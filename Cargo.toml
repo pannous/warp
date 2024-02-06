@@ -1,5 +1,5 @@
 [package]
-name = "warp"
+name = "wasp"
 version = "0.1.0"
 edition = "2021" # Cargo edition! NOT package edition!
 
@@ -7,10 +7,11 @@ edition = "2021" # Cargo edition! NOT package edition!
 
 [dependencies]
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
-
+bla = { path = "bla" } # local
 syn = { version = "2.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["blocking"] }
 paste = { version = "1.0.14", features = [] }
+regex = "1.10.3"
 
 #syn = "*" # latest version
 #syn = "2" # >= 2.0.0

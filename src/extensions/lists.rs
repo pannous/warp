@@ -40,7 +40,7 @@ impl FromRange<i32> for Vec<i32> {
 
 pub enum List<T>{
     Vector(Vec<T>),
-    Array([T; 5]), // makes no sense to have a list of fixed array length
+    // Array([T; 5]), // makes no sense to have a list of fixed array length
 }
 
 

@@ -1,13 +1,25 @@
-// extern crate warp;
-// use warp::extensions::*;
+use wasp::*;
+use wasp::extensions::*;
+use wasp::extensions::strings::*;  // NO, test are their OWN crate!
+
+// extern crate wasp;
 #[allow(dead_code)]
-mod extensions;
-use extensions::*;
+// use crate::extensions::strings::*; // NO, test are their OWN crate!
+// use super::extensions::strings::*;  // NO, test are their OWN crate!
+
+// #[path = "../src/extensions.rs"] mod extensions;
+// #[path = "../src/extensions/strings.rs"] mod strings;
+// use strings::*;  // NO, test are their OWN crate!
+// use extensions::*;
+// extern crate wasp;
+// use wasp::extensions::*;
+// use wasp::extensions::strings::*;  // NO, test are their OWN crate!
 // just soft-linked for now ;)
 
 
 #[test]
 fn test_substring() {
+    init_lib();
     let s = "hello 🌍";
     let sub = s.substring(3, 5);
     put!("substring ", sub);

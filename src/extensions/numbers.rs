@@ -16,6 +16,18 @@ pub enum Number {
 }
 
 
+impl Number {
+    pub(crate) fn is_number(token: &str) -> bool {
+        token.parse::<f64>().is_ok()
+    }
+
+    pub(crate) fn parse(token: &str) -> Self {
+        let parsed = token.parse().expect("Expected a valid number");
+        Number::Float(parsed)
+    }
+}
+
+
 impl Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -1,6 +1,6 @@
 use std::fmt::Debug; // for println!("{:?}", item)
 use std::fmt::Display; // for println!("{}", item)
-use crate::put;
+// use crate::put;
 
 #[allow(dead_code)]
 #[allow(non_snake_case)]
@@ -16,7 +16,7 @@ pub fn S(s: &str) -> String {
     s.to_string()
 }
 
-pub(crate) trait CharExtensions {
+pub trait CharExtensions {
     fn upper(&self) -> char;
 }
 impl CharExtensions for char {
@@ -25,11 +25,15 @@ impl CharExtensions for char {
     }
 }
 
-pub(crate) trait StringExtensions {
+pub trait StringExtensions {
     fn upper(&self) -> String;
     fn reverse(&self) -> String;
     fn map(&self, f: fn(char) -> char) -> String;
     fn substring(&self, start: usize, end: usize) -> &str;
+    fn first_char(&self) -> char;
+    fn first(&self) -> char;
+    fn start(&self) -> char;
+    fn head(&self) -> char;
 }
 
 impl StringExtensions for str {
@@ -39,7 +43,10 @@ impl StringExtensions for str {
     fn reverse(&self) -> String {
         self.chars().rev().collect()
     }
-
+    fn first_char(&self) -> char { self.chars().next().unwrap() }
+    fn first(&self) -> char { self.chars().next().unwrap() }
+    fn start(&self) -> char { self.chars().next().unwrap() }
+    fn head(&self) -> char { self.chars().next().unwrap() }
     fn map(&self, f: fn(char) -> char) -> String {
         self.chars().map(f).collect()
     }
@@ -47,6 +54,7 @@ impl StringExtensions for str {
         // just use the range operator directly
         &self[start..end]
     }
+
 }
 
 pub(crate) trait IntegerExtensions {
@@ -80,7 +88,7 @@ impl IntegerExtensions for i32 {
 // call with &arg if you encounter "Borrow of moved value" error (later)
 pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
     for item in list {
-        put!(item);
+        println!("{}",item);
     }
 }
 

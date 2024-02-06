@@ -1,12 +1,19 @@
 // pub mod string_tests {
 // use crate::extensions::StringExtensions;
-
+// mod bla;
 mod extensions;
-use crate::extensions::*; // crate for F12
+
+// use crate::extensions::*; // crate for F12
 use extensions::numbers::*;
 use extensions::strings::*;
 use extensions::lists::*;
 use extensions::utils::*;
+
+pub mod parser;
+use parser::test_parser;
+
+use bla::test_bla_lib;
+
 
 // glob import doesn't reexport anything because no candidate is public enough
 // reexporting is done by pub use
@@ -19,6 +26,7 @@ type Strings = Vec<String>;
 
 #[allow(unused_variables)] // for testing
 fn main() {
+    test_bla_lib();
     let url="https://files.pannous.com/test";
     let test:String=download(url);
     let n=Number::Int(5);
@@ -60,5 +68,6 @@ fn main() {
     // let numbers_as_strings: [String; 5] = numbers.map(|n| n.to_string());
     // let numbers_as_strings: Vec<String> = numbers.iter().map(|n| n.to_string()).collect();
     tee();
+    test_parser();
 }
 
