@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports)]
 // shared code with wasp tests etc
 // only lib.rs allows reexporting as:
 // use wasp::extensions::*; etc
@@ -10,6 +11,7 @@ pub use extensions::lists::*;
 pub use extensions::utils::*;
 
 pub mod parser;
+pub mod emitter;
 
 pub fn init_lib(){
     println!("init lib")

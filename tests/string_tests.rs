@@ -26,6 +26,18 @@ fn test_substring() {
     assert_eq!(sub, "lo");
 }
 
+#[test]
+fn test_first_char() {
+    let s = "hello 🌍";
+    let c = s.first_char();
+    put!("first_char ", c);
+    assert_eq!(c, 'h');
+    assert_eq!(s.at(1),'e');
+    assert_eq!(s.char(1),'e');
+    assert_eq!(s.last_char(),'🌍');
+    // assert_eq!(-1%3,2);
+    assert_eq!(s.at(-1),'🌍');
+}
 
 #[test]
 fn test_interpolation() {

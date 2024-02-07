@@ -1,8 +1,13 @@
-
+use std::io::ErrorKind;
 //noinspection ALL
-use reqwest::blocking::get;
-// use reqwest::get;
+#[cfg(not(feature = "wasm"))]
+use reqwest::blocking::{Client, get, Response};
+
+#[cfg(feature = "wasm")]
+extern { fn download(url: &str) -> String; } // String not FFI-safe
+
 #[must_use]
+#[cfg(not(feature = "wasm"))]
 pub fn download(url: &str) -> String {
     let empty:String = String::from("");
 

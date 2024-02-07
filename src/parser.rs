@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 extern crate regex;
 
 use std::fmt;

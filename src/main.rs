@@ -1,3 +1,6 @@
+#![allow(dead_code, unused_imports)]
+
+
 // pub mod string_tests {
 // use crate::extensions::StringExtensions;
 // mod bla;

@@ -2,6 +2,11 @@ use std::fmt::Debug; // for println!("{:?}", item)
 use std::fmt::Display; // for println!("{}", item)
 // use crate::put;
 
+struct WasmString {
+    length: u32,
+    data: *const u8,
+}
+
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn String(s: &str) -> String {
@@ -26,17 +31,34 @@ impl CharExtensions for char {
 }
 
 pub trait StringExtensions {
+    fn at(&self,nr:i32) -> char;
+    fn char(&self,nr:usize) -> char;
     fn upper(&self) -> String;
     fn reverse(&self) -> String;
     fn map(&self, f: fn(char) -> char) -> String;
     fn substring(&self, start: usize, end: usize) -> &str;
     fn first_char(&self) -> char;
+    fn last_char(&self) -> char;
     fn first(&self) -> char;
     fn start(&self) -> char;
     fn head(&self) -> char;
+    fn byte_at(&self, nr: usize) -> u8;
+    fn str(&self) -> String;
+    // allow negative index into chars : -2 = next to last
+    fn s(&self) -> String;
 }
 
 impl StringExtensions for str {
+    // allow negative index into chars : -2 = next to last
+    fn s(&self) -> String { self.to_string() }
+    fn str(&self) -> String { self.to_string() }
+    fn at(&self,nr:i32) -> char {
+        let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
+        self.chars().nth( wrapped_index).unwrap()
+    }
+    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn last_char(&self) -> char { self.chars().last().unwrap() }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
