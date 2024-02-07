@@ -1,6 +1,6 @@
 use wasp::*;
-use wasp::extensions::*;
-use wasp::extensions::strings::*;  // NO, test are their OWN crate!
+
+  // NO, test are their OWN crate!
 
 // extern crate wasp;
 #[allow(dead_code)]
@@ -30,7 +30,7 @@ fn test_substring() {
 fn test_first_char() {
     let s = "hello 🌍";
     let c = s.first_char();
-    put!("first_char ", c);
+    put!("first_char: ", c);
     assert_eq!(c, 'h');
     assert_eq!(s.at(1),'e');
     assert_eq!(s.char(1),'e');
@@ -41,8 +41,8 @@ fn test_first_char() {
 
 #[test]
 fn test_interpolation() {
-    let world = "🌍";
-    let s = format!("hello {world}");
+    let _world = "🌍";
+    let s = format!("hello {_world}");
     assert_eq!(s, "hello 🌍");
 }
 
