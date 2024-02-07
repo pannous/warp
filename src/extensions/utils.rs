@@ -1,13 +1,22 @@
 use std::io::ErrorKind;
 //noinspection ALL
 #[cfg(not(feature = "wasm"))]
+#[cfg(not(test))]
 use reqwest::blocking::{Client, get, Response};
+use crate::extensions::strings::StringExtensions;
 
+
+// #[cfg(any(feature = "wasm",test))]
 #[cfg(feature = "wasm")]
 extern { fn download(url: &str) -> String; } // String not FFI-safe
 
+#[cfg(test)]
+fn download(url: &str) -> String { String::from("mock".s() + url) }
+
+
 #[must_use]
 #[cfg(not(feature = "wasm"))]
+#[cfg(not(test))]
 pub fn download(url: &str) -> String {
     let empty:String = String::from("");
 

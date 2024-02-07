@@ -1,3 +1,8 @@
+# cargo install --path . --locked --offline
+# GO OFFLINE against fucking 10 sec compilation every time!
+# --offline mode
+
+
 [package]
 name = "wasp"
 version = "0.1.0"
@@ -9,8 +14,13 @@ edition = "2021" # Cargo edition! NOT package edition!
 [package.metadata.clippy]
 warn = false
 
+[features]
+#test = [] superfluous, just use cargo test => #[cfg(test)]
+release = []
+wasm = []
 
 [dependencies]
+# can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 bla = { path = "bla" } # local
 syn = { version = "2.0", features = ["full"] }
@@ -21,6 +31,11 @@ wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 #wasm_bindgen = "0.2.73"
 wasm-bindgen = "0.2.91"
 
+#[test-dependencies] no such thing. it's :
+[dev-dependencies]
+# only compiled and included when running tests or examples
+
+
 #syn = "*" # latest version
 #syn = "2" # >= 2.0.0
 #syn = "2.0.48"
@@ -29,8 +44,6 @@ wasm-bindgen = "0.2.91"
 [profile.dev]
 incremental = true
 
-[features]
-wasm = []
 [lib]
 # to compile to wasm using `wasm-pack build` :
 crate-type = ["cdylib", "rlib"]

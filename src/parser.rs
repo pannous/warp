@@ -47,7 +47,7 @@ impl fmt::Debug for Node {
     }
 }
 
-enum Kind {
+pub enum Kind {
     Object,
     // {}
     Group,
@@ -59,7 +59,7 @@ enum Kind {
     Other(char, char),
 }
 
-enum Bracket {
+pub enum Bracket {
     Curly,
     Square,
     Round,
