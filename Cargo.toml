@@ -5,6 +5,11 @@ edition = "2021" # Cargo edition! NOT package edition!
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# disable all "never used" warnings
+[package.metadata.clippy]
+warn = false
+
+
 [dependencies]
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 bla = { path = "bla" } # local
@@ -12,9 +17,22 @@ syn = { version = "2.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["blocking"] }
 paste = { version = "1.0.14", features = [] }
 regex = "1.10.3"
+wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
+#wasm_bindgen = "0.2.73"
+wasm-bindgen = "0.2.91"
 
 #syn = "*" # latest version
 #syn = "2" # >= 2.0.0
 #syn = "2.0.48"
 
+
+[profile.dev]
+incremental = true
+
+[features]
+wasm = []
+[lib]
+# to compile to wasm using `wasm-pack build` :
+crate-type = ["cdylib", "rlib"]
+#https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
 
