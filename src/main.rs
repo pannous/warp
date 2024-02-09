@@ -1,10 +1,5 @@
 #![allow(dead_code, unused_imports)]
 
-// extern crate wasp; // use lib here!
- 
-// pub mod string_tests {
-// use crate::extensions::StringExtensions;
-// mod bla;
 mod extensions;
 
 // use crate::extensions::*; // crate for F12
@@ -64,4 +59,6 @@ fn main() {
 }
 
 #[cfg(test)]
-fn main() {}
+fn main() {
+    print!("test");
+}

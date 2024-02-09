@@ -8,6 +8,7 @@ use wasm_ast::NumericInstruction::*;
 
 use std::fs::File;
 use std::io::prelude::*;
+use wasm_ast::ValueType::I32;
 
 // use wasm_bindgen::prelude::*;
 
@@ -28,6 +29,15 @@ pub fn build(file_name: &str) {
     let mut builder = Module::builder();
     // builder.add_function("add", |a: i32, b: i32| a + b);
     // builder.add_function("sub", |a: i32, b: i32| a - b);
+    let void = ResultType::new(vec![]);
+    let int_result = ResultType::new(vec![I32]);
+
+    let main_function_type = FunctionType::new(void.clone(), int_result.clone());
+    let _ = builder.add_function_type(main_function_type);
+    let main_body = Expression::new(vec![
+        I32Constant(42).into(),
+    ]);
+    let main_func= Function::new(0, void.clone(), main_body);
 
     let parameters = ResultType::new(vec![ValueType::I32, ValueType::I32]);
     let results = ResultType::new(vec![ValueType::I32]);
@@ -42,17 +52,10 @@ pub fn build(file_name: &str) {
         Multiply(NumberType::I32).into(),
     ].into();
 
-    assert_eq!(
-        Numeric(I32Constant(42)),
-        42i32.into()
-    );
-    assert_eq!(
-        Instruction::Numeric(NumericInstruction::I64Constant(42i64)),
-        42i64.into()
-    );
 
-    let fun = Function::new(kind.into(), locals.clone(), body);
-    let _result = builder.add_function(fun);
+    let fun = Function::new(1, locals.clone(), body);
+    let _ = builder.add_function(main_func);
+    let _ = builder.add_function(fun);
     builder.add_export(Export::new(
         Name::new(s!("main")),
         ExportDescription::Function(0),
