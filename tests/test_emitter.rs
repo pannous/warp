@@ -15,7 +15,7 @@ pub fn test_emitter() {
     match result {
         Ok(x) => {
             assert_eq!(x, 42);
-            println!("Result: {:?}", result)
+            println!("OK Result: {:?}", x)
         },
         Err(e) => {
             assert!(false, "Error: {:?}", e)

@@ -43,7 +43,6 @@ pub fn build(file_name: &str) {
     let results = ResultType::new(vec![ValueType::I32]);
     let function_type = FunctionType::new(parameters, results);
     let _ = builder.add_function_type(function_type);
-    let kind: TypeIndex = 0u32.into();
     let locals: ResultType = vec![ValueType::I32].into();
     let body: Expression = vec![
         42i32.into(),

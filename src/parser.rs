@@ -19,9 +19,10 @@ pub enum Node {
     Empty,
 }
 impl Node {
-    pub fn new() -> Node {
-        Node::Empty
-    }
+    pub fn new() -> Node { Node::Empty }
+    pub fn keys(s: &str, v: &str) -> Node { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
+    pub fn key(s: &str, v: Node) -> Node { Node::KeyValue(s.to_string(), Box::new(v)) }
+    pub fn text(s: &str) -> Node { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Node {
         Node::Symbol(s.to_string())
     }
