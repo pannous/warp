@@ -25,7 +25,7 @@ impl Node {
     pub fn symbol(s: &str) -> Node {
         Node::Symbol(s.to_string())
     }
-    pub fn Number(n: i64) -> Node {
+    pub fn number(n: i64) -> Node {
         Node::Number(Number::Int(n))
     }
 }

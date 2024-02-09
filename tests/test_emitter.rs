@@ -4,12 +4,21 @@ use std::env;
 use wasp;
 use wasp::run::wasmtime_runner::*;
 use wasp::emitter::*;
-use wasmtime::*;
+// use wasmtime::*;
 
 #[test]
 pub fn test_emitter() {
     greet();
     println!("Current working directory: {:?}", env::current_dir());
     build("test.wasm");
-    run_wasm("test.wasm");
+    let result = run_wasm("test.wasm");
+    match result {
+        Ok(x) => {
+            assert_eq!(x, 42);
+            println!("Result: {:?}", result)
+        },
+        Err(e) => {
+            assert!(false, "Error: {:?}", e)
+        },
+    }
 }

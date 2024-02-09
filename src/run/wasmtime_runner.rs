@@ -1,28 +1,46 @@
+use syn::ext;
 use wasmtime::*;
 use std::fs::read;
 use std::path::Path;
 use std::str::from_utf8;
-pub fn run_wasm(path: &str) -> wasmtime::Result<()>{
+pub fn run_wasm(path: &str) -> Result<i32>{
     let engine = Engine::default();
     let _wat = r#" (module
             (import "host" "host_func" (func $host_hello (param i32)))
-            (func (export "hello") i32.const 3; call $host_hello) ) "#;
-    // let module = Module::new(&engine, wat)?;
+            (func (export "main") i32.const 42) ) "#;
+    // let module = Module::new(&engine, _wat)?;
     let module = Module::new(&engine, &read(Path::new(path))?)?;
 
     let data = 4; // could be any data
     let mut store = Store::new(&engine, data);
-    let host_func = Func::wrap(&mut store, |caller: Caller<'_, u32>, param: i32| {
+    let _host_func = Func::wrap(&mut store, |caller: Caller<'_, u32>, param: i32| {
         println!("Got {} from WebAssembly", param);
         println!("my host state is: {}", caller.data());
     });
 
-    let instance = Instance::new(&mut store, &module, &[host_func.into()])?;
-    let wasm_main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+    // Error: expected 0 imports, found 1   Instance::new needs FIXED imports known ahead of time WTH
+    // let imports :&[Extern]= &[];// &[host_func.into()];
+// let instance = Instance::new(&mut store, &module, imports)?;
+
+    let mut linker = Linker::new(&engine);
+    // let external_func = Func::new(&mut store, typ, test_func);
+    // linker.func_new("namespace", "external_func",typ, external_func);
+    let typ = FuncType::new([ValType::I32], [ValType::I32]);
+    linker.func_new("namespace", "external_func",typ,move |_, _, _| {
+        Ok(())
+        })?;
+    linker.func_wrap("", "", || {})?;
+    let instance = linker.instantiate(&mut store, &module)?;
+    
+    let wasm_main = instance.get_typed_func::<(), i32>(&mut store, "main")?;
 
     // And finally we can call the wasm!
-    let result=wasm_main.call(&mut store, ())?;
+    let result=wasm_main.call(&mut store, ())? as i32;
     println!("Result: {:?}", result);
 
-    Ok(())
+    Ok(result)
+}
+
+fn test_func(_caller: Caller<'_, u32>, param: &[Val], _xyz:&mut[Val]) -> Result<i32, Trap> {
+    Ok(param[0].unwrap_i32() * 2) // Dummy implementation
 }
