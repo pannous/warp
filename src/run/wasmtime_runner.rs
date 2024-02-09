@@ -31,11 +31,10 @@ pub fn run_wasm(path: &str) -> Result<i32>{
         })?;
     linker.func_wrap("", "", || {})?;
     let instance = linker.instantiate(&mut store, &module)?;
-    
-    let wasm_main = instance.get_typed_func::<(), i32>(&mut store, "main")?;
 
-    // And finally we can call the wasm!
-    let result=wasm_main.call(&mut store, ())? as i32;
+    type ReturnType = i32;
+    let wasm_main = instance.get_typed_func::<(), ReturnType>(&mut store, "main")?;
+    let result= wasm_main.call(&mut store, ())?;
     println!("Result: {:?}", result);
 
     Ok(result)
