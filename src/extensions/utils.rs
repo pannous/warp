@@ -35,3 +35,21 @@ pub fn download(url: &str) -> String {
         Err(_) => empty
     }
 }
+
+
+pub trait FileExtensions {
+    // std::fs::File does not directly expose the file name.
+    fn name(&self) -> String;
+    fn path(&self) -> String;
+}
+
+impl FileExtensions for std::fs::File {
+    fn name(&self) -> String {
+        "std::fs::File does not expose the file name. ".to_string()
+    }
+
+    fn path(&self) -> String {
+        "std::fs::File does not expose the file name or path.".to_string()
+    }
+
+}

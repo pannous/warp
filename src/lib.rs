@@ -12,6 +12,7 @@ pub use extensions::utils::*;
 
 pub mod parser;
 pub mod emitter;
+pub mod run;
 
 pub fn init_lib(){
     println!("init lib")
