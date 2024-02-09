@@ -18,6 +18,17 @@ pub enum Node {
     List(Vec<Node>),
     Empty,
 }
+impl Node {
+    pub fn new() -> Node {
+        Node::Empty
+    }
+    pub fn symbol(s: &str) -> Node {
+        Node::Symbol(s.to_string())
+    }
+    pub fn Number(n: i64) -> Node {
+        Node::Number(Number::Int(n))
+    }
+}
 
 impl fmt::Debug for Node {
     // impl fmt::Debug for Node {

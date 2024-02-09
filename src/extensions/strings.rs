@@ -21,13 +21,16 @@ pub fn S(s: &str) -> String {
     s.to_string()
 }
 
+// byte literal b'A' b"hello" &[u8]
 pub trait CharExtensions {
     fn upper(&self) -> char;
+    fn s(&self) -> String;
 }
 impl CharExtensions for char {
     fn upper(&self) -> char {
         self.to_uppercase().next().unwrap()
     }
+    fn s(&self) -> String { self.to_string() }
 }
 
 pub trait StringExtensions {
