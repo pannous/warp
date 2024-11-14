@@ -1,10 +1,47 @@
+// LIST AND VECTOR EXTENSIONS
+
+use std::array::IntoIter;
+use std::iter::Enumerate;
 use crate::extensions::numbers::Number;
 
 use std::ops::Range;
+use wasmparser::{FromReader, SectionLimited};
+
+// [a,b,c] => [(0,a), (1,b), (2,c)] aka enumerate
+pub trait Indexed<T> {
+    fn indexed(self) -> impl Iterator<Item = (usize, T)>;
+}
+
+impl<T> Indexed<T> for Vec<T>
+{
+    fn indexed(self)-> impl Iterator<Item = (usize, T)>{
+        self.into_iter()
+            // .map(|item| item.into_result())
+            .enumerate()
+    }
+}
+
+//
+// impl<T> Indexed<T> for SectionLimited<'_, T> {
+//     fn indexed(self)-> impl Iterator<Item = (usize, T)>{
+//         self.into_iter().enumerate()
+//     }
+// }
+
+pub trait Filter<T> {
+    fn filter(self, f: fn(&T) -> bool) -> Vec<T>;
+}
+
+impl<T> Filter<T> for Vec<T> {
+    fn filter(self, f: fn(&T) -> bool) -> Vec<T> {
+        self.into_iter().filter(f).collect()
+    }
+}
 
 pub trait FromRange<T> {
     fn from(range: Range<T>) -> Vec<T>;
 }
+
 // impl From<Range<i32>> for Vec<i32> {
 impl FromRange<i32> for Vec<i32> {
     fn from(range: Range<i32>) -> Self {
@@ -77,10 +114,6 @@ impl From<[i32; 5]> for List<Number> {
 // impl_from_array!(9);
 
 
-pub trait VecExtensions<T> {
-    fn with(&self, n: T) -> Vec<T>;
-}
-
 pub trait StringVecExtensions<String> {
     fn with(&self, n: &str) -> Vec<String>;
 }
@@ -92,6 +125,13 @@ impl StringVecExtensions<String> for Vec<String> {
         v
     }
 }
+pub(crate) trait VecExtensions<T: Clone> {
+    fn with(&self, n: T) -> Vec<T>;
+    // fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T>;
+    // fn find(&self, f: &dyn Fn(&T) -> bool) -> Option<&T>;
+    fn filter(&self, f: fn(&T) -> bool) -> Vec<T>;
+    fn find(&self, f: fn(&T) -> bool) -> Option<&T>;
+}
 
 impl<T: Clone> VecExtensions<T> for Vec<T> {
     fn with(&self, n: T) -> Vec<T> {
@@ -99,8 +139,35 @@ impl<T: Clone> VecExtensions<T> for Vec<T> {
         v.push(n);
         v
     }
+    fn filter(&self, f: fn(&T) -> bool) -> Vec<T> {
+        self.iter().filter(|item| f(item)).cloned().collect()
+    }
+    fn find(&self, f: fn(&T) -> bool) -> Option<&T> {
+        self.iter().find(|item| f(item))
+    }
 }
 
+pub(crate) trait VecExtensions2<T: Clone> {
+    fn with(&self, n: T) -> Vec<T>;
+    fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T>;
+    fn find2(&self, f: &dyn Fn(&T) -> bool) -> Option<&T>;
+}
+
+impl<T: Clone> VecExtensions2<T> for Vec<T> {
+    fn with(&self, n: T) -> Vec<T> {
+        let mut new_vec = self.clone();
+        new_vec.push(n);
+        new_vec
+    }
+
+    fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T> {
+        self.iter().filter(|&x| f(x)).cloned().collect()
+    }
+
+    fn find2(&self, f: &dyn Fn(&T) -> bool) -> Option<&T> {
+        self.iter().find(|&x| f(x))
+    }
+}
 pub(crate) trait ArrayExtensions<T> {
     fn push(&self, n: T) -> Vec<T>;
 }
@@ -175,4 +242,11 @@ impl Adds<&str> for Vec<String> {
         self.push(rhs.to_string());
         self
     }
+}
+
+pub fn map<T, U, F>(items: Vec<T>, func: F) -> Vec<U>
+    where
+        F: FnMut(T) -> U,
+{
+    items.into_iter().map(func).collect()
 }

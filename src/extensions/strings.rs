@@ -51,6 +51,38 @@ pub trait StringExtensions {
     fn s(&self) -> String;
 }
 
+
+impl StringExtensions for String {
+    // Function implementations
+    fn s(&self) -> String { self.to_owned() }
+    fn str(&self) -> String { self.to_owned() }
+    fn at(&self, nr: i32) -> char {
+        let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
+        self.chars().nth(wrapped_index).unwrap()
+    }
+    
+    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn last_char(&self) -> char { self.chars().last().unwrap() }
+    fn upper(&self) -> String {
+        self.to_uppercase()
+    }
+    fn reverse(&self) -> String {
+        self.chars().rev().collect()
+    }
+    fn first_char(&self) -> char { self.chars().next().unwrap() }
+    fn first(&self) -> char { self.chars().next().unwrap() }
+    fn start(&self) -> char { self.chars().next().unwrap() }
+    fn head(&self) -> char { self.chars().next().unwrap() }
+    fn map(&self, f: fn(char) -> char) -> String {
+        self.chars().map(f).collect()
+    }
+    fn substring(&self, start: usize, end: usize) -> &str {
+        // just use the range operator directly
+        &self[start..end]
+    }
+}
+
 impl StringExtensions for str {
     // allow negative index into chars : -2 = next to last
     fn s(&self) -> String { self.to_string() }
@@ -117,18 +149,20 @@ pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
     }
 }
 
-// by reference
-// fn print_list_<'a, T: std::fmt::Display + 'a>(list: impl IntoIterator<Item = &'a T> /*(*/ ) {
-//     for item in list {
-//         put!(item);
+
+use std::cmp::PartialEq;
+// only traits defined in the current crate can be implemented for types defined outside of the crate
+// use Wrapper or compare via s == *s2
+// impl PartialEq for String {
+//     fn eq(&self, other: &Self) -> bool {
+//         &self.0 == &other.0
 //     }
 // }
 
-// fn printList<T>(list: Vec<T>) {
-//     for item in list {
-//         println!("$item ")
-//     }
-// }
-// fn printList<T>(list: [T;N]) {
-//     printList(list.to_vec());
-// }
+// Test it
+fn main() {
+    let s1 = String::from("RustRover");
+    let s2 = &String::from("RustRover");
+
+    assert_eq!(s1 == *s2, true);
+}

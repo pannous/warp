@@ -1,6 +1,6 @@
 use wasp::*;
-use wasp::parser::Node;
-use wasp::parser::Node::*;
+use wasp::node::Node;
+use wasp::node::Node::*;
 
 #[test]
 fn test_node(){
@@ -8,10 +8,29 @@ fn test_node(){
     let n:Node = Node::keys("key", "value");
     // let n:Node = KeyValue("key".s(), Box::new(Text("value".s())));
     println!("{:?}", n );
-
-    // let n2:Node = List(vec![Symbol("a".s()), Symbol("b".s()), Symbol("c".s()),n]);
-    let n2:Node = List(vec![symbol("a"), Symbol("b".s()), Symbol('c'.s()),n]);
-        println!("{:?}", n2);
 }
 
-fn symbol(p0: &str) -> Node { Symbol(p0.s()) }
+
+#[test]
+fn test_node_list() {
+    let n: Node = Node::ints(vec![1, 2, 3]);
+    println!("{:?}", n);
+    assert_eq!(n[0], Node::Number(wasp::Number::Int(1)));
+}
+
+
+#[test]
+fn test_node_equality(){
+    let n:Node = Node::number(1);
+    let n2:Node = Node::number(2);
+    assert_eq!(n, n2);
+}
+
+
+#[test]
+fn test_node_box() {
+    let n: Node = Node::Data("data".into());
+    println!("{:?}", n);
+    assert_eq!(n, Node::Data("data".into()));
+}
+

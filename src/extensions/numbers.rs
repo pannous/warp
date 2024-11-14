@@ -6,7 +6,8 @@ pub fn tee() {
     println!("tee");
 }
 
-#[derive(Debug, PartialEq)]
+// PartialEq per hand!
+#[derive(Debug, Clone, Copy)]
 pub enum Number {
     Int(i64),
     Float(f64),
@@ -15,6 +16,16 @@ pub enum Number {
     // other variants as needed
 }
 
+impl Number {
+    pub fn abs(&self) -> f64 {
+        match self {
+            Number::Int(i) => i.abs() as f64,
+            Number::Quotient(n, d) => (*n as f64 / *d as f64).abs(),
+            Number::Complex(r, i) => (r * r + i * i).sqrt(),
+            Number::Float(f) => f.abs(),
+        }
+    }
+}
 
 impl Number {
     pub(crate) fn is_number(token: &str) -> bool {
@@ -131,4 +142,54 @@ impl Into<f64> for Number {
     }
 }
 
-// }
+
+use std::cmp::PartialEq;
+
+impl PartialEq for Number{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Number::Int(i1), Number::Int(i2)) => i1 == i2,
+            (Number::Float(f1), Number::Float(f2)) => f1 == f2,
+            (Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => n1 * d2 == n2 * d1,
+            (Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
+            _ => false,
+        }
+    }
+}
+
+
+impl PartialEq<i32> for Number {
+    fn eq(&self, other: &i32) -> bool {
+        match self {
+            Number::Int(i) => *i == *other as i64,
+            Number::Float(f) => *f == *other as f64,
+            Number::Quotient(n, d) => *n/d == *other as i64,
+            Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
+            // _ => false,
+        }
+    }
+}
+
+impl PartialEq<i64> for Number {
+    fn eq(&self, other: &i64) -> bool {
+        match self {
+            Number::Int(i) => *i == *other,
+            Number::Float(f) => *f == *other as f64,
+            Number::Quotient(n, d) => *n/d == *other,
+            Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
+            // _ => false,
+        }
+    }
+}
+
+impl PartialEq<f64> for Number {
+    fn eq(&self, other: &f64) -> bool {
+        match self {
+            Number::Int(i) => *i as f64 == *other,
+            Number::Float(f) => *f == *other,
+            Number::Quotient(n, d) => *n as f64 / *d as f64 == *other,
+            Number::Complex(r, i) => *r == *other && *i == 0.0,
+            // _ => false,
+        }
+    }
+}
