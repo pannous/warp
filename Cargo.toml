@@ -6,7 +6,7 @@
 [package]
 name = "wasp"
 version = "0.1.0"
-edition = "2021" # Cargo edition! NOT package edition!
+edition = "2021"  # Cargo edition! NOT package edition!
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,21 +23,51 @@ wasm = []
 # ⚠️ toggle OFFLINE mode!
 # can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
-bla = { path = "bla" } # local
-syn = { version = "2.0", features = ["full","extra-traits"] }
-reqwest = { version = "0.11", features = ["blocking"] }
+bla = { path = "bla" }                                # local
 paste = { version = "1.0.14", features = [] }
 regex = "1.10.3"
 wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
-#wasm_bindgen = "0.2.73"
+wast = "*"
+wat  = "*"
+#wasmparser  = "*"
+wasmparser = "*"
+wasm-compose = "*"
+wasm-encoder  = "*"
+wasm-metadata = "*"
+wasmprinter = "*"
+wit-component = "*"
+#cargo-component-core
+
+[target.'cfg(not(target_os = "wasm32"))'.dependencies]
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+reqwest = { version = "0.11", features = ["blocking"] }
+
 #wasm-bindgen = "0.2.91"
+
 #wasmer = "4.2.5"
 #wasmedge-sdk = "0.13.2" BROKEN!
+
+#binaryen = "*" # 0.12.0 C++ compiler and toolchain infrastructure library for WebAssembly. It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
+#wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
+
 wasmtime = "*"
+#wasmtime-runtime = "*" # Wasmtime runtime
+#wasmtime-wasi = "*" # WASI support for Wasmtime
+#wasmtime-wast = "*" # Wast support for Wasmtime
+#wasmtime-environ = "*" # Wasmtime environment
+#wasmtime-obj = "*" # Wasmtime object file
+#wasmtime-objdump = "*" # Wasmtime object file dumper
+#wasmtime-profiling = "*" # Wasmtime profiling
+#wasmtime-wasi-common = "*" # WASI common support for Wasmtime
+#wasmtime-jit = "*" # JIT compiler for Wasmtime
+#wasmtime-wiggle = "*" # Wiggle support for Wasmtime
 
-wasm-builder = "*"
-#Wasm builder is a utility for building a project as a Wasm binary
+#wasm-builder = "*" #Wasm builder is a utility for building a rust project as a Wasm binary
 
+parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries. Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
+# parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
+
+wasmparser = "*" # A WebAssembly binary format parser
 
 
 #[test-dependencies] no such thing. it's :
@@ -57,4 +87,3 @@ incremental = true
 # to compile to wasm using `wasm-pack build` :
 crate-type = ["cdylib", "rlib"]
 #https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
-

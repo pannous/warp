@@ -4,7 +4,16 @@ use std::env;
 use wasp;
 use wasp::run::wasmtime_runner::*;
 use wasp::emitter::*;
+use wasp::compiler::wasm_reader::*;
 // use wasmtime::*;
+
+#[test]
+pub fn test_wasm_parser() {
+    let module =parse_wasm("test.wasm");
+    println!("module {:#?}", module);
+}
+
+
 
 #[test]
 pub fn test_emitter() {

@@ -5,80 +5,10 @@ extern crate regex;
 use std::fmt;
 use regex::Regex;
 
+use crate::node::{Node, Kind, Bracket};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-
-pub enum Node {
-    Symbol(String),
-    Number(Number),
-    Text(String),
-    // "quoted text"
-    Block(Vec<Node>, Kind, Bracket),
-    KeyValue(String, Box<Node>),
-    List(Vec<Node>),
-    Empty,
-}
-impl Node {
-    pub fn new() -> Node { Node::Empty }
-    pub fn keys(s: &str, v: &str) -> Node { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
-    pub fn key(s: &str, v: Node) -> Node { Node::KeyValue(s.to_string(), Box::new(v)) }
-    pub fn text(s: &str) -> Node { Node::Text(s.to_string()) }
-    pub fn symbol(s: &str) -> Node {
-        Node::Symbol(s.to_string())
-    }
-    pub fn number(n: i64) -> Node {
-        Node::Number(Number::Int(n))
-    }
-}
-
-impl fmt::Debug for Node {
-    // impl fmt::Debug for Node {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Node::Symbol(s) => write!(f, "{}", s),
-            Node::Number(n) => write!(f, "{}", n),
-            Node::Text(t) => write!(f, "'{}'", t),
-            Node::Block(nodes, _kind, bracket) => {
-                if nodes.len() == 1 {
-                    write!(f, "{:?} ", nodes.get(0).unwrap())
-                } else {
-                    match bracket {
-                        Bracket::Curly => write!(f, "{{{:?}}}", nodes),
-                        Bracket::Square => write!(f, "[{:?}]", nodes),
-                        Bracket::Round => write!(f, "({:?})", nodes),
-                        Bracket::Other(open, close) => write!(f, "{}{:?}{}", open, nodes, close),
-                        // _ => panic!("Unknown bracket type {:?}", bracket.into())
-                    }
-                }
-            }
-            Node::KeyValue(k, v) => write!(f, "{}: {:?}", k, v),
-            Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
-            Node::Empty => write!(f, "Empty"),
-            // _ => {}
-        }
-    }
-}
-
-pub enum Kind {
-    Object,
-    // {}
-    Group,
-    // ()
-    Pattern,
-    // []
-    // Other, // <…>
-    // Other(String, String),
-    Other(char, char),
-}
-
-pub enum Bracket {
-    Curly,
-    Square,
-    Round,
-    // brace or parenthesis
-    Other(char, char),
-}
-
+use std::ops::Index; // node[i]
 
 pub struct Parser {
     tokens: Vec<String>,
