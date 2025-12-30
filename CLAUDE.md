@@ -167,12 +167,12 @@ to be checked via test_wasm_roundtrip
 
 DONE save it! Strings are now stored in linear memory data section with actual pointers
 DONE automatically convert Node tree to WaspNode tree (all Node types supported: Text, Symbol, Tag, KeyValue, Pair, Block, List, Data)
+DONE kitchensink comprehensive tests in tests/kitchensink_test.rs covering all node types individually and in complex nested trees
 
-TODO kitchensink (comprehensive test with all node types in complex tree)
-
-Always verify it via wasm-tools print (passes, wasm-tools v1.243.0 has better GC support than wasm2wat)
+Always verify it via wasm-tools print (wasm2wat v1.0.39 has incomplete GC support)
 DONE auto verify it via wasm verification crate (wasmparser with GC features enabled, passes)
-TODO verify it via wasmtime run --enable-gc (needs wasmtime 28.0+ for full GC introspection)
+DONE wasmtime updated to v40.0.0 (has full GC support, was v19.0.1)
+TODO verify it via wasmtime run --wasm-features=gc (execution with actual GC introspection)
 
 
 4. Read back fields:

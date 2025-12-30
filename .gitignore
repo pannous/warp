@@ -4,3 +4,4 @@ vendor
 test.wasm
 Cargo.lock
 nodes.wasm
+kitchensink_*.wasm
