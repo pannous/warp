@@ -1,6 +1,7 @@
 use crate::node::{Node, Grouper, Bracket, DataType};
 use crate::extensions::numbers::Number;
 use wasm_encoder::*;
+use std::collections::HashMap;
 
 /// WebAssembly GC emitter for Node AST
 /// Generates WASM GC bytecode using struct and array types
@@ -11,11 +12,16 @@ pub struct WasmGcEmitter {
     code: CodeSection,
     exports: ExportSection,
     names: NameSection,
+    memory: MemorySection,
+    data: DataSection,
     // Type indices for unified GC types
     node_base_type: u32,
     node_array_type: u32,
     next_type_idx: u32,
     next_func_idx: u32,
+    // String storage for linear memory
+    string_table: HashMap<String, u32>, // Maps string -> memory offset
+    next_data_offset: u32,
 }
 
 /// Node variant tags (for runtime type checking)
@@ -45,17 +51,53 @@ impl WasmGcEmitter {
             code: CodeSection::new(),
             exports: ExportSection::new(),
             names: NameSection::new(),
+            memory: MemorySection::new(),
+            data: DataSection::new(),
             node_base_type: 0,
             node_array_type: 0,
             next_type_idx: 0,
             next_func_idx: 0,
+            string_table: HashMap::new(),
+            next_data_offset: 0,
         }
     }
 
     /// Generate all type definitions and functions
     pub fn emit(&mut self) {
+        // Initialize linear memory (1 page = 64KB)
+        self.memory.memory(MemoryType {
+            minimum: 1,
+            maximum: None,
+            memory64: false,
+            shared: false,
+            page_size_log2: None,
+        });
+
         self.emit_gc_types();
         self.emit_constructor_functions();
+    }
+
+    /// Allocate a string in linear memory and return its offset
+    /// Returns (ptr, len) tuple
+    fn allocate_string(&mut self, s: &str) -> (u32, u32) {
+        if let Some(&offset) = self.string_table.get(s) {
+            return (offset, s.len() as u32);
+        }
+
+        let offset = self.next_data_offset;
+        let bytes = s.as_bytes();
+
+        // Add string data to data section (passive data, offset 0, memory index 0)
+        self.data.active(
+            0, // memory index
+            &ConstExpr::i32_const(offset as i32), // offset expression
+            bytes.iter().copied(),
+        );
+
+        self.string_table.insert(s.to_string(), offset);
+        self.next_data_offset += bytes.len() as u32;
+
+        (offset, bytes.len() as u32)
     }
 
     /// Define GC struct types for Node variants
@@ -304,6 +346,9 @@ impl WasmGcEmitter {
 
     /// Emit a function that constructs and returns a specific Node
     pub fn emit_node_main(&mut self, node: &Node) {
+        // Pre-allocate all strings in the node tree
+        self.collect_and_allocate_strings(node);
+
         // Use the unified Node struct type
         let node_ref = RefType {
             nullable: false,
@@ -324,6 +369,38 @@ impl WasmGcEmitter {
         self.code.function(&func);
         self.exports.export("main", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
+    }
+
+    /// Recursively collect and allocate all strings from a node tree
+    fn collect_and_allocate_strings(&mut self, node: &Node) {
+        let node = node.unwrap_meta();
+        match node {
+            Node::Text(s) | Node::Symbol(s) => {
+                self.allocate_string(s);
+            }
+            Node::Tag(name, attrs, body) => {
+                self.allocate_string(name);
+                self.collect_and_allocate_strings(attrs);
+                self.collect_and_allocate_strings(body);
+            }
+            Node::KeyValue(key, value) => {
+                self.allocate_string(key);
+                self.collect_and_allocate_strings(value);
+            }
+            Node::Pair(left, right) => {
+                self.collect_and_allocate_strings(left);
+                self.collect_and_allocate_strings(right);
+            }
+            Node::Block(items, _, _) | Node::List(items) => {
+                for item in items {
+                    self.collect_and_allocate_strings(item);
+                }
+            }
+            Node::Data(dada) => {
+                self.allocate_string(&dada.type_name);
+            }
+            _ => {}
+        }
     }
 
     /// Emit WASM instructions to construct a Node in the unified struct format
@@ -390,9 +467,12 @@ impl WasmGcEmitter {
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
-                // text_ptr, text_len (store string length for now)
-                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
-                func.instruction(&Instruction::I32Const(s.len() as i32));
+                // text_ptr, text_len (use actual allocated string)
+                let (ptr, len) = self.string_table.get(s.as_str())
+                    .map(|&offset| (offset, s.len() as u32))
+                    .unwrap_or((0, s.len() as u32));
+                func.instruction(&Instruction::I32Const(ptr as i32));
+                func.instruction(&Instruction::I32Const(len as i32));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -426,9 +506,12 @@ impl WasmGcEmitter {
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
-                // text_ptr, text_len (store symbol length for now)
-                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
-                func.instruction(&Instruction::I32Const(s.len() as i32));
+                // text_ptr, text_len (use actual allocated string)
+                let (ptr, len) = self.string_table.get(s.as_str())
+                    .map(|&offset| (offset, s.len() as u32))
+                    .unwrap_or((0, s.len() as u32));
+                func.instruction(&Instruction::I32Const(ptr as i32));
+                func.instruction(&Instruction::I32Const(len as i32));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -436,9 +519,12 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
             Node::Tag(name, _attrs, _body) => {
-                // For Tag nodes, store the tag name in name field
-                func.instruction(&Instruction::I32Const(0)); // name_ptr (placeholder for linear memory)
-                func.instruction(&Instruction::I32Const(name.len() as i32)); // name_len
+                // For Tag nodes, store the tag name in name field (use actual allocated string)
+                let (ptr, len) = self.string_table.get(name.as_str())
+                    .map(|&offset| (offset, name.len() as u32))
+                    .unwrap_or((0, name.len() as u32));
+                func.instruction(&Instruction::I32Const(ptr as i32));
+                func.instruction(&Instruction::I32Const(len as i32));
                 // tag
                 func.instruction(&Instruction::I32Const(NodeKind::Tag as i32));
                 // int_value, float_value
@@ -455,9 +541,12 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
             Node::KeyValue(key, value) => {
-                // name_ptr, name_len (store key)
-                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
-                func.instruction(&Instruction::I32Const(key.len() as i32));
+                // name_ptr, name_len (store key - use actual allocated string)
+                let (ptr, len) = self.string_table.get(key.as_str())
+                    .map(|&offset| (offset, key.len() as u32))
+                    .unwrap_or((0, key.len() as u32));
+                func.instruction(&Instruction::I32Const(ptr as i32));
+                func.instruction(&Instruction::I32Const(len as i32));
                 // tag
                 func.instruction(&Instruction::I32Const(NodeKind::KeyValue as i32));
                 // int_value, float_value
@@ -541,9 +630,12 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
             Node::Data(dada) => {
-                // name_ptr, name_len (store type_name)
-                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
-                func.instruction(&Instruction::I32Const(dada.type_name.len() as i32));
+                // name_ptr, name_len (store type_name - use actual allocated string)
+                let (ptr, len) = self.string_table.get(dada.type_name.as_str())
+                    .map(|&offset| (offset, dada.type_name.len() as u32))
+                    .unwrap_or((0, dada.type_name.len() as u32));
+                func.instruction(&Instruction::I32Const(ptr as i32));
+                func.instruction(&Instruction::I32Const(len as i32));
                 // tag
                 func.instruction(&Instruction::I32Const(NodeKind::Data as i32));
                 // int_value (store data_type), float_value
@@ -587,8 +679,10 @@ impl WasmGcEmitter {
     pub fn finish(mut self) -> Vec<u8> {
         self.module.section(&self.types);
         self.module.section(&self.functions);
+        self.module.section(&self.memory); // Memory section before code
         self.module.section(&self.exports);
         self.module.section(&self.code);
+        self.module.section(&self.data); // Data section after code
 
         // Add comprehensive names for debugging
         self.emit_names();
