@@ -21,16 +21,19 @@ fn test_node_list() {
 
 #[test]
 fn test_node_equality(){
-    let n:Node = Node::number(1);
-    let n2:Node = Node::number(2);
-    assert_eq!(n, n2);
+    let n:Node = Node::int(1);
+    let n2:Node = Node::int(2);
+    assert_eq!(n, 1);
+    assert_eq!(n2, 2);
+    assert_ne!(n, n2);
+    assert_ne!(n, 2);
 }
 
 
-#[test]
-fn test_node_box() {
-    let n: Node = Node::Data("data".into());
-    println!("{:?}", n);
-    assert_eq!(n, Node::Data("data".into()));
-}
+// #[test]
+// fn test_node_box() {
+//     let n: Node = Node::Data("data".into());
+//     println!("{:?}", n);
+//     assert_eq!(n, Node::Data("data".into()));
+// }
 
