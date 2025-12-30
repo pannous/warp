@@ -131,6 +131,18 @@ impl WaspParser {
         while let Some(ch) = self.current_char() {
             if ch == quote {
                 self.advance(); // skip closing quote
+
+                // Single quotes with exactly one character become Codepoint
+                if quote == '\'' {
+                    let mut chars = s.chars();
+                    if let Some(c) = chars.next() {
+                        if chars.next().is_none() {
+                            // Exactly one character
+                            return Ok(Node::codepoint(c));
+                        }
+                    }
+                }
+
                 return Ok(Node::text(&s));
             }
             if ch == '\\' {
