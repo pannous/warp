@@ -1,4 +1,3 @@
-use wast::parser::parse;
 use wasp::*;
 use wasp::node::Node;
 // use wasp::node::Node::*;
@@ -8,8 +7,8 @@ fn test_node(){
     // let n:Node = Node::new();
     // eval("key=value");
     let n:Node = Node::keys("key", "value");
-    eq!(n.get_key().unwrap(), "key");
-    eq!(n.get_value().unwrap(), &Node::text("value"));
+    eq!(n.get_key(), "key");
+    eq!(n.get_value(), &Node::text("value"));
     // let n:Node = KeyValue("key".s(), Box::new(Text("value".s())));
     println!("{:?}", n );
 }

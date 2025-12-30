@@ -1,21 +1,21 @@
 use wasp::*;
-use wasp::node::Node;
-// NO, test are their OWN crate!
+// test are their OWN crate!
 
-// extern crate wasp;
-#[allow(dead_code)]
-// use crate::extensions::strings::*; // NO, test are their OWN crate!
-// use super::extensions::strings::*;  // NO, test are their OWN crate!
+macro_rules! s {
+    ($lit:literal) => {
+        String::from($lit)
+    };
+}
 
-// #[path = "../src/extensions.rs"] mod extensions;
-// #[path = "../src/extensions/strings.rs"] mod strings;
-// use strings::*;  // NO, test are their OWN crate!
-// use extensions::*;
-// extern crate wasp;
-// use wasp::extensions::*;
-// use wasp::extensions::strings::*;  // NO, test are their OWN crate!
-// just soft-linked for now ;)
 
+#[test]
+fn test_str_string() {
+    let _ok:String = s!("hello");
+    eq!("hello".to_string(), String::from("hello"));
+    eq!(String::from("hello"), "hello");
+    eq!(s!("hello"), "hello");
+    eq!("hello".s(), "hello");
+}
 
 #[test]
 fn test_string_substring() {
@@ -101,16 +101,7 @@ fn test_map() {
     put!("upper ", &upper);
     assert_eq!(upper, "HELLO 🌍");
 }
-// }
 
-fn eval(s: &str) -> Node {
-    let node = wasp::wasp_parser::WaspParser::parse(s);
-    if matches!(node, Node::Error(_)) {
-        Node::symbol(s)
-    } else {
-        node
-    }
-}
 
 #[test]
 fn test_check(){
