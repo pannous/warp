@@ -2,7 +2,7 @@
 
 extern crate regex;
 
-use std::fmt;
+use  std::fmt;
 use regex::Regex;
 
 use crate::extensions::numbers::Number;
@@ -37,6 +37,7 @@ pub enum Node {
     // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
     // Data(Dada), // use via if let Some(i) = data.downcast_ref::<myType>() {
     KeyValue(String, Box<Node>),
+    Pair(Box<Node>, Box<Node>),
     Block(Vec<Node>, Kind, Bracket),
     List(Vec<Node>), // same as Block
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
@@ -89,6 +90,7 @@ impl Node {
     pub fn new() -> Node { Node::Empty }
     pub fn key(s: &str, v: Node) -> Self { Node::KeyValue(s.to_string(), Box::new(v)) }
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
+    pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
     pub fn number(n: i64) -> Self { Node::Number(Number::Int(n)) }
@@ -145,6 +147,7 @@ impl fmt::Debug for Node {
                 }
             }
             Node::KeyValue(k, v) => write!(f, "{}: {:?}", k, v),
+            Node::Pair(a, b) => write!(f, "({:?}, {:?})", a, b),
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Node::Empty => write!(f, "ø"),
             // Node::Data(x) => write!(f, "{:?}", x)
