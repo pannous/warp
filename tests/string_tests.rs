@@ -1,6 +1,6 @@
 use wasp::*;
-
-  // NO, test are their OWN crate!
+use wasp::node::Node;
+// NO, test are their OWN crate!
 
 // extern crate wasp;
 #[allow(dead_code)]
@@ -18,13 +18,53 @@ use wasp::*;
 
 
 #[test]
-fn test_substring() {
+fn test_string_substring() {
     init_lib();
     let s = "hello 🌍";
     let sub = s.substring(3, 5);
     put!("substring ", sub);
     assert_eq!(sub, "lo");
 }
+
+#[test]
+fn test_string_substring_from() {
+    init_lib();
+    let s = "hello 🌍";
+    // let sub = s.from(3); // reserved for String.from("…") constructor
+    // let sub = s.start(3); // ugly! just learn:
+    let sub = &s[3..]; 
+    put!("substring from 3", sub);
+    assert_eq!(sub, "lo 🌍");
+}
+
+
+#[test]
+fn test_string_at() {
+    init_lib();
+    let s = "hello 🌍";
+    let sub = s.at(3);
+    put!("substring from 3", sub);
+    assert_eq!(sub, 'l');
+    // assert_eq!(sub, "l");
+}
+
+
+#[test]
+fn test_string_from(){
+    init_lib();
+    let s = "hello 🌍";
+    let sub = s.after("ell");
+    assert_eq!(sub, "o 🌍");
+}
+
+#[test]
+fn test_string_set_at() {
+    init_lib();
+    let s = "hello 🌍";
+    let sub = s.set(1, 'a');
+    assert_eq!(sub, "hallo 🌍");
+}
+
 
 #[test]
 fn test_first_char() {
@@ -40,18 +80,18 @@ fn test_first_char() {
 }
 
 #[test]
-fn test_interpolation() {
-    let _world = "🌍";
-    let s = format!("hello {_world}");
-    assert_eq!(s, "hello 🌍");
-}
-
-#[test]
 fn test_reverse() {
     let s = "hello 🌍";
     let rev = s.reverse();
     put!("reverse ", &rev);
     assert_eq!(rev, "🌍 olleh");
+}
+
+#[test]
+fn test_interpolation() {
+    let _world = "🌍";
+    let s = format!("hello {_world}");
+    assert_eq!(s, "hello 🌍");
 }
 
 #[test]
@@ -63,6 +103,21 @@ fn test_map() {
 }
 // }
 
+fn eval(s:String) -> Node {
+    Node::symbol(s.as_str())
+    // wasp::node::Node(s)
+}
+
+#[test]
+fn test_check(){
+    is!(3,3);
+    is!("hello","hello");
+    // is!(3,4);// should fail and show comparison values
+    let a=3;
+    is!(a, a);
+    let b=4;
+    is!(a, b);// should fail and show comparison values
+}
 
 // #[test]
 // pub(crate) fn test_all(){
@@ -70,3 +125,4 @@ fn test_map() {
 //     test_reverse();
 //     test_map();
 // }
+

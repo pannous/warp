@@ -105,5 +105,5 @@ pub fn parse_wasm_parity(_file:&str){
 }
 
 pub fn main(){
-    parse_wasm("test.wasm");
+    let _ = parse_wasm("test.wasm");
 }

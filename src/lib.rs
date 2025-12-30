@@ -12,6 +12,7 @@ pub use extensions::utils::*;
 pub mod node;
 pub mod compiler;
 pub mod parser;
+pub mod wasp_parser;
 pub mod emitter;
 pub mod run;
 
