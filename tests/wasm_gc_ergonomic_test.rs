@@ -1,7 +1,8 @@
 use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::{read_bytes, GcObject};
+use wasp::wasm_gc_reader::{read, read_bytes};
 use wasp::node::Node;
 use wasp::extensions::numbers::Number;
+use wasp::write_wasm;
 
 /// Test ergonomic reading patterns from rasm
 #[test]
@@ -101,19 +102,18 @@ fn test_ergonomic_pattern() {
 
     let node = Node::Tag(
         "html".to_string(),
-        Box::new(Node::Empty),
-        Box::new(Node::Empty),
+        Box::new(Node::keys("param","test")),
+        Box::new(Node::keys("body","ok")),
     );
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
 
-    // Save to file
-    std::fs::write("test_nodes.wasm", &bytes).expect("Failed to write file");
+    // Write to unique file to avoid conflicts with parallel tests
+    let filename = "out/test_ergonomic_pattern.wasm";
+    write_wasm(filename, &bytes);
 
-    // Ergonomic pattern: root = read("test.wasm")
-    let root = wasp::wasm_gc_reader::read("test_nodes.wasm")
-        .expect("Failed to read WASM file");
+    let root = read(filename).expect("Failed to read WASM file");
 
     println!("✓ Read WASM file");
 
@@ -129,9 +129,6 @@ fn test_ergonomic_pattern() {
     let kind = root.kind().expect("Failed to get kind");
     println!("  Kind: {}", kind);
     assert_eq!(kind, 7); // NodeKind::Tag
-
-    // Clean up
-    std::fs::remove_file("test_nodes.wasm").ok();
 }
 
 /// Test field existence checking
