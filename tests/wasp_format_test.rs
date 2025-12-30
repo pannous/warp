@@ -94,8 +94,12 @@ fn test_wasp_roundtrip() {
     println!("Original WASP: {}", wasp);
     println!("JSON output:\n{}", json);
 
-    // Verify structure
-    assert_eq!(node.get_key().unwrap(), "user");
+    // Verify structure - user{...} becomes Tag
+    if let Node::Tag(name, _, _) = node {
+        assert_eq!(name, "user");
+    } else {
+        panic!("Expected Tag node");
+    }
 }
 
 #[test]
