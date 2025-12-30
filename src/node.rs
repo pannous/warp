@@ -671,6 +671,31 @@ impl PartialEq<&str> for Node {
     }
 }
 
+impl PartialEq<char> for Node {
+    fn eq(&self, other: &char) -> bool {
+        match self {
+            Node::Text(s) => {
+                // Check if string is exactly one char
+                let mut chars = s.chars();
+                chars.next() == Some(*other) && chars.next().is_none()
+            }
+            Node::Symbol(s) => {
+                // Check if string is exactly one char
+                let mut chars = s.chars();
+                chars.next() == Some(*other) && chars.next().is_none()
+            }
+            Node::WithMeta(node, _) => node.as_ref().eq(other),
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<&Node> for Node {
+    fn eq(&self, other: &&Node) -> bool {
+        self == *other
+    }
+}
+
 impl PartialOrd<i32> for Node {
     fn partial_cmp(&self, other: &i32) -> Option<std::cmp::Ordering> {
         match self {

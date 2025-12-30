@@ -8,13 +8,13 @@ fn test_node(){
     // let n:Node = Node::new();
     // eval("key=value");
     let n:Node = Node::keys("key", "value");
-    is!(n.get_key().unwrap(), "key");
-    is!(n.get_value().unwrap(), &Node::text("value"));
+    eq!(n.get_key().unwrap(), "key");
+    eq!(n.get_value().unwrap(), &Node::text("value"));
     // let n:Node = KeyValue("key".s(), Box::new(Text("value".s())));
     println!("{:?}", n );
 }
 
-fn eval(code: &str) -> Node {
+fn eval(code: String) -> Node {
     Node::todo(format!("Eval not implemented: {}", code))
 }
 
@@ -47,7 +47,7 @@ fn test_node_equality(){
 fn test_node_data_eq() {
     let n = Node::data(vec![1, 2, 3]);
     let n2 = n.clone();
-    is!(n,n2)
+    eq!(n,n2)
 }
 
 // #[test]
