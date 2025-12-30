@@ -7,7 +7,7 @@ fn test_position_tracking() {
 age: 30
 city: "NYC""#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
@@ -44,7 +44,7 @@ name: "Bob"
 // Age field
 age: 25"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed with comments: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
@@ -75,7 +75,7 @@ fn test_nested_position_tracking() {
     host: "localhost"
 }"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Nested structure: {:?}", node);
 
     if let Some(meta) = node.get_meta() {
@@ -91,7 +91,7 @@ fn test_multiline_structure() {
     body{ content:"Hello" }
 }"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("HTML structure: {:?}", node);
 
     // Top-level html should be at line 1
@@ -105,7 +105,7 @@ fn test_multiline_structure() {
 fn test_column_tracking() {
     let wasp = "a:1 b:2 c:3";
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
@@ -139,7 +139,7 @@ fn test_column_tracking() {
 fn test_position_in_json_output() {
     let wasp = "// Important\nvalue: 42";
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("JSON with metadata:\n{}", json);

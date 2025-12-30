@@ -125,7 +125,7 @@ impl WitEmitter {
 
         // Emit core functions
         self.emit_line("// Parse WASP format to Node");
-        self.emit_line("parse: func(input: string) -> result<node, string>;");
+        self.emit_line("parse: func(input: string) -> Node;");
         self.emit_blank();
 
         self.emit_line("// Serialize Node to JSON");
@@ -257,6 +257,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
                 column
             )
         }
+        Node::Error(e) => format!("error(\"{}\")", escape_string(e))
     }
 }
 

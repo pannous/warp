@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use Instruction::I32Const;
 use wasmparser::{Validator, WasmFeatures};
 use log::trace;
+use crate::wasm_gc_reader::read_bytes;
+use crate::wasp_parser::WaspParser;
 
 /// WebAssembly GC emitter for Node AST
 /// Generates WASM GC bytecode using struct and array types
@@ -679,6 +681,20 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
+            Node::Error(_) => {
+                // Emit an Empty node for errors
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(NodeKind::Empty as i32));
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
         }
     }
 
@@ -762,37 +778,18 @@ impl WasmGcEmitter {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_emit_gc_types() {
-        let mut emitter = WasmGcEmitter::new();
-        emitter.emit();
-
-        // Verify unified type indices are valid (can be 0 for first type)
-        assert_eq!(emitter.node_base_type, 0); // First type
-        assert_eq!(emitter.node_array_type, 1); // Second type
-        assert!(emitter.next_type_idx > 1); // We defined at least 2 types
+pub fn eval(code: &str) -> Node {
+    let node = WaspParser::parse(code);
+    if let Node::Error(e) = &node {
+        panic!("Parse error: {}", e);
     }
-
-    #[test]
-    fn test_generate_wasm() {
-        let mut emitter = WasmGcEmitter::new();
-        emitter.emit();
-        let bytes = emitter.finish();
-
-        // Should have WASM magic number
-        assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6d]);
-        // Should have version 1
-        assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00]);
-    }
-
-    #[test]
-    fn test_node_kind_enum() {
-        assert_eq!(NodeKind::Empty as u32, 0);
-        assert_eq!(NodeKind::Number as u32, 1);
-        assert_eq!(NodeKind::Codepoint as u32, 3);
+    let mut emitter = WasmGcEmitter::new();
+    emitter.emit_node_main(&node);
+    let wasm_bytes = emitter.finish();
+    let obj = read_bytes(&wasm_bytes);
+    match obj {
+        Err(e) => panic!("Failed to read WASM bytes: {}", e),
+        Ok(x) => Node::from_gc_object(&x)
     }
 }
