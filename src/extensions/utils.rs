@@ -1,4 +1,7 @@
 use std::io::ErrorKind;
+use std::fs::{File, create_dir_all};
+use std::io::Write;
+use std::path::Path;
 //noinspection ALL
 #[cfg(not(feature = "wasm"))]
 #[cfg(not(test))]
@@ -52,4 +55,24 @@ impl FileExtensions for std::fs::File {
         "std::fs::File does not expose the file name or path.".to_string()
     }
 
+}
+
+/// Write bytes to a WASM file, creating parent directories if needed
+/// Returns true on success, false on error (no panics)
+pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
+    let path = Path::new(filename);
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            if create_dir_all(parent).is_err() {
+                return false;
+            }
+        }
+    }
+
+    // Write file
+    File::create(filename)
+        .and_then(|mut f| f.write_all(bytes))
+        .is_ok()
 }
