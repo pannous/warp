@@ -11,21 +11,8 @@ pub struct WasmGcEmitter {
     code: CodeSection,
     exports: ExportSection,
     names: NameSection,
-    // Type indices for GC types
+    // Type indices for unified GC types
     node_base_type: u32,
-    empty_type: u32,
-    number_type: u32,
-    text_type: u32,
-    codepoint_type: u32,
-    symbol_type: u32,
-    keyvalue_type: u32,
-    pair_type: u32,
-    tag_type: u32,
-    block_type: u32,
-    list_type: u32,
-    data_type: u32,
-    meta_type: u32,
-    withmeta_type: u32,
     node_array_type: u32,
     next_type_idx: u32,
     next_func_idx: u32,
@@ -59,19 +46,6 @@ impl WasmGcEmitter {
             exports: ExportSection::new(),
             names: NameSection::new(),
             node_base_type: 0,
-            empty_type: 0,
-            number_type: 0,
-            text_type: 0,
-            codepoint_type: 0,
-            symbol_type: 0,
-            keyvalue_type: 0,
-            pair_type: 0,
-            tag_type: 0,
-            block_type: 0,
-            list_type: 0,
-            data_type: 0,
-            meta_type: 0,
-            withmeta_type: 0,
             node_array_type: 0,
             next_type_idx: 0,
             next_func_idx: 0,
@@ -134,244 +108,121 @@ impl WasmGcEmitter {
         self.types.ty().array(&storage_type, true);
         self.node_array_type = self.next_type_idx;
         self.next_type_idx += 1;
-
-        // Base Node type - abstract supertype (empty struct with tag)
-        // Fields: [kind: i8]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind tag
-        ]);
-        self.node_base_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Empty node: [kind: i8]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-        ]);
-        self.empty_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Number node: [kind: i8, is_int: i8, int_val: i64, float_val: f64]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::I8, mutable: false }, // is_int flag
-            FieldType { element_type: StorageType::Val(ValType::I64), mutable: false }, // int value
-            FieldType { element_type: StorageType::Val(ValType::F64), mutable: false }, // float value
-        ]);
-        self.number_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Text node: [kind: i8, ptr: i32, len: i32]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // len
-        ]);
-        self.text_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Codepoint node: [kind: i8, codepoint: i32]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // codepoint
-        ]);
-        self.codepoint_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Symbol node: [kind: i8, ptr: i32, len: i32]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // len
-        ]);
-        self.symbol_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // KeyValue node: [kind: i8, key_ptr: i32, key_len: i32, value: ref node]
-        let value_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // key ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // key len
-            FieldType { element_type: StorageType::Val(ValType::Ref(value_ref)), mutable: false }, // value
-        ]);
-        self.keyvalue_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Pair node: [kind: i8, first: ref node, second: ref node]
-        let node_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // first
-            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // second
-        ]);
-        self.pair_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Tag node: [kind: i8, name_ptr: i32, name_len: i32, attrs: ref node, body: ref node]
-        let node_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // name ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // name len
-            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // attrs
-            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // body
-        ]);
-        self.tag_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Block/List node: [kind: i8, grouper: i8, bracket: i8, items: ref array]
-        let array_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_array_type),
-        };
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::I8, mutable: false }, // grouper
-            FieldType { element_type: StorageType::I8, mutable: false }, // bracket
-            FieldType { element_type: StorageType::Val(ValType::Ref(array_ref)), mutable: false }, // items
-        ]);
-        self.block_type = self.next_type_idx;
-        self.list_type = self.next_type_idx; // List uses same structure
-        self.next_type_idx += 1;
-
-        // Data node: [kind: i8, type_name_ptr: i32, type_name_len: i32, data_type: i8]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // type_name ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // type_name len
-            FieldType { element_type: StorageType::I8, mutable: false }, // data_type enum
-        ]);
-        self.data_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // Meta record: [comment_ptr: i32, comment_len: i32, line: i32, column: i32]
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // comment ptr
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // comment len
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // line
-            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // column
-        ]);
-        self.meta_type = self.next_type_idx;
-        self.next_type_idx += 1;
-
-        // WithMeta node: [kind: i8, node: ref node, meta: ref meta]
-        let node_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        let meta_ref = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.meta_type),
-        };
-        self.types.ty().struct_(vec![
-            FieldType { element_type: StorageType::I8, mutable: false }, // kind
-            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // node
-            FieldType { element_type: StorageType::Val(ValType::Ref(meta_ref)), mutable: false }, // meta
-        ]);
-        self.withmeta_type = self.next_type_idx;
-        self.next_type_idx += 1;
     }
 
-    /// Emit constructor functions for creating Node instances
+    /// Emit constructor functions for creating Node instances using unified struct
     fn emit_constructor_functions(&mut self) {
-        // make_empty() -> (ref empty)
-        let empty_ref = RefType {
+        // make_empty() -> (ref node)
+        let node_ref = RefType {
             nullable: false,
-            heap_type: HeapType::Concrete(self.empty_type),
+            heap_type: HeapType::Concrete(self.node_base_type),
         };
         let func_type = self.types.len();
-        self.types.ty().function(vec![], vec![ValType::Ref(empty_ref)]);
+        self.types.ty().function(vec![], vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![]);
-        func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
-        func.instruction(&Instruction::StructNew(self.empty_type));
+        // Emit all 10 fields: name_ptr, name_len, tag, int_value, float_value, text_ptr, text_len, left, right, meta
+        func.instruction(&Instruction::I32Const(0)); // name_ptr
+        func.instruction(&Instruction::I32Const(0)); // name_len
+        func.instruction(&Instruction::I32Const(NodeKind::Empty as i32)); // tag
+        func.instruction(&Instruction::I64Const(0)); // int_value
+        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value
+        func.instruction(&Instruction::I32Const(0)); // text_ptr
+        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
+        func.instruction(&Instruction::StructNew(self.node_base_type));
         func.instruction(&Instruction::End);
 
         self.code.function(&func);
         self.exports.export("make_empty", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
 
-        // make_int(i64) -> (ref number)
-        let number_ref = RefType {
-            nullable: false,
-            heap_type: HeapType::Concrete(self.number_type),
-        };
+        // make_int(i64) -> (ref node)
         let func_type = self.types.len();
-        self.types.ty().function(vec![ValType::I64], vec![ValType::Ref(number_ref)]);
+        self.types.ty().function(vec![ValType::I64], vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::I64)]);
-        func.instruction(&Instruction::I32Const(NodeKind::Number as i32));
-        func.instruction(&Instruction::I32Const(1)); // is_int = true
-        func.instruction(&Instruction::LocalGet(0)); // int value
-        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float value (unused)
-        func.instruction(&Instruction::StructNew(self.number_type));
+        func.instruction(&Instruction::I32Const(0)); // name_ptr
+        func.instruction(&Instruction::I32Const(0)); // name_len
+        func.instruction(&Instruction::I32Const(NodeKind::Number as i32)); // tag
+        func.instruction(&Instruction::LocalGet(0)); // int_value
+        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value (unused)
+        func.instruction(&Instruction::I32Const(0)); // text_ptr
+        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
+        func.instruction(&Instruction::StructNew(self.node_base_type));
         func.instruction(&Instruction::End);
 
         self.code.function(&func);
         self.exports.export("make_int", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
 
-        // make_float(f64) -> (ref number)
+        // make_float(f64) -> (ref node)
         let func_type = self.types.len();
-        self.types.ty().function(vec![ValType::F64], vec![ValType::Ref(number_ref)]);
+        self.types.ty().function(vec![ValType::F64], vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::F64)]);
-        func.instruction(&Instruction::I32Const(NodeKind::Number as i32));
-        func.instruction(&Instruction::I32Const(0)); // is_int = false
-        func.instruction(&Instruction::I64Const(0)); // int value (unused)
-        func.instruction(&Instruction::LocalGet(0)); // float value
-        func.instruction(&Instruction::StructNew(self.number_type));
+        func.instruction(&Instruction::I32Const(0)); // name_ptr
+        func.instruction(&Instruction::I32Const(0)); // name_len
+        func.instruction(&Instruction::I32Const(NodeKind::Number as i32)); // tag
+        func.instruction(&Instruction::I64Const(0)); // int_value (unused)
+        func.instruction(&Instruction::LocalGet(0)); // float_value
+        func.instruction(&Instruction::I32Const(0)); // text_ptr
+        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
+        func.instruction(&Instruction::StructNew(self.node_base_type));
         func.instruction(&Instruction::End);
 
         self.code.function(&func);
         self.exports.export("make_float", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
 
-        // make_codepoint(i32) -> (ref codepoint)
-        let codepoint_ref = RefType {
-            nullable: false,
-            heap_type: HeapType::Concrete(self.codepoint_type),
-        };
+        // make_codepoint(i32) -> (ref node)
         let func_type = self.types.len();
-        self.types.ty().function(vec![ValType::I32], vec![ValType::Ref(codepoint_ref)]);
+        self.types.ty().function(vec![ValType::I32], vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::I32)]);
-        func.instruction(&Instruction::I32Const(NodeKind::Codepoint as i32));
-        func.instruction(&Instruction::LocalGet(0)); // codepoint value
-        func.instruction(&Instruction::StructNew(self.codepoint_type));
+        func.instruction(&Instruction::I32Const(0)); // name_ptr
+        func.instruction(&Instruction::I32Const(0)); // name_len
+        func.instruction(&Instruction::I32Const(NodeKind::Codepoint as i32)); // tag
+        func.instruction(&Instruction::I64Const(0)); // int_value
+        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value
+        func.instruction(&Instruction::LocalGet(0)); // text_ptr (reusing for codepoint)
+        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
+        func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
+        func.instruction(&Instruction::StructNew(self.node_base_type));
         func.instruction(&Instruction::End);
 
         self.code.function(&func);
         self.exports.export("make_codepoint", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
 
-        // get_node_kind(ref node) -> i32
-        let node_ref = RefType {
+        // get_node_kind(ref node) -> i32 (returns tag field)
+        let node_ref_nullable = RefType {
             nullable: true,
             heap_type: HeapType::Concrete(self.node_base_type),
         };
         let func_type = self.types.len();
-        self.types.ty().function(vec![ValType::Ref(node_ref)], vec![ValType::I32]);
+        self.types.ty().function(vec![ValType::Ref(node_ref_nullable)], vec![ValType::I32]);
         self.functions.function(func_type);
 
-        let mut func = Function::new(vec![(1, ValType::Ref(node_ref))]);
+        let mut func = Function::new(vec![(1, ValType::Ref(node_ref_nullable))]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
-            field_index: 0,
+            field_index: 2, // tag field is at index 2
         });
         func.instruction(&Instruction::End);
 
@@ -591,18 +442,7 @@ impl WasmGcEmitter {
         let mut type_names = NameMap::new();
         type_names.append(self.node_base_type, "node");
         type_names.append(self.node_array_type, "node_array");
-        type_names.append(self.empty_type, "empty_node");
-        type_names.append(self.number_type, "number_node");
-        type_names.append(self.text_type, "text_node");
-        type_names.append(self.codepoint_type, "codepoint_node");
-        type_names.append(self.symbol_type, "symbol_node");
-        type_names.append(self.keyvalue_type, "keyvalue_node");
-        type_names.append(self.pair_type, "pair_node");
-        type_names.append(self.tag_type, "tag_node");
-        type_names.append(self.block_type, "block_node");
-        type_names.append(self.data_type, "data_node");
-        type_names.append(self.meta_type, "meta");
-        type_names.append(self.withmeta_type, "withmeta_node");
+        // Only unified node and node_array types
         self.names.types(&type_names);
 
         // Field names for the unified node struct
@@ -647,12 +487,10 @@ mod tests {
         let mut emitter = WasmGcEmitter::new();
         emitter.emit();
 
-        // Verify type indices are set
-        assert_ne!(emitter.node_base_type, 0);
-        assert_ne!(emitter.empty_type, 0);
-        assert_ne!(emitter.number_type, 0);
-        assert_ne!(emitter.codepoint_type, 0);
-        assert_ne!(emitter.text_type, 0);
+        // Verify unified type indices are valid (can be 0 for first type)
+        assert_eq!(emitter.node_base_type, 0); // First type
+        assert_eq!(emitter.node_array_type, 1); // Second type
+        assert!(emitter.next_type_idx > 1); // We defined at least 2 types
     }
 
     #[test]
