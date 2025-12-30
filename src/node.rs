@@ -11,42 +11,104 @@ use std::ops::Index; // node[i]
 use std::any::Any;
 use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
 
-// Custom trait for cloneable Any types
+// Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {
     fn clone_any(&self) -> Box<dyn CloneAny>;
     fn as_any(&self) -> &dyn Any;
+    fn eq_any(&self, other: &dyn CloneAny) -> bool;
 }
 
-impl<T: 'static + Clone> CloneAny for T {
+impl<T: 'static + Clone + PartialEq> CloneAny for T {
     fn clone_any(&self) -> Box<dyn CloneAny> {
         Box::new(self.clone())
     }
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn eq_any(&self, other: &dyn CloneAny) -> bool {
+        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
+            self == other_t
+        } else {
+            false
+        }
+    }
 }
 
-pub struct Dada(Box<dyn CloneAny>);
+#[derive(Clone, Debug, PartialEq)]
+pub enum DataType {
+    Vec,
+    Tuple,
+    Struct,
+    Primitive,
+    String,
+    Other,
+}
+
+pub struct Dada {
+    data: Box<dyn CloneAny>,
+    pub type_name: String,
+    pub data_type: DataType,
+}
+
+// most generic container for any kind of data not captured by other node types
+// Vec, tuples, primitives, custom structs, etc.
+// let v = Node::data(vec![1, 2, 3]);
+// let t = Node::data((42, "answer"));
+// let n = Node::data(CustomData { id: 42, name: "test" });
 
 impl Dada {
-    pub fn new<T: 'static + Clone>(data: T) -> Self {
-        Dada(Box::new(data))
+    pub fn new<T: 'static + Clone + PartialEq>(data: T) -> Self {
+        let type_name = std::any::type_name::<T>().to_string();
+        let data_type = Self::infer_type(&type_name);
+        Dada {
+            data: Box::new(data),
+            type_name,
+            data_type,
+        }
+    }
+
+    fn infer_type(type_name: &str) -> DataType {
+        if type_name.starts_with("alloc::vec::Vec") || type_name.starts_with("std::vec::Vec") {
+            DataType::Vec
+        } else if type_name.starts_with('(') && type_name.ends_with(')') {
+            DataType::Tuple
+        } else if type_name.contains("::String") || type_name == "str" || type_name == "&str" {
+            DataType::String
+        } else if type_name.contains("::") {
+            DataType::Struct
+        } else if matches!(type_name, "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                                     | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
+                                     | "f32" | "f64" | "bool" | "char") {
+            DataType::Primitive
+        } else {
+            DataType::Other
+        }
     }
 
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.0.as_any().downcast_ref::<T>()
+        self.data.as_any().downcast_ref::<T>()
     }
 }
 
 impl Clone for Dada {
     fn clone(&self) -> Self {
-        Dada(self.0.clone_any())
+        Dada {
+            data: self.data.clone_any(),
+            type_name: self.type_name.clone(),
+            data_type: self.data_type.clone(),
+        }
     }
 }
 
 impl fmt::Debug for Dada {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Dada(..)")
+        write!(f, "Dada({:?}:{})", self.data_type, self.type_name)
+    }
+}
+
+impl PartialEq for Dada {
+    fn eq(&self, other: &Self) -> bool {
+        self.data.eq_any(other.data.as_ref())
     }
 }
 
@@ -61,11 +123,11 @@ pub enum Node {
     Symbol(String),
     // Keyword(String), Call, Declaration … AST or here? AST!
     // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
-    Data(Dada), // use via if let Some(i) = data.downcast_ref::<myType>() {
     KeyValue(String, Box<Node>),
     Pair(Box<Node>, Box<Node>),
     Block(Vec<Node>, Kind, Bracket),
     List(Vec<Node>), // same as Block
+    Data(Dada), // most generic container for any kind of data not captured by other node types
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
     // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
     // List(Vec<T>) // turns whole Node into a generic type :(
@@ -119,7 +181,7 @@ impl Node {
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
-    pub fn data<T: 'static + Clone>(value: T) -> Self { Node::Data(Dada::new(value)) }
+    pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self { Node::Data(Dada::new(value)) }
     pub fn number(n: Number) -> Self { Node::Number(n) }
     pub fn int(n: i64) -> Self { Node::Number(Number::Int(n)) }
     pub fn float(n: f64) -> Self { Node::Number(Number::Float(n)) }
@@ -242,7 +304,12 @@ impl PartialEq for Node {
                     _ => false,
                 }
             }
-            Node::Data(_) => false,
+            Node::Data(d) => {
+                match other {
+                    Node::Data(d2) => d == d2,
+                    _ => false,
+                }
+            }
             // Node::KeyValue(_, _) => {}
             // Node::Block(_, _, _) => {}
             // Node::List(_) => {}
