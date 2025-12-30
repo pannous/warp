@@ -103,8 +103,13 @@ fn test_map() {
 }
 // }
 
-fn eval(s:String) -> Node {
-    wasp::wasp_parser::WaspParser::parse(&s).unwrap_or_else(|_| Node::symbol(&s))
+fn eval(s: &str) -> Node {
+    let node = wasp::wasp_parser::WaspParser::parse(s);
+    if matches!(node, Node::Error(_)) {
+        Node::symbol(s)
+    } else {
+        node
+    }
 }
 
 #[test]
@@ -112,8 +117,8 @@ fn test_check(){
     eq!(4,4);
     is!("3.0",3.0);
     is!("3",3);
-    is!('🍏','🍏');
-    is!("🍏",'🍏');// !
+    is!("'🍏'",'🍏');
+    is!("\"🍏\"",'🍏');// !
     is!("hello","hello");// goes through eval! may serialize and deserialize wasm ;)
     let a=3;
     assert!(a==3);

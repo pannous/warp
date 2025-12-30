@@ -58,7 +58,7 @@ interface ast {
   }
 
   // Parse WASP format to Node
-  parse: func(input: string) -> result<node, string>;
+  parse: func(input: string) -> Node;
 
   // Serialize Node to JSON
   to-json: func(node: node) -> result<string, string>;

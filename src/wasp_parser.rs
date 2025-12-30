@@ -1,12 +1,14 @@
 use crate::node::{Node, Grouper, Bracket, Meta};
+use crate::node::Node::Error;
 use crate::extensions::numbers::Number;
 use std::fs;
 
 /// Read and parse a WASP file
-pub fn read(path: &str) -> Result<Node, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {}", path, e))?;
-    WaspParser::parse(&content)
+pub fn read(path: &str) -> Node {
+    match fs::read_to_string(path) {
+        Ok(content) => WaspParser::parse(&content),
+        _ => Error(format!("Failed to read {}", path)),
+    }
 }
 
 pub struct WaspParser {
@@ -21,7 +23,7 @@ impl WaspParser {
         WaspParser { input, pos: 0, line: 1, column: 1 }
     }
 
-    pub fn parse(input: &str) -> Result<Node, String> {
+    pub fn parse(input: &str) -> Node {
         let mut parser = WaspParser::new(input.to_string());
         parser.parse_value()
     }
@@ -135,7 +137,7 @@ impl WaspParser {
         comment
     }
 
-    fn parse_value(&mut self) -> Result<Node, String> {
+    fn parse_value(&mut self) -> Node {
         let comment = self.skip_whitespace_and_comments();
 
         // Capture position before parsing
@@ -147,9 +149,9 @@ impl WaspParser {
             Some('{') => self.parse_block(),
             Some(ch) if ch.is_ascii_digit() || ch == '-' => self.parse_number(),
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
-            Some(ch) => Err(format!("Unexpected character: {}", ch)),
-            None => Err("Unexpected end of input".to_string()),
-        }?;
+            Some(ch) => Error(format!("Unexpected character: {}", ch)),
+            None => Error("Unexpected end of input".to_string()),
+        };
 
         // Attach metadata with position and comment
         let mut meta = Meta::with_position(line, column);
@@ -157,12 +159,11 @@ impl WaspParser {
             meta.comment = Some(c);
         }
         node = node.with_meta(meta);
-
-        Ok(node)
+        node
     }
 
-    fn parse_string(&mut self) -> Result<Node, String> {
-        let quote = self.current_char().unwrap();
+    fn parse_string(&mut self) -> Node {
+        let quote = self.current_char().unwrap_or('"');
         self.advance(); // skip opening quote
 
         let mut s = String::new();
@@ -176,12 +177,12 @@ impl WaspParser {
                     if let Some(c) = chars.next() {
                         if chars.next().is_none() {
                             // Exactly one character
-                            return Ok(Node::codepoint(c));
+                            return Node::codepoint(c);
                         }
                     }
                 }
 
-                return Ok(Node::text(&s));
+                return Node::text(&s);
             }
             if ch == '\\' {
                 self.advance();
@@ -199,10 +200,10 @@ impl WaspParser {
                 self.advance();
             }
         }
-        Err("Unterminated string".to_string())
+        Error("Unterminated string".to_string())
     }
 
-    fn parse_number(&mut self) -> Result<Node, String> {
+    fn parse_number(&mut self) -> Node {
         let mut num_str = String::new();
         let mut has_dot = false;
 
@@ -227,11 +228,11 @@ impl WaspParser {
         if has_dot {
             num_str.parse::<f64>()
                 .map(Node::float)
-                .map_err(|_| format!("Invalid float: {}", num_str))
+                .expect("Invalid float")
         } else {
             num_str.parse::<i64>()
                 .map(Node::int)
-                .map_err(|_| format!("Invalid integer: {}", num_str))
+                .expect("Invalid int")
         }
     }
 
@@ -254,42 +255,48 @@ impl WaspParser {
         }
     }
 
-    fn parse_symbol_or_named_block(&mut self) -> Result<Node, String> {
-        let symbol = self.parse_symbol()?;
+    fn parse_symbol_or_named_block(&mut self) -> Node {
+        let symbol = match self.parse_symbol() {
+            Ok(s) => s,
+            Err(e) => return Node::Error(e),
+        };
         self.skip_whitespace();
 
         // Check for named block: name{...} or name(...)
         match self.current_char() {
             Some('{') => {
-                let block = self.parse_block()?;
+                let block = self.parse_block();
                 // Create Tag for named blocks: html{...} -> Tag("html", None, body)
-                Ok(Node::tag(&symbol, block))
+                Node::tag(&symbol, block)
             }
             Some('(') => {
                 // Function-like: def name(params){body}
-                let params = self.parse_parenthesized()?;
+                let params = match self.parse_parenthesized() {
+                    Ok(p) => p,
+                    Err(e) => return Node::Error(e),
+                };
                 self.skip_whitespace();
 
                 if self.current_char() == Some('{') {
-                    let body = self.parse_block()?;
+                    let body = self.parse_block();
                     // Use Pair for function syntax: name(params) : body
                     let signature = Node::text(&format!("{}{}", symbol, params));
-                    Ok(Node::pair(signature, body))
+                    Node::pair(signature, body)
                 } else {
                     // Just a call: name(params)
-                    Ok(Node::text(&format!("{}{}", symbol, params)))
+                    Node::text(&format!("{}{}", symbol, params))
                 }
             }
             Some(':') | Some('=') => {
                 // Key-value pair (both : and = are supported)
                 self.advance();
                 self.skip_whitespace();
-                let value = self.parse_value()?;
-                Ok(Node::key(&symbol, value))
+                let value = self.parse_value();
+                Node::key(&symbol, value)
             }
             _ => {
                 // Just a symbol
-                Ok(Node::symbol(&symbol))
+                Node::symbol(&symbol)
             }
         }
     }
@@ -318,7 +325,7 @@ impl WaspParser {
         Err("Unterminated parentheses".to_string())
     }
 
-    fn parse_list(&mut self) -> Result<Node, String> {
+    fn parse_list(&mut self) -> Node {
         self.advance(); // skip '['
         let mut items = Vec::new();
 
@@ -330,7 +337,10 @@ impl WaspParser {
                 break;
             }
 
-            items.push(self.parse_value()?);
+            let value = self.parse_value();
+            if value != Node::Empty {
+                items.push(value);
+            }
             self.skip_whitespace();
 
             match self.current_char() {
@@ -344,11 +354,10 @@ impl WaspParser {
                 _ => {}
             }
         }
-
-        Ok(Node::list(items))
+        Node::list(items)
     }
 
-    fn parse_block(&mut self) -> Result<Node, String> {
+    fn parse_block(&mut self) -> Node {
         self.advance(); // skip '{'
         let mut items = Vec::new();
 
@@ -361,10 +370,13 @@ impl WaspParser {
             }
 
             if self.current_char().is_none() {
-                return Err("Unterminated block".to_string());
+                return Node::Error("Unterminated block".to_string());
             }
 
-            items.push(self.parse_value()?);
+            let value = self.parse_value();
+            if value != Node::Empty {
+                items.push(value);
+            }
             self.skip_whitespace_and_comments();
 
             // Optional comma/semicolon separator
@@ -375,7 +387,7 @@ impl WaspParser {
             }
         }
 
-        Ok(Node::Block(items, Grouper::Object, Bracket::Curly))
+        Node::Block(items, Grouper::Object, Bracket::Curly)
     }
 }
 
@@ -385,19 +397,19 @@ mod tests {
 
     #[test]
     fn test_parse_number() {
-        let node = WaspParser::parse("42").unwrap();
+        let node = WaspParser::parse("42");
         assert_eq!(node, 42);
     }
 
     #[test]
     fn test_parse_string() {
-        let node = WaspParser::parse(r#""hello""#).unwrap();
+        let node = WaspParser::parse(r#""hello""#);
         assert_eq!(node, "hello");
     }
 
     #[test]
     fn test_parse_symbol() {
-        let node = WaspParser::parse("red").unwrap();
+        let node = WaspParser::parse("red");
         if let Node::Symbol(s) = node {
             assert_eq!(s, "red");
         }
@@ -405,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_parse_list() {
-        let node = WaspParser::parse("[1, 2, 3]").unwrap();
+        let node = WaspParser::parse("[1, 2, 3]");
         if let Node::List(items) = node {
             assert_eq!(items.len(), 3);
             assert_eq!(items[0], 1);
@@ -414,13 +426,13 @@ mod tests {
 
     #[test]
     fn test_parse_key_value() {
-        let node = WaspParser::parse(r#"name: "Alice""#).unwrap();
-        assert_eq!(node.get_key().unwrap(), "name");
+        let node = WaspParser::parse(r#"name: "Alice""#);
+        assert_eq!(node.get_key(), Some("name"));
     }
 
     #[test]
     fn test_parse_named_block() {
-        let node = WaspParser::parse("html{ }").unwrap();
+        let node = WaspParser::parse("html{ }");
         // Named blocks become Tags
         if let Node::Tag { title, .. } = node.unwrap_meta() {
             assert_eq!(title, "html");
@@ -435,7 +447,7 @@ mod tests {
             ul{ li:"hi" li:"ok" }
             colors=[red, green, blue]
         }"#;
-        let node = WaspParser::parse(input).unwrap();
+        let node = WaspParser::parse(input);
         println!("{:?}", node);
         if let Node::Tag { title, .. } = node.unwrap_meta() {
             assert_eq!(title, "html");
@@ -447,7 +459,7 @@ mod tests {
     #[test]
     fn test_parse_function() {
         let input = "def myfun(a, b){ return a + b }";
-        let node = WaspParser::parse(input).unwrap();
+        let node = WaspParser::parse(input);
         println!("{:?}", node);
         // Should be Pair(signature, body)
         if let Node::Pair(sig, body) = node {
