@@ -65,6 +65,9 @@ impl Add for Number {
             (Number::Int(n1), Number::Int(n2)) => Number::Int(n1 + n2),
             (Number::Float(n1), Number::Float(n2)) => Number::Float(n1 + n2),
             (Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 + r2, i1 + i2),
+            // Mixed type conversions - convert to Float
+            (Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 + n2),
+            (Number::Float(n1), Number::Int(n2)) => Number::Float(n1 + n2 as f64),
             _ => panic!("unsupported types"),
         }
     }
@@ -83,6 +86,9 @@ impl Sub for Number {
             (Number::Int(n1), Number::Int(n2)) => Number::Int(n1 - n2),
             (Number::Float(n1), Number::Float(n2)) => Number::Float(n1 - n2),
             (Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 - r2, i1 - i2),
+            // Mixed type conversions - convert to Float
+            (Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 - n2),
+            (Number::Float(n1), Number::Int(n2)) => Number::Float(n1 - n2 as f64),
             _ => panic!("unsupported types"),
         }
     }
