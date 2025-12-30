@@ -1,8 +1,10 @@
+use wasp::StringExtensions;
 use wasp::node::Node;
 use wasp::node::Node::*;
 use wasp::run::wasmtime_runner::run;
 use wasp::wasm_gc_emitter::{NodeKind, WasmGcEmitter,eval};
 use wasp::{eq, is, write_wasm};
+use wasp::Number::Int;
 
 #[test]
 fn test_wasm_roundtrip() {
@@ -25,21 +27,19 @@ fn test_wasm_roundtrip() {
 
     // let root : GcObject = run_wasm_gc_object(path).expect("Failed to read back WASM");
     let root = run(path); // reconstruct Node from WASM via GcObject
-    println!("✓ Read back root node from WASM: {:?}", root);
+    println!("✓ Read back root node from !WASM: {:?}", root);
     eq!(root, node);
 }
 
 #[test]
 fn test_wasm_roundtrip_via_is() {
     let x = Tag {
-        title: "html".to_string(),
-        params: Box::new(KeyValue(
-            "test".to_string(),
-            Box::new(Number(wasp::extensions::numbers::Number::Int(1))),
-        )),
+        title: "html".s(),
+        params: Box::new(KeyValue("test".s(), Box::new(Number(Int(1))))),
         body: Box::new(Node::Empty),
     };
     let ok:Node = eval("html{test=1}");
+    eq!(ok, x);
     is!("html{test=1}", x);
 }
 
