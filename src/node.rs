@@ -10,6 +10,8 @@ use crate::extensions::strings::StringExtensions;
 use std::ops::Index; // node[i]
 use std::any::Any;
 use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::ser::SerializeStruct;
 
 // Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {
@@ -34,7 +36,7 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
     Vec,
     Tuple,
@@ -112,8 +114,41 @@ impl PartialEq for Dada {
     }
 }
 
+impl Serialize for Dada {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Dada", 2)?;
+        state.serialize_field("type_name", &self.type_name)?;
+        state.serialize_field("data_type", &self.data_type)?;
+        state.end()
+    }
+}
 
-#[derive(Clone)]
+impl<'de> Deserialize<'de> for Dada {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct DadaHelper {
+            type_name: String,
+            data_type: DataType,
+        }
+
+        let helper = DadaHelper::deserialize(deserializer)?;
+        // Create a placeholder Dada with empty string
+        Ok(Dada {
+            data: Box::new(String::from("<deserialized>")),
+            type_name: helper.type_name,
+            data_type: helper.data_type,
+        })
+    }
+}
+
+
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
     Empty, // Null, Nill, None, Ø, ø null nill none nil
     // Number(i32),
@@ -233,6 +268,14 @@ impl Node {
         let s = format!("{:?}", self);
         s.trim().to_string()
     }
+
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    pub fn from_json(json: &str) -> Result<Node, serde_json::Error> {
+        serde_json::from_str(json)
+    }
 }
 
 impl fmt::Debug for Node {
@@ -264,7 +307,7 @@ impl fmt::Debug for Node {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Kind {
     Object,
     // {}
@@ -277,7 +320,7 @@ pub enum Kind {
     Other(char, char),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Bracket {
     Curly,
     Square,

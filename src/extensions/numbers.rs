@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::ops::{Add, Sub, Mul, Div};
+use serde::{Serialize, Deserialize};
 
 // pub mod Numbers{
 pub fn tee() {
@@ -7,12 +8,14 @@ pub fn tee() {
 }
 
 // PartialEq per hand!
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Number {
     Int(i64),
     Float(f64),
     Quotient(i64, i64),
     Complex(f64, f64),
+    // Hyper(Vec<Pair<f64,f64>>)
+    // Hyper Hyperreal with epsilon infinitesimal and omega infinite parts
     // other variants as needed
 }
 
@@ -149,7 +152,10 @@ impl PartialEq for Number{
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Number::Int(i1), Number::Int(i2)) => i1 == i2,
-            (Number::Float(f1), Number::Float(f2)) => f1 == f2,
+            // simple approximation:  f64 as f32
+            (Number::Float(f1), Number::Float(f2)) => *f1 as f32 == *f2 as f32,
+            // (Number::Float(f1), Number::Float(f2)) => *f1 == *f2,
+            // (Number::Float(f1), Number::Float(f2)) => f1 == f2,
             (Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => n1 * d2 == n2 * d1,
             (Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
             _ => false,
@@ -182,14 +188,38 @@ impl PartialEq<i64> for Number {
     }
 }
 
-impl PartialEq<f64> for Number {
-    fn eq(&self, other: &f64) -> bool {
+// high precision
+// impl PartialEq<f64> for Number {
+//     fn eq(&self, other: &f64) -> bool {
+//         match self {
+//             Number::Int(i) => *i as f64 == *other,
+//             Number::Float(f) => *f == *other,
+//             Number::Quotient(n, d) => *n as f64 / *d as f64 == *other,
+//             Number::Complex(r, i) => *r == *other && *i == 0.0,
+//             // _ => false,
+//         }
+//     }
+// }
+
+impl PartialEq<f32> for Number {
+    fn eq(&self, other: &f32) -> bool {
         match self {
-            Number::Int(i) => *i as f64 == *other,
-            Number::Float(f) => *f == *other,
-            Number::Quotient(n, d) => *n as f64 / *d as f64 == *other,
-            Number::Complex(r, i) => *r == *other && *i == 0.0,
+            Number::Int(i) => *i as f32 == *other,
+            Number::Float(f) => *f as f32 == *other,
+            Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
+            Number::Complex(r, i) => *r as f32 == *other as f32 && *i == 0.0,
             // _ => false,
         }
     }
 }
+
+// impl PartialEq for Number {
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Number::Int(a), Number::Int(b)) => a == b,
+//             (Number::Float(a), Number::Float(b)) => (a - b).abs() < f64::EPSILON,
+//             (Number::Int(a), Number::Float(b)) => (*a as f64 - *b).abs() < f64::EPSILON,
+//             (Number::Float(a), Number::Int(b)) => (*a - *b as f64).abs() < f64::EPSILON,
+//         }
+//     }
+// }
