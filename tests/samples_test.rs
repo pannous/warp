@@ -1,13 +1,15 @@
 use std::fs;
 use std::path::Path;
 use wasp::node::Node;
-use wasp::wasp_parser::{read, WaspParser};
+use wasp::wasp_parser::WaspParser;
 
 /// Test that all sample .wasp files can be parsed without errors
-// #[test]
-fn dont_test_parse_all_samples() {
+#[test]
+fn test_parse_all_samples() {
     println!("\n=== Testing All Sample Files ===\n");
-
+    if 1 > 0 {
+        todo!("currently STALLS!?");
+    }
     let samples_dir = Path::new("samples");
     assert!(samples_dir.exists(), "samples/ directory not found");
 

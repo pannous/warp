@@ -427,7 +427,7 @@ mod tests {
     #[test]
     fn test_parse_key_value() {
         let node = WaspParser::parse(r#"name: "Alice""#);
-        assert_eq!(node.get_key(), Some("name"));
+        assert_eq!(node.get_key(), "name");
     }
 
     #[test]

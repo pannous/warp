@@ -1,5 +1,5 @@
-use wasp::wasp_parser::WaspParser;
 use wasp::node::Node;
+use wasp::wasp_parser::WaspParser;
 
 #[test]
 fn test_wasp_to_json() {
@@ -107,12 +107,11 @@ fn test_list_operations() {
     let wasp = "numbers=[1, 2, 3, 4, 5]";
     let node = WaspParser::parse(wasp);
 
-    if let Some(value) = node.get_value() {
-        if let Node::List(items) = value {
-            assert_eq!(items.len(), 5);
-            assert_eq!(items[0], 1);
-            assert_eq!(items[4], 5);
-        }
+    let value = node.get_value();
+    if let Node::List(items) = value {
+        assert_eq!(items.len(), 5);
+        assert_eq!(items[0], 1);
+        assert_eq!(items[4], 5);
     }
 }
 
