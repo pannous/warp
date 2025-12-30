@@ -39,7 +39,7 @@ impl FieldMap {
         // 7: left (ref null node)
         // 8: right (ref null node)
         // 9: meta (ref null node)
-        match name {
+        match name { // todo these don't need to be hardcoded, see rasm 
             "name_ptr" => Ok(0),
             "name_len" => Ok(1),
             "tag" => Ok(2),

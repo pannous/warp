@@ -27,7 +27,7 @@ fn test_kitchensink_all_node_types() {
 
     // Test 6: Tag node (from parser)
     let tag_input = "div{class=container}";
-    let tag_node = WaspParser::parse(tag_input).expect("Failed to parse tag");
+    let tag_node = WaspParser::parse(tag_input);
     test_node("Tag", tag_node);
 
     // Test 7: KeyValue node
@@ -67,8 +67,8 @@ fn test_kitchensink_all_node_types() {
 
     // Test 12: Complex nested structure
     let complex = WaspParser::parse("html{head{title{My Page}} body{h1{Hello} p{World}}}");
-    if let Ok(node) = complex {
-        test_node("Complex nested HTML", node);
+    if !matches!(complex, Node::Error(_)) {
+        test_node("Complex nested HTML", complex);
     }
 
     println!("\n✅ All kitchensink tests passed!\n");

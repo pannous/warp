@@ -25,7 +25,7 @@ fn test_wit_interface_generation() {
     assert!(output.contains("record data"));
 
     // Check function signatures
-    assert!(output.contains("parse: func(input: string) -> result<node, string>"));
+    assert!(output.contains("parse: func(input: string) -> Node"));
     assert!(output.contains("to-json: func(node: node) -> result<string, string>"));
     assert!(output.contains("to-wasp: func(node: node) -> string"));
 
@@ -146,7 +146,7 @@ fn test_wasp_to_wit_roundtrip() {
         host: "localhost"
     }"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let wit = node_to_wit_value(&node);
 
     // Check structure is preserved

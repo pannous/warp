@@ -9,7 +9,7 @@ fn test_line_comments() {
         age: 30
     "#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed with line comment: {:?}", node);
 
     // Should parse successfully
@@ -27,7 +27,7 @@ fn test_block_comments() {
         age: 25
     "#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed with block comment: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
@@ -42,7 +42,7 @@ fn test_inline_comments() {
         age: 35 /* age in years */
     "#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Parsed with inline comments: {:?}", node);
 }
 
@@ -50,7 +50,7 @@ fn test_inline_comments() {
 fn test_comment_metadata() {
     let wasp = "// Important config\nport: 8080";
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     println!("Node: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
@@ -74,7 +74,7 @@ fn test_comments_in_html_structure() {
         }
     "#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("WASP with comments:\n{}\n", wasp);
