@@ -4,38 +4,64 @@ extern crate regex;
 
 use  std::fmt;
 use regex::Regex;
-
+use std::cmp::PartialEq;
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use std::ops::Index; // node[i]
 use std::any::Any;
 use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
 
-// pub enum AllowedListTypes {
-//     Int,
-//     Float,
-//     String,
-//     Symbol,
-//     Node,
-// }
+// Custom trait for cloneable Any types
+pub trait CloneAny: Any {
+    fn clone_any(&self) -> Box<dyn CloneAny>;
+    fn as_any(&self) -> &dyn Any;
+}
 
+impl<T: 'static + Clone> CloneAny for T {
+    fn clone_any(&self) -> Box<dyn CloneAny> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
-// #[derive(Clone, Debug)]
-// pub struct Dada(Box<dyn Any>);
-// pub struct Dada(Box<dyn Any + Clone>);
+pub struct Dada(Box<dyn CloneAny>);
 
-// impl Dada {}
+impl Dada {
+    pub fn new<T: 'static + Clone>(data: T) -> Self {
+        Dada(Box::new(data))
+    }
+
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.0.as_any().downcast_ref::<T>()
+    }
+}
+
+impl Clone for Dada {
+    fn clone(&self) -> Self {
+        Dada(self.0.clone_any())
+    }
+}
+
+impl fmt::Debug for Dada {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Dada(..)")
+    }
+}
 
 
 #[derive(Clone)]
 pub enum Node {
-    Empty,
+    Empty, // Null, Nill, None, Ø, ø null nill none nil
     // Number(i32),
     Number(Number),
-    Symbol(String),
     Text(String),
+    // String(String),
+    Symbol(String),
+    // Keyword(String), Call, Declaration … AST or here? AST!
     // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
-    // Data(Dada), // use via if let Some(i) = data.downcast_ref::<myType>() {
+    Data(Dada), // use via if let Some(i) = data.downcast_ref::<myType>() {
     KeyValue(String, Box<Node>),
     Pair(Box<Node>, Box<Node>),
     Block(Vec<Node>, Kind, Bracket),
@@ -93,6 +119,7 @@ impl Node {
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
+    pub fn data<T: 'static + Clone>(value: T) -> Self { Node::Data(Dada::new(value)) }
     pub fn number(n: Number) -> Self { Node::Number(n) }
     pub fn int(n: i64) -> Self { Node::Number(Number::Int(n)) }
     pub fn float(n: f64) -> Self { Node::Number(Number::Float(n)) }
@@ -150,9 +177,8 @@ impl fmt::Debug for Node {
             Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
             Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
+            Node::Data(d) => write!(f, "{:?}", d),
             Node::Empty => write!(f, "ø"),
-            // Node::Data(x) => write!(f, "{:?}", x)
-            // _ => write!(f, "ø"),
         }
     }
 }
@@ -182,7 +208,6 @@ pub enum Bracket {
 
 
 
-use std::cmp::PartialEq;
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
@@ -190,9 +215,11 @@ impl PartialEq for Node {
             Node::Empty => {
                 match other {
                     Node::Empty => true,
-                    Node::Symbol(s) => s.is_empty(), // disallow empty symbol
-                    Node::Text(s) => s.is_empty(), // disallow empty symbol
-                    Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL!
+                    Node::Symbol(s) => s.is_empty(), // todo disallow empty symbol
+                    Node::Text(s) => s.is_empty(),
+                    Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL
+                    Node::Block(b,_,_) => b.is_empty(),
+                    Node::List(l) => l.is_empty(),
                     _ => self.size() == 0,
                 }
             }
@@ -203,9 +230,19 @@ impl PartialEq for Node {
                 }
 
             }
-            // Node::Symbol(_) => {}
-            // Node::Text(_) => {}
-            // Node::Data(_) => {}
+            Node::Symbol(s) => {
+                match other {
+                Node::Symbol(s2) => s == s2,
+                    // todo variable values? nah not here
+                _ => return false,
+            }}
+            Node::Text(s) => {
+                match other {
+                    Node::Text(s2) => s == s2,
+                    _ => false,
+                }
+            }
+            Node::Data(_) => false,
             // Node::KeyValue(_, _) => {}
             // Node::Block(_, _, _) => {}
             // Node::List(_) => {}
@@ -222,6 +259,26 @@ impl PartialEq<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n == other,
             Node::Number(Number::Float(f)) => *f == *other as f64,
+            _ => false,
+        }
+    }
+}
+
+
+impl PartialEq<bool> for Node {
+    fn eq(&self, other: &bool) -> bool {
+        match self {
+            // todo 2 == true? NO only in truthy if(2) …
+            Node::Number(n) => n == &if *other { 1 } else { 0 },
+            // Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },
+            // Node::Number(Number::Float(f)) => *f == if *other { 1.0 } else { 0.0 },
+            Node::Empty => !*other,
+            Node::Symbol(s) => s.is_empty() == !*other,
+            Node::Text(s) => s.is_empty() == !*other,
+            Node::Block(b, _ ,_) => b.is_empty() == !*other,
+            Node::List(l) => l.is_empty() == !*other,
+            Node::KeyValue(_,_) => *other, // todo NEVER false OR check value k=v ?
+            Node::Pair(_, _)  => *other, // // todo NEVER false OR check value k:v ?
             _ => false,
         }
     }
