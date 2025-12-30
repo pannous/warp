@@ -5,7 +5,7 @@ extern crate regex;
 use std::fmt;
 use regex::Regex;
 
-use crate::node::{Node, Kind, Bracket};
+use crate::node::{Node, Grouper, Bracket};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use std::ops::Index; // node[i]
@@ -135,12 +135,13 @@ impl Parser {
         }
     }
 
-    fn bracket_kind(&mut self, kind: char) -> Kind {
+    fn bracket_kind(&mut self, kind: char) -> Grouper {
         match kind {
-            '{' => Kind::Object,
-            '(' => Kind::Group,
-            '[' => Kind::Pattern,
-            _ => Kind::Other(kind, self.closing_bracket(kind))
+            '{' => Grouper::Object,
+            '(' => Grouper::Group,
+            '[' => Grouper::Pattern,
+            ';' => Grouper::Expression,
+            _ => Grouper::Other(kind, self.closing_bracket(kind))
         }
     }
 
