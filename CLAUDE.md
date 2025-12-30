@@ -171,9 +171,9 @@ to be checked via test_wasm_roundtrip
 
    TODO kitchensink
 
-TODO verify it via wasm2wat --no-check --enable-all --ignore-custom-section-errors
-TODO verify it via wasmtime run --enable-gc --enable-interface-types
-TODO verify it via wasm verification crate
+Always verify it via wasm-tools print (passes, wasm-tools v1.243.0 has better GC support than wasm2wat)
+DONE auto verify it via wasm verification crate (wasmparser with GC features enabled, passes)
+TODO verify it via wasmtime run --enable-gc (needs wasmtime 28.0+ for full GC introspection)
 
 
 4. Read back fields:
