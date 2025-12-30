@@ -1,5 +1,13 @@
 use crate::node::{Node, Grouper, Bracket, Meta};
 use crate::extensions::numbers::Number;
+use std::fs;
+
+/// Read and parse a WASP file
+pub fn read(path: &str) -> Result<Node, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read {}: {}", path, e))?;
+    WaspParser::parse(&content)
+}
 
 pub struct WaspParser {
     input: String,
@@ -42,6 +50,19 @@ impl WaspParser {
         (self.line, self.column)
     }
 
+    fn prev_char(&self) -> Option<char> {
+        if self.pos > 0 {
+            self.input.chars().nth(self.pos - 1)
+        } else {
+            None
+        }
+    }
+
+    fn is_at_line_start(&self) -> bool {
+        // Check if we're at the very beginning or right after whitespace/newline
+        self.pos == 0 || self.prev_char().map_or(false, |ch| ch.is_whitespace())
+    }
+
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char() {
             if ch.is_whitespace() {
@@ -56,6 +77,23 @@ impl WaspParser {
         let mut comment = None;
         loop {
             self.skip_whitespace();
+
+            // Check for # line comment (shell-style, shebang)
+            // Only treat # as comment if at line start (to allow list#index later)
+            if self.current_char() == Some('#') && self.is_at_line_start() {
+                self.advance(); // skip #
+                let mut line_comment = String::new();
+                while let Some(ch) = self.current_char() {
+                    if ch == '\n' {
+                        self.advance();
+                        break;
+                    }
+                    line_comment.push(ch);
+                    self.advance();
+                }
+                comment = Some(line_comment.trim().to_string());
+                continue;
+            }
 
             // Check for // line comment
             if self.current_char() == Some('/') && self.peek_char(1) == Some('/') {
