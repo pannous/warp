@@ -42,7 +42,19 @@ fn test_wasm_roundtrip() {
     assert!(!bytes.is_empty());
     assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D]);
 
-    // Validate WASM structure using wasmparser
+    // Validate WASM structure using wasmparser with full GC validation
+    use wasmparser::{Validator, WasmFeatures};
+
+    let mut features = WasmFeatures::default();
+    features.set(WasmFeatures::REFERENCE_TYPES, true);
+    features.set(WasmFeatures::GC, true);
+
+    let mut validator = Validator::new_with_features(features);
+    match validator.validate_all(&bytes) {
+        Ok(_) => println!("✓ WASM validation with GC features passed"),
+        Err(e) => panic!("WASM validation failed: {}", e),
+    }
+
     let parser = Parser::new(0);
     let mut has_type_section = false;
     let mut has_function_section = false;

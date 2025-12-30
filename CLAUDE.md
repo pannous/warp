@@ -184,4 +184,11 @@ TODO verify it via wasm verification crate
    let rust_node = Node::from_wasm_node(&wasm_node)?;
 
 
+## complete roundtrip test
+is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
 
+### soon
+compiletime and runtime evaluation
+is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
+is!("def square:=it*it; square(3)",9);
+is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
