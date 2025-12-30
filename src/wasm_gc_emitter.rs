@@ -52,7 +52,7 @@ impl WasmGcEmitter {
     fn emit_core_functions(&mut self) {
         // make_empty() -> i32
         // Returns tag for Empty node
-        self.types.function(vec![], vec![ValType::I32]);
+        self.types.ty().function(vec![], vec![ValType::I32]);
         let make_empty_idx = self.next_type_idx;
         self.next_type_idx += 1;
 
@@ -67,7 +67,7 @@ impl WasmGcEmitter {
 
         // make_int(i64) -> i32
         // Returns tag for Number node
-        self.types.function(vec![ValType::I64], vec![ValType::I32]);
+        self.types.ty().function(vec![ValType::I64], vec![ValType::I32]);
         let make_int_idx = self.next_type_idx;
         self.next_type_idx += 1;
 
@@ -81,7 +81,7 @@ impl WasmGcEmitter {
         self.next_func_idx += 1;
 
         // make_float(f64) -> i32
-        self.types.function(vec![ValType::F64], vec![ValType::I32]);
+        self.types.ty().function(vec![ValType::F64], vec![ValType::I32]);
         let make_float_idx = self.next_type_idx;
         self.next_type_idx += 1;
 
