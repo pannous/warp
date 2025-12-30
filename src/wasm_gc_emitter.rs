@@ -10,6 +10,7 @@ pub struct WasmGcEmitter {
     functions: FunctionSection,
     code: CodeSection,
     exports: ExportSection,
+    names: NameSection,
     // Type indices for GC types
     node_base_type: u32,
     empty_type: u32,
@@ -56,6 +57,7 @@ impl WasmGcEmitter {
             functions: FunctionSection::new(),
             code: CodeSection::new(),
             exports: ExportSection::new(),
+            names: NameSection::new(),
             node_base_type: 0,
             empty_type: 0,
             number_type: 0,
@@ -84,10 +86,49 @@ impl WasmGcEmitter {
 
     /// Define GC struct types for Node variants
     fn emit_gc_types(&mut self) {
+        // First, define the unified Node struct type per the design spec
+        // This is a single struct that can represent any node type
+        // (type $node (struct
+        //   (field $name_ptr i32)
+        //   (field $name_len i32)
+        //   (field $tag i32)
+        //   (field $int_value i64)
+        //   (field $float_value f64)
+        //   (field $text_ptr i32)
+        //   (field $text_len i32)
+        //   (field $left (ref null $node))  // recursive reference
+        //   (field $right (ref null $node))
+        //   (field $meta (ref null $node))
+        // ))
+
+        // Save the index where we'll define the node struct
+        let node_type_idx = self.next_type_idx;
+        self.next_type_idx += 1;
+
+        // For recursive refs, use the type index that will be assigned
+        let node_ref = RefType {
+            nullable: true,
+            heap_type: HeapType::Concrete(node_type_idx),
+        };
+
+        self.types.ty().struct_(vec![
+            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // name_ptr
+            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // name_len
+            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // tag
+            FieldType { element_type: StorageType::Val(ValType::I64), mutable: false }, // int_value
+            FieldType { element_type: StorageType::Val(ValType::F64), mutable: false }, // float_value
+            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // text_ptr
+            FieldType { element_type: StorageType::Val(ValType::I32), mutable: false }, // text_len
+            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // left
+            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // right
+            FieldType { element_type: StorageType::Val(ValType::Ref(node_ref)), mutable: false }, // meta
+        ]);
+        self.node_base_type = node_type_idx;
+
         // Define node array type: array of (ref null node)
         let node_ref = RefType {
             nullable: true,
-            heap_type: HeapType::Concrete(self.next_type_idx),
+            heap_type: HeapType::Concrete(self.node_base_type),
         };
         let storage_type = StorageType::Val(ValType::Ref(node_ref));
         self.types.ty().array(&storage_type, true);
@@ -337,32 +378,194 @@ impl WasmGcEmitter {
         self.code.function(&func);
         self.exports.export("get_node_kind", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
+
+        // Add field getters for the unified node struct
+        self.emit_node_field_getters();
+    }
+
+    /// Emit getter functions for unified node struct fields
+    fn emit_node_field_getters(&mut self) {
+        let node_ref = RefType {
+            nullable: false,
+            heap_type: HeapType::Concrete(self.node_base_type),
+        };
+
+        // get_tag(node) -> i32
+        let func_type = self.types.len();
+        self.types.ty().function(vec![ValType::Ref(node_ref)], vec![ValType::I32]);
+        self.functions.function(func_type);
+        let mut func = Function::new(vec![(1, ValType::Ref(node_ref))]);
+        func.instruction(&Instruction::LocalGet(0));
+        func.instruction(&Instruction::StructGet {
+            struct_type_index: self.node_base_type,
+            field_index: 2, // tag field
+        });
+        func.instruction(&Instruction::End);
+        self.code.function(&func);
+        self.exports.export("get_tag", ExportKind::Func, self.next_func_idx);
+        self.next_func_idx += 1;
+
+        // get_int_value(node) -> i64
+        let func_type = self.types.len();
+        self.types.ty().function(vec![ValType::Ref(node_ref)], vec![ValType::I64]);
+        self.functions.function(func_type);
+        let mut func = Function::new(vec![(1, ValType::Ref(node_ref))]);
+        func.instruction(&Instruction::LocalGet(0));
+        func.instruction(&Instruction::StructGet {
+            struct_type_index: self.node_base_type,
+            field_index: 3, // int_value field
+        });
+        func.instruction(&Instruction::End);
+        self.code.function(&func);
+        self.exports.export("get_int_value", ExportKind::Func, self.next_func_idx);
+        self.next_func_idx += 1;
+
+        // get_float_value(node) -> f64
+        let func_type = self.types.len();
+        self.types.ty().function(vec![ValType::Ref(node_ref)], vec![ValType::F64]);
+        self.functions.function(func_type);
+        let mut func = Function::new(vec![(1, ValType::Ref(node_ref))]);
+        func.instruction(&Instruction::LocalGet(0));
+        func.instruction(&Instruction::StructGet {
+            struct_type_index: self.node_base_type,
+            field_index: 4, // float_value field
+        });
+        func.instruction(&Instruction::End);
+        self.code.function(&func);
+        self.exports.export("get_float_value", ExportKind::Func, self.next_func_idx);
+        self.next_func_idx += 1;
+
+        // get_name_len(node) -> i32
+        let func_type = self.types.len();
+        self.types.ty().function(vec![ValType::Ref(node_ref)], vec![ValType::I32]);
+        self.functions.function(func_type);
+        let mut func = Function::new(vec![(1, ValType::Ref(node_ref))]);
+        func.instruction(&Instruction::LocalGet(0));
+        func.instruction(&Instruction::StructGet {
+            struct_type_index: self.node_base_type,
+            field_index: 1, // name_len field
+        });
+        func.instruction(&Instruction::End);
+        self.code.function(&func);
+        self.exports.export("get_name_len", ExportKind::Func, self.next_func_idx);
+        self.next_func_idx += 1;
     }
 
     /// Emit a function that constructs and returns a specific Node
-    pub fn emit_node_main(&mut self, _node: &Node) {
-        // For now, emit a simple main that returns an empty node
-        // TODO: Implement full node encoding
-        let empty_ref = RefType {
+    pub fn emit_node_main(&mut self, node: &Node) {
+        // Use the unified Node struct type
+        let node_ref = RefType {
             nullable: false,
-            heap_type: HeapType::Concrete(self.empty_type),
+            heap_type: HeapType::Concrete(self.node_base_type),
         };
 
         let func_type = self.types.len();
-        self.types.ty().function(vec![], vec![ValType::Ref(empty_ref)]);
+        self.types.ty().function(vec![], vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![]);
 
-        // For now just return empty node
-        // TODO: Encode the actual node structure
-        func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
-        func.instruction(&Instruction::StructNew(self.empty_type));
+        // Encode the node into the unified struct format
+        self.emit_node_instructions(&mut func, node);
+
         func.instruction(&Instruction::End);
 
         self.code.function(&func);
         self.exports.export("main", ExportKind::Func, self.next_func_idx);
         self.next_func_idx += 1;
+    }
+
+    /// Emit WASM instructions to construct a Node in the unified struct format
+    fn emit_node_instructions(&self, func: &mut Function, node: &Node) {
+        // Unwrap metadata if present
+        let node = node.unwrap_meta();
+
+        match node {
+            Node::Empty => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left, right, meta (all null)
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Number(num) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Number as i32));
+                // int_value, float_value
+                match num {
+                    Number::Int(i) => {
+                        func.instruction(&Instruction::I64Const(*i));
+                        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                    }
+                    Number::Float(f) => {
+                        func.instruction(&Instruction::I64Const(0));
+                        func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
+                    }
+                    _ => {
+                        // Quotient, Complex not yet supported
+                        func.instruction(&Instruction::I64Const(0));
+                        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                    }
+                }
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left, right, meta (all null)
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Tag(name, _attrs, _body) => {
+                // For Tag nodes, store the tag name in name field
+                // TODO: Store name string in linear memory and use ptr/len
+                func.instruction(&Instruction::I32Const(0)); // name_ptr (placeholder)
+                func.instruction(&Instruction::I32Const(name.len() as i32)); // name_len
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Tag as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left (attrs), right (body), meta
+                // TODO: Recursively encode child nodes
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            _ => {
+                // For other node types, return empty for now
+                // TODO: Implement remaining node types
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+        }
     }
 
     /// Generate the final WASM module bytes
@@ -371,7 +574,67 @@ impl WasmGcEmitter {
         self.module.section(&self.functions);
         self.module.section(&self.exports);
         self.module.section(&self.code);
+
+        // Add comprehensive names for debugging
+        self.emit_names();
+        self.module.section(&self.names);
+
         self.module.finish()
+    }
+
+    /// Emit comprehensive WASM names for types, functions, and fields
+    fn emit_names(&mut self) {
+        // Module name
+        self.names.module("wasp_node_ast");
+
+        // Type names
+        let mut type_names = NameMap::new();
+        type_names.append(self.node_base_type, "node");
+        type_names.append(self.node_array_type, "node_array");
+        type_names.append(self.empty_type, "empty_node");
+        type_names.append(self.number_type, "number_node");
+        type_names.append(self.text_type, "text_node");
+        type_names.append(self.codepoint_type, "codepoint_node");
+        type_names.append(self.symbol_type, "symbol_node");
+        type_names.append(self.keyvalue_type, "keyvalue_node");
+        type_names.append(self.pair_type, "pair_node");
+        type_names.append(self.tag_type, "tag_node");
+        type_names.append(self.block_type, "block_node");
+        type_names.append(self.data_type, "data_node");
+        type_names.append(self.meta_type, "meta");
+        type_names.append(self.withmeta_type, "withmeta_node");
+        self.names.types(&type_names);
+
+        // Field names for the unified node struct
+        let mut field_names = NameMap::new();
+        field_names.append(0, "name_ptr");
+        field_names.append(1, "name_len");
+        field_names.append(2, "tag");
+        field_names.append(3, "int_value");
+        field_names.append(4, "float_value");
+        field_names.append(5, "text_ptr");
+        field_names.append(6, "text_len");
+        field_names.append(7, "left");
+        field_names.append(8, "right");
+        field_names.append(9, "meta");
+
+        let mut type_field_names = IndirectNameMap::new();
+        type_field_names.append(self.node_base_type, &field_names);
+        self.names.fields(&type_field_names);
+
+        // Function names
+        let mut func_names = NameMap::new();
+        func_names.append(0, "make_empty");
+        func_names.append(1, "make_int");
+        func_names.append(2, "make_float");
+        func_names.append(3, "make_codepoint");
+        func_names.append(4, "get_node_kind");
+        func_names.append(5, "get_tag");
+        func_names.append(6, "get_int_value");
+        func_names.append(7, "get_float_value");
+        func_names.append(8, "get_name_len");
+        func_names.append(9, "main");
+        self.names.functions(&func_names);
     }
 }
 
