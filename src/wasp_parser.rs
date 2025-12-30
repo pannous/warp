@@ -1,4 +1,4 @@
-use crate::node::{Node, Kind, Bracket, Meta};
+use crate::node::{Node, Grouper, Bracket, Meta};
 use crate::extensions::numbers::Number;
 
 pub struct WaspParser {
@@ -337,7 +337,7 @@ impl WaspParser {
             }
         }
 
-        Ok(Node::Block(items, Kind::Object, Bracket::Curly))
+        Ok(Node::Block(items, Grouper::Object, Bracket::Curly))
     }
 }
 

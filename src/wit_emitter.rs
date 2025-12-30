@@ -1,4 +1,4 @@
-use crate::node::{Node, Kind, Bracket, Meta, DataType};
+use crate::node::{Node, Grouper, Bracket, Meta, DataType};
 use crate::extensions::numbers::Number;
 
 pub struct WitEmitter {
@@ -196,10 +196,11 @@ pub fn node_to_wit_value(node: &Node) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             let kind_str = match kind {
-                Kind::Object => "object",
-                Kind::Group => "group",
-                Kind::Pattern => "pattern",
-                Kind::Other(_, _) => "object", // fallback
+                Grouper::Object => "object",
+                Grouper::Group => "group",
+                Grouper::Pattern => "pattern",
+                Grouper::Expression => "expression",
+                Grouper::Other(_, _) => "object", // fallback
             };
             let bracket_str = match bracket {
                 Bracket::Curly => "curly",
