@@ -270,7 +270,75 @@ impl Node {
     }
 
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
+        let value = self.to_json_value();
+        serde_json::to_string_pretty(&value)
+    }
+
+    pub fn to_json_compact(&self) -> Result<String, serde_json::Error> {
+        let value = self.to_json_value();
+        serde_json::to_string(&value)
+    }
+
+    fn to_json_value(&self) -> serde_json::Value {
+        use serde_json::{Value, Map};
+
+        match self {
+            Node::Empty => Value::Null,
+            Node::Number(Number::Int(n)) => Value::Number((*n).into()),
+            Node::Number(Number::Float(f)) => {
+                serde_json::Number::from_f64(*f)
+                    .map(Value::Number)
+                    .unwrap_or(Value::Null)
+            }
+            Node::Number(n) => Value::String(format!("{}", n)),
+            Node::Text(s) | Node::Symbol(s) => Value::String(s.clone()),
+            Node::List(items) => {
+                Value::Array(items.iter().map(|n| n.to_json_value()).collect())
+            }
+            Node::KeyValue(k, v) => {
+                let mut map = Map::new();
+                map.insert(k.clone(), v.to_json_value());
+                Value::Object(map)
+            }
+            Node::Pair(a, b) => {
+                Value::Array(vec![a.to_json_value(), b.to_json_value()])
+            }
+            Node::Block(items, kind, bracket) => {
+                // Curly braces -> object with items, Square/Round -> array
+                match bracket {
+                    Bracket::Curly => {
+                        let mut map = Map::new();
+                        for item in items {
+                            match item {
+                                Node::KeyValue(k, v) => {
+                                    map.insert(k.clone(), v.to_json_value());
+                                }
+                                Node::Block(nested, _, Bracket::Curly) => {
+                                    // Nested blocks become nested objects
+                                    for nested_item in nested {
+                                        if let Node::KeyValue(k, v) = nested_item {
+                                            map.insert(k.clone(), v.to_json_value());
+                                        }
+                                    }
+                                }
+                                other => {
+                                    // Non-KeyValue items: try to infer a key
+                                    let key = format!("item_{}", map.len());
+                                    map.insert(key, other.to_json_value());
+                                }
+                            }
+                        }
+                        Value::Object(map)
+                    }
+                    _ => Value::Array(items.iter().map(|n| n.to_json_value()).collect())
+                }
+            }
+            Node::Data(d) => {
+                let mut map = Map::new();
+                map.insert("_type".to_string(), Value::String(d.type_name.clone()));
+                Value::Object(map)
+            }
+        }
     }
 
     pub fn from_json(json: &str) -> Result<Node, serde_json::Error> {
