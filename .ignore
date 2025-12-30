@@ -1,0 +1,17 @@
+# IDE and search exclusions
+vendor/
+target/
+.git/
+*.wasm
+.DS_Store
+
+# Build artifacts
+*.rlib
+*.so
+*.dylib
+*.dll
+Cargo.lock
+
+# Test outputs
+*.profraw
+*.profdata
