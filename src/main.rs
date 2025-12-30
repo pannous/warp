@@ -32,6 +32,7 @@ type Strings = Vec<String>;
 #[allow(unused_variables)] // for testing
 #[cfg(not(any(feature = "wasm", test)))]
 fn main() {
+    println!("Warp 🎡𐃏 ☸ WASM Building Program");
     // test_bla_lib();
     let url = "https://files.pannous.com/test";
     let test: String = download(url);

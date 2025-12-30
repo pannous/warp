@@ -785,6 +785,7 @@ pub fn eval(code: &str) -> Node {
         panic!("Parse error: {}", e);
     }
     let mut emitter = WasmGcEmitter::new();
+    emitter.emit();
     emitter.emit_node_main(&node);
     let wasm_bytes = emitter.finish();
     let obj = read_bytes(&wasm_bytes);
