@@ -276,6 +276,22 @@ impl Node {
         s.trim().to_string()
     }
 
+    pub fn iter(&self) -> NodeIter {
+        match self {
+            Node::List(items) => NodeIter::new(items.clone()),
+            Node::Block(items, _, _) => NodeIter::new(items.clone()),
+            _ => NodeIter::new(vec![]),
+        }
+    }
+
+    pub fn into_iter(self) -> NodeIter {
+        match self {
+            Node::List(items) => NodeIter::new(items),
+            Node::Block(items, _, _) => NodeIter::new(items),
+            _ => NodeIter::new(vec![]),
+        }
+    }
+
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         let value = self.to_json_value();
         serde_json::to_string_pretty(&value)
@@ -408,6 +424,49 @@ impl fmt::Debug for Node {
     }
 }
 
+pub struct NodeIter {
+    items: Vec<Node>,
+    index: usize,
+}
+
+impl NodeIter {
+    fn new(items: Vec<Node>) -> Self {
+        NodeIter { items, index: 0 }
+    }
+}
+
+impl Iterator for NodeIter {
+    type Item = Node;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.items.len() {
+            let item = self.items[self.index].clone();
+            self.index += 1;
+            Some(item)
+        } else {
+            None
+        }
+    }
+}
+
+impl IntoIterator for Node {
+    type Item = Node;
+    type IntoIter = NodeIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Node {
+    type Item = Node;
+    type IntoIter = NodeIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Kind {
     Object,
@@ -536,6 +595,56 @@ impl PartialEq<&str> for Node {
             Node::Text(s) => s == *other,
             Node::Symbol(s) => s == *other,
             _ => false,
+        }
+    }
+}
+
+impl PartialOrd<i32> for Node {
+    fn partial_cmp(&self, other: &i32) -> Option<std::cmp::Ordering> {
+        match self {
+            Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
+            Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
+            _ => None,
+        }
+    }
+}
+
+impl PartialOrd<i64> for Node {
+    fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
+        match self {
+            Node::Number(Number::Int(n)) => n.partial_cmp(other),
+            Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
+            _ => None,
+        }
+    }
+}
+
+impl PartialOrd<f64> for Node {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        match self {
+            Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
+            Node::Number(Number::Float(f)) => f.partial_cmp(other),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Node::Number(Number::Int(n)) => write!(f, "{}", n),
+            Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
+            Node::Number(n) => write!(f, "{:?}", n),
+            Node::Text(s) | Node::Symbol(s) => write!(f, "{}", s),
+            Node::List(items) => {
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            },
+            _ => write!(f, "{:?}", self),
         }
     }
 }

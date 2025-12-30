@@ -1,0 +1,12 @@
+{
+  "temp-session-id": {
+    "permissionMode": "default",
+    "backendVersion": "1.2.0",
+    "cwd": "/Users/me/dev/angles/warp"
+  },
+  "59415603-fc0e-4152-acce-f87ff86b5bab": {
+    "permissionMode": "bypassPermissions",
+    "backendVersion": "1.2.0",
+    "cwd": "/Users/me/dev/angles/warp"
+  }
+}
