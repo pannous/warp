@@ -110,15 +110,13 @@ fn eval(s:String) -> Node {
 
 #[test]
 fn test_check(){
-    is!(4,4);
-    is!("hello","hello");
+    eq!(4,4);
+    is!("hello","hello");// goes through eval! may serialize and deserialize wasm ;)
+
     // is!(3,4);// should fail and show comparison values
     let a=3;
-    check!(a == a);
+    assert!(a==3);
     // check!(a != a); // should fail and show test condition, ok works
-    // is!(a, a);
-    // let b=4;
-    // is!(a, b);// should fail and show comparison values, ok works
 }
 
 // #[test]
