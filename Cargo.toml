@@ -52,7 +52,7 @@ reqwest = { version = "0.11", features = ["blocking"] }
 #binaryen = "*" # 0.12.0 C++ compiler and toolchain infrastructure library for WebAssembly. It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = "*"
+wasmtime = "40.0.0"
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime

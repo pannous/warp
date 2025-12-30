@@ -25,7 +25,7 @@ pub fn run_wasm(path: &str) -> Result<i32>{
     let mut linker = Linker::new(&engine);
     // let external_func = Func::new(&mut store, typ, test_func);
     // linker.func_new("namespace", "external_func",typ, external_func);
-    let typ = FuncType::new([ValType::I32], [ValType::I32]);
+    let typ = FuncType::new(&engine, [ValType::I32], [ValType::I32]);
     linker.func_new("namespace", "external_func",typ,move |_, _, _| {
         Ok(())
         })?;
