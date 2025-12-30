@@ -170,6 +170,8 @@ impl<'de> Deserialize<'de> for Dada {
 }
 
 
+// use wasp::node::Node;
+// use wasp::node::Node::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
     Empty, // Null, Nill, None, Ø, ø null nill none nil
@@ -183,7 +185,7 @@ pub enum Node {
     // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
     KeyValue(String, Box<Node>),
     Pair(Box<Node>, Box<Node>),
-    Tag(String, Box<Node>, Box<Node>), // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
+    Tag { title: String, params: Box<Node>, body: Box<Node> }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
     Block(Vec<Node>, Grouper, Bracket),
     List(Vec<Node>), // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
@@ -251,10 +253,10 @@ impl Node {
     pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
     pub fn key(s: &str, v: Node) -> Self { Node::KeyValue(s.to_string(), Box::new(v)) }
     pub fn tag(name: &str, body: Node) -> Self {
-        Node::Tag(name.to_string(), Box::new(Node::Empty), Box::new(body))
+        Node::Tag { title: name.to_string(), params: Box::new(Node::Empty), body: Box::new(body) }
     }
     pub fn tag_with_attrs(name: &str, attrs: Node, body: Node) -> Self {
-        Node::Tag(name.to_string(), Box::new(attrs), Box::new(body))
+        Node::Tag { title: name.to_string(), params: Box::new(attrs), body: Box::new(body) }
     }
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
@@ -384,13 +386,13 @@ impl Node {
             Node::Pair(a, b) => {
                 Value::Array(vec![a.to_json_value(), b.to_json_value()])
             }
-            Node::Tag(name, attrs, body) => {
+            Node::Tag { title, params, body } => {
                 let mut map = Map::new();
-                if **attrs != Node::Empty {
+                if **params != Node::Empty {
                     // Include attributes if present
-                    map.insert("_attrs".to_string(), attrs.to_json_value());
+                    map.insert("_attrs".to_string(), params.to_json_value());
                 }
-                map.insert(name.clone(), body.to_json_value());
+                map.insert(title.clone(), body.to_json_value());
                 Value::Object(map)
             }
             Node::Block(items, _kind, bracket) => {
@@ -403,15 +405,15 @@ impl Node {
                                 Node::KeyValue(k, v) => {
                                     map.insert(k.clone(), v.to_json_value());
                                 }
-                                Node::Tag(name, attrs, body) => {
+                                Node::Tag { title, params, body } => {
                                     // Tags become named keys
-                                    if **attrs != Node::Empty {
+                                    if **params != Node::Empty {
                                         let mut tag_map = Map::new();
-                                        tag_map.insert("_attrs".to_string(), attrs.to_json_value());
-                                        tag_map.insert(name.clone(), body.to_json_value());
+                                        tag_map.insert("_attrs".to_string(), params.to_json_value());
+                                        tag_map.insert(title.clone(), body.to_json_value());
                                         map.extend(tag_map);
                                     } else {
-                                        map.insert(name.clone(), body.to_json_value());
+                                        map.insert(title.clone(), body.to_json_value());
                                     }
                                 }
                                 Node::Block(nested, _, Bracket::Curly) => {
@@ -479,10 +481,10 @@ impl fmt::Debug for Node {
             }
             Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
             Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
-            Node::Tag(name, attrs, body) => {
-                match **attrs {
-                    Node::Empty => write!(f, "{}{{{:?}}}", name, body),
-                    _ => write!(f, "<{} {:?}>{:?}", name, attrs, body),
+            Node::Tag { title, params, body } => {
+                match **params {
+                    Node::Empty => write!(f, "{}{{{:?}}}", title, body),
+                    _ => write!(f, "<{} {:?}>{:?}", title, params, body),
                 }
             }
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !

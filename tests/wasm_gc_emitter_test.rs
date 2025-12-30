@@ -1,7 +1,8 @@
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::run::wasmtime_runner::run;
-use wasp::{eq, write_wasm};
-
+use wasp::{eq, is, write_wasm};
+use wasp::node::Node;
+use wasp::node::Node::*;
 
 #[test]
 fn test_wasm_roundtrip() {
@@ -21,11 +22,22 @@ fn test_wasm_roundtrip() {
     assert!(write_wasm(path, &bytes), "Failed to write WASM file");
     println!("✓ Generated {} ({} bytes)", path, bytes.len());
 
-
-
     // let root : GcObject = run_wasm_gc_object(path).expect("Failed to read back WASM");
-    // if root. {  }
     let root = run(path); // reconstruct Node from WASM via GcObject
     println!("✓ Read back root node from WASM: {:?}", root);
     eq!(root, node);
 }
+
+#[test]
+fn test_wasm_roundtrip_via_is() {
+    let x = Tag {
+        title: "html".to_string(),
+        params: Box::new(KeyValue(
+            "test".to_string(),
+            Box::new(Number(wasp::extensions::numbers::Number::Int(1)))
+        )),
+        body: Box::new(Node::Empty),
+    };
+    // is!("html{test=1}", x);  // TODO: implement is! macro
+}
+

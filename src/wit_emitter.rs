@@ -181,11 +181,11 @@ pub fn node_to_wit_value(node: &Node) -> String {
         Node::Pair(a, b) => {
             format!("pair(({}, {}))", node_to_wit_value(a), node_to_wit_value(b))
         }
-        Node::Tag(name, attrs, body) => {
+        Node::Tag { title, params, body } => {
             format!(
                 "tag((\"{}\", {}, {}))",
-                escape_string(name),
-                node_to_wit_value(attrs),
+                escape_string(title),
+                node_to_wit_value(params),
                 node_to_wit_value(body)
             )
         }

@@ -100,11 +100,11 @@ fn test_ergonomic_pattern() {
     let mut emitter = WasmGcEmitter::new();
     emitter.emit();
 
-    let node = Node::Tag(
-        "html".to_string(),
-        Box::new(Node::keys("param","test")),
-        Box::new(Node::keys("body","ok")),
-    );
+    let node = Node::Tag {
+        title: "html".to_string(),
+        params: Box::new(Node::keys("param","test")),
+        body: Box::new(Node::keys("body","ok")),
+    };
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();

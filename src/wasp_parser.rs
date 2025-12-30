@@ -422,8 +422,8 @@ mod tests {
     fn test_parse_named_block() {
         let node = WaspParser::parse("html{ }").unwrap();
         // Named blocks become Tags
-        if let Node::Tag(name, _, _) = node.unwrap_meta() {
-            assert_eq!(name, "html");
+        if let Node::Tag { title, .. } = node.unwrap_meta() {
+            assert_eq!(title, "html");
         } else {
             panic!("Expected Tag node");
         }
@@ -437,8 +437,8 @@ mod tests {
         }"#;
         let node = WaspParser::parse(input).unwrap();
         println!("{:?}", node);
-        if let Node::Tag(name, _, _) = node.unwrap_meta() {
-            assert_eq!(name, "html");
+        if let Node::Tag { title, .. } = node.unwrap_meta() {
+            assert_eq!(title, "html");
         } else {
             panic!("Expected Tag node");
         }
