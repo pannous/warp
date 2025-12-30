@@ -13,6 +13,27 @@ use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::ser::SerializeStruct;
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct Meta {
+    pub comment: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
+impl Meta {
+    pub fn new() -> Self {
+        Meta { comment: None, line: None, column: None }
+    }
+
+    pub fn with_comment(comment: String) -> Self {
+        Meta { comment: Some(comment), line: None, column: None }
+    }
+
+    pub fn with_position(line: usize, column: usize) -> Self {
+        Meta { comment: None, line: Some(line), column: Some(column) }
+    }
+}
+
 // Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {
     fn clone_any(&self) -> Box<dyn CloneAny>;
@@ -164,13 +185,14 @@ pub enum Node {
     Block(Vec<Node>, Kind, Bracket),
     List(Vec<Node>), // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
+    WithMeta(Box<Node>, Meta), // Wrapper to attach metadata to any node
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
     // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
     // List(Vec<T>) // turns whole Node into a generic type :(
 }
 
 impl Node {
-    pub fn Todo(p0: String) -> Node {
+    pub fn todo(p0: String) -> Node {
         Node::Text(format!("TODO: {}", p0))
     }
 }
@@ -235,6 +257,25 @@ impl Node {
     pub fn list(xs:Vec<Node>) -> Self { Node::List(xs) }
     // pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
     pub fn ints(xs:Vec<i32>) -> Self { Node::List(map(xs, |x| Node::Number(Number::Int(x as i64))))}
+
+    pub fn with_meta(self, meta: Meta) -> Self { Node::WithMeta(Box::new(self), meta) }
+    pub fn with_comment(self, comment: String) -> Self {
+        Node::WithMeta(Box::new(self), Meta::with_comment(comment))
+    }
+
+    pub fn get_meta(&self) -> Option<&Meta> {
+        match self {
+            Node::WithMeta(_, meta) => Some(meta),
+            _ => None,
+        }
+    }
+
+    pub fn unwrap_meta(&self) -> &Node {
+        match self {
+            Node::WithMeta(node, _) => node.unwrap_meta(),
+            _ => self,
+        }
+    }
     //  }
 
     // pub fn liste<T>(xs:Vec<T>) -> Self {
@@ -335,7 +376,7 @@ impl Node {
                 map.insert(name.clone(), body.to_json_value());
                 Value::Object(map)
             }
-            Node::Block(items, kind, bracket) => {
+            Node::Block(items, _kind, bracket) => {
                 // Curly braces -> object with items, Square/Round -> array
                 match bracket {
                     Bracket::Curly => {
@@ -381,6 +422,15 @@ impl Node {
                 map.insert("_type".to_string(), Value::String(d.type_name.clone()));
                 Value::Object(map)
             }
+            Node::WithMeta(node, meta) => {
+                let mut value = node.to_json_value();
+                if let Some(comment) = &meta.comment {
+                    if let Value::Object(ref mut map) = value {
+                        map.insert("_comment".to_string(), Value::String(comment.clone()));
+                    }
+                }
+                value
+            }
         }
     }
 
@@ -419,6 +469,13 @@ impl fmt::Debug for Node {
             }
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Node::Data(d) => write!(f, "{:?}", d),
+            Node::WithMeta(node, meta) => {
+                if let Some(comment) = &meta.comment {
+                    write!(f, "{:?} /* {} */", node, comment)
+                } else {
+                    write!(f, "{:?}", node)
+                }
+            }
             Node::Empty => write!(f, "ø"),
         }
     }
@@ -532,6 +589,10 @@ impl PartialEq for Node {
                     _ => false,
                 }
             }
+            Node::WithMeta(node, _) => {
+                // Ignore metadata when comparing equality
+                node.as_ref().eq(other)
+            }
             // Node::KeyValue(_, _) => {}
             // Node::Block(_, _, _) => {}
             // Node::List(_) => {}
@@ -644,6 +705,7 @@ impl std::fmt::Display for Node {
                 }
                 write!(f, "]")
             },
+            Node::WithMeta(node, _) => write!(f, "{}", node),
             _ => write!(f, "{:?}", self),
         }
     }

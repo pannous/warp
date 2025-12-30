@@ -38,10 +38,55 @@ impl WaspParser {
         }
     }
 
-    fn parse_value(&mut self) -> Result<Node, String> {
-        self.skip_whitespace();
+    fn skip_whitespace_and_comments(&mut self) -> Option<String> {
+        let mut comment = None;
+        loop {
+            self.skip_whitespace();
 
-        match self.current_char() {
+            // Check for // line comment
+            if self.current_char() == Some('/') && self.peek_char(1) == Some('/') {
+                self.advance(); // skip first /
+                self.advance(); // skip second /
+                let mut line_comment = String::new();
+                while let Some(ch) = self.current_char() {
+                    if ch == '\n' {
+                        self.advance();
+                        break;
+                    }
+                    line_comment.push(ch);
+                    self.advance();
+                }
+                comment = Some(line_comment.trim().to_string());
+                continue;
+            }
+
+            // Check for /* block comment */
+            if self.current_char() == Some('/') && self.peek_char(1) == Some('*') {
+                self.advance(); // skip /
+                self.advance(); // skip *
+                let mut block_comment = String::new();
+                while let Some(ch) = self.current_char() {
+                    if ch == '*' && self.peek_char(1) == Some('/') {
+                        self.advance(); // skip *
+                        self.advance(); // skip /
+                        break;
+                    }
+                    block_comment.push(ch);
+                    self.advance();
+                }
+                comment = Some(block_comment.trim().to_string());
+                continue;
+            }
+
+            break;
+        }
+        comment
+    }
+
+    fn parse_value(&mut self) -> Result<Node, String> {
+        let comment = self.skip_whitespace_and_comments();
+
+        let mut node = match self.current_char() {
             Some('"') | Some('\'') => self.parse_string(),
             Some('[') => self.parse_list(),
             Some('{') => self.parse_block(),
@@ -49,7 +94,14 @@ impl WaspParser {
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
             Some(ch) => Err(format!("Unexpected character: {}", ch)),
             None => Err("Unexpected end of input".to_string()),
+        }?;
+
+        // Attach comment if present
+        if let Some(c) = comment {
+            node = node.with_comment(c);
         }
+
+        Ok(node)
     }
 
     fn parse_string(&mut self) -> Result<Node, String> {
@@ -232,7 +284,7 @@ impl WaspParser {
         let mut items = Vec::new();
 
         loop {
-            self.skip_whitespace();
+            self.skip_whitespace_and_comments();
 
             if self.current_char() == Some('}') {
                 self.advance();
@@ -244,7 +296,7 @@ impl WaspParser {
             }
 
             items.push(self.parse_value()?);
-            self.skip_whitespace();
+            self.skip_whitespace_and_comments();
 
             // Optional comma/semicolon separator
             if let Some(ch) = self.current_char() {
