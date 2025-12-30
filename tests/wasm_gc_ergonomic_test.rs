@@ -108,8 +108,6 @@ fn test_ergonomic_pattern() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-
-    // Write to unique file to avoid conflicts with parallel tests
     let filename = "out/test_ergonomic_pattern.wasm";
     write_wasm(filename, &bytes);
 
