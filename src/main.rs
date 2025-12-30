@@ -10,6 +10,7 @@ use extensions::utils::*;
 
 pub mod node;
 pub mod parser;
+pub mod wasm_gc_reader;
 
 
 use parser::test_parser;

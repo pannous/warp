@@ -1,5 +1,5 @@
 use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::{read, read_bytes};
+use wasp::wasm_gc_reader::{run_wasm_gc_object, read_bytes};
 use wasp::node::Node;
 use wasp::extensions::numbers::Number;
 use wasp::write_wasm;
@@ -111,7 +111,7 @@ fn test_ergonomic_pattern() {
     let filename = "out/test_ergonomic_pattern.wasm";
     write_wasm(filename, &bytes);
 
-    let root = read(filename).expect("Failed to read WASM file");
+    let root = run_wasm_gc_object(filename).expect("Failed to read WASM file");
 
     println!("✓ Read WASM file");
 

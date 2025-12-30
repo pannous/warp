@@ -1,8 +1,9 @@
-use syn::ext;
 use wasmtime::*;
 use std::fs::read;
 use std::path::Path;
-use std::str::from_utf8;
+use crate::node::Node;
+use crate::wasm_gc_reader;
+
 pub fn run_wasm(path: &str) -> Result<i32>{
     let engine = Engine::default();
     let _wat = r#" (module
@@ -42,4 +43,10 @@ pub fn run_wasm(path: &str) -> Result<i32>{
 
 fn test_func(_caller: Caller<'_, u32>, param: &[Val], _xyz:&mut[Val]) -> Result<i32, Trap> {
     Ok(param[0].unwrap_i32() * 2) // Dummy implementation
+}
+
+pub fn run(path: &str) -> Node
+{
+    let result = wasm_gc_reader::run_wasm_gc_object(path).unwrap();
+    Node::from_gc_object(&result)
 }
