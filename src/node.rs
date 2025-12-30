@@ -2,7 +2,7 @@
 
 extern crate regex;
 
-use  std::fmt;
+use std::fmt;
 use regex::Regex;
 use std::cmp::PartialEq;
 use crate::extensions::numbers::Number;
@@ -179,6 +179,7 @@ pub enum Node {
     // Number(i32),
     Number(Number),
     Text(String),
+    Error(String),
     Codepoint(char), // Single Unicode codepoint/character like 'a', '🍏'
     // String(String),
     Symbol(String),
@@ -560,6 +561,11 @@ impl Node {
                 }
                 value
             }
+            Node::Error(e) => {
+                let mut map = Map::new();
+                map.insert("_error".to_string(), Value::String(e.clone()));
+                Value::Object(map)
+            }
         }
     }
 
@@ -606,6 +612,7 @@ impl fmt::Debug for Node {
                     write!(f, "{:?}", node)
                 }
             }
+            Node::Error(e) => write!(f, "Error({})", e),
             Node::Empty => write!(f, "ø"),
         }
     }
@@ -751,11 +758,10 @@ impl PartialEq for Node {
                     _ => false,
                 }
             }
-            Node::Block(items1, g1, br1) => {
+            Node::Block(items1, _g1, _br1) => {
                 match other {
-                    Node::Block(items2, g2, br2) => {
-                        // Compare items, but ignore grouper/bracket for now
-                        items1 == items2
+                    Node::Block(items2, _g2, _br2) => {
+                        items1 == items2 // ignore grouper/bracket [1,2]=={1,2}
                     }
                     _ => false,
                 }
@@ -763,6 +769,12 @@ impl PartialEq for Node {
             Node::List(items1) => {
                 match other {
                     Node::List(items2) => items1 == items2,
+                    _ => false,
+                }
+            }
+            Node::Error(e1) => {
+                match other {
+                    Node::Error(e2) => e1 == e2,
                     _ => false,
                 }
             }

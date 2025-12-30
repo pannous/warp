@@ -8,7 +8,7 @@ fn test_wasp_to_json() {
         colors=[red, green, blue]
     }"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("WASP:\n{}\n", wasp);
@@ -21,7 +21,7 @@ fn test_wasp_to_json() {
 #[test]
 fn test_function_syntax() {
     let wasp = "def myfun(a, b){ return a + b }";
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("WASP: {}", wasp);
@@ -49,7 +49,7 @@ fn test_nested_structures() {
         }
     "#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("WASP config:\n{}\n", wasp);
@@ -73,7 +73,7 @@ fn test_mixed_syntax() {
         }
     }"#;
 
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("WASP:\n{}\n", wasp);
@@ -87,7 +87,7 @@ fn test_mixed_syntax() {
 #[test]
 fn test_wasp_roundtrip() {
     let wasp = r#"user{ name:"Bob" age:25 active:true }"#;
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
 
     // Convert to JSON
     let json = node.to_json().unwrap();
@@ -105,7 +105,7 @@ fn test_wasp_roundtrip() {
 #[test]
 fn test_list_operations() {
     let wasp = "numbers=[1, 2, 3, 4, 5]";
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
 
     if let Some(value) = node.get_value() {
         if let Node::List(items) = value {
@@ -119,7 +119,7 @@ fn test_list_operations() {
 #[test]
 fn test_empty_structures() {
     let wasp = "empty{}";
-    let node = WaspParser::parse(wasp).unwrap();
+    let node = WaspParser::parse(wasp);
     let json = node.to_json().unwrap();
 
     println!("Empty block: {}", json);

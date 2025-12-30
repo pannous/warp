@@ -14,10 +14,6 @@ fn test_node(){
     println!("{:?}", n );
 }
 
-fn eval(code: String) -> Node {
-    Node::todo(format!("Eval not implemented: {}", code))
-}
-
 #[test]
 fn test_node_list() {
     let n: Node = Node::ints(vec![1, 2, 3]);
