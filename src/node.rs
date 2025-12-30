@@ -133,6 +133,11 @@ pub enum Node {
     // List(Vec<T>) // turns whole Node into a generic type :(
 }
 
+impl Node {
+    pub fn Todo(p0: String) -> Node {
+        Node::Text(format!("TODO: {}", p0))
+    }
+}
 
 impl Index<usize> for Node {
     type Output = Node;
@@ -207,6 +212,20 @@ impl Node {
             Node::List(elements) => elements.get(i).unwrap(),
             Node::Block(nodes,..) => nodes.get(i).unwrap(),
             _ => &Node::Empty,
+        }
+    }
+
+    pub fn get_key(&self) -> Option<&str> {
+        match self {
+            Node::KeyValue(k, _) => Some(k),
+            _ => None,
+        }
+    }
+
+    pub fn get_value(&self) -> Option<&Node> {
+        match self {
+            Node::KeyValue(_, v) => Some(v),
+            _ => None,
         }
     }
 
