@@ -58,7 +58,7 @@ impl WasmGcEmitter {
             next_type_idx: 0,
             next_func_idx: 0,
             string_table: HashMap::new(),
-            next_data_offset: 0,
+            next_data_offset: 8, // Start at offset 8 to avoid confusion with null (0)
         }
     }
 
@@ -72,6 +72,9 @@ impl WasmGcEmitter {
             shared: false,
             page_size_log2: None,
         });
+
+        // Export memory so it can be accessed from the host
+        self.exports.export("memory", ExportKind::Memory, 0);
 
         self.emit_gc_types();
         self.emit_constructor_functions();
