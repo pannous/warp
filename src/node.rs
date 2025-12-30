@@ -13,6 +13,7 @@ use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::ser::SerializeStruct;
 use crate::wasm_gc_reader::GcObject;
+use crate::wasm_gc_emitter::NodeKind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Meta {
@@ -196,11 +197,120 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn from_gc_object(p0: &GcObject) -> Node {
-        // Convert GcObject to Node
-        // TODO This is a placeholder implementation
-        Node::todo(format!("GcObject({:?})", p0))
+    pub fn from_gc_object(obj: &GcObject) -> Node {
+        // Read the tag field to determine node type
+        // If this fails, the ref is likely null
+        let tag = match obj.kind() {
+            Ok(t) => t,
+            Err(_) => return Node::Empty, // Null ref becomes Empty
+        };
+
+        match tag {
+            t if t == NodeKind::Empty as i32 => Node::Empty,
+
+            t if t == NodeKind::Number as i32 => {
+                // Try int first, then float
+                if let Ok(int_val) = obj.get::<i64>("int_value") {
+                    if int_val != 0 {
+                        return Node::Number(Number::Int(int_val));
+                    }
+                }
+                if let Ok(float_val) = obj.get::<f64>("float_value") {
+                    if float_val != 0.0 {
+                        return Node::Number(Number::Float(float_val));
+                    }
+                }
+                Node::Number(Number::Int(0))
+            }
+
+            t if t == NodeKind::Text as i32 => {
+                match obj.text() {
+                    Ok(s) => Node::Text(s),
+                    Err(e) => Node::Text(format!("Error reading text: {}", e)),
+                }
+            }
+
+            t if t == NodeKind::Codepoint as i32 => {
+                match obj.get::<i64>("int_value") {
+                    Ok(code) => {
+                        if let Some(c) = char::from_u32(code as u32) {
+                            Node::Codepoint(c)
+                        } else {
+                            Node::Codepoint('\0')
+                        }
+                    }
+                    Err(_) => Node::Codepoint('\0'),
+                }
+            }
+
+            t if t == NodeKind::Symbol as i32 => {
+                match obj.text() {
+                    Ok(s) => Node::Symbol(s),
+                    Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
+                }
+            }
+
+            t if t == NodeKind::KeyValue as i32 => {
+                let key = obj.name().unwrap_or_else(|_| String::new());
+                // Recursively read the value node from right field
+                let value = match obj.get::<GcObject>("right") {
+                    Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+                    Err(_) => Box::new(Node::Empty),
+                };
+                Node::KeyValue(key, value)
+            }
+
+            t if t == NodeKind::Pair as i32 => {
+                // Recursively read left and right nodes
+                let left = match obj.get::<GcObject>("left") {
+                    Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+                    Err(_) => Box::new(Node::Empty),
+                };
+                let right = match obj.get::<GcObject>("right") {
+                    Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+                    Err(_) => Box::new(Node::Empty),
+                };
+                Node::Pair(left, right)
+            }
+
+            t if t == NodeKind::Tag as i32 => {
+                let title = obj.name().unwrap_or_else(|_| String::new());
+                // Recursively read params (left field) and body (right field)
+                let params = match obj.get::<GcObject>("left") {
+                    Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+                    Err(_) => Box::new(Node::Empty),
+                };
+                let body = match obj.get::<GcObject>("right") {
+                    Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+                    Err(_) => Box::new(Node::Empty),
+                };
+                Node::Tag { title, params, body }
+            }
+
+            t if t == NodeKind::Block as i32 => {
+                // TODO: decode grouper/bracket info from int_value and read items
+                Node::Block(vec![], Grouper::Expression, Bracket::Curly)
+            }
+
+            t if t == NodeKind::List as i32 => {
+                // TODO: read items from linked list structure
+                Node::List(vec![])
+            }
+
+            t if t == NodeKind::Data as i32 => {
+                let type_name = obj.name().unwrap_or_else(|_| String::new());
+                // Create placeholder Dada with the type name
+                Node::Data(Dada {
+                    data: Box::new(format!("<wasm data: {}>", type_name)),
+                    type_name,
+                    data_type: DataType::Other,
+                })
+            }
+
+            _ => Node::Text(format!("Unknown NodeKind: {}", tag)),
+        }
     }
+
     pub fn todo(p0: String) -> Node {
         Node::Text(format!("TODO: {}", p0))
     }
@@ -621,13 +731,41 @@ impl PartialEq for Node {
                 // Ignore metadata when comparing equality
                 node.as_ref().eq(other)
             }
-            // Node::KeyValue(_, _) => {}
-            // Node::Block(_, _, _) => {}
-            // Node::List(_) => {}
-            _ => {
-                panic!("unimplemented");
-                // false
-            },
+            Node::KeyValue(k1, v1) => {
+                match other {
+                    Node::KeyValue(k2, v2) => k1 == k2 && v1 == v2,
+                    _ => false,
+                }
+            }
+            Node::Pair(a1, b1) => {
+                match other {
+                    Node::Pair(a2, b2) => a1 == a2 && b1 == b2,
+                    _ => false,
+                }
+            }
+            Node::Tag { title: t1, params: p1, body: b1 } => {
+                match other {
+                    Node::Tag { title: t2, params: p2, body: b2 } => {
+                        t1 == t2 && p1 == p2 && b1 == b2
+                    }
+                    _ => false,
+                }
+            }
+            Node::Block(items1, g1, br1) => {
+                match other {
+                    Node::Block(items2, g2, br2) => {
+                        // Compare items, but ignore grouper/bracket for now
+                        items1 == items2
+                    }
+                    _ => false,
+                }
+            }
+            Node::List(items1) => {
+                match other {
+                    Node::List(items2) => items1 == items2,
+                    _ => false,
+                }
+            }
         }
     }
 }
