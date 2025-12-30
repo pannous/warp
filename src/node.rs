@@ -204,6 +204,7 @@ impl Index<usize> for Node {
         match self {
             Node::List(elements) => elements.get(i).unwrap_or(&Node::Empty),
             Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
+            Node::WithMeta(node, _) => &node[i],
             _ => &Node::Empty,
         }
     }
@@ -231,6 +232,7 @@ impl Index<&String> for Node {
                     _ => false
                 }
             ).unwrap_or(&Node::Empty),
+            Node::WithMeta(node, _) => &node[i],
             _ => &Node::Empty,
         }
     }
@@ -286,14 +288,16 @@ impl Node {
         match self {
             Node::List(elements,..)  => elements.len(),
             Node::Block(nodes,..) => nodes.len(),
+            Node::WithMeta(node, _) => node.size(),
             _ => 0,
         }
     }
-    
+
     pub fn get(&self, i: usize) -> &Node {
         match self {
             Node::List(elements) => elements.get(i).unwrap(),
             Node::Block(nodes,..) => nodes.get(i).unwrap(),
+            Node::WithMeta(node, _) => node.get(i),
             _ => &Node::Empty,
         }
     }
@@ -301,6 +305,7 @@ impl Node {
     pub fn get_key(&self) -> Option<&str> {
         match self {
             Node::KeyValue(k, _) => Some(k),
+            Node::WithMeta(node, _) => node.get_key(),
             _ => None,
         }
     }
@@ -308,6 +313,7 @@ impl Node {
     pub fn get_value(&self) -> Option<&Node> {
         match self {
             Node::KeyValue(_, v) => Some(v),
+            Node::WithMeta(node, _) => node.get_value(),
             _ => None,
         }
     }
@@ -321,6 +327,7 @@ impl Node {
         match self {
             Node::List(items) => NodeIter::new(items.clone()),
             Node::Block(items, _, _) => NodeIter::new(items.clone()),
+            Node::WithMeta(node, _) => node.iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -329,6 +336,7 @@ impl Node {
         match self {
             Node::List(items) => NodeIter::new(items),
             Node::Block(items, _, _) => NodeIter::new(items),
+            Node::WithMeta(node, _) => (*node).clone().into_iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -609,6 +617,7 @@ impl PartialEq<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n == other,
             Node::Number(Number::Float(f)) => *f == *other as f64,
+            Node::WithMeta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -645,6 +654,7 @@ impl PartialEq<f64> for Node {
         match self {
             Node::Number(Number::Float(f)) => f == other,
             Node::Number(Number::Int(n)) => *n as f64 == *other,
+            Node::WithMeta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -655,6 +665,7 @@ impl PartialEq<&str> for Node {
         match self {
             Node::Text(s) => s == *other,
             Node::Symbol(s) => s == *other,
+            Node::WithMeta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -665,6 +676,7 @@ impl PartialOrd<i32> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
+            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -675,6 +687,7 @@ impl PartialOrd<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n.partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
+            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -685,6 +698,7 @@ impl PartialOrd<f64> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
             Node::Number(Number::Float(f)) => f.partial_cmp(other),
+            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
