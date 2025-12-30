@@ -1,5 +1,5 @@
 use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::read;
+use wasp::wasm_gc_reader::run_wasm_gc_object;
 use wasp::node::Node;
 use wasp::extensions::numbers::Number;
 
@@ -24,7 +24,7 @@ fn main() {
 
     // Ergonomic reading pattern from rasm:
     // root = read("test.wasm")
-    let root = read("demo.wasm").expect("Failed to read WASM");
+    let root = run_wasm_gc_object("demo.wasm").expect("Failed to read WASM");
 
     println!("\n--- Ergonomic Field Access ---");
 
@@ -54,7 +54,7 @@ fn main() {
     emitter2.emit_node_main(&Node::Number(Number::Int(42)));
     std::fs::write("number.wasm", &emitter2.finish()).expect("Failed to write");
 
-    let num_node = read("number.wasm").expect("Failed to read number WASM");
+    let num_node = run_wasm_gc_object("number.wasm").expect("Failed to read number WASM");
     let value: i64 = num_node.get("int_value").expect("Failed to get value");
     println!("  Number node value: {}", value);
     assert_eq!(value, 42);
@@ -67,7 +67,7 @@ fn main() {
     emitter3.emit_node_main(&Node::Text("Hello from WASM!".to_string()));
     std::fs::write("text.wasm", &emitter3.finish()).expect("Failed to write");
 
-    let text_node = read("text.wasm").expect("Failed to read text WASM");
+    let text_node = run_wasm_gc_object("text.wasm").expect("Failed to read text WASM");
     let text = text_node.text().expect("Failed to get text");
     println!("  Text node content: \"{}\"", text);
     assert_eq!(text, "Hello from WASM!");
