@@ -384,9 +384,9 @@ impl WasmGcEmitter {
             Node::Text(s) | Node::Symbol(s) => {
                 self.allocate_string(s);
             }
-            Node::Tag(name, attrs, body) => {
-                self.allocate_string(name);
-                self.collect_and_allocate_strings(attrs);
+            Node::Tag { title, params, body } => {
+                self.allocate_string(title);
+                self.collect_and_allocate_strings(params);
                 self.collect_and_allocate_strings(body);
             }
             Node::KeyValue(key, value) => {
@@ -524,11 +524,11 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
-            Node::Tag(name, _attrs, _body) => {
+            Node::Tag { title, params: _params, body: _body } => {
                 // For Tag nodes, store the tag name in name field (use actual allocated string)
-                let (ptr, len) = self.string_table.get(name.as_str())
-                    .map(|&offset| (offset, name.len() as u32))
-                    .unwrap_or((0, name.len() as u32));
+                let (ptr, len) = self.string_table.get(title.as_str())
+                    .map(|&offset| (offset, title.len() as u32))
+                    .unwrap_or((0, title.len() as u32));
                 func.instruction(&I32Const(ptr as i32));
                 func.instruction(&I32Const(len as i32));
                 // tag
