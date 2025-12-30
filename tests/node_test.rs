@@ -15,7 +15,7 @@ fn test_node(){
 }
 
 fn eval(code: &str) -> Node {
-    Node::Todo(format!("Eval not implemented: {}", code))
+    Node::todo(format!("Eval not implemented: {}", code))
 }
 
 #[test]
