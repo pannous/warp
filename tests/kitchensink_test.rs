@@ -211,11 +211,11 @@ fn test_kitchensink_wasmtime_execution() {
     println!("\n=== Kitchensink: Wasmtime Execution Test ===\n");
 
     // Create a simple node
-    let node = Node::Tag(
-        "html".to_string(),
-        Box::new(Node::Empty),
-        Box::new(Node::Text("content".to_string()))
-    );
+    let node = Node::Tag {
+        title: "html".to_string(),
+        params: Box::new(Node::Empty),
+        body: Box::new(Node::Text("content".to_string()))
+    };
 
     let mut emitter = WasmGcEmitter::new();
     emitter.emit();

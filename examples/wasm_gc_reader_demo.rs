@@ -10,11 +10,11 @@ fn main() {
     let mut emitter = WasmGcEmitter::new();
     emitter.emit();
 
-    let html_node = Node::Tag(
-        "html".to_string(),
-        Box::new(Node::Empty),
-        Box::new(Node::Text("Hello WASM!".to_string())),
-    );
+    let html_node = Node::Tag {
+        title: "html".to_string(),
+        params: Box::new(Node::Empty),
+        body: Box::new(Node::Text("Hello WASM!".to_string())),
+    };
     emitter.emit_node_main(&html_node);
 
     let bytes = emitter.finish();
