@@ -88,12 +88,13 @@ impl Index<&String> for Node {
 impl Node {
     // associated 'static' functions
     pub fn new() -> Node { Node::Empty }
+    pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
     pub fn key(s: &str, v: Node) -> Self { Node::KeyValue(s.to_string(), Box::new(v)) }
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
-    pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
-    pub fn number(n: i64) -> Self { Node::Number(Number::Int(n)) }
+    pub fn number(n: Number) -> Self { Node::Number(n) }
+    pub fn int(n: i64) -> Self { Node::Number(Number::Int(n)) }
     pub fn float(n: f64) -> Self { Node::Number(Number::Float(n)) }
     pub fn list(xs:Vec<Node>) -> Self { Node::List(xs) }
     // pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
@@ -146,8 +147,8 @@ impl fmt::Debug for Node {
                     }
                 }
             }
-            Node::KeyValue(k, v) => write!(f, "{}: {:?}", k, v),
-            Node::Pair(a, b) => write!(f, "({:?}, {:?})", a, b),
+            Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
+            Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Node::Empty => write!(f, "ø"),
             // Node::Data(x) => write!(f, "{:?}", x)
@@ -212,6 +213,42 @@ impl PartialEq for Node {
                 panic!("unimplemented");
                 // false
             },
+        }
+    }
+}
+
+impl PartialEq<i64> for Node {
+    fn eq(&self, other: &i64) -> bool {
+        match self {
+            Node::Number(Number::Int(n)) => n == other,
+            Node::Number(Number::Float(f)) => *f == *other as f64,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<i32> for Node {
+    fn eq(&self, other: &i32) -> bool {
+        self == &(*other as i64)
+    }
+}
+
+impl PartialEq<f64> for Node {
+    fn eq(&self, other: &f64) -> bool {
+        match self {
+            Node::Number(Number::Float(f)) => f == other,
+            Node::Number(Number::Int(n)) => *n as f64 == *other,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<&str> for Node {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            Node::Text(s) => s == *other,
+            Node::Symbol(s) => s == *other,
+            _ => false,
         }
     }
 }
