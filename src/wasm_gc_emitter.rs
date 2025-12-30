@@ -381,10 +381,63 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
+            Node::Text(s) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Text as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len (store string length for now)
+                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
+                func.instruction(&Instruction::I32Const(s.len() as i32));
+                // left, right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Codepoint(c) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Codepoint as i32));
+                // int_value (store codepoint as int), float_value
+                func.instruction(&Instruction::I64Const(*c as i64));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left, right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Symbol(s) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Symbol as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len (store symbol length for now)
+                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
+                func.instruction(&Instruction::I32Const(s.len() as i32));
+                // left, right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
             Node::Tag(name, _attrs, _body) => {
                 // For Tag nodes, store the tag name in name field
-                // TODO: Store name string in linear memory and use ptr/len
-                func.instruction(&Instruction::I32Const(0)); // name_ptr (placeholder)
+                func.instruction(&Instruction::I32Const(0)); // name_ptr (placeholder for linear memory)
                 func.instruction(&Instruction::I32Const(name.len() as i32)); // name_len
                 // tag
                 func.instruction(&Instruction::I32Const(NodeKind::Tag as i32));
@@ -395,15 +448,126 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::I32Const(0));
                 func.instruction(&Instruction::I32Const(0));
                 // left (attrs), right (body), meta
-                // TODO: Recursively encode child nodes
+                // Note: Recursive encoding not yet implemented - would need locals and multiple StructNew
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
-            _ => {
-                // For other node types, return empty for now
-                // TODO: Implement remaining node types
+            Node::KeyValue(key, value) => {
+                // name_ptr, name_len (store key)
+                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
+                func.instruction(&Instruction::I32Const(key.len() as i32));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::KeyValue as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left (null), right (value node - not yet recursively encoded), meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode value
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Pair(left, right) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Pair as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left, right (not yet recursively encoded), meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode left
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode right
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Block(items, grouper, bracket) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Block as i32));
+                // int_value (store grouper/bracket info as encoded value), float_value
+                let grouper_val = match grouper {
+                    Grouper::Object => 0i64,
+                    Grouper::Group => 1,
+                    Grouper::Pattern => 2,
+                    Grouper::Expression => 3,
+                    Grouper::Other(_, _) => 4,
+                };
+                let bracket_val = match bracket {
+                    Bracket::Curly => 0i64,
+                    Bracket::Square => 1,
+                    Bracket::Round => 2,
+                    Bracket::Other(_, _) => 3,
+                };
+                let group_info = grouper_val << 8 | bracket_val;
+                func.instruction(&Instruction::I64Const(group_info));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr (item count), text_len
+                func.instruction(&Instruction::I32Const(items.len() as i32));
+                func.instruction(&Instruction::I32Const(0));
+                // left (first item if exists), right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode items
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::List(items) => {
+                // name_ptr, name_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::List as i32));
+                // int_value, float_value
+                func.instruction(&Instruction::I64Const(0));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr (item count), text_len
+                func.instruction(&Instruction::I32Const(items.len() as i32));
+                func.instruction(&Instruction::I32Const(0));
+                // left (first item if exists), right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode items
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::Data(dada) => {
+                // name_ptr, name_len (store type_name)
+                func.instruction(&Instruction::I32Const(0)); // ptr placeholder
+                func.instruction(&Instruction::I32Const(dada.type_name.len() as i32));
+                // tag
+                func.instruction(&Instruction::I32Const(NodeKind::Data as i32));
+                // int_value (store data_type), float_value
+                let data_type_val = match &dada.data_type {
+                    DataType::Vec => 0i64,
+                    DataType::Tuple => 1,
+                    DataType::Struct => 2,
+                    DataType::Primitive => 3,
+                    DataType::String => 4,
+                    DataType::Other => 5,
+                };
+                func.instruction(&Instruction::I64Const(data_type_val));
+                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
+                // text_ptr, text_len
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                // left, right, meta
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
+                func.instruction(&Instruction::StructNew(self.node_base_type));
+            }
+            Node::WithMeta(_, _) => {
+                // Should not reach here since unwrap_meta is called at the start
                 func.instruction(&Instruction::I32Const(0));
                 func.instruction(&Instruction::I32Const(0));
                 func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
