@@ -2,8 +2,7 @@ use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::node::Node;
 use wasp::extensions::numbers::Number;
-use std::fs::File;
-use std::io::Write as IoWrite;
+use wasp::write_wasm;
 
 /// Comprehensive test covering all Node types and their WASM encoding
 #[test]
@@ -106,9 +105,8 @@ fn test_node(name: &str, node: Node) {
     }
 
     // Write to file for inspection
-    let filename = format!("kitchensink_{}.wasm", name.to_lowercase().replace("::", "_").replace(" ", "_"));
-    if let Ok(mut f) = File::create(&filename) {
-        let _ = f.write_all(&bytes);
+    let filename = format!("out/kitchensink_{}.wasm", name.to_lowercase().replace("::", "_").replace(" ", "_"));
+    if write_wasm(&filename, &bytes) {
         println!("  ✓ Written to {}", filename);
     }
 
@@ -178,9 +176,8 @@ fn test_kitchensink_complex_tree() {
     validator.validate_all(&bytes).expect("Complex tree WASM validation failed");
 
     // Check data section has all strings
-    let filename = "kitchensink_complex_tree.wasm";
-    let mut f = File::create(filename).unwrap();
-    f.write_all(&bytes).unwrap();
+    let filename = "out/kitchensink_complex_tree.wasm";
+    write_wasm(filename, &bytes);
 
     println!("✓ Complex tree with all node types validated successfully");
     println!("✓ Written to {}", filename);
@@ -226,9 +223,8 @@ fn test_kitchensink_wasmtime_execution() {
     let bytes = emitter.finish();
 
     // Write to file
-    let filename = "kitchensink_wasmtime.wasm";
-    let mut f = File::create(filename).unwrap();
-    f.write_all(&bytes).unwrap();
+    let filename = "out/kitchensink_wasmtime.wasm";
+    write_wasm(filename, &bytes);
 
     // Try to run with wasmtime
     use std::process::Command;
