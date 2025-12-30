@@ -160,6 +160,7 @@ pub enum Node {
     // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
     KeyValue(String, Box<Node>),
     Pair(Box<Node>, Box<Node>),
+    Tag(String, Box<Node>, Box<Node>), // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
     Block(Vec<Node>, Kind, Bracket),
     List(Vec<Node>), // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
@@ -218,6 +219,12 @@ impl Node {
     pub fn new() -> Node { Node::Empty }
     pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
     pub fn key(s: &str, v: Node) -> Self { Node::KeyValue(s.to_string(), Box::new(v)) }
+    pub fn tag(name: &str, body: Node) -> Self {
+        Node::Tag(name.to_string(), Box::new(Node::Empty), Box::new(body))
+    }
+    pub fn tag_with_attrs(name: &str, attrs: Node, body: Node) -> Self {
+        Node::Tag(name.to_string(), Box::new(attrs), Box::new(body))
+    }
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
@@ -303,6 +310,15 @@ impl Node {
             Node::Pair(a, b) => {
                 Value::Array(vec![a.to_json_value(), b.to_json_value()])
             }
+            Node::Tag(name, attrs, body) => {
+                let mut map = Map::new();
+                if **attrs != Node::Empty {
+                    // Include attributes if present
+                    map.insert("_attrs".to_string(), attrs.to_json_value());
+                }
+                map.insert(name.clone(), body.to_json_value());
+                Value::Object(map)
+            }
             Node::Block(items, kind, bracket) => {
                 // Curly braces -> object with items, Square/Round -> array
                 match bracket {
@@ -312,6 +328,17 @@ impl Node {
                             match item {
                                 Node::KeyValue(k, v) => {
                                     map.insert(k.clone(), v.to_json_value());
+                                }
+                                Node::Tag(name, attrs, body) => {
+                                    // Tags become named keys
+                                    if **attrs != Node::Empty {
+                                        let mut tag_map = Map::new();
+                                        tag_map.insert("_attrs".to_string(), attrs.to_json_value());
+                                        tag_map.insert(name.clone(), body.to_json_value());
+                                        map.extend(tag_map);
+                                    } else {
+                                        map.insert(name.clone(), body.to_json_value());
+                                    }
                                 }
                                 Node::Block(nested, _, Bracket::Curly) => {
                                     // Nested blocks become nested objects
@@ -368,6 +395,12 @@ impl fmt::Debug for Node {
             }
             Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
             Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
+            Node::Tag(name, attrs, body) => {
+                match **attrs {
+                    Node::Empty => write!(f, "{}{{{:?}}}", name, body),
+                    _ => write!(f, "<{} {:?}>{:?}", name, attrs, body),
+                }
+            }
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Node::Data(d) => write!(f, "{:?}", d),
             Node::Empty => write!(f, "ø"),
