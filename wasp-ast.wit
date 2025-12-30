@@ -1,0 +1,73 @@
+package wasp:ast;
+
+interface ast {
+
+  // WebAssembly Interface Types for Node AST
+
+  variant number {
+    int(s64),
+    float(f64),
+    quotient(tuple<s64, s64>),
+    complex(tuple<f64, f64>),
+  }
+
+  enum bracket {
+    curly,
+    square,
+    round,
+  }
+
+  enum kind {
+    object,
+    group,
+    pattern,
+  }
+
+  enum data-type {
+    vec,
+    tuple,
+    struct,
+    primitive,
+    string,
+    other,
+  }
+
+  record meta {
+    comment: option<string>,
+    line: option<u32>,
+    column: option<u32>,
+  }
+
+  record data {
+    type-name: string,
+    data-type: data-type,
+  }
+
+  variant node {
+    empty,
+    number(number),
+    text(string),
+    symbol(string),
+    key-value(tuple<string, node>),
+    pair(tuple<node, node>),
+    tag(tuple<string, node, node>),
+    block(tuple<list<node>, kind, bracket>),
+    list(list<node>),
+    data(data),
+    with-meta(tuple<node, meta>),
+  }
+
+  // Parse WASP format to Node
+  parse: func(input: string) -> result<node, string>;
+
+  // Serialize Node to JSON
+  to-json: func(node: node) -> result<string, string>;
+
+  // Serialize Node to WASP format
+  to-wasp: func(node: node) -> string;
+
+}
+
+world ast {
+  export ast;
+}
