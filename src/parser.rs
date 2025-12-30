@@ -2,12 +2,12 @@
 
 extern crate regex;
 
-use std::fmt;
 use regex::Regex;
+use std::fmt;
 
-use crate::node::{Node, Grouper, Bracket};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
+use crate::node::{Bracket, Grouper, Node};
 use std::ops::Index; // node[i]
 
 pub struct Parser {
@@ -48,12 +48,8 @@ impl Parser {
         match tokens {
             " " => Node::Empty,
             "'" | "\"" => self.parse_quote(&token),
-            "{" => {
-                self.parse_block(&token, "}")
-            }
-            "[" => {
-                self.parse_block(&token, "]")
-            }
+            "{" => self.parse_block(&token, "}"),
+            "[" => self.parse_block(&token, "]"),
             _ => {
                 // we already progressed with self.current += 1;
                 // look ahead to see if it's a key value pair
@@ -74,8 +70,8 @@ impl Parser {
         }
     }
 
-        // fn parse_sequence(&mut self) -> Node {
-        //     let mut sequence = Vec::new();
+    // fn parse_sequence(&mut self) -> Node {
+    //     let mut sequence = Vec::new();
     // while let Some(next) = self.tokens.get(self.current) {
     //             if next == "," {
     //                 self.current += 1;
@@ -88,10 +84,9 @@ impl Parser {
     //             }
     //         }
 
-
     fn parse_sequence(&mut self, initial_token: String) -> Node {
         let mut sequence = vec![Node::Symbol(initial_token)];
-        while let Some(token) = self.tokens.get(self.current){
+        while let Some(token) = self.tokens.get(self.current) {
             match token.as_str() {
                 "," | ";" | " " => {
                     self.current += 1; // Consume the ","
@@ -125,13 +120,17 @@ impl Parser {
     //     }
     // }
 
-    // maybe char was premature? begin … end  TAB indent … dedent
+    // maybe char was premature? begin … end  TAB indent … dedent can be char though
     fn closing_bracket(&mut self, kind: char) -> char {
         match kind {
             '{' => '}',
             '[' => ']',
             '(' => ')',
-            _ => panic!("Unknown closing bracket for kind {}", kind)
+            ';' => ';',
+            // #define INDENT 0x0F // 	SI 	␏ 	^O 		Shift In
+            // #define DEDENT 0x0E //  SO 	␎ 	^N 		Shift Out
+            '\u{000F}' => '\u{000E}', // indent → dedent
+            _ => panic!("Unknown closing bracket for kind {}", kind),
         }
     }
 
@@ -141,44 +140,62 @@ impl Parser {
             '(' => Grouper::Group,
             '[' => Grouper::Pattern,
             ';' => Grouper::Expression,
-            _ => Grouper::Other(kind, self.closing_bracket(kind))
+            _ => Grouper::Other(kind, self.closing_bracket(kind)),
         }
     }
 
     fn parse_block(&mut self, bracket: &String, closing: &str) -> Node {
         let mut nodes = Vec::new();
         while !self.check(closing) && !self.eof() {
-            let node = self.parse_code() ;
+            let node = self.parse_code();
             nodes.push(node);
             self.skip_token(",");
             self.skip_token(";");
+            if closing != "\n" {
+                self.skip_token("\n");
+            }
         }
         self.expect_token(closing);
-        Node::Block(nodes, self.bracket_kind(bracket.first_char()), Bracket::Curly)
+        Node::Block(
+            nodes,
+            self.bracket_kind(bracket.first_char()),
+            Bracket::Curly,
+        )
     }
 
-
     fn skip_token(&mut self, expected: &str) {
-        if self.tokens.get(self.current).map_or(false, |t| t == expected) {
+        if self
+            .tokens
+            .get(self.current)
+            .map_or(false, |t| t == expected)
+        {
             self.current += 1;
         }
     }
 
     fn expect_token(&mut self, expected: &str) {
-        if self.tokens.get(self.current).map_or(false, |t| t == expected) {
+        if self
+            .tokens
+            .get(self.current)
+            .map_or(false, |t| t == expected)
+        {
             self.current += 1;
         } else {
-            panic!("Expected token '{}', found {:?}", expected, self.tokens.get(self.current));
+            panic!(
+                "Expected token '{}', found {:?}",
+                expected,
+                self.tokens.get(self.current)
+            );
         }
     }
-
 
     fn lookahead_token(&mut self, expected: &str) -> bool {
         for i in self.current..self.tokens.len() {
             if self.tokens.get(i).map_or(false, |t| t == expected) {
                 return true;
             }
-            if self.tokens.get(i).map_or(false, |t| t == "\n") { // stop at newline
+            if self.tokens.get(i).map_or(false, |t| t == "\n") {
+                // stop at newline
                 return false;
             }
         }
@@ -195,7 +212,9 @@ impl Parser {
     }
 
     fn check(&self, expected: &str) -> bool {
-        self.tokens.get(self.current).map_or(false, |t| t == expected)
+        self.tokens
+            .get(self.current)
+            .map_or(false, |t| t == expected)
     }
     fn eof(&self) -> bool {
         self.current >= self.tokens.len()
