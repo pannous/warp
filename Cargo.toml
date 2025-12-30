@@ -23,7 +23,6 @@ wasm = []
 # ⚠️ toggle OFFLINE mode!
 # can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
-bla = { path = "bla" }                                # local
 paste = { version = "1.0.14", features = [] }
 regex = "1.10.3"
 serde = { version = "1.0", features = ["derive"] }
