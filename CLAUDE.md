@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is **warp**, a rust implementation of **wasp** 
 wasp is a data format and wasm first programming language
-locally at ~/wasp/ ~/wasp/wiki
+C++ source code locally at ~/wasp/ documentation at ~/wasp/wiki
 https://github.com/pannous/wasp
 https://wasp.pannous.com/
 
@@ -35,6 +35,10 @@ Recursive descent parser that converts text input to Node AST:
 ### Emitters
 Three distinct code generation backends:
 
+
+0. **Generic Emitter** (`src/emitter.rs`)
+   - Textual emitter similar to json5
+
 1. **WIT Emitter** (`src/wit_emitter.rs`)
    - Generates WebAssembly Interface Type definitions
    - Outputs `.wit` files defining type shapes for Node variants
@@ -43,16 +47,12 @@ Three distinct code generation backends:
    - Generates WASM GC bytecode using `wasm-encoder` crate
    - Creates GC struct types for each Node variant with proper tagging
    - Uses `NodeKind` enum for runtime type discrimination
-   - **Recently migrated** from deprecated WASM GC API to proper `wasm-encoder` GC API (see commit 9e1315c)
-
-3. **Generic Emitter** (`src/emitter.rs`)
-   - Legacy/fallback emitter
 
 ### WASM Runtime Support (`src/run/`)
 Multiple runtime backends for executing generated WASM:
-- `wasmtime_runner.rs` - Primary runtime (requires wasmtime 40.0+)
-- `wasmer_runner.rs` - Alternative runtime
-- `wasmedge_runner.rs` - Alternative runtime
+- `wasmtime_runner.rs` - Primary runtime
+- `wasmedge_runner.rs` - Alternative 
+- `wasmer_runner.rs` - Alternative 
 
 ### Compiler Utilities (`src/compiler/`)
 - `wasm_reader.rs` - Reads WASM modules using wasmparser
@@ -77,15 +77,10 @@ cargo test --test <test_file>  # Run specific test file (without _test.rs suffix
 ```
 
 #### Important Test Files
-- `tests/wasm_gc_emitter_test.rs` - Tests WASM GC code generation
-- `tests/wasm_gc_features_test.rs` - Tests WASM GC feature support
-- `tests/wasm_gc_read_test.rs` - Tests reading WASM GC objects (see guide below)
-- `tests/wasp_parser_test.rs` - Tests parser functionality
-- `tests/wasp_comments_test.rs` - Tests comment preservation
-- `tests/wasp_position_test.rs` - Tests position tracking
-- `tests/wit_emitter_test.rs` - Tests WIT generation
-- `tests/json_test.rs` - Tests JSON interop
 - `tests/node_test.rs` - Tests Node AST operations
+- `tests/wasp_parser_test.rs` - Tests parser functionality
+- `tests/wasm_gc_emitter_test.rs` - Tests WASM GC code generation
+- `tests/wasm_reader_test.rs` - Tests reading WASM GC objects (see guide below)
 
 ### Running Examples
 ```bash
@@ -93,24 +88,6 @@ cargo run --example wasm_gc_generation
 cargo run --example wit_generation
 cargo run --example wasp_comments_demo
 ```
-
-## Key Dependencies
-
-### WASM Tooling
-- `wasmtime` (v40.0.0) - Primary WASM runtime with GC support
-- `wasm-encoder` - WASM module generation (proper GC API)
-- `wasmparser` - WASM module parsing
-- `wasm-compose`, `wasm-metadata` - Module composition and metadata
-- `wasmprinter` - WASM text format printing
-- `wast`, `wat` - WebAssembly text format parsing
-- `wit-component` - Component model support
-- `parity-wasm` - Alternative WASM serialization (incomplete GC support)
-
-### Rust Utilities
-- `syn` - Rust AST parsing (not WASM32 targets)
-- `regex` - Pattern matching
-- `serde`, `serde_json` - Serialization
-- `paste` - Macro utilities
 
 ## WASM GC Reading Patterns
 
@@ -121,18 +98,13 @@ The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC
 - Ergonomic `GcObject` wrapper hiding store management
 - Creating GC objects from Rust
 
-**Key requirement**: Wasmtime 28.0+ for full GC introspection (currently using 40.0.0)
-
 ## Important Notes
+
+Use WASM names excessively! Wasm provides custom sections for names, use ALL of them!
 
 ### Offline Development
 The project is configured for **offline-first** development to avoid compilation delays. Dependencies are vendored and Cargo.toml has offline mode notes. Use `--offline` flag when building.
 
-### WASM GC Migration
-Recent architectural change (commit 9e1315c): Migrated from deprecated WASM GC API to proper `wasm-encoder` GC API. The `WasmGcEmitter` now uses:
-- Proper `StructType` definitions instead of deprecated approaches
-- Type section management with GC-aware constructors
-- Validated against wasmtime 40.0.0 GC introspection support
 
 ### Test File Locations
 Tests are in `tests/` directory (not `src/`). Each test file is named `*_test.rs` and tests a specific module or feature.
@@ -143,17 +115,73 @@ The `src/extensions/` directory provides Rust standard library extensions:
 - `strings.rs` - String manipulation helpers
 - `lists.rs` - Collection utilities
 - `utils.rs` - General utilities (download, file I/O)
+- more on demand
 
 These are reexported in `lib.rs` for test access via `use wasp::*`.
 
 ## Development Workflow
 
+0. **Run tests** - `cargo test` to verify we start from a clean state, check git logs
 1. **Modify parser or emitter** - Edit files in `src/`
 2. **Add tests** - Create or update tests in `tests/`
 3. **Run tests** - `cargo test` to verify
 4. **Check examples** - Run examples to see output
 5. **Build offline** - Use `--offline` for reproducible builds
 
-## Subproject: LO
+## Serialization
+=== Node Serialization Workflow (Design) ===
 
-The `LO/` directory contains a separate WebAssembly project (likely "Language Oriented" or similar) with its own build system (`build.sh`), WASM binary (`lo.wasm`), and VSCode extension (`vscode-ext/`). It appears to be related tooling but is independently maintained.
+to be checked via test_wasm_roundtrip
+
+1. Define Node GC struct type in WAT:  (still subject to change)
+
+   (type $node (struct
+     (field $name (ref $string))   ;; For Tag nodes e.g. 'html{test=42}'
+     (field $tag i32)              ;; NodeTag Kind / Type discriminant
+     (field $int_value i64)        ;; For Number nodes
+     (field $float_value f64)      ;; For Number nodes
+     (field $text (ref $string))   ;; For Text/Symbol nodes
+     (field $left (ref null $node)) ;; For Pair/Block/List nodes
+     (field $right (ref null $node))
+     (field $meta (ref null $node)) ;; For Pair/Block nodes
+   ))
+   the same type struct must be emitted to wasm bytecode
+
+2. Create Rust wrapper:
+   gc_struct! {
+       WaspNode {
+           tag: 0 => i32,
+           int_value: 1 => i64,
+           float_value: 2 => f64,
+           text: 3 => String,
+           left: 4 => Option<WaspNode>,
+           right: 5 => Option<WaspNode>,
+       }
+   }
+
+3. Convert wasp::Node to WASM:
+   let wasm_node = WaspNode::create(&template, obj! {
+       tag: NodeTag::Number as i32,
+       int_value: 42,
+   })?;
+
+   TODO save it!
+
+   TODO automatically convert Node tree to WaspNode tree
+
+   TODO kitchensink
+
+TODO verify it via wasm2wat --no-check --enable-all --ignore-custom-section-errors
+TODO verify it via wasmtime run --enable-gc --enable-interface-types
+TODO verify it via wasm verification crate
+
+
+4. Read back fields:
+   let tag = wasm_node.tag()?;  // Auto-generated getter
+   let value = wasm_node.int_value()?;
+
+5. Round-trip: WASM -> Rust Node:
+   let rust_node = Node::from_wasm_node(&wasm_node)?;
+
+
+

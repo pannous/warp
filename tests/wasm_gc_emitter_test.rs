@@ -17,7 +17,7 @@ fn test_wasm_module_generation() {
 }
 
 #[test]
-fn test_wasm_file_output() {
+fn test_wasm_roundtrip() {
     use wasp::wasp_parser::WaspParser;
     use wasmparser::{Parser, Payload};
 
@@ -30,7 +30,7 @@ fn test_wasm_file_output() {
     emitter.emit();
     emitter.emit_node_main(&node); // Emit a main() function that returns the node
 
-    let path = "/tmp/test-wasm-gc-nodes.wasm";
+    let path = "test_wasm_roundtrip.wasm";
     let bytes = emitter.finish();
     let result = File::create(path).and_then(|mut f| f.write_all(&bytes));
     assert!(result.is_ok(), "Failed to write WASM file");
@@ -68,9 +68,16 @@ fn test_wasm_file_output() {
                     .collect();
                 println!("Exports: {:?}", export_names);
                 assert!(export_names.contains(&"main".to_string()), "Should export main function");
+                assert!(export_names.contains(&"get_tag".to_string()), "Should export get_tag");
+                assert!(export_names.contains(&"get_int_value".to_string()), "Should export get_int_value");
             },
             Payload::CodeSectionEntry(_body) => {
                 has_code_section = true;
+            },
+            Payload::CustomSection(custom) => {
+                if custom.name() == "name" {
+                    println!("✓ Found name custom section");
+                }
             },
             _ => {}
         }
