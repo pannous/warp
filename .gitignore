@@ -3,3 +3,4 @@
 vendor
 test.wasm
 Cargo.lock
+nodes.wasm
