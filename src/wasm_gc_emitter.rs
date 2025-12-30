@@ -339,6 +339,32 @@ impl WasmGcEmitter {
         self.next_func_idx += 1;
     }
 
+    /// Emit a function that constructs and returns a specific Node
+    pub fn emit_node_main(&mut self, _node: &Node) {
+        // For now, emit a simple main that returns an empty node
+        // TODO: Implement full node encoding
+        let empty_ref = RefType {
+            nullable: false,
+            heap_type: HeapType::Concrete(self.empty_type),
+        };
+
+        let func_type = self.types.len();
+        self.types.ty().function(vec![], vec![ValType::Ref(empty_ref)]);
+        self.functions.function(func_type);
+
+        let mut func = Function::new(vec![]);
+
+        // For now just return empty node
+        // TODO: Encode the actual node structure
+        func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
+        func.instruction(&Instruction::StructNew(self.empty_type));
+        func.instruction(&Instruction::End);
+
+        self.code.function(&func);
+        self.exports.export("main", ExportKind::Func, self.next_func_idx);
+        self.next_func_idx += 1;
+    }
+
     /// Generate the final WASM module bytes
     pub fn finish(mut self) -> Vec<u8> {
         self.module.section(&self.types);
