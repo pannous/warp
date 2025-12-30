@@ -17,11 +17,12 @@ fn test_indexed(){
 fn test_filter(){
     println!("test_filter own extension filter for Vec<i32>");
     let v = vec![1, 2, 3, 4, 5];
-    for i in v.filter(|&x| x > 2) {
+    for i in v.clone().filter(|&x| x > 2) {
         print!("{} ", i);
     }
-    let xs = Node::list(v);
-    for node in xs.filter(|&x| x > 2) {
+    // let xs = Node::list(v);
+    let xs = Node::ints(v);
+    for node in xs.filter(|x| x > &2) {
         print!("{} ", node);
     }
 }

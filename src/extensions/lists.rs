@@ -3,6 +3,7 @@
 use std::array::IntoIter;
 use std::iter::Enumerate;
 use crate::extensions::numbers::Number;
+use crate::node::Node;
 
 use std::ops::Range;
 use wasmparser::{FromReader, SectionLimited};
@@ -21,6 +22,17 @@ impl<T> Indexed<T> for Vec<T>
     }
 }
 
+// Implement Indexed for Node to support enumerating List nodes
+impl Indexed<Node> for Node {
+    fn indexed(self) -> impl Iterator<Item = (usize, Node)> {
+        match self {
+            Node::List(items) => items.into_iter().enumerate(),
+            Node::Block(items, _, _) => items.into_iter().enumerate(),
+            _ => vec![].into_iter().enumerate(),
+        }
+    }
+}
+
 //
 // impl<T> Indexed<T> for SectionLimited<'_, T> {
 //     fn indexed(self)-> impl Iterator<Item = (usize, T)>{
@@ -35,6 +47,17 @@ pub trait Filter<T> {
 impl<T> Filter<T> for Vec<T> {
     fn filter(self, f: fn(&T) -> bool) -> Vec<T> {
         self.into_iter().filter(f).collect()
+    }
+}
+
+// Implement Filter for Node to support filtering List nodes
+impl Filter<Node> for Node {
+    fn filter(self, f: fn(&Node) -> bool) -> Vec<Node> {
+        match self {
+            Node::List(items) => items.into_iter().filter(f).collect(),
+            Node::Block(items, _, _) => items.into_iter().filter(f).collect(),
+            _ => vec![],
+        }
     }
 }
 
