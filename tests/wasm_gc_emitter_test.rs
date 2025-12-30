@@ -6,6 +6,7 @@ use wasp::{eq, is, write_wasm};
 
 #[test]
 fn test_wasm_roundtrip() {
+    // same as eval() but shows explicit parsing
     use wasp::wasp_parser::WaspParser;
 
     // Parse WASP input
