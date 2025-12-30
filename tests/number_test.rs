@@ -29,6 +29,13 @@ fn test_number_floats() {
     put!("n3", n3);
     // assert_eq!(n3, 3.3);
     assert!(approx_equal(n3, Float(3.3) , 1e-10), "Left: {}, Right: {}", n3, 3.3);
+    assert_eq!(n3, Float(3.3)); // ⚠️ 3.3000000000000003 
+    assert_eq!(n3, Float(3.3));
+    assert_eq!(n3, 3.3);
+    // assert!(approx_equal_f64(n3, 3.3, 1e-10));
+    if let Float(val) = n3 {
+        assert!(approx_equal_f64(val, 3.3, 1e-10));
+    }
 }
 
 

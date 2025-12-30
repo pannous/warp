@@ -49,6 +49,12 @@ pub trait StringExtensions {
     fn str(&self) -> String;
     // allow negative index into chars : -2 = next to last
     fn s(&self) -> String;
+    // from is reserved for String.from("…") constructor
+    // fn from(&self, start: usize) -> &str;
+    fn start_from(&self, start: usize) -> &str;
+    fn set(&self, index: usize, c: char) -> String;
+    // return the slice after the first occurrence of `pat`, or empty slice if not found
+    fn after(&self, pat: &str) -> &str;
 }
 
 
@@ -81,6 +87,16 @@ impl StringExtensions for String {
         // just use the range operator directly
         &self[start..end]
     }
+    fn after(&self, pat: &str) -> &str {
+        match self.find(pat) {
+            Some(idx) => &self[idx + pat.len()..],
+            None => &self[self.len()..],
+        }
+    }
+    fn set(&self, at: usize, value: char) -> String { self.clone().replace_range(at..at+1, &value.to_string()); self.to_string() }
+    // fn from(&self, start: usize) -> &str { &self[start..] }
+    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 }
 
 impl StringExtensions for str {
@@ -107,11 +123,25 @@ impl StringExtensions for str {
     fn map(&self, f: fn(char) -> char) -> String {
         self.chars().map(f).collect()
     }
+    fn after(&self, pat: &str) -> &str {
+        match self.find(pat) {
+            Some(idx) => &self[idx + pat.len()..],
+            None => &self[self.len()..],
+        }
+    }
+    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
+
     fn substring(&self, start: usize, end: usize) -> &str {
         // just use the range operator directly
         &self[start..end]
     }
 
+    fn set(&self, at: usize, value: char) -> String {
+        let mut changed=self.to_string();
+        changed.replace_range(at..at+1, &value.to_string());
+        changed
+    }
 }
 
 pub(crate) trait IntegerExtensions {
@@ -159,7 +189,82 @@ use std::cmp::PartialEq;
 //     }
 // }
 
-// Test it
+// only traits defined in the current crate can be implemented for types defined outside of the crate
+// impl PartialEq<str> for char {
+//     fn eq(&self, other: &str) -> bool {
+//         other.len() == 1 && other.chars().next() == Some(*self)
+//     }
+// }
+//
+// impl PartialEq<char> for str {
+//     fn eq(&self, other: &char) -> bool {
+//         self.len() == 1 && self.chars().next() == Some(*other)
+//     }
+// }
+
+// use std::cmp::PartialEq;
+
+trait PartialEqStr {
+    fn is(&self, other: &str) -> bool;
+}
+trait PartialEqChar {
+    fn is(&self, other: &char) -> bool;
+}
+
+trait PartialEqNum {
+    fn is(&self, other: &i64) -> bool;
+}
+
+impl PartialEqStr for char {
+    fn is(&self, other: &str) -> bool {
+        other.len() == 1 && other.chars().next() == Some(*self)
+    }
+}
+
+// impl PartialEqNum for char {
+//     fn is(&self, other: &i64) -> bool {
+//         self.to_digit(10) == Some(*other as u32)
+//     }
+// }
+
+impl PartialEqChar for str {
+    fn is(&self, other: &char) -> bool {
+        self.len() == 1 && self.chars().next() == Some(*other)
+    }
+}
+
+impl PartialEqChar for String {
+    fn is(&self, other: &char) -> bool {
+        self.as_str() == other.to_string()
+    }
+}
+
+
+// fn assert<T: PartialEq + Debug>(x: T) {
+//     assert_eq!(x, true);
+// }
+// fn assert(x: bool) {
+//     assert_eq!(x, true);
+// }
+// macro_rules! assert {
+//     ($x:expr) => {
+//         assert_eq!($x, true);
+//     };
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_char_str_eq() {
+        assert!('l'.is("l"));
+        // assert!('1'.is(1));
+        // assert!("l".is('l'));
+    }
+}
+
+// Test it see tests/string_tests.rs !!
 fn main() {
     let s1 = String::from("RustRover");
     let s2 = &String::from("RustRover");
