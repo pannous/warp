@@ -691,7 +691,11 @@ impl WasmGcEmitter {
         self.emit_names();
         self.module.section(&self.names);
 
-        self.module.finish()
+        let bytes = self.module.finish();
+
+        // Save to file
+        std::fs::write("test.wasm", &bytes).expect("Failed to write test.wasm");
+        bytes
     }
 
     /// Emit comprehensive WASM names for types, functions, and fields
