@@ -95,7 +95,7 @@ fn test_wasp_roundtrip() {
     println!("JSON output:\n{}", json);
 
     // Verify structure - user{...} becomes Tag
-    if let Node::Tag(name, _, _) = node {
+    if let Node::Tag(name, _, _) = node.unwrap_meta() {
         assert_eq!(name, "user");
     } else {
         panic!("Expected Tag node");

@@ -1,14 +1,16 @@
-use crate::node::{Node, Kind, Bracket};
+use crate::node::{Node, Kind, Bracket, Meta};
 use crate::extensions::numbers::Number;
 
 pub struct WaspParser {
     input: String,
     pos: usize,
+    line: usize,
+    column: usize,
 }
 
 impl WaspParser {
     pub fn new(input: String) -> Self {
-        WaspParser { input, pos: 0 }
+        WaspParser { input, pos: 0, line: 1, column: 1 }
     }
 
     pub fn parse(input: &str) -> Result<Node, String> {
@@ -25,7 +27,19 @@ impl WaspParser {
     }
 
     fn advance(&mut self) {
+        if let Some(ch) = self.current_char() {
+            if ch == '\n' {
+                self.line += 1;
+                self.column = 1;
+            } else {
+                self.column += 1;
+            }
+        }
         self.pos += 1;
+    }
+
+    fn get_position(&self) -> (usize, usize) {
+        (self.line, self.column)
     }
 
     fn skip_whitespace(&mut self) {
@@ -86,6 +100,9 @@ impl WaspParser {
     fn parse_value(&mut self) -> Result<Node, String> {
         let comment = self.skip_whitespace_and_comments();
 
+        // Capture position before parsing
+        let (line, column) = self.get_position();
+
         let mut node = match self.current_char() {
             Some('"') | Some('\'') => self.parse_string(),
             Some('[') => self.parse_list(),
@@ -96,10 +113,12 @@ impl WaspParser {
             None => Err("Unexpected end of input".to_string()),
         }?;
 
-        // Attach comment if present
+        // Attach metadata with position and comment
+        let mut meta = Meta::with_position(line, column);
         if let Some(c) = comment {
-            node = node.with_comment(c);
+            meta.comment = Some(c);
         }
+        node = node.with_meta(meta);
 
         Ok(node)
     }
@@ -353,7 +372,7 @@ mod tests {
     fn test_parse_named_block() {
         let node = WaspParser::parse("html{ }").unwrap();
         // Named blocks become Tags
-        if let Node::Tag(name, _, _) = node {
+        if let Node::Tag(name, _, _) = node.unwrap_meta() {
             assert_eq!(name, "html");
         } else {
             panic!("Expected Tag node");
@@ -368,7 +387,7 @@ mod tests {
         }"#;
         let node = WaspParser::parse(input).unwrap();
         println!("{:?}", node);
-        if let Node::Tag(name, _, _) = node {
+        if let Node::Tag(name, _, _) = node.unwrap_meta() {
             assert_eq!(name, "html");
         } else {
             panic!("Expected Tag node");
