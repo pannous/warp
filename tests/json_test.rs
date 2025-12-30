@@ -1,5 +1,5 @@
 use wasp::node::Node;
-use wasp::node::{Kind, Bracket};
+use wasp::node::{Grouper, Bracket};
 
 #[test]
 fn test_node_to_json_compact() {
@@ -23,7 +23,7 @@ fn test_implicit_html_structure() {
                     Node::keys("li", "hi"),
                     Node::keys("li", "ok"),
                 ],
-                Kind::Object,
+                Grouper::Object,
                 Bracket::Curly,
             ),
             Node::KeyValue(
@@ -35,7 +35,7 @@ fn test_implicit_html_structure() {
                 ])),
             ),
         ],
-        Kind::Object,
+        Grouper::Object,
         Bracket::Curly,
     );
 
@@ -119,7 +119,7 @@ fn test_nested_node_json() {
 fn test_block_node_json() {
     let n = Node::Block(
         vec![Node::int(1), Node::int(2), Node::int(3)],
-        Kind::Object,
+        Grouper::Object,
         Bracket::Curly,
     );
 

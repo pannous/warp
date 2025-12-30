@@ -183,7 +183,7 @@ pub enum Node {
     KeyValue(String, Box<Node>),
     Pair(Box<Node>, Box<Node>),
     Tag(String, Box<Node>, Box<Node>), // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
-    Block(Vec<Node>, Kind, Bracket),
+    Block(Vec<Node>, Grouper, Bracket),
     List(Vec<Node>), // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
     WithMeta(Box<Node>, Meta), // Wrapper to attach metadata to any node
@@ -537,7 +537,8 @@ impl<'a> IntoIterator for &'a Node {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub enum Kind {
+pub enum Grouper {
+    // see Type
     Object,
     // {}
     Group,
@@ -545,6 +546,7 @@ pub enum Kind {
     Pattern,
     // []
     // Other, // <…>
+    Expression, // List of Symbols/Nodes to be evaluated without grouping () // MAYBE ';' ;)
     // Other(String, String),
     Other(char, char),
 }
