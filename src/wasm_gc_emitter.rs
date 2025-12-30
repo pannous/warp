@@ -2,6 +2,9 @@ use crate::node::{Node, Grouper, Bracket, DataType};
 use crate::extensions::numbers::Number;
 use wasm_encoder::*;
 use std::collections::HashMap;
+use Instruction::I32Const;
+use wasmparser::{Validator, WasmFeatures};
+use log::trace;
 
 /// WebAssembly GC emitter for Node AST
 /// Generates WASM GC bytecode using struct and array types
@@ -168,13 +171,13 @@ impl WasmGcEmitter {
 
         let mut func = Function::new(vec![]);
         // Emit all 10 fields: name_ptr, name_len, tag, int_value, float_value, text_ptr, text_len, left, right, meta
-        func.instruction(&Instruction::I32Const(0)); // name_ptr
-        func.instruction(&Instruction::I32Const(0)); // name_len
-        func.instruction(&Instruction::I32Const(NodeKind::Empty as i32)); // tag
+        func.instruction(&I32Const(0)); // name_ptr
+        func.instruction(&I32Const(0)); // name_len
+        func.instruction(&I32Const(NodeKind::Empty as i32)); // tag
         func.instruction(&Instruction::I64Const(0)); // int_value
         func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value
-        func.instruction(&Instruction::I32Const(0)); // text_ptr
-        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&I32Const(0)); // text_ptr
+        func.instruction(&I32Const(0)); // text_len
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
@@ -191,13 +194,13 @@ impl WasmGcEmitter {
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::I64)]);
-        func.instruction(&Instruction::I32Const(0)); // name_ptr
-        func.instruction(&Instruction::I32Const(0)); // name_len
-        func.instruction(&Instruction::I32Const(NodeKind::Number as i32)); // tag
+        func.instruction(&I32Const(0)); // name_ptr
+        func.instruction(&I32Const(0)); // name_len
+        func.instruction(&I32Const(NodeKind::Number as i32)); // tag
         func.instruction(&Instruction::LocalGet(0)); // int_value
         func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value (unused)
-        func.instruction(&Instruction::I32Const(0)); // text_ptr
-        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&I32Const(0)); // text_ptr
+        func.instruction(&I32Const(0)); // text_len
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
@@ -214,13 +217,13 @@ impl WasmGcEmitter {
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::F64)]);
-        func.instruction(&Instruction::I32Const(0)); // name_ptr
-        func.instruction(&Instruction::I32Const(0)); // name_len
-        func.instruction(&Instruction::I32Const(NodeKind::Number as i32)); // tag
+        func.instruction(&I32Const(0)); // name_ptr
+        func.instruction(&I32Const(0)); // name_len
+        func.instruction(&I32Const(NodeKind::Number as i32)); // tag
         func.instruction(&Instruction::I64Const(0)); // int_value (unused)
         func.instruction(&Instruction::LocalGet(0)); // float_value
-        func.instruction(&Instruction::I32Const(0)); // text_ptr
-        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&I32Const(0)); // text_ptr
+        func.instruction(&I32Const(0)); // text_len
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
@@ -237,13 +240,13 @@ impl WasmGcEmitter {
         self.functions.function(func_type);
 
         let mut func = Function::new(vec![(1, ValType::I32)]);
-        func.instruction(&Instruction::I32Const(0)); // name_ptr
-        func.instruction(&Instruction::I32Const(0)); // name_len
-        func.instruction(&Instruction::I32Const(NodeKind::Codepoint as i32)); // tag
+        func.instruction(&I32Const(0)); // name_ptr
+        func.instruction(&I32Const(0)); // name_len
+        func.instruction(&I32Const(NodeKind::Codepoint as i32)); // tag
         func.instruction(&Instruction::I64Const(0)); // int_value
         func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value
         func.instruction(&Instruction::LocalGet(0)); // text_ptr (reusing for codepoint)
-        func.instruction(&Instruction::I32Const(0)); // text_len
+        func.instruction(&I32Const(0)); // text_len
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // left
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // right
         func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // meta
@@ -414,16 +417,16 @@ impl WasmGcEmitter {
         match node {
             Node::Empty => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
+                func.instruction(&I32Const(NodeKind::Empty as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left, right, meta (all null)
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -432,10 +435,10 @@ impl WasmGcEmitter {
             }
             Node::Number(num) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Number as i32));
+                func.instruction(&I32Const(NodeKind::Number as i32));
                 // int_value, float_value
                 match num {
                     Number::Int(i) => {
@@ -453,8 +456,8 @@ impl WasmGcEmitter {
                     }
                 }
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left, right, meta (all null)
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -463,10 +466,10 @@ impl WasmGcEmitter {
             }
             Node::Text(s) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Text as i32));
+                func.instruction(&I32Const(NodeKind::Text as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
@@ -474,8 +477,8 @@ impl WasmGcEmitter {
                 let (ptr, len) = self.string_table.get(s.as_str())
                     .map(|&offset| (offset, s.len() as u32))
                     .unwrap_or((0, s.len() as u32));
-                func.instruction(&Instruction::I32Const(ptr as i32));
-                func.instruction(&Instruction::I32Const(len as i32));
+                func.instruction(&I32Const(ptr as i32));
+                func.instruction(&I32Const(len as i32));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -484,16 +487,16 @@ impl WasmGcEmitter {
             }
             Node::Codepoint(c) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Codepoint as i32));
+                func.instruction(&I32Const(NodeKind::Codepoint as i32));
                 // int_value (store codepoint as int), float_value
                 func.instruction(&Instruction::I64Const(*c as i64));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -502,10 +505,10 @@ impl WasmGcEmitter {
             }
             Node::Symbol(s) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Symbol as i32));
+                func.instruction(&I32Const(NodeKind::Symbol as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
@@ -513,8 +516,8 @@ impl WasmGcEmitter {
                 let (ptr, len) = self.string_table.get(s.as_str())
                     .map(|&offset| (offset, s.len() as u32))
                     .unwrap_or((0, s.len() as u32));
-                func.instruction(&Instruction::I32Const(ptr as i32));
-                func.instruction(&Instruction::I32Const(len as i32));
+                func.instruction(&I32Const(ptr as i32));
+                func.instruction(&I32Const(len as i32));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -526,16 +529,16 @@ impl WasmGcEmitter {
                 let (ptr, len) = self.string_table.get(name.as_str())
                     .map(|&offset| (offset, name.len() as u32))
                     .unwrap_or((0, name.len() as u32));
-                func.instruction(&Instruction::I32Const(ptr as i32));
-                func.instruction(&Instruction::I32Const(len as i32));
+                func.instruction(&I32Const(ptr as i32));
+                func.instruction(&I32Const(len as i32));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Tag as i32));
+                func.instruction(&I32Const(NodeKind::Tag as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left (attrs), right (body), meta
                 // Note: Recursive encoding not yet implemented - would need locals and multiple StructNew
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -548,34 +551,35 @@ impl WasmGcEmitter {
                 let (ptr, len) = self.string_table.get(key.as_str())
                     .map(|&offset| (offset, key.len() as u32))
                     .unwrap_or((0, key.len() as u32));
-                func.instruction(&Instruction::I32Const(ptr as i32));
-                func.instruction(&Instruction::I32Const(len as i32));
+                func.instruction(&I32Const(ptr as i32));
+                func.instruction(&I32Const(len as i32));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::KeyValue as i32));
+                func.instruction(&I32Const(NodeKind::KeyValue as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left (null), right (value node - not yet recursively encoded), meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
-                func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode value
+                Self::emit_node_instructions(self,func,value); // todo : get Via local or Call!
+                // func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode value
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
-            Node::Pair(left, right) => {
+            Node::Pair(_left, _right) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Pair as i32));
+                func.instruction(&I32Const(NodeKind::Pair as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left, right (not yet recursively encoded), meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode left
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode right
@@ -584,10 +588,10 @@ impl WasmGcEmitter {
             }
             Node::Block(items, grouper, bracket) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Block as i32));
+                func.instruction(&I32Const(NodeKind::Block as i32));
                 // int_value (store grouper/bracket info as encoded value), float_value
                 let grouper_val = match grouper {
                     Grouper::Object => 0i64,
@@ -606,8 +610,8 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::I64Const(group_info));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr (item count), text_len
-                func.instruction(&Instruction::I32Const(items.len() as i32));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(items.len() as i32));
+                func.instruction(&I32Const(0));
                 // left (first item if exists), right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode items
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -616,16 +620,16 @@ impl WasmGcEmitter {
             }
             Node::List(items) => {
                 // name_ptr, name_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::List as i32));
+                func.instruction(&I32Const(NodeKind::List as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr (item count), text_len
-                func.instruction(&Instruction::I32Const(items.len() as i32));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(items.len() as i32));
+                func.instruction(&I32Const(0));
                 // left (first item if exists), right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type))); // TODO: encode items
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -637,10 +641,10 @@ impl WasmGcEmitter {
                 let (ptr, len) = self.string_table.get(dada.type_name.as_str())
                     .map(|&offset| (offset, dada.type_name.len() as u32))
                     .unwrap_or((0, dada.type_name.len() as u32));
-                func.instruction(&Instruction::I32Const(ptr as i32));
-                func.instruction(&Instruction::I32Const(len as i32));
+                func.instruction(&I32Const(ptr as i32));
+                func.instruction(&I32Const(len as i32));
                 // tag
-                func.instruction(&Instruction::I32Const(NodeKind::Data as i32));
+                func.instruction(&I32Const(NodeKind::Data as i32));
                 // int_value (store data_type), float_value
                 let data_type_val = match &dada.data_type {
                     DataType::Vec => 0i64,
@@ -653,8 +657,8 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::I64Const(data_type_val));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr, text_len
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 // left, right, meta
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -663,13 +667,13 @@ impl WasmGcEmitter {
             }
             Node::WithMeta(_, _) => {
                 // Should not reach here since unwrap_meta is called at the start
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(NodeKind::Empty as i32));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(NodeKind::Empty as i32));
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
-                func.instruction(&Instruction::I32Const(0));
-                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&I32Const(0));
+                func.instruction(&I32Const(0));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
                 func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_base_type)));
@@ -677,6 +681,20 @@ impl WasmGcEmitter {
             }
         }
     }
+
+
+
+    fn validate_wasm(bytes: &Vec<u8>) {
+        let mut features = WasmFeatures::default();
+        features.set(WasmFeatures::REFERENCE_TYPES, true);
+        features.set(WasmFeatures::GC, true);
+        let mut validator = Validator::new_with_features(features);
+        match validator.validate_all(&bytes) {
+            Ok(_) => trace!("✓ WASM validation with GC features passed"),
+            Err(e) => panic!("WASM validation failed: {}", e),
+        }
+    }
+
 
     /// Generate the final WASM module bytes
     pub fn finish(mut self) -> Vec<u8> {
@@ -695,6 +713,7 @@ impl WasmGcEmitter {
 
         // Save to file
         std::fs::write("test.wasm", &bytes).expect("Failed to write test.wasm");
+        Self::validate_wasm(&bytes);
         bytes
     }
 

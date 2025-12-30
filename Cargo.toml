@@ -24,21 +24,15 @@ wasm = []
 # can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 anyhow = "1.0"
-paste = { version = "1.0.14", features = [] }
 regex = "1.10.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 wast = "*"
 wat  = "*"
-#wasmparser  = "*"
 wasmparser = "*"
-wasm-compose = "*"
 wasm-encoder  = "*"
-wasm-metadata = "*"
-wasmprinter = "*"
-wit-component = "*"
-#cargo-component-core
+log = "0.4.29"
 
 [target.'cfg(not(target_os = "wasm32"))'.dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }

@@ -1,14 +1,19 @@
-use wasmtime::{Engine, Instance, Linker, Module, Store, Val, Config};
+use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
 use std::rc::Rc;
 use std::cell::RefCell;
-use anyhow::{Result, anyhow};
-
+use anyhow::{anyhow, Result};
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
     inner: Val,
     store: Rc<RefCell<Store<()>>>,
     instance: Instance,
     field_map: Rc<FieldMap>,
+}
+
+impl std::fmt::Debug for GcObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GcObject {{ ... }}")
+    }
 }
 
 /// Maps field names to indices for the unified Node struct
@@ -165,8 +170,9 @@ impl FromVal for GcObject {
     }
 }
 
+
 /// Load a WASM module with GC support and return root object
-pub fn read(path: &str) -> Result<GcObject> {
+pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_function_references(true);
@@ -233,6 +239,7 @@ pub fn read_bytes(bytes: &[u8]) -> Result<GcObject> {
 
     Ok(GcObject::new(results[0].clone(), store_rc, instance))
 }
+
 
 /// Create a node by calling a constructor function
 pub fn call_constructor(

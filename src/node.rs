@@ -12,6 +12,7 @@ use std::any::Any;
 use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::ser::SerializeStruct;
+use crate::wasm_gc_reader::GcObject;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Meta {
@@ -193,6 +194,11 @@ pub enum Node {
 }
 
 impl Node {
+    pub fn from_gc_object(p0: &GcObject) -> Node {
+        // Convert GcObject to Node
+        // TODO This is a placeholder implementation
+        Node::todo(format!("GcObject({:?})", p0))
+    }
     pub fn todo(p0: String) -> Node {
         Node::Text(format!("TODO: {}", p0))
     }
