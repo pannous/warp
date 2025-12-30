@@ -175,6 +175,7 @@ pub enum Node {
     // Number(i32),
     Number(Number),
     Text(String),
+    Codepoint(char), // Single Unicode codepoint/character like 'a', '🍏'
     // String(String),
     Symbol(String),
     // Keyword(String), Call, Declaration … AST or here? AST!
@@ -251,6 +252,7 @@ impl Node {
     }
     pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
     pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
+    pub fn codepoint(c: char) -> Self { Node::Codepoint(c) }
     pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
     pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self { Node::Data(Dada::new(value)) }
     pub fn number(n: Number) -> Self { Node::Number(n) }
@@ -364,6 +366,7 @@ impl Node {
             }
             Node::Number(n) => Value::String(format!("{}", n)),
             Node::Text(s) | Node::Symbol(s) => Value::String(s.clone()),
+            Node::Codepoint(c) => Value::String(c.to_string()),
             Node::List(items) => {
                 Value::Array(items.iter().map(|n| n.to_json_value()).collect())
             }
@@ -454,6 +457,7 @@ impl fmt::Debug for Node {
             Node::Symbol(s) => write!(f, "{}", s),
             Node::Number(n) => write!(f, "{}", n),
             Node::Text(t) => write!(f, "'{}'", t),
+            Node::Codepoint(c) => write!(f, "'{}'", c),
             Node::Block(nodes, _kind, bracket) => {
                 if nodes.len() == 1 {
                     write!(f, "{:?} ", nodes.get(0).unwrap())
@@ -591,6 +595,12 @@ impl PartialEq for Node {
                     _ => false,
                 }
             }
+            Node::Codepoint(c) => {
+                match other {
+                    Node::Codepoint(c2) => c == c2,
+                    _ => false,
+                }
+            }
             Node::Data(d) => {
                 match other {
                     Node::Data(d2) => d == d2,
@@ -674,6 +684,7 @@ impl PartialEq<&str> for Node {
 impl PartialEq<char> for Node {
     fn eq(&self, other: &char) -> bool {
         match self {
+            Node::Codepoint(c) => c == other,
             Node::Text(s) => {
                 // Check if string is exactly one char
                 let mut chars = s.chars();
@@ -736,6 +747,7 @@ impl std::fmt::Display for Node {
             Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
             Node::Number(n) => write!(f, "{:?}", n),
             Node::Text(s) | Node::Symbol(s) => write!(f, "{}", s),
+            Node::Codepoint(c) => write!(f, "{}", c),
             Node::List(items) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {

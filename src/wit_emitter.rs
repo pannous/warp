@@ -173,6 +173,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
             Number::Complex(r, i) => format!("number(complex(({}, {})))", r, i),
         },
         Node::Text(s) => format!("text(\"{}\")", escape_string(s)),
+        Node::Codepoint(c) => format!("codepoint('{}')", c),
         Node::Symbol(s) => format!("symbol(\"{}\")", escape_string(s)),
         Node::KeyValue(k, v) => {
             format!("key-value((\"{}\", {}))", escape_string(k), node_to_wit_value(v))
