@@ -1,7 +1,6 @@
 #![allow(dead_code, unused_imports)]
-
+// type string = str; NO! ugly for a reason!
 extern crate regex;
-
 use std::fmt;
 use regex::Regex;
 use std::cmp::PartialEq;
@@ -423,19 +422,19 @@ impl Node {
         }
     }
 
-    pub fn get_key(&self) -> Option<&str> {
+    pub fn get_key(&self) -> &str {
         match self {
-            Node::KeyValue(k, _) => Some(k),
+            Node::KeyValue(k, _) => k,
             Node::WithMeta(node, _) => node.get_key(),
-            _ => None,
+            _ => "",
         }
     }
 
-    pub fn get_value(&self) -> Option<&Node> {
+    pub fn get_value(&self) -> Node {
         match self {
-            Node::KeyValue(_, v) => Some(v),
+            Node::KeyValue(_, v) => v.as_ref().clone(),
             Node::WithMeta(node, _) => node.get_value(),
-            _ => None,
+            _ => Node::Empty,
         }
     }
 
