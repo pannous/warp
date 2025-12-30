@@ -165,11 +165,10 @@ to be checked via test_wasm_roundtrip
        int_value: 42,
    })?;
 
-   TODO save it!
+DONE save it! Strings are now stored in linear memory data section with actual pointers
+DONE automatically convert Node tree to WaspNode tree (all Node types supported: Text, Symbol, Tag, KeyValue, Pair, Block, List, Data)
 
-   TODO automatically convert Node tree to WaspNode tree
-
-   TODO kitchensink
+TODO kitchensink (comprehensive test with all node types in complex tree)
 
 Always verify it via wasm-tools print (passes, wasm-tools v1.243.0 has better GC support than wasm2wat)
 DONE auto verify it via wasm verification crate (wasmparser with GC features enabled, passes)
