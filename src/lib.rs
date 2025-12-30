@@ -16,6 +16,7 @@ pub mod wasp_parser;
 pub mod emitter;
 pub mod wit_emitter;
 pub mod wasm_gc_emitter;
+pub mod wasm_gc_reader;
 pub mod run;
 
 pub fn init_lib(){

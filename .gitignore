@@ -1,10 +1,9 @@
 /target
-
 vendor
 test.wasm
 Cargo.lock
 nodes.wasm
 kitchensink_*.wasm
-# Exclude vendor from IDE and searches
 .vscode/
 .idea/
+out

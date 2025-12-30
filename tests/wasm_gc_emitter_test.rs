@@ -1,6 +1,5 @@
-use wasp::wasm_gc_emitter::{WasmGcEmitter, NodeKind};
-use std::fs::File;
-use std::io::Write as IoWrite;
+use wasp::wasm_gc_emitter::WasmGcEmitter;
+use wasp::write_wasm;
 
 #[test]
 fn test_wasm_module_generation() {
@@ -32,8 +31,7 @@ fn test_wasm_roundtrip() {
 
     let path = "test_wasm_roundtrip.wasm";
     let bytes = emitter.finish();
-    let result = File::create(path).and_then(|mut f| f.write_all(&bytes));
-    assert!(result.is_ok(), "Failed to write WASM file");
+    assert!(write_wasm(path, &bytes), "Failed to write WASM file");
     println!("✓ Generated {} ({} bytes)", path, bytes.len());
     println!("Now verify with: wasm2wat --no-check --enable-all --ignore-custom-section-errors {}", path);
 
