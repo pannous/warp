@@ -823,9 +823,24 @@ impl WasmGcEmitter {
 
         // Type names
         let mut type_names = NameMap::new();
-        type_names.append(self.node_base_type, "node");
-        type_names.append(self.node_array_type, "node_array");
-        // Only unified node and node_array types
+        type_names.append(0, "node");
+        type_names.append(1, "node_array");
+        // Function signature types (created by emit_node_constructor and emit_node_field_getters)
+        type_names.append(2, "func_new_empty");
+        type_names.append(3, "func_new_int");
+        type_names.append(4, "func_new_float");
+        type_names.append(5, "func_new_codepoint");
+        type_names.append(6, "func_new_text");
+        type_names.append(7, "func_new_symbol");
+        type_names.append(8, "func_new_tag");
+        type_names.append(9, "func_new_pair");
+        type_names.append(10, "func_new_keyvalue");
+        type_names.append(11, "func_get_node_kind");
+        type_names.append(12, "func_get_tag");
+        type_names.append(13, "func_get_int_value");
+        type_names.append(14, "func_get_float_value");
+        type_names.append(15, "func_get_name_len");
+        type_names.append(16, "func_main");
         self.names.types(&type_names);
 
         // Field names for the unified node struct
