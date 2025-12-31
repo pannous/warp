@@ -228,11 +228,11 @@ impl WaspParser {
         if has_dot {
             num_str.parse::<f64>()
                 .map(Node::float)
-                .expect("Invalid float")
+                .unwrap_or_else(|_| Node::Error(format!("Invalid float: {}", num_str)))
         } else {
             num_str.parse::<i64>()
                 .map(Node::int)
-                .expect("Invalid int")
+                .unwrap_or_else(|_| Node::Error(format!("Invalid int: {}", num_str)))
         }
     }
 
@@ -270,7 +270,7 @@ impl WaspParser {
                 Node::tag(&symbol, block)
             }
             Some('(') => {
-                // Function-like: def name(params){body}
+                // Function-like: def name(params){body} or name(params):value
                 let params = match self.parse_parenthesized() {
                     Ok(p) => p,
                     Err(e) => return Node::Error(e),
@@ -282,6 +282,13 @@ impl WaspParser {
                     // Use Pair for function syntax: name(params) : body
                     let signature = Node::text(&format!("{}{}", symbol, params));
                     Node::pair(signature, body)
+                } else if self.current_char() == Some(':') || self.current_char() == Some('=') {
+                    // name(params):value or name(params)=value
+                    self.advance();
+                    self.skip_whitespace();
+                    let value = self.parse_value();
+                    let key = format!("{}{}", symbol, params);
+                    Node::key(&key, value)
                 } else {
                     // Just a call: name(params)
                     Node::text(&format!("{}{}", symbol, params))
@@ -373,6 +380,7 @@ impl WaspParser {
                 return Node::Error("Unterminated block".to_string());
             }
 
+            let pos_before = self.pos;
             let value = self.parse_value();
             if value != Node::Empty {
                 items.push(value);
@@ -382,6 +390,15 @@ impl WaspParser {
             // Optional comma/semicolon separator
             if let Some(ch) = self.current_char() {
                 if ch == ',' || ch == ';' {
+                    self.advance();
+                }
+            }
+
+            // Safety check: if we haven't made progress and we're not at the end,
+            // we're in an infinite loop - skip the problematic character
+            if self.pos == pos_before && self.current_char() != Some('}') {
+                if self.current_char().is_some() {
+                    // Skip unexpected character to avoid infinite loop
                     self.advance();
                 }
             }

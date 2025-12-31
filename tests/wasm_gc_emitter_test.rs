@@ -53,7 +53,7 @@ fn test_wasm_roundtrip() {
 fn test_wasm_roundtrip_via_is() {
     // Parser treats {test=1} as body containing KeyValue, not params
     let x = KeyValue("test".s(), Box::new(Number(Int(1))));
-    let ok:Node = eval("html{test=1}");
+    let _ok:Node = eval("html{test=1}");
     // After single-item block unwrapping, body becomes just the KeyValue
     is!("html{test=1}", Tag {
         title: "html".s(),
