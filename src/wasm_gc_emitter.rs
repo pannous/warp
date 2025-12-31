@@ -137,13 +137,24 @@ impl WasmGcEmitter {
     }
 
     /// Sanitize a string to create a valid WASM identifier name
-    /// - Replace spaces and special chars with underscores
-    /// - Limit to 10 characters
+    /// - Allow up to 20 characters, but cut at first space after position 10
+    /// - Replace remaining spaces and special chars with underscores
     /// - Ensure it starts with a letter or underscore
     fn sanitize_data_name(s: &str) -> String {
-        let mut name = s
+        // Take up to 20 chars, but look for natural break point after char 10
+        let truncated = if s.len() > 20 {
+            // Find first space after position 10
+            if let Some(space_pos) = s[10.min(s.len())..20.min(s.len())].find(' ') {
+                &s[..10 + space_pos]
+            } else {
+                &s[..20.min(s.len())]
+            }
+        } else {
+            s
+        };
+
+        let mut name = truncated
             .chars()
-            .take(10)
             .map(|c| {
                 if c.is_alphanumeric() || c == '_' {
                     c
