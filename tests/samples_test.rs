@@ -7,9 +7,9 @@ use wasp::wasp_parser::WaspParser;
 #[test]
 fn test_parse_all_samples() {
     println!("\n=== Testing All Sample Files ===\n");
-    if 1 > 0 {
-        todo!("currently STALLS!?");
-    }
+    // if 1 > 0 {
+    //     todo!("currently STALLS after parsing 4 files!?");
+    // }
     let samples_dir = Path::new("samples");
     assert!(samples_dir.exists(), "samples/ directory not found");
 
@@ -30,6 +30,7 @@ fn test_parse_all_samples() {
 
         let filename = path.file_name().unwrap().to_str().unwrap();
         print!("  Parsing {}... ", filename);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
         match fs::read_to_string(&path) {
             Ok(content) => {
