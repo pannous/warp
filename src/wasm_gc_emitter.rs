@@ -308,9 +308,8 @@ impl WasmGcEmitter {
         self.types.ty().function(desc.params.clone(), vec![ValType::Ref(node_ref)]);
         self.functions.function(func_type);
 
-        // 2. Create function body with locals matching parameters
-        let locals: Vec<_> = desc.params.iter().map(|t| (1, *t)).collect();
-        let mut func = Function::new(locals);
+        // 2. Create function body (no additional locals needed beyond parameters)
+        let mut func = Function::new(vec![]);
 
         // 3. Emit all 10 field values in order based on descriptor
         for field_value in &desc.fields {
@@ -426,7 +425,7 @@ impl WasmGcEmitter {
             .function(vec![Ref(node_ref_nullable)], vec![ValType::I32]);
         self.functions.function(func_type);
 
-        let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+        let mut func = Function::new(vec![]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
@@ -456,7 +455,7 @@ impl WasmGcEmitter {
             .ty()
             .function(vec![Ref(node_ref)], vec![ValType::I32]);
         self.functions.function(func_type);
-        let mut func = Function::new(vec![(1, Ref(node_ref))]);
+        let mut func = Function::new(vec![]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
@@ -473,7 +472,7 @@ impl WasmGcEmitter {
             .ty()
             .function(vec![Ref(node_ref)], vec![ValType::I64]);
         self.functions.function(func_type);
-        let mut func = Function::new(vec![(1, Ref(node_ref))]);
+        let mut func = Function::new(vec![]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
@@ -490,7 +489,7 @@ impl WasmGcEmitter {
             .ty()
             .function(vec![Ref(node_ref)], vec![ValType::F64]);
         self.functions.function(func_type);
-        let mut func = Function::new(vec![(1, Ref(node_ref))]);
+        let mut func = Function::new(vec![]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
@@ -507,7 +506,7 @@ impl WasmGcEmitter {
             .ty()
             .function(vec![Ref(node_ref)], vec![ValType::I32]);
         self.functions.function(func_type);
-        let mut func = Function::new(vec![(1, Ref(node_ref))]);
+        let mut func = Function::new(vec![]);
         func.instruction(&Instruction::LocalGet(0));
         func.instruction(&Instruction::StructGet {
             struct_type_index: self.node_base_type,
