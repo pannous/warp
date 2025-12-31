@@ -716,6 +716,11 @@ impl WasmGcEmitter {
                     self.emit_node_instructions(func, &items[0]);
                     return;
                 }
+                // Empty block
+                if items.is_empty() {
+                    func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
+                    return;
+                }
                 // name_ptr, name_len
                 func.instruction(&I32Const(0));
                 func.instruction(&I32Const(0));
@@ -741,9 +746,22 @@ impl WasmGcEmitter {
                 // text_ptr (item count), text_len
                 func.instruction(&I32Const(items.len() as i32));
                 func.instruction(&I32Const(0));
-                // left (first item if exists), right, meta
-                self.emit_node_null(func); // TODO: encode items
-                self.emit_node_null(func);
+                // Encode items as linked list: left=first, right=rest
+                // Emit first item
+                self.emit_node_instructions(func, &items[0]);
+                // Emit rest as a Block or null if no more items
+                if items.len() > 2 {
+                    // More than 2 items: create nested Block with remaining items
+                    let rest = Node::Block(items[1..].to_vec(), grouper.clone(), bracket.clone());
+                    self.emit_node_instructions(func, &rest);
+                } else if items.len() == 2 {
+                    // Exactly 2 items: emit second item directly
+                    self.emit_node_instructions(func, &items[1]);
+                } else {
+                    // Should never happen (len must be >= 2 here)
+                    self.emit_node_null(func);
+                }
+                // meta
                 self.emit_node_null(func);
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
@@ -751,6 +769,11 @@ impl WasmGcEmitter {
                 // Special case: single-item lists emit the item directly
                 if items.len() == 1 {
                     self.emit_node_instructions(func, &items[0]);
+                    return;
+                }
+                // Empty list
+                if items.is_empty() {
+                    func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
                     return;
                 }
                 // name_ptr, name_len
@@ -764,9 +787,22 @@ impl WasmGcEmitter {
                 // text_ptr (item count), text_len
                 func.instruction(&I32Const(items.len() as i32));
                 func.instruction(&I32Const(0));
-                // left (first item if exists), right, meta
-                self.emit_node_null(func); // TODO: encode items
-                self.emit_node_null(func);
+                // Encode items as linked list: left=first, right=rest
+                // Emit first item
+                self.emit_node_instructions(func, &items[0]);
+                // Emit rest as a List or null if no more items
+                if items.len() > 2 {
+                    // More than 2 items: create nested List with remaining items
+                    let rest = Node::List(items[1..].to_vec());
+                    self.emit_node_instructions(func, &rest);
+                } else if items.len() == 2 {
+                    // Exactly 2 items: emit second item directly
+                    self.emit_node_instructions(func, &items[1]);
+                } else {
+                    // Should never happen (len must be >= 2 here)
+                    self.emit_node_null(func);
+                }
+                // meta
                 self.emit_node_null(func);
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
