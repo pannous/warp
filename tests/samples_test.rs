@@ -30,7 +30,6 @@ fn test_parse_all_samples() {
 
         let filename = path.file_name().unwrap().to_str().unwrap();
         print!("  Parsing {}... ", filename);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
         match fs::read_to_string(&path) {
             Ok(content) => {
