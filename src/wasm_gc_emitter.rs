@@ -68,6 +68,8 @@ pub struct WasmGcEmitter {
     // String storage for linear memory
     string_table: HashMap<String, u32>, // Maps string -> memory offset
     next_data_offset: u32,
+    data_segment_names: Vec<(u32, String)>, // (data_index, name) for name section
+    next_data_segment_idx: u32,
 }
 
 
@@ -111,6 +113,8 @@ impl WasmGcEmitter {
             function_indices: HashMap::new(),
             string_table: HashMap::new(),
             next_data_offset: 8, // Start at offset 8 to avoid confusion with null (0)
+            data_segment_names: Vec::new(),
+            next_data_segment_idx: 0,
         }
     }
 
@@ -132,6 +136,31 @@ impl WasmGcEmitter {
         self.emit_constructor_functions();
     }
 
+    /// Sanitize a string to create a valid WASM identifier name
+    /// - Replace spaces and special chars with underscores
+    /// - Limit to 10 characters
+    /// - Ensure it starts with a letter or underscore
+    fn sanitize_data_name(s: &str) -> String {
+        let mut name = s
+            .chars()
+            .take(10)
+            .map(|c| {
+                if c.is_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+
+        // Ensure it starts with letter or underscore
+        if name.is_empty() || name.chars().next().unwrap().is_numeric() {
+            name.insert(0, '_');
+        }
+
+        name
+    }
+
     /// Allocate a string in linear memory and return its offset
     /// Returns (ptr, len) tuple
     fn allocate_string(&mut self, s: &str) -> (u32, u32) {
@@ -142,12 +171,20 @@ impl WasmGcEmitter {
         let offset = self.next_data_offset;
         let bytes = s.as_bytes();
 
+        // Generate a sanitized name for this data segment
+        let data_name = Self::sanitize_data_name(s);
+        let data_idx = self.next_data_segment_idx;
+
         // Add string data to data section (passive data, offset 0, memory index 0)
         self.data.active(
             0,                                    // memory index
             &ConstExpr::i32_const(offset as i32), // offset expression
             bytes.iter().copied(),
         );
+
+        // Track the data segment name for the name section
+        self.data_segment_names.push((data_idx, data_name));
+        self.next_data_segment_idx += 1;
 
         self.string_table.insert(s.to_string(), offset);
         self.next_data_offset += bytes.len() as u32;
@@ -879,6 +916,13 @@ impl WasmGcEmitter {
         func_names.append(13, "get_name_len");
         func_names.append(14, "main");
         self.names.functions(&func_names);
+
+        // Data segment names (based on string content)
+        let mut data_names = NameMap::new();
+        for (idx, name) in &self.data_segment_names {
+            data_names.append(*idx, name);
+        }
+        self.names.data(&data_names);
     }
 }
 
