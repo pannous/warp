@@ -10,6 +10,44 @@ use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
 
+// Wasp ABI GC Node representation design:
+// This is a single struct that can represent any node type
+/*
+(type $node (struct
+  (field $name_ptr i32)
+  (field $name_len i32)
+  (field $tag i32)
+  (field $int_value i64)
+  (field $float_value f64)
+  (field $text_ptr i32)
+  (field $text_len i32)
+  (field $left (ref null $node))  // recursive reference
+  (field $right (ref null $node))
+  (field $meta (ref null $node))
+ ))
+ */
+
+// todo move node layout to wasp_abi.rs
+// any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ... todo ...
+
+/// Node variant tags (for runtime type checking)
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeKind {
+    Empty = 0,
+    Number = 1,
+    Text = 2,
+    Codepoint = 3,
+    Symbol = 4,
+    KeyValue = 5,
+    Pair = 6,
+    Tag = 7,
+    Block = 8,
+    List = 9,
+    Data = 10,
+    Meta = 11,
+}
+
 /// WebAssembly GC emitter for Node AST
 /// Generates WASM GC bytecode using struct and array types
 pub struct WasmGcEmitter {
@@ -27,37 +65,21 @@ pub struct WasmGcEmitter {
     next_type_idx: u32,
     next_func_idx: u32,
     // Constructor function indices
-    fn_new_empty: u32,
-    fn_new_int: u32,
-    fn_new_float: u32,
-    fn_new_codepoint: u32,
-    fn_new_text: u32,
-    fn_new_symbol: u32,
-    fn_new_tag: u32,
-    fn_new_pair: u32,
-    fn_new_keyvalue: u32,
+    indices: HashMap<&'static str, u32>,
+    // fn_new_empty: u32,
+    // fn_new_int: u32,
+    // fn_new_float: u32,
+    // fn_new_codepoint: u32,
+    // fn_new_text: u32,
+    // fn_new_symbol: u32,
+    // fn_new_tag: u32,
+    // fn_new_pair: u32,
+    // fn_new_keyvalue: u32,
     // String storage for linear memory
     string_table: HashMap<String, u32>, // Maps string -> memory offset
     next_data_offset: u32,
 }
 
-/// Node variant tags (for runtime type checking)
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeKind {
-    Empty = 0,
-    Number = 1,
-    Text = 2,
-    Codepoint = 3,
-    Symbol = 4,
-    KeyValue = 5,
-    Pair = 6,
-    Tag = 7,
-    Block = 8,
-    List = 9,
-    Data = 10,
-    WithMeta = 11,
-}
 
 /// Specifies how a struct field gets its value in a constructor
 #[derive(Debug, Clone, Copy)]
@@ -70,7 +92,7 @@ enum FieldValue {
     LocalI64(u32),   // LocalGet for i64 parameter
     LocalF64(u32),   // LocalGet for f64 parameter
     LocalRef(u32),   // LocalGet for ref node parameter
-    Kind(NodeKind),  // Constant NodeKind value as i32
+    KindField(NodeKind),  // Constant NodeKind value as i32
 }
 
 /// Descriptor for a node constructor function
@@ -95,15 +117,7 @@ impl WasmGcEmitter {
             node_array_type: 0,
             next_type_idx: 0,
             next_func_idx: 0,
-            fn_new_empty: 0,
-            fn_new_int: 0,
-            fn_new_float: 0,
-            fn_new_codepoint: 0,
-            fn_new_text: 0,
-            fn_new_symbol: 0,
-            fn_new_tag: 0,
-            fn_new_pair: 0,
-            fn_new_keyvalue: 0,
+            indices: HashMap::new(),
             string_table: HashMap::new(),
             next_data_offset: 8, // Start at offset 8 to avoid confusion with null (0)
         }
@@ -153,19 +167,6 @@ impl WasmGcEmitter {
     /// Define GC struct types for Node variants
     fn emit_gc_types(&mut self) {
         // First, define the unified Node struct type per the design spec
-        // This is a single struct that can represent any node type
-        // (type $node (struct
-        //   (field $name_ptr i32)
-        //   (field $name_len i32)
-        //   (field $tag i32)
-        //   (field $int_value i64)
-        //   (field $float_value f64)
-        //   (field $text_ptr i32)
-        //   (field $text_len i32)
-        //   (field $left (ref null $node))  // recursive reference
-        //   (field $right (ref null $node))
-        //   (field $meta (ref null $node))
-        // ))
 
         // Save the index where we'll define the node struct
         let node_type_idx = self.next_type_idx;
@@ -207,7 +208,6 @@ impl WasmGcEmitter {
     /// Get descriptors for all node constructor functions
     fn get_node_constructors(&self) -> Vec<NodeConstructor> {
         use FieldValue::*;
-        use NodeKind as NK;
 
         let node_ref_type = ValType::Ref(RefType {
             nullable: true,
@@ -220,7 +220,7 @@ impl WasmGcEmitter {
                 export_name: "new_empty",
                 params: vec![],
                 fields: [
-                    Zero, Zero, Kind(NK::Empty),
+                    Zero, Zero, KindField(NodeKind::Empty),
                     I64Zero, FloatZero,
                     Zero, Zero,
                     Null, Null, Null
@@ -231,7 +231,7 @@ impl WasmGcEmitter {
                 export_name: "new_int",
                 params: vec![ValType::I64],
                 fields: [
-                    Zero, Zero, Kind(NK::Number),
+                    Zero, Zero, KindField(NodeKind::Number),
                     LocalI64(0), FloatZero,
                     Zero, Zero,
                     Null, Null, Null
@@ -242,7 +242,7 @@ impl WasmGcEmitter {
                 export_name: "new_float",
                 params: vec![ValType::F64],
                 fields: [
-                    Zero, Zero, Kind(NK::Number),
+                    Zero, Zero, KindField(NodeKind::Number),
                     I64Zero, LocalF64(0),
                     Zero, Zero,
                     Null, Null, Null
@@ -253,29 +253,29 @@ impl WasmGcEmitter {
                 export_name: "new_codepoint",
                 params: vec![ValType::I32],
                 fields: [
-                    Zero, Zero, Kind(NK::Codepoint),
+                    Zero, Zero, KindField(NodeKind::Codepoint),
                     I64Zero, FloatZero,
                     LocalI32(0), Zero,  // Reuses text_ptr for codepoint
                     Null, Null, Null
                 ],
             },
-            // new_text(ptr: i32, len: i32) -> (ref node)
+            // new_text(name*: i32, len: i32) -> (ref node)
             NodeConstructor {
                 export_name: "new_text",
                 params: vec![ValType::I32, ValType::I32],
                 fields: [
-                    Zero, Zero, Kind(NK::Text),
+                    Zero, Zero, KindField(NodeKind::Text),
                     I64Zero, FloatZero,
                     LocalI32(0), LocalI32(1),
                     Null, Null, Null
                 ],
             },
-            // new_symbol(ptr: i32, len: i32) -> (ref node)
+            // new_symbol(name*: i32, len: i32) -> (ref node)
             NodeConstructor {
                 export_name: "new_symbol",
                 params: vec![ValType::I32, ValType::I32],
                 fields: [
-                    Zero, Zero, Kind(NK::Symbol),
+                    Zero, Zero, KindField(NodeKind::Symbol),
                     I64Zero, FloatZero,
                     LocalI32(0), LocalI32(1),
                     Null, Null, Null
@@ -285,8 +285,7 @@ impl WasmGcEmitter {
             NodeConstructor {
                 export_name: "new_tag",
                 params: vec![ValType::I32, ValType::I32, node_ref_type, node_ref_type],
-                fields: [
-                    LocalI32(0), LocalI32(1), Kind(NK::Tag),
+                fields: [LocalI32(0), LocalI32(1), KindField(NodeKind::Tag),
                     I64Zero, FloatZero,
                     Zero, Zero,
                     LocalRef(2), LocalRef(3), Null
@@ -296,23 +295,13 @@ impl WasmGcEmitter {
             NodeConstructor {
                 export_name: "new_pair",
                 params: vec![node_ref_type, node_ref_type],
-                fields: [
-                    Zero, Zero, Kind(NK::Pair),
-                    I64Zero, FloatZero,
-                    Zero, Zero,
-                    LocalRef(0), LocalRef(1), Null
-                ],
+                fields: [Zero, Zero, KindField(NodeKind::Pair), I64Zero, FloatZero, Zero, Zero, LocalRef(0), LocalRef(1), Null],
             },
             // new_keyvalue(key_ptr: i32, key_len: i32, value: ref node) -> (ref node)
             NodeConstructor {
                 export_name: "new_keyvalue",
                 params: vec![ValType::I32, ValType::I32, node_ref_type],
-                fields: [
-                    LocalI32(0), LocalI32(1), Kind(NK::KeyValue),
-                    I64Zero, FloatZero,
-                    Zero, Zero,
-                    Null, LocalRef(2), Null
-                ],
+                fields: [LocalI32(0), LocalI32(1), KindField(NodeKind::KeyValue), I64Zero, FloatZero, Zero, Zero, Null, LocalRef(2), Null],
             },
         ]
     }
@@ -342,7 +331,7 @@ impl WasmGcEmitter {
                 FieldValue::LocalI32(idx) | FieldValue::LocalI64(idx) | FieldValue::LocalF64(idx) | FieldValue::LocalRef(idx) => {
                     func.instruction(&Instruction::LocalGet(*idx));
                 },
-                FieldValue::Kind(kind) => { func.instruction(&I32Const(*kind as i32)); },
+                FieldValue::KindField(kind) => { func.instruction(&I32Const(*kind as i32)); },
             }
         }
 
@@ -367,18 +356,7 @@ impl WasmGcEmitter {
             let fn_idx = self.emit_node_constructor(desc);
 
             // Save function index for later use in emit_node_instructions
-            match desc.export_name {
-                "new_empty" => self.fn_new_empty = fn_idx,
-                "new_int" => self.fn_new_int = fn_idx,
-                "new_float" => self.fn_new_float = fn_idx,
-                "new_codepoint" => self.fn_new_codepoint = fn_idx,
-                "new_text" => self.fn_new_text = fn_idx,
-                "new_symbol" => self.fn_new_symbol = fn_idx,
-                "new_tag" => self.fn_new_tag = fn_idx,
-                "new_pair" => self.fn_new_pair = fn_idx,
-                "new_keyvalue" => self.fn_new_keyvalue = fn_idx,
-                _ => {}
-            }
+            self.indices.insert(desc.export_name, fn_idx);
         }
 
         self.emit_get_node_kind();
@@ -466,57 +444,9 @@ impl WasmGcEmitter {
         self.next_func_idx += 1;
     }
 
-    /// Emit new_text(ptr: i32, len: i32) -> (ref node)
+    /// Emit new_text(name*: i32, len: i32) -> (ref node)
 
-    /// Emit new_symbol(ptr: i32, len: i32) -> (ref node)
-
-    /// Emit new_tag(name_ptr: i32, name_len: i32, params: ref node, body: ref node) -> (ref node)
-
-    /// Emit new_pair(left: ref node, right: ref node) -> (ref node)
-    fn emit_new_node_pair(&mut self) {
-        let node_ref = RefType {
-            nullable: false,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        let node_ref_nullable = RefType {
-            nullable: true,
-            heap_type: HeapType::Concrete(self.node_base_type),
-        };
-        let func_type = self.types.len();
-        self.types.ty().function(
-            vec![
-                Ref(node_ref_nullable),
-                Ref(node_ref_nullable),
-            ],
-            vec![Ref(node_ref)],
-        );
-        self.functions.function(func_type);
-
-        let mut func = Function::new(vec![
-            (1, Ref(node_ref_nullable)),
-            (1, Ref(node_ref_nullable)),
-        ]);
-        func.instruction(&I32Const(0)); // name_ptr
-        func.instruction(&I32Const(0)); // name_len
-        func.instruction(&I32Const(NodeKind::Pair as i32)); // kind
-        func.instruction(&Instruction::I64Const(0)); // int_value
-        func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits()))); // float_value
-        func.instruction(&I32Const(0)); // text_ptr
-        func.instruction(&I32Const(0)); // text_len
-        func.instruction(&Instruction::LocalGet(0)); // left
-        func.instruction(&Instruction::LocalGet(1)); // right
-        self.emit_node_null(&mut func); // meta
-        func.instruction(&Instruction::StructNew(self.node_base_type));
-        func.instruction(&Instruction::End);
-
-        self.code.function(&func);
-        self.fn_new_pair = self.next_func_idx;
-        self.exports.export("new_pair", ExportKind::Func, self.next_func_idx);
-        self.next_func_idx += 1;
-    }
-
-
-    /// Emit new_keyvalue(key_ptr: i32, key_len: i32, value: ref node) -> (ref node)
+    /// Emit new_symbol(name*: i32, len: i32) -> (ref node)
 
     /// Emit getter functions for unified node struct fields
     fn emit_node_field_getters(&mut self) {
@@ -672,21 +602,21 @@ impl WasmGcEmitter {
             Node::Empty => {
                 // self.emit_node_null(func); // expected (ref $type), found (ref null $type) currently not nullable
                 // self.emit_empty_node(func, NodeKind::Empty);
-                func.instruction(&Instruction::Call(self.fn_new_empty));
+                func.instruction(&Instruction::Call(self.indices["new_empty"]));
             }
             Node::Number(num) => {
                 match num {
                     Number::Int(i) => {
                         func.instruction(&Instruction::I64Const(*i));
-                        func.instruction(&Instruction::Call(self.fn_new_int));
+                        func.instruction(&Instruction::Call(self.indices["new_int"]));
                     }
                     Number::Float(f) => {
                         func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
-                        func.instruction(&Instruction::Call(self.fn_new_float));
+                        func.instruction(&Instruction::Call(self.indices["new_float"]));
                     }
                     _ => {
                         // Quotient, Complex not yet supported - emit empty node
-                        func.instruction(&Instruction::Call(self.fn_new_empty));
+                        func.instruction(&Instruction::Call(self.indices["new_empty"]));
                     }
                 }
             }
@@ -696,11 +626,11 @@ impl WasmGcEmitter {
                     .unwrap_or((0, s.len() as u32));
                 func.instruction(&I32Const(ptr as i32));
                 func.instruction(&I32Const(len as i32));
-                func.instruction(&Instruction::Call(self.fn_new_text));
+                func.instruction(&Instruction::Call(self.indices["new_text"]));
             }
             Node::Codepoint(c) => {
                 func.instruction(&I32Const(*c as i32));
-                func.instruction(&Instruction::Call(self.fn_new_codepoint));
+                func.instruction(&Instruction::Call(self.indices["new_codepoint"]));
             }
             Node::Symbol(s) => {
                 let (ptr, len) = self.string_table.get(s.as_str())
@@ -708,7 +638,7 @@ impl WasmGcEmitter {
                     .unwrap_or((0, s.len() as u32));
                 func.instruction(&I32Const(ptr as i32));
                 func.instruction(&I32Const(len as i32));
-                func.instruction(&Instruction::Call(self.fn_new_symbol));
+                func.instruction(&Instruction::Call(self.indices["new_symbol"]));
             }
             Node::Tag {
                 title,
@@ -722,7 +652,7 @@ impl WasmGcEmitter {
                 func.instruction(&I32Const(len as i32));
                 self.emit_node_instructions(func, _params);
                 self.emit_node_instructions(func, _body);
-                func.instruction(&Instruction::Call(self.fn_new_tag));
+                func.instruction(&Instruction::Call(self.indices["new_tag"]));
             }
             Node::KeyValue(key, value) => {
                 let (ptr, len) = self.string_table.get(key.as_str())
@@ -731,12 +661,12 @@ impl WasmGcEmitter {
                 func.instruction(&I32Const(ptr as i32));
                 func.instruction(&I32Const(len as i32));
                 self.emit_node_instructions(func, value);
-                func.instruction(&Instruction::Call(self.fn_new_keyvalue));
+                func.instruction(&Instruction::Call(self.indices["new_keyvalue"]));
             }
             Node::Pair(_left, _right) => {
                 self.emit_node_instructions(func, _left);
                 self.emit_node_instructions(func, _right);
-                func.instruction(&Instruction::Call(self.fn_new_pair));
+                func.instruction(&Instruction::Call(self.indices["new_pair"]));
             }
             Node::Block(items, grouper, bracket) => {
                 // Special case: single-item blocks emit the item directly
