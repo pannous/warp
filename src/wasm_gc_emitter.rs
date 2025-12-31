@@ -776,6 +776,11 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
             Node::List(items) => {
+                // Special case: single-item lists emit the item directly
+                if items.len() == 1 {
+                    self.emit_node_instructions(func, &items[0]);
+                    return;
+                }
                 // name_ptr, name_len
                 func.instruction(&I32Const(0));
                 func.instruction(&I32Const(0));
