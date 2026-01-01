@@ -216,7 +216,7 @@ fn testWitFunction() {
     // a:b,c vs a:b, c:d
 
     is!("add: func(a: float32, b: float32) -> float32", 0);
-    //     Module & mod = read_wasm("test.wasm");
+    //     let mod : Module = read_wasm("test.wasm");
     // print( mod .import_count);
     eq!(mod.import_count, 1);
     eq!(Node().setKind(longs).serialize(), "0");
