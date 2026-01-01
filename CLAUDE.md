@@ -20,7 +20,7 @@ https://wasp.pannous.com/
 ### Node AST (`src/node.rs`)
 The central data structure is `Node`, an enum representing all AST node types:
 - **Empty, Number, Text, Codepoint, Symbol** - Atomic values
-- **KeyValue, Pair, Tag** - Binary structures
+- **Key, Pair, Tag** - Binary structures
 - **Block** - Contains child nodes with grouping via `Grouper` (parentheses, brackets, braces)
 - **List** - Collection of nodes
 - **Data** - Generic container using `Dada` for arbitrary Rust types with `CloneAny` trait
@@ -166,7 +166,7 @@ to be checked via test_wasm_roundtrip
    })?;
 
 DONE save it! Strings are now stored in linear memory data section with actual pointers
-DONE automatically convert Node tree to WaspNode tree (all Node types supported: Text, Symbol, Tag, KeyValue, Pair, Block, List, Data)
+DONE automatically convert Node tree to WaspNode tree (all Node types supported: Text, Symbol, Tag, Key, Pair, Block, List, Data)
 DONE kitchensink comprehensive tests in tests/kitchensink_test.rs covering all node types individually and in complex nested trees
 
 Always verify it via wasm-tools print (wasm2wat v1.0.39 has incomplete GC support)

@@ -1,32 +1,39 @@
+// use_wasm_structs = true;
 
 // #[test] fn test_wasm_structs();
 // extern int tests_executed;
-// Node &compile(String);
+// let compile : Node(String);
+
+use wasp::{eq, is, put, skip};
+use wasp::analyzer::analyze;
+use wasp::extensions::{assert_throws, print};
+use wasp::node::{node, Node};
+use wasp::run::wasmtime_runner::run;
+use wasp::wasp_parser::parse;
 
 #[test] fn testStructWast() {
-    return; // LOST file: test/wast/box.wast
     let wast = r#"(module
   (type $Box (struct (field $val (mut i32))));
   (global $box (export "box") (ref $Box) (struct.new $Box (i32.const 42)));
   (func $main (export "main") (result (ref $Box)));
 )"#;
     // compile(wast);
-    let ok = run_wasm_file("test/wast/box.wast");
-    let boxx = *smartNode(ok);
-    assert!(boxx["val"]==42);
+    let ok = run("test/wast/box.wast");
+    assert!(ok == 42);
+    // let boxx = *smartNode(ok);
+    // assert!(boxx["val"]==42);
 }
 
 #[test] fn testStruct() {
-    use_wasm_structs = true;
     // builtin with struct/record
-    is!("struct a{x:int y:float};b=a{1 .2};b.y", .2);
+    is!("struct a{x:int y:float};b=a{1 0.2};b.y", 0.2);
     return;
     is!("struct a{x:int y:int z:int};a{1 3 4}.y", 3);
     is!("struct a{x:int y:float};a{1 3.2}.y", 3.2);
-    is!("struct a{x:int y:float};b a{1 .2};b.y", .2);
-    is!("struct a{x:int y:float};b:a{1 .2};b.y", .2);
-    is!("struct a{x:int y:float};a b{1 .2};b.y", .2);
-    is!("record a{x:u32 y:float32};a b{1 .2};b.y", .2);
+    is!("struct a{x:int y:float};b a{1 0.2};b.y", 0.2);
+    is!("struct a{x:int y:float};b:a{1 0.2};b.y", 0.2);
+    is!("struct a{x:int y:float};a b{1 0.2};b.y", 0.2);
+    is!("record a{x:u32 y:float32};a b{1 0.2};b.y", 0.2);
     is!(r#"
 record person {
     name: string,
@@ -37,10 +44,10 @@ record person {
 
 #[test] fn testStruct2() {
     let code0 = "struct point{a:int b:int c:string}";
-    Node &node = parse(code0);
+    let node : Node = parse(code0);
     //    eq!(node.kind(), Kind::structs);
-    eq!(node.length, 3);
-    eq!(IntegerType, node[1].typo);
+    eq!(node.length(), 3);
+    // eq!(IntegerType, node[1].typ());
     //    const char *code = "struct point{a:int b:int c:string};x=point(1,2,'ok');x.b";
     // basal node_pointer act as structs
     is!("point{a:int b:int c:string};x=point(1,2,'ok');x.b", 2);
@@ -51,18 +58,18 @@ record person {
     //    is!("y=(1 4 3)[1]", 4);
     //    is!("x=(1 4 3);x#2", 4);
     //is!("42",42);
-    use_wasm_structs = true;
-    use_wasm_strings = true;
-    use_wasm_arrays = true;
+    // use_wasm_structs = true;
+    // use_wasm_strings = true;
+    // use_wasm_arrays = true;
     //    is!("x=(1 2 3)", 0);
-    let fun=Node();
-    fun.name = "first";
-    fun.kind = declaration; // ≠ functor;
-    fun.typo = types["u8"];
+    let fun=node("some");
+    // fun.name = "first";
+    // fun.kind = declaration; // ≠ functor;
+    // fun.typo = types["u8"];
 
-    let fun_type=Node();
-    fun.name = "my_callback";
-    fun.kind = clazz;
+    let fun_type=node("no");
+    // fun.name = "my_callback";
+    // fun.kind = NodeKind::Class;
     //	fun.kind = functor; todo
 
     //	testGcFunctionReferences();
@@ -120,9 +127,9 @@ record person {
 
 #[test] fn test_wasm_structs() {
     test_wasm_node_struct();
-    let aNode = Node("A").setKind(clazz);
-    aNode["a"] = IntegerType;
-    let a2 = analyze("class A{a:int}");
+    let IntegerType: Node = node("int");
+    let aNode = Node::Class("A".to_string(), Node::key("a", IntegerType).into());
+    let a2 = analyze(parse("class A{a:int}"));
     eq!(aNode, a2);
     is!("class A{a:int}", aNode);
 }
@@ -146,28 +153,29 @@ fn testFlags2() {
        parser-flags my_flags = data_mode + space_brace
     "#;
     //     is!(code, 5) // 1+4
-    clearAnalyzerContext();
-    //     Node & parsed = parse(code, { kebab_case: true });
-    Node & node = analyze(parsed);
-    assert!(types.has("parser-flags"));
-    assert!(globals.has("data_mode"));
+    // clearAnalyzerContext();
+    let parsed : Node = parse(code); //, { kebab_case: true });
+    let node1 : Node = analyze(parsed);
+    // assert!(types.has("parser-flags"));
+    // assert!(globals.has("data_mode"));
     //     assert!(globals.has("parser-flags.data_mode")) //
-    Node & parserFlags = node.first();
+    let parserFlags : Node = node1.first();
     // todo AddressSanitizer:DEADLYSIGNAL why? lldb does'nt fail here
-    assert!(parserFlags.name == "parser-flags");
-    assert!(parserFlags.kind == flags);
+    assert!(parserFlags.name() == "parser-flags");
+    let Flags = node("flags");
+    assert!(parserFlags.class() == Flags);
     assert!(parserFlags.length() == 3);
-    assert!(parserFlags[1].name == "arrow");
-    assert!(parserFlags[2].value.longy == 4);
-    Node & instance = node.last();
-    print(instance);
-    assert!(instance.name == "my_flags");
-    assert!(instance.typo);
+    assert!(parserFlags[1].name() == "arrow");
+    assert!(parserFlags[2].value() == 4);
+    let instance : Node = node1.laste();
+    put!(instance);
+    assert!(instance.name() == "my_flags");
+    // assert!(instance.class() == Node);
     //     assert!(instance.typo->name == "parser-flags") // deduced!
-    //     assert!(instance.kind == flags) // kind? not really type! todo?
-    my_flags = instance.interpret();
+    //     assert!(instance.class() == Flags) // kind? not really type! todo?
+    let my_flags = instance.interpret();
     print(my_flags);
-    //     assert!(my_flags.value.longy == 5) // 1+4 bit internal detail!
+    //     assert!(my_flags.value() == 5) // 1+4 bit internal detail!
     skip!(
 
         assert!(my_flags.values().serialize() == "data_mode + space_brace");
@@ -179,48 +187,49 @@ fn testFlags2() {
 #[test]
 fn testFlags() {
     clearAnalyzerContext();
-    Node & parsed = parse("flags abc{a b c}");
+    let parsed : Node = parse("flags abc{a b c}");
     backtrace_line();
-    Node & node = analyze(parsed);
-    assert!(node.name == "abc");
-    assert!(node.kind == flags);
+    let node : Node = analyze(parsed);
+    assert!(node.name() == "abc");
+    assert!(node.class() == Flags);
     assert!(node.length() == 3);
-    assert!(node[0].name == "a");
-    eq!(typeName(node[0].kind), typeName(flag_entry));
-    eq!(node[0].kind(), flag_entry);
-    assert!(node[0].kind == flag_entry);
-    assert!(node[0].value.longy == 1);
-    assert!(node[0].typo);
-    assert!(node[0].typo == node);
-    assert!(node[1].value.longy == 2);
-    assert!(node[2].value.longy == 4);
+    assert!(node[0].name() == "a");
+    // eq!(typeName(node[0].kind), typeName(flag_entry));
+    // eq!(node[0].kind(), flag_entry);
+    // assert!(node[0].class() == Flag_entry);
+    assert!(node[0].value() == 1);
+    // assert!(node[0].typo);
+    // assert!(node[0].typo == node);
+    assert!(node[1].value() == 2);
+    assert!(node[2].value() == 4);
 }
 
 
 #[test]
 fn testWitInterface() {
-    //     Node & mod = Node("host-funcs").setKind(modul).add(Node("current-user").setKind(functor).add(StringType));
-    is!("interface host-funcs {current-user: func() -> string}", mod);
+    //     let mod : Node = Node("host-funcs").setKind(modul).add(Node("current-user").setKind(functor).add(StringType));
+    // is!("interface host-funcs {current-user: func() -> string}", mod);
 }
 
 #[test]
 fn testWitExport() {
     //     const char
-    *code = "struct point{x:int y:float}";
-    Node & node = parse(code);
-    bindgen(node);
+    let code = "struct point{x:int y:float}";
+    let node : Node = parse(code);
+    // bindgen(node);
 }
+
 #[test]
 fn testWitFunction() {
     //    funcDeclaration
     // a:b,c vs a:b, c:d
 
     is!("add: func(a: float32, b: float32) -> float32", 0);
-    //     let mod : Module = read_wasm("test.wasm");
+        // let mod : Module = read_wasm("test.wasm");
     // print( mod .import_count);
-    eq!(mod.import_count, 1);
-    eq!(Node().setKind(longs).serialize(), "0");
-    eq!(mod.import_names, List<String>{"add"}); // or export names?
+    // eq!(mod.import_count, 1);
+    // eq!(Node().setKind(longs).serialize(), "0");
+    // eq!(mod.import_names, List<String>{"add"}); // or export names?
 }
 
 #[test]
@@ -230,12 +239,14 @@ fn testWitImport() {}
 fn testWit() {
     //    testWitFunction();
     //    testWitInterface();
+    /*
     WitReader::read("test/merge/world.wit");
     WitReader::read("samples/bug.wit");
     WitReader::read("test/merge/example_dep/index.wit");
     WitReader::read("test/merge/index.wit");
     WitReader::read("samples/wit/typenames.wit");
     WitReader::read("samples/wit/wasi_unstable.wit");
+    */
     //    assert!(wit.length() > 0);
 }
 

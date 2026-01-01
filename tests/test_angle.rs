@@ -15,7 +15,7 @@ use wasp::{eq, is, skip};
 //#define async_yield(y);
 //}
 //
-#[test] fn testCall() {
+#[test] fn test_call() {
     // #[cfg(feature = "WASMTIME")]{
     // 	warn("square 3  => SIGABRT in WASMTIME! must be bug there!?");
     // 	return ;
@@ -135,7 +135,7 @@ use wasp::{eq, is, skip};
         is!("if(condition=2,then=3)", 3);
         is!("if(condition=0,then=3,else=4)", 4);
         is!("if(condition=1,then=3,else=4)", 3);
-        assert_parses("if(condition=2,then=3,else=4)");
+    let result = parse("if(condition=2,then=3,else=4)");
         assert!(result["condition"] == 2);
         assert!(result["else"] == 4);
         is!("if(condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
@@ -355,7 +355,7 @@ use wasp::{eq, is, skip};
         is!("if(2<4){3}{4}", 3);
         is!("if 1<2 {3} else 4", 3);
 
-        assert_parses("if(3<condition=2,then=3,else=4)");
+    let result = parse("if(3<condition=2,then=3,else=4)");
         assert!(result["condition"] == 2);
         assert!(result["else"] == 4);
         is!("if(3<condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
@@ -438,7 +438,7 @@ use wasp::{eq, is, skip};
     //	testSmartTypes();
     test_truthy_and();
     test_if();
-    // testCall(); in testTodoBrowser();
+    // test_call(); in testTodoBrowser();
     skip!(
         testSwitch();
         testFunctionParams(); // TODO!

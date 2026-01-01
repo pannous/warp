@@ -1,11 +1,11 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node::{Empty, Error};
-use crate::node::{Bracket, Grouper, Meta, Node};
+use crate::node::{Bracket, Grouper, MetaData, Node};
 use log::warn;
 use std::fs;
 
 /// Read and parse a WASP file
-pub fn parseFile(path: &str) -> Node {
+pub fn parse_file(path: &str) -> Node {
     match fs::read_to_string(path) {
         Ok(content) => WaspParser::parse(&content),
         _ => Error(format!("Failed to read {}", path)),
@@ -15,16 +15,12 @@ pub fn parseFile(path: &str) -> Node {
 
 pub fn parse(input: &str) -> Node {
     if input.ends_with(".wasp") {
-        return parseFile(input);
+        return parse_file(input);
     }
     WaspParser::parse(input)
 }
 
 
-pub fn analyze(p0: Node) -> Node {
-    p0
-    // todo!("analyze not implemented yet");
-}
 
 pub struct WaspParser {
     input: String,
@@ -80,7 +76,7 @@ impl WaspParser {
         if root_nodes.len() == 1 {
             root_nodes[0].clone()
         } else if root_nodes.is_empty() {
-            Node::Empty
+            Empty
         } else {
             Node::List(root_nodes)
         }
@@ -248,7 +244,7 @@ impl WaspParser {
             return node;
         }
         // Attach metadata with position and comment
-        let mut meta = Meta::with_position(line, column);
+        let mut meta = MetaData::with_position(line, column);
         if let Some(c) = comment {
             meta.comment = Some(c);
         }

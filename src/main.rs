@@ -14,6 +14,7 @@ pub mod wasp_parser;
 pub mod wasm_gc_reader;
 pub mod wasm_gc_emitter;
 
+pub mod type_kinds;
 
 use parser::test_parser;
 

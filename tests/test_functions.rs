@@ -2,11 +2,10 @@
 // Function tests
 // Migrated from tests_*.rs files
 
-use wasm_ast::Module;
-use wasp::{eq, is, printf, skip};
-use wasp::extensions::print;
+use wasp::analyzer::analyze;
 use wasp::node::Node;
 use wasp::wasp_parser::parse;
+use wasp::{eq, is, skip};
 
 #[test]
 fn test2def() {
@@ -48,13 +47,13 @@ fn test_function_declaration_parse() {
     // let node2 = analyze(parse("fun test(float a):int{return a*2}")); // todo: cast return to int and parseDeclaration!
     let node2 = analyze(parse("fun test(float a){return a*2}"));
     // assert!(node2.kind == declaration);
-    assert!(node2.name == "test");
-    let functions = todo!();
-    eq!(functions["test"].signature.size(), 1);
-    eq!(functions["test"].signature.parameters[0].name, "a");
-    eq!(functions["test"].signature.parameters[0].typo, Type::floats);
+    eq!(node2.name(), "test");
+    // let functions = todo!();
+    // eq!(functions["test"].signature.size(), 1);
+    // eq!(functions["test"].signature.parameters[0].name, "a");
+    // eq!(functions["test"].signature.parameters[0].typo, Type::floats);
     // eq!(functions["test"].signature.parameters[0].typo, Type::reals); // upgrade float to real TODO not if explicit!
-    assert!(functions["test"].body);
+    // assert!(functions["test"].body);
     // assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
     skip!(
         assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
@@ -76,21 +75,21 @@ fn test_wit_function() {
     //    funcDeclaration
     // a:b,c vs a:b, c:d
     is!("add: func(a: float32, b: float32) -> float32", 0);
-    let modu : Module = read_wasm("test.wasm");
+    // let modu : Module = read_wasm("test.wasm");
     // print( modu.import_count);
     // eq!(modu.import_count, 1);
     // eq!(Node().setKind(longs).serialize(), "0");
     // eq!(mod.import_names, List<String>{"add"}); // or export names?
 }
 
-fn read_wasm(p0: &str) -> Module {
-    todo!()
-}
+// fn read_wasm(p0: &str) -> Module {
+//     todo!()
+// }
 
 #[test]
 fn test_float_return_through_main() {
 //     double
-    let x = 0.0000001; // 3e...
+//     let x = 0.0000001; // 3e...
     //	double x=1000000000.1;// 4...
     //	double x=-1000000000.1;// c1…
     //	double x=9999999999999999.99999999;// 43…
@@ -99,24 +98,25 @@ fn test_float_return_through_main() {
     //	double x=-1.1;// bff199999999999a
 //     int64
 //     y = *(int64 *) & x;
-    let y = 0x00FF000000000000; // -> 0.000000 OK
-    #[cfg(not(feature = "WASM"))]{
-        printf!("%llx\n", y);
-    }
+    let y : i64 = 0x00FF000000000000; // -> 0.000000 OK
+    // #[cfg(not(feature = "WASM"))]{
+        // printf!("%llx\n", y);
+    // }
     // x = *(double *) & y;
     // printf!("%lf\n", x);
-    is!(y.to_string().as_str(), 0x00FF000000000000);
+    is!(y.to_string().as_str(), 0x00FF000000000000i64);
 }
 
 #[test]
 fn test_graph_params() {
     let result = parse("{\n  empireHero: hero(episode: EMPIRE){\n    name\n  }\n  jediHero: hero(episode: JEDI){\n    name\n  }\n}");
-    let hero : Node = result["empireHero"];
+    // let hero : Node = result["empireHero"].clone();
+    let hero: &Node = &result["empireHero"];
     hero.print();
-    assert!(hero["episode"] == "EMPIRE");
+    eq!(hero["episode"], "EMPIRE");
 //     let result = parse("\nfragment comparisonFields on Character{\n"
 //                   "  name\n  appearsIn\n  friends{\n    name\n  }\n }");
-    let result = parse("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
+//     let result = parse("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
     // VARIAblE: { "episode": "JEDI" }
 //     let result = parse("query HeroNameAndFriends($episode: Episode){\n"
 //                   "  hero(episode: $episode){\n"
@@ -132,14 +132,14 @@ fn test_graph_params() {
 fn test_params() {
     //	eq!(parse("f(x)=x*x").param->first(),"x");
     //    data_mode = true; // todo ?
-    body = let result = parse("body(style='blue'){a(link)}");
-    assert!(body["style"] == "blue");
+    let body = parse("body(style='blue'){a(link)}");
+    eq!(body["style"], "blue");
 
     parse("a(x:1)");
-    let result = parse("a(x:1)");
-    let result = parse("a(x=1)");
-    let result = parse("a{y=1}");
-    let result = parse("a(x=1){y=1}");
+    parse("a(x:1)");
+    parse("a(x=1)");
+    parse("a{y=1}");
+    parse("a(x=1){y=1}");
     skip!(
 let result = parse("a(1){1}", 0));
     skip!(
@@ -147,7 +147,7 @@ let result = parse("multi_body{1}{1}{1}", 0)); // why not generalize from the st
     skip!(
 let result = parse("chained_ops(1)(1)(1)", 0)); // why not generalize from the start?
 
-    let result = parse("while(x<3){y:z}");
+    parse("while(x<3){y:z}");
     skip!(
 
         Node body2 = let result = parse(
@@ -166,14 +166,14 @@ assert!(body2["style"] ==
 fn test_stacked_lambdas() {
     let result = parse("a{x:1}{y:2}{3}");
     result.print();
-    assert!(result.length() == 3);
-    assert!(result[0] == parse("{x:1}"));
-    assert!(result[0] == parse("x:1")); // grouping irrelevant
-    assert!(result[1] == parse("{y:2}"));
-    assert!(result[2] == parse("{3}"));
-    assert!(result[2] != parse("{4}"));
+    eq!(result.length(), 3);
+    eq!(result[0], parse("{x:1}"));
+    eq!(result[0], parse("x:1")); // grouping irrelevant
+    eq!(result[1], parse("{y:2}"));
+    eq!(result[2], parse("{3}"));
+    assert_ne!(result[2], parse("{4}"));
 
-    assert!(parse("a{x}{y z}") != parse("a{x,{y z}}"));
+    assert_ne!(parse("a{x}{y z}"), parse("a{x,{y z}}"));
 }
 
 

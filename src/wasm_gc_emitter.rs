@@ -9,45 +9,8 @@ use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
-
-// Wasp ABI GC Node representation design:
-// This is a single struct that can represent any node type
-/*
-(type $node (struct
-  (field $name_ptr i32)
-  (field $name_len i32)
-  (field $tag i32)
-  (field $int_value i64)
-  (field $float_value f64)
-  (field $text_ptr i32)
-  (field $text_len i32)
-  (field $left (ref null $node))  // recursive reference
-  (field $right (ref null $node))
-  (field $meta (ref null $node))
- ))
- */
-
-// todo move node layout to wasp_abi.rs
-// any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ... todo ...
-
-/// Node variant tags (for runtime type checking)
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeKind {
-    Empty = 0,
-    Number = 1,
-    Text = 2,
-    Codepoint = 3,
-    Symbol = 4,
-    Key = 5,
-    Pair = 6,
-    Tag = 7,
-    Block = 8,
-    List = 9,
-    Data = 10,
-    Meta = 11,
-    Error = 12
-}
+// use wast::type_kinds::NodeKind;
+use crate::type_kinds::NodeKind;
 
 /// WebAssembly GC emitter for Node AST
 /// Generates WASM GC bytecode using struct and array types
@@ -671,7 +634,7 @@ impl WasmGcEmitter {
                 func.instruction(&I32Const(len as i32));
                 func.instruction(&Instruction::Call(self.function_indices["new_text"]));
             }
-            Node::Codepoint(c) => {
+            Node::Char(c) => {
                 func.instruction(&I32Const(*c as i32));
                 func.instruction(&Instruction::Call(self.function_indices["new_codepoint"]));
             }
@@ -827,6 +790,7 @@ impl WasmGcEmitter {
                     DataType::String => 4,
                     DataType::Other => 5,
                     DataType::Reference => 6,
+                    _ => todo!("Unhandled DataType variant"),
                 };
                 func.instruction(&Instruction::I64Const(data_type_val));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
@@ -867,7 +831,8 @@ impl WasmGcEmitter {
                 self.emit_node_null(func);
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             },
-            &Node::False | &Node::True => todo!()
+            &Node::False | &Node::True => todo!(),
+            _ => todo!()
         }
     }
 

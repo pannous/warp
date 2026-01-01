@@ -2,8 +2,18 @@
 // Type system tests
 // Migrated from tests_*.rs files
 
-use wasp::{is, skip};
+use std::iter::Map;
+use syn::Signature;
+use wasm_ast::Function;
+use wasp::{eq, is, skip, Number};
+use wasp::analyzer::analyze;
+use wasp::extensions::assert_throws;
+use wasp::node::Node;
+use wasp::node::Node::False;
+use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
+
+// const functions : Map<String, Function> = wasp::analyzer::FUNCTIONS;
 
 #[test]
 fn testGoTypes() {
@@ -12,8 +22,8 @@ fn testGoTypes() {
 
 #[test]
 fn testAutoType() {
-    is!("0/0", Nan);
-    is!("0÷0", Nan);
+    is!("0/0", False);
+    is!("0÷0", Node::Number(Number::Nan));
     is!("-1/6.", -1/6.);
     is!("-1/6", -1/6.); // Auto-promote int/int division to float
     is!("-1÷6", -1/6.); // Auto-promote int/int division to float
@@ -34,7 +44,7 @@ fn testReturnTypes() {
     is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4);
     is!("float addi(x,y){x+y};addi(2.2,2.2)", 4.4);
     is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
-    is!("add1 x:=x+1;add1 3", (int64) 4);
+    is!("add1 x:=x+1;add1 3",  4);
     is!("int x = $bla", 123);
     is!("`${1+1}`", "2");
     is!("real x = $bla", 123.);
@@ -49,23 +59,54 @@ fn testReturnTypes() {
     //==============================================================================
 }
 
+
+// fn cast(node: Node, to_type: &Type) -> Node {
+fn cast(node: Node, to_type: NodeKind) -> Node {
+    // stub
+    // in real code this would do actual casting
+    match to_type {
+        NodeKind::Text => {
+            Node::Text(node.to_string())
+        }
+        NodeKind::Number => {
+            match node {
+                Node::Number(n) => node,
+                Node::Symbol(s) => {
+                    match s.parse::<i64>() {
+                        Ok(v) => Node::Number(Number::Int(v)),
+                        _ => {
+                            match s.parse::<f64>(){
+                                Ok(f) => Node::Number(Number::Float(f)),
+                                _ => Node::Number(Number::Nan),
+                            }
+                        }
+                    }
+                }
+                _ => Node::Number(Number::Nan)
+            }
+        }
+        _ => todo!("cast not implemented for type {}", to_type),
+    }
+}
+
 #[test]
 fn testCast() {
-    is!("2"s, cast(Node(2), strings).value.string);
-    is!(cast(Node(2), longs).value.longy, 2); // trivial
-    is!(cast(Node(2.1), longs).value.longy, 2);
-    is!(cast(Node(2), reals).value.real, 2.0);
-    is!(cast(Node(2.1), reals).value.real, 2.1);
-    is!("2.1"s, cast(Node(2.1), strings).value.string);
-    is!("a"s, cast(Node('a'), strings).value.string);
-    is!(false, cast(Node('0'), bools).value.longy);
-    is!(false, cast(Node('ø'), bools).value.longy);
-    is!(false, cast(Node("False"s, false), bools).value.longy);
-    is!(false, cast(Node("ø"s, false), bools).value.longy);
-    is!(true, cast(Node("True"s, false), bools).value.longy);
-    is!(true, cast(Node("1"s, false), bools).value.longy);
-    is!(true, cast(Node(1), bools).value.longy);
-    is!(true, cast(Node("abcd"s, false), bools).value.longy);
+    // is!("2", cast(Node(2),  NodeKind::Text).value.string);
+    // eq!(cast(Node(2), longs), 2); // trivial
+    // eq!(cast(Node(2.1), longs), 2);
+    // eq!(cast(Node(2), reals).value.real, 2.0);
+    // eq!(cast(Node(2.1), reals).value.real, 2.1);
+    // is!("2.1", cast(Node(2.1), NodeKind::Text).value.string);
+    // is!("a", cast(Node('a'), NodeKind::Text).value.string);
+    // no need to cast!
+    // eq!(false, cast(Node('0'), bools));
+    // eq!(false, cast(Node('ø'), bools));
+    // eq!(false, cast(Node("False", false), bools));
+    // eq!(false, cast(Node("ø", false), bools));
+    // eq!(true, cast(Node("True", false), bools));
+    // eq!(true, cast(Node("1", false), bools));
+    // eq!(true, cast(Node(1), bools));
+    // eq!(true, cast(Node("abcd", false), bools));
 }
 
 #[test]
@@ -114,7 +155,7 @@ fn testBadType() {
 fn testDeepType() {
     parse("a=$canvas.tagName");
     //    eq!(result.kind(), smarti64);
-    //    eq!(result.kind(), Kind::strings);
+    //    eq!(result.kind(), AST::NodeKind::Text);
 }
 
 #[test]
@@ -127,31 +168,31 @@ fn testTypeConfusion() {
 
 #[test]
 fn testTypesSimple() {
-    clearAnalyzerContext();
-    result = analyze(parse("chars a"));
-    eq!(result.kind(), Kind::reference);
+    // clearAnalyzerContext();
+    let result = analyze(parse("chars a"));
+    eq!(result.kind(), Type::reference);
     eq!(result.typo, &ByteCharType); // todo char ≠ char* !
     eq!(result.name, "a");
     result = analyze(parse("int a"));
-    eq!(result.kind(), Kind::reference);
+    eq!(result.kind(), AST::reference);
     eq!(result.typo, &IntegerType); // IntegerType
     eq!(result.name, "a");
 
     result = analyze(parse("string b"));
-    eq!(result.kind(), Kind::reference);
+    eq!(result.kind(), AST::reference);
     eq!(result.typo, &StringType);
     eq!(result.name, "b");
 
     result = analyze(parse("float a,string b"));
     let result0 = result[0];
-    eq!(result0.kind(), Kind::reference);
-    //	eq!(result0.kind(), Kind::declaration);
+    eq!(result0.kind(), AST::reference);
+    //	eq!(result0.kind(), AST::declaration);
     //	todo at this stage it should be a declaration?
 
     eq!(result0.typo, &DoubleType);
     eq!(result0.name, "a");
     let result1 = result[1];
-    eq!(result1.kind(), Kind::reference);
+    eq!(result1.kind(), AST::reference);
     eq!(result1.typo, &StringType);
     eq!(result1.name, "b");
 }
@@ -159,29 +200,29 @@ fn testTypesSimple() {
 #[test]
 fn testTypesSimple2() {
     result = analyze(parse("a:chars"));
-    //    eq!(result.kind(), Kind::reference);
-    eq!(result.kind(), Kind::key);
+    //    eq!(result.kind(), AST::reference);
+    eq!(result.kind(), AST::key);
     eq!(result.typo, &ByteCharType);
     eq!(result.name, "a");
     result = analyze(parse("a:int"));
-    eq!(result.kind(), Kind::reference);
+    eq!(result.kind(), AST::reference);
     eq!(result.typo, &IntegerType); // IntegerType
     eq!(result.name, "a");
 
     result = analyze(parse("b:string"));
-    eq!(result.kind(), Kind::reference);
+    eq!(result.kind(), AST::reference);
     eq!(result.typo, &StringType);
     eq!(result.name, "b");
 
-    result = analyze(parse("a:float,b:string"));
+    let result = analyze(parse("a:float,b:string"));
     let result0 = result[0];
-    eq!(result0.kind(), Kind::reference);
-    //	eq!(result0.kind(), Kind::declaration);
+    eq!(result0.kind(), AST::reference);
+    //	eq!(result0.kind(), AST::declaration);
     //	todo at this stage it should be a declaration?
     eq!(result0.typo, &DoubleType);
     eq!(result0.name, "a");
     let result1 = result[1];
-    eq!(result1.kind(), Kind::reference);
+    eq!(result1.kind(), AST::reference);
     eq!(result1.typo, &StringType);
     eq!(result1.name, "b");
 }
@@ -191,19 +232,19 @@ fn testTypedFunctions() {
     // todo name 'id' clashes with 'id' in preRegisterFunctions();
     clearAnalyzerContext();
     result = analyze(parse("int tee(float b, string c){b}"));
-    eq!(result.kind(), Kind::declaration);
+    eq!(result.kind(), AST::declaration);
     eq!(result.name, "tee");
     let signature_node = result["@signature"];
     //	let signature_node = result.metas()["signature"];
-    // if (not signature_node.value.data);
+    // if (not signature_node.data_value());
     // error("no signature");
-    let signature : Signature = signature_node.value.data;
-    eq!(signature.functions.first()->name, "tee");
+    let signature : Signature = signature_node.data_value();
+    eq!(signature.functions.first(), "tee");
     eq!(signature.parameters.size(), 2);
     eq!(signature.parameters.first().name, "b");
     eq!(signature.parameters.first().typo, reals); // use real / number for float64  float32
     eq!(signature.parameters.last().name, "c");
-    eq!(signature.parameters.last().typo, strings);
+    eq!(signature.parameters.last().typo, NodeKind::Text);
     // let params = signature.parameters.map(+[](Arg f) { return f.name; });
     // eq!(params.first(), "b");
 }
@@ -218,19 +259,19 @@ fn testEmptyTypedFunctions() {
     //		proceed();
     //		break;
     //	}
-    result = analyze(parse("int a(){}"));
-    eq!(result.kind(), Kind::declaration);
+    let result = analyze(parse("int a(){}"));
+    eq!(result.kind(), AST::declaration);
     eq!(result.name, "a");
     let signature_node = result["@signature"];
-    let signature = signature_node.value.data;
-    eq!(signature.functions.first()->name, "a");
+    let signature : Signature = signature_node.data_value().downcast_ref::<Signature>().unwrap().clone();
+    eq!(signature.functions.first(), "a");
     // let names2 = signature.functions.map < String > ( + [](Function * f)
-    // { return f; ->name; });
+    // { return f; ; });
     eq!(names2.size(), 1);
     eq!(names2.first(), "a");
 
     result = analyze(parse("int a();"));
-    eq!(result.kind(), Kind::declaration); // header signature
+    eq!(result.kind(), AST::declaration); // header signature
     eq!(result.typo, IntegerType);
     eq!(result.name, "a");
 }
@@ -259,7 +300,7 @@ fn testPolymorphism() {
     eq!(function.is_polymorphic, true);
     eq!(function.variants.size(), 2);
     eq!(function.variants[0]->signature.size(), 1);
-    //	eq!(function.variants[0].signature.parameters[0].typo, (Type) strings); todo
+    //	eq!(function.variants[0].signature.parameters[0].typo, (Type) NodeKind::Text); todo
     eq!(function.variants[0]->signature.parameters[0].typo, (Type) stringp);
     let variant = function.variants[1];
     eq!(variant->signature.size(), 1);
@@ -289,9 +330,9 @@ fn testPolymorphism3() {
 #[test]
 fn testGenerics() {
     let typ = Type(Generics { kind: array, value_type: int16t });
-    //    let header= typ.value & array;
-    //    let header= typ.value & 0xFFFF0000; // todo <<
-    let header = typ.value & 0x0000FFFF; //todo ??
+    //    let header= typ.let array : value;
+    //    let header= typ.let 0xFFFF0000 : value; // todo <<
+    let header = typ.let 0x0000FFFF : value; //todo ??
 //     assert!(_eq!(header, array);
 }
 

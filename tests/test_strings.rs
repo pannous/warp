@@ -1,3 +1,5 @@
+use wasp::extensions::print;
+use wasp::is;
 
 #[test] fn test_string_basics() {
     print("Testing string basics ...");
@@ -17,7 +19,7 @@
 //     try {
 //         test_string_operations();
 //         print("All string tests passed successfully.");
-//     } catch (const std::exception &e) {
+//     } catch (const std::let e : exception) {
 //         printf!("string tests failed: %s,",e.what());
 //         return 1; // Indicate failure
 //     }
