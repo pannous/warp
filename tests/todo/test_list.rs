@@ -187,3 +187,38 @@ fn testArrayIndices() {
         is!("x=(1 4 3);x#2=5;x#2", 5);
     }
 }
+
+#[test]
+fn test_root_lists() {
+    // vargs needs to be 0 terminated, otherwise pray!
+    is!("1 2 3", Node(1, 2, 3, 0));
+    is!("(1 2 3)", Node(1, 2, 3, 0));
+    is!("(1,2,3)", Node(1, 2, 3, 0));
+    is!("(1;2;3)", Node(1, 2, 3, 0));
+    //     is!("1;2;3", Node(1, 2, 3, 0, 0)) //ok
+    is!("1,2,3", Node(1, 2, 3, 0));
+    is!("[1 2 3]", Node(1, 2, 3, 0).setKind(patterns));
+    is!("[1 2 3]", Node(1, 2, 3, 0));
+    is!("[1,2,3]", Node(1, 2, 3, 0));
+    is!("[1,2,3]", Node(1, 2, 3, 0).setKind(patterns));
+    is!("[1;2;3]", Node(1, 2, 3, 0));
+    todo_emit( // todo ?
+               //                is!("{1 2 3}", Node(1, 2, 3, 0));
+               //     is!("{1,2,3}", Node(1, 2, 3, 0));
+               //     is!("{1;2;3}", Node(1, 2, 3, 0));
+    );
+    todo_emit( // todo symbolic wasm
+               //                is!("(a,b,c)", Node("a", "b", "c", 0));
+               //     is!("(a;b;c)", Node("a", "b", "c", 0));
+               //     is!("a;b;c", Node("a", "b", "c", 0));
+               //     is!("a,b,c", Node("a", "b", "c", 0));
+               //     is!("{a b c}", Node("a", "b", "c", 0));
+               //     is!("{a,b,c}", Node("a", "b", "c", 0));
+               //     is!("[a,b,c]", Node("a", "b", "c", 0));
+               //     is!("(a b c)", Node("a", "b", "c", 0));
+               //     is!("[a;b;c]", Node("a", "b", "c", 0));
+               //     is!("a b c", Node("a", "b", "c", 0, 0));
+               //     is!("{a;b;c}", Node("a", "b", "c", 0));
+               //     is!("[a b c]", Node("a", "b", "c", 0));
+    );
+}

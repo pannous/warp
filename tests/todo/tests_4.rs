@@ -1,5 +1,5 @@
 #[test]
-fn testRoots() {
+fn test_roots() {
     assert!(Empty == 0);
     // is!((char *) "'hello'", "hello");
     is!("hello", "hello"); // todo reference==string really?
@@ -23,39 +23,7 @@ fn testRoots() {
     );
 }
 #[test]
-fn testParams() {
-    //	eq!(parse("f(x)=x*x").param->first(),"x");
-    //    data_mode = true; // todo ?
-    body = assert_parses("body(style='blue'){a(link)}");
-    assert(body["style"] == "blue");
-
-    parse("a(x:1)");
-    assert_parses("a(x:1)");
-    assert_parses("a(x=1)");
-    assert_parses("a{y=1}");
-    assert_parses("a(x=1){y=1}");
-    skip!(
-assert_parses("a(1){1}", 0));
-    skip!(
-assert_parses("multi_body{1}{1}{1}", 0)); // why not generalize from the start?
-    skip!(
-assert_parses("chained_ops(1)(1)(1)", 0)); // why not generalize from the start?
-
-    assert_parses("while(x<3){y:z}");
-    skip!(
-
-        Node body2 = assert_parses(
-            "body(style='blue'){style:green}"); // is that whole xml compatibility a good idea?
-        skip!(
-assert(body2["style"] ==
-            "green", 0)); // body has prescedence over param, semantically param provide extra data to body
-        assert(body2[".style"] == "blue");
-    );
-    //	assert_parses("a(href='#'){'a link'}");
-    //	assert_parses("(markdown link)[www]");
-}
-#[test]
-fn testDidYouMeanAlias() {
+fn test_did_you_mean_alias() {
     skip!(
 
         Node ok1 = assert_parses("printf('hi')");
@@ -64,33 +32,22 @@ fn testDidYouMeanAlias() {
 }
 
 #[test]
-fn testEmpty() {
+fn test_empty() {
     result = assert_parsesx("{  }");
 //     eq!(_x(result.length, 0);
 }
 
 #[test]
-fn testEval() {
+fn test_eval() {
     skip!(
 
         is!("√4", 2);
     );
 }
 
-#[test]
-fn testLengthOperator() {
-    is!("#'0123'", 4); // todo at compile?
-    is!("#[0 1 2 3]", 4);
-    is!("#[a b c d]", 4);
-    is!("len('0123')", 4); // todo at compile?
-    is!("len([0 1 2 3])", 4);
-    is!("size([a b c d])", 4);
-    is!("#{a b c}", 3);
-    is!("#(a b c)", 3); // todo: groups
-}
 
 #[test]
-fn testNodeName() {
+fn test_node_name() {
     a = Node("xor"); // NOT type string by default!
 //     bool
     ok1 = a == "xor";
@@ -100,7 +57,7 @@ fn testNodeName() {
 }
 
 #[test]
-fn testIndentAsBlock() {
+fn test_indent_as_block() {
     todo_emit(
 
         //==============================================================================
@@ -118,26 +75,26 @@ fn testIndentAsBlock() {
 
 
 #[test]
-fn testAsserts() {
+fn test_asserts() {
     eq!(11, 11);
     eq!(11.1f, 11.1f);
     //	eq!(11.1l, 11.1);
     eq!((float) 11., (float) 11.);
     //	eq!((double)11., (double )11.);
     eq!("a", "a");
-    eq!("a"s, "a"s);
-    eq!("a"s, "a");
+    eq!("a", "a");
+    eq!("a", "a");
     eq!(Node("a"), Node("a"));
     eq!(Node(1), Node(1));
 }
 
 #[test]
-fn testStringConcatenation() {
+fn test_string_concatenation() {
     //	eq!(Node("✔️"), True);
     //	eq!(Node("✔"), True);
     //	eq!(Node("✖️"), False);
     //	eq!(Node("✖"), False);
-    huh = "a"s + 2;
+    let huh = "a" + 2;
 //     assert!(_eq(huh.length, 2);
 //     assert!(_eq(huh[0], 'a');
 //     assert!(_eq(huh[1], '2');
@@ -146,20 +103,20 @@ fn testStringConcatenation() {
     assert!(eq("a2", "a2", 3));
 
     eq!(huh, "a2");
-    eq!("a"s + 2, "a2");
-    eq!("a"s + 2.2, "a2.2");
-    eq!("a"s + "2.2", "a2.2");
-    eq!("a"s + 'b', "ab");
-    eq!("a"s + "bc", "abc");
-    eq!("a"s + true, "a✔️"s);
-    eq!("a%sb"s % "hi", "ahib");
+    eq!("a" + 2, "a2");
+    eq!("a" + 2.2, "a2.2");
+    eq!("a" + "2.2", "a2.2");
+    eq!("a" + 'b', "ab");
+    eq!("a" + "bc", "abc");
+    eq!("a" + true, "a✔️");
+    eq!("a%sb" % "hi", "ahib");
 
-    eq!("a%db"s % 123, "a123b");
-    eq!("a%s%db"s % "hi" % 123, "ahi123b");
+    eq!("a%db" % 123, "a123b");
+    eq!("a%s%db" % "hi" % 123, "ahi123b");
 }
 
 #[test]
-fn testString() {
+fn test_string() {
 //     String * a = new
     String("abc");
     b = String("abc");
@@ -183,9 +140,9 @@ fn testString() {
     eq!(a, c);
     eq!(b, c);
     let d = "abc";
-//     print(a->data);
+//     print(a.data);
     // print(d);
-    assert!(eq(a->data, d));
+    assert!(eq(a.data, d));
     eq!(b, "abc");
     eq!(c, "abc");
 //     assert!(_eq(b, "abc");
@@ -193,75 +150,75 @@ fn testString() {
     assert!(c == "abc");
     assert!(b == a);
     assert!(b == c);
-    assert!("%d"s % 5 == "5");
-    assert!("%s"s % "a" == "a");
-    assert!("%s"s % "ja" == "ja");
-    assert!("hi %s ok"s.replace("%s", "ja") == "hi ja ok");
-    assert!("1234%d6789"s % 5 == "123456789");
-    assert!("char %c"s % 'a' == "char a");
-    assert!("%c %d"s % 'a' % 3 == "a 3");
-    assert!("abc"s.replace("a", "d") == "dbc");
-    assert!("hi %s ok"s % "ja" == "hi ja ok");
-    assert!("%s %d"s % "hu" % 3 == "hu 3");
-    assert!("%s %s %d"s % "ha" % "hu" % 3 == "ha hu 3");
-    eq!("%c"s % u'γ', "γ");
-    eq!("%C"s % U'γ', "γ");
+    assert!("%d" % 5 == "5");
+    assert!("%s" % "a" == "a");
+    assert!("%s" % "ja" == "ja");
+    assert!("hi %s ok".replace("%s", "ja") == "hi ja ok");
+    assert!("1234%d6789" % 5 == "123456789");
+    assert!("char %c" % 'a' == "char a");
+    assert!("%c %d" % 'a' % 3 == "a 3");
+    assert!("abc".replace("a", "d") == "dbc");
+    assert!("hi %s ok" % "ja" == "hi ja ok");
+    assert!("%s %d" % "hu" % 3 == "hu 3");
+    assert!("%s %s %d" % "ha" % "hu" % 3 == "ha hu 3");
+    eq!("%c" % 'γ', "γ");
+    eq!("%C" % 'γ', "γ");
     eq!(String("abcd").substring(1, 2, false), "b");
     eq!(String("abcd").substring(1, 3, false), "bc");
     eq!(String("abcd").substring(1, 2, true/*share*/), "b"); // excluding, like js
     eq!(String("abcd").substring(1, 3, true), "bc");
     eq!(String("abcd").substring(1, 3), "bc");
     eq!(String("abcd").substring(1, 2), "b");
-    assert!("%s"s.replace("%s", "ja") == "ja");
-    assert!("hi %s"s.replace("%s", "ja") == "hi ja");
-    assert!("%s ok"s.replace("%s", "ja") == "ja ok");
-    assert!("hi %s ok"s.replace("%s", "ja") == "hi ja ok");
-    let x = "hi %s ok"s % "ja";
+    assert!("%s".replace("%s", "ja") == "ja");
+    assert!("hi %s".replace("%s", "ja") == "hi ja");
+    assert!("%s ok".replace("%s", "ja") == "ja ok");
+    assert!("hi %s ok".replace("%s", "ja") == "hi ja ok");
+    let x = "hi %s ok" % "ja";
     assert!(x);
     printf("%s", x.data);
     assert!(x == "hi ja ok");
-    assert!("hi %s ok"s % "ja" == "hi ja ok");
+    assert!("hi %s ok" % "ja" == "hi ja ok");
     eq!(atoi1('x'), -1);
     eq!(atoi1('3'), 3);
     eq!(parseLong("١٢٣"), 123l); // Arabic numerals are (LTR) too!
 //     assert!(_eq(parseLong("123"), 123l); // can crash!?!
-    //	eq!( atoi1(u'₃'),3);// op
+    //	eq!( atoi1('₃'),3);// op
     eq!(parseLong("0"), 0l);
     eq!(parseLong("x"), 0l); // todo side channel?
     eq!(parseLong("3"), 3l);
-//     assert!(_eq(" a b c  \n"s.trim(), "a b c");
-    eq!("     \n   malloc"s.trim(), "malloc");
-    eq!("     \n   malloc     \n   "s.trim(), "malloc");
-    eq!("malloc     \n   "s.trim(), "malloc");
-    testStringConcatenation();
+//     assert!(_eq(" a b c  \n".trim(), "a b c");
+    eq!("     \n   malloc".trim(), "malloc");
+    eq!("     \n   malloc     \n   ".trim(), "malloc");
+    eq!("malloc     \n   ".trim(), "malloc");
+    test_string_concatenation();
     testStringReferenceReuse();
 //     eq!(_x(parse("١٢٣"), Node(123));
     //    is!("١٢٣", 123);
     assert!("abc" == "abc");
 
-    assert!(String(u'☺').length == 3);
-    assert!(String(L'☺').length == 3);
-    assert!(String(U'☺').length == 3);
+    assert!(String('☺').length == 3);
+    assert!(String('☺').length == 3);
+    assert!(String('☺').length == 3);
 
     let node1 = interpret("ç='☺'");
     assert!(node1.kind == strings);
-    assert!(*node1.value.string == u'☺');
-    assert!(*node1.value.string == u'☺');
-//     assert(node1 == String(u'☺'));
-//     assert(node1 == String(L'☺'));
-//     assert(node1 == String(U'☺'));
+    assert!(*node1.value.string == '☺');
+    assert!(*node1.value.string == '☺');
+//     assert!(node1 == String('☺'));
+//     assert!(node1 == String('☺'));
+//     assert!(node1 == String('☺'));
 }
 #[test]
-fn testNilValues() {
+fn test_nil_values() {
     #[cfg(feature = "LINUX")]{
         return; // todo: not working on linux, why?
     }
-    assert(Empty.name == nil_name.data);
-    assert(Empty.isNil());
+    assert!(Empty.name == nil_name.data);
+    assert!(Empty.isNil());
     assert_parses("{ç:null}");
     Node & node1 = result["ç"];
     debugNode(node1);
-    assert(node1 == Empty);
+    assert!(node1 == Empty);
 
     assert_parses("{a:null}");
     assert!(result["a"].value.data == 0);
@@ -270,16 +227,16 @@ fn testNilValues() {
     assert!(result.value.longy == 0);
     debugNode(result["a"]);
     // print(result["a"].serialize());
-    assert(result["a"] == Empty);
-    assert(result == Empty);
+    assert!(result["a"] == Empty);
+    assert!(result == Empty);
     eq!(result["a"], Empty);
 
     assert_parses("{ç:ø}");
     Node & node = result["ç"];
-    assert(node == Empty);
+    assert!(node == Empty);
 }
 #[test]
-fn testConcatenationBorderCases() {
+fn test_concatenation_border_cases() {
     eq!(Node(1, 0) + Node(3, 0), Node(1, 3, 0)); // ok
     eq!(Node("1", 0, 0) + Node("2", 0, 0), Node("1", "2", 0));
     // Border cases: {1}==1;
@@ -287,11 +244,11 @@ fn testConcatenationBorderCases() {
     // Todo Edge case a=[] a+=1
     eq!(Node() + Node("1", 0, 0), Node("1", 0, 0));
     //  singleton {1}+2==1+2 = 12/3 should be {1,2}
-    eq!(Node("1", 0, 0) + Node("x"s), Node("1", "x", 0));
+    eq!(Node("1", 0, 0) + Node("x"), Node("1", "x", 0));
 }
 
 #[test]
-fn testConcatenation() {
+fn test_concatenation() {
     node1 = Node("1", "2", "3", 0);
     assert!(node1.length == 3);
     assert!(node1.last() == "3");
@@ -348,11 +305,11 @@ fn testConcatenation() {
 
     skip!(
 
-        eq!(Node(1) + Node("a"s), Node("1a"));
-        Node bug = Node("1"s) + Node(2);
+        eq!(Node(1) + Node("a"), Node("1a"));
+        Node bug = Node("1") + Node(2);
         // AMBIGUOUS: "1" + 2 == ["1" 2] ?
-        eq!(Node("1"s) + Node(2), Node("12"));
-        eq!(Node("a"s) + Node(2.2), Node("a2.2"));
+        eq!(Node("1") + Node(2), Node("12"));
+        eq!(Node("a") + Node(2.2), Node("a2.2"));
         // "3" is type unknown => it is treated as Empty and not added!
         eq!(Node("1", "2", 0) + Node("3"), Node("1", "2", "3", 0)); // can't work ^^
     );
@@ -360,7 +317,7 @@ fn testConcatenation() {
 
 
 #[test]
-fn testIndex() {
+fn test_index() {
     assert_parses("[a b c]#2");
     result.print();
     assert!(result.length == 3);
@@ -394,7 +351,7 @@ fn testIndex() {
 
 
 #[test]
-fn testGroupCascade1() {
+fn test_group_cascade1() {
     result0 = parse("a b; c d");
     assert!(result0.length == 2);
     assert!(result0[1].length == 2);
@@ -416,7 +373,7 @@ fn testGroupCascade1() {
 }
 
 #[test]
-fn testGroupCascade2() {
+fn test_group_cascade2() {
     result = parse("{ a b , c d ; e f , g h }");
     result1 = parse("{ a b , c d \n e f , g h }");
     // print(result1.serialize());
@@ -427,22 +384,22 @@ fn testGroupCascade2() {
 }
 
 #[test]
-fn testSuperfluousIndentation() {
+fn test_superfluous_indentation() {
     result = parse("a{\n  b,c}");
     result1 = parse("a{b,c}");
     assert!(result1 == result);
 }
 
 #[test]
-fn testGroupCascade() {
-    //	testGroupCascade2();
+fn test_group_cascade() {
+    //	test_group_cascade2();
     //	testGroupCascade0();
-    //	testGroupCascade1();
+    //	test_group_cascade1();
 
-//     result = parse("{ a b c, d e f; g h i , j k l \n "
-//                    "a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2}"
-//                    "{a3 b3 c3, d3 e3 f3; g3 h3 i3 , j3 k3 l3 \n"
-//                    "a4 b4 c4 ,d4 e4 f4; g4 h4 i4 ,j4 k4 l4}");
+    let result = parse(r#"{ a b c, d e f; g h i , j k l
+              a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2}
+              {a3 b3 c3, d3 e3 f3; g3 h3 i3 , j3 k3 l3
+              a4 b4 c4 ,d4 e4 f4; g4 h4 i4 ,j4 k4 l4}"#);
     result.print();
     eq!(result.kind, groups); // ( {} {} ) because 2 {}!
     let &first = result.first();
@@ -470,239 +427,19 @@ fn testGroupCascade() {
     // print(reparse.serialize());
     assert!(result == reparse);
 }
-#[test]
-// fn testNodeBasics() {
-//     a1 = Node(1);
-//     //	assert!(a1.name == "1");// debug only!
-//     assert!(a1 == 1);
-//     a11 = Node(1.1);
-// //     assert!(_eq(a11.name, "1.1");
-//     assert!(a11 == 1.1);
-// 
-//     a = Node("a");
-//     // print(a);
-//     // print(a.serialize());
-//     // print(a.name);
-// //     assert!(_eq(a.name, "a");
-//     assert!(a.name == "a");
-//     assert!(a == "a");
-//     b = Node("c");
-// //     assert!(_eq(b.name, "c");
-//     a.add(b.clone());
-// //     assert!(_eq(b.name, "c"); // wow, worked before, corrupted memory!!
-//     assert!(_eq(a.length, 1);
-//     assert!(a.children);
-//     Node * b2 = b.clone();
-//     assert!(_eq(b.name, "c"); // wow, worked before, corrupted memory!!
-//     assert!(b == b2);
-// //     assert!(_eq(b, a.children[0]);
-// 
-//     //	a["b"] = "c";
-// //     assert!(_eq(b, a.children[0]);
-// //     assert!(_eq(b.name, "c"); // wow, worked before, corrupted memory!!
-// //     assert!(_eq(a.children[0].name, "c");
-//     assert!(a.has("c"));
-//     assert!(b == a.has("c"));
-// 
-//     //	a["b"] = "c";
-//     a["d"] = "e";
-// //     assert!(_eq(a.length, 2);
-//     assert!(a.has("d"));
-//     assert!(a["d"] == "e");
-//     Node & d = a.children[a.length - 1];
-//     assert!(d.length == 0);
-//     assert!(d == "e");
-//     assert!(d.kind == key);
-//     a.addSmart(b); // why?
-// }
 
 
-#[test]
-fn testNodeEmit() {
-    is!("y:{x:2 z:3};y.x", 2);
-    is!("y:{x:'z'};y.x", 'z'); // emitData( node! ) emitNode();
-    is!("y{x:1}", true); // emitData( node! ) emitNode();
-    is!("y{x}", true); // emitData( node! ) emitNode();
-    is!("{x:1}", true); // emitData( node! ) emitNode();
-    is!("y={x:{z:1}};y", true); // emitData( node! ) emitNode();
-}
 
-//int dump_nr = 1;
-//#[test] fn dumpMemory(){
-// 
-//	String file_name="dumps/dump"s+dump_nr++;
-//	FILE* file=fopen(file_name,"wb");
-//	size_t length = 65536*10;
-//	fwrite(memory, length, 1, file);
-//	fclose(file);
-//}
 
-// #[cfg(feature = "IMPLICIT_NODES")]{
-#[test]
-fn testNodeImplicitConversions() {
-    // looks nice, but only causes trouble and is not necessary for our runtime!
-    b = true;
-    // print(typeName(b.kind));
-    assert!(b.value.longy == 1);
-    assert!(b.kind == bools);
-    assert!(b == True);
-    a = 1;
-    assert!(a.kind == longs);
-    assert!(a.value.longy = 1);
-    a0 = 10l;
-    assert!(a0.kind == longs);
-    assert!(a0.value.longy = 1);
-    a1 = 1.1;
-//     assert!(_eq(a1.kind, reals);
-    assert!(a1.kind == reals);
-    assert!(a1.value.real = 1.1);
-    a2 = 1.2f;
-    assert!(a2.kind == reals);
-    assert!(a2.value.real = 1.2f);
-//     Node as = 'a';
-    assert!(as.kind == strings);
-    assert!(as.value.string == 'a');
-}
-// }
 
-#[test]
-fn testUnits() {
-    is!("1 m + 1km", Node(1001).setType(types["m"]));
-}
 
-#[test]
-// fn testPaint() {
-//     // #[cfg(feature = "SDL")]{
-//         init_graphics();
-//         while (1)
-// //         paint(-1);
-// //     }
-// // }
 
-// #[test]
-fn testPaintWasm() {
-    #[cfg(feature = "GRAFIX")]{
-        //	struct timeval stop, start;
-        //	gettimeofday(&start, NULL);
-        // todo: let compiler compute constant expressions like 1024*65536/4
-        //    	is!("i=0;k='hi';while(i<1024*65536/4){i++;k#i=65};k[1]", 65)// wow SLOOW!!!
-        //out of bounds memory access if only one Memory page!
-//         is!("i=0;k='hi';while(i<16777216){i++;k#i=65};paint()", 0) // still slow, but < 1s
-        // wow, SLOWER in wasm-micro-runtime HOW!?
-        //	exit(0);
 
-        //(√((x-c)^2+(y-c)^2)<r?0:255);
-        //(x-c)^2+(y-c)^2
-        is!("h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x-c)^2+(y-c)^2‖<r", 1);
-        ////char *wasm_paint_routine = "surface=(1,2);i=0;while(i<1000000){i++;surface#i=i*(10-√i);};paint";
-//         char * wasm_paint_routine = "w=1920;c=500;r=100;surface=(1,2);i=0;"
-//         "while(i<1000000){"
-//         "i++;x=i%w;y=i/w;surface#i=(x-c)^2+(y-c)^2"
-        "};paint";
-        //((x-c)^2+(y-c)^2 < r^2)?0x44aa88:0xffeedd
-        //char *wasm_paint_routine = "surface=(1,2);i=0;while(i<1000000){i++;surface#i=i;};paint";
-        //is!(wasm_paint_routine, 0);
-        //	char *wasm_paint_routine = "maxi=3840*2160/4/2;init_graphics();surface=(1,2,3);i=0;while(i<maxi){i++;surface#i=i*(10-√i);};";
-        eval(wasm_paint_routine);
-        //	paint(0);
-        //	gettimeofday(&stop, NULL);
-        //	printf("took %lu µs\n", (stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec);
-        //	printf("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
-        //	exit(0);
-        //char *wasm_paint_routine = "init_graphics(); while(1){paint()}";// SDL bugs a bit
-        //        while (1)paint(0);// help a little
-    }
-}
 
-#[test]
-fn testNodesInWasm() {
-    is!("{b:c}", parse("{b:c}"));
-    is!("a{b:c}", parse("a{b:c}"));
-}
-
-#[test]
-fn testSubGroupingIndent() {
-    result = parse("x{\ta\n\tb,c,\n\td;\n\te");
-    eq!(result.length, 3);
-    eq!(result.first(), "a");
-    eq!(result.last(), "e");
-}
-
-#[test]
-fn testSubGrouping() {
-    // todo dangling ',' should make '\n' not close
-    //	result=parse("a\nb,c,\nd;e");
-//     result = parse("a\n"
-//                    "b,c,\n"
-//                    "d;\n"
-//                    "e");
-    eq!(result.length, 3); // b,c,d should be grouped as one because of dangling comma
-    eq!(result.first(), "a");
-    eq!(result.last(), "e");
-}
-
-#[test]
-fn testSubGroupingFlatten() {
-    // ok [a (b,c) d] should be flattened to a (b,c) d
-    result = parse("[a\nb,c\nd]");
-    //	result=parse("a\nb,c\nd");// still wrapped!
-    eq!(result.length, 3);
-    eq!(result.first(), "a");
-    eq!(result.last(), "d");
-}
-
-#[test]
-fn testBUG() {
-    // move to tests() once done!
-    //        testRecentRandomBugs();
-}
-
-#[test]
-fn testBadInWasm() {
-    // break immediately
-    testStringConcatWasm();
-    is!("square(3.0)", 9.); // todo groupFunctionCallPolymorphic
-    is!("global x=1+π", 1 + pi); // int 4 ƒ
-    testWasmMutableGlobal(); // todo!
-    is!("i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ", 800 * 800);
-    //local pixel in context wasp_main already known  with type long, ignoring new type group<byte>
-    is!("grows:=it*2; grows 3*42 > grows 2*3", 1);
-    // is there a situation where a COMPARISON is ambivalent?
-    // sleep ( time > 8pm ) and shower ≠ sleep time > ( 8pm and true);
-    testNodeDataBinaryReconstruction(); // todo!  y:{x:2 z:3}
-    testSmartReturnHarder(); // y:{x:2 z:3} can't work yet(?);
-    is!("add1 x:=$0+1;add1 3", (int64) 4); // $0 specially parsed now
-    is!("print 3", 3); // todo dispatch!
-    is!("if 4>1 then 2 else 3", 2);
-
-    // bad only SOMETIMES / after a while!
-    is!("puts('ok');(1 4 3)#2", 4); // EXPECT 4 GOT 1n
-    is!("'αβγδε'#3", U'γ'); // TODO! sometimes works!?
-    is!("3 + √9", (int64) 6); // why !?!
-    is!("id 3*42> id 2*3", 1);
-    testSquares(); // ⚠️
-
-    // often breaks LATER! usually some map[key] where key missing!
-    // WHY do thesAe tests break in particular, sometimes?
-    testMergeOwn();
-    testEmitter(); // huh!?!
-}
-#[test]
-fn assurances() {
-    #[cfg(feature = "WASM")]{
-        //	assert!(sizeof(Type32) == 4) // todo:
-//         # else
-        //    assert!(sizeof(Type32) == 4) // otherwise all header structs fall apart
-        assert!(sizeof(Type64) == 8) // otherwise all header structs fall apart
-        //    assert!(sizeof(Type) == 8) // otherwise all header structs fall apart
-    }
-    //    assert!(sizeof(void*)==4) // otherwise all header structs fall apart TODO adjust in 64bit wasm / NORMAL arm64 !!
-    assert!(sizeof(int64) == 8);
-}
 
 // todo: merge with testAllWasm, move ALL of these to test_wasm.rs
 #[test]
-fn testAllEmit() {
+fn test_all_emit() {
     // WASM emit tests under the hood:
     // is!("√3^2", 3); // basics
     //	is!("42", 42);// basics
@@ -733,7 +470,7 @@ fn testAllEmit() {
 
     testLogic01();
     testLogicOperators();
-    testRoots();
+    test_roots();
     testRootFloat();
     testMathExtra(); // "one plus two times three"==7 used to work?
     testTruthiness();
@@ -762,102 +499,7 @@ fn testAllEmit() {
     assert!(Empty == 0); // should never be modified
     // print("ALL TESTS PASSED");
 }
-#[test]
-fn testHostIntegration() {
-    #[cfg(feature = "WASMTIME")]{
-//         or
-//         WASMEDGE
-        return;
-    }
-    #[cfg(not(feature = "WASM"))]{
-        testHostDownload(); // no is!
-    }
-    test_getElementById();
-    testDom();
-    testDomProperty();
-    testInnerHtml();
-    testJS();
-    testFetch();
-    skip!(
 
-        testCanvas(); // attribute setter missing value breaks browser
-    );
-}
-#[test]
-// fn print(Module &m) {
-//     print("Module");
-//     print("name:");
-    // print(m.name);
-    // print("code:");
-    // print(m.code);
-    // print("import_data:");
-    // print(m.import_data);
-    // print("export_data:");
-    // print(m.export_data);
-    // print("functype_data:");
-    // print(m.functype_data);
-    // print("code_data:");
-    // print(m.code_data);
-    // print("globals_data:");
-    // print(m.globals_data);
-    // print("memory_data:");
-    // print(m.memory_data);
-    // print("table_data:");
-    // print(m.table_data);
-    // print("name_data:");
-    // print(m.name_data);
-    // print("data_segments:");
-    // print(m.data_segments);
-    // print("linking_section:");
-    // print(m.linking_section);
-    // print("relocate_section:");
-    // print(m.relocate_section);
-    // print("funcToTypeMap:");
-    // print(m.funcToTypeMap);
-    // print("custom_sections:");
-    // print(m.custom_sections);
-    // print("type_count:");
-    // print(m.type_count);
-    // print("import_count:");
-    // print(m.import_count);
-    // print("total_func_count:");
-    // print(m.total_func_count);
-    // print("table_count:");
-    // print(m.table_count);
-    // print("memory_count:");
-    // print(m.memory_count);
-    // print("export_count:");
-    // print(m.export_count);
-    // print("global_count:");
-    // print(m.global_count);
-    // print("code_count:");
-    // print(m.code_count);
-    // print("data_segments_count:");
-    // print(m.data_segments_count);
-    // print("start_index:");
-    // print(m.start_index);
-    // print("globals); List<Global> WHY NOT??");
-    // print("m.functions.size()");
-    // print(m.functions.size());
-    // print("m.funcTypes.size()");
-    // print(m.funcTypes.size());
-    assert!(m.funcTypes.size() == m.type_count);
-
-    // print("m.signatures.size()");
-    // print(m.signatures.size());
-    // print("m.export_names");
-    // print(m.export_names); // none!?
-    // print("import_names:");
-    // print(m.import_names);
-// }
-
-#[test]
-fn test_const_String_comparison_bug() {
-    // fixed in 8268c182 String == chars ≠> chars == chars  no more implicit cast
-//     const String
-    &library_name = "raylib";
-    assert!(library_name == "raylib");
-}
 #[test]
 fn todo_done() { // moved from todo();
     // GOOD! move to tests() once they work again but a#[test] fn redundant test executions
@@ -918,7 +560,7 @@ fn todo_done() { // moved from todo();
     testParams();
     is!("\"Hello \" + \"🌍\" + (2000+25)","Hello 🌍2025");
 
-    // test_const_String_comparison_bug(); // fixed in 8268c182
+    // test_const_string_comparison_bug(); // fixed in 8268c182
 }
 // todo: ^^ move back into tests() once they work again
 #[test]
@@ -966,7 +608,7 @@ fn todos() {
     // := is terminated by \n, not by ;!
     assert_throws("xyz 3.7"); // todo SHOULD THROW unknown symbol!
     is!("if(0):{3}", false); // 0:3 messy node
-    eq!(Node("1", 0) + Node("2"s),
+    eq!(Node("1", 0) + Node("2"),
                   Node("1", "2", 0)); // 1+2 => 1:2  stupid border case because 1 not group (1);
 //     is!((char *) "{a b c}#2", "b"); // ok, but not for patterns:
 //     is!((char *) "[a b c]#2", "b"); // patterns
@@ -975,8 +617,8 @@ fn todos() {
     is!("i=3.7;.3+i", 4); // todo bring variables to interpreter
     is!("i=3;i*-1", -3); // todo bring variables to interpreter
     is!("one plus two times three", 7);
-    //	print("OK %s %d"s % ("WASM",1));// only 1 handed over
-    //    print(" OK %d %d"s % (2, 1));// error: expression result unused [-Werror,-Wunused-value] OK
+    //	print("OK %s %d" % ("WASM",1));// only 1 handed over
+    //    print(" OK %d %d" % (2, 1));// error: expression result unused [-Werror,-Wunused-value] OK
     is!("use wasp;use lowerCaseUTF;a='ÂÊÎÔÛ';lowerCaseUTF(a);a", "âêîôû");
     test2Def();
     testConstructorCast();
@@ -989,7 +631,7 @@ fn test_todos() {
     // move to test_done() once done!
 }
 #[test]
-fn todo_done(); // may be below
+fn todo_done(){} // may be below
 
 #[test]
 fn tests() {
@@ -1010,24 +652,24 @@ fn tests() {
     testUnicode_UTF16_UTF32();
     testReplaceAll();
     testExceptions();
-    testString();
+    test_string();
     testNodeBasics();
     testIterate();
     testLists();
-    testEval();
+    test_eval();
     testParent();
     testNoBlock(); // fixed
-    testSubGroupingFlatten();
+    test_sub_grouping_flatten();
     testNodeConversions();
     testUpperLowerCase();
     testListGrow();
-    testGroupCascade();
+    test_group_cascade();
     testNewlineLists();
     testStackedLambdas();
 
     testParamizedKeys();
     testForEach();
-    testEmpty();
+    test_empty();
     testDiv();
     testRoot();
     testSerialize();
@@ -1036,23 +678,23 @@ fn tests() {
         testPrimitiveTypes();
     );
     //	test_sin();
-    testIndentAsBlock();
+    test_indent_as_block();
     testDeepCopyDebugBugBug2(); // SUBTLE: BUGS OUT ONLY ON SECOND TRY!!!
     testDeepCopyDebugBugBug();
     testComments();
     testEmptyLineGrouping();
     testSwitch();
-    testAsserts();
+    test_asserts();
     testFloatReturnThroughMain();
-    testSuperfluousIndentation();
-    testString();
+    test_superfluous_indentation();
+    test_string();
     testEmptyLineGrouping();
     testColonLists();
     testGraphParams();
-    testNodeName();
-    testStringConcatenation();
+    test_node_name();
+    test_string_concatenation();
     testStringReferenceReuse();
-    testConcatenation();
+    test_concatenation();
     testMarkSimple();
     testMarkMulti();
     testMarkMulti2();
@@ -1062,7 +704,7 @@ fn tests() {
     testGraphQlQuery();
     // print(testNodiscard());
     testCpp();
-    testNilValues();
+    test_nil_values();
     testMapsAsLists();
     testMaps();
     testLists();
@@ -1070,7 +712,7 @@ fn tests() {
     testGraphParams();
     testAddField();
     testOverwrite();
-    testDidYouMeanAlias();
+    test_did_you_mean_alias();
     testNetBase();
     testForEach();
     // testLengthOperator();
@@ -1089,13 +731,13 @@ fn tests() {
     testGraphQlQuery2();
     testUTF(); // fails sometimes => bad pointer!?
     testUnicode_UTF16_UTF32();
-    testConcatenationBorderCases();
+    test_concatenation_border_cases();
     testNewlineLists();
-    testIndex();
-    testGroupCascade();
+    test_index();
+    test_group_cascade();
     testParams();
     testSignificantWhitespace();
-    testBUG();
+    test_bug();
     testFlags();
     //    testFlags2();
     //    testFlagSafety();
@@ -1113,7 +755,7 @@ fn tests() {
         warn("WASM emit tests CURRENTLY __ALL__ SKIPPED or asynchroneous!");
         return;
 //         # else
-        testAllEmit();
+        test_all_emit();
     }
     // todo: split in test_wasp test_angle test_emit.rs
 }
