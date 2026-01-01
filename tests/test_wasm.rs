@@ -1,4 +1,5 @@
-use wasp::{is, skip};
+use wasp::{eq, is, skip};
+use wasp::wasp_parser::parse;
 
 #[test]
 fn test_range() {
@@ -637,7 +638,7 @@ fn test_range() {
         is!("false true and", false);
         is!("false false and ", false);
         is!("true false and ", false);
-        assert!(parse("false and false").length == 3);
+        assert!(parse("false and false").length() == 3);
     );
     is!("false and false", false);
     is!("false and true", false);
@@ -1336,7 +1337,7 @@ testWasmTypedGlobals());
 #[cfg(not(feature = "TRACE"))]{
     assert_run("x='123';x + '4' is '1234'", true); // ok
     assert_run("'123' + '4' is '1234'", true); // ok needs runtime for concat();
-    assert_run("x='123';x=='123'", true); // ok needs runtime for eq();
+    assert_run("x='123';x=='123'", true); // ok needs runtime for eq!();
 }
 }
 #[test] fn test_logarithm() {
@@ -1484,24 +1485,23 @@ testWasmTypedGlobals());
 }
 
 #[test] fn test_sinus() {
-    //k=78; fucks it up!!
-    is!("double sin(double x){\n"
-                "\tx = modulo_double(x,tau)\n"
-                "\let z : tdouble = x*x\n"
-                "\let w : tdouble = z*z\n"
-                "\tS1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */\n"
-                "\tS2  =  8.33333333332248946124e-03, /* 0x3F811111, 0x1110F8A6 */\n"
-                "\tS3  = -1.98412698298579493134e-04, /* 0xBF2A01A0, 0x19C161D5 */\n"
-                "\tS4  =  2.75573137070700676789e-06, /* 0x3EC71DE3, 0x57B1FE7D */\n"
-                "\tS5  = -2.50507602534068634195e-08, /* 0xBE5AE5E6, 0x8A2B9CEB */\n"
-                "\tS6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */\n"
-                //	            "\ttau =  6.283185307179586 // 2π\n"
-                "\tif(x >= pi) return -sin(modulo_double(x,pi))\n"
-                "\let r : tdouble = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)\n"
-                "\treturn x + z*x*(S1 + z*r)\n"
-                "};sin π/2", 1.0000000002522271); // IT WORKS!!! todo: why imprecision?
-    //    exit(1);
+    is!(r#"double sin(double x){
+    x = modulo_double(x,tau)
+    let z : tdouble = x*x
+    let w : tdouble = z*z
+    S1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */
+    S2  =  8.33333333332248946124e-03, /* 0x3F811111, 0x1110F8A6 */
+    S3  = -1.98412698298579493134e-04, /* 0xBF2A01A0, 0x19C161D5 */
+    S4  =  2.75573137070700676789e-06, /* 0x3EC71DE3, 0x57B1FE7D */
+    S5  = -2.50507602534068634195e-08, /* 0xBE5AE5E6, 0x8A2B9CEB */
+    S6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */
+    //	            tau =  6.283185307179586 // 2π
+    if(x >= pi) return -sin(modulo_double(x,pi))
+    let r : tdouble = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
+    return x + z*x*(S1 + z*r)
+    "};sin π/2"#, 1.0000000002522271); // IT WORKS!!! todo: why imprecision?
 }
+
 #[test] fn test_emit_basics() {
     is!("true", true);
     is!("false", false);
@@ -1578,7 +1578,7 @@ testWasmTypedGlobals());
     let x : wasm_string = reinterpret_cast<wasm_string>("\03abc");
     let y : String = String(x);
     assert!(y == "abc");
-    assert!(y.length == 3);
+    assert!(y.length() == 3);
     is!("“hello1”", Node(String("hello1"))); // Invalid typed array length: 12655
     is!("“hello2”", Node("hello2").setKind(strings)); // Invalid typed array length: 12655
     is!("“hello3”", Node("hello3"));

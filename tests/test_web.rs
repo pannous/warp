@@ -26,7 +26,7 @@ fn testInnerHtml() {
         return;
     }
     let html = parse("<html><bold>test</bold></html>");
-    eq!(html.kind, Kind::strings);
+    eq!(html.kind(), Kind::strings);
     assert!(html.value.string);
     eq!(*html.value.string, "<bold>test</bold>");
     let serialized = html.serialize();
@@ -80,7 +80,7 @@ fn testFetch() {
 #[test]
 fn testCanvas() {
     result = analyze(parse("$canvas"));
-    eq!(result.kind, externref);
+    eq!(result.kind(), externref);
     let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
     print(nod);
 }
@@ -90,20 +90,20 @@ fn testDom() {
     print("testDom");
     preRegisterFunctions();
     result = analyze(parse("getElementById('canvas')"));
-    eq!(result.kind, call);
+    eq!(result.kind(), call);
     result = eval("getElementById('canvas');");
     //	print(typeName(result.kind));
-    //	eq!(result.kind, strings); // why?
-    //	eq!(result.kind, longs); // todo: can't use smart pointers for elusive externref
-    //	eq!(result.kind, bools); // todo: can't use smart pointers for elusive externref
+    //	eq!(result.kind(), strings); // why?
+    //	eq!(result.kind(), longs); // todo: can't use smart pointers for elusive externref
+    //	eq!(result.kind(), bools); // todo: can't use smart pointers for elusive externref
     print(typeName(30));
     print(typeName(9));
-    //	eq!(result.kind, 30);//
-    //	eq!(result.kind,9);//
-    //	eq!(result.kind, (int64) externref); // todo: can't use smart pointers for elusive externref
+    //	eq!(result.kind(), 30);//
+    //	eq!(result.kind(),9);//
+    //	eq!(result.kind(), (int64) externref); // todo: can't use smart pointers for elusive externref
     //	result = eval("document.getElementById('canvas');");
     //	result = analyze(parse("$canvas"));
-    //	eq!(result.kind, (int64) externref);
+    //	eq!(result.kind(), (int64) externref);
 }
 
 #[test]
@@ -118,8 +118,8 @@ fn testDomProperty() {
     is!(result.value.longy, 300);
     //	return;
     result = eval("$canvas.style");
-    eq!(result.kind, strings);
-    //	eq!(result.kind, stringp);
+    eq!(result.kind(), strings);
+    //	eq!(result.kind(), stringp);
     // if (result.value.string);
     // is!(*result.value.string, "dfsa");
     //	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]

@@ -1,5 +1,6 @@
 use wasp::*;
 use wasp::node::Node;
+use wasp::node::Node::{Empty, False, True};
 // use wasp::node::Node::*;
 
 #[test]
@@ -52,3 +53,27 @@ fn test_node_data_eq() {
 //     assert_eq!(n, Node::Data("data".into()));
 // }
 
+#[test]
+fn test_roots() {
+    assert!(Empty == 0);
+    // is!((char *) "'hello'", "hello");
+    is!("hello", "hello"); // todo reference==string really?
+    is!("True", True);
+    is!("False", False);
+    is!("true", True);
+    is!("false", False);
+    is!("yes", True);
+    is!("no", False);
+    //	is!("right", True);
+    //	is!("wrong", False);
+    is!("null", Empty);
+    is!("", Empty);
+    assert!(Empty == 0);
+    is!("0", Empty);
+    is!("1", 1);
+    is!("123", 123);
+    skip!(
+        is!("()", Empty);
+        is!("{}", Empty); // NOP
+    );
+}
