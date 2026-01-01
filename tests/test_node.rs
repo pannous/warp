@@ -10,7 +10,7 @@ fn test_node(){
     let n:Node = Node::keys("key", "value");
     eq!(n.get_key(), "key");
     eq!(n.get_value(), &Node::text("value"));
-    // let n:Node = KeyValue("key".s(), Box::new(Text("value".s())));
+    // let n:Node = Key("key".s(), Box::new(Text("value".s())));
     println!("{:?}", n );
 }
 
@@ -19,6 +19,23 @@ fn test_node_list() {
     let n: Node = Node::ints(vec![1, 2, 3]);
     println!("{:?}", n);
     assert_eq!(n[0], 1);
+}
+
+#[test]
+fn test_node_index_str() {
+    use wasp::node::{Bracket, Grouper};
+    // Test indexing with &str on Block containing Key nodes
+    let block = Node::Block(
+        vec![
+            Node::key("name", Node::text("Alice")),
+            Node::key("age", Node::int(30)),
+        ],
+        Grouper::Object,
+        Bracket::Curly,
+    );
+    assert_eq!(block["name"], Node::text("Alice"));
+    assert_eq!(block["age"], 30);
+    assert_eq!(block["nonexistent"], Node::Empty);
 }
 
 
