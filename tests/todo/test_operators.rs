@@ -151,20 +151,20 @@ fn testMinusMinus() {
 #[test]
 fn testExp() {
     // todo parsed same:
-    assert_is("ℯ^0", 1);
-    assert_is("ℯ^1", e);
-    assert_is("π^0", 1);
-    assert_is("π^1", pi);
-    assert_is("π*√163", 40.1091); // ok
+    is!("ℯ^0", 1);
+    is!("ℯ^1", e);
+    is!("π^0", 1);
+    is!("π^1", pi);
+    is!("π*√163", 40.1091); // ok
     skip!(
 
-        assert_is("π√163", 40.1091);
-        assert_is("(π*√163)==(π√163)", 1);
-        assert_is("π*√163==(π√163)", 1);
-        assert_is("π*√163==π√163", 1);
-        assert_is("exp(0)", 1); // "TODO rewrite as ℯ^x" OK
+        is!("π√163", 40.1091);
+        is!("(π*√163)==(π√163)", 1);
+        is!("π*√163==(π√163)", 1);
+        is!("π*√163==π√163", 1);
+        is!("exp(0)", 1); // "TODO rewrite as ℯ^x" OK
     );
-    assert_is("ℯ^(π*√163)", 262537412640768743.99999999999925);
+    is!("ℯ^(π*√163)", 262537412640768743.99999999999925);
 }
 
 #[test]
@@ -189,16 +189,6 @@ fn testVectorShim() {
     is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
 }
 
-#[test]
-fn testWitExport() {
-//     const char
-    *code = "struct point{x:int y:float}";
-    Node & node = parse(code);
-    bindgen(node);
-}
-
-#[test]
-fn testWitImport() {}
 
 #[test]
 fn testEqualsBinding() {
@@ -227,25 +217,15 @@ fn testHypenVersusMinus() {
     //    Node &node = parse(data);
 }
 
-#[test]
-fn test_sinus_wasp_import() {
-    // using sin.wasp, not sin.wasm
-    // todo: compile and reuse sin.wasm if unmodified
-    is!("use sin;sin π/2", 1);
-    is!("use sin;sin π", 0);
-    is!("use sin;sin 3*π/2", -1);
-    is!("use sin;sin 2π", 0);
-    is!("use sin;sin -π/2", -1);
-}
 
 #[test]
 fn testImport42() {
-    assert_is("import fourty_two", 42);
-    assert_is("include fourty_two", 42);
-    assert_is("require fourty_two", 42);
-    assert_is("import fourty_two;ft*2", 42 * 2);
-    assert_is("include fourty_two;ft*2", 42 * 2);
-    assert_is("require fourty_two;ft*2", 42 * 2);
+    is!("import fourty_two", 42);
+    is!("include fourty_two", 42);
+    is!("require fourty_two", 42);
+    is!("import fourty_two;ft*2", 42 * 2);
+    is!("include fourty_two;ft*2", 42 * 2);
+    is!("require fourty_two;ft*2", 42 * 2);
 }
 
 #[test]
@@ -268,40 +248,6 @@ fn testDivMark() {
     use_polish_notation = false;
 }
 
-#[test]
-fn testDiv() {
-    result = parse("div{ class:'bold' 'text'}");
-    result.print();
-    assert(result.length == 2);
-    assert(result["class"] == "bold");
-    testDivDeep();
-    skip!(
-
-        testDivMark();
-    );
-}
-
-#[test]
-fn testMarkMultiDeep() {
-    // fragile:( problem :  c:{d:'hi'}} becomes c:'hi' because … bug
-
-#[test]
-fn testMarkMulti() {
-//     chars
-    source = "{a:'HIO' b:3}";
-    assert_parses(source);
-    Node & node = result['b'];
-    print(result['a']);
-    print(result['b']);
-    assert(result["b"] == 3);
-    assert(result['b'] == node);
-}
-
-#[test]
-fn testMarkMulti2() {
-    assert_parses("a:'HIO' b:3  d:{}");
-    assert(result["b"] == 3);
-}
 
 #[test]
 fn testErrors() {
@@ -341,46 +287,46 @@ fn testForEach() {
 
 #[test]
 fn testLogic() {
-    assert_is("true or false", true);
-    assert_is("false or true", true);
+    is!("true or false", true);
+    is!("false or true", true);
 
-    assert_is("not true", false);
-    assert_is("not false", true); // fourth test fails regardles of complexity?
+    is!("not true", false);
+    is!("not false", true); // fourth test fails regardles of complexity?
 
-    assert_is("false or false", false);
-    assert_is("true or false", true);
-    assert_is("true or true", true);
+    is!("false or false", false);
+    is!("true or false", true);
+    is!("true or true", true);
     //==============================================================================
     // LOGIC/BOOLEAN TESTS (see angle_tests.h + feature_tests.h);
     //==============================================================================
 
-    assert_is("true and true", true);
-    assert_is("true and false", false);
-    assert_is("false and true", false);
-    assert_is("false and false", false);
+    is!("true and true", true);
+    is!("true and false", false);
+    is!("false and true", false);
+    is!("false and false", false);
 
-    assert_is("false xor true", true);
-    assert_is("true xor false", true);
-    assert_is("false xor false", false);
-    assert_is("true xor true", false);
+    is!("false xor true", true);
+    is!("true xor false", true);
+    is!("false xor false", false);
+    is!("true xor true", false);
 
-    assert_is("¬ 1", 0);
-    assert_is("¬ 0", 1);
+    is!("¬ 1", 0);
+    is!("¬ 0", 1);
 
-    assert_is("0 ⋁ 0", 0);
-    assert_is("0 ⋁ 1", 1);
-    assert_is("1 ⋁ 0", 1);
-    assert_is("1 ⋁ 1", 1);
+    is!("0 ⋁ 0", 0);
+    is!("0 ⋁ 1", 1);
+    is!("1 ⋁ 0", 1);
+    is!("1 ⋁ 1", 1);
 
-    assert_is("0 ⊻ 0", 0);
-    assert_is("0 ⊻ 1", 1);
-    assert_is("1 ⊻ 0", 1);
-    assert_is("1 ⊻ 1", 0);
+    is!("0 ⊻ 0", 0);
+    is!("0 ⊻ 1", 1);
+    is!("1 ⊻ 0", 1);
+    is!("1 ⊻ 1", 0);
 
-    assert_is("1 ∧ 1", 1);
-    assert_is("1 ∧ 0", 0);
-    assert_is("0 ∧ 1", 0);
-    assert_is("0 ∧ 0", 0);
+    is!("1 ∧ 1", 1);
+    is!("1 ∧ 0", 0);
+    is!("0 ∧ 1", 0);
+    is!("0 ∧ 0", 0);
 }
 
 #[test]
@@ -389,98 +335,98 @@ fn testLogicEmptySet() {
         print("todo eval_via_emit testLogicEmptySet …"); // todo
         return;
     }
-    assert_is("not ()", true); // missing args for operator not
-    assert_is("() xor 1", true);
-    assert_is("1 xor ()", true);
-    assert_is("() xor ()", false);
-    assert_is("1 xor 1", false);
-    assert_is("() or 1", true);
-    assert_is("() or ()", false);
-    assert_is("1 or ()", true);
-    assert_is("1 or 1", true);
+    is!("not ()", true); // missing args for operator not
+    is!("() xor 1", true);
+    is!("1 xor ()", true);
+    is!("() xor ()", false);
+    is!("1 xor 1", false);
+    is!("() or 1", true);
+    is!("() or ()", false);
+    is!("1 or ()", true);
+    is!("1 or 1", true);
 
-    assert_is("1 and 1", true);
-    assert_is("1 and ()", false);
-    assert_is("() and 1", false);
-    assert_is("() and ()", false);
+    is!("1 and 1", true);
+    is!("1 and ()", false);
+    is!("() and 1", false);
+    is!("() and ()", false);
 
-    assert_is("not 1", false);
-    assert_is("{} xor 1", true);
-    assert_is("1 xor {}", true);
-    assert_is("{} xor {}", false);
-    assert_is("1 xor 1", false);
-    assert_is("{} or 1", true);
-    assert_is("{} or {}", false);
-    assert_is("1 or {}", true);
-    assert_is("1 or 1", true);
+    is!("not 1", false);
+    is!("{} xor 1", true);
+    is!("1 xor {}", true);
+    is!("{} xor {}", false);
+    is!("1 xor 1", false);
+    is!("{} or 1", true);
+    is!("{} or {}", false);
+    is!("1 or {}", true);
+    is!("1 or 1", true);
 
-    assert_is("1 and 1", true);
-    assert_is("1 and {}", false);
-    assert_is("{} and 1", false);
-    assert_is("{} and {}", false);
+    is!("1 and 1", true);
+    is!("1 and {}", false);
+    is!("{} and 1", false);
+    is!("{} and {}", false);
 
-    assert_is("not {}", true);
-    assert_is("not 1", false);
+    is!("not {}", true);
+    is!("not 1", false);
 
-    assert_is("[] or 1", true);
-    assert_is("[] or []", false);
-    assert_is("1 or []", true);
-    assert_is("1 or 1", true);
+    is!("[] or 1", true);
+    is!("[] or []", false);
+    is!("1 or []", true);
+    is!("1 or 1", true);
 
-    assert_is("1 and 0", false);
-    assert_is("1 and []", false);
-    assert_is("[] and 1", false);
-    assert_is("[] and []", false);
+    is!("1 and 0", false);
+    is!("1 and []", false);
+    is!("[] and 1", false);
+    is!("[] and []", false);
 
-    assert_is("not []", true);
-    assert_is("not 1", false);
-    assert_is("[] xor 1", true);
-    assert_is("1 xor []", true);
-    assert_is("[] xor []", false);
-    assert_is("1 xor 1", false);
+    is!("not []", true);
+    is!("not 1", false);
+    is!("[] xor 1", true);
+    is!("1 xor []", true);
+    is!("[] xor []", false);
+    is!("1 xor 1", false);
 }
 
 #[test]
 fn testLogicOperators() {
-    assert_is("¬ 0", 1);
-    assert_is("¬ 1", 0);
+    is!("¬ 0", 1);
+    is!("¬ 1", 0);
 
-    assert_is("0 ⋁ 0", 0);
-    assert_is("0 ⋁ 1", 1);
-    assert_is("1 ⋁ 0", 1);
-    assert_is("1 ⋁ 1", 1);
+    is!("0 ⋁ 0", 0);
+    is!("0 ⋁ 1", 1);
+    is!("1 ⋁ 0", 1);
+    is!("1 ⋁ 1", 1);
 
-    assert_is("0 ⊻ 0", 0);
-    assert_is("0 ⊻ 1", 1);
-    assert_is("1 ⊻ 0", 1);
-    assert_is("1 ⊻ 1", 0);
+    is!("0 ⊻ 0", 0);
+    is!("0 ⊻ 1", 1);
+    is!("1 ⊻ 0", 1);
+    is!("1 ⊻ 1", 0);
 
-    assert_is("1 ∧ 1", 1);
-    assert_is("1 ∧ 0", 0);
-    assert_is("0 ∧ 1", 0);
-    assert_is("0 ∧ 0", 0);
+    is!("1 ∧ 1", 1);
+    is!("1 ∧ 0", 0);
+    is!("0 ∧ 1", 0);
+    is!("0 ∧ 0", 0);
 }
 
 #[test]
 fn testLogic01() {
-    assert_is("0 or 0", false);
-    assert_is("0 or 1", true);
-    assert_is("1 or 0", true);
-    assert_is("1 or 1", true);
+    is!("0 or 0", false);
+    is!("0 or 1", true);
+    is!("1 or 0", true);
+    is!("1 or 1", true);
 
-    assert_is("1 and 1", true);
-    assert_is("1 and 0", false);
-    assert_is("0 and 1", false);
-    assert_is("0 and 0", false);
+    is!("1 and 1", true);
+    is!("1 and 0", false);
+    is!("0 and 1", false);
+    is!("0 and 0", false);
 
     // eor either or
-    assert_is("0 xor 0", false);
-    assert_is("0 xor 1", true);
-    assert_is("1 xor 0", true);
-    assert_is("1 xor 1", false);
+    is!("0 xor 0", false);
+    is!("0 xor 1", true);
+    is!("1 xor 0", true);
+    is!("1 xor 1", false);
 
-    assert_is("not 0", true);
-    assert_is("not 1", false);
+    is!("not 0", true);
+    is!("not 1", false);
 }
 
 #[test]
@@ -491,138 +437,11 @@ fn testLengthOperator() {
     is!("len('0123')", 4); // todo at compile?
     is!("len([0 1 2 3])", 4);
     is!("size([a b c d])", 4);
-    assert_is("#{a b c}", 3);
-    assert_is("#(a b c)", 3); // todo: groups
+    is!("#{a b c}", 3);
+    is!("#(a b c)", 3); // todo: groups
 }
 
-#[test]
-fn testConcatenationBorderCases() {
-    eq!(Node(1, 0) + Node(3, 0), Node(1, 3, 0)); // ok
-    eq!(Node("1", 0, 0) + Node("2", 0, 0), Node("1", "2", 0));
-    // Border cases: {1}==1;
-    eq!(parse("{1}"), parse("1"));
-    // Todo Edge case a=[] a+=1
-    eq!(Node() + Node("1", 0, 0), Node("1", 0, 0));
-    //  singleton {1}+2==1+2 = 12/3 should be {1,2}
-    eq!(Node("1", 0, 0) + Node("x"s), Node("1", "x", 0));
-}
 
-#[test]
-fn testSort() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-        assert!(list.sort() == listb);
-//         let by_precedence = [](int & a, int & b)
-        { return a * a > b * b; };
-        assert!(list.sort(by_precedence) == listb);
-//         let by_square = [](int & a)
-        {
-            return (float);
-            a * a;
-        };
-        assert!(list.sort(by_square) == listb);
-    }
-}
 
-#[test]
-fn testSort1() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-//         let by_precedence = [](int & a, int & b)
-        { return a * a > b * b; };
-        assert!(list.sort(by_precedence) == listb);
-    }
-}
 
-#[test]
-fn testSort2() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-//         let by_square = [](int & a)
-        {
-            return (float);
-            a * a;
-        };
-        assert!(list.sort(by_square) == listb);
-    }
-}
-
-#[test]
-// fn print(Module &m) {
-//     print("Module");
-//     print("name:");
-    // print(m.name);
-    // print("code:");
-    // print(m.code);
-    // print("import_data:");
-    // print(m.import_data);
-    // print("export_data:");
-    // print(m.export_data);
-    // print("functype_data:");
-    // print(m.functype_data);
-    // print("code_data:");
-    // print(m.code_data);
-    // print("globals_data:");
-    // print(m.globals_data);
-    // print("memory_data:");
-    // print(m.memory_data);
-    // print("table_data:");
-    // print(m.table_data);
-    // print("name_data:");
-    // print(m.name_data);
-    // print("data_segments:");
-    // print(m.data_segments);
-    // print("linking_section:");
-    // print(m.linking_section);
-    // print("relocate_section:");
-    // print(m.relocate_section);
-    // print("funcToTypeMap:");
-    // print(m.funcToTypeMap);
-    // print("custom_sections:");
-    // print(m.custom_sections);
-    // print("type_count:");
-    // print(m.type_count);
-    // print("import_count:");
-    // print(m.import_count);
-    // print("total_func_count:");
-    // print(m.total_func_count);
-    // print("table_count:");
-    // print(m.table_count);
-    // print("memory_count:");
-    // print(m.memory_count);
-    // print("export_count:");
-    // print(m.export_count);
-    // print("global_count:");
-    // print(m.global_count);
-    // print("code_count:");
-    // print(m.code_count);
-    // print("data_segments_count:");
-    // print(m.data_segments_count);
-    // print("start_index:");
-    // print(m.start_index);
-    // print("globals); List<Global> WHY NOT??");
-    // print("m.functions.size()");
-    // print(m.functions.size());
-    // print("m.funcTypes.size()");
-    // print(m.funcTypes.size());
-    assert!(m.funcTypes.size() == m.type_count);
-
-    // print("m.signatures.size()");
-    // print(m.signatures.size());
-    // print("m.export_names");
-    // print(m.export_names); // none!?
-    // print("import_names:");
-    // print(m.import_names);
-// }
-
-#[test]
-fn test_const_String_comparison_bug() {
-    // fixed in 8268c182 String == chars ≠> chars == chars  no more implicit cast
-//     const String
-    &library_name = "raylib";
-    assert!(library_name == "raylib");
-}
 

@@ -1,6 +1,7 @@
-use crate::node::{Node, Grouper, Bracket, Meta};
-use crate::node::Node::Error;
 use crate::extensions::numbers::Number;
+use crate::node::Node::{Empty, Error};
+use crate::node::{Bracket, Grouper, Meta, Node};
+use log::warn;
 use std::fs;
 
 /// Read and parse a WASP file
@@ -11,37 +12,67 @@ pub fn read(path: &str) -> Node {
     }
 }
 
+pub fn parse(input: &str) -> Node {
+    WaspParser::parse(input)
+}
+
 pub struct WaspParser {
     input: String,
     pos: usize,
     line: usize,
     column: usize,
+    char: char,
     pub current_line: String,
 }
 
 impl WaspParser {
     pub fn new(input: String) -> Self {
         let current_line = input.lines().next().unwrap_or("").to_string();
-        WaspParser { input, pos: 0, line: 1, column: 1, current_line }
+        WaspParser {
+            input,
+            pos: 0,
+            line: 1,
+            column: 1,
+            char: '\0',
+            current_line,
+        }
     }
 
     pub fn parse(input: &str) -> Node {
         let mut parser = WaspParser::new(input.to_string());
-        let mut values = Vec::new();
+        let mut current_expression = Vec::new();
+        let mut root_nodes = Vec::new();
 
         parser.skip_whitespace_and_comments();
-        while parser.current_char().is_some() {
-            values.push(parser.parse_value());
+        let char_count = parser.input.chars().count(); // for unicode correctness
+        let _len = parser.input.len();
+        while parser.pos < char_count {
+            let c = parser.current_char();
+            let node = parser.parse_value();
+            // if node != Node::Empty { // Todo: Skip empty nodes only at END, if at all!
+                // [lame:'Joe' last:ø] meaningful nodes!
+                current_expression.push(node);
+            // }
             parser.skip_whitespace_and_comments();
+            if c == Some(';') {
+                root_nodes.push(Node::list(current_expression));
+                current_expression = Vec::new();
+                parser.advance()
+            }
+        }
+        if root_nodes.is_empty() {
+            root_nodes = current_expression
+        } else if !current_expression.is_empty() {
+            root_nodes.push(Node::list(current_expression));
         }
 
         // If only one value, return it directly for backward compatibility
-        if values.len() == 1 {
-            values.into_iter().next().unwrap()
-        } else if values.is_empty() {
+        if root_nodes.len() == 1 {
+            root_nodes[0].clone()
+        } else if root_nodes.is_empty() {
             Node::Empty
         } else {
-            Node::List(values)
+            Node::List(root_nodes)
         }
     }
 
@@ -55,6 +86,7 @@ impl WaspParser {
 
     fn advance(&mut self) {
         if let Some(ch) = self.current_char() {
+            self.char = ch; // debug
             if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
@@ -89,6 +121,7 @@ impl WaspParser {
         self.pos == 0 || self.prev_char().map_or(false, |ch| ch.is_whitespace())
     }
 
+
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char() {
             if ch.is_whitespace() {
@@ -100,10 +133,10 @@ impl WaspParser {
     }
 
     fn skip_whitespace_and_comments(&mut self) -> Option<String> {
+
         let mut comment = None;
         loop {
             self.skip_whitespace();
-
             // Check for # line comment (shell-style, shebang)
             // Only treat # as comment if at line start (to allow list#index later)
             if self.current_char() == Some('#') && self.is_at_line_start() {
@@ -138,6 +171,10 @@ impl WaspParser {
                 continue;
             }
 
+            if self.pos >= self.input.len() {
+                return None;
+            }
+
             // Check for /* block comment */
             if self.current_char() == Some('/') && self.peek_char(1) == Some('*') {
                 self.advance(); // skip /
@@ -161,22 +198,45 @@ impl WaspParser {
         comment
     }
 
+    fn is_at_line_end(&self) -> bool {
+        self.column == 0 && self.current_char() == Some('\n') || self.pos >= self.input.len()
+    }
+
     fn parse_value(&mut self) -> Node {
         let comment = self.skip_whitespace_and_comments();
 
         // Capture position before parsing
         let (line, column) = self.get_position();
-
-        let mut node = match self.current_char() {
-            Some('"') | Some('\'') => self.parse_string(),
-            Some('[') => self.parse_list(),
-            Some('{') => self.parse_block(),
-            Some(ch) if ch.is_ascii_digit() || ch == '-' => self.parse_number(),
-            Some(ch) if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
-            Some(ch) => Error(format!("Unexpected character: {}", ch)),
-            None => Error("Unexpected end of input".to_string()),
+        if self.is_at_line_end() {
+            return Empty
         };
-
+        let mut node = match self.current_char() {
+            None => {
+                self.advance();
+                Empty // end of input ≠ ø !
+            },
+            Some(ch) => {
+                match ch {
+                    '"' | '\'' | '“' | '‘' | '«' => self.parse_string(),
+                    '[' => self.parse_list(),
+                    '{' => self.parse_block(),
+                    // assert!(!'三'.is_numeric());
+                    _ if ch.is_numeric() || ch == '-' => self.parse_number(),
+                    _ if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
+                    // _ if ch.is_ascii_graphic()
+                    // _ if ch.is_control() => self.
+                    _ => {
+                        // todo implement the rest like operators, etc.
+                        warn!("Unexpected character '{}' at line {}, column {}", ch, line, column);
+                        self.advance();
+                        Error(format!("Unexpected character '{}'", ch))
+                    }
+                }
+            }
+        };
+        if node == Node::Empty {
+            return node;
+        }
         // Attach metadata with position and comment
         let mut meta = Meta::with_position(line, column);
         if let Some(c) = comment {
@@ -231,13 +291,15 @@ impl WaspParser {
         let mut num_str = String::new();
         let mut has_dot = false;
 
+        // todo edge case: leading plus
         if self.current_char() == Some('-') {
             num_str.push('-');
             self.advance();
         }
 
         while let Some(ch) = self.current_char() {
-            if ch.is_ascii_digit() {
+            // assert!(!'三'.is_numeric());
+            if ch.is_numeric() {
                 num_str.push(ch);
                 self.advance();
             } else if ch == '.' && !has_dot {
@@ -250,11 +312,13 @@ impl WaspParser {
         }
 
         if has_dot {
-            num_str.parse::<f64>()
+            num_str
+                .parse::<f64>()
                 .map(Node::float)
                 .unwrap_or_else(|_| Node::Error(format!("Invalid float: {}", num_str)))
         } else {
-            num_str.parse::<i64>()
+            num_str
+                .parse::<i64>()
                 .map(Node::int)
                 .unwrap_or_else(|_| Node::Error(format!("Invalid int: {}", num_str)))
         }

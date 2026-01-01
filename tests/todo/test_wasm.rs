@@ -1,11 +1,3 @@
-
-
-extern int tests_executed;
-#[cfg(feature = "INCLUDE_MERGER")]{
-
-}
-#import "../source/asserts.h"
-
 #[test] fn testRange() {
     is!("0..3", Node(0, 1, 2));
     is!("0...3", Node(0, 1, 2, 3));
@@ -21,10 +13,10 @@ extern int tests_executed;
 }
 #[cfg(feature = "INCLUDE_MERGER")]{
     return; // LOST files: main_global.wasm, lib_global.wasm :(
-    Module &main = loadModule("test/merge/main_global.wasm");
-    Module &lib = loadModule("test/merge/lib_global.wasm");
-    Code merged = merge_binaries(main.code, lib.code);
-    smart_pointer_64 i = merged.save().run();
+    let main : Module = loadModule("test/merge/main_global.wasm");
+    let lib : Module = loadModule("test/merge/lib_global.wasm");
+    let merged : Code = merge_binaries(main.code, lib.code);
+    let i : smart_pointer_64 = merged.save().run();
     eq!(i, 42);
 }
 }
@@ -35,23 +27,23 @@ extern int tests_executed;
     return;
 }
 #[cfg(feature = "INCLUDE_MERGER")]{
-    Module &main = loadModule("test/merge/main_memory.wasm");
-    Module &lib = loadModule("test/merge/lib_memory.wasm");
-    Code merged = merge_binaries(main.code, lib.code);
-    int i = merged.save().run();
+    let main : Module = loadModule("test/merge/main_memory.wasm");
+    let lib : Module = loadModule("test/merge/lib_memory.wasm");
+    let merged : Code = merge_binaries(main.code, lib.code);
+    let i : int = merged.save().run();
     eq!(i, 42);
 }
 }
 #[test] fn testMergeRuntime() {
     return; // LOST file: main_memory.wasm (time machine?);
 #[cfg(feature = "INCLUDE_MERGER")]{
-    Module &runtime = loadModule("wasp-runtime.wasm");
-    Module &main = loadModule("test/merge/main_memory.wasm"); // LOST :( time machine?
-    // Module &main = loadModule("test/merge/main_global.wasm");
+    let runtime : Module = loadModule("wasp-runtime.wasm");
+    let main : Module = loadModule("test/merge/main_memory.wasm"); // LOST :( time machine?
+    // let main : Module = loadModule("test/merge/main_global.wasm");
     main.code.needs_relocate = true;
     runtime.code.needs_relocate = false;
-    Code merged = merge_binaries(runtime.code, main.code);
-    int i = merged.save().run();
+    let merged : Code = merge_binaries(runtime.code, main.code);
+    let i : int = merged.save().run();
     eq!(i, 42);
 }
 }
@@ -62,23 +54,23 @@ extern int tests_executed;
     return;
 }
 #[cfg(feature = "INCLUDE_MERGER")]{
-    Module &main = loadModule("test/merge/main2.wasm");
-    Module &lib = loadModule("test/merge/lib4.wasm");
-    Code merged = merge_binaries(main.code, lib.code);
-    //	Code merged = merge_binaries(lib.code,main.code);
-    int i = merged.save().run();
+    let main : Module = loadModule("test/merge/main2.wasm");
+    let lib : Module = loadModule("test/merge/lib4.wasm");
+    let merged : Code = merge_binaries(main.code, lib.code);
+    //	let merged : Code = merge_binaries(lib.code,main.code);
+    let i : int = merged.save().run();
     eq!(i, 42);
 }
 }
 
-#[test] fn testWasmStuff();
+// #[test] fn testWasmStuff();
 #[test] fn testEmitter() {
 #[cfg(not(feature = "RUNTIME_ONLY"))]{
     clearAnalyzerContext();
     clearEmitterContext();
-    Node node = Node(42);
-    Code &code = emit(node, "42");
-    int resulti = code.run();
+    let node : Node = Node(42);
+    let code : Code = emit(node, "42");
+    let resulti : int = code.run();
     assert!(resulti == 42);
 }
 }
@@ -102,7 +94,7 @@ extern int tests_executed;
 
     is!("global x=1;x=7;x+1", 8);
 
-    // only the most primitive expressions are allowed in global initializers => move to main!
+    // only the most primitive expressions are allowed in let initializers : global => move to main!
     // test_wasm_todos
     // is!("global x=1+π", 1 + pi);
     is!("global x=1+2", 3);
@@ -127,7 +119,7 @@ extern int tests_executed;
 }
 
 #[test] fn testWasmFunctionDefiniton() {
-    //	assert_is("add1 x:=x+1;add1 3", (int64) 4);
+    //	eq!("add1 x:=x+1;add1 3", (int64) 4);
     is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
     is!("fac:= if it<=0 : 1 else it * fac it-1; fac(5)", 5 * 4 * 3 * 2 * 1);
 
@@ -189,7 +181,7 @@ extern int tests_executed;
     is!("id(3*42) > id 2*3", 1);
     is!("id 123", (int64) 123);
     is!("id (3+3)", (int64) 6);
-    assert_is("id 3+3", 6);
+    eq!("id 3+3", 6);
     is!("3 + id 3+3", (int64) 9);
 }
 
@@ -203,9 +195,9 @@ extern int tests_executed;
     print("OK");
     //	printf("%llx\n", -2000000000000ll);
     //	printf("%llx", -4615739258092021350ll);
-    print("a %d c"s % 3);
-    print("a %f c"s % 3.1);
-    print("a %x c"s % 15);
+    print("a %d c".s() % 3);
+    print("a %f c".s() % 3.1);
+    print("a %x c".s() % 15);
     printf("a %d c\n", 3);
     printf("a %f c\n", 3.1);
     printf("a %x c\n", 15);
@@ -214,7 +206,7 @@ extern int tests_executed;
 #[test] fn testMathPrimitives() {
     skip!(
 
-        is!(("42.1"), 42.1) // todo: return &Node(42.1) or print value to stdout
+        is!(("42.1"), 42.1) // todo: let Node : return(42.1) or print value to stdout
         is!(("-42.1"), 42.1);
     );
     is!(("42"), 42);
@@ -224,7 +216,7 @@ extern int tests_executed;
         is!(("2000000000"), 2000000000) // todo stupid smart pointers
         is!(("-2000000000"), -2000000000);
     );
-    is!(("2000000000000"), (int64) 2000000000000) // let int64
+    is!(("2000000000000"), (int64) 2000000000000); // let int64
     is!(("-2000000000000"), (int64) -2000000000000L);
 
     is!("x=3;x*=3", 9);
@@ -235,7 +227,7 @@ extern int tests_executed;
     is!(("x=15;x>=14"), 1);
     is!("i=1.0;i", 1.0); // works first time but not later in code :(
     is!("i=0.0;i", 0.0); //
-    assert_is("3*-1", -3);
+    eq!("3*-1", -3);
     is!("3*-1", -3);
 
     skip!(
@@ -247,7 +239,7 @@ extern int tests_executed;
 }
 
 #[test] fn testFloatOperators() {
-    assert_is(("42.0/2.0"), 21);
+    eq!(("42.0/2.0"), 21);
     is!(("3.0+3.0*3.0"), 12);
     is!(("42.0/2.0"), 21);
     is!(("42.0*2.0"), 84);
@@ -274,7 +266,7 @@ extern int tests_executed;
     is!(("3.0+3.0*3.0>3.0+3.0+3.0"), true);
     is!(("3.0+3.0*3.0<3.0*3.0*3.0"), true);
     is!(("3.0+3.0*3.0<3.0+3.0+3.0"), false);
-    is!(("3.0+3.0*3.0>3.0*3.0*3.0"), false) // 0x1.8p+1 == 3.0
+    is!(("3.0+3.0*3.0>3.0*3.0*3.0"), false); // 0x1.8p+1 == 3.0
     is!(("3.0+3.0+3.0<3.0+3.0*3.0"), true);
     is!(("3.0*3.0*3.0>3.0+3.0*3.0"), true);
 }
@@ -333,8 +325,8 @@ extern int tests_executed;
     is!("‖-3‖", 3);
     is!("-‖-3‖", -3);
     is!("‖-3‖+1", 4);
-    assert_is(("7%5"), 2);
-    assert_is(("42/2"), 21);
+    eq!(("7%5"), 2);
+    eq!(("42/2"), 21);
     //			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is not a I32, in function at index 0
     is!(("42/2"), 21);
     is!(("42*2"), 84);
@@ -348,7 +340,7 @@ extern int tests_executed;
     is!(("3+3+3<3+3*3"), true);
     is!(("3*3*3>3+3*3"), true);
     is!("i=3;i*-1", -3);
-    assert_is("3*-1", -3);
+    eq!("3*-1", -3);
     is!("3*-1", -3);
     is!("-√9", -3);
 
@@ -356,17 +348,20 @@ extern int tests_executed;
     is!("i=3.71;.3+i", 4.01);
 #[cfg(feature = "WASM")]{
     is!("i=3.70001;.3+i", 4.0000100000000005); // lol todo?
-#else
+}
+    #[cfg(not(feature = "WASM"))]{
     is!("i=3.70001;.3+i", 4.00001);
 }
-    assert_is("4-1", 3); //
+    eq!("4-1", 3); //
 
     is!("i=3;i++", 4);
     is!("- √9", -3);
     is!("i=-9;-i", 9);
 #[cfg(feature = "WASM")]{
     is!("√ π ²", 3.141592653589793); // fu ;);
-#else
+    }
+    #[cfg(not(feature = "WASM"))]{
+
     is!("√ π ²", 3.1415926535896688);
 }
     is!(("3²"), 9);
@@ -390,10 +385,11 @@ extern int tests_executed;
     is!("√3^0", 1.0);
 #[cfg(feature = "WASM")]{
     is!("√3^2", 2.9999999999999996); // bad sqrt!?
-    assert_is("π**2", (double) 9.869604401089358);
-#else
+    eq!("π**2", (double) 9.869604401089358);
+}#[cfg(not(feature = "WASM"))]{
+}#[cfg(not(feature = "WASM"))]{
     is!("√3^2", 3);
-    assert_is("π**2", (double) 9.869604401089358);
+    eq!("π**2", (double) 9.869604401089358);
 }
 }
 
@@ -508,7 +504,7 @@ extern int tests_executed;
     is!(("12≤2"), false);
     is!(("112≤24"), false);
 #[cfg(not(feature = "WASM"))]{
-    is!(("452==452"), 1) // forces runtime eq
+    is!(("452==452"), 1); // forces runtime eq
     is!(("13==14"), False);
 }
 }
@@ -533,7 +529,7 @@ extern int tests_executed;
     is!("null", (int64) 0);
     is!("null", (int64) nullptr);
     is!("ø", false);
-    is!("nil", NIL);
+    is!("nil", Empty);
 }
 #[test] fn testWasmVariables0() {
     //	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
@@ -558,7 +554,7 @@ extern int tests_executed;
     is!("8.33333333332248946124e-03", 0); // todo in wasm
 #[cfg(feature = "WASM")]{
     is!("8.33333333332248946124e+01", 83.33333333322489);
-#else
+}#[cfg(not(feature = "WASM"))]{
     is!("8.33333333332248946124e+01", 83.3333333332248946124);
 }
 
@@ -756,15 +752,15 @@ extern int tests_executed;
     if (!MAX_MEM) {
         error("NO MEMORY");
     }
-    printf("MEMORY start at %lld\n", (int64) memory);
-    printf("current start at %lld\n", (int64) heap_end);
+    printf!("MEMORY start at %lld\n", (int64) memory);
+    printf!("current start at %lld\n", (int64) heap_end);
     //	Bus error: 10  if i > MEMORY_SIZE
     // Fails at 100000, works at 100001 WHERE IS THIS SET?
     //	int start=125608;
-    int start = __heap_base;
-    int64 end = 0x1000000; // MAX_MEM / 4; // /4 because 1 int = 4 bytes
-    for (int i = start; i < end; ++i) {
-        int tmp = memory[i];
+    let start : int = __heap_base;
+    let end : int64 = 0x1000000; // MAX_MEM / 4; // /4 because let int : 1 = 4 bytes
+    for i in start..end {
+        let tmp : int = memory[i];
         //		memory[i] = memory[i]+1;
         //		memory[i] = memory[i]-1;
         memory[i] = i;
@@ -799,11 +795,11 @@ extern int tests_executed;
 }
 
 // ⚠️ CANNOT USE is!
- in WASM! ONLY via testRun();
+//  in WASM! ONLY via testRun();
 #[test] fn testOldRandomBugs() {
     // ≈ testRecentRandomBugs();
     // some might break due some testBadInWasm() BEFORE!
-    is!("-42", -42) // OK!?!
+    is!("-42", -42); // OK!?!
     skip!(
 
         is!("x:=41;if x>1 then 2 else 3", 2);
@@ -816,47 +812,44 @@ extern int tests_executed;
     );
 
     //		testGraphQlQuery();
-    //	assert_is("x", Node(false));// passes now but not later!!
-    //	assert_is("x", false);// passes now but not later!!
-    //	assert_is("y", false);
-    //	assert_is("x", false);
+    //	eq!("x", Node(false));// passes now but not later!!
+    //	eq!("x", false);// passes now but not later!!
+    //	eq!("y", false);
+    //	eq!("x", false);
 
     //0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , 55 , 89 , 144
 
     //	exit(1);
-    //	const Node &node1 = parse("x:40;x++;x+1");
+    //	const let node1 : Node = parse("x:40;x++;x+1");
     //	assert!(node.length==3);
     //	assert!(node[0]["x"]==40);
     //	exit(1);
 }
 
-//#[test] fn testRefactor(){ 
-//	wabt::Module *module = readWasm("t.wasm");
+//#[test] fn testRefactor(){
+//	wabt::let module : Module = readWasm("t.wasm");
 //	refactor_wasm(module, "__original_main", "_start");
 //	module = readWasm("out.wasm");
 //	assert!(module->funcs.front()->name == "_start");
 //}
 
-#[cfg(feature = "WABT_MERGE")]{
-//
-}
 
 #[test] fn testMergeWabt() {
 #[cfg(feature = "WABT_MERGE")]{
-    merge_files({"test/merge/main.wasm", "test/merge/lib.wasm"});
+    // merge_files({"test/merge/main.wasm", "test/merge/lib.wasm"});
 }
 }
 #[test] fn testMergeWabtByHand() {
 #[cfg(feature = "WABT_MERGE")]{ // ?? ;);
-    merge_files({"./playground/test-lld-wasm/main.wasm", "./playground/test-lld-wasm/lib.wasm"});
-    wabt::Module *main = readWasm("test-lld-wasm/main.wasm");
-    wabt::Module *module = readWasm("test-lld-wasm/lib.wasm");
+    // merge_files({"./playground/test-lld-wasm/main.wasm", "./playground/test-lld-wasm/lib.wasm"});
+    let main : wabt::Module = readWasm("test-lld-wasm/main.wasm");
+    let module : wabt::Module = readWasm("test-lld-wasm/lib.wasm");
     refactor_wasm(module, "b", "neu");
     remove_function(module, "f");
     Module *merged = merge_wasm2(main, module);
     save_wasm(merged);
-    int ok = run_wasm(merged);
-    int ok = run_wasm("a.wasm");
+    let ok : int = run_wasm(merged);
+    let ok : int = run_wasm("a.wasm");
     assert!(ok == 42);
 }
 }
@@ -1002,9 +995,9 @@ extern int tests_executed;
     is!("x={1 2 3}; x#3=4;x#3", 4);
 #[cfg(feature = "WASM")]{
     is!("puts('ok');", -1); // todo: fix puts return
-#elif WASMEDGE
+}#[cfg(feature = "WASMEDGE")]{
     is!("puts('ok');", 8);
-#else
+}#[cfg(not(feature = "WASM"))]{
     is!("puts('ok');", 0);
 }
     is!("puts('ok');(1 4 3)#2", 4);
@@ -1023,14 +1016,14 @@ extern int tests_executed;
 
         is!("i=3;k='αβγδε';k#i='Γ';k#i", u'Γ'); // todo setCharAt
         is!("[1 4 3]#2", 4); // exactly one op expected in emitIndexPattern
-        assert_is("[1 2 3]#2", 2); // assert! node based (non-primitive) interpretation first
+        eq!("[1 2 3]#2", 2); // assert! node based (non-primitive) interpretation first
         assert_throws("(1 4 3)#4"); // todo THROW!
         // todo patterns as lists
     );
-    //	Node empty_array = parse("pixel=[]");
+    //	let empty_array : Node = parse("pixel=[]");
     //	assert!(empty_array.kind==patterns);
     //
-    //	Node construct = analyze(parse("pixel=[]"));
+    //	let construct : Node = analyze(parse("pixel=[]"));
     //	assert!(construct["rhs"].kind == patterns or construct.length==1 and construct.first().kind==patterns);
     //	emit("pixel=[]");
     //	exit(0);
@@ -1053,13 +1046,10 @@ extern int tests_executed;
     );
 }
 
-bool testRecentRandomBugsAgain = true;
-
-// ⚠️ CANNOT USE is!
- in WASM! ONLY via #[test] fn testRun();
+// ⚠️ CANNOT USE is! in WASM! ONLY via #[test] fn testRun();
 #[test] fn testRecentRandomBugs() {
     // fixed now thank god
-    if (!testRecentRandomBugsAgain)return;
+    if (!testRecentRandomBugsAgain){return};
     testRecentRandomBugsAgain = false;
     is!("-42", -42);
     is!("‖3‖-1", 2);
@@ -1071,7 +1061,7 @@ bool testRecentRandomBugsAgain = true;
 }
 }
     //			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is not a I32, in function at index 0
-    assert_is(("42/2"), 21) // in WEBAPP
+    eq!(("42/2"), 21); // in WEBAPP
 
     is!(("42.1"), 42.1);
     // main returns int, should be pointer to value! result & array_header_32 => smart pointer!
@@ -1104,7 +1094,7 @@ bool testRecentRandomBugsAgain = true;
     //    is!("puts('ok');", 0);
     assert_parsesx("{ç:☺}");
     assert(result["ç"] == "☺");
-#[cfg(not(feature = "WASMTIME"))]{ and not LINUX // todo why
+#[cfg(not(feature = "WASMTIME"))]{ // and not LINUX // todo why
     assert_run("x=123;x + 4 is 127", true);
     is!("n=3;2ⁿ", 8);
     //	function attempted to return an incompatible value WHAT DO YOU MEAN!?
@@ -1133,7 +1123,7 @@ bool testRecentRandomBugsAgain = true;
     is!("int i=π*1000000", 3141592);
 #[cfg(feature = "WASM")]{
     is!("π*1000000.", 3141592.653589793);
-#else
+}#[cfg(not(feature = "WASM"))]{
     is!("π*1000000.", 3141592.6535897);
 }
     is!("i=-9;-i", 9);
@@ -1143,7 +1133,7 @@ bool testRecentRandomBugsAgain = true;
     is!("√9", 3);
     //	is!("√-9 is -3i", -3);// if «use complex numbers»
     is!(".1", .1);
-#[cfg(not(feature = "WASMTIME"))]{ and not LINUX // todo why
+#[cfg(not(feature = "WASMTIME"))]{ // and not LINUX // todo why
     skip!(
 
         is!("i=-9;√-i", 3);
@@ -1233,7 +1223,7 @@ testWasmTypedGlobals());
     is!(("suffix operator ³ := it*it*it; .5³"), 1 / 8);
     is!(("suffix ³ := it*it*it; 3³"), 27); // define inside wasp!
 
-    //	is!(("alias to the third = ³"),1);
+    //	is!(("alias to let third : the = ³"),1);
     //	is!(("3⁴"),9*9);
 }
 
@@ -1303,7 +1293,7 @@ testWasmTypedGlobals());
 
     is!("1", 1);
     is!("-2000000000000", (int64) -2000000000000l);
-    is!("2000000000000", (int64) 2000000000000l) // let int64
+    is!("2000000000000", (int64) 2000000000000l); // let int64
     is!("42.0/2.0", 21);
     is!("42.0/2.0", 21.);
     is!("- √9", -3);
@@ -1313,7 +1303,7 @@ testWasmTypedGlobals());
         is!("42/4", 10.5);
     );
 
-    assert_is(("42.0/2.0"), 21);
+    eq!(("42.0/2.0"), 21);
 
     is!(("-1.1"), -1.1);
     is!("'OK'", "OK");
@@ -1328,7 +1318,7 @@ testWasmTypedGlobals());
 
 #[test] fn testAssertRun() {
     // all these have been tested with is!
- before. now assert! that it works with runtime
+ // before. now assert! that it works with runtime
     testWasmRuntimeExtension();
 
     assert_run("42", 42);
@@ -1350,7 +1340,7 @@ testWasmTypedGlobals());
 
 #[test] fn testLogarithm2() {
     //	float ℯ = 2.7182818284590;
-    Function &function = functions["log10"];
+    let function : Function = functions["log10"];
     assert!(function.is_import);
     is!("use math; log10(100)", 2.);
     is!("use math; 10⌞100", 2.); // read 10'er Logarithm
@@ -1397,7 +1387,8 @@ testWasmTypedGlobals());
     is!("for i in 1 to 5 : print i", 5);
     is!("for i in 1 to 5\n  print i", 5);
     // is!("for i in 1 to 5\n  print i\ni", 6);
-#else // todo : why puti not in WASM??
+}
+#[cfg(not(feature = "WASM"))]{// # else // todo : why puti not in WASM??
     // is!("for i in 1 to 5 : {put(i)};i", 6);
     is!("for i in 1 to 5 : {puti(i)}", 5);
     is!("for i in 1 to 5 : {puti i};i", 6); // after loop :(
@@ -1463,15 +1454,15 @@ testWasmTypedGlobals());
 }
 
 #[test] fn testHostDownload() {
-#[cfg(not(feature = ""))]{WASMEDGE
+#[cfg(not(feature = "WASMEDGE"))]{
     is!("download http://pannous.com/files/test", "test 2 5 3 7");
 }
 }
 #[test] fn testSinus2() {
     is!(r#"double sin(double x){
     x = modulo_double(x,tau);
-    double z = x*x
-    double w = z*z
+    let z : double = x*x
+    let w : double = z*z
     S1  = -1.66666666666666324348e-01,
     S2  =  8.33333333332248946124e-03,
     S3  = -1.98412698298579493134e-04,
@@ -1479,7 +1470,7 @@ testWasmTypedGlobals());
     S5  = -2.50507602534068634195e-08,
     S6  =  1.58969099521155010221e-10
     if(x >= pi) return -sin(modulo_double(x,pi));
-    double r = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6);
+    let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6);
     return x + z*x*(S1 + z*r);
 }; sin π/2"#, 1); // IT WORKS!!!
 }
@@ -1488,8 +1479,8 @@ testWasmTypedGlobals());
     //k=78; fucks it up!!
     is!("double sin(double x){\n"
                 "\tx = modulo_double(x,tau)\n"
-                "\tdouble z = x*x\n"
-                "\tdouble w = z*z\n"
+                "\let z : tdouble = x*x\n"
+                "\let w : tdouble = z*z\n"
                 "\tS1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */\n"
                 "\tS2  =  8.33333333332248946124e-03, /* 0x3F811111, 0x1110F8A6 */\n"
                 "\tS3  = -1.98412698298579493134e-04, /* 0xBF2A01A0, 0x19C161D5 */\n"
@@ -1498,7 +1489,7 @@ testWasmTypedGlobals());
                 "\tS6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */\n"
                 //	            "\ttau =  6.283185307179586 // 2π\n"
                 "\tif(x >= pi) return -sin(modulo_double(x,pi))\n"
-                "\tdouble r = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)\n"
+                "\let r : tdouble = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)\n"
                 "\treturn x + z*x*(S1 + z*r)\n"
                 "};sin π/2", 1.0000000002522271); // IT WORKS!!! todo: why imprecision?
     //    exit(1);
@@ -1523,7 +1514,7 @@ testWasmTypedGlobals());
     );
 }
 #[test] fn testMathExtra() {
-    assert_is("15÷5", 3);
+    eq!("15÷5", 3);
     is!("15÷5", 3);
     is!("3⋅5", 15);
     is!("3×5", 15);
@@ -1533,27 +1524,27 @@ testWasmTypedGlobals());
         is!("√3**2", 3);
         is!("3^3", 27);
         is!("√3^2", 3); // in test_squares
-        assert_is("one plus two times three", 7);
+        eq!("one plus two times three", 7);
     );
 }
 
 #[test] fn testRoot() {
     skip!(
 
-        assert_is("40+√4", 42, 0);
-        assert_is("√4", 2);
-        assert_is("√4+40", 42);
-        assert_is("40 + √4", 42);
+        eq!("40+√4", 42, 0);
+        eq!("√4", 2);
+        eq!("√4+40", 42);
+        eq!("40 + √4", 42);
     ); // todo tokenized as +√
 }
 
 #[test] fn testRootFloat() {
     //	skip!(
   // include <cmath> causes problems, so skip
-    assert_is("√42.0 * √42.0", 42.);
-    assert_is("√42 * √42.0", 42.);
-    assert_is("√42.0*√42", 42);
-    assert_is("√42*√42", 42); // round AFTER! ok with f64! f32 result 41.99999 => 41
+    eq!("√42.0 * √42.0", 42.);
+    eq!("√42 * √42.0", 42.);
+    eq!("√42.0*√42", 42);
+    eq!("√42*√42", 42); // round AFTER! ok with f64! f32 result 41.99999 => 41
 }
 #[test] fn testNodeDataBinaryReconstruction() {
     eq!(parse("y:{x:2 z:3}").serialize(), "y{x:2 z:3}"); // todo y:{} vs y{}
@@ -1576,8 +1567,8 @@ testWasmTypedGlobals());
     is!("\"i\"", "i");
     is!("'j'", Node("j"));
 #[cfg(not(feature = "WASM"))]{ // todo
-    wasm_string x = reinterpret_cast<wasm_string>("\03abc");
-    String y = String(x);
+    let x : wasm_string = reinterpret_cast<wasm_string>("\03abc");
+    let y : String = String(x);
     assert!(y == "abc");
     assert!(y.length == 3);
     is!("“hello1”", Node(String("hello1"))); // Invalid typed array length: 12655
@@ -1592,7 +1583,7 @@ testWasmTypedGlobals());
     testStringIndicesWasm();
     is!("(2+1)==(4-1)", true); // suddenly passes !? not with above line commented out BUG <<<
     is!("(3+1)==(5-1)", true);
-    assert_is("(2+1)==(4-1)", true);
+    eq!("(2+1)==(4-1)", true);
     is!("3==2+1", 1);
     is!("3 + √9", (int64) 6);
     is!("puti 3", (int64) 3);
@@ -1610,7 +1601,7 @@ testWasmTypedGlobals());
 }
 //testWasmControlFlow
 
-#[test] fn testBadInWasm();
+// #[test] fn testBadInWasm();
 
 // SIMILAR AS:
 #[test] fn testTodoBrowser() {
@@ -1624,7 +1615,7 @@ testWasmTypedGlobals());
     );
 }
 // ⚠️ ALL tests containing is!
- must go here! testCurrent() only for basics
+//  must go here! testCurrent() only for basics
 #[test] fn testAllWasm() {
     // called by testRun() OR synchronously!
     is!("42", 42);
@@ -1646,7 +1637,7 @@ testWasmTypedGlobals());
         testStruct(); // TODO get pointer of node on stack
         testStruct2();
     );
-#[cfg(feature = "WEBAPP")]{ or MY_WASM
+#[cfg(feature = "WEBAPP")]{ // or MY_WASM
     testHostDownload();
 }
     // Test that IMPLICITLY use runtime /  assert_run
@@ -1732,7 +1723,7 @@ testWasmTypedGlobals());
     // TRUE TESTS:
     testRecentRandomBugs();
     // testOldRandomBugs();
-    assert_is("١٢٣", 123); //  numerals are left-to-right (LTR) even in Arabic!
+    eq!("١٢٣", 123); //  numerals are left-to-right (LTR) even in Arabic!
 
     skip!(
 

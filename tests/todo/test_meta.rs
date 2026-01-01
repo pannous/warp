@@ -1,4 +1,3 @@
-
 // Metadata tests
 // Migrated from tests_*.rs files
 
@@ -62,7 +61,7 @@ fn testMetaAt2() {
 
 #[test]
 fn testParentContext() {
-//     chars
+    //     chars
     source = "{a:'HIO' d:{} b:3 c:ø}";
     assert_parses(source);
     result.print();
@@ -82,24 +81,25 @@ fn testParentContext() {
 
 #[test]
 fn testParent() {
-    //	chars source = "{a:'HIO' d:{} b:3 c:ø}";
-//     chars
-    source = "{a:'HIO'}";
-    assert_parses(source);
-    Node & a = result["a"];
-    // print(a);
-    assert!(a.kind == key or a.kind == strings);
-    assert!(a == "HIO");
-    assert!(a.parent == 0); // key is the highest level
-//     Node * parent = a.value.node -> parent;
-    assert!(parent);
-    // print(parent); // BROKEN, WHY?? let's find out:
-    assert!(*parent == result);
-    skip!(
+    skip!( // not in rust!
+        //	chars source = "{a:'HIO' d:{} b:3 c:ø}";
+    //     chars
+        source = "{a:'HIO'}";
+        assert_parses(source);
+        Node & a = result["a"];
+        // print(a);
+        assert!(a.kind == key or a.kind == strings);
+        assert!(a == "HIO");
+        assert!(a.parent == 0); // key is the highest level
+    //     Node * parent = a.value.node -> parent;
+        assert!(parent);
+        // print(parent); // BROKEN, WHY?? let's find out:
+        assert!(*parent == result);
+        skip!(
 
-        // pointer identity broken by flat() ?
-        assert!(parent == &result);
+            // pointer identity broken by flat() ?
+            assert!(parent == &result);
+        );
+        testParentContext(); // make sure parsed correctly
     );
-    testParentContext(); // make sure parsed correctly
 }
-

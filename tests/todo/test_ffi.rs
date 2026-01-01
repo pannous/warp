@@ -26,10 +26,10 @@
     // Note: FFI only works in native mode, not when compiled to WASM
 
     // Math library functions (libm) - using functions that work reliably
-    assert_is("use m; ceil(3.2)", 4.0);
-    assert_is("use math; floor(3.7)", 3.0);
-    assert_is("use m; fmin(3.5, 2.1)", 2.1);
-    assert_is("use m; fmax(1.5, 2.5)", 2.5);
+    is!("use m; ceil(3.2)", 4.0);
+    is!("use math; floor(3.7)", 3.0);
+    is!("use m; fmin(3.5, 2.1)", 2.1);
+    is!("use m; fmax(1.5, 2.5)", 2.5);
 }
 
 // ============================================================================
