@@ -14,7 +14,7 @@
 }
 
 #[test]
-fn testPower() {
+fn test_power() {
     eq!(powi(10, 1), 10l);
     eq!(powi(10, 2), 100l);
     eq!(powi(10, 3), 1000l);
@@ -56,7 +56,7 @@ fn testPower() {
 
 
 #[test]
-fn testHyphenUnits() {
+fn test_hyphen_units() {
     //     const char *code = "1900 - 2000 AD";// (easy with units);
     //     assert_analyze(code,"{kind=range type=AD value=(1900,2000)}");
     // todo how does Julia represent 10 ± 2 m/s ?
@@ -66,7 +66,7 @@ fn testHyphenUnits() {
 }
 
 #[test]
-fn testHypenVersusMinus() {
+fn test_hypen_versus_minus() {
     // Needs variable register in parser.
     is!("a=-1 b=2 b-a", 3);
     is!("a-b:2 c-d:4 a-b", 2);
@@ -74,7 +74,7 @@ fn testHypenVersusMinus() {
 
 
 #[test]
-fn testModulo() {
+fn test_modulo() {
     //	eq!(mod_d(10007.0, 10000.0), 7);
     is!("10007%10000", 7); // breaks here!?!
     is!("10007.0%10000", 7);
@@ -111,7 +111,7 @@ fn test_sin() {
 
 
 #[test]
-fn testPrimitiveTypes() {
+fn test_primitive_types() {
     is!("double 2", 2);
     is!("float 2", 2);
     is!("int 2", 2);
@@ -147,7 +147,7 @@ fn testPrimitiveTypes() {
 }
 
 
-#[test] fn testLogarithmInRuntime(){
+#[test] fn test_logarithm_in_runtime(){
 
     // float
     let ℯ = 2.7182818284590;
@@ -173,7 +173,7 @@ fn test_sinus_wasp_import() {
 }
 
 #[test]
-fn testHex() {
+fn test_hex() {
     eq!(hex(18966001896603L), "0x113fddce4c9b");
     is!("42", 42);
     is!("0xFF", 255);
@@ -181,4 +181,9 @@ fn testHex() {
     is!("0xdce4c9b", 0xdce4c9b);
     //    is!("0x113fddce4c9b", 0x113fddce4c9bl); todo
     //	is!("0x113fddce4c9b", 0x113fddce4c9bL);
+}
+
+#[test]
+fn test_units() {
+    is!("1 m + 1km", Node(1001).setType(types["m"]));
 }

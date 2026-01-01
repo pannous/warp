@@ -2,7 +2,7 @@
 // Migrated from tests_*.rs files
 
 #[test]
-fn testMetaField() {
+fn test_meta_field() {
     tee = parse("tee{a:1}");
     tee["a"]["@attrib"] = 42;
     tee["a"]["@attrib2"] = 43;
@@ -19,7 +19,7 @@ fn testMetaField() {
 }
 
 #[test]
-fn testMeta() {
+fn test_meta() {
     tee = parse("tee{a:1}");
     tee["@attrib"] = 42;
     tee["@attrib2"] = 43;
@@ -34,7 +34,7 @@ fn testMeta() {
 }
 
 #[test]
-fn testMetaAt() {
+fn test_meta_at() {
     eq!(parse("tee{a:1}").name, "tee");
     eq!(parse("tee{a:1}").serialize(), "tee{a:1}");
     let code = "@attrib tee{a:1}";
@@ -46,7 +46,7 @@ fn testMetaAt() {
 }
 
 #[test]
-fn testMetaAt2() {
+fn test_meta_at2() {
     let code = "@attrib(1) @attrib2(42) tee{a:1}";
     let node = parse(code);
     assert!(node.name == "tee");
@@ -60,7 +60,7 @@ fn testMetaAt2() {
 }
 
 #[test]
-fn testParentContext() {
+fn test_parent_context() {
     //     chars
     source = "{a:'HIO' d:{} b:3 c:ø}";
     assert_parses(source);
@@ -70,17 +70,17 @@ fn testParentContext() {
     eq!(a.kind, strings);
     eq!(a.value.string, "HIO");
     eq!(a.string(), "HIO"); // keyNodes go to values!
-    assert(a == "HIO");
+    assert!(a == "HIO");
     //	eq!(a.name,"a" or"HIO");// keyNodes go to values!
     skip!(
 
         eq!(a.kind, key);
-        assert(a.name == "HIO");
+        assert!(a.name == "HIO");
     );
 }
 
 #[test]
-fn testParent() {
+fn test_parent() {
     skip!( // not in rust!
         //	chars source = "{a:'HIO' d:{} b:3 c:ø}";
     //     chars

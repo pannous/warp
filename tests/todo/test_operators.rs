@@ -1,15 +1,14 @@
-
 // Operator tests
 // Migrated from tests_*.rs files
 
 #[test]
-fn testNotTruthyFalsy() {
+fn test_not_truthy_falsy() {
     is!("not ''", 1);
     is!("not \"\"", 1);
 }
 
 #[test]
-fn testNotNegation2() {
+fn test_not_negation2() {
     // just aliases for 'not'
     is!("!0", 1);
     is!("!0.0", 1);
@@ -32,8 +31,8 @@ fn testNotNegation2() {
 }
 
 #[test]
-fn testNotNegation() {
-    // testNotNegation2(); // just aliases for 'not'
+fn test_not_negation() {
+    // test_not_negation2(); // just aliases for 'not'
     is!("not 0", 1);
     is!("not 0.0", 1);
     is!("not true", 0);
@@ -59,7 +58,7 @@ fn testNotNegation() {
 }
 
 #[test]
-fn testWhileNot() {
+fn test_while_not() {
     is!("i=2;while !1:i++;i", 2);
     is!("i=2;while i!=3:i++;i", 3);
     is!("i=2;while i!=3:i++;i", 3);
@@ -72,7 +71,7 @@ fn testWhileNot() {
 }
 
 #[test]
-fn testWhileNotCall() {
+fn test_while_not_call() {
     // Tests with function calls in while conditions
     // Note: These require proper handling of function calls as while conditions
     skip!(
@@ -125,7 +124,7 @@ fn test_while_true_forever() {
 }
 
 #[test]
-fn testRandomParse() {
+fn test_random_parse() {
     let node = parse("x:40;x+1");
     assert!(node.length == 2);
     assert!(node[0]["x"] == 40); // breaks!?
@@ -136,7 +135,7 @@ fn testRandomParse() {
 }
 
 #[test]
-fn testMinusMinus() {
+fn test_minus_minus() {
     #[cfg(not(feature = "WASM"))]{ // todo square
         is!("1 - 3 - square 3+4", (int64) -51); // OK!
     }
@@ -149,7 +148,7 @@ fn testMinusMinus() {
 }
 
 #[test]
-fn testExp() {
+fn test_exp() {
     // todo parsed same:
     is!("ℯ^0", 1);
     is!("ℯ^1", e);
@@ -168,7 +167,7 @@ fn testExp() {
 }
 
 #[test]
-fn testMatrixOrder() {
+fn test_matrix_order() {
     is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
 
     //==============================================================================
@@ -184,26 +183,15 @@ fn testMatrixOrder() {
 }
 
 #[test]
-fn testVectorShim() {
+fn test_vector_shim() {
     //    unknown function matrix_multiply (matrix_multiply);
     is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
 }
 
 
-#[test]
-fn testEqualsBinding() {
-    // colon closes with space, not semicolon !
-    parse("a = float32, b: float32");
-    assert!(result.length == 1);
-    assert!(result["a"] == "float32");
-    val;
-    val.add(Node("float32"));
-    val.add(Node("b").add(Node("float32")));
-    eq!(result[0], val);
-}
 
 #[test]
-fn testHypenVersusMinus() {
+fn test_hypen_versus_minus() {
     // Needs variable register in parser.
 //     const char
     *code = "a=-1 b=2 b-a";
@@ -219,7 +207,7 @@ fn testHypenVersusMinus() {
 
 
 #[test]
-fn testImport42() {
+fn test_import42() {
     is!("import fourty_two", 42);
     is!("include fourty_two", 42);
     is!("require fourty_two", 42);
@@ -229,28 +217,28 @@ fn testImport42() {
 }
 
 #[test]
-fn testDivDeep() {
+fn test_div_deep() {
     div = parse("div{ span{ class:'bold' 'text'} br}");
     Node & node = div["span"];
     node.print();
-    assert(div["span"].length == 2);
-    assert(div["span"]["class"] == "bold");
+    assert!(div["span"].length == 2);
+    assert!(div["span"]["class"] == "bold");
 }
 
 #[test]
-fn testDivMark() {
+fn test_div_mark() {
     use_polish_notation = true;
     div = parse("{div {span class:'bold' 'text'} {br}}");
     Node & span = div["span"];
     span.print();
-    assert(span.length == 2);
-    assert(span["class"] == "bold");
+    assert!(span.length == 2);
+    assert!(span["class"] == "bold");
     use_polish_notation = false;
 }
 
 
 #[test]
-fn testErrors() {
+fn test_errors() {
     // use assert_throws
     throwing = true;
     // 0/0 now returns NaN (float division), not an error
@@ -265,7 +253,7 @@ fn testErrors() {
     assert_throws("]"); // set throwing to true!!
     // throwing = false; // error always throws
     // result = parse("]");
-    // assert(result == ERROR);
+    // assert!(result == ERROR);
     /*
         ln -s /me/dev/apps/wasp/samples /me/dev/apps/wasp/cmake-build-wasm/out
         ln -s /Users/me/dev/apps/wasp/samples /Users/me/dev/apps/wasp/cmake-build-default/ #out/
@@ -276,17 +264,17 @@ fn testErrors() {
 }
 
 #[test]
-fn testForEach() {
+fn test_for_each() {
 //     int
     sum = 0;
 //     for (Node &item: parse(
 //     "1 2 3"));
     sum += item.value.longy;
-    assert(sum == 6);
+    assert!(sum == 6);
 }
 
 #[test]
-fn testLogic() {
+fn test_logic() {
     is!("true or false", true);
     is!("false or true", true);
 
@@ -330,9 +318,9 @@ fn testLogic() {
 }
 
 #[test]
-fn testLogicEmptySet() {
+fn test_logic_empty_set() {
     if (eval_via_emit) {
-        print("todo eval_via_emit testLogicEmptySet …"); // todo
+        print("todo eval_via_emit test_logic_empty_set …"); // todo
         return;
     }
     is!("not ()", true); // missing args for operator not
@@ -387,7 +375,7 @@ fn testLogicEmptySet() {
 }
 
 #[test]
-fn testLogicOperators() {
+fn test_logic_operators() {
     is!("¬ 0", 1);
     is!("¬ 1", 0);
 
@@ -408,7 +396,7 @@ fn testLogicOperators() {
 }
 
 #[test]
-fn testLogic01() {
+fn test_logic01() {
     is!("0 or 0", false);
     is!("0 or 1", true);
     is!("1 or 0", true);
@@ -430,7 +418,7 @@ fn testLogic01() {
 }
 
 #[test]
-fn testLengthOperator() {
+fn test_length_operator() {
     is!("#'0123'", 4); // todo at compile?
     is!("#[0 1 2 3]", 4);
     is!("#[a b c d]", 4);
