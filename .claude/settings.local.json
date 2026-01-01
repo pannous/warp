@@ -8,7 +8,12 @@
       "Bash(rustup override:*)",
       "Bash(rustup show:*)",
       "Bash(cargo build:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(find tests -name \"*.rs\" -type f | sort)",
+      "Bash(for f in tests/*.rs; do echo \"=== $f ===\"; wc -l \"$f\"; head -20 \"$f\"; echo; done)",
+      "Bash(for f in tests/todo/*.rs; do echo \"=== $f ($(wc -l < \"$f\" | tr -d ' ') lines) ===\"; cat \"$f\"; echo; done | head -300)",
+      "Bash(for f in tests/todo/*.rs; do lines=$(wc -l < \"$f\" | tr -d ' '); if [ \"$lines\" -lt 30 ]; then echo \"$f ($lines lines)\"; fi; done)",
+      "Bash(wc -l tests/todo/*.rs | sort -n | head -20)"
     ]
   },
   "hooks": {

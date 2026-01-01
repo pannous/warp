@@ -1,6 +1,6 @@
 {
   "temp-session-id": {
-    "permissionMode": "default",
+    "permissionMode": "bypassPermissions",
     "backendVersion": "1.2.0",
     "cwd": "/Users/me/dev/angles/warp"
   },
