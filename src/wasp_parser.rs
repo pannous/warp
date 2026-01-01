@@ -16,11 +16,13 @@ pub struct WaspParser {
     pos: usize,
     line: usize,
     column: usize,
+    pub current_line: String,
 }
 
 impl WaspParser {
     pub fn new(input: String) -> Self {
-        WaspParser { input, pos: 0, line: 1, column: 1 }
+        let current_line = input.lines().next().unwrap_or("").to_string();
+        WaspParser { input, pos: 0, line: 1, column: 1, current_line }
     }
 
     pub fn parse(input: &str) -> Node {
@@ -56,6 +58,13 @@ impl WaspParser {
             if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
+                // Update current_line to the new line
+                let lines: Vec<&str> = self.input.lines().collect();
+                if self.line > 0 && self.line <= lines.len() {
+                    self.current_line = lines[self.line - 1].to_string();
+                } else {
+                    self.current_line = String::new();
+                }
             } else {
                 self.column += 1;
             }
@@ -65,15 +74,6 @@ impl WaspParser {
 
     fn get_position(&self) -> (usize, usize) {
         (self.line, self.column)
-    }
-
-    pub fn current_line(&self) -> &str {
-        let lines: Vec<&str> = self.input.lines().collect();
-        if self.line > 0 && self.line <= lines.len() {
-            lines[self.line - 1]
-        } else {
-            ""
-        }
     }
 
     fn prev_char(&self) -> Option<char> {
@@ -548,13 +548,13 @@ mod tests {
     fn test_current_line() {
         let input = "line1\nline2\nline3";
         let parser = WaspParser::new(input.to_string());
-        assert_eq!(parser.current_line(), "line1");
+        assert_eq!(parser.current_line, "line1");
 
         let mut parser = WaspParser::new(input.to_string());
         // Advance to second line
         while parser.line == 1 && parser.current_char().is_some() {
             parser.advance();
         }
-        assert_eq!(parser.current_line(), "line2");
+        assert_eq!(parser.current_line, "line2");
     }
 }
