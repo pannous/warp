@@ -91,7 +91,7 @@ fn test_generate_wasm() {
 fn test_node_kind_enum_abi() { // ensure enum values match expected ABI
     assert_eq!(NodeKind::Empty as u32, 0);
     assert_eq!(NodeKind::Number as u32, 1);
-    assert_eq!(NodeKind::Char as u32, 3);
+    assert_eq!(NodeKind::Codepoint as u32, 3);
     assert_eq!(NodeKind::Symbol as u32, 4);
     assert_eq!(NodeKind::Key as u32, 5);
     assert_eq!(NodeKind::Pair as u32, 6);

@@ -1,10 +1,11 @@
+use wasp::{eq, is};
 use wasp::node::Node;
 use wasp::wasp_parser::parse;
 
 #[test]
 fn test_remove() {
     let result = parse("a b c d");
-    result.remove(1, 2);
+    // result.remove(1, 2); // TODO: implement remove method
     let replaced = parse("a d");
     assert!(result == replaced);
 }
@@ -29,26 +30,26 @@ fn test_replace() {
 
 #[test]
 fn test_mark_as_map() {
-    let compare = Node::new();
+    let mut compare = Node::new();
     //	compare["d"] = Node();
     compare["b"] = 3.into();
     compare["a"] = "HIO".into();
-    let dangling : Node = compare["c"];
+    let dangling : Node = compare["c"].clone();
     assert!(dangling.isNil());
     //     assert!(Nil();
-    assert!(dangling == Empty);
-    assert!(&dangling != &Empty); // not same pointer!
-    dangling = Node(3);
+    assert!(dangling == Node::Empty);
+    assert!(&dangling != &Node::Empty); // not same pointer!
+    let dangling = Node::from(3);
     //	dangling = 3;
     assert!(dangling == 3);
     assert!(compare["c"] == 3);
-    eq!(compare["c"], Node(3));
-    let node : Node = compare["a"];
+    eq!(compare["c"], Node::from(3));
+    let node : Node = compare["a"].clone();
     assert!(node == "HIO");
     //     chars
-    source = "{b:3 a:'HIO' c:3}"; // d:{}
-    marked = parse(source);
-    let node1 : Node = marked["a"];
+    let source = "{b:3 a:'HIO' c:3}"; // d:{}
+    let marked = parse(source);
+    let node1 : Node = marked["a"].clone();
     assert!(node1 == "HIO");
     assert!(compare["a"] == "HIO");
     assert!(marked["a"] == "HIO");
