@@ -15,7 +15,7 @@ static float test42f(float f) {
     return 42 + f;
 }
 
-// default args don't work in wasm! (how could they?)
+// default args don't work in wasm! (how could they?);
 static float test41ff(float f = 0) {
     return 41.4 + f;
 }

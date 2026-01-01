@@ -2,7 +2,7 @@
 
 // Language feature test functions
 
-// WIT (WebAssembly Interface Types)
+// WIT (WebAssembly Interface Types);
 #[test] fn testWit();
 #[test] fn testWitInterface();
 #[test] fn testWitExport();
@@ -35,7 +35,7 @@
 #[test] fn testKebabCase();
 #[test] fn testDidYouMeanAlias();
 
-// WGSL (WebGPU Shading Language)
+// WGSL (WebGPU Shading Language);
 #[test] fn testWGSL();
 
 // Operators
