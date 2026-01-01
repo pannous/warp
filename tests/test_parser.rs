@@ -20,11 +20,12 @@
 use log::warn;
 use Node::{False, True};
 use wasp::{eq, is, printf, skip};
+use wasp::extensions::{print, prints};
 use wasp::node::Node;
 use wasp::node::Node::Empty;
-use wasp::wasm_gc_emitter::{eval, NodeKind};
-use wasp::wasm_gc_emitter::NodeKind::key;
-use wasp::wasp_parser::{parse, parseFile};
+use wasp::type_kinds::NodeKind::Key;
+use wasp::type_kinds::NodeKind;
+use wasp::wasp_parser::{parse, parse_file};
 
 // Mark (data notation) tests
 #[test]
@@ -37,7 +38,7 @@ fn test_mark_simple() {
 #[test]
 fn test_deep_colon() {
     let mut result: Node = parse("current-user: func() -> string");
-    eq!(result.kind(), key);
+    eq!(result.kind(), Key);
     eq!(result.values().name(), "func");
     eq!(result.values().values().name(), "string");
 }
@@ -45,7 +46,7 @@ fn test_deep_colon() {
 #[test]
 fn test_deep_colon2() {
     let result = parse("a:b:c:d");
-    eq!(result.kind(), key);
+    eq!(result.kind(), Key);
     eq!(result.values().name(), "b");
     eq!(result.values().values().values().name(), "d");
 }
@@ -81,9 +82,7 @@ fn test_colon_immediate_binding() {
     assert!(result[1] == Node("b").add(Node("float32")));
 }
 
-fn Node(p0: &str) -> Node {
-    Node::Symbol(p0.s())
-}
+
 
 // https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md#item-use
 #[test]
@@ -117,14 +116,14 @@ testDataMode()
     assert!(result.length() == 2 || result.length() == 1);
     let result = parse("a b:c");
     assert!(result.length() == 2); // a , b:c
-    assert!(result.laste().kind() == key); // a , b:c
+    assert!(result.laste().kind() == Key); // a , b:c
     //     let result = parse("a: b c d", { colon_immediate: false });
     assert!(result.length() == 3);
     assert!(result.name() == "a"); // "a"(b c d), NOT ((a:b) c d);
-    assert!(result.kind() == NodeKind::list); // not key!
+    assert!(result.kind() == NodeKind::List); // not key!
     //     let result = parse("a b : c", { colon_immediate: false });
     assert!(result.length() == 1 || result.length() == 2); // (a b):c
-    eq!(result.kind(), key);
+    eq!(result.kind(), Key);
     skip!(
 
         assert!(eval("1 + 1 == 2"));
@@ -174,13 +173,13 @@ e
 	"#;
     let groups = parse(indented);
     //	let groups = parse("a:\n b\n c\nd\ne\n");
-    print(groups.serialize());
-    print(groups.length().to_string());
+    prints(groups.serialize());
+    prints(groups.length().to_string());
     assert!(groups.length() == 3); // a(),d,e
     let parsed = groups.first();
     assert!(parsed.name() == "a");
     assert!(parsed.length() == 2);
-    print(parsed[1].serialize());
+    prints(parsed[1].serialize());
     assert!(parsed[1].name() == "c");
 }
 
@@ -204,7 +203,7 @@ fn test_paramized_keys() {
     // 0. parameters accessible
     let label0 = parse("label(for:password)");
     label0.print();
-    let node : Node = label0["for"];
+    let node : &Node = &label0["for"];
     eq!(node, "password");
     eq!(label0["for"], "password");
 
@@ -250,13 +249,13 @@ e
     "#;
     let groups = parse(indented);
     //	let groups = parse("a:\n b\n c\nd\ne\n");
-    print(groups.serialize());
-    print(groups.length().to_string());
+    prints(groups.serialize());
+    prints(groups.length().to_string());
     assert!(groups.length() == 3); // a(),d,e
     let parsed = groups.first();
     assert!(parsed.name() == "a");
     assert!(parsed.length() == 2);
-    print(parsed[1].serialize());
+    prints(parsed[1].serialize());
     assert!(parsed[1].name() == "c");
 }
 
@@ -304,17 +303,12 @@ fn test_colon_lists() {
     assert!(parsed[1] == "c");
     assert!(parsed.name() == "a");
 }
-#[test]
-fn test_modern_cpp() {
-    let aa = 1. * 2;
-    printf!("%f", aa); // lol
-}
 
 #[test]
 fn test_deep_copy_bug() {
     //     chars
     let source = "{c:{d:123}}";
-    let result = assert_parses(source);
+    let result = parse(source);
     assert!(result["d"] == 123);
 }
 #[test]
@@ -322,7 +316,7 @@ fn test_deep_copy_debug_bug_bug() {
     test_deep_copy_bug();
     //     chars
     let source = "{deep{a:3,b:4,c:{d:true}}}";
-    let result = assert_parses(source);
+    let result = parse(source);
     assert!(result.name() == "deep");
     result.print();
     let c : Node = result["deep"]['c'];
@@ -336,7 +330,7 @@ fn test_deep_copy_debug_bug_bug2() {
     //	chars source = "{deep{a:3,b:4,c:{d:123}}}";
     //     chars
     let source = "{deep{c:{d:123}}}";
-    let result = assert_parses(source);
+    let result = parse(source);
     let c : Node = result["deep"]['c'];
     let node : Node = c['d'];
     eq!(node.value().longy,  123);
@@ -472,7 +466,7 @@ testUnicode_UTF16_UTF32());
     assert!(not is_operator('ç'));
     assert!(is_operator('='));
     //	assert!(x[1]=="牛");
-    assert!("a牛c"s.codepointAt(1) == '牛');
+    assert!("a牛c".codepointAt(1) == '牛');
     let x = "a牛c";
     //     codepoint
     let i = x.codepointAt(1);
@@ -482,24 +476,24 @@ testUnicode_UTF16_UTF32());
         assert!(i == "牛"s); // owh wow it works reversed
     }
 
-    let result = assert_parses("{ç:☺}");
+    let result = parse("{ç:☺}");
     assert!(result["ç"] == "☺");
 
-    let result = assert_parses("ç:'☺'");
+    let result = parse("ç:'☺'");
     skip!(
 
         assert!(result == "☺");
     );
 
-    let result = assert_parses("{ç:111}");
+    let result = parse("{ç:111}");
     assert!(result["ç"] == 111);
 
     skip!(
 
-        let result = assert_parses("ç='☺'");
+        let result = parse("ç='☺'");
         assert!(eval("ç='☺'") == "☺");
 
-        let result = assert_parses("ç=☺");
+        let result = parse("ç=☺");
         assert!(result == "☺" || result.kind() == expression);
     );
     //	assert!(node == "ø"); //=> OK
@@ -526,7 +520,7 @@ fn test_mark_multi_deep() {
     // fragile:( problem :  c:{d:'hi'}} becomes c:'hi' because … bug
     //     chars
     let source = "{deep{a:3,b:4,c:{d:'hi'}}}";
-    let result = assert_parses(source);
+    let result = parse(source);
     let c : Node = result["deep"]['c'];
     let node : Node = result["deep"]['c']['d'];
     eq!(node, "hi");
@@ -544,7 +538,7 @@ fn test_mark_multi_deep() {
 fn test_mark_multi() {
     //     chars
     let source = "{a:'HIO' b:3}";
-    let result = assert_parses(source);
+    let result = parse(source);
     let node : Node = result['b'];
     print(result['a']);
     print(result['b']);
@@ -554,7 +548,7 @@ fn test_mark_multi() {
 
 #[test]
 fn test_mark_multi2() {
-    let result = assert_parses("a:'HIO' b:3  d:{}");
+    let result = parse("a:'HIO' b:3  d:{}");
     assert!(result["b"] == 3);
 }
 
@@ -562,7 +556,7 @@ fn test_mark_multi2() {
 fn test_overwrite() {
     //     chars
     let source = "{a:'HIO' b:3}";
-    let result = assert_parses(source);
+    let result = parse(source);
     result["b"] = 4;
     assert!(result["b"] == 4);
     assert!(result['b'] == 4);
@@ -625,7 +619,7 @@ fn test_eval3() {
 
 #[test]
 fn test_deep_lists() {
-    let result = assert_parses("{a:1 name:'ok' x:[1,2,3]}");
+    let result = parse("{a:1 name:'ok' x:[1,2,3]}");
     assert!(result.length() == 3);
     assert!(result["x"].length() == 3);
     assert!(result["x"][2] == 3);
@@ -636,12 +630,12 @@ fn test_deep_lists() {
 
 #[test]
 fn test_maps_as_lists() {
-    assert_parses("{1,2,3}");
-    assert_parses("{'a'\n'b'\n'c'}");
-    assert_parses("{add x y}"); // expression?
-    assert_parses("{'a' 'b' 'c'}"); // expression?
-    assert_parses("{'a','b','c'}"); // list
-    let result = assert_parses("{'a';'b';'c'}"); // list
+let result = parse("{1,2,3}");
+let result = parse("{'a'\n'b'\n'c'}");
+let result = parse("{add x y}"); // expression?
+let result = parse("{'a' 'b' 'c'}"); // expression?
+let result = parse("{'a','b','c'}"); // list
+    let result = parse("{'a';'b';'c'}"); // list
     assert!(result.length() == 3);
     assert!(result[1] == "b");
     //	is!("[1,2,3]",1); what?
@@ -704,7 +698,7 @@ fn test_equalities() {
 // test once: not a test, just documentation
 #[test]
 fn test_bit_field() {
-    union MyStruct {
+    // union MyStruct {
         // bit fields
         //         struct {
         //         short Reserved1: 3;
@@ -712,7 +706,7 @@ fn test_bit_field() {
         //         short SyncErr: 1;
         //         short WordCntErr: 1;
         //            short Reserved2: 10;
-    }
+    // }
 
     //         short word_field;
     //     assert!(_eq!(sizeof(mystruct), 2 /*bytes */);
@@ -730,14 +724,14 @@ fn test_cpp() {
 
 #[test]
 fn test_graph_simple() {
-    let result = assert_parses("{  me {    name  } # Queries can have comments!\n}");
+    let result = parse("{  me {    name  } # Queries can have comments!\n}");
     assert!(result.children()[0].name() == "name"); // result IS me !!
     assert!(result["me"].children()[0].name() == "name"); // me.me = me good idea?
 }
 #[test]
 fn test_graph_ql_query_bug() {
     let graph_result = "{friends: [ {name:x}, {name:y}]}";
-    let result = assert_parses(graph_result);
+    let result = parse(graph_result);
     let friends : Node = result["friends"];
     assert!(friends[0]["name"] == "x");
 }
@@ -759,7 +753,7 @@ fn test_graph_ql_query() {
       }
     }
     }"#;
-    let result = assert_parses(graph_result);
+    let result = parse(graph_result);
     result.print();
     let data : Node = result["data"];
     data.print();
@@ -780,7 +774,7 @@ fn test_graph_ql_query() {
 
 #[test]
 fn test_graph_ql_query_significant_whitespace() {
-    let result = assert_parses("{\n  human(id: \"1000\") {\n    name\n    height(unit: FOOT)\n  }\n}");
+    let result = parse("{\n  human(id: \"1000\") {\n    name\n    height(unit: FOOT)\n  }\n}");
     assert!(result["human"]["id"] == 1000);
     skip!(
 assert!(result["id"] == 1000, 0)

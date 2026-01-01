@@ -174,25 +174,25 @@ fn test_empty_node() {
 /// Test codepoint node
 #[test]
 fn test_codepoint_node() {
-    println!("=== Testing Codepoint Node ===\n");
+    println!("=== Testing Char Node ===\n");
 
     let mut emitter = WasmGcEmitter::new();
     emitter.emit();
 
-    let node = Node::Codepoint('🦀');
+    let node = Node::Char('🦀');
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
     let root = read_bytes(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 3); // NodeKind::Codepoint
+    assert_eq!(kind, 3); // NodeKind::Char
 
     let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
-    println!("  Codepoint value: {} ({})", codepoint, char::from_u32(codepoint as u32).unwrap_or('?'));
+    println!("  Char value: {} ({})", codepoint, char::from_u32(codepoint as u32).unwrap_or('?'));
     assert_eq!(codepoint, '🦀' as i64);
 
-    println!("✓ Codepoint node works");
+    println!("✓ Char node works");
 }
 
 /// Test float number node

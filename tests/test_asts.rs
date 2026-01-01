@@ -14,7 +14,7 @@ fn test_ast() {
         }
     };
     // Iterate over the trait items.
-    // for item in &item_trait.items {
+    // for item let item_trait : in.items {
     //     match item {
     //         TraitItem::Method(TraitItemMethod { sig, .. }) => {
     //             // Print the method signature.

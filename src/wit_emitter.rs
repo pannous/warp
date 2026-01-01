@@ -1,4 +1,4 @@
-use crate::node::{Node, Grouper, Bracket, Meta, DataType};
+use crate::node::{Node, Grouper, Bracket, MetaData, DataType};
 use crate::extensions::numbers::Number;
 
 pub struct WitEmitter {
@@ -172,7 +172,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
             _ => todo!("Number variant not implemented in WIT conversion"),
         },
         Node::Text(s) => format!("text(\"{}\")", escape_string(s)),
-        Node::Codepoint(c) => format!("codepoint('{}')", c),
+        Node::Char(c) => format!("codepoint('{}')", c),
         Node::Symbol(s) => format!("symbol(\"{}\")", escape_string(s)),
         Node::Key(k, v) => {
             format!("key-value((\"{}\", {}))", escape_string(k), node_to_wit_value(v))
@@ -248,6 +248,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
         Node::Error(e) => format!("error(\"{}\")", escape_string(e)),
         Node::False => "false".to_string(),
         Node::True => "true".to_string(),
+        _ => todo!()
     }
 }
 
@@ -298,9 +299,9 @@ mod tests {
 
     #[test]
     fn test_node_with_meta_to_wit() {
-        use crate::node::Meta;
+        use crate::node::MetaData;
 
-        let node = Node::int(42).with_meta(Meta::with_position(10, 5));
+        let node = Node::int(42).with_meta(MetaData::with_position(10, 5));
         let wit = node_to_wit_value(&node);
 
         println!("{}", wit);

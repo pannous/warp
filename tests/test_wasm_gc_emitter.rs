@@ -2,7 +2,7 @@ use wasp::StringExtensions;
 use wasp::node::Node;
 use wasp::node::Node::*;
 use wasp::run::wasmtime_runner::run;
-use wasp::wasm_gc_emitter::{NodeKind, WasmGcEmitter,eval};
+use wasp::wasm_gc_emitter::{WasmGcEmitter,eval};
 use wasp::{eq, is, write_wasm};
 
 fn normalize_blocks(node: &Node) -> Node {
@@ -15,12 +15,13 @@ fn normalize_blocks(node: &Node) -> Node {
         },
         Block(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
         List(items) if items.len() == 1 => normalize_blocks(&items[0]),
-        KeyValue(k, v) => KeyValue(k.clone(), Box::new(normalize_blocks(v))),
+        Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
         Pair(left, right) => Pair(Box::new(normalize_blocks(left)), Box::new(normalize_blocks(right))),
         _ => node.clone(),
     }
 }
 use wasp::Number::Int;
+use wasp::type_kinds::NodeKind;
 
 #[test]
 fn test_wasm_roundtrip() {
@@ -51,13 +52,13 @@ fn test_wasm_roundtrip() {
 
 #[test]
 fn test_wasm_roundtrip_via_is() {
-    // Parser treats {test=1} as body containing KeyValue, not params
-    let x = KeyValue("test".s(), Box::new(Number(Int(1))));
+    // Parser treats {test=1} as body containing Key, not params
+    let x = Key("test".s(), Box::new(Number(Int(1))));
     let _ok:Node = eval("html{test=1}");
-    // After single-item block unwrapping, body becomes just the KeyValue
+    // After single-item block unwrapping, body becomes just the Key
     is!("html{test=1}", Tag {
         title: "html".s(),
-        params: Box::new(Node::Empty),
+        params: Box::new(Empty),
         body: Box::new(x),
     });
 }
@@ -90,9 +91,9 @@ fn test_generate_wasm() {
 fn test_node_kind_enum_abi() { // ensure enum values match expected ABI
     assert_eq!(NodeKind::Empty as u32, 0);
     assert_eq!(NodeKind::Number as u32, 1);
-    assert_eq!(NodeKind::Codepoint as u32, 3);
+    assert_eq!(NodeKind::Char as u32, 3);
     assert_eq!(NodeKind::Symbol as u32, 4);
-    assert_eq!(NodeKind::KeyValue as u32, 5);
+    assert_eq!(NodeKind::Key as u32, 5);
     assert_eq!(NodeKind::Pair as u32, 6);
     assert_eq!(NodeKind::Tag as u32, 7);
     assert_eq!(NodeKind::Block as u32, 8);

@@ -56,14 +56,14 @@ fn test_bad_in_wasm() {
     // sleep ( time > 8pm ) and shower ≠ sleep time > ( 8pm and true);
     testNodeDataBinaryReconstruction(); // todo!  y:{x:2 z:3}
     testSmartReturnHarder(); // y:{x:2 z:3} can't work yet(?);
-    is!("add1 x:=$0+1;add1 3", (int64) 4); // $0 specially parsed now
+    is!("add1 x:=$0+1;add1 3",  4); // $0 specially parsed now
     is!("print 3", 3); // todo dispatch!
     is!("if 4>1 then 2 else 3", 2);
 
     // bad only SOMETIMES / after a while!
     is!("puts('ok');(1 4 3)#2", 4); // EXPECT 4 GOT 1n
     is!("'αβγδε'#3", 'γ'); // TODO! sometimes works!?
-    is!("3 + √9", (int64) 6); // why !?!
+    is!("3 + √9",  6); // why !?!
     is!("id 3*42> id 2*3", 1);
     testSquares(); // ⚠️
 
