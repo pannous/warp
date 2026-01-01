@@ -210,7 +210,7 @@ pub enum Node {
     // String(String),
     Symbol(String),
     // Keyword(String), Call, Declaration … AST or here? AST!
-    KeyValue(String, Box<Node>), // todo ? via Pair or losing specificity?
+    Key(String, Box<Node>), // todo ? via Pair or losing specificity?
     Pair(Box<Node>, Box<Node>),
     Tag {
         title: String,
@@ -254,7 +254,7 @@ impl Node {
 
     pub fn values(&self) -> Node {
         match self {
-            Node::KeyValue(_, v) => *v.clone(),
+            Node::Key(_, v) => *v.clone(),
             Node::Meta(node, _) => node.values(),
             _ => todo!(), //#Node::Empty,
         }
@@ -267,7 +267,7 @@ impl Node {
             Node::Text(_) => NodeKind::Text,
             Node::Codepoint(_) => NodeKind::Codepoint,
             Node::Symbol(_) => NodeKind::Symbol,
-            Node::KeyValue(_, _) => NodeKind::Key,
+            Node::Key(_, _) => NodeKind::Key,
             Node::Pair(_, _) => NodeKind::Pair,
             Node::Tag { .. } => NodeKind::Tag,
             Node::Block(_, _, _) => NodeKind::Block,
@@ -292,7 +292,7 @@ impl Node {
         match self {
             Node::Symbol(name) => name.clone(),
             Node::Tag { title, .. } => title.clone(),
-            Node::KeyValue(k, _) => k.clone(),
+            Node::Key(k, _) => k.clone(),
             Node::Meta(node, _) => node.name(),
             Node::List(items) => {
                 // todo only for specific cases like expressions
@@ -359,7 +359,7 @@ impl Node {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
                     Err(_) => Box::new(Node::Empty),
                 };
-                Node::KeyValue(key, value)
+                Node::Key(key, value)
             }
 
             t if t == NodeKind::Pair as i32 => {
@@ -442,20 +442,54 @@ impl Index<&String> for Node {
         match self {
             // Node::List(elements) => elements.filter(|node|
             //     match node {
-            //         Node::KeyValue(k, _) => k == *i,
+            //         Node::Key(k, _) => k == *i,
             //         Node::Text(t) => t == *i,
             //         _ => false
             //     }
             // ).next().unwrap_or(&Node::Empty),
 
             // Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Node::Block(nodes, ..) => nodes
-                .find2(&|node| match node {
-                    Node::KeyValue(k, _) => *k == *i,
+            Node::Block(nodes, ..) => {
+                if let Some(found) = nodes.find2(&|node| match node {
+                    Node::Key(k, _) => *k == *i,
                     Node::Text(t) => *t == *i,
                     _ => false,
-                })
-                .unwrap_or(&Node::Empty),
+                }) {
+                    // If we found a Key, return its value instead of the whole Key
+                    match found {
+                        Node::Key(_, v) => v.as_ref(),
+                        other => other,
+                    }
+                } else {
+                    &Node::Empty
+                }
+            }
+            Node::Meta(node, _) => &node[i],
+            _ => &Node::Empty,
+        }
+    }
+}
+
+impl Index<&str> for Node {
+    type Output = Node;
+
+    fn index(&self, i: &str) -> &Self::Output {
+        match self {
+            Node::Block(nodes, ..) => {
+                if let Some(found) = nodes.find2(&|node| match node {
+                    Node::Key(k, _) => k == i,
+                    Node::Text(t) => t == i,
+                    _ => false,
+                }) {
+                    // If we found a Key, return its value instead of the whole Key
+                    match found {
+                        Node::Key(_, v) => v.as_ref(),
+                        other => other,
+                    }
+                } else {
+                    &Node::Empty
+                }
+            }
             Node::Meta(node, _) => &node[i],
             _ => &Node::Empty,
         }
@@ -471,7 +505,7 @@ impl Node {
         Node::Pair(Box::new(a), Box::new(b))
     }
     pub fn key(s: &str, v: Node) -> Self {
-        Node::KeyValue(s.to_string(), Box::new(v))
+        Node::Key(s.to_string(), Box::new(v))
     }
     pub fn tag(name: &str, body: Node) -> Self {
         Node::Tag {
@@ -488,7 +522,7 @@ impl Node {
         }
     }
     pub fn keys(s: &str, v: &str) -> Self {
-        Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string())))
+        Node::Key(s.to_string(), Box::new(Node::Text(v.to_string())))
     }
     pub fn text(s: &str) -> Self {
         Node::Text(s.to_string())
@@ -565,7 +599,7 @@ impl Node {
 
     pub fn get_key(&self) -> &str {
         match self {
-            Node::KeyValue(k, _) => k,
+            Node::Key(k, _) => k,
             Node::Meta(node, _) => node.get_key(),
             _ => "",
         }
@@ -573,7 +607,7 @@ impl Node {
 
     pub fn get_value(&self) -> Node {
         match self {
-            Node::KeyValue(_, v) => v.as_ref().clone(),
+            Node::Key(_, v) => v.as_ref().clone(),
             Node::Meta(node, _) => node.get_value(),
             _ => Node::Empty,
         }
@@ -627,7 +661,7 @@ impl Node {
             Node::Text(s) | Node::Symbol(s) => Value::String(s.clone()),
             Node::Codepoint(c) => Value::String(c.to_string()),
             Node::List(items) => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
-            Node::KeyValue(k, v) => {
+            Node::Key(k, v) => {
                 let mut map = Map::new();
                 map.insert(k.clone(), v.to_json_value());
                 Value::Object(map)
@@ -653,7 +687,7 @@ impl Node {
                         let mut map = Map::new();
                         for item in items {
                             match item {
-                                Node::KeyValue(k, v) => {
+                                Node::Key(k, v) => {
                                     map.insert(k.clone(), v.to_json_value());
                                 }
                                 Node::Tag {
@@ -675,13 +709,13 @@ impl Node {
                                 Node::Block(nested, _, Bracket::Curly) => {
                                     // Nested blocks become nested objects
                                     for nested_item in nested {
-                                        if let Node::KeyValue(k, v) = nested_item {
+                                        if let Node::Key(k, v) = nested_item {
                                             map.insert(k.clone(), v.to_json_value());
                                         }
                                     }
                                 }
                                 other => {
-                                    // Non-KeyValue items: try to infer a key
+                                    // Non-Key items: try to infer a key
                                     let key = format!("item_{}", map.len());
                                     map.insert(key, other.to_json_value());
                                 }
@@ -740,7 +774,7 @@ impl fmt::Debug for Node {
                     }
                 }
             }
-            Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
+            Node::Key(k, v) => write!(f, "{}={:?}", k, v), // todo vs
             Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
             Node::Tag {
                 title,
@@ -905,8 +939,8 @@ impl PartialEq for Node {
                 // Ignore metadata when comparing equality
                 node.as_ref().eq(other)
             }
-            Node::KeyValue(k1, v1) => match other {
-                Node::KeyValue(k2, v2) => k1 == k2 && v1 == v2,
+            Node::Key(k1, v1) => match other {
+                Node::Key(k2, v2) => k1 == k2 && v1 == v2,
                 _ => false,
             },
             Node::Pair(a1, b1) => match other {
@@ -969,7 +1003,7 @@ impl PartialEq<bool> for Node {
             Node::Text(s) => s.is_empty() == !*other,
             Node::Block(b, _, _) => b.is_empty() == !*other,
             Node::List(l) => l.is_empty() == !*other,
-            Node::KeyValue(_, _) => *other, // todo NEVER false OR check value k=v ?
+            Node::Key(_, _) => *other, // todo NEVER false OR check value k=v ?
             Node::Pair(_, _) => *other,     // // todo NEVER false OR check value k:v ?
             _ => false,
         }
