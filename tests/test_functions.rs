@@ -92,11 +92,11 @@ fn test_float_return_through_main() {
 //     int64
 //     y = *(int64 *) & x;
     #[cfg(not(feature = "WASM"))]{
-        printf("%llx\n", y);
+        printf!("%llx\n", y);
     }
     y = 0x00FF000000000000; // -> 0.000000 OK
 //     x = *(double *) & y;
-    printf("%lf\n", x);
+    printf!("%lf\n", x);
 }
 
 #[test]

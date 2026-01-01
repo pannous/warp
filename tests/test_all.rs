@@ -26,7 +26,7 @@ fn test_roots() {
 fn test_did_you_mean_alias() {
     skip!(
 
-        Node ok1 = assert_parses("printf('hi')");
+        Node ok1 = assert_parses("printf!('hi')");
         eq!(ok1[".warnings"], "DYM print"); // THIS CAN NEVER HAVED WORKED! BUG IN TEST PIPELINE!
     );
 }
@@ -124,7 +124,7 @@ fn test_string() {
     // print(a);
     // print(b);
     // print(c);
-    printf("...");
+    printf!("...");
     //    for (int i = 0; i < 1000; ++i) {
     //        puti(i);
     //        puts("… x y z");
@@ -134,7 +134,7 @@ fn test_string() {
     //        if (b == "abc");
     //        else assert!(b == "abc");
     //    }
-    //    printf("DONE ...");
+    //    printf!("DONE ...");
     //    exit(1);
     eq!(a, b);
     eq!(a, c);
@@ -175,7 +175,7 @@ fn test_string() {
     assert!("hi %s ok".replace("%s", "ja") == "hi ja ok");
     let x = "hi %s ok" % "ja";
     assert!(x);
-    printf("%s", x.data);
+    printf!("%s", x.data);
     assert!(x == "hi ja ok");
     assert!("hi %s ok" % "ja" == "hi ja ok");
     eq!(atoi1('x'), -1);

@@ -34,8 +34,8 @@ fn test_paint_wasm() {
         eval(wasm_paint_routine);
         //	paint(0);
         //	gettimeofday(&stop, NULL);
-        //	printf("took %lu µs\n", (stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec);
-        //	printf("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
+        //	printf!("took %lu µs\n", (stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec);
+        //	printf!("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
         //	exit(0);
         //char *wasm_paint_routine = "init_graphics(); while(1){paint()}";// SDL bugs a bit
         //        while (1)paint(0);// help a little

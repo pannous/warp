@@ -1,3 +1,5 @@
+use wasp::{is, skip};
+
 #[test]
 fn test_range() {
     is!("0..3", Node(0, 1, 2));
@@ -194,14 +196,14 @@ fn test_range() {
     // does wasm print? (visual control!!);
     is!(("print 42"), 42);
     print("OK");
-    //	printf("%llx\n", -2000000000000ll);
-    //	printf("%llx", -4615739258092021350ll);
+    //	printf!("%llx\n", -2000000000000ll);
+    //	printf!("%llx", -4615739258092021350ll);
     print("a %d c".s() % 3);
     print("a %f c".s() % 3.1);
     print("a %x c".s() % 15);
-    printf("a %d c\n", 3);
-    printf("a %f c\n", 3.1);
-    printf("a %x c\n", 15);
+    printf!("a %d c\n", 3);
+    printf!("a %f c\n", 3.1);
+    printf!("a %x c\n", 15);
 }
 
 #[test] fn test_math_primitives() {
@@ -767,7 +769,7 @@ fn test_range() {
         memory[i] = i;
         //		if(i%10000==0)logi(i);// logi USES STACK, so it can EXHAUST if called too often!
         if (memory[i] != i) {
-            printf("MEMORY CORRUPTION at %d", i);
+            printf!("MEMORY CORRUPTION at %d", i);
             proc_exit(0);
         }
         memory[i] = tmp; // else test fail
@@ -856,7 +858,7 @@ fn test_range() {
 }
 #[test] fn test_wasm_runtime_extension() {
 #[cfg(feature = "TRACE")]{
-    printf("TRACE mode currently SIGTRAP's in test_wasm_runtime_extension. OK, Switch to Debug mode. WHY though?");
+    printf!("TRACE mode currently SIGTRAP's in test_wasm_runtime_extension. OK, Switch to Debug mode. WHY though?");
 }
 
     assert_run("43", 43);
@@ -894,7 +896,7 @@ fn test_range() {
         assert_run("test42f", 41.5); /// … expected f32 but nothing on stack
     );
     //	functionSignatures["int"].returns(int32);
-    //	assert_run("printf('123')", 123);
+    //	assert_run("printf!('123')", 123);
     // works with ./wasp but breaks in webapp
     // works with ./wasp but breaks now:
 
@@ -925,7 +927,7 @@ fn test_range() {
     skip!(
 
         assert_run("'123'", 123); // result printed and parsed?
-        assert_run("printf('123')", 123); // result printed and parsed?
+        assert_run("printf!('123')", 123); // result printed and parsed?
     );
     skip!(
  // if not compiled as RUNTIME_ONLY library:
@@ -1010,12 +1012,12 @@ fn test_range() {
     assert_throws("(1 4 3)#0");
 
 #[cfg(not(feature = "WASM"))]{ // TODO!
-    is!("'αβγδε'#3", U'γ');
-    is!("i=3;k='αβγδε';k#i", u'γ');
+    is!("'αβγδε'#3", 'γ');
+    is!("i=3;k='αβγδε';k#i", 'γ');
 }
     skip!(
 
-        is!("i=3;k='αβγδε';k#i='Γ';k#i", u'Γ'); // todo setCharAt
+        is!("i=3;k='αβγδε';k#i='Γ';k#i", 'Γ'); // todo setCharAt
         is!("[1 4 3]#2", 4); // exactly one op expected in emitIndexPattern
         eq!("[1 2 3]#2", 2); // assert! node based (non-primitive) interpretation first
         assert_throws("(1 4 3)#4"); // todo THROW!
@@ -1029,6 +1031,11 @@ fn test_range() {
     //	emit("pixel=[]");
     //	exit(0);
 }
+
+fn assert_throws(p0: &str) {
+    todo!()
+}
+
 // random stuff todo: put in proper tests
 #[test] fn test_wasm_stuff() {
     //	is!("grows := it * 2 ; grows(4)", 8);
@@ -1270,14 +1277,14 @@ testWasmTypedGlobals());
 
 #[test] fn test_smart_return_harder() {
     is!("'a'", Node('a'));
-    is!("'a'", Node(u'a'));
-    is!("'a'", Node(U'a'));
+    is!("'a'", Node('a'));
+    is!("'a'", Node('a'));
     is!("'a'", String('a'));
-    is!("'a'", String(u'a'));
-    is!("'a'", String(U'a'));
+    is!("'a'", String('a'));
+    is!("'a'", String('a'));
     //    is!("'a'", 'a'); // … should be 97
-    //    is!("'a'", u'a');
-    //    is!("'a'", U'a');
+    //    is!("'a'", 'a');
+    //    is!("'a'", 'a');
     is!("10007.0%10000.0", 7);
     is!("10007.0%10000", 7);
 #[cfg(not(feature = "WASM"))]{
@@ -1561,8 +1568,8 @@ testWasmTypedGlobals());
     is!("\"d\"", 'd');
     is!("'e'", 'e');
 #[cfg(feature = "WASM")]{
-    is!("'f'", u'f');
-    is!("'g'", U'g');
+    is!("'f'", 'f');
+    is!("'g'", 'g');
 }
     is!("'h'", "h");
     is!("\"i\"", "i");
@@ -1648,9 +1655,8 @@ testWasmTypedGlobals());
 
     is!("√9*-‖-3‖/-3", 3);
     skip!(
-
         is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
-        is!("i=3;k='αβγδε';k#i='Γ';k#i", u'Γ'); // todo setCharAt
+        is!("i=3;k='αβγδε';k#i='Γ';k#i", 'Γ'); // todo setCharAt
         testGenerics();
     );
     test_implicit_multiplication(); // todo in parser how?
