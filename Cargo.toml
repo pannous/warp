@@ -16,6 +16,25 @@ warn = false
 
 [features]
 #test = [] superfluous, just use cargo test => #[cfg(test)]
+APPLE = []
+EMSCRIPTEN = []
+GRAFIX = []
+INCLUDE_MERGER = []
+LINUX = []
+MICRO = []
+MULTI_VALUE = []
+MY_WASM = []
+RUNTIME_ONLY = []
+SDL = []
+std = []
+TRACE = []
+WABT_MERGE = []
+WAMR = []
+WASI = []
+WASM = []
+WASMEDGE = []
+WASMTIME = []
+WEBAPP = []
 release = []
 wasm = []
 
@@ -34,6 +53,7 @@ wasmparser = "*"
 wasm-encoder  = "*"
 log = "0.4.29"
 fetch = "0.8.1"
+num-bigint = "0.4.6"
 
 [target.'cfg(not(target_os = "wasm32"))'.dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }
