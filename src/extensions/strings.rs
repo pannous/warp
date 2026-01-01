@@ -35,6 +35,7 @@ impl CharExtensions for char {
 
 pub trait StringExtensions {
     fn at(&self,nr:i32) -> char;
+    fn codepoint_at(&self, nr:i32) -> char;
     fn char(&self,nr:usize) -> char;
     fn upper(&self) -> String;
     fn reverse(&self) -> String;
@@ -66,7 +67,7 @@ impl StringExtensions for String {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth(wrapped_index).unwrap()
     }
-    
+    fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
     fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
     fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
     fn last_char(&self) -> char { self.chars().last().unwrap() }
@@ -107,6 +108,7 @@ impl StringExtensions for str {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth( wrapped_index).unwrap()
     }
+    fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
     fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
     fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
     fn last_char(&self) -> char { self.chars().last().unwrap() }
@@ -254,6 +256,7 @@ impl PartialEqChar for String {
 
 #[cfg(test)]
 mod tests {
+    use crate::eq;
     use super::*;
 
     #[test]
@@ -262,6 +265,22 @@ mod tests {
         // assert!('1'.is(1));
         // assert!("l".is('l'));
     }
+
+
+    #[test]
+    fn test_str_plus() {
+        // eq!("a"+"b", "ab");
+        eq!("a".s()+"b", "ab");
+        // eq!("a".s()+2, "a2");
+    }
+
+}
+
+#[allow(unused)]
+macro_rules! s {
+    ($lit:literal) => {
+        String::from($lit)
+    };
 }
 
 // Test it see tests/string_tests.rs !!

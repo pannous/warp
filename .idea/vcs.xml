@@ -3,5 +3,8 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/LO" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../../apps/wasp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../../apps/wasp/Frameworks/wasm3" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../../apps/wasp/wiki" vcs="Git" />
   </component>
 </project>

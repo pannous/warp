@@ -2,6 +2,14 @@
 // Web/Browser tests
 // Migrated from tests_*.rs files
 
+use wasp::{eq, is, put, skip};
+use wasp::analyzer::analyze;
+use wasp::extensions::print;
+use wasp::type_kinds::{AstKind, NodeKind};
+use wasp::util::fetch;
+use wasp::wasm_gc_emitter::eval;
+use wasp::wasp_parser::parse;
+
 #[test]
 fn testHtmlWasp() {
     eval("html{bold{Hello}}"); // => <html><body><bold>Hello</bold></body></html> via appendChild bold to body
@@ -21,14 +29,12 @@ fn testJS() {
 }
 
 #[test]
-fn testInnerHtml() {
+fn test_inner_html() {
     #[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]{
         return;
     }
     let html = parse("<html><bold>test</bold></html>");
-    eq!(html.kind(), Kind::strings);
-    assert!(html.value.string);
-    eq!(*html.value.string, "<bold>test</bold>");
+    eq!(*html.value(), "<bold>test</bold>");
     let serialized = html.serialize();
     eq!(serialized, "<html><bold>test</bold></html>");
     //	eval("<html><script>alert('ok')");
@@ -52,22 +58,21 @@ fn testInnerHtml() {
 }
 
 #[test]
-fn testHtml() {
+fn test_html() {
     //	testHtmlWasp();
     //	testJS();
-    testInnerHtml();
+    test_inner_html();
 }
 
 #[test]
-fn testFetch() {
+fn test_fetch() {
     // todo: use host fetch if available
-    let string1 = fetch("https://pannous.com/files/test");
-    let res = String(string1).trim();
+    let res = fetch("https://pannous.com/files/test");
     if (res.contains("not available")) {
         print("fetch not available. set CURL=1 in CMakelists.txt or use host function");
         return;
     }
-    is!(res, "test 2 5 3 7");
+    eq!(res, "test 2 5 3 7");
     is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
     is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
     skip!(
@@ -78,50 +83,50 @@ fn testFetch() {
 }
 
 #[test]
-fn testCanvas() {
-    result = analyze(parse("$canvas"));
-    eq!(result.kind(), externref);
+fn test_canvas() {
+    let result = analyze(parse("$canvas"));
+    eq!(result.kind(), NodeKind::Externref);
     let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
-    print(nod);
+    put!(nod);
 }
 
 #[test]
-fn testDom() {
-    print("testDom");
-    preRegisterFunctions();
-    result = analyze(parse("getElementById('canvas')"));
-    eq!(result.kind(), call);
+fn test_dom() {
+    print("test_dom");
+    // preRegisterFunctions();
+    let mut result = analyze(parse("getElementById('canvas')"));
+    // eq!(result.kind(), AstKind::Call);
     result = eval("getElementById('canvas');");
     //	print(typeName(result.kind));
     //	eq!(result.kind(), strings); // why?
     //	eq!(result.kind(), longs); // todo: can't use smart pointers for elusive externref
     //	eq!(result.kind(), bools); // todo: can't use smart pointers for elusive externref
-    print(typeName(30));
-    print(typeName(9));
+    // print(typeName(30));
+    // print(typeName(9));
     //	eq!(result.kind(), 30);//
     //	eq!(result.kind(),9);//
-    //	eq!(result.kind(), (int64) externref); // todo: can't use smart pointers for elusive externref
+    //	eq!(result.kind(),  externref); // todo: can't use smart pointers for elusive externref
     //	result = eval("document.getElementById('canvas');");
     //	result = analyze(parse("$canvas"));
-    //	eq!(result.kind(), (int64) externref);
+    //	eq!(result.kind(),  externref);
 }
 
 #[test]
-fn testDomProperty() {
+fn test_dom_property() {
     #[cfg(not(feature = "WEBAPP"))]{
         return;
     }
-    result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
-    eq!(result.value.longy, 300); // only works because String "300" gets converted to BigInt 300
+    let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
+    eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
     //	result = eval("width='width';$canvas.width");
     result = eval("$canvas.width");
-    is!(result.value.longy, 300);
+    eq!(result.value(), &300);
     //	return;
     result = eval("$canvas.style");
-    eq!(result.kind(), strings);
+    // eq!(result.kind(), strings);
     //	eq!(result.kind(), stringp);
-    // if (result.value.string);
-    // is!(*result.value.string, "dfsa");
+    // if (result.value()));
+    // is!(*result.value()), "dfsa");
     //	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
     // ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
     // todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?

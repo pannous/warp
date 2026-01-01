@@ -77,7 +77,7 @@ fn test_parse_all_samples() {
 
         if !unexpected_failures.is_empty() {
             println!("\n⚠ Unexpected failures (not in known issues list):");
-            for file in &unexpected_failures {
+            for file in unexpected_failures {
                 println!("  - {}", file);
             }
             // Only panic if there are unexpected failures

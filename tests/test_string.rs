@@ -132,3 +132,31 @@ fn test_primitive_hello() {
 //     test_reverse();
 //     test_map();
 // }
+
+
+
+#[test]
+fn test_string_concatenation() {
+    //	eq!(Node("✔️"), True);
+    //	eq!(Node("✔"), True);
+    //	eq!(Node("✖️"), False);
+    //	eq!(Node("✖"), False);
+    let huh = "a".s() + 2;
+    //     assert!(_eq!(huh.length(), 2);
+    //     assert!(_eq!(huh[0], 'a');
+    //     assert!(_eq!(huh[1], '2');
+    //     assert!(_eq!(huh[2],  0);
+    is!("a2", "a2");
+
+    eq!(huh, "a2");
+    eq!("a" + 2, "a2");
+    eq!("a" + 2.2, "a2.2");
+    eq!("a" + "2.2", "a2.2");
+    eq!("a" + 'b', "ab");
+    eq!("a" + "bc", "abc");
+    eq!("a" + true, "a✔️");
+    eq!("a%sb" % "hi", "ahib");
+
+    eq!("a%db" % 123, "a123b");
+    eq!("a%s%db" % "hi" % 123, "ahi123b");
+}

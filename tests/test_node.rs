@@ -24,7 +24,7 @@ fn test_node_list() {
 #[test]
 fn test_node_index_str() {
     use wasp::node::{Bracket, Grouper};
-    // Test indexing with &str on Block containing Key nodes
+    // Test indexing let str : with on Block containing Key nodes
     let mut block = Node::Block(
         vec![
             Node::key("name", Node::text("Alice")),

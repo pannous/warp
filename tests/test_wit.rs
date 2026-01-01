@@ -1,6 +1,6 @@
 use wasp::eq;
 use wasp::node::Node::*;
-use wasp::wasp_parser::read;
+use wasp::wasp_parser::parse_file;
 
 #[test]
 fn test_timeout_protection() {
@@ -13,7 +13,7 @@ fn test_timeout_protection() {
 #[test]
 pub fn test_wit_parse() {
     // loop {} // Should be killed at .1
-    let ast = read("wasp-ast.wit");
+    let ast = parse_file("wasp-ast.wit");
     println!("serialize: {:#?}", ast.serialize());
     if let List(ref items) = ast {
         for (i, item) in items.iter().enumerate() {

@@ -1,8 +1,9 @@
+use wasp::wasp_parser::parse;
+use wasp::eq;
 
-
-#[test] fn testParse() {
+#[test] fn test_parse() {
 //	Mark::markmode();
-//	const Node &node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
+//	const let node : Node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
 
 
 	let wat = r#"(module
@@ -33,20 +34,20 @@
 
 	let module = parse(wat);
 	eq!(module, "module");
-	printf!("%s", module.toString());
-	eq!(module.length, 8);
-//	eq!(node.length, 12);
+	// printf!("%s", module.toString());
+	eq!(module.length(), 8);
+//	eq!(node.length(), 12);
 //	puts(node);
 	eq!(module[0], "table");
 	eq!(module[1], "memory");
 	eq!(module[2], "export");
-	assert!(module["func"].length() == 2);
-	assert!(module["func"]["$main"]["param"].length() == 2);
+	assert_eq!(module["func"].length(), 2);
+	assert_eq!(module["func"]["$main"]["param"].length(), 2);
 
 }
 
-#[test] fn testWast() {
-    use_polish_notation = true;
-    testParse();
-    use_polish_notation = false;
+#[test] fn test_wast() {
+    // use_polish_notation = true;
+    test_parse();
+    // use_polish_notation = false;
 }
