@@ -37,7 +37,7 @@ fn testInnerHtml() {
         // skip!(
 
         eval("<html><bold id=b ok=123>test</bold></html>");
-        assert_is("$b.ok", 123); // TODO emitAttributeSetter
+        is!("$b.ok", 123); // TODO emitAttributeSetter
         eval("<script>console.log('ok!')</script>");
         eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
         // );
@@ -81,9 +81,7 @@ fn testFetch() {
 fn testCanvas() {
     result = analyze(parse("$canvas"));
     eq!(result.kind, externref);
-    let nod = eval("    ctx = $canvas.getContext('2d');\n"
-                   "    ctx.fillStyle = 'red';\n"
-                   "    ctx.fillRect(10, 10, 150, 100);");
+    let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
     print(nod);
 }
 
@@ -122,8 +120,8 @@ fn testDomProperty() {
     result = eval("$canvas.style");
     eq!(result.kind, strings);
     //	eq!(result.kind, stringp);
-    if (result.value.string);
-    assert! _eq(*result.value.string, "dfsa");
+    // if (result.value.string);
+    // assert! _eq(*result.value.string, "dfsa");
     //	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
     // ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
     // todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?

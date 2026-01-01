@@ -1,4 +1,6 @@
-use wasp::wasp_parser::WaspParser;
+use wasp::is;
+use wasp::wasp_parser::{parse, WaspParser};
+// use wasp::wasp_parser::WaspParser::parse;
 use wasp::node::Node;
 
 #[test]
@@ -95,4 +97,22 @@ fn test_comment_with_metadata_accessor() {
     } else {
         panic!("Expected metadata");
     }
+}
+
+
+// Comments
+#[test]
+fn testComments() {
+    is!("1+1 // comment", 2);
+    is!("1 /* inline */ + 1", 2);
+    is!("/* block \n comment */ 1+1", 2);
+}
+
+#[test]
+fn testComments2() {
+    let c = "blah a b c # to silence python warnings;)\n y/* yeah! */=0 // really";
+    let result: Node = parse(c);
+    assert!(result.length() == 2);
+    assert!(result[0].length() == 4);
+    assert!(result[1].length() == 3);
 }

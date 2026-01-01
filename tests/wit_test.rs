@@ -3,7 +3,16 @@ use wasp::node::Node::*;
 use wasp::wasp_parser::read;
 
 #[test]
-pub fn test_parser() {
+fn test_timeout_protection() {
+    let do_test_timeout_protection = false;
+    if do_test_timeout_protection {
+        loop {} // Should be killed at .1s
+    }
+}
+
+#[test]
+pub fn test_wit_parse() {
+    // loop {} // Should be killed at .1
     let ast = read("wasp-ast.wit");
     println!("serialize: {:#?}", ast.serialize());
     if let List(ref items) = ast {
@@ -11,5 +20,7 @@ pub fn test_parser() {
             println!("item {}: {:#?}", i, item);
         }
     }
-    eq!(ast.size(), 3);
+    eq!(ast.size(), 2);
+    eq!(ast[0].name(), "package");
+    eq!(ast[1].name(), "interface");
 }

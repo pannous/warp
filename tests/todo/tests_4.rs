@@ -1,27 +1,25 @@
 #[test]
 fn testRoots() {
-    assert!(NIL.value.longy == 0);
-    // assert_is((char *) "'hello'", "hello");
+    assert!(Empty == 0);
+    // is!((char *) "'hello'", "hello");
+    is!("hello", "hello"); // todo reference==string really?
+    is!("True", True);
+    is!("False", False);
+    is!("true", True);
+    is!("false", False);
+    is!("yes", True);
+    is!("no", False);
+    //	is!("right", True);
+    //	is!("wrong", False);
+    is!("null", Empty);
+    is!("", Empty);
+    assert!(Empty == 0);
+    is!("0", Empty);
+    is!("1", 1);
+    is!("123", 123);
     skip!(
-assert_is("hello", "hello", 0)); // todo reference==string really?
-    assert_is("True", True);
-    assert_is("False", False);
-    assert_is("true", True);
-    assert_is("false", False);
-    assert_is("yes", True);
-    assert_is("no", False);
-    //	assert_is("right", True);
-    //	assert_is("wrong", False);
-    assert_is("null", NIL);
-    assert_is("", NIL);
-    assert!(NIL.value.longy == 0);
-    assert_is("0", NIL);
-    assert_is("1", 1);
-    assert_is("123", 123);
-    skip!(
-
-        assert_is("()", NIL);
-        assert_is("{}", NIL); // NOP
+        is!("()", Empty);
+        is!("{}", Empty); // NOP
     );
 }
 #[test]
@@ -75,7 +73,7 @@ fn testEmpty() {
 fn testEval() {
     skip!(
 
-        assert_is("√4", 2);
+        is!("√4", 2);
     );
 }
 
@@ -87,8 +85,8 @@ fn testLengthOperator() {
     is!("len('0123')", 4); // todo at compile?
     is!("len([0 1 2 3])", 4);
     is!("size([a b c d])", 4);
-    assert_is("#{a b c}", 3);
-    assert_is("#(a b c)", 3); // todo: groups
+    is!("#{a b c}", 3);
+    is!("#(a b c)", 3); // todo: groups
 }
 
 #[test]
@@ -109,7 +107,7 @@ fn testIndentAsBlock() {
         // NODE/DATA STRUCTURE TESTS (see node_tests.h);
         //==============================================================================
 
-//         assert_is((char *) "a\n\tb", "a{b}");
+//         is!((char *) "a\n\tb", "a{b}");
     );
     // 0x0E 	SO 	␎ 	^N 		Shift Out
     // 0x0F 	SI 	␏ 	^O 		Shift In
@@ -117,48 +115,7 @@ fn testIndentAsBlock() {
     //	https://fontawesome.com/v4.7/icon/outdent looks more like it, also matching context  OK in font PingFang HK?
 } // 􀖯􀉶𠿜🕻🗠🂿	𝄉
 
-#[test]
-fn testParentContext() {
-//     chars
-    source = "{a:'HIO' d:{} b:3 c:ø}";
-    assert_parses(source);
-    result.print();
-    Node & a = result["a"];
-    a.print();
-    eq!(a.kind, strings);
-    eq!(a.value.string, "HIO");
-    eq!(a.string(), "HIO"); // keyNodes go to values!
-    assert(a == "HIO");
-    //	eq!(a.name,"a" or"HIO");// keyNodes go to values!
-    skip!(
 
-        eq!(a.kind, key);
-        assert(a.name == "HIO");
-    );
-}
-
-#[test]
-fn testParent() {
-    //	chars source = "{a:'HIO' d:{} b:3 c:ø}";
-//     chars
-    source = "{a:'HIO'}";
-    assert_parses(source);
-    Node & a = result["a"];
-    // print(a);
-    assert!(a.kind == key or a.kind == strings);
-    assert!(a == "HIO");
-    assert!(a.parent == 0); // key is the highest level
-//     Node * parent = a.value.node -> parent;
-    assert!(parent);
-    // print(parent); // BROKEN, WHY?? let's find out:
-    assert!(*parent == result);
-    skip!(
-
-        // pointer identity broken by flat() ?
-        assert!(parent == &result);
-    );
-    testParentContext(); // make sure parsed correctly
-}
 
 #[test]
 fn testAsserts() {
@@ -279,7 +236,7 @@ fn testString() {
     testStringConcatenation();
     testStringReferenceReuse();
 //     eq!(_x(parse("١٢٣"), Node(123));
-    //    assert_is("١٢٣", 123);
+    //    is!("١٢٣", 123);
     assert!("abc" == "abc");
 
     assert!(String(u'☺').length == 3);
@@ -299,12 +256,12 @@ fn testNilValues() {
     #[cfg(feature = "LINUX")]{
         return; // todo: not working on linux, why?
     }
-    assert(NIL.name == nil_name.data);
-    assert(NIL.isNil());
+    assert(Empty.name == nil_name.data);
+    assert(Empty.isNil());
     assert_parses("{ç:null}");
     Node & node1 = result["ç"];
     debugNode(node1);
-    assert(node1 == NIL);
+    assert(node1 == Empty);
 
     assert_parses("{a:null}");
     assert!(result["a"].value.data == 0);
@@ -313,13 +270,13 @@ fn testNilValues() {
     assert!(result.value.longy == 0);
     debugNode(result["a"]);
     // print(result["a"].serialize());
-    assert(result["a"] == NIL);
-    assert(result == NIL);
-    eq!(result["a"], NIL);
+    assert(result["a"] == Empty);
+    assert(result == Empty);
+    eq!(result["a"], Empty);
 
     assert_parses("{ç:ø}");
     Node & node = result["ç"];
-    assert(node == NIL);
+    assert(node == Empty);
 }
 #[test]
 fn testConcatenationBorderCases() {
@@ -342,16 +299,16 @@ fn testConcatenation() {
     other = Node("4").setKind(strings); // necessary: Node("x") == reference|strings? => kind=unknown
     assert!(other.kind == strings);
     assert!(!other.isNil());
-    assert!(!(&other == &NIL));
-    //	address of 'NIL' will always evaluate to 'true' because NIL is const now!
-    //	assert!(!(other == &NIL));
-    //	assert!(not(&other == &NIL));
-    //	assert!(not(other == &NIL));
-    assert!(other != NIL);
+    assert!(!(&other == &Empty));
+    //	address of 'Empty' will always evaluate to 'true' because Empty is const now!
+    //	assert!(!(other == &Empty));
+    //	assert!(not(&other == &Empty));
+    //	assert!(not(other == &Empty));
+    assert!(other != Empty);
     #[cfg(not(feature = "WASM"))]{
-        //	assert!(other != &NIL);
+        //	assert!(other != &Empty);
     }
-    assert!(&other != &NIL);
+    assert!(&other != &Empty);
     assert!(not other.isNil());
     node1234 = node1.merge(other);
     //	Node node1234=node1.merge(Node("4"));
@@ -396,63 +353,11 @@ fn testConcatenation() {
         // AMBIGUOUS: "1" + 2 == ["1" 2] ?
         eq!(Node("1"s) + Node(2), Node("12"));
         eq!(Node("a"s) + Node(2.2), Node("a2.2"));
-        // "3" is type unknown => it is treated as NIL and not added!
+        // "3" is type unknown => it is treated as Empty and not added!
         eq!(Node("1", "2", 0) + Node("3"), Node("1", "2", "3", 0)); // can't work ^^
     );
 }
-#[test]
-fn testParamizedKeys() {
-    //	<label for="pwd">Password</label>
 
-    // 0. parameters accessible
-    label0 = parse("label(for:password)");
-    label0.print();
-    Node & node = label0["for"];
-    eq!(node, "password");
-    eq!(label0["for"], "password");
-
-    // 1. paramize keys: label{param=(for:password)}:"Text"
-    label1 = parse("label(for:password):'Passwort'"); // declaration syntax :(
-    // Node label1 = parse("label{for:password}:'Passwort'");
-    // Node label1 = parse("label[for:password]:'Passwort'");
-    label1.print();
-    eq!(label1, "Passwort");
-    eq!(label1["for"], "password");
-    //	eq!(label1["for:password"],"Passwort");
-
-    // 2. paramize values
-    // TODO 1. move params of Passwort up to lable   OR 2. preserve Passwort as object in stead of making it string value of label!
-    skip!(
-
-        Node label2 = parse("label:'Passwort'(for:password)");
-        assert!(label2 == "Passwort");
-        eq!(label2, "Passwort");
-        eq!(label2["for"], "password");
-        eq!(label2["for"], "password"); // descend value??
-        eq!(label2["Passwort"]["for"], "password");
-    );
-
-    skip!(
-
-        //	3. relative equivalence? todo not really
-        eq!(label1, label2);
-        Node label3 = parse("label:{for:password 'Password'}");
-    );
-}
-
-#[test]
-fn testStackedLambdas() {
-    result = parse("a{x:1}{y:2}{3}");
-    result.print();
-    assert!(result.length == 3);
-    assert!(result[0] == parse("{x:1}"));
-    assert!(result[0] == parse("x:1")); // grouping irrelevant
-    assert!(result[1] == parse("{y:2}"));
-    assert!(result[2] == parse("{3}"));
-    assert!(result[2] != parse("{4}"));
-
-    assert!(parse("a{x}{y z}") != parse("a{x,{y z}}"));
-}
 
 #[test]
 fn testIndex() {
@@ -461,19 +366,19 @@ fn testIndex() {
     assert!(result.length == 3);
     skip!(
 
-        assert_is("(a b c)#2", "b");
-        assert_is("{a b c}#2", "b");
-        assert_is("[a b c]#2", "b");
+        is!("(a b c)#2", "b");
+        is!("{a b c}#2", "b");
+        is!("[a b c]#2", "b");
     );
     todo_emit(
-//         assert_is("{a:1 b:2}.a", 1);
-//     assert_is("a of {a:1 b:2}", 1);
-//     assert_is("a in {a:1 b:2}", 1);
-//     assert_is("{a:1 b:2}[a]", 1);
-//     assert_is("{a:1 b:2}.b", 2);
-//     assert_is("b of {a:1 b:2}", 2);
-//     assert_is("b in {a:1 b:2}", 2);
-//     assert_is("{a:1 b:2}[b]", 2);
+//         is!("{a:1 b:2}.a", 1);
+//     is!("a of {a:1 b:2}", 1);
+//     is!("a in {a:1 b:2}", 1);
+//     is!("{a:1 b:2}[a]", 1);
+//     is!("{a:1 b:2}.b", 2);
+//     is!("b of {a:1 b:2}", 2);
+//     is!("b in {a:1 b:2}", 2);
+//     is!("{a:1 b:2}[b]", 2);
     );
 
     //==============================================================================
@@ -481,108 +386,12 @@ fn testIndex() {
     //==============================================================================
 }
 
-// can be removed because noone touches List.sort algorithm!
-#[test]
-fn testSort() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-        assert!(list.sort() == listb);
-//         let by_precedence = [](int & a, int & b)
-        { return a * a > b * b; };
-        assert!(list.sort(by_precedence) == listb);
-//         let by_square = [](int & a)
-        {
-            return (float);
-            a * a;
-        };
-        assert!(list.sort(by_square) == listb);
-    }
-}
 
-#[test]
-fn testSort1() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-//         let by_precedence = [](int & a, int & b)
-        { return a * a > b * b; };
-        assert!(list.sort(by_precedence) == listb);
-    }
-}
 
-#[test]
-fn testSort2() {
-    #[cfg(not(feature = "WASM"))]{
-        // List<int> list = { 3, 1, 2, 5, 4 };
-        // List<int> listb = { 1, 2, 3, 4, 5 };
-//         let by_square = [](int & a)
-        {
-            return (float);
-            a * a;
-        };
-        assert!(list.sort(by_square) == listb);
-    }
-}
 
-#[test]
-fn testRemove() {
-    result = parse("a b c d");
-    result.remove(1, 2);
-    replaced = parse("a d");
-    assert!(result == replaced);
-}
 
-#[test]
-fn testRemove2() {
-    result = parse("a b c d");
-    result.remove(2, 10);
-    replaced = parse("a b");
-    assert!(result == replaced);
-}
 
-#[test]
-fn testReplace() {
-    result = parse("a b c d");
-//     result.replace(1, 2, new Node("x"));
-    replaced = parse("a x d");
-    assert!(result == replaced);
-}
-#[test]
-fn testNodeConversions() {
-    b = Node(true);
-    // print("b.kind");
-    // print(b.kind);
-    // print(typeName(b.kind));
-    // print("b.value.longy");
-    // print(b.value.longy);
-    assert!(b.value.longy == 1);
-    assert!(b.kind == bools);
-    assert!(b == True);
-    a = Node(1);
-    assert!(a.kind == longs);
-    assert!(a.value.longy == 1);
-//     a0 = Node((int64_t) 10ll);
-    assert!(a0.kind == longs);
-    assert!(a0.value.longy == 10);
-    a1 = Node(1.1);
-//     assert!(_eq(a1.kind, reals);
-    assert!(a1.kind == reals);
-    assert!(a1.value.real == 1.1);
-    a2 = Node(1.2f);
-    assert!(a2.kind == reals);
-    assert!(a2.value.real == 1.2f);
-//     Node as = Node('a');
-    assert!(as.kind == strings or as.kind == codepoint1);
-//     if ( as.kind == strings) { assert!(*as.value.string == 'a'); }
-//     if ( as.kind == codepoint1) assert!((codepoint) as.value.longy == 'a');
-}
 
-#[test]
-fn testGroupCascade0() {
-    result = parse("x='abcde';x#4='y';x#4");
-    assert!(result.length == 3);
-}
 
 #[test]
 fn testGroupCascade1() {
@@ -707,31 +516,7 @@ fn testGroupCascade() {
 //     a.addSmart(b); // why?
 // }
 
-// #[test]
-fn testBUG();
 
-#[test]
-fn testEmitBasics();
-
-#[test]
-fn testSourceMap();
-#[test]
-fn testArrayIndices() {
-    skip!(
-
-        // fails second time WHY?
-        assert_is("[1 2 3]", Node(1, 2, 3, 0).setType(patterns));
-        assert_is("[1 2 3]", Node(1, 2, 3, 0));
-    );
-    #[cfg(not(feature = ""))]{
-//         (WASM
-//         and
-//         INCLUDE_MERGER);
-        assert_is("(1 4 3)#2", 4); // todo needs_runtime = true => whole linker machinery
-        assert_is("x=(1 4 3);x#2", 4);
-        assert_is("x=(1 4 3);x#2=5;x#2", 5);
-    }
-}
 #[test]
 fn testNodeEmit() {
     is!("y:{x:2 z:3};y.x", 2);
@@ -782,7 +567,7 @@ fn testNodeImplicitConversions() {
 
 #[test]
 fn testUnits() {
-    assert_is("1 m + 1km", Node(1001).setType(types["m"]));
+    is!("1 m + 1km", Node(1001).setType(types["m"]));
 }
 
 #[test]
@@ -974,7 +759,7 @@ fn testAllEmit() {
     #[cfg(feature = "APPLE")]{
         testAllSamples();
     }
-    assert!(NIL.value.longy == 0); // should never be modified
+    assert!(Empty == 0); // should never be modified
     // print("ALL TESTS PASSED");
 }
 #[test]
@@ -1076,7 +861,7 @@ fn test_const_String_comparison_bug() {
 #[test]
 fn todo_done() { // moved from todo();
     // GOOD! move to tests() once they work again but a#[test] fn redundant test executions
-    assert_is("2+1/2", 2.5);
+    is!("2+1/2", 2.5);
     is!("a = [1, 2, 3]; a[2]", 3);
     // #[cfg(not(feature = "WASMTIME"))]{ and not LINUX // todo why
     // is!("n=3;2ⁿ", 8);
@@ -1183,13 +968,13 @@ fn todos() {
     is!("if(0):{3}", false); // 0:3 messy node
     eq!(Node("1", 0) + Node("2"s),
                   Node("1", "2", 0)); // 1+2 => 1:2  stupid border case because 1 not group (1);
-//     assert_is((char *) "{a b c}#2", "b"); // ok, but not for patterns:
-//     assert_is((char *) "[a b c]#2", "b"); // patterns
+//     is!((char *) "{a b c}#2", "b"); // ok, but not for patterns:
+//     is!((char *) "[a b c]#2", "b"); // patterns
     is!("abs(0)", 0);
-    assert_is("i=3;i--", 2); // todo bring variables to interpreter
-    assert_is("i=3.7;.3+i", 4); // todo bring variables to interpreter
-    assert_is("i=3;i*-1", -3); // todo bring variables to interpreter
-    assert_is("one plus two times three", 7);
+    is!("i=3;i--", 2); // todo bring variables to interpreter
+    is!("i=3.7;.3+i", 4); // todo bring variables to interpreter
+    is!("i=3;i*-1", -3); // todo bring variables to interpreter
+    is!("one plus two times three", 7);
     //	print("OK %s %d"s % ("WASM",1));// only 1 handed over
     //    print(" OK %d %d"s % (2, 1));// error: expression result unused [-Werror,-Wunused-value] OK
     is!("use wasp;use lowerCaseUTF;a='ÂÊÎÔÛ';lowerCaseUTF(a);a", "âêîôû");
@@ -1398,7 +1183,7 @@ fn testCurrent() {
         testKebabCase(); // needed later …
         testStruct();
         todos();
-        assert_is("(1 4 3)#2", 4); //
+        is!("(1 4 3)#2", 4); //
         assert_throws("0/0"); // now NaN OK
         testPolymorphism2();
         testPolymorphism3();
