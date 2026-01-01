@@ -67,9 +67,9 @@ fn testFetch() {
         print("fetch not available. set CURL=1 in CMakelists.txt or use host function");
         return;
     }
-    assert! _eq(res, "test 2 5 3 7");
-    assert! _emit("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-    assert! _emit("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+    is!(res, "test 2 5 3 7");
+    is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+    is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
     skip!(
 
         assert!_emit("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
@@ -115,13 +115,13 @@ fn testDomProperty() {
     eq!(result.value.longy, 300); // only works because String "300" gets converted to BigInt 300
     //	result = eval("width='width';$canvas.width");
     result = eval("$canvas.width");
-    assert! _eq(result.value.longy, 300);
+    is!(result.value.longy, 300);
     //	return;
     result = eval("$canvas.style");
     eq!(result.kind, strings);
     //	eq!(result.kind, stringp);
     // if (result.value.string);
-    // assert! _eq(*result.value.string, "dfsa");
+    // is!(*result.value.string, "dfsa");
     //	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
     // ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
     // todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?

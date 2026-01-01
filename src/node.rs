@@ -219,13 +219,56 @@ pub enum Node {
     List(Vec<Node>),                    // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
     Meta(Box<Node>, Meta), // Wrapper to attach metadata to any node
-                // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
-                // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
-                // List(Vec<T>) // turns whole Node into a generic type :(
+    // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
+    // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
+    // List(Vec<T>) // turns whole Node into a generic type :(
+    False,
+    True,
 }
 
 impl Node {
+    pub fn first(&self) -> Node {
+        todo!()
+    }
+    pub fn laste(&self) -> Node {
+        // last() belongs to iterator trade!!
+        todo!()
+    }
+    pub fn print(&self) {
+        todo!()
+    }
+    pub fn children(&self) -> Vec<Node> {
+        todo!()
+    }
+    pub fn add(&self, p0: Node) -> Node {
+        todo!()
+    }
 
+    pub fn values(&self) -> Node {
+        match self {
+            Node::KeyValue(_, v) => *v.clone(),
+            Node::Meta(node, _) => node.values(),
+            _ => todo!(), //#Node::Empty,
+        }
+    }
+
+    pub fn kind(&self) -> NodeKind {
+        match self {
+            Node::Empty => NodeKind::Empty,
+            Node::Number(_) => NodeKind::Number,
+            Node::Text(_) => NodeKind::Text,
+            Node::Codepoint(_) => NodeKind::Codepoint,
+            Node::Symbol(_) => NodeKind::Symbol,
+            Node::KeyValue(_, _) => NodeKind::key,
+            Node::Pair(_, _) => NodeKind::Pair,
+            Node::Tag { .. } => NodeKind::Tag,
+            Node::Block(_, _, _) => NodeKind::Block,
+            Node::List(_) => NodeKind::list,
+            Node::Data(_) => NodeKind::Data,
+            Node::Meta(_, _) => NodeKind::Meta,
+            Node::Error(_) => NodeKind::Error,
+        }
+    }
     pub fn length(&self) -> i32 {
         match self {
             Node::List(items) => items.len() as i32,
@@ -299,7 +342,7 @@ impl Node {
                 Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
             },
 
-            t if t == NodeKind::KeyValue as i32 => {
+            t if t == NodeKind::key as i32 => {
                 let key = obj.name().unwrap_or_else(|_| String::new());
                 // Recursively read the value node from right field
                 let value = match obj.get::<GcObject>("right") {
@@ -345,7 +388,7 @@ impl Node {
                 Node::Block(vec![], Grouper::Expression, Bracket::Curly)
             }
 
-            t if t == NodeKind::List as i32 => {
+            t if t == NodeKind::list as i32 => {
                 // TODO: read items from linked list structure
                 Node::List(vec![])
             }
