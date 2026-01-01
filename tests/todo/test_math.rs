@@ -12,3 +12,173 @@
     is!("2+3*4", 14); // precedence
     is!("10-3*2", 4); // precedence
 }
+
+#[test]
+fn testPower() {
+    eq!(powi(10, 1), 10l);
+    eq!(powi(10, 2), 100l);
+    eq!(powi(10, 3), 1000l);
+    eq!(powi(10, 4), 10000l);
+    eq!(parseLong("8e6"), 8000000l);
+    skip!(
+
+        eq!(parseLong("8e-6"), 1.0 / 8000000l);
+    );
+    eq!(parseDouble("8.333e-3"), 0.008333l);
+    eq!(parseDouble("8.333e3"), 8333.0l);
+    eq!(parseDouble("8.333e-3"), 0.008333l);
+    //    eq!(ftoa(8.33333333332248946124e-03), "0.0083");
+    eq!(powi(10, 1), 10l);
+    eq!(powi(10, 2), 100l);
+    eq!(powi(10, 4), 10000l);
+    eq!(powi(2, 2), 4l);
+    eq!(powi(2, 8), 256l);
+    skip!(
+
+        eq!(powd(2, -2), 1 / 4.);
+        eq!(powd(2, -8), 1 / 256.);
+        eq!(powd(10, -2), 1 / 100.);
+        eq!(powd(10, -4), 1 / 10000.);
+        eq!(powd(3,0), 1.);
+        eq!(powd(3,1), 3.);
+        eq!(powd(3,2), 9.);
+        eq!(powd(3,2.1), 10.04510856630514);
+
+        //==============================================================================
+        // MAP TESTS (see map_tests.h);
+        //==============================================================================
+
+        eq!(powd(3.1,2.1), 10.761171606099687);
+    );
+    // is!("√3^0", 0.9710078239440918); // very rough power approximation from where?
+}
+
+
+
+#[test]
+fn testHyphenUnits() {
+    //     const char *code = "1900 - 2000 AD";// (easy with units);
+    //     assert_analyze(code,"{kind=range type=AD value=(1900,2000)}");
+    // todo how does Julia represent 10 ± 2 m/s ?
+    is!("1900 - 2000 AD == 1950 AD ± 50", true);
+    is!("1900 - 2000 cm == 1950 cm ± 50", true);
+    is!("1900 - 2000 cm == 1950 ± 50 cm ", true);
+}
+
+#[test]
+fn testHypenVersusMinus() {
+    // Needs variable register in parser.
+    is!("a=-1 b=2 b-a", 3);
+    is!("a-b:2 c-d:4 a-b", 2);
+}
+
+
+#[test]
+fn testModulo() {
+    //	eq!(mod_d(10007.0, 10000.0), 7);
+    is!("10007%10000", 7); // breaks here!?!
+    is!("10007.0%10000", 7);
+    is!("10007.0%10000.0", 7);
+
+    is!("10007%10000.0", 7); // breaks here!?! load_lib mod_d suspect!!
+    is!("i=10007;x=i%10000", 7);
+    is!("i=10007.0;x=i%10000.0", 7); // breaks here!?!
+    is!("i=10007.1;x=i%10000.1", 7);
+}
+
+
+// One of the few tests which can be removed because who will ever change the sin routine?
+#[test]
+fn test_sin() {
+    #[cfg(feature = "LINUX")]{
+        return; // only for internal sinus implementation testing
+        //         # else
+        eq!(sin(0), 0.);
+        eq!(sin(pi / 2), 1.);
+        eq!(sin(-pi / 2), -1.);
+        eq!(sin(pi), 0.);
+        eq!(sin(2 * pi), 0.);
+        eq!(sin(3 * pi / 2), -1.);
+
+        eq!(cos(-pi / 2 + 0), 0.);
+        eq!(cos(0), 1.);
+        eq!(cos(-pi / 2 + pi), 0.);
+        eq!(cos(-pi / 2 + 2 * pi), 0.);
+        eq!(cos(pi), -1.);
+        eq!(cos(-pi), -1.);
+    }
+}
+
+
+#[test]
+fn testPrimitiveTypes() {
+    is!("double 2", 2);
+    is!("float 2", 2);
+    is!("int 2", 2);
+    is!("long 2", 2);
+    is!("8.33333333332248946124e-03", 0);
+    is!("8.33333333332248946124e+01", 83);
+    is!("S1  = -1.6666", -1);
+    is!("double S1  = -1.6666", -1);
+    //  is!("double\n" "\tS1  = -1.6666", -1);
+
+    is!("grow(double z):=z*2;grow 5", 10);
+    is!("grow(z):=z*2;grow 5", 10);
+    is!("int grow(double z):=z*2;grow 5", 10);
+    is!("double grow(z):=z*2;grow 5", 10);
+    is!("int grow(int z):=z*2;grow 5", 10);
+    is!("double grow(int z):=z*2;grow 5", 10);
+    is!("double\n"
+             "\tS1  = -1.66666666666666324348e01, /* 0xBFC55555, 0x55555549 */\n"
+             "\tS2  =  8.33333333332248946124e03, /* 0x3F811111, 0x1110F8A6 */\n\nS1", -16);
+    is!("double\n"
+             "\tS1  = -1.66666666666666324348e01, /* 0xBFC55555, 0x55555549 */\n"
+             "\tS2  =  8.33333333332248946124e01, /* 0x3F811111, 0x1110F8A6 */\n\nS2", 83);
+    eq!(ftoa(8.33333333332248946124e-03), "0.0083");
+    //  eq!(ftoa2(8.33333333332248946124e-03), "8.333E-3");
+    is!("S1 = -1.66666666666666324348e-01;S1*100", -16);
+    is!("S1 = 8.33333333332248946124e-03;S1*1000", 8);
+    skip!(
+     is!("(2,4) == (2,4)", 1); // todo: array creation/ comparison
+     is!("(float 2, int 4.3)  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
+     is!("float 2, int 4.3  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
+        //  float  2, ( int ==( 4.3 2)), 4
+ )
+}
+
+
+#[test] fn testLogarithmInRuntime(){
+
+    // float
+    let ℯ = 2.7182818284590;
+    //	eq!(ln(0),-∞);
+    eq!(log(100000),5.);
+    eq!(log(10),1.);
+    eq!(log(1),0.);
+    eq!(ln(ℯ*ℯ),2.);
+    eq!(ln(1),0.);
+    eq!(ln(ℯ),1.);
+}
+
+
+#[test]
+fn test_sinus_wasp_import() {
+    // using sin.wasp, not sin.wasm
+    // todo: compile and reuse sin.wasm if unmodified
+    is!("use sin;sin π/2", 1);
+    is!("use sin;sin π", 0);
+    is!("use sin;sin 3*π/2", -1);
+    is!("use sin;sin 2π", 0);
+    is!("use sin;sin -π/2", -1);
+}
+
+#[test]
+fn testHex() {
+    eq!(hex(18966001896603L), "0x113fddce4c9b");
+    is!("42", 42);
+    is!("0xFF", 255);
+    is!("0x100", 256);
+    is!("0xdce4c9b", 0xdce4c9b);
+    //    is!("0x113fddce4c9b", 0x113fddce4c9bl); todo
+    //	is!("0x113fddce4c9b", 0x113fddce4c9bL);
+}

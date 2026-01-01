@@ -12,6 +12,9 @@
       <excludeFolder url="file://$MODULE_DIR$/.vscode" />
       <excludeFolder url="file://$MODULE_DIR$/vendor" />
     </content>
+    <content url="file:///Users/me/dev/apps/wasp/source">
+      <sourceFolder url="file:///Users/me/dev/apps/wasp/source" type="java-resource" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

@@ -2,38 +2,6 @@
 // Function tests
 // Migrated from tests_*.rs files
 
-#[test]
-    skip!(
-fn test_list_lambdas() {
-    // List<int> nums = { 1, -2, 3, -4, 5 };
-    negCount2 = nums.count( + [](int & x)
-    { return x < 0; });
-    assert!(negCount2 == 2);
-
-    // Remove negatives in-place
-    nums.remove( + [](int & x)
-    { return x < 0; }); // [1, 3, 5]
-    assert!(nums.length() == 3);
-
-    // Filter to new list
-    let positives = nums.filter( + [](int & x)
-    { return x > 0; });
-    assert!(positives.length() == 3);
-
-    // assert! conditions
-    bool
-    hasNeg = nums.any( + [](int & x)
-    { return x < 0; });
-    bool
-    allPos = nums.all( + [](int & x)
-    { return x > 0; });
-    int
-    negCount = nums.count( + [](int & x)
-    { return x < 0; });
-    assert!(negCount == 0);
-    assert!(!hasNeg);
-    assert!(allPos);
-}
 
 #[test]
 fn test2Def() {
@@ -185,45 +153,6 @@ assert(body2["style"] ==
     //	assert_parses("(markdown link)[www]");
 }
 
-#[test]
-fn testParamizedKeys() {
-    //	<label for="pwd">Password</label>
-
-    // 0. parameters accessible
-    label0 = parse("label(for:password)");
-    label0.print();
-    Node & node = label0["for"];
-    eq!(node, "password");
-    eq!(label0["for"], "password");
-
-    // 1. paramize keys: label{param=(for:password)}:"Text"
-    label1 = parse("label(for:password):'Passwort'"); // declaration syntax :(
-    // Node label1 = parse("label{for:password}:'Passwort'");
-    // Node label1 = parse("label[for:password]:'Passwort'");
-    label1.print();
-    eq!(label1, "Passwort");
-    eq!(label1["for"], "password");
-    //	eq!(label1["for:password"],"Passwort");
-
-    // 2. paramize values
-    // TODO 1. move params of Passwort up to lable   OR 2. preserve Passwort as object in stead of making it string value of label!
-    skip!(
-
-        Node label2 = parse("label:'Passwort'(for:password)");
-        assert!(label2 == "Passwort");
-        eq!(label2, "Passwort");
-        eq!(label2["for"], "password");
-        eq!(label2["for"], "password"); // descend value??
-        eq!(label2["Passwort"]["for"], "password");
-    );
-
-    skip!(
-
-        //	3. relative equivalence? todo not really
-        eq!(label1, label2);
-        Node label3 = parse("label:{for:password 'Password'}");
-    );
-}
 
 #[test]
 fn testStackedLambdas() {
@@ -239,3 +168,32 @@ fn testStackedLambdas() {
     assert!(parse("a{x}{y z}") != parse("a{x,{y z}}"));
 }
 
+#[test]
+fn testFunctionDeclarationParse() {
+    //    let node1 = analyze(parse("fn main(){}"));
+    //    assert!(node1.kind==declaration);
+    //    assert!(node1.name=="main");
+    clearAnalyzerContext();
+    // let node2 = analyze(parse("fun test(float a):int{return a*2}")); // todo: cast return to int and parseDeclaration!
+    let node2 = analyze(parse("fun test(float a){return a*2}"));
+    assert!(node2.kind == declaration);
+    assert!(node2.name == "test");
+    eq!(functions["test"].signature.size(), 1);
+    eq!(functions["test"].signature.parameters[0].name, "a");
+    eq!(functions["test"].signature.parameters[0].type, (Type) floats);
+    // eq!(functions["test"].signature.parameters[0].type, (Type) reals); // upgrade float to real TODO not if explicit!
+    assert!(functions["test"].body);
+    assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
+    skip!(
+
+        assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
+        eq!(*functions["test"].body, analyze(parse("return a*2")));
+    );
+}
+
+
+#[test]
+fn testModifiers() {
+    is!("public fun ignore(){3}", 3);
+    is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}",3);
+}

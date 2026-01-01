@@ -7,10 +7,9 @@ macro_rules! s {
     };
 }
 
-
 #[test]
 fn test_str_string() {
-    let _ok:String = s!("hello");
+    let _ok: String = s!("hello");
     eq!("hello".to_string(), String::from("hello"));
     eq!(String::from("hello"), "hello");
     eq!(s!("hello"), "hello");
@@ -32,11 +31,10 @@ fn test_string_substring_from() {
     let s = "hello 🌍";
     // let sub = s.from(3); // reserved for String.from("…") constructor
     // let sub = s.start(3); // ugly! just learn:
-    let sub = &s[3..]; 
+    let sub = &s[3..];
     put!("substring from 3", sub);
     assert_eq!(sub, "lo 🌍");
 }
-
 
 #[test]
 fn test_string_at() {
@@ -48,9 +46,8 @@ fn test_string_at() {
     // assert_eq!(sub, "l");
 }
 
-
 #[test]
-fn test_string_from(){
+fn test_string_from() {
     init_lib();
     let s = "hello 🌍";
     let sub = s.after("ell");
@@ -65,18 +62,17 @@ fn test_string_set_at() {
     assert_eq!(sub, "hallo 🌍");
 }
 
-
 #[test]
 fn test_first_char() {
     let s = "hello 🌍";
     let c = s.first_char();
     put!("first_char: ", c);
     assert_eq!(c, 'h');
-    assert_eq!(s.at(1),'e');
-    assert_eq!(s.char(1),'e');
-    assert_eq!(s.last_char(),'🌍');
+    assert_eq!(s.at(1), 'e');
+    assert_eq!(s.char(1), 'e');
+    assert_eq!(s.last_char(), '🌍');
     // assert_eq!(-1%3,2);
-    assert_eq!(s.at(-1),'🌍');
+    assert_eq!(s.at(-1), '🌍');
 }
 
 #[test]
@@ -102,17 +98,32 @@ fn test_map() {
     assert_eq!(upper, "HELLO 🌍");
 }
 
+#[test]
+fn test_primitive_float() {
+    eq!(4, 4);
+    is!("3.0", 3.0);
+    // is!("'3.0'", 3.0);
+}
 
 #[test]
-fn test_check(){
-    eq!(4,4);
-    is!("3.0",3.0);
-    is!("3",3);
-    is!("'🍏'",'🍏');
-    is!("\"🍏\"",'🍏');// !
-    is!("hello","hello");// goes through eval! may serialize and deserialize wasm ;)
-    let a=3;
-    assert!(a==3);
+fn test_primitive_int() {
+    is!("3", 3);
+    // is!("'3'", 3); php style, really?
+    // is!("\"3\"", 3);
+}
+
+#[test]
+fn test_primitive_char() {
+    is!("'🍏'", '🍏');
+}
+
+#[test]
+fn test_primitive_string() {
+    is!("\"🍏\"", '🍏'); // !
+}
+#[test]
+fn test_primitive_hello() {
+    is!("hello", "hello"); // goes through eval! may serialize and deserialize wasm ;)
 }
 
 // #[test]
@@ -121,4 +132,3 @@ fn test_check(){
 //     test_reverse();
 //     test_map();
 // }
-

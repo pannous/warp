@@ -14,7 +14,9 @@
       "Bash(for f in tests/todo/*.rs; do echo \"=== $f ($(wc -l < \"$f\" | tr -d ' ') lines) ===\"; cat \"$f\"; echo; done | head -300)",
       "Bash(for f in tests/todo/*.rs; do lines=$(wc -l < \"$f\" | tr -d ' '); if [ \"$lines\" -lt 30 ]; then echo \"$f ($lines lines)\"; fi; done)",
       "Bash(wc -l tests/todo/*.rs | sort -n | head -20)",
-      "Read(/Users/me/dev/angles/warp/tests/todo/test_list.rs)"
+      "Read(/Users/me/dev/angles/warp/tests/todo/test_list.rs)",
+      "Bash(grep \"fn test.*List\\|fn test.*Array\" tests/todo/tests_1.rs | head -20)",
+      "Bash(grep -n \"fn testList\\|fn test_list\\|fn testArray\" tests/todo/tests_*.rs tests/todo/tests_original.rs | head -40)"
     ]
   },
   "hooks": {
