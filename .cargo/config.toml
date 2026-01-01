@@ -1,0 +1,13 @@
+[build]
+# Timeout protection for tests - prevents infinite loops from hanging CI/development
+# Uses gtimeout on macOS (brew install coreutils) or timeout on Linux
+
+[target.aarch64-apple-darwin]
+# Smart timeout: 0.1s default, disable with NO_TIMEOUT=1 or DEBUG=1
+runner = [".cargo/timeout-runner.sh"]
+
+[target.x86_64-apple-darwin]
+runner = [".cargo/timeout-runner.sh"]
+
+[target.x86_64-unknown-linux-gnu]
+runner = [".cargo/timeout-runner.sh"]
