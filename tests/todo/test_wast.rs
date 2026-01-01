@@ -1,5 +1,11 @@
 
-chars wat = R"(module
+
+#[test] fn testParse() {
+//	Mark::markmode();
+//	const Node &node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
+
+
+	let wat = r#"(module
   (table (;0;) 1 1 funcref);
   (memory (;0;) 2);
   (export "memory" (memory 0));
@@ -23,12 +29,9 @@ chars wat = R"(module
 	  call $add
 	  ;;(i32.const 42);
   );
-)";
+)"#;
 
-#[test] fn testParse() {
-//	Mark::markmode();
-//	const Node &node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
-	Node module = parse(wat);
+	let module = parse(wat);
 	eq!(module, "module");
 	printf("%s", module.toString());
 	eq!(module.length, 8);

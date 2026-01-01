@@ -86,7 +86,8 @@ extern int tests_executed;
 #[test] fn testImplicitMultiplication() {
     is!("x=3;2x", 6);
     is!("2π", 2 * pi);
-    skip(
+    skip!(
+
         is!("x=9;⅓x", 3);
     );
     //    is!("⅓9", 3);
@@ -109,7 +110,8 @@ extern int tests_executed;
     is!("global x=7;x+=1", 8);
     is!("global x;x=7;x+=1", 8);
     is!("global x;x=7;x+=1;x+1", 9);
-    skip(
+    skip!(
+
         is!("global x=π;x=7;x", 7);
     );
     is!("global x;x=7;x", 7);
@@ -118,7 +120,8 @@ extern int tests_executed;
 
 #[test] fn test_get_local() {
     is!("add1 x:=it+1;add1 3", (int64) 4);
-    skip(
+    skip!(
+
         is!("add1 x:=$0+1;add1 3", (int64) 4); // $0 specially parsed now
     );
 }
@@ -130,7 +133,8 @@ extern int tests_executed;
 
     is!("add1 x:=x+1;add1 3", (int64) 4);
     is!("add2 x:=x+2;add2 3", (int64) 5);
-    skip(
+    skip!(
+
         is!("expression_as_return:=y=9;expression_as_return", (int64) 9);
         is!("addy x:= y=2 ; x+y ; addy 3", (int64) 5);
     );
@@ -144,7 +148,8 @@ extern int tests_executed;
     //0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , 55 , 89 , 144
     is!("fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)", 13);
     is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
-    skip(
+    skip!(
+
         is!("fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)", 13);
         is!("fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)", 13);
         is!("fib:=it<2 or fib(it-1)+fib(it-2);fib(4)", 5);
@@ -159,7 +164,8 @@ extern int tests_executed;
     //	is!("(1<2)?10:255", 255);
 
     is!("fac:= it<=0 ? 1 : it * fac it-1; fac(5)", 5 * 4 * 3 * 2 * 1);
-    skip(
+    skip!(
+
         // What seems to be the problem?
     );
 }
@@ -173,7 +179,8 @@ extern int tests_executed;
 
 #[test] fn testWasmFunctionCalls() {
     // todo put square puti putf back here when it works!!
-    skip(
+    skip!(
+
         is!("puts 'ok'", (int64) 0);
     );
     is!("i=1;while i<9:i++;i+1", 10);
@@ -205,13 +212,15 @@ extern int tests_executed;
 }
 
 #[test] fn testMathPrimitives() {
-    skip(
+    skip!(
+
         is!(("42.1"), 42.1) // todo: return &Node(42.1) or print value to stdout
         is!(("-42.1"), 42.1);
     );
     is!(("42"), 42);
     is!("-42", -42);
-    skip(
+    skip!(
+
         is!(("2000000000"), 2000000000) // todo stupid smart pointers
         is!(("-2000000000"), -2000000000);
     );
@@ -229,7 +238,8 @@ extern int tests_executed;
     assert_is("3*-1", -3);
     is!("3*-1", -3);
 
-    skip( // todo NOT SKIP!
+    skip!(
+ // todo NOT SKIP!
         is!("maxi=3840*2160", 3840 * 2160);
         is!("maxi=3840*2160;maxi", 3840 * 2160);
         is!("blue=255;green=256*255;", 256 * 255);
@@ -253,7 +263,8 @@ extern int tests_executed;
 
     is!(("2.1<=3.0"), true);
 
-    skip(
+    skip!(
+
         is!("i=8;i=i/2;i", 4); // make sure i stays a-float
         is!("i=1.0;i=3;i=i/2;i=i*4", 6.0); // make sure i stays a-float
         "BUG IN WASM?? should work!?"
@@ -281,7 +292,8 @@ extern int tests_executed;
     is!("i=1;‖-3‖>i", 1);
     is!("i=1;‖-3‖<i", 0);
     is!("f=4;‖-3‖>f", 0);
-    skip(
+    skip!(
+
         is!("i=1;x=‖-3‖>i", 1);
         is!("f=4;x=‖-3‖<f", 1);
         is!("i=1;x=‖-3‖<i", 0);
@@ -310,7 +322,8 @@ extern int tests_executed;
     is!("- -3", 3);
     is!("1- -3", 4);
     is!("1 - -3", 4);
-    skip(
+    skip!(
+
         is!("1 - - 3", 4); // -1 uh ok?
         assert_throws("1--3"); // should throw, variable missed by parser! 1 OK'ish
     );
@@ -357,7 +370,8 @@ extern int tests_executed;
     is!("√ π ²", 3.1415926535896688);
 }
     is!(("3²"), 9);
-    skip(
+    skip!(
+
         is!(("3⁰"), 1); // get UNITY of set (1->e let cast ok?);
         is!(("3¹"), 3);
         is!(("3³"), 27); // define inside wasp!
@@ -411,7 +425,8 @@ extern int tests_executed;
     // may be evaluated by compiler!
     is!("id(3*42 )> id 2*3", 1);
     is!("id(3*1)< id 2*3", 1);
-    skip(
+    skip!(
+
         is!("id(3*452)==452*3", 1);
         is!("452*3==id(3*452)", 1);
         is!("452*3==id 3*452", 1);
@@ -441,7 +456,8 @@ extern int tests_executed;
 
 #[test] fn testComparisonIdPrecedence() {
     // may be evaluated by compiler!
-    skip(
+    skip!(
+
         is!("id 3*452==452*3", 1) // forces runtime
         is!(("id 3*13==14*3"), False);
 
@@ -498,7 +514,8 @@ extern int tests_executed;
 }
 
 #[test] fn testWasmLogicPrimitives() {
-    skip( // todo: if emit returns Node:
+    skip!(
+ // todo: if emit returns Node:
         is!(("false").name, False.name); // NO LOL emit only returns number
         is!(("false"), False);
     );
@@ -532,7 +549,8 @@ extern int tests_executed;
     is!("i:=true;i", true);
     is!("i=true;i", true);
     is!("i=123.4;i", 123); // main returning int
-    skip(
+    skip!(
+
         is!("i=0.0;i", 0.0);
         is!("i=ø;i", nullptr);
         is!("i=123.4;i", 123.4); // main returning int
@@ -552,7 +570,8 @@ extern int tests_executed;
 
 #[test] fn testWasmIncrement() {
     is!("i=2;i++", 3);
-    skip(
+    skip!(
+
         is!("i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ", 800 * 800);
         //				assert_error("i:=123;i++", "i is a closure, can't be incremented");
     );
@@ -562,7 +581,8 @@ extern int tests_executed;
     is!("i=0.0; not i", true);
     is!("i=false; not i", true);
     is!("i=0; not i", true);
-    skip(
+    skip!(
+
         is!("i=true; not i", false);
     );
     is!("i=ø; not i", true);
@@ -577,7 +597,8 @@ extern int tests_executed;
     is!("i=3;i-=3", (int64) 0);
     is!("i=3;i/=3", (int64) 1);
     //	is!("i=3;i√=3", (int64) ∛3); NO i TIMES √
-    skip(
+    skip!(
+
         is!("i=3^1;i^=3", (int64) 27);
         assert_throws("i*=3"); // well:
         is!("i*=3", (int64) 0);
@@ -598,7 +619,8 @@ extern int tests_executed;
 #[test] fn testWasmLogicOnObjects() {
     is!("not 'a'", false);
     is!("not {a:2}", false);
-    skip(
+    skip!(
+
         is!("not {a:0}", false); // maybe
     );
 
@@ -609,7 +631,8 @@ extern int tests_executed;
 }
 
 #[test] fn testWasmLogic() {
-    skip(
+    skip!(
+
         // should be easy to do, but do we really want this?
         is!("true true and", true);
         is!("false true and", false);
@@ -696,7 +719,8 @@ extern int tests_executed;
 #[test] fn testWasmIf() {
     is!("if 2 : 3 else 4", 3);
     is!("if 2 then 3 else 4", 3);
-    skip(
+    skip!(
+
         is!("if(2){3}{4}", 3);
         is!("if({2},{3},{4})", 3);
         is!("if(2,3,4)", 3); // bad border case EXC_BAD_ACCESS because not anayized!
@@ -718,7 +742,8 @@ extern int tests_executed;
     is!("i=1;while i<10 and i<11 do {i++};i", 10);
     is!("i=1;while i<9 or i<10 do {i++};i", 10);
     is!("i=1;while(i<10) do {i++};i", 10);
-    skip( // fails on 2nd attempt todo
+    skip!(
+ // fails on 2nd attempt todo
         is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
     );
     is!("i=1;while(i<9)i++;i+1", 10);
@@ -767,7 +792,8 @@ extern int tests_executed;
     is!("3 + square 3", (int64) 12);
     is!("1 - 3 - square 3+4", (int64) -51); // OK!
     is!("square(3*42) > square 2*3", 1);
-    skip(
+    skip!(
+
         testSquarePrecedence();
     );
 }
@@ -778,7 +804,8 @@ extern int tests_executed;
     // ≈ testRecentRandomBugs();
     // some might break due some testBadInWasm() BEFORE!
     is!("-42", -42) // OK!?!
-    skip(
+    skip!(
+
         is!("x:=41;if x>1 then 2 else 3", 2);
         is!("x=41;if x>1 then 2 else 3", 2);
         is!("x:41;if x>1 then 2 else 3", 2);
@@ -841,7 +868,8 @@ extern int tests_executed;
     assert_run("43", 43);
     is!("strlen('123')", 3); // todo broke
     assert_run("strlen('123')", 3); // todo broke
-    skip(
+    skip!(
+
         //            todo polymorphism
         assert_run("len('123')", 3);
         assert_run("len('1235')", 4);
@@ -856,7 +884,8 @@ extern int tests_executed;
     assert_run("'123' + '4' is '1234'", true); // ok
 }
     assert_throws("not_ok"); // error
-    skip(
+    skip!(
+
         // WORKED before we moved these to test_functions.h
         // todo activate in wasp-runtime-debug.wasm instead of wasp-runtime.wasm
         assert_run("test42+1", 43);
@@ -879,7 +908,8 @@ extern int tests_executed;
     //	assert_run("puts 'hello' 'world'", "hello world");
     //	assert_run("hello world", "hello world");// unresolved symbol printed as is
 
-    skip(
+    skip!(
+
         assert_run("x=123;x + 4 is 127", true);
         //	assert_run("'123'='123'", true);// parsed as key a:b !?!? todo!
         //	assert_run("'123' = '123'", true);
@@ -898,11 +928,13 @@ extern int tests_executed;
     //is!("grows := it * 2 ; grows(4)", 8);
     //	assert!(Primitive::charp!=Valtype::pointer);
 
-    skip(
+    skip!(
+
         assert_run("'123'", 123); // result printed and parsed?
         assert_run("printf('123')", 123); // result printed and parsed?
     );
-    skip( // if not compiled as RUNTIME_ONLY library:
+    skip!(
+ // if not compiled as RUNTIME_ONLY library:
         assert!(functionSignatures.has("tests"));
         assert_run("tests", 42);
     );
@@ -930,7 +962,8 @@ extern int tests_executed;
     is!("'world'#1", 'w');
     is!("'world'#2", 'o');
     is!("'world'#3", 'r');
-    skip( // todo move angle syntax to test_angle
+    skip!(
+ // todo move angle syntax to test_angle
         is!("char #1 in 'world'", 'w');
         is!("char 1 in 'world'", 'w');
         is!("2nd char in 'world'", 'o');
@@ -941,7 +974,8 @@ extern int tests_executed;
     is!("hello='world';hello#1", 'w');
     is!("hello='world';hello#2", 'o');
     //	is!("pixel=100 int(s);pixel#1=15;pixel#1", 15);
-    skip(
+    skip!(
+
         is!("hello='world';hello#1='W';hello#1", 'W'); // diadic ternary operator
         is!("hello='world';hello[0]='W';hello[0]", 'W'); // diadic ternary operator
     );
@@ -985,7 +1019,8 @@ extern int tests_executed;
     is!("'αβγδε'#3", U'γ');
     is!("i=3;k='αβγδε';k#i", u'γ');
 }
-    skip(
+    skip!(
+
         is!("i=3;k='αβγδε';k#i='Γ';k#i", u'Γ'); // todo setCharAt
         is!("[1 4 3]#2", 4); // exactly one op expected in emitIndexPattern
         assert_is("[1 2 3]#2", 2); // assert! node based (non-primitive) interpretation first
@@ -1007,7 +1042,8 @@ extern int tests_executed;
     is!("x=41;x+1", 42);
     is!("x=40;y=2;x+y", 42);
     is!("id(4*42) > id 2+3", 1);
-    skip(
+    skip!(
+
         is!("grows x := x * 2 ; grows(4)", 8);
         is!("grows := it * 2 ; grows(4)", 8);
         is!("grows:=it*2; grows 3", 6);
@@ -1045,7 +1081,8 @@ bool testRecentRandomBugsAgain = true;
     is!("i=true; not i", false);
     // these fail LATER in tests!!
 
-    skip(
+    skip!(
+
         testLengthOperator();
         is!("i=3^1;i^=3", (int64) 27);
         assert_throws("i*=3"); // well:
@@ -1056,7 +1093,8 @@ bool testRecentRandomBugsAgain = true;
     is!("i=-9;√-i", 3);
     is!("1- -3", 4);
     is!("width=height=400;height", 400);
-    skip(
+    skip!(
+
         assert_throws("1--3"); // should throw, variable missed by parser! 1 OK'ish
         is!("x=0;while x++<11: nop;x", 11);
         assert_throws("x==0;while x++<11: nop;x");
@@ -1072,7 +1110,8 @@ bool testRecentRandomBugsAgain = true;
     //	function attempted to return an incompatible value WHAT DO YOU MEAN!?
 }
     // move to tests() once OK'
-    skip(
+    skip!(
+
         is!("i=ø; not i", true); // i not a setter if value ø
         is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
     );
@@ -1105,7 +1144,8 @@ bool testRecentRandomBugsAgain = true;
     //	is!("√-9 is -3i", -3);// if «use complex numbers»
     is!(".1", .1);
 #[cfg(not(feature = "WASMTIME"))]{ and not LINUX // todo why
-    skip(
+    skip!(
+
         is!("i=-9;√-i", 3);
     is!("n=3;2ⁿ", 8);
     is!("n=3.0;2.0ⁿ", 8);
@@ -1145,8 +1185,10 @@ bool testRecentRandomBugsAgain = true;
     is!("global k:=7", 7); //  global or function?
     is!("global k;k = 7", 7); // python style, as always the best
     //    is!("global.k=7", 7);//  currently all globals are exported
-    skip(testWasmMutableGlobal2());
-    skip(testWasmTypedGlobals());
+    skip!(
+testWasmMutableGlobal2());
+    skip!(
+testWasmTypedGlobals());
     //    testWasmMutableGlobalImports();
 }
 
@@ -1224,7 +1266,8 @@ bool testRecentRandomBugsAgain = true;
 #[test] fn testMathLibrary() {
     // todo generic power i as builtin
 #[cfg(not(feature = "WASMTIME"))]{
-    skip(
+    skip!(
+
         // REGRESSION 2023-01-20 variable x-c in context wasp_main emitted as node data:
         is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
     );
@@ -1265,7 +1308,8 @@ bool testRecentRandomBugsAgain = true;
     is!("42.0/2.0", 21.);
     is!("- √9", -3);
     is!("42/4.", 10.5);
-    skip(
+    skip!(
+
         is!("42/4", 10.5);
     );
 
@@ -1298,7 +1342,8 @@ bool testRecentRandomBugsAgain = true;
 }
 }
 #[test] fn testLogarithm() {
-    skip(
+    skip!(
+
         is!("use log; log10(100)", 2.);
     );
 }
@@ -1325,7 +1370,8 @@ bool testRecentRandomBugsAgain = true;
     is!("log10(100000)", 5.);
     is!("log10(10)", 1.);
     is!("log(1)", 0.);
-    skip(
+    skip!(
+
         eq!(-ln(0), Infinity);
         eq!(ln(0), -Infinity);
         is!("ln(ℯ)", 1.);
@@ -1364,7 +1410,8 @@ bool testRecentRandomBugsAgain = true;
     // is!("for i in 1 ..< 5\n  puti i", 4);// exclusive!
     is!("for i in 1 ... 5\n  puti i", 5);
 }
-    skip(
+    skip!(
+
         is!("sum=0\nfor i in 1…3 {sum+=i}\nsum", 6); // todo range
         is!("sum=0\nfor i in 1 to 3 : sum+=i\nsum", 6); // todo range
         is!("sum=0\nfor i in (1 ... 3) {sum+=i}\nsum", 6); // todo range
@@ -1401,7 +1448,8 @@ bool testRecentRandomBugsAgain = true;
 #[test] fn testFibonacci() {
     is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
     is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
-    skip( // TODO!!!
+    skip!(
+ // TODO!!!
         is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
         is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
         is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
@@ -1466,7 +1514,8 @@ bool testRecentRandomBugsAgain = true;
     is!("40", 40);
     is!("41", 41);
     is!("1 ∧ 0", 0);
-    skip(
+    skip!(
+
         // see testSmartReturn
         is!("'ok'", "ok"); // BREAKS wasm !!
         is!("'a'", "a");
@@ -1478,7 +1527,8 @@ bool testRecentRandomBugsAgain = true;
     is!("15÷5", 3);
     is!("3⋅5", 15);
     is!("3×5", 15);
-    skip(
+    skip!(
+
         is!("3**3", 27);
         is!("√3**2", 3);
         is!("3^3", 27);
@@ -1488,7 +1538,8 @@ bool testRecentRandomBugsAgain = true;
 }
 
 #[test] fn testRoot() {
-    skip(
+    skip!(
+
         assert_is("40+√4", 42, 0);
         assert_is("√4", 2);
         assert_is("√4+40", 42);
@@ -1497,7 +1548,8 @@ bool testRecentRandomBugsAgain = true;
 }
 
 #[test] fn testRootFloat() {
-    //	skip(  // include <cmath> causes problems, so skip
+    //	skip!(
+  // include <cmath> causes problems, so skip
     assert_is("√42.0 * √42.0", 42.);
     assert_is("√42 * √42.0", 42.);
     assert_is("√42.0*√42", 42);
@@ -1565,7 +1617,8 @@ bool testRecentRandomBugsAgain = true;
     testFixedInBrowser();
     testOldRandomBugs(); // currently ok
 
-    skip( // still breaking! (some for good reason);
+    skip!(
+ // still breaking! (some for good reason);
         // OPEN BUGS
         testBadInWasm(); // NO, breaks!
     );
@@ -1581,12 +1634,14 @@ bool testRecentRandomBugsAgain = true;
 
     testAssertRun();
     testTodoBrowser(); // TODO!
-    skip(
+    skip!(
+
         is!("putf 3.1", 3);
         is!("putf 3.1", 3.1);
     );
 
-    skip(
+    skip!(
+
         testWasmGC(); // WASM EDGE Error message: type mismatch
         testStruct(); // TODO get pointer of node on stack
         testStruct2();
@@ -1600,7 +1655,8 @@ bool testRecentRandomBugsAgain = true;
     // is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
 
     is!("√9*-‖-3‖/-3", 3);
-    skip(
+    skip!(
+
         is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
         is!("i=3;k='αβγδε';k#i='Γ';k#i", u'Γ'); // todo setCharAt
         testGenerics();
@@ -1611,7 +1667,8 @@ bool testRecentRandomBugsAgain = true;
     testFibonacci();
     testAutoSmarty();
     testArguments();
-    skip(
+    skip!(
+
         testWasmGC();
         is!("τ≈6.2831853", true);
         eq!("τ≈6.2831853", true);
@@ -1627,7 +1684,8 @@ bool testRecentRandomBugsAgain = true;
 }
 
     //	assert_run not compatible with Wasmer, don't ask why, we don't know;);
-    //    skip(
+    //    skip!(
+
     //            testCustomOperators();
     //            testWasmMutableGlobal();
     //    );
@@ -1676,12 +1734,14 @@ bool testRecentRandomBugsAgain = true;
     // testOldRandomBugs();
     assert_is("١٢٣", 123); //  numerals are left-to-right (LTR) even in Arabic!
 
-    skip(
+    skip!(
+
         testMergeOwn();
         testMergeRelocate();
     );
     test_get_local();
-    skip( // new stuff :
+    skip!(
+ // new stuff :
         testObjectPropertiesWasm();
         testWasmLogicOnObjects();
         testCustomOperators();

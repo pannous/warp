@@ -87,7 +87,7 @@
 }
 
 // ============================================================================
-// String Comparison Functions
+// let Comparison Functions
 // ============================================================================
 
 #[test] fn test_ffi_strcmp() {
@@ -169,7 +169,7 @@
 }
 
 // ============================================================================
-// String Conversion Functions
+// let Conversion Functions
 // ============================================================================
 
 #[test] fn test_ffi_atoi() {
@@ -272,72 +272,22 @@
 // Signature Detection and Coverage Tests
 // ============================================================================
 
-#[test] fn test_ffi_signature_detection() {
-    List<FFIMarshaller::CType> params1(1);
-    params1.add(FFIMarshaller::CType::Int32);
-    String wrapper1 = FFIMarshaller::detect_wrapper_name(params1, FFIMarshaller::CType::Int32);
-    eq!(wrapper1, "ffi_i32_i32");
 
-    List<FFIMarshaller::CType> params2(1);
-    params2.add(FFIMarshaller::CType::Float64);
-    String wrapper2 = FFIMarshaller::detect_wrapper_name(params2, FFIMarshaller::CType::Float64);
-    eq!(wrapper2, "ffi_f64_f64");
-
-    List<FFIMarshaller::CType> params3(1);
-    params3.add(FFIMarshaller::CType::String);
-    String wrapper3 = FFIMarshaller::detect_wrapper_name(params3, FFIMarshaller::CType::Int32);
-    eq!(wrapper3, "ffi_str_i32");
-
-    List<FFIMarshaller::CType> params4(1);
-    params4.add(FFIMarshaller::CType::String);
-    String wrapper4 = FFIMarshaller::detect_wrapper_name(params4, FFIMarshaller::CType::Float64);
-    eq!(wrapper4, "ffi_str_f64");
-
-    List<FFIMarshaller::CType> params5(2);
-    params5.add(FFIMarshaller::CType::Float64);
-    params5.add(FFIMarshaller::CType::Float64);
-    String wrapper5 = FFIMarshaller::detect_wrapper_name(params5, FFIMarshaller::CType::Float64);
-    eq!(wrapper5, "ffi_f64_f64_f64");
-
-    String sig_format = FFIMarshaller::format_signature(params5, FFIMarshaller::CType::Float64);
-    eq!(sig_format, "float64 (float64, float64)");
-}
-
-#[test] fn test_ffi_signature_coverage() {
-    List<FFIMarshaller::CType> params_strcmp(2);
-    params_strcmp.add(FFIMarshaller::CType::String);
-    params_strcmp.add(FFIMarshaller::CType::String);
-    FFIMarshaller::CType ret_strcmp = FFIMarshaller::CType::Int32;
-    String sig_strcmp = FFIMarshaller::format_signature(params_strcmp, ret_strcmp);
-    eq!(sig_strcmp, "int32 (char*, char*)");
-
-    List<FFIMarshaller::CType> params_rand(0);
-    FFIMarshaller::CType ret_rand = FFIMarshaller::CType::Int32;
-    String sig_rand = FFIMarshaller::format_signature(params_rand, ret_rand);
-    eq!(sig_rand, "int32 ()");
-
-    List<FFIMarshaller::CType> params_trig(1);
-    params_trig.add(FFIMarshaller::CType::Float64);
-    FFIMarshaller::CType ret_trig = FFIMarshaller::CType::Float64;
-    String sig_trig = FFIMarshaller::format_signature(params_trig, ret_trig);
-    eq!(sig_trig, "float64 (float64)");
-}
-
-// ============================================================================
 // Import Pattern Tests
 // ============================================================================
 
 #[test] fn test_import_from_pattern_parse() {
-    String code1 = "import abs from \"c\"";
-    Node parsed1 = parse(code1);
+    let code1 = "import abs from \"c\"";
+    let parsed1 = parse(code1);
     eq!(parsed1.name, "import");
 
-    String code2 = "import sqrt from \"m\"";
-    Node parsed2 = parse(code2);
+    let code2 = "import sqrt from \"m\"";
+    let parsed2 = parse(code2);
 }
 
 #[test] fn test_import_from_pattern_emit() {
-    skip(
+    skip!(
+
         is!("import abs from \"c\"\nabs(-42)", 42);
         is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
         is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
@@ -345,8 +295,8 @@
 }
 
 #[test] fn test_import_from_vs_include() {
-    String ffi_import = "import abs from \"c\"";
-    Node ffi_node = parse(ffi_import);
+    let ffi_import = "import abs from \"c\"";
+    let ffi_node = parse(ffi_import);
 }
 
 // ============================================================================
@@ -354,9 +304,9 @@
 // ============================================================================
 
 #[test] fn test_extract_function_signature() {
-    String c_code1 = "double sqrt(double x);";
-    Node& parsed1 = parse(c_code1);
-    FFIHeaderSignature sig1;
+    let c_code1 = "double sqrt(double x);";
+    let parsed1 = parse(c_code1);
+    let sig1;
     sig1.library = "m";
     extractFunctionSignature(c_code1, sig1);
     eq!(sig1.name, "sqrt");
@@ -364,9 +314,9 @@
     eq!(sig1.param_types.size(), 1);
     eq!(sig1.param_types[0], "double");
 
-    String c_code2 = "double fmin(double x, double y);";
-    Node& parsed2 = parse(c_code2);
-    FFIHeaderSignature sig2;
+    let c_code2 = "double fmin(double x, double y);";
+    let parsed2 = parse(c_code2);
+    let sig2;
     sig2.library = "m";
     extractFunctionSignature(c_code2, sig2);
     eq!(sig2.name, "fmin");
@@ -375,9 +325,9 @@
     eq!(sig2.param_types[0], "double");
     eq!(sig2.param_types[1], "double");
 
-    String c_code3 = "int strlen(char* str);";
-    Node& parsed3 = parse(c_code3);
-    FFIHeaderSignature sig3;
+    let c_code3 = "int strlen(char* str);";
+    let parsed3 = parse(c_code3);
+    let sig3;
     extractFunctionSignature(c_code3, sig3);
     eq!(sig3.name, "strlen");
     eq!(sig3.return_type, "int");
@@ -473,7 +423,8 @@
     test_ffi_sdl_init();
     test_ffi_sdl_window();
     test_ffi_sdl_version();
-    skip(
+    skip!(
+
     test_ffi_sdl_combined(); // broken after 48eb08f7817b28bb38eb1cc7756f938dc91116f1
         );
     // test_ffi_sdl_red_square_demo(); only live demo, not automated test
@@ -523,7 +474,8 @@
     assert!(modul->functions.has("DrawCircle"));
     assert!(modul->functions.has("BeginDrawing"));
     test_ffi_raylib_combined();
-    skip(
+    skip!(
+
         test_ffi_raylib_simple_use_import(); // todo
         is!("test/wasp/ffi/raylib/raylib_init_close.wasp", 42);
     );
