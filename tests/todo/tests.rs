@@ -10,7 +10,7 @@
 //
 
 //==============================================================================
-// TYPE SYSTEM TESTS (see type_tests.h for declarations)
+// TYPE SYSTEM TESTS (see type_tests.h for declarations);
 //==============================================================================
 
 #[test] fn testGoTypes() {
@@ -111,7 +111,7 @@
     is!("def stop():{1};while !stop() : {0};42", 42);
 
     is!("def goon(){0};;while(goon()){0};42", 42);
-    )
+    );
 
     is!("goon=0;while(goon){goon+=1};goon+2", 2); // Variable instead of call
     is!("goon=0;while goon{goon+=1};goon+2", 2); // Variable instead of call
@@ -123,8 +123,8 @@
     todow("test_while_true_forever");
 
     skip(
-        is!("def stop():{0};while !stop() : {}", 0); // should hang forever ;)
-        is!("def goo():{1};while goo() : {}", 0); // should hang forever ;)
+        is!("def stop():{0};while !stop() : {}", 0); // should hang forever ;);
+        is!("def goo():{1};while goo() : {}", 0); // should hang forever ;);
 
         let node = parse("1:2");
         print(node.serialize());
@@ -132,9 +132,9 @@
         assert!(node.values().value.longy == 2);
         assert!(node.kind == pair or node.kind == key);
         assert!(node.value.longy == 1);
-        is!("while True : 2", 0); // should hang forever ;)
-        // is!("while 1 : 2", 0); // should hang forever ;)
-    )
+        is!("while True : 2", 0); // should hang forever ;);
+        // is!("while 1 : 2", 0); // should hang forever ;);
+    );
 }
 #[test] fn testTypeSynonyms() {
     // eq!(Type("i32"s),Type("int32"s));
@@ -266,10 +266,10 @@
     testMetaAt2();
     testMetaField();
     let code = r#" wgsl{
-@group(0) @binding(0)
+@group(0) @binding(0);
 var<storage, read_write> data: array<u32>;
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(64);
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let i = id.x;
     data[i] = data[i] * 2;
@@ -283,7 +283,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     // assert!(node.value.string->contains("@compute"));
     print(wsgl);
     assert!(wsgl.length == 2);
-    // TODO: a lot ;)
+    // TODO: a lot ;);
     // assert!(node[0].kind == wgsl_function);
     // assert!(wsgl[1]["name"] == "main");
     // assert!(wsgl[1]["workgroup_size"] == "64");
@@ -303,26 +303,26 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 #[test] fn testReturnTypes() {
     is!("fun addier(a,b){b+a};addier(42,1)", 43);
     is!("fun addier(a,b){b+a};addier(42,1)+1", 44);
-    is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4)
-    is!("float addi(x,y){x+y};addi(2.2,2.2)", 4.4)
+    is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4);
+    is!("float addi(x,y){x+y};addi(2.2,2.2)", 4.4);
     is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
     is!("add1 x:=x+1;add1 3", (int64) 4);
     is!("int x = $bla", 123);
-    is!("`${1+1}`", "2")
+    is!("`${1+1}`", "2");
     is!("real x = $bla", 123.);
     skip(
-        is!("k=(1,2,3);i=1;k#i=4;k#1", 4) // fails linking _ZdlPvm operator delete(void*, unsigned long)
+        is!("k=(1,2,3);i=1;k#i=4;k#1", 4) // fails linking _ZdlPvm operator delete(void*, unsigned long);
         is!("i=1;k='hi';k#i", 'h'); // BUT IT WORKS BEFORE!?! be careful with i64 smarty return!
-    )
+    );
 
     //==============================================================================
-    // STRING TESTS (see string_tests.h)
+    // STRING TESTS (see string_tests.h);
     //==============================================================================
 }
 
 #[test] fn testRandomParse() {
     const Node &node = parse("x:40;x+1");
-    assert!(node.length == 2)
+    assert!(node.length == 2);
     assert!(node[0]["x"] == 40) // breaks!?
     assert!(operator_list.has("+"));
     assert!(not(bool) Node("x"));
@@ -347,7 +347,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     skip( // BUT:
         is!("'say ' + $bla", "say 123");
         is!("$test + 'world'", "hello world");
-    )
+    );
     is!("'say ' 'hello'", "say hello");
     is!("'say ' + 'hello'", "say hello");
     is!("`$test world`", "hello world");
@@ -357,17 +357,17 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     is!("`hello ${1+1}`", "hello 2");
     is!("`${42} world`", "42 world");
     is!("`${1+1} world`", "2 world");
-    is!("`unaffected`", "unaffected")
-    is!("`${'hi'}`", "hi")
-    is!("`${1+1}`", "2")
-    is!("`1+1=${1+1}`", "1+1=2")
+    is!("`unaffected`", "unaffected");
+    is!("`${'hi'}`", "hi");
+    is!("`${1+1}`", "2");
+    is!("`1+1=${1+1}`", "1+1=2");
     skip(
         is!("$test", "hello"); // via externref or params! but calling toLong()!
 
         is!("x=123;'${x} world'", "123 world") // todo should work
         is!("x='hello';'${x} world'", "hello world") // todo should work
         is!("x='hello';'`$x world`", "hello world") // todo referencex vs reference
-    )
+    );
 }
 
 #[test] fn testExternString() {
@@ -386,7 +386,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         is!("print($hello)", "hello"); // (i64) -> nil
         is!("printRef($hello)", "hello"); // (externref) -> nil
         is!("print(toString($hello))", "hello"); // (i64) -> nil via smarti?
-    )
+    );
 }
 
 #[test] fn testExternReferenceXvalue() {
@@ -397,7 +397,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     is!("number x = $bla; x*2", 123*2.);
     skip(
         is!("2*$bla", 123*2);
-    )
+    );
 }
 
 #[test] fn testMinusMinus() {
@@ -469,7 +469,7 @@ Node cast_smart(smarty value, Type to_type) {
         assert_is("π*√163==(π√163)", 1);
         assert_is("π*√163==π√163", 1);
         assert_is("exp(0)", 1); // "TODO rewrite as ℯ^x" OK
-    )
+    );
     assert_is("ℯ^(π*√163)", 262537412640768743.99999999999925);
 }
 
@@ -518,11 +518,11 @@ int test_wasmedge_gc() {
     const WasmEdge_ModuleInstanceContext *module_ctx = WasmEdge_VMGetActiveModule(VM);
     WasmEdge_MemoryInstanceContext *memory_ctx = WasmEdge_ModuleInstanceFindMemory(module_ctx, mem);
     uint8_t *memo = WasmEdge_MemoryInstanceGetPointer(memory_ctx, 0, 0);
-    if (memo)
+    if (memo);
         wasm_memory = memo;
     else
         warn("⚠️Can't connect wasmedge memory");
-    // Print the result (object reference)
+    // Print the result (object reference);
     WasmEdge_Value Return = Returns[0];
     #[test] fn *p#[test] fn = WasmEdge_ValueGetExternRef(Return);
     if (WasmEdge_ValTypeIsRef(Return.Type)) {
@@ -547,7 +547,7 @@ int test_wasmedge_gc() {
     is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
 
     //==============================================================================
-    // LIST/ARRAY TESTS (see list_tests.h)
+    // LIST/ARRAY TESTS (see list_tests.h);
     //==============================================================================
 
     is!("([[1, 2], [3, 4]])[0][1]", 2);
@@ -607,7 +607,7 @@ template<class S>
     skip(
         // TODO strict mode a:b=c => b is type vs data mode a:b => b is data HOW?
         assert_throws("x:yz=1"); // "yz" is not a type
-    )
+    );
 }
 
 #[test] fn testDeepType() {
@@ -632,7 +632,7 @@ template<class S>
     assert_throws("x:int=1;x='ok'"); // worked before, cleanup fail!
     assert_throws("x:int=1;x=1.1");
     skip(
-    )
+    );
     //    is!("x:int=1;x=1.0",1); // might be cast by compiler
     //    is!("x=1;x='ok';x=1", 1); // untyped x can be reassigned
     assert_throws("'unclosed quote");
@@ -662,7 +662,7 @@ template<class S>
 }
 
 #[test] fn testVectorShim() {
-    //    unknown function matrix_multiply (matrix_multiply)
+    //    unknown function matrix_multiply (matrix_multiply);
     is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
 }
 
@@ -674,11 +674,11 @@ template<class S>
 
 #[test] fn testJS() {
     // todo remove (local $getContext i32)  !
-    eval("$canvas.getContext('2d')"); // => invokeReference(canvas, getContext, '2d')
+    eval("$canvas.getContext('2d')"); // => invokeReference(canvas, getContext, '2d');
     skip(
         eval("js{alert('Hello')}"); // => <script>alert('Hello')</script>
         eval("script{alert('Hello')}"); // => <script>alert('Hello')</script>
-    )
+    );
 }
 
 #[test] fn testInnerHtml() {
@@ -699,7 +699,7 @@ template<class S>
     assert_is("$b.ok", 123); // TODO emitAttributeSetter
     eval("<script>console.log('ok!')</script>");
     eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
-    // )
+    // );
 }
 
     //	eval("$b.innerHTML='<i>ok</i>'");
@@ -740,7 +740,7 @@ template<class S>
     skip(
         assert!_emit("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
         assert!_emit("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-    )
+    );
 }
 
 #[test] fn test_getElementById() {
@@ -759,7 +759,7 @@ template<class S>
     print(nod);
 }
 
-// run in APP (or browser?)
+// run in APP (or browser?);
 #[test] fn testDom() {
     print("testDom");
     preRegisterFunctions();
@@ -797,14 +797,14 @@ inline #[test] fn print(Primitive l) {
     result = eval("$canvas.style");
     eq!(result.kind, strings);
     //	eq!(result.kind, stringp);
-    if (result.value.string)
+    if (result.value.string);
         assert!_eq(*result.value.string, "dfsa");
     //	getExternRefPropertyValue OK  [object HTMLCanvasElement] style [object CSSStyleDeclaration]
     // ⚠️ But can't forward result as smarti or stringref:  SyntaxError: Failed to parse String to BigInt
     // todo : how to communicate new string as RETURN type of arbitrary function from js to wasp?
     // call Webview.getString(); ?
 
-    //	embedder.trace('canvas = document.getElementById("canvas");')
+    //	embedder.trace('canvas = document.getElementById("canvas");');
     //	print(nod);
 }
 #[test] fn testTypesSimple() {
@@ -866,21 +866,21 @@ inline #[test] fn print(Primitive l) {
     eq!(result1.name, "b");
 }
 #[test] fn testTypedFunctions() {
-    // todo name 'id' clashes with 'id' in preRegisterFunctions()
+    // todo name 'id' clashes with 'id' in preRegisterFunctions();
     clearAnalyzerContext();
     result = analyze(parse("int tee(float b, string c){b}"));
     eq!(result.kind, Kind::declaration);
     eq!(result.name, "tee");
     let signature_node = result["@signature"];
     //	let signature_node = result.metas()["signature"];
-    if (not signature_node.value.data)
+    if (not signature_node.value.data);
         error("no signature");
     Signature &signature = *(Signature *) signature_node.value.data;
-    eq!(signature.functions.first()->name, "tee")
-    eq!(signature.parameters.size(), 2)
-    eq!(signature.parameters.first().name, "b")
+    eq!(signature.functions.first()->name, "tee");
+    eq!(signature.parameters.size(), 2);
+    eq!(signature.parameters.first().name, "b");
     eq!(signature.parameters.first().type, reals); // use real / number for float64  float32
-    eq!(signature.parameters.last().name, "c")
+    eq!(signature.parameters.last().name, "c");
     eq!(signature.parameters.last().type, strings);
     // let params = signature.parameters.map(+[](Arg f) { return f.name; });
     // eq!(params.first(), "b");
@@ -900,7 +900,7 @@ inline #[test] fn print(Primitive l) {
     eq!(result.name, "a");
     let signature_node = result["@signature"];
     Signature signature = *(Signature *) signature_node.value.data;
-    eq!(signature.functions.first()->name, "a")
+    eq!(signature.functions.first()->name, "a");
     let names2 = signature.functions.map<String>(+[](Function *f) { return f->name; });
     eq!(names2.size(), 1);
     eq!(names2.first(), "a");
@@ -920,7 +920,7 @@ inline #[test] fn print(Primitive l) {
     skip(
         testTypesSimple2();
         testEmptyTypedFunctions();
-    )
+    );
 }
 
 #[test] fn testPolymorphism() {
@@ -995,16 +995,16 @@ inline #[test] fn print(Primitive l) {
     assert!(((n * 2) ^ 10) == 1024);
 }
 #[test] fn testFunctionArgumentCast() {
-    is!("float addi(int x,int y){x+y};'hello'+5", "hello5")
-    is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9")
-    is!("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "hello4.")
+    is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
+    is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
+    is!("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "hello4.");
     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
 
     is!("fun addier(a,b){b+a};addier(42.0,1.0)", 43);
     is!("fun addier(int a,int b){b+a};addier(42,1)+1", 44);
-    is!("fun addi(int x,int y){x+y};addi(2.2,2.2)", 4)
-    is!("fun addi(float x,float y){x+y};addi(2.2,2.2)", 4.4)
-    is!("float addi(int x,int y){x+y};addi(2.2,2.2)", 4.4)
+    is!("fun addi(int x,int y){x+y};addi(2.2,2.2)", 4);
+    is!("fun addi(float x,float y){x+y};addi(2.2,2.2)", 4.4);
+    is!("float addi(int x,int y){x+y};addi(2.2,2.2)", 4.4);
     is!("fun addier(float a,float b){b+a};addier(42,1)+1", 44);
 }
 
@@ -1028,7 +1028,7 @@ inline #[test] fn print(Primitive l) {
         is!("function x(){42+it};x(1)+1", 44);
         is!("def x(a=3){42+a};x+1", 46); // default value
         is!("def x(a){42+a};x+1", 43);
-    )
+    );
 }
 
 #[test] fn testFunctionDeclarationParse() {
@@ -1049,7 +1049,7 @@ inline #[test] fn print(Primitive l) {
     skip(
         assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
         eq!(*functions["test"].body, analyze(parse("return a*2")));
-    )
+    );
 }
 
 #[test] fn testRenameWasmFunction() {
@@ -1067,7 +1067,7 @@ inline #[test] fn print(Primitive l) {
     eq!(parseLong("8e6"), 8000000l);
     skip(
         eq!(parseLong("8e-6"), 1.0 / 8000000l);
-    )
+    );
     eq!(parseDouble("8.333e-3"), 0.008333l);
     eq!(parseDouble("8.333e3"), 8333.0l);
     eq!(parseDouble("8.333e-3"), 0.008333l);
@@ -1088,11 +1088,11 @@ inline #[test] fn print(Primitive l) {
         eq!(powd(3,2.1), 10.04510856630514);
 
         //==============================================================================
-        // MAP TESTS (see map_tests.h)
+        // MAP TESTS (see map_tests.h);
         //==============================================================================
 
         eq!(powd(3.1,2.1), 10.761171606099687);
-    )
+    );
     // is!("√3^0", 0.9710078239440918); // very rough power approximation from where?
 }
 
@@ -1194,7 +1194,7 @@ inline #[test] fn print(Primitive l) {
     //    is!("quit",0);
     is!("x='hello';fd_write(1,x,1,8)", (int64) 0); // &x+4 {char*,len}
     //    is!("len('123')", 3); // Map::len
-    //    quit()
+    //    quit();
     is!("puts 'ok'", (int64) 0); // connect to wasi fd_write
     loadModule("wasp");
     is!("puts 'ok'", (int64) 0);
@@ -1203,7 +1203,7 @@ inline #[test] fn print(Primitive l) {
     //    is!("putx 56", 56);
     is!("putf 3.1", 0);
 
-    assert!(module_cache.has("wasp-runtime.wasm"s.hash()))
+    assert!(module_cache.has("wasp-runtime.wasm"s.hash()));
 }
 
 #[test] fn testEnumConversion() {
@@ -1248,16 +1248,16 @@ inline #[test] fn print(Primitive l) {
     //    "var (f, l) = person;                        // positional deconstruction"
 }
 #[test] fn test_c_numbers() {
-    //    assert!(0x1000000000000000l==powi(2,60))
+    //    assert!(0x1000000000000000l==powi(2,60));
     unsigned int x = -1;
     unsigned int y = 0xFFFFFFFF;
     //    signed int biggest = 0x7FFFFFFF;
     //    signed int smallest = 0x80000000;// "implementation defined" so might not always pass
     signed int z = -1;
-    assert!(x == y)
-    assert!(x == z)
-    assert!(z == y)
-    assert!((int) -1 == (unsigned int) 0xFFFFFFFF)
+    assert!(x == y);
+    assert!(x == z);
+    assert!(z == y);
+    assert!((int) -1 == (unsigned int) 0xFFFFFFFF);
 }
 
 #[test] fn testArraySize() {
@@ -1355,18 +1355,18 @@ inline #[test] fn print(Primitive l) {
     skip(
         is!("y=(1 4 3);y[1]", 4); // CAN NOT WORK in data_mode because y[1] ≈ y:1 setter
         is!("x=(5 6 7);y=(1 4 3);y[1]", 4);
-    )
+    );
     is!("(5 6 7);(2 4 3)[0]", 2);
     is!("x=(5 6 7);y=(1 4 3);y#2", 4);
     is!("(5 6 7);(1 4 3)#2", 4);
     is!("x=(5 6 7);(1 4 3)#2", 4);
     skip(
         is!("puts('ok');(1 4 3)#2", 4);
-    )
+    );
     is!("x=0;while x++<11: nop;", 0);
     is!("i=10007;x=i%10000", 7);
-    is!("k=(1,2,3);i=1;k#i=4;k#1", 4)
-    is!("k=(1,2,3);i=1;k#i=4;k#1", 4)
+    is!("k=(1,2,3);i=1;k#i=4;k#1", 4);
+    is!("k=(1,2,3);i=1;k#i=4;k#1", 4);
     is!("maxi=3840*2160", 3840 * 2160);
     is!("i=10007;x=i%10000", 7);
     assert_is("x=(1 4 3);x#2=5;x#2", 5);
@@ -1392,28 +1392,28 @@ inline #[test] fn print(Primitive l) {
     clearAnalyzerContext();
     Node &parsed = parse(code, {.kebab_case = true});
     Node &node = analyze(parsed);
-    assert!(types.has("parser-flags"))
-    assert!(globals.has("data_mode"))
+    assert!(types.has("parser-flags"));
+    assert!(globals.has("data_mode"));
     assert!(globals.has("parser-flags.data_mode")) //
     Node &parserFlags = node.first();
     // todo AddressSanitizer:DEADLYSIGNAL why? lldb does'nt fail here
-    assert!(parserFlags.name == "parser-flags")
-    assert!(parserFlags.kind == flags)
-    assert!(parserFlags.length == 3)
-    assert!(parserFlags[1].name == "arrow")
-    assert!(parserFlags[2].value.longy == 4)
+    assert!(parserFlags.name == "parser-flags");
+    assert!(parserFlags.kind == flags);
+    assert!(parserFlags.length == 3);
+    assert!(parserFlags[1].name == "arrow");
+    assert!(parserFlags[2].value.longy == 4);
     Node &instance = node.last();
     print(instance);
-    assert!(instance.name == "my_flags")
-    assert!(instance.type)
+    assert!(instance.name == "my_flags");
+    assert!(instance.type);
     assert!(instance.type->name == "parser-flags") // deduced!
     assert!(instance.kind == flags) // kind? not really type! todo?
     Node my_flags = instance.interpret();
     print(my_flags);
     assert!(my_flags.value.longy == 5) // 1+4 bit internal detail!
     skip(
-        assert!(my_flags.values().serialize() == "data_mode + space_brace")
-    )
+        assert!(my_flags.values().serialize() == "data_mode + space_brace");
+    );
 
     //    assert!(node.last().serialize() == "ParserOptions my_flags = data_mode | space_brace") // todo canonical type serialization!?
 }
@@ -1422,8 +1422,8 @@ inline #[test] fn print(Primitive l) {
     Node &parsed = parse("flags abc{a b c}");
     backtrace_line();
     Node &node = analyze(parsed);
-    assert!(node.name == "abc")
-    assert!(node.kind == flags)
+    assert!(node.name == "abc");
+    assert!(node.kind == flags);
     assert!(node.length == 3);
     assert!(node[0].name == "a");
     eq!(typeName(node[0].kind), typeName(flag_entry));
@@ -1444,13 +1444,13 @@ inline #[test] fn print(Primitive l) {
     //    is!("(2 4 3)[0]", 2);
 
     //==============================================================================
-    // WIT/COMPONENT MODEL TESTS (see feature_tests.h)
+    // WIT/COMPONENT MODEL TESTS (see feature_tests.h);
     //==============================================================================
 }
 
 #[test] fn testWitInterface() {
     Node &mod = Node("host-funcs").setKind(modul).add(Node("current-user").setKind(functor).add(StringType));
-    is!("interface host-funcs {current-user: func() -> string}", mod)
+    is!("interface host-funcs {current-user: func() -> string}", mod);
 }
 
 #[test] fn testWitExport() {
@@ -1465,8 +1465,8 @@ inline #[test] fn print(Primitive l) {
     is!("add: func(a: float32, b: float32) -> float32", 0);
     Module &mod = read_wasm("test.wasm");
     print(mod.import_count);
-    eq!(mod.import_count, 1)
-    eq!(Node().setKind(longs).serialize(), "0")
+    eq!(mod.import_count, 1);
+    eq!(Node().setKind(longs).serialize(), "0");
     eq!(mod.import_names, List<String>{"add"}); // or export names?
 }
 
@@ -1507,7 +1507,7 @@ inline #[test] fn print(Primitive l) {
 }
 
 #[test] fn testHyphenUnits() {
-    //     const char *code = "1900 - 2000 AD";// (easy with units)
+    //     const char *code = "1900 - 2000 AD";// (easy with units);
     //     assert_analyze(code,"{kind=range type=AD value=(1900,2000)}");
     // todo how does Julia represent 10 ± 2 m/s ?
     assert_is("1900 - 2000 AD == 1950 AD ± 50", true);
@@ -1553,9 +1553,9 @@ inline #[test] fn print(Primitive l) {
 
 // only test once, see lebByteSize for result
 #[test] fn testLebByteSize() {
-    assert!_eq(lebByteSize((int64) -17179869185 + 1), 5)
-    assert!_eq(lebByteSize((int64) -17179869185), 6)
-    assert!_eq(lebByteSize((int64) -17179869185 - 1), 6)
+    assert!_eq(lebByteSize((int64) -17179869185 + 1), 5);
+    assert!_eq(lebByteSize((int64) -17179869185), 6);
+    assert!_eq(lebByteSize((int64) -17179869185 - 1), 6);
     short last = 1;
     for (int64 i = -63; i > -0x100000000000000l; --i) {
         //    for (int64 i = 0; i < 0x10000000000000l; ++i) {
@@ -1576,7 +1576,7 @@ inline #[test] fn print(Primitive l) {
     for (int i = 4; i < 1000000000; ++i) {
         oh.add(i);
         unsigned int ix = random() % i;
-        assert!_silent(oh[ix] == ix)
+        assert!_silent(oh[ix] == ix);
     }
     String aok = "ok";
     List<String> ja; // = {ok};
@@ -1600,8 +1600,8 @@ inline #[test] fn print(Primitive l) {
     for (int i = 0; i < reruns; ++i) {
         //
         printf("\n\n    ===========================================\n%d\n\n\n", i);
-        //		is!("i=-9;√-i", 3);// SIGKILL after about 3000 emits OK'ish ;)
-        is!("i=-9;√-i", 3); // SIGKILL after about 120 runs … can be optimized ;)
+        //		is!("i=-9;√-i", 3);// SIGKILL after about 3000 emits OK'ish ;);
+        is!("i=-9;√-i", 3); // SIGKILL after about 120 runs … can be optimized ;);
     }
 }
 
@@ -1628,11 +1628,11 @@ inline #[test] fn print(Primitive l) {
 #[test] fn testStupidLongLong() {
     //	int a;
     //	long b;// 4 byte in wasm/windows grr
-    //	long long c;// 8 bytes everywhere (still not guaranteed grr)
-    //	int64 c;// 8 bytes everywhere (still not guaranteed grr)
+    //	long long c;// 8 bytes everywhere (still not guaranteed grr);
+    //	int64 c;// 8 bytes everywhere (still not guaranteed grr);
     double b;
     float a;
-    long double c; // float128 16 byte in wasm wow, don't use anyway;)
+    long double c; // float128 16 byte in wasm wow, don't use anyway;);
     print((int) sizeof(a));
     print((int) sizeof(b));
     print((int) sizeof(c)); // what? 16 bytes!?
@@ -1672,19 +1672,19 @@ inline #[test] fn print(Primitive l) {
 
 #[test] fn testArrayInitialization() {
     // via Units
-    is!("x : int[100]; x.length", 100)
+    is!("x : int[100]; x.length", 100);
     is!("x : u8 * 100; x.length", 100) // type times size operation!!
-    is!("x : 100 * int; x.length", 100)
-    is!("x : 100 * ints; x.length", 100)
+    is!("x : 100 * int; x.length", 100);
+    is!("x : 100 * ints; x.length", 100);
     is!("x : 100 ints; x.length", 100) // implicit multiplication, no special case!
-    is!("x : 100 int; x.length", 100)
-    is!("x : 100 integers; x.length", 100)
-    is!("x : 100 numbers; x.length", 100)
-    is!("x is 100 times [0]; x.length", 100)
-    is!("x is array of size 100; x.length", 100)
-    is!("x is an 100 integer array; x.length", 100)
-    is!("x is a 100 integer array; x.length", 100)
-    is!("x is a 100 element array; x.length", 100)
+    is!("x : 100 int; x.length", 100);
+    is!("x : 100 integers; x.length", 100);
+    is!("x : 100 numbers; x.length", 100);
+    is!("x is 100 times [0]; x.length", 100);
+    is!("x is array of size 100; x.length", 100);
+    is!("x is an 100 integer array; x.length", 100);
+    is!("x is a 100 integer array; x.length", 100);
+    is!("x is a 100 element array; x.length", 100);
 }
 
 #[test] fn testArrayInitializationBasics() {
@@ -1705,7 +1705,7 @@ inline #[test] fn print(Primitive l) {
 
 #[test] fn testIteration() {
     List<String> args;
-    for (let x: args)
+    for (let x: args);
         error("NO ITEM, should'nt be reached "s + x);
 
     //#[cfg(not(feature = "WASM"))]{
@@ -1741,11 +1741,11 @@ inline #[test] fn print(Primitive l) {
 //	eq!(ln(ℯ),1.);
 //}
 //==============================================================================
-// PARSER/SYNTAX TESTS (see parser_tests.h)
+// PARSER/SYNTAX TESTS (see parser_tests.h);
 //==============================================================================
 
 #[test] fn testUpperLowerCase() {
-    //    is!("lowerCaseUTF('ÂÊÎÔÛ')", "âêîôû")
+    //    is!("lowerCaseUTF('ÂÊÎÔÛ')", "âêîôû");
 
     char string[] = "ABC";
     lowerCase(string, 0);
@@ -1761,7 +1761,7 @@ inline #[test] fn print(Primitive l) {
         lowerCase(string2, 0);
         eq!(string2, "âêîôû áéíóú àèìòù aöu");
         chars string3 = "ÂÊÎÔÛ ÁÉÍÓÚ ÀÈÌÒÙ AÖU";
-    )
+    );
     //	g_utf8_strup(string);
 }
 
@@ -1798,7 +1798,7 @@ inline #[test] fn print(Primitive l) {
         is!("(float 2, int 4.3)  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
         is!("float 2, int 4.3  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
         //	float  2, ( int ==( 4.3 2)), 4
-    )
+    );
 }
 
 // One of the few tests which can be removed because who will ever change the sin routine?
@@ -1822,7 +1822,7 @@ inline #[test] fn print(Primitive l) {
 }
 }
 #[test] fn testModulo() {
-    //	eq!(mod_d(10007.0, 10000.0), 7)
+    //	eq!(mod_d(10007.0, 10000.0), 7);
     is!("10007%10000", 7); // breaks here!?!
     is!("10007.0%10000", 7);
     is!("10007.0%10000.0", 7);
@@ -1857,15 +1857,15 @@ inline #[test] fn print(Primitive l) {
     skip(
         result = analyze(result);
         print(result);
-        assert!(result.length == 1); // todo  todo => (a b)=c => =( (a b) c)
+        assert!(result.length == 1); // todo  todo => (a b)=c => =( (a b) c);
 
         result = parse("<a href=link.html/>", ParserOptions{.data_mode = true, .use_tags = true});
-        assert!(result.length == 1); // a(b=c)
-    )
+        assert!(result.length == 1); // a(b=c);
+    );
 }
 
 #[test] fn testSignificantWhitespace() {
-    skip(testDataMode())
+    skip(testDataMode());
     result = parse("a b (c)");
     assert!(result.length == 3);
     result = parse("a b(c)");
@@ -1875,7 +1875,7 @@ inline #[test] fn print(Primitive l) {
     assert!(result.last().kind == key); // a , b:c
     result = parse("a: b c d", {.colon_immediate = false});
     assert!(result.length == 3);
-    assert!(result.name == "a"); // "a"(b c d), NOT ((a:b) c d)
+    assert!(result.name == "a"); // "a"(b c d), NOT ((a:b) c d);
     assert!(result.kind == groups); // not key!
     result = parse("a b : c", {.colon_immediate = false});
     assert!(result.length == 1 or result.length == 2); // (a b):c
@@ -1884,7 +1884,7 @@ inline #[test] fn print(Primitive l) {
         assert(eval("1 + 1 == 2"));
         is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
 
-    )
+    );
     //1 + 1 ≠ 1 +1 == [1 1]
     //	assert_is("1 +1", parse("[1 1]"));
     skip(
@@ -1893,7 +1893,7 @@ inline #[test] fn print(Primitive l) {
         is!("1 +1 == [1 1]", 1);
         is!("1 +1 ≠ 1 + 1", 1);
         assert(eval("1 +1 ≠ 1 + 1"));
-    )
+    );
 }
 #[test] fn testComments() {
     let c = "blah a b c # to silence python warnings;)\n y/* yeah! */=0 // really";
@@ -1922,7 +1922,7 @@ e
 }
 //[[maybe_used]]
 [[nodiscard("replace generates a new string to be consumed!")]]
-//__attribute__((__warn_unused_result__))
+//__attribute__((__warn_unused_result__));
 int testNodiscard() {
     return 54;
 }
@@ -1984,11 +1984,11 @@ e
 	is!("i=0;k='hi';while(i<16777216){i++;k#i=65};k[1]", 65)// still slow, but < 1s
 	//	is!("i=0;k='hi';while(i<16){i++;k#i=65};k[1]", 65)// still slow, but < 1s
 	//	70 ms PURE C -O3   123 ms  PURE C -O1  475 ms in PURE C without optimization
-	//  141 ms wasmtime very fast (similar to wasmer)
+	//  141 ms wasmtime very fast (similar to wasmer);
 	//  150 ms wasmer very fast!
-	//  546 ms in WebKit (todo: test V8/WebView2!)
+	//  546 ms in WebKit (todo: test V8/WebView2!);
 	//	465 - 3511 ms in WASM3  VERY inconsistent, but ok, it's an interpreter!
-	//	1687 ms wasmx (node.js)
+	//	1687 ms wasmx (node.js);
 	//  1000-3000 ms in wasm-micro-runtime :( MESSES with system clock! // wow, SLOWER HOW!?
 	//	so we can never draw 4k by hand wow. but why? only GPU can do more than 20 frames per second
 	//	sleep(1);
@@ -2059,7 +2059,7 @@ e
     chars url = "http://de.netbase.pannous.com:8080/json/verbose/2";
 
     //==============================================================================
-    // NETWORK/WEB TESTS (see web_tests.h)
+    // NETWORK/WEB TESTS (see web_tests.h);
     //==============================================================================
 
     //	print(url);
@@ -2111,14 +2111,14 @@ e
     testDivDeep();
     skip(
         testDivMark();
-    )
+    );
 }
 
 #[test] fn assert!Nil() {
     assert!(NIL.isNil());
     eq!(NIL.name.data, nil_name);
     assert!(nil_name == "nil"s); // WASM
-    if (NIL.name.data == nil_name)
+    if (NIL.name.data == nil_name);
         eq!(NIL.name, nil_name);
 #[cfg(not(feature = "LINUX"))]{ // WHY???
     assert!(NIL.name.data == nil_name);
@@ -2196,7 +2196,7 @@ e
 
     //	let wc3 = "z\udf\u6c34\U1f34c";// not ok in cpp
 
-    // char = byte % 128   char<0 => utf or something;)
+    // char = byte % 128   char<0 => utf or something;);
     //	using namespace std;
 #[cfg(not(feature = "WASM"))]{
     const char8_t str[9] = u8"عربى"; // wow, 9 bytes!
@@ -2224,9 +2224,9 @@ e
     printf("%c", hanzi);
     printf("%c", word);
 
-    //	for(let c : str32)
+    //	for(let c : str32);
     //		cout << uint_least32_t(c) << '\n';
-    //		char a = '☹';// char (by definition) is one byte (WTF)
+    //		char a = '☹';// char (by definition) is one byte (WTF);
     //		char[10] a='☹';// NOPE
     chars a = "☹"; // OK
     byte *b = (byte *) a;
@@ -2258,7 +2258,7 @@ e
     assert(interpret("ç='☺'") == String(u8"☺"));
     assert(interpret("ç='☺'") == String(U"☺"));
     // assert(interpret("ç='☺'") == String(L"☺"));
-    //	)
+    //	);
     assert!(String(u'牛') == "牛");
     assert!(String(L'牛') == "牛");
     assert!(String(U'牛') == "牛");
@@ -2298,8 +2298,8 @@ e
     String x3 = x.substring(0, 2, true);
     assert!(x.data == x3.data);
     assert!(x.length >
-        x3.length)
-    // shared data but different length! assert! shared_reference when modifying it!! &text[1] doesn't work anyway;)
+        x3.length);
+    // shared data but different length! assert! shared_reference when modifying it!! &text[1] doesn't work anyway;);
     assert!(x3 == "ab");
     print(x3);
     // todo("make sure all algorithms respect shared_reference and crucial length! especially print!");
@@ -2313,8 +2313,8 @@ e
     assert!(utf8_byte_count(U'√') == 3);
     assert!(utf8_byte_count(U'🥲') == 4);
     assert!(is_operator(u'√')) // can't work because ☺==0xe2... too
-    assert!(!is_operator(U'☺'))
-    assert!(!is_operator(U'🥲'))
+    assert!(!is_operator(U'☺'));
+    assert!(!is_operator(U'🥲'));
     assert!(not is_operator(U'ç'));
     assert!(is_operator(U'='));
     //	assert!(x[1]=="牛");
@@ -2335,7 +2335,7 @@ e
     assert_parses("ç:'☺'");
     skip(
         assert(result == "☺");
-    )
+    );
 
     assert_parses("{ç:111}");
     assert(result["ç"] == 111);
@@ -2346,7 +2346,7 @@ e
 
         assert_parses("ç=☺");
         assert(result == "☺" or result.kind == expression);
-    )
+    );
     //	assert(node == "ø"); //=> OK
 }
 #[test] fn testMarkMultiDeep() {
@@ -2359,7 +2359,7 @@ e
     assert(node == "hi"_s);
 
     //==============================================================================
-    // MARK DATA NOTATION TESTS (see parser_tests.h)
+    // MARK DATA NOTATION TESTS (see parser_tests.h);
     //==============================================================================
 
     assert(node == "hi");
@@ -2402,7 +2402,7 @@ e
     // 0/0 now returns NaN (float division), not an error
     assert_throws("x"); // UNKNOWN local symbol 'x' in context main  OK
 #[cfg(feature = "WASI")]{ or WASM
-    skip("can't catch ERROR in wasm")
+    skip("can't catch ERROR in wasm");
     return;
 }
     assert_throws("]"); // set throwing to true!!
@@ -2419,7 +2419,7 @@ e
 }
 #[test] fn testForEach() {
     int sum = 0;
-    for (Node &item: parse("1 2 3"))
+    for (Node &item: parse("1 2 3"));
         sum += item.value.longy;
     assert(sum == 6);
 }
@@ -2437,7 +2437,7 @@ using files = std::filesystem::recursive_directory_iterator;
     //	ln -s /me/dev/apps/wasp/samples /me/dev/apps/wasp/out/
     // ln -s /me/dev/apps/wasp/samples /me/dev/apps/wasp/out/out wtf
     for (const let &file: files("samples/")) {
-        if (!String(file.path().string().data()).contains("error"))
+        if (!String(file.path().string().data()).contains("error"));
             Mark::/*Wasp::*/parseFile(file.path().string().data());
     }
 }
@@ -2492,18 +2492,18 @@ using files = std::filesystem::recursive_directory_iterator;
         // SHOULD effect result
         child.value.longy = child.value.longy + 10;
     }
-    assert!(liste[0].value.longy == 11)
+    assert!(liste[0].value.longy == 11);
     for (Node child: liste) {
         // should NOT affect result
         child.value.longy = child.value.longy + 1;
     }
-    assert!(liste[0].value.longy == 11)
+    assert!(liste[0].value.longy == 11);
 }
 
 #[test] fn testListInitializerList() {
     List<int> oks = {1, 2, 3}; // easy!
-    assert!(oks.size_ == 3)
-    assert!(oks[2] == 3)
+    assert!(oks.size_ == 3);
+    assert!(oks[2] == 3);
 }
 
 #[test] fn testListVarargs() {
@@ -2511,11 +2511,11 @@ using files = std::filesystem::recursive_directory_iterator;
     // ^^ OK just use List<int> oks = {1, 2, 3};
     skip(
         const List<int> &list1 = List<int>(1, 2, 3, 0);
-        if (list1.size_ != 3)
+        if (list1.size_ != 3);
         breakpoint_helper
         assert!(list1.size_ == 3);
         assert!(list1[2] == 3);
-    )
+    );
 }
 #[test] fn testLists() {
     testListVarargs(); //
@@ -2527,7 +2527,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert(result[0] == 1);
     skip(
         assert(result[0] == "1"); // autocast
-    )
+    );
     List<int> a = {1, 2, 3};
     List<int> b{1, 2, 3};
     List<short> c{1, 2, 3};
@@ -2568,7 +2568,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert_is("true or false", true);
     assert_is("true or true", true);
     //==============================================================================
-    // LOGIC/BOOLEAN TESTS (see angle_tests.h + feature_tests.h)
+    // LOGIC/BOOLEAN TESTS (see angle_tests.h + feature_tests.h);
     //==============================================================================
 
     assert_is("true and true", true);
@@ -2626,7 +2626,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert_is("1", True);
     skip(
         assert_is("ø", NIL);
-    )
+    );
     assert_is("nil", NIL);
     assert_is("nil", False);
     assert_is("nil", false);
@@ -2636,18 +2636,18 @@ using files = std::filesystem::recursive_directory_iterator;
         assert_is("2", True); // Truthiness != equality with 'True' !
         assert_is("{x:0}", true); // wow! falsey so deep?
         assert_is("[0]", true); // wow! falsey so deep?
-    )
+    );
     assert_is("1", true);
     assert_is("{1}", true);
     skip(
         assert_is("{x:1}", true);
-    )
+    );
 
     todo_emit( // UNKNOWN local symbol ‘x’ in context main OK
         assert_is("x", false);
         assert_is("{x}", false);
         assert_is("cat{}", false);
-    )
+    );
 
     // empty referenceIndices are falsey! OK
 }
@@ -2865,7 +2865,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert(hero["episode"] == "EMPIRE");
     assert_parses("\nfragment comparisonFields on Character{\n"
         "  name\n  appearsIn\n  friends{\n    name\n  }\n }");
-    assert_parses("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}")
+    assert_parses("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
     // VARIAblE: { "episode": "JEDI" }
     assert_parses("query HeroNameAndFriends($episode: Episode){\n"
         "  hero(episode: $episode){\n"
@@ -2874,64 +2874,64 @@ using files = std::filesystem::recursive_directory_iterator;
         "      name\n"
         "    }\n"
         "  }\n"
-        "}")
+        "}");
 }
 
 #[test] fn testRootLists() {
     // vargs needs to be 0 terminated, otherwise pray!
-    assert_is("1 2 3", Node(1, 2, 3, 0))
-    assert_is("(1 2 3)", Node(1, 2, 3, 0))
-    assert_is("(1,2,3)", Node(1, 2, 3, 0))
-    assert_is("(1;2;3)", Node(1, 2, 3, 0))
+    assert_is("1 2 3", Node(1, 2, 3, 0));
+    assert_is("(1 2 3)", Node(1, 2, 3, 0));
+    assert_is("(1,2,3)", Node(1, 2, 3, 0));
+    assert_is("(1;2;3)", Node(1, 2, 3, 0));
     assert_is("1;2;3", Node(1, 2, 3, 0, 0)) //ok
-    assert_is("1,2,3", Node(1, 2, 3, 0))
-    assert_is("[1 2 3]", Node(1, 2, 3, 0).setKind(patterns))
-    assert_is("[1 2 3]", Node(1, 2, 3, 0))
-    assert_is("[1,2,3]", Node(1, 2, 3, 0))
+    assert_is("1,2,3", Node(1, 2, 3, 0));
+    assert_is("[1 2 3]", Node(1, 2, 3, 0).setKind(patterns));
+    assert_is("[1 2 3]", Node(1, 2, 3, 0));
+    assert_is("[1,2,3]", Node(1, 2, 3, 0));
     assert_is("[1,2,3]", Node(1, 2, 3, 0).setKind(patterns));
-    assert_is("[1;2;3]", Node(1, 2, 3, 0))
+    assert_is("[1;2;3]", Node(1, 2, 3, 0));
     todo_emit( // todo ?
-        assert_is("{1 2 3}", Node(1, 2, 3, 0))
-        assert_is("{1,2,3}", Node(1, 2, 3, 0))
-        assert_is("{1;2;3}", Node(1, 2, 3, 0))
-    )
+        assert_is("{1 2 3}", Node(1, 2, 3, 0));
+        assert_is("{1,2,3}", Node(1, 2, 3, 0));
+        assert_is("{1;2;3}", Node(1, 2, 3, 0));
+    );
     todo_emit( // todo symbolic wasm
-        assert_is("(a,b,c)", Node("a", "b", "c", 0))
-        assert_is("(a;b;c)", Node("a", "b", "c", 0))
-        assert_is("a;b;c", Node("a", "b", "c", 0))
-        assert_is("a,b,c", Node("a", "b", "c", 0))
-        assert_is("{a b c}", Node("a", "b", "c", 0))
-        assert_is("{a,b,c}", Node("a", "b", "c", 0))
-        assert_is("[a,b,c]", Node("a", "b", "c", 0))
-        assert_is("(a b c)", Node("a", "b", "c", 0))
-        assert_is("[a;b;c]", Node("a", "b", "c", 0))
-        assert_is("a b c", Node("a", "b", "c", 0, 0))
-        assert_is("{a;b;c}", Node("a", "b", "c", 0))
-        assert_is("[a b c]", Node("a", "b", "c", 0))
-    )
+        assert_is("(a,b,c)", Node("a", "b", "c", 0));
+        assert_is("(a;b;c)", Node("a", "b", "c", 0));
+        assert_is("a;b;c", Node("a", "b", "c", 0));
+        assert_is("a,b,c", Node("a", "b", "c", 0));
+        assert_is("{a b c}", Node("a", "b", "c", 0));
+        assert_is("{a,b,c}", Node("a", "b", "c", 0));
+        assert_is("[a,b,c]", Node("a", "b", "c", 0));
+        assert_is("(a b c)", Node("a", "b", "c", 0));
+        assert_is("[a;b;c]", Node("a", "b", "c", 0));
+        assert_is("a b c", Node("a", "b", "c", 0, 0));
+        assert_is("{a;b;c}", Node("a", "b", "c", 0));
+        assert_is("[a b c]", Node("a", "b", "c", 0));
+    );
 }
 #[test] fn testRoots() {
     assert!(NIL.value.longy == 0);
     // assert_is((char *) "'hello'", "hello");
     skip(assert_is("hello", "hello", 0)); // todo reference==string really?
-    assert_is("True", True)
-    assert_is("False", False)
-    assert_is("true", True)
-    assert_is("false", False)
-    assert_is("yes", True)
-    assert_is("no", False)
-    //	assert_is("right", True)
-    //	assert_is("wrong", False)
+    assert_is("True", True);
+    assert_is("False", False);
+    assert_is("true", True);
+    assert_is("false", False);
+    assert_is("yes", True);
+    assert_is("no", False);
+    //	assert_is("right", True);
+    //	assert_is("wrong", False);
     assert_is("null", NIL);
     assert_is("", NIL);
     assert!(NIL.value.longy == 0);
     assert_is("0", NIL);
-    assert_is("1", 1)
-    assert_is("123", 123)
+    assert_is("1", 1);
+    assert_is("123", 123);
     skip(
         assert_is("()", NIL);
         assert_is("{}", NIL); // NOP
-    )
+    );
 }
 #[test] fn testParams() {
     //	eq!(parse("f(x)=x*x").param->first(),"x");
@@ -2955,7 +2955,7 @@ using files = std::filesystem::recursive_directory_iterator;
         skip(assert(body2["style"] ==
             "green", 0)); // body has prescedence over param, semantically param provide extra data to body
         assert(body2[".style"] == "blue");
-    )
+    );
     //	assert_parses("a(href='#'){'a link'}");
     //	assert_parses("(markdown link)[www]");
 }
@@ -2963,7 +2963,7 @@ using files = std::filesystem::recursive_directory_iterator;
     skip(
         Node ok1 = assert_parses("printf('hi')");
         eq!(ok1[".warnings"], "DYM print"); // THIS CAN NEVER HAVED WORKED! BUG IN TEST PIPELINE!
-    )
+    );
 }
 
 #[test] fn testEmpty() {
@@ -2974,7 +2974,7 @@ using files = std::filesystem::recursive_directory_iterator;
 #[test] fn testEval() {
     skip(
         assert_is("√4", 2);
-    )
+    );
 }
 
 #[test] fn testLengthOperator() {
@@ -2991,20 +2991,20 @@ using files = std::filesystem::recursive_directory_iterator;
 #[test] fn testNodeName() {
     Node a = Node("xor"); // NOT type string by default!
     bool ok1 = a == "xor";
-    assert!(a == "xor")
-    assert!(a.name == "xor")
-    assert!(ok1)
+    assert!(a == "xor");
+    assert!(a.name == "xor");
+    assert!(ok1);
 }
 
 #[test] fn testIndentAsBlock() {
     todo_emit(
 
         //==============================================================================
-        // NODE/DATA STRUCTURE TESTS (see node_tests.h)
+        // NODE/DATA STRUCTURE TESTS (see node_tests.h);
         //==============================================================================
 
-        assert_is((char *) "a\n\tb", "a{b}")
-    )
+        assert_is((char *) "a\n\tb", "a{b}");
+    );
     // 0x0E 	SO 	␎ 	^N 		Shift Out
     // 0x0F 	SI 	␏ 	^O 		Shift In
     //	indent/dedent  0xF03B looks like pause!?   0xF032…  it does, what's going on CLion? Using STSong!
@@ -3025,7 +3025,7 @@ using files = std::filesystem::recursive_directory_iterator;
     skip(
         eq!(a.kind, key);
         assert(a.name == "HIO");
-    )
+    );
 }
 
 #[test] fn testParent() {
@@ -3044,7 +3044,7 @@ using files = std::filesystem::recursive_directory_iterator;
     skip(
         // pointer identity broken by flat() ?
         assert!(parent == &result);
-    )
+    );
     testParentContext(); // make sure parsed correctly
 }
 
@@ -3166,9 +3166,9 @@ using files = std::filesystem::recursive_directory_iterator;
     //    assert_is("١٢٣", 123);
     assert!("abc"_ == "abc");
 
-    assert!(String(u'☺').length == 3)
-    assert!(String(L'☺').length == 3)
-    assert!(String(U'☺').length == 3)
+    assert!(String(u'☺').length == 3);
+    assert!(String(L'☺').length == 3);
+    assert!(String(U'☺').length == 3);
 
     let node1 = interpret("ç='☺'");
     assert!(node1.kind == strings);
@@ -3190,10 +3190,10 @@ using files = std::filesystem::recursive_directory_iterator;
     assert(node1 == NIL);
 
     assert_parses("{a:null}");
-    assert!(result["a"].value.data == 0)
-    assert!(result.value.data == 0)
-    assert!(result["a"].value.longy == 0)
-    assert!(result.value.longy == 0)
+    assert!(result["a"].value.data == 0);
+    assert!(result.value.data == 0);
+    assert!(result["a"].value.longy == 0);
+    assert!(result.value.longy == 0);
     debugNode(result["a"]);
     print(result["a"].serialize());
     assert(result["a"] == NIL);
@@ -3277,7 +3277,7 @@ using files = std::filesystem::recursive_directory_iterator;
         eq!(Node("a"_s) + Node(2.2), Node("a2.2"));
         // "3" is type unknown => it is treated as NIL and not added!
         eq!(Node("1", "2", 0) + Node("3"), Node("1", "2", "3", 0)); // can't work ^^
-    )
+    );
 }
 #[test] fn testParamizedKeys() {
     //	<label for="pwd">Password</label>
@@ -3307,13 +3307,13 @@ using files = std::filesystem::recursive_directory_iterator;
         eq!(label2["for"], "password");
         eq!(label2["for"], "password"); // descend value??
         eq!(label2["Passwort"]["for"], "password");
-    )
+    );
 
     skip(
         //	3. relative equivalence? todo not really
         eq!(label1, label2);
         Node label3 = parse("label:{for:password 'Password'}");
-    )
+    );
 }
 
 #[test] fn testStackedLambdas() {
@@ -3337,20 +3337,20 @@ using files = std::filesystem::recursive_directory_iterator;
         assert_is("(a b c)#2", "b");
         assert_is("{a b c}#2", "b");
         assert_is("[a b c]#2", "b");
-    )
+    );
     todo_emit(
-        assert_is("{a:1 b:2}.a", 1)
-        assert_is("a of {a:1 b:2}", 1)
-        assert_is("a in {a:1 b:2}", 1)
-        assert_is("{a:1 b:2}[a]", 1)
-        assert_is("{a:1 b:2}.b", 2)
-        assert_is("b of {a:1 b:2}", 2)
-        assert_is("b in {a:1 b:2}", 2)
-        assert_is("{a:1 b:2}[b]", 2)
-    )
+        assert_is("{a:1 b:2}.a", 1);
+        assert_is("a of {a:1 b:2}", 1);
+        assert_is("a in {a:1 b:2}", 1);
+        assert_is("{a:1 b:2}[a]", 1);
+        assert_is("{a:1 b:2}.b", 2);
+        assert_is("b of {a:1 b:2}", 2);
+        assert_is("b in {a:1 b:2}", 2);
+        assert_is("{a:1 b:2}[b]", 2);
+    );
 
     //==============================================================================
-    // ADVANCED TESTS (see various)
+    // ADVANCED TESTS (see various);
     //==============================================================================
 }
 
@@ -3359,11 +3359,11 @@ using files = std::filesystem::recursive_directory_iterator;
 #[cfg(not(feature = "WASM"))]{
     List<int> list = {3, 1, 2, 5, 4};
     List<int> listb = {1, 2, 3, 4, 5};
-    assert!(list.sort() == listb)
+    assert!(list.sort() == listb);
     let by_precedence = [](int &a, int &b) { return a * a > b * b; };
-    assert!(list.sort(by_precedence) == listb)
+    assert!(list.sort(by_precedence) == listb);
     let by_square = [](int &a) { return (float) a * a; };
-    assert!(list.sort(by_square) == listb)
+    assert!(list.sort(by_square) == listb);
 }
 }
 
@@ -3372,7 +3372,7 @@ using files = std::filesystem::recursive_directory_iterator;
     List<int> list = {3, 1, 2, 5, 4};
     List<int> listb = {1, 2, 3, 4, 5};
     let by_precedence = [](int &a, int &b) { return a * a > b * b; };
-    assert!(list.sort(by_precedence) == listb)
+    assert!(list.sort(by_precedence) == listb);
 }
 }
 
@@ -3381,7 +3381,7 @@ using files = std::filesystem::recursive_directory_iterator;
     List<int> list = {3, 1, 2, 5, 4};
     List<int> listb = {1, 2, 3, 4, 5};
     let by_square = [](int &a) { return (float) a * a; };
-    assert!(list.sort(by_square) == listb)
+    assert!(list.sort(by_square) == listb);
 }
 }
 
@@ -3499,7 +3499,7 @@ using files = std::filesystem::recursive_directory_iterator;
     eq!(result[0][0][0][0].length, 3) // a b c
     skip(
         eq!(result[0][0][0][0], parse("a b c"));
-    )
+    );
     eq!(result[0][0][0][0][0], "a");
     eq!(result[0][0][0][0][1], "b");
     eq!(result[0][0][0][0][2], "c");
@@ -3564,10 +3564,10 @@ using files = std::filesystem::recursive_directory_iterator;
 #[test] fn testArrayIndices() {
     skip(
         // fails second time WHY?
-        assert_is("[1 2 3]", Node(1, 2, 3, 0).setType(patterns))
-        assert_is("[1 2 3]", Node(1, 2, 3, 0))
-    )
-#[cfg(not(feature = ""))]{(WASM and INCLUDE_MERGER)
+        assert_is("[1 2 3]", Node(1, 2, 3, 0).setType(patterns));
+        assert_is("[1 2 3]", Node(1, 2, 3, 0));
+    );
+#[cfg(not(feature = ""))]{(WASM and INCLUDE_MERGER);
     assert_is("(1 4 3)#2", 4); // todo needs_runtime = true => whole linker machinery
     assert_is("x=(1 4 3);x#2", 4);
     assert_is("x=(1 4 3);x#2=5;x#2", 5);
@@ -3575,11 +3575,11 @@ using files = std::filesystem::recursive_directory_iterator;
 }
 #[test] fn testNodeEmit() {
     is!("y:{x:2 z:3};y.x", 2);
-    is!("y:{x:'z'};y.x", 'z'); // emitData( node! ) emitNode()
-    is!("y{x:1}", true); // emitData( node! ) emitNode()
-    is!("y{x}", true); // emitData( node! ) emitNode()
-    is!("{x:1}", true); // emitData( node! ) emitNode()
-    is!("y={x:{z:1}};y", true); // emitData( node! ) emitNode()
+    is!("y:{x:'z'};y.x", 'z'); // emitData( node! ) emitNode();
+    is!("y{x:1}", true); // emitData( node! ) emitNode();
+    is!("y{x}", true); // emitData( node! ) emitNode();
+    is!("{x:1}", true); // emitData( node! ) emitNode();
+    is!("y={x:{z:1}};y", true); // emitData( node! ) emitNode();
 }
 
 //int dump_nr = 1;
@@ -3641,7 +3641,7 @@ using files = std::filesystem::recursive_directory_iterator;
     // wow, SLOWER in wasm-micro-runtime HOW!?
     //	exit(0);
 
-    //(√((x-c)^2+(y-c)^2)<r?0:255)
+    //(√((x-c)^2+(y-c)^2)<r?0:255);
     //(x-c)^2+(y-c)^2
     is!("h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x-c)^2+(y-c)^2‖<r", 1);
     ////char *wasm_paint_routine = "surface=(1,2);i=0;while(i<1000000){i++;surface#i=i*(10-√i);};paint";
@@ -3710,20 +3710,20 @@ using files = std::filesystem::recursive_directory_iterator;
     testWasmMutableGlobal(); // todo!
     is!("i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ", 800 * 800);
     //local pixel in context wasp_main already known  with type long, ignoring new type group<byte>
-    is!("grows:=it*2; grows 3*42 > grows 2*3", 1)
+    is!("grows:=it*2; grows 3*42 > grows 2*3", 1);
     // is there a situation where a COMPARISON is ambivalent?
-    // sleep ( time > 8pm ) and shower ≠ sleep time > ( 8pm and true)
+    // sleep ( time > 8pm ) and shower ≠ sleep time > ( 8pm and true);
     testNodeDataBinaryReconstruction(); // todo!  y:{x:2 z:3}
-    testSmartReturnHarder(); // y:{x:2 z:3} can't work yet(?)
+    testSmartReturnHarder(); // y:{x:2 z:3} can't work yet(?);
     is!("add1 x:=$0+1;add1 3", (int64) 4); // $0 specially parsed now
     is!("print 3", 3); // todo dispatch!
-    is!("if 4>1 then 2 else 3", 2)
+    is!("if 4>1 then 2 else 3", 2);
 
     // bad only SOMETIMES / after a while!
     is!("puts('ok');(1 4 3)#2", 4); // EXPECT 4 GOT 1n
     is!("'αβγδε'#3", U'γ'); // TODO! sometimes works!?
     is!("3 + √9", (int64) 6); // why !?!
-    is!("id 3*42> id 2*3", 1)
+    is!("id 3*42> id 2*3", 1);
     testSquares(); // ⚠️
 
     // often breaks LATER! usually some map[key] where key missing!
@@ -3740,7 +3740,7 @@ using files = std::filesystem::recursive_directory_iterator;
     //    assert!(sizeof(Type) == 8) // otherwise all header structs fall apart
 }
     //    assert!(sizeof(void*)==4) // otherwise all header structs fall apart TODO adjust in 64bit wasm / NORMAL arm64 !!
-    assert!(sizeof(int64) == 8)
+    assert!(sizeof(int64) == 8);
 }
 
 // todo: merge with testAllWasm, move ALL of these to test_wasm.rs
@@ -3792,7 +3792,7 @@ using files = std::filesystem::recursive_directory_iterator;
 
     skip( // todo!
         testBadInWasm();
-    )
+    );
     //    part of
     //    testAllWasm() :
     //    testRoundFloorCeiling();
@@ -3818,7 +3818,7 @@ using files = std::filesystem::recursive_directory_iterator;
     testFetch();
     skip(
         testCanvas(); // attribute setter missing value breaks browser
-    )
+    );
 }
 #[test] fn print(Module &m) {
     print("Module");
@@ -3892,7 +3892,7 @@ using files = std::filesystem::recursive_directory_iterator;
     const String &library_name = "raylib";
     assert!(library_name == "raylib");
 }
-#[test] fn todo_done() { // moved from todo()
+#[test] fn todo_done() { // moved from todo();
     // GOOD! move to tests() once they work again but a#[test] fn redundant test executions
     assert_is("2+1/2", 2.5);
     is!("a = [1, 2, 3]; a[2]", 3);
@@ -3969,7 +3969,7 @@ using files = std::filesystem::recursive_directory_iterator;
         is!("1 +1 == [1 1]", 1);
         is!("1 +1 ≠ 1 + 1", 1);
         testWasmTypedGlobals();
-    )
+    );
 
 #[cfg(not(feature = "TRACE"))]{
     println("parseLong fails in trace mode WHY?");
@@ -3983,8 +3983,8 @@ using files = std::filesystem::recursive_directory_iterator;
     // while without body
     //    Missing condition for while statement
     skip(
-        is!("i=0;while(i++ <10001);i", 10000) // parsed wrongly! while(  <( ++ i 10001) i)
-    )
+        is!("i=0;while(i++ <10001);i", 10000) // parsed wrongly! while(  <( ++ i 10001) i);
+    );
 
     is!("use math;⅓ ≈ .3333333 ", 1);
     is!("precision = 3 digits; ⅓ ≈ .333 ", 1);
@@ -3998,7 +3998,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert_throws("xyz 3.7"); // todo SHOULD THROW unknown symbol!
     is!("if(0):{3}", false); // 0:3 messy node
     eq!(Node("1", 0) + Node("2"_s),
-                  Node("1", "2", 0)); // 1+2 => 1:2  stupid border case because 1 not group (1)
+                  Node("1", "2", 0)); // 1+2 => 1:2  stupid border case because 1 not group (1);
     assert_is((char *) "{a b c}#2", "b"); // ok, but not for patterns:
     assert_is((char *) "[a b c]#2", "b"); // patterns
     is!("abs(0)", 0);
@@ -4008,7 +4008,7 @@ using files = std::filesystem::recursive_directory_iterator;
     assert_is("one plus two times three", 7);
     //	print("OK %s %d"s % ("WASM",1));// only 1 handed over
     //    print(" OK %d %d"s % (2, 1));// error: expression result unused [-Werror,-Wunused-value] OK
-    is!("use wasp;use lowerCaseUTF;a='ÂÊÎÔÛ';lowerCaseUTF(a);a", "âêîôû")
+    is!("use wasp;use lowerCaseUTF;a='ÂÊÎÔÛ';lowerCaseUTF(a);a", "âêîôû");
     test2Def();
     testConstructorCast();
     is!("html{bold{'Hello'}}", "Hello"); // in wasmtime
@@ -4061,7 +4061,7 @@ using files = std::filesystem::recursive_directory_iterator;
     testSerialize();
     skip(
         testPrimitiveTypes();
-    )
+    );
     //	test_sin();
     testIndentAsBlock();
     testDeepCopyDebugBugBug2(); // SUBTLE: BUGS OUT ONLY ON SECOND TRY!!!
@@ -4162,7 +4162,7 @@ using files = std::filesystem::recursive_directory_iterator;
 // 2022-12-03 : 2 sec WITHOUT runtime_emit, wasmtime 4.0 X86 on M1
 // 2022-12-03 : 10 sec WITH runtime_emit, wasmtime 4.0 X86 on M1
 // 2022-12-28 : 3 sec WITH runtime_emit, wasmedge on M1 WOW ALL TESTS PASSING
-// 2025-03-23 : <5 sec WITH runtime_emit, WASMTIME/WAMR/WASMEDGE on M1, 45 sec in Chrome (because print?)
+// 2025-03-23 : <5 sec WITH runtime_emit, WASMTIME/WAMR/WASMEDGE on M1, 45 sec in Chrome (because print?);
 // ⚠️ CANNOT USE is! in WASM! ONLY via #[test] fn testRun();
 // 2025-12-23 : 10 sec WITH runtime_emit, wasmtime 4.0 on M2
 #[test] fn testCurrent() {
@@ -4187,7 +4187,7 @@ using files = std::filesystem::recursive_directory_iterator;
     skip(
         testDeepColon(); // wit definition vs wasp declaration clash!
         todos(); // WIP and BUGs
-    )
+    );
     todo_done();
     // sleep(10);
     // exit(0);
@@ -4218,7 +4218,7 @@ using files = std::filesystem::recursive_directory_iterator;
         testHostIntegration();
         testJS();
         testHtmlWasp();
-    )
+    );
     // testListGrowth<const int&>();// pointer to a reference error
 
     // todo print as general dispatch depending on smarttype
@@ -4233,9 +4233,9 @@ using files = std::filesystem::recursive_directory_iterator;
 #[cfg(not(feature = "WASM"))]{
     // ⚠️ in WASM these tests are called via async trick
     testAngle(); // fails in WASM why?
-    testAssertRun(); // separate because they take longer (≈10 sec as of 2022.12)
+    testAssertRun(); // separate because they take longer (≈10 sec as of 2022.12);
     testAllWasm();
-    //    todos();// those not passing yet (skip)
+    //    todos();// those not passing yet (skip);
 }
     print(tests_executed);
     print("CURRENT TESTS PASSED");

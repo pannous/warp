@@ -10,8 +10,8 @@
 //}
 
 //#[cfg(feature = "EMSCRIPTEN")]{
-//#define assert_expect(x)
-//#define async_yield(y)
+//#define assert_expect(x);
+//#define async_yield(y);
 //}
 //
 #[test] fn testCall() {
@@ -19,19 +19,19 @@
     // 	warn("square 3  => SIGABRT in WASMTIME! must be bug there!?");
     // 	return ;
     // }
-    is!("square 3", 9)
-    is!("square(3)", 9)
+    is!("square 3", 9);
+    is!("square(3)", 9);
     //	functionSignatures["square"] = (*new Signature()).add(i32t).returns(i32t).import();
-    is!("square(1+2)", 9)
-    is!("square 1+2", 9)
+    is!("square(1+2)", 9);
+    is!("square 1+2", 9);
     //	preRegisterSignatures();
-    is!("1+square 2+3", 26)
-    is!("1 + square 1+2", 10)
+    is!("1+square 2+3", 26);
+    is!("1 + square 1+2", 10);
     skip!(
         // interpreter broken lol
-        is!("1+square(2+3)", 26)
+        is!("1+square(2+3)", 26);
         is!("square{i:3}", 9) //todo: match arguments!
-    )
+    );
 }
 
 #[test] fn testTruthyAnd() {
@@ -51,7 +51,7 @@
         is!("0 and 'a'", 0);
         is!("0 and '🍏'", 0);
         is!("0 and '🍏🍏🍏'", 0);
-    )
+    );
 }
 
 #[test] fn testIf() {
@@ -61,7 +61,7 @@
     //            is!("if ø:3", false);
     //            is!("if {}:3", false);
     //            is!("if x:3", false);
-    //    )
+    //    );
 
     is!("if(2):{3}", 3);
     is!("if 2 : 3 else 4", 3);
@@ -103,7 +103,7 @@
     skip!(
         is!("2 and 3 or 4", 3);
         is!("false else 3", 3);
-    )
+    );
     is!("1 and 0 or 4", 4);
     is!("if 1 then 0 else 4", (int64) 0);
     is!("if 0 {3}", false);
@@ -137,8 +137,8 @@
         assert_parses("if(condition=2,then=3,else=4)");
         assert!(result["condition"] == 2);
         assert!(result["else"] == 4);
-        is!("if(condition=2,then=3,else=4)", 3); // this is what happens under the hood (?)
-    )
+        is!("if(condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
+    );
 }
 
 #[test] fn testIfCallZero() {
@@ -163,7 +163,7 @@
         is!("def zero(){0};if 1 then zero() else 4", (int64) 0);
         is!("def zero(){0};if zero() {3}", false);
         is!("def zero(){0};if zero() {3} else 4", 4);
-    )
+    );
     is!("def zero(){0};if(zero()){3} else 4", 4);
     is!("def zero(){0};if(zero()){3} else {4}", 4);
     is!("def zero(){0};if (zero()) {3} else {4}", 4);
@@ -228,7 +228,7 @@
         is!("if 2+0 {3*1} else {4*1}", 3);
         is!("if 2+0 {3*1}", 3);
 
-    )
+    );
     is!("if(0*2):{3*1} else {4*1}", 4);
 
     is!("if 2+0 then 3 else 4+0", 3);
@@ -236,13 +236,13 @@
     //	assert_group("if 2+0 : 3 else 4+0", "(if (2+0) (3) (4+0))");
     is!("if 2+0 : 3 else 4+0", 3);
     is!("if 0*2:{3*1} else {4*1}", 4);
-    is!("2+0", 2)
+    is!("2+0", 2);
     is!("if 0*2:3*1", false);
     skip!(
         is!("if(2,then=3*1)", 3);
         is!("if(0,then=3,else=4*1)", 4);
         is!("if(1,then=3+0,else=4)", 3);
-    )
+    );
     is!("if 0*2:3 else {4*1}", 4);
     is!("if 0*2 {3*1} else {4*1}", 4);
     is!("if {0}:3 else 4+0", 4);
@@ -278,7 +278,7 @@
     skip!(
         is!("if 0*2 {3*1} else 4+0", 4);
         is!("if 2+0 {3*1} else 4+0", 3);
-    )
+    );
     is!("if(2,3,4)", 3);
     is!("if({2},{3*1},{4*1})", 3);
     is!("if(2*1){3*1}{4*1}", 3);
@@ -294,7 +294,7 @@
         is!("if 0>1 {3} else {4}", 4);
         is!("if (0<1) {3} else {4}", 4);
         is!("if 1<2 {3}", 3);
-    )
+    );
     is!("if (1<0) {3}", false);
     is!("if (0<1) {3}", 3);
 
@@ -357,19 +357,19 @@
         assert_parses("if(3<condition=2,then=3,else=4)");
         assert!(result["condition"] == 2);
         assert!(result["else"] == 4);
-        is!("if(3<condition=2,then=3,else=4)", 3); // this is what happens under the hood (?)
-    )
+        is!("if(3<condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
+    );
 }
 #[test] fn testSwitchEvaluation() {
-    is!("{a:1+1 b:2}(a)", 2)
-    is!("x=a;{a:1 b:2}(x)", 1)
+    is!("{a:1+1 b:2}(a)", 2);
+    is!("x=a;{a:1 b:2}(x)", 1);
     // functor switch(x,xs)=xs[x] or xs[default]
 }
 
 #[test] fn testSwitch() {
     //	todo if(1>0) ... innocent groups
-    todo_emit(is!("{a:1 b:2}[a]", 1))
-    todo_emit(is!("{a:1 b:2}[b]", 2))
+    todo_emit(is!("{a:1 b:2}[a]", 1));
+    todo_emit(is!("{a:1 b:2}[b]", 2));
 }
 
 /*
@@ -437,11 +437,11 @@
     //	testSmartTypes();
     testTruthyAnd();
     testIf();
-    // testCall(); in testTodoBrowser()
+    // testCall(); in testTodoBrowser();
     skip!(
         testSwitch();
         testFunctionParams(); // TODO!
-    )
+    );
 }
 
 #[test] fn testAngle() {

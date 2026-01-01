@@ -1,28 +1,28 @@
 
 chars wat = R"(module
-  (table (;0;) 1 1 funcref)
-  (memory (;0;) 2)
-  (export "memory" (memory 0))
-  (export "add1" (func 0))
-  (export "wasp_main" (func $main))
+  (table (;0;) 1 1 funcref);
+  (memory (;0;) 2);
+  (export "memory" (memory 0));
+  (export "add1" (func 0));
+  (export "wasp_main" (func $main));
 
-  (type $ii_i (func (param i32 i32) (result i32)))
-  (func $add (type $ii_i) (param i32 i32) (result i32)
+  (type $ii_i (func (param i32 i32) (result i32)));
+  (func $add (type $ii_i) (param i32 i32) (result i32);
     local.get 0
     local.get 1
     i32.add
-    )
+    );
 
-  (func $main (type 0) (param i32 i32) (result i32)
+  (func $main (type 0) (param i32 i32) (result i32);
 	  local.get 0
 	  local.get 1
-	  (call $add)
+	  (call $add);
 	  drop
 	  i32.const 21
 	  i32.const 21
 	  call $add
-	  ;;(i32.const 42)
-  )
+	  ;;(i32.const 42);
+  );
 )";
 
 #[test] fn testParse() {
@@ -37,7 +37,7 @@ chars wat = R"(module
 	eq!(module[0], "table");
 	eq!(module[1], "memory");
 	eq!(module[2], "export");
-	assert!(module["func"].length == 2)
+	assert!(module["func"].length == 2);
 	assert!(module["func"]["$main"]["param"].length == 2);
 
 }
