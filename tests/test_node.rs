@@ -38,6 +38,33 @@ fn test_node_index_str() {
     assert_eq!(block["nonexistent"], Node::Empty);
 }
 
+#[test]
+fn test_node_not_operator() {
+    // Boolean nodes
+    assert_eq!(!True, False);
+    assert_eq!(!False, True);
+
+    // Empty/null
+    assert_eq!(!Empty, True);
+
+    // Numbers
+    assert_eq!(!Node::int(0), True);
+    assert_eq!(!Node::int(1), False);
+    assert_eq!(!Node::int(42), False);
+    assert_eq!(!Node::float(0.0), True);
+    assert_eq!(!Node::float(3.14), False);
+
+    // Strings
+    assert_eq!(!Node::text(""), True);
+    assert_eq!(!Node::text("hello"), False);
+    assert_eq!(!Node::symbol(""), True);
+    assert_eq!(!Node::symbol("x"), False);
+
+    // Collections
+    assert_eq!(!Node::List(vec![]), True);
+    assert_eq!(!Node::ints(vec![1, 2, 3]), False);
+}
+
 
 #[test]
 fn test_node_equality(){
