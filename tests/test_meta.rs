@@ -69,7 +69,7 @@ fn test_parent_context() {
     let source = "{a:'HIO' d:{} b:3 c:ø}";
 let result = parse(source);
     result.print();
-    let a : Node = result["a"];
+    let a : Node = result["a"].clone();
     a.print();
     // eq!(a.kind(), strings);
     eq!(a.value(), "HIO"); // we can't be sure it's to string
