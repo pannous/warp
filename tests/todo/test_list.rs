@@ -1,47 +1,179 @@
-
-
 // List and array test functions
 
-// List growth
-#[test] fn testListGrowth();
-#[test] fn testListGrowthWithStrings();
-#[test] fn test_list_growth();
-#[test] fn testListGrow();
+use wasp::*;
+use wasp::node::Node;
 
-// List initialization
-#[test] fn testListInitializerList();
-#[test] fn testListVarargs();
-#[test] fn testLists();
+// Array size tests
+#[test]
+fn testArraySize() {
+    // todo!
+    // There should be one-- and preferably only one --obvious way to do it.
+    // requires struct lookup and aliases
+    is!("pixel=[1 2 4];#pixel", 3);
+    //  is!("pixel=[1 2 4];pixel#", 3);
+    is!("pixel=[1 2 4];pixel size", 3);
+    is!("pixel=[1 2 4];pixel length", 3);
+    is!("pixel=[1 2 4];pixel count", 3);
+    is!("pixel=[1 2 4];pixel number", 3); // ambivalence with type number!
+    is!("pixel=[1 2 4];pixel.size", 3);
+    is!("pixel=[1 2 4];pixel.length", 3);
+    is!("pixel=[1 2 4];pixel.count", 3);
+    is!("pixel=[1 2 4];pixel.number", 3); // ambivalence cast
+    is!("pixels=[1 2 4];number of pixels ", 3);
+    is!("pixels=[1 2 4];size of pixels ", 3);
+    is!("pixels=[1 2 4];length of pixels ", 3);
+    is!("pixels=[1 2 4];count of pixels ", 3);
+    is!("pixel=[1 2 3];pixel.add(5);#pixel", 4);
+}
 
-// Array operations
-#[test] fn testArraySize();
-#[test] fn testArrayOperations();
-#[test] fn testArrayCreation();
-#[test] fn testArrayS();
-#[test] fn testArrayInitialization();
-#[test] fn testArrayInitializationBasics();
-#[test] fn testArrayIndices();
-#[test] fn testArrayIndicesWasm();
+// Array operations tests  
+#[test]
+fn testArrayOperations() {
+    todo!("wasp language evaluation not yet implemented");
+}
 
-// List operations
-#[test] fn testIndex();
-#[test] fn testIndexOffset();
-#[test] fn testIndexWasm();
+#[test]
+fn testArrayCreation() {
+    todo!("wasp language evaluation not yet implemented");
+}
 
-// Sorting and filtering
-#[test] fn testSort();
-#[test] fn testSort1();
-#[test] fn testSort2();
-#[test] fn testRemove();
-#[test] fn testRemove2();
+#[test]
+fn testArrayS() {
+    todo!("wasp language evaluation not yet implemented");
+}
 
-// Deep lists
-#[test] fn testDeepLists();
-#[test] fn testNewlineLists();
-#[test] fn testRootLists();
-#[test] fn testColonLists();
+#[test]
+fn testArrayInitialization() {
+    todo!("wasp language evaluation not yet implemented");
+}
 
-// Iteration
-#[test] fn testIteration();
-#[test] fn testIterate();
-#[test] fn testForEach();
+#[test]
+fn testArrayInitializationBasics() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testArrayIndices() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testArrayIndicesWasm() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// List growth tests
+#[test]
+fn testListGrowth() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testListGrowthWithStrings() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn test_list_growth() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testListGrow() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// List initialization tests
+#[test]
+fn testListInitializerList() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testListVarargs() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testLists() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// List indexing tests
+#[test]
+fn testIndex() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testIndexOffset() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testIndexWasm() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// Sorting and filtering tests
+#[test]
+fn testSort() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testSort1() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testSort2() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testRemove() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testRemove2() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// Deep lists tests
+#[test]
+fn testDeepLists() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testNewlineLists() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testRootLists() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testColonLists() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+// Iteration tests
+#[test]
+fn testIteration() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testIterate() {
+    todo!("wasp language evaluation not yet implemented");
+}
+
+#[test]
+fn testForEach() {
+    todo!("wasp language evaluation not yet implemented");
+}
