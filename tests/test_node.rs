@@ -37,11 +37,11 @@ fn test_node_index_str() {
     assert_eq!(block["age"], 30);
     assert_eq!(block["nonexistent"], Node::Empty);
 
-    // Test mutable indexing
-    block["name"] = Node::text("Bob");
-    assert_eq!(block["name"], Node::text("Bob"));
+    // Test mutable indexing with automatic conversion
+    block["name"] = "Bob".into();
+    assert_eq!(block["name"], "Bob");
 
-    block["age"] = Node::int(25);
+    block["age"] = 25.into();
     assert_eq!(block["age"], 25);
 }
 
