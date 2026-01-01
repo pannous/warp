@@ -12,7 +12,7 @@ fn test_meta_field() {
     assert!(tee["a"]["@attrib"]);
     assert!(tee["a"]["@attrib2"]);
     assert!(tee["a"] == 1);
-    assert!(tee.length == 1);
+    assert!(tee.length() == 1);
     assert!(tee["a"]["@attrib"].value.longy == 42);
     assert!(tee["a"]["@attrib2"].value.longy == 43);
     eq!(tee.serialize(), "tee{@attrib(42) @attrib2(43) a:1}");
@@ -28,7 +28,7 @@ fn test_meta() {
     assert!(tee["@attrib"]);
     assert!(tee["@attrib2"]);
     assert!(tee["a"] == 1);
-    assert!(tee.length == 1);
+    assert!(tee.length() == 1);
     assert!(tee["@attrib"].value.longy == 42);
     assert!(tee["@attrib2"].value.longy == 43);
 }
@@ -40,7 +40,7 @@ fn test_meta_at() {
     let code = "@attrib tee{a:1}";
     let node = parse(code);
     assert!(node.name == "tee");
-    assert!(node.length == 1);
+    assert!(node.length() == 1);
     assert!(node["a"] == 1);
     assert!(node["@attrib"]);
 }
@@ -50,7 +50,7 @@ fn test_meta_at2() {
     let code = "@attrib(1) @attrib2(42) tee{a:1}";
     let node = parse(code);
     assert!(node.name == "tee");
-    assert!(node.length == 1);
+    assert!(node.length() == 1);
     assert!(node["a"] == 1);
     // eq!(node.serialize(),code); // todo ok except order!
     assert!(node["@attrib"]);
@@ -67,14 +67,14 @@ fn test_parent_context() {
     result.print();
     Node & a = result["a"];
     a.print();
-    eq!(a.kind, strings);
+    eq!(a.kind(), strings);
     eq!(a.value.string, "HIO");
     eq!(a.string(), "HIO"); // keyNodes go to values!
     assert!(a == "HIO");
     //	eq!(a.name,"a" or"HIO");// keyNodes go to values!
     skip!(
 
-        eq!(a.kind, key);
+        eq!(a.kind(), key);
         assert!(a.name == "HIO");
     );
 }

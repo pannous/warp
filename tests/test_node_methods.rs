@@ -2,7 +2,7 @@
 
 #[test]
 fn test_remove() {
-    result = parse("a b c d");
+    let result = parse("a b c d");
     result.remove(1, 2);
     replaced = parse("a d");
     assert!(result == replaced);
@@ -11,7 +11,7 @@ fn test_remove() {
 
 #[test]
 fn test_remove2() {
-    result = parse("a b c d");
+    let result = parse("a b c d");
     result.remove(2, 10);
     replaced = parse("a b");
     assert!(result == replaced);
@@ -19,7 +19,7 @@ fn test_remove2() {
 
 #[test]
 fn test_replace() {
-    result = parse("a b c d");
+    let result = parse("a b c d");
     result.replace(1, 2, Node("x"));
     replaced = parse("a x d");
     assert!(result == replaced);

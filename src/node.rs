@@ -227,6 +227,12 @@ pub enum Node {
 }
 
 impl Node {
+    pub fn strings(p0: Vec<&str>) -> Node {
+        Node::List(map(p0, |s| Node::Text(s.to_string())))
+    }
+}
+
+impl Node {
     pub fn first(&self) -> Node {
         todo!()
     }
@@ -267,6 +273,8 @@ impl Node {
             Node::Data(_) => NodeKind::Data,
             Node::Meta(_, _) => NodeKind::Meta,
             Node::Error(_) => NodeKind::Error,
+            Node::False => NodeKind::Number, // map to 0 !
+            Node::True => NodeKind::Number, // map to 1
         }
     }
     pub fn length(&self) -> i32 {
@@ -606,6 +614,8 @@ impl Node {
         use serde_json::{Map, Value};
 
         match self {
+            Node::True => Value::Bool(true),
+            Node::False => Value::Bool(false),
             Node::Empty => Value::Null,
             Node::Number(Number::Int(n)) => Value::Number((*n).into()),
             Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
@@ -749,6 +759,8 @@ impl fmt::Debug for Node {
             }
             Node::Error(e) => write!(f, "Error({})", e),
             Node::Empty => write!(f, "ø"),
+            Node::True => write!(f, "true"),
+            Node::False => write!(f, "false"),
         }
     }
 }
@@ -823,8 +835,24 @@ pub enum Bracket {
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         match self {
+            Node::True => {
+                match other {
+                    Node::True => true,
+                    Node::False => false,
+                    _ => other == self, // flip symmetric cases
+                }
+            }
+            Node::False => {
+                match other {
+                    Node::True => false,
+                    Node::False => true,
+                    _ => other == self, // flip symmetric cases
+                }
+            }, // flip symmetric cases:
             Node::Empty => {
                 match other {
+                    Node::True => false,
+                    Node::False => true,
                     Node::Empty => true,
                     Node::Symbol(s) => s.is_empty(), // todo disallow empty symbol
                     Node::Text(s) => s.is_empty(),
@@ -834,22 +862,36 @@ impl PartialEq for Node {
                     _ => self.size() == 0,
                 }
             }
-            Node::Number(n) => match other {
+            Node::Number(n ) => match other {
+                Node::True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
+                // Node::True => match n {
+                //     Number::Int(i) => *i == 1,
+                //     Number::Float(f) => *f == 1.0,
+                //     _ => false,
+                // }
+                Node::False => n.zero(),
                 Node::Number(n2) => n == n2,
                 _ => false,
             },
             Node::Symbol(s) => {
                 match other {
+                    Node::True => !s.is_empty(),
+                    Node::False => s.is_empty(),
                     Node::Symbol(s2) => s == s2,
                     // todo variable values? nah not here
                     _ => return false,
                 }
             }
             Node::Text(s) => match other {
+                Node::True => !s.is_empty(),
+                Node::False => s.is_empty(),
                 Node::Text(s2) => s == s2,
                 _ => false,
             },
+
             Node::Codepoint(c) => match other {
+                Node::True =>  c != &'\0' ,
+                Node::False => c == &'\0' ,
                 Node::Codepoint(c2) => c == c2,
                 _ => false,
             },
@@ -897,6 +939,7 @@ impl PartialEq for Node {
                 Node::Error(e2) => e1 == e2,
                 _ => false,
             },
+            // _ => false,
         }
     }
 }
@@ -1040,4 +1083,19 @@ impl std::fmt::Display for Node {
             _ => write!(f, "{:?}", self),
         }
     }
+}
+
+fn assert_parses(p0: &str) -> Node {
+    todo!()
+}
+
+// fn print(p0: &str) {
+//     todo!()
+// }
+fn print(p0: String) {
+    println!("{}", p0);
+}
+
+fn Node(p0: String) -> Node {
+    Node::Text(p0)
 }
