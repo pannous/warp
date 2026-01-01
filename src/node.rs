@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
-use std::ops::Index;
+use std::ops::{Index, Not};
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -1093,6 +1093,30 @@ impl PartialOrd<f64> for Node {
             Node::Number(Number::Float(f)) => f.partial_cmp(other),
             Node::Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
+        }
+    }
+}
+
+impl Not for Node {
+    type Output = Node;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Node::True => Node::False,
+            Node::False => Node::True,
+            Node::Empty => Node::True,  // !null == true
+            Node::Number(ref n) if n.zero() => Node::True,  // !0 == true
+            Node::Number(_) => Node::False,  // !non-zero == false
+            Node::Text(ref s) if s.is_empty() => Node::True,  // !"" == true
+            Node::Text(_) => Node::False,  // !non-empty string == false
+            Node::Symbol(ref s) if s.is_empty() => Node::True,
+            Node::Symbol(_) => Node::False,
+            Node::List(ref items) if items.is_empty() => Node::True,  // ![] == true
+            Node::List(_) => Node::False,  // !non-empty list == false
+            Node::Block(ref items, _, _) if items.is_empty() => Node::True,
+            Node::Block(_, _, _) => Node::False,
+            Node::Meta(node, meta) => (!(*node.clone())).with_meta(meta),  // Apply not to wrapped node, preserve metadata
+            _ => Node::False,  // Other types default to falsy
         }
     }
 }
