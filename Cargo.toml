@@ -33,6 +33,7 @@ wat  = "*"
 wasmparser = "*"
 wasm-encoder  = "*"
 log = "0.4.29"
+fetch = "0.8.1"
 
 [target.'cfg(not(target_os = "wasm32"))'.dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }
