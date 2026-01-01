@@ -4,14 +4,14 @@
 
 
 #[test]
-fn test2Def() {
+fn test2def() {
     // parse("def test1(x){x+1};def test2(x){x+1};test2(3)");
     is!("def test1(x){x+1};def test2(x){x+1};test2(3)", 4);
     is!("def test1(x){x+3};def test2(x){x+1};test2(3)", 6);
 }
 
 #[test]
-fn testFunctionDeclaration() {
+fn test_function_declaration() {
     // THESE NEVER WORKED! should they? YES! partly
     // 'fixing' one broke fib etc :(
     // 💡we already have a working syntax so this has low priority
@@ -36,7 +36,7 @@ fn testFunctionDeclaration() {
 }
 
 #[test]
-fn testFunctionDeclarationParse() {
+fn test_function_declaration_parse() {
     //    let node1 = analyze(parse("fn main(){}"));
     //    assert!(node1.kind==declaration);
     //    assert!(node1.name=="main");
@@ -59,7 +59,7 @@ fn testFunctionDeclarationParse() {
 }
 
 #[test]
-fn testRenameWasmFunction() {
+fn test_rename_wasm_function() {
     Module & module1 = loadModule("samples/test.wasm");
     module1.functions.at(0).name = "test";
     module1.save("samples/test2.wasm");
@@ -67,7 +67,7 @@ fn testRenameWasmFunction() {
 }
 
 #[test]
-fn testWitFunction() {
+fn test_wit_function() {
     //    funcDeclaration
     // a:b,c vs a:b, c:d
 
@@ -80,7 +80,7 @@ fn testWitFunction() {
 }
 
 #[test]
-fn testFloatReturnThroughMain() {
+fn test_float_return_through_main() {
 //     double
     x = 0.0000001; // 3e...
     //	double x=1000000000.1;// 4...
@@ -100,12 +100,12 @@ fn testFloatReturnThroughMain() {
 }
 
 #[test]
-fn testGraphParams() {
+fn test_graph_params() {
 //     assert_parses("{\n  empireHero: hero(episode: EMPIRE){\n    name\n  }\n"
 //                   "  jediHero: hero(episode: JEDI){\n    name\n  }\n}");
     Node & hero = result["empireHero"];
     hero.print();
-    assert(hero["episode"] == "EMPIRE");
+    assert!(hero["episode"] == "EMPIRE");
 //     assert_parses("\nfragment comparisonFields on Character{\n"
 //                   "  name\n  appearsIn\n  friends{\n    name\n  }\n }");
     assert_parses("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
@@ -121,11 +121,11 @@ fn testGraphParams() {
 }
 
 #[test]
-fn testParams() {
+fn test_params() {
     //	eq!(parse("f(x)=x*x").param->first(),"x");
     //    data_mode = true; // todo ?
     body = assert_parses("body(style='blue'){a(link)}");
-    assert(body["style"] == "blue");
+    assert!(body["style"] == "blue");
 
     parse("a(x:1)");
     assert_parses("a(x:1)");
@@ -145,9 +145,9 @@ assert_parses("chained_ops(1)(1)(1)", 0)); // why not generalize from the start?
         Node body2 = assert_parses(
             "body(style='blue'){style:green}"); // is that whole xml compatibility a good idea?
         skip!(
-assert(body2["style"] ==
+assert!(body2["style"] ==
             "green", 0)); // body has prescedence over param, semantically param provide extra data to body
-        assert(body2[".style"] == "blue");
+        assert!(body2[".style"] == "blue");
     );
     //	assert_parses("a(href='#'){'a link'}");
     //	assert_parses("(markdown link)[www]");
@@ -155,7 +155,7 @@ assert(body2["style"] ==
 
 
 #[test]
-fn testStackedLambdas() {
+fn test_stacked_lambdas() {
     result = parse("a{x:1}{y:2}{3}");
     result.print();
     assert!(result.length == 3);
@@ -168,32 +168,9 @@ fn testStackedLambdas() {
     assert!(parse("a{x}{y z}") != parse("a{x,{y z}}"));
 }
 
-#[test]
-fn testFunctionDeclarationParse() {
-    //    let node1 = analyze(parse("fn main(){}"));
-    //    assert!(node1.kind==declaration);
-    //    assert!(node1.name=="main");
-    clearAnalyzerContext();
-    // let node2 = analyze(parse("fun test(float a):int{return a*2}")); // todo: cast return to int and parseDeclaration!
-    let node2 = analyze(parse("fun test(float a){return a*2}"));
-    assert!(node2.kind == declaration);
-    assert!(node2.name == "test");
-    eq!(functions["test"].signature.size(), 1);
-    eq!(functions["test"].signature.parameters[0].name, "a");
-    eq!(functions["test"].signature.parameters[0].type, (Type) floats);
-    // eq!(functions["test"].signature.parameters[0].type, (Type) reals); // upgrade float to real TODO not if explicit!
-    assert!(functions["test"].body);
-    assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
-    skip!(
-
-        assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
-        eq!(*functions["test"].body, analyze(parse("return a*2")));
-    );
-}
-
 
 #[test]
-fn testModifiers() {
+fn test_modifiers() {
     is!("public fun ignore(){3}", 3);
     is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}",3);
 }
