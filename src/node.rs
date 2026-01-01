@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
-use std::ops::{Index, Not};
+use std::ops::{Index, IndexMut, Not};
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -229,12 +229,12 @@ pub enum Node {
 }
 
 impl Node {
+    pub fn remove(&self, p0: i32, p1: i32) {
+        todo!()
+    }
     pub fn strings(p0: Vec<&str>) -> Node {
         Node::List(map(p0, |s| Node::Text(s.to_string())))
     }
-}
-
-impl Node {
     pub fn first(&self) -> Node {
         todo!()
     }
@@ -492,6 +492,77 @@ impl Index<&str> for Node {
             }
             Node::Meta(node, _) => &node[i],
             _ => &Node::Empty,
+        }
+    }
+}
+
+impl IndexMut<usize> for Node {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+        match self {
+            Node::List(elements) => {
+                if i < elements.len() {
+                    &mut elements[i]
+                } else {
+                    panic!("Index out of bounds")
+                }
+            }
+            Node::Block(nodes, ..) => {
+                if i < nodes.len() {
+                    &mut nodes[i]
+                } else {
+                    panic!("Index out of bounds")
+                }
+            }
+            Node::Meta(node, _) => &mut node[i],
+            _ => panic!("Cannot mutably index this node type"),
+        }
+    }
+}
+
+impl IndexMut<&String> for Node {
+    fn index_mut(&mut self, i: &String) -> &mut Self::Output {
+        match self {
+            Node::Block(nodes, ..) => {
+                if let Some(found) = nodes.iter_mut().find(|node| match node {
+                    Node::Key(k, _) => k == i,
+                    Node::Text(t) => t == i,
+                    _ => false,
+                }) {
+                    // If we found a Key, return mutable reference to its value
+                    match found {
+                        Node::Key(_, v) => v.as_mut(),
+                        other => other,
+                    }
+                } else {
+                    panic!("Key '{}' not found", i)
+                }
+            }
+            Node::Meta(node, _) => &mut node[i],
+            _ => panic!("Cannot mutably index this node type"),
+        }
+    }
+}
+
+impl IndexMut<&str> for Node {
+    fn index_mut(&mut self, i: &str) -> &mut Self::Output {
+        match self {
+            Node::Block(nodes, ..) => {
+                if let Some(found) = nodes.iter_mut().find(|node| match node {
+                    Node::Key(k, _) => k == i,
+                    Node::Text(t) => t == i,
+                    _ => false,
+                }) {
+                    // If we found a Key, return mutable reference to its value
+                    match found {
+                        Node::Key(_, v) => v.as_mut(),
+                        other => other,
+                    }
+                } else {
+                    panic!("Key '{}' not found", i)
+                }
+            }
+            Node::Meta(node, _) => &mut node[i],
+            _ => panic!("Cannot mutably index this node type"),
         }
     }
 }
