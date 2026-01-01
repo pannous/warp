@@ -10,7 +10,7 @@ fn test_node_to_json_compact() {
     // Should be simple key-value
     assert!(json.contains("name"));
     assert!(json.contains("Alice"));
-    assert!(!json.contains("KeyValue")); // No type tags!
+    assert!(!json.contains("Key")); // No type tags!
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn test_implicit_html_structure() {
                 Grouper::Object,
                 Bracket::Curly,
             ),
-            Node::KeyValue(
+            Node::Key(
                 "colors".to_string(),
                 Box::new(Node::list(vec![
                     Node::symbol("red"),

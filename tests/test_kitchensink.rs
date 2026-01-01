@@ -19,8 +19,8 @@ fn test_kitchensink_all_node_types() {
     // Test 3: Text node
     test_node("Text", Node::Text("hello world".to_string()));
 
-    // Test 4: Codepoint node
-    test_node("Codepoint", Node::Codepoint('🦀'));
+    // Test 4: Char node
+    test_node("Char", Node::Char('🦀'));
 
     // Test 5: Symbol node
     test_node("Symbol", Node::Symbol("my_var".to_string()));
@@ -30,9 +30,9 @@ fn test_kitchensink_all_node_types() {
     let tag_node = WaspParser::parse(tag_input);
     test_node("Tag", tag_node);
 
-    // Test 7: KeyValue node
-    test_node("KeyValue",
-        Node::KeyValue("key".to_string(), Box::new(Node::Number(Number::Int(123)))));
+    // Test 7: Key node
+    test_node("Key",
+        Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(123)))));
 
     // Test 8: Pair node
     test_node("Pair",
@@ -131,9 +131,9 @@ fn test_kitchensink_complex_tree() {
             // Strings
             Node::Text("hello".to_string()),
             Node::Symbol("world".to_string()),
-            Node::Codepoint('🚀'),
-            // KeyValue
-            Node::KeyValue("key".to_string(), Box::new(Node::Number(Number::Int(100)))),
+            Node::Char('🚀'),
+            // Key
+            Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(100)))),
             // Nested Pair
             Node::Pair(
                 Box::new(Node::Symbol("left".to_string())),

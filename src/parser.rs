@@ -62,7 +62,7 @@ impl Parser {
                         self.current += 1;
                         let key = token.parse().unwrap();
                         let value = self.parse_code();
-                        return Node::KeyValue(key, Box::new(value));
+                        return Node::Key(key, Box::new(value));
                     }
                 }
                 Node::Symbol(token)

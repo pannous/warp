@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::ops::{Add, Sub, Mul, Div};
 use serde::{Serialize, Deserialize};
+// use num_bigint::BigInt;
 
 // pub mod Numbers{
 pub fn tee() {
@@ -10,10 +11,18 @@ pub fn tee() {
 // PartialEq per hand!
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Number {
+    Nan,
+    // True,
+    // False,
+    Inf,
+    NegInf,
     Int(i64),
     Float(f64),
     Quotient(i64, i64),
     Complex(f64, f64),
+    // BigInt(BigInt),
+    // use num_traits::{One, Zero};
+    // Number::BigNum(_) => unimplemented!(),
     // Hyper(Vec<Pair<f64,f64>>)
     // Hyper Hyperreal with epsilon infinitesimal and omega infinite parts
     // other variants as needed
@@ -26,6 +35,7 @@ impl Number {
             Number::Quotient(n, _d) => *n == 0,
             Number::Complex(r, i) => *r == 0.0 && *i == 0.0,
             Number::Float(f) => *f == 0.0,
+            Number::Nan | Number::Inf | Number::NegInf => false,
         }
     }
     pub fn abs(&self) -> f64 {
@@ -34,6 +44,9 @@ impl Number {
             Number::Quotient(n, d) => (*n as f64 / *d as f64).abs(),
             Number::Complex(r, i) => (r * r + i * i).sqrt(),
             Number::Float(f) => f.abs(),
+            Number::Nan => f64::NAN,
+            Number::Inf  => f64::INFINITY,
+            Number::NegInf => f64::NEG_INFINITY,
         }
     }
 }
@@ -57,6 +70,9 @@ impl Display for Number {
             Number::Float(fl) => write!(f, "{}", fl),
             Number::Quotient(numer, denom) => write!(f, "{}/{}", numer, denom),
             Number::Complex(real, imag) => write!(f, "{} + {}i", real, imag),
+            Number::Nan => write!(f, "NaN"),
+            Number::Inf => write!(f, "∞"),
+            Number::NegInf => write!(f, "-∞"),
         }
     }
 }
@@ -155,6 +171,9 @@ impl Into<f64> for Number {
             Number::Float(f) => f,
             Number::Quotient(numer, denom) => numer as f64 / denom as f64,
             Number::Complex(_, _) => unimplemented!(),
+            Number::Nan => f64::NAN,
+            Number::Inf  => f64::INFINITY,
+            Number::NegInf => f64::NEG_INFINITY,
         }
     }
 }
@@ -185,7 +204,7 @@ impl PartialEq<i32> for Number {
             Number::Float(f) => *f == *other as f64,
             Number::Quotient(n, d) => *n/d == *other as i64,
             Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
-            // _ => false,
+            _ => false,
         }
     }
 }
@@ -197,7 +216,7 @@ impl PartialEq<i64> for Number {
             Number::Float(f) => *f == *other as f64,
             Number::Quotient(n, d) => *n/d == *other,
             Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
-            // _ => false,
+            _ => false,
         }
     }
 }
@@ -221,7 +240,10 @@ impl PartialEq<f32> for Number {
             Number::Int(i) => *i as f32 == *other,
             Number::Float(f) => *f as f32 == *other,
             Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
-            Number::Complex(r, i) => *r as f32 == *other as f32 && *i == 0.0,
+            Number::Complex(r, i) => *r as f32 == *other && *i == 0.0,
+            Number::Nan => *other == f32::NAN,
+            Number::Inf  => *other == f32::INFINITY,
+            Number::NegInf => *other == f32::NEG_INFINITY,
             // _ => false,
         }
     }
