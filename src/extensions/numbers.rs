@@ -23,7 +23,7 @@ impl Number {
     pub fn zero(&self) -> bool {
         match self {
             Number::Int(i) => *i == 0,
-            Number::Quotient(n, d) => *n == 0,
+            Number::Quotient(n, _d) => *n == 0,
             Number::Complex(r, i) => *r == 0.0 && *i == 0.0,
             Number::Float(f) => *f == 0.0,
         }

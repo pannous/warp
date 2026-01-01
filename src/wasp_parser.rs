@@ -20,6 +20,12 @@ pub fn parse(input: &str) -> Node {
     WaspParser::parse(input)
 }
 
+
+pub fn analyze(p0: Node) -> Node {
+    p0
+    // todo!("analyze not implemented yet");
+}
+
 pub struct WaspParser {
     input: String,
     pos: usize,

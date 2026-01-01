@@ -39,11 +39,11 @@ pub enum NodeKind {
     Text = 2,
     Codepoint = 3,
     Symbol = 4,
-    key = 5,
+    Key = 5,
     Pair = 6,
     Tag = 7,
     Block = 8,
-    list = 9,
+    List = 9,
     Data = 10,
     Meta = 11,
     Error = 12
@@ -341,7 +341,7 @@ impl WasmGcEmitter {
             NodeConstructor {
                 export_name: "new_keyvalue",
                 params: vec![ValType::I32, ValType::I32, node_ref_type],
-                fields: [LocalI32(0), LocalI32(1), KindField(NodeKind::key), I64Zero, FloatZero, Zero, Zero, Null, LocalRef(2), Null],
+                fields: [LocalI32(0), LocalI32(1), KindField(NodeKind::Key), I64Zero, FloatZero, Zero, Zero, Null, LocalRef(2), Null],
             },
         ]
     }
@@ -781,7 +781,7 @@ impl WasmGcEmitter {
                 func.instruction(&I32Const(0));
                 func.instruction(&I32Const(0));
                 // kind
-                func.instruction(&I32Const(NodeKind::list as i32));
+                func.instruction(&I32Const(NodeKind::List as i32));
                 // int_value, float_value
                 func.instruction(&Instruction::I64Const(0));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
