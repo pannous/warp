@@ -12,7 +12,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
-use std::ops::{Index, IndexMut, Not};
+use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
+use crate::node::Node::Empty;
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -78,6 +79,7 @@ pub enum DataType {
     String,    // map to Node(String) early! get rid?
     Vec,       // map to Node::List(…) early or keep raw for efficiency!
     Tuple,     // - '' -
+    Reference,
     Struct,    // map to Node(…) early!! (if possible, else interesting Rust objects!)
     Other,     // <- only interesting cases
 }
@@ -229,6 +231,9 @@ pub enum Node {
 }
 
 impl Node {
+    pub fn toString(&self) -> String {
+        self.serialize()
+    }
     pub fn remove(&self, p0: i32, p1: i32) {
         todo!()
     }
@@ -287,6 +292,30 @@ impl Node {
             _ => 0,
         }
     }
+
+    // pub fn value(&self) -> Dada {
+    //     match self {
+    //         Node::Number(n) => Dada::new(n.clone()),
+    //         Node::Text(s) => Dada::new(s.clone()),
+    //         Node::Codepoint(c) => Dada::new(*c),
+    //         Node::Data(dada) => dada.clone(),
+    //         Node::Meta(node, _) => node.value(),
+    //         Node::Key(_, v) => v.value(),
+    //         _ => Dada::new(()), // empty Dada
+    //     }
+    // }
+
+    pub fn value(&self) -> &Node {
+        match self {
+            Node::Number(_) | Node::Text(_) | Node::Codepoint(_) | Node::Data(_) => {
+                self //.clone()
+            }
+            Node::Meta(node, _) => node.value(),
+            Node::Key(_, v) => v.value(),
+            _ => &Node::Empty,
+        }
+    }
+
 
     pub fn name(&self) -> String {
         match self {
@@ -1238,6 +1267,315 @@ impl From<bool> for Node {
 impl From<char> for Node {
     fn from(c: char) -> Self {
         Node::Codepoint(c)
+    }
+}
+
+// ============ Arithmetic Operators ============
+
+// Add implementations
+impl Add<&Node> for &Node {
+    type Output = Node;
+
+    fn add(self, rhs: &Node) -> Self::Output {
+        // Handle Meta wrappers
+        let (left, left_meta) = match self {
+            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            _ => (self, None)
+        };
+        let right = match rhs {
+            Node::Meta(node, _) => node.as_ref(),
+            _ => rhs
+        };
+
+        // Match on types and compute
+        let result = match (left, right) {
+            (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 + *n2),
+            (Node::True, Node::True) => Node::Number(Number::Int(2)),
+            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) + *n),
+            (Node::Number(n), Node::True) => Node::Number(*n + Number::Int(1)),
+            (Node::False, Node::Number(n)) | (Node::Number(n), Node::False) => Node::Number(*n),
+            (Node::Empty, Node::Number(n)) | (Node::Number(n), Node::Empty) => Node::Number(*n),
+            _ => panic!("Cannot add {:?} and {:?}", left, right)
+        };
+
+        // Preserve metadata from left operand
+        if let Some(meta) = left_meta {
+            result.with_meta(meta.clone())
+        } else {
+            result
+        }
+    }
+}
+
+impl Add<i64> for &Node {
+    type Output = Node;
+    fn add(self, rhs: i64) -> Self::Output {
+        self + &Node::int(rhs)
+    }
+}
+
+impl Add<f64> for &Node {
+    type Output = Node;
+    fn add(self, rhs: f64) -> Self::Output {
+        self + &Node::float(rhs)
+    }
+}
+
+impl Add<i32> for &Node {
+    type Output = Node;
+    fn add(self, rhs: i32) -> Self::Output {
+        self + &Node::int(rhs as i64)
+    }
+}
+
+impl Add<&Node> for i64 {
+    type Output = Node;
+    fn add(self, rhs: &Node) -> Self::Output {
+        &Node::int(self) + rhs
+    }
+}
+
+impl Add<&Node> for f64 {
+    type Output = Node;
+    fn add(self, rhs: &Node) -> Self::Output {
+        &Node::float(self) + rhs
+    }
+}
+
+impl Add<&Node> for i32 {
+    type Output = Node;
+    fn add(self, rhs: &Node) -> Self::Output {
+        &Node::int(self as i64) + rhs
+    }
+}
+
+// Sub implementations
+impl Sub<&Node> for &Node {
+    type Output = Node;
+
+    fn sub(self, rhs: &Node) -> Self::Output {
+        // Handle Meta wrappers
+        let (left, left_meta) = match self {
+            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            _ => (self, None)
+        };
+        let right = match rhs {
+            Node::Meta(node, _) => node.as_ref(),
+            _ => rhs
+        };
+
+        // Match on types and compute
+        let result = match (left, right) {
+            (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 - *n2),
+            (Node::True, Node::True) => Node::Number(Number::Int(0)),
+            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) - *n),
+            (Node::Number(n), Node::True) => Node::Number(*n - Number::Int(1)),
+            (Node::Number(n), Node::False) => Node::Number(*n),
+            (Node::False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
+            (Node::Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
+            (Node::Number(n), Node::Empty) => Node::Number(*n),
+            _ => panic!("Cannot subtract {:?} and {:?}", left, right)
+        };
+
+        // Preserve metadata from left operand
+        if let Some(meta) = left_meta {
+            result.with_meta(meta.clone())
+        } else {
+            result
+        }
+    }
+}
+
+impl Sub<i64> for &Node {
+    type Output = Node;
+    fn sub(self, rhs: i64) -> Self::Output {
+        self - &Node::int(rhs)
+    }
+}
+
+impl Sub<f64> for &Node {
+    type Output = Node;
+    fn sub(self, rhs: f64) -> Self::Output {
+        self - &Node::float(rhs)
+    }
+}
+
+impl Sub<i32> for &Node {
+    type Output = Node;
+    fn sub(self, rhs: i32) -> Self::Output {
+        self - &Node::int(rhs as i64)
+    }
+}
+
+impl Sub<&Node> for i64 {
+    type Output = Node;
+    fn sub(self, rhs: &Node) -> Self::Output {
+        &Node::int(self) - rhs
+    }
+}
+
+impl Sub<&Node> for f64 {
+    type Output = Node;
+    fn sub(self, rhs: &Node) -> Self::Output {
+        &Node::float(self) - rhs
+    }
+}
+
+impl Sub<&Node> for i32 {
+    type Output = Node;
+    fn sub(self, rhs: &Node) -> Self::Output {
+        &Node::int(self as i64) - rhs
+    }
+}
+
+// Mul implementations
+impl Mul<&Node> for &Node {
+    type Output = Node;
+
+    fn mul(self, rhs: &Node) -> Self::Output {
+        // Handle Meta wrappers
+        let (left, left_meta) = match self {
+            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            _ => (self, None)
+        };
+        let right = match rhs {
+            Node::Meta(node, _) => node.as_ref(),
+            _ => rhs
+        };
+
+        // Match on types and compute
+        let result = match (left, right) {
+            (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 * *n2),
+            (Node::True, Node::Number(n)) | (Node::Number(n), Node::True) => Node::Number(*n),
+            (Node::False, _) | (_, Node::False) => Node::Number(Number::Int(0)),
+            (Node::Empty, _) | (_, Node::Empty) => Node::Number(Number::Int(0)),
+            _ => panic!("Cannot multiply {:?} and {:?}", left, right)
+        };
+
+        // Preserve metadata from left operand
+        if let Some(meta) = left_meta {
+            result.with_meta(meta.clone())
+        } else {
+            result
+        }
+    }
+}
+
+impl Mul<i64> for &Node {
+    type Output = Node;
+    fn mul(self, rhs: i64) -> Self::Output {
+        self * &Node::int(rhs)
+    }
+}
+
+impl Mul<f64> for &Node {
+    type Output = Node;
+    fn mul(self, rhs: f64) -> Self::Output {
+        self * &Node::float(rhs)
+    }
+}
+
+impl Mul<i32> for &Node {
+    type Output = Node;
+    fn mul(self, rhs: i32) -> Self::Output {
+        self * &Node::int(rhs as i64)
+    }
+}
+
+impl Mul<&Node> for i64 {
+    type Output = Node;
+    fn mul(self, rhs: &Node) -> Self::Output {
+        &Node::int(self) * rhs
+    }
+}
+
+impl Mul<&Node> for f64 {
+    type Output = Node;
+    fn mul(self, rhs: &Node) -> Self::Output {
+        &Node::float(self) * rhs
+    }
+}
+
+impl Mul<&Node> for i32 {
+    type Output = Node;
+    fn mul(self, rhs: &Node) -> Self::Output {
+        &Node::int(self as i64) * rhs
+    }
+}
+
+// Div implementations
+impl Div<&Node> for &Node {
+    type Output = Node;
+
+    fn div(self, rhs: &Node) -> Self::Output {
+        // Handle Meta wrappers
+        let (left, left_meta) = match self {
+            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            _ => (self, None)
+        };
+        let right = match rhs {
+            Node::Meta(node, _) => node.as_ref(),
+            _ => rhs
+        };
+
+        // Match on types and compute
+        let result = match (left, right) {
+            (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 / *n2),
+            (Node::Number(n), Node::True) => Node::Number(*n / Number::Int(1)),
+            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
+            (Node::False, Node::Number(_)) => Node::Number(Number::Int(0)),
+            (Node::Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
+            _ => panic!("Cannot divide {:?} and {:?}", left, right)
+        };
+
+        // Preserve metadata from left operand
+        if let Some(meta) = left_meta {
+            result.with_meta(meta.clone())
+        } else {
+            result
+        }
+    }
+}
+
+impl Div<i64> for &Node {
+    type Output = Node;
+    fn div(self, rhs: i64) -> Self::Output {
+        self / &Node::int(rhs)
+    }
+}
+
+impl Div<f64> for &Node {
+    type Output = Node;
+    fn div(self, rhs: f64) -> Self::Output {
+        self / &Node::float(rhs)
+    }
+}
+
+impl Div<i32> for &Node {
+    type Output = Node;
+    fn div(self, rhs: i32) -> Self::Output {
+        self / &Node::int(rhs as i64)
+    }
+}
+
+impl Div<&Node> for i64 {
+    type Output = Node;
+    fn div(self, rhs: &Node) -> Self::Output {
+        &Node::int(self) / rhs
+    }
+}
+
+impl Div<&Node> for f64 {
+    type Output = Node;
+    fn div(self, rhs: &Node) -> Self::Output {
+        &Node::float(self) / rhs
+    }
+}
+
+impl Div<&Node> for i32 {
+    type Output = Node;
+    fn div(self, rhs: &Node) -> Self::Output {
+        &Node::int(self as i64) / rhs
     }
 }
 
