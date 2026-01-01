@@ -156,7 +156,7 @@ impl WasmGcEmitter {
         let mut name = truncated
             .chars()
             .map(|c| {
-                if c.is_alphanumeric() || c == '_' {
+                if c.is_alphanumeric() {
                     c
                 } else {
                     '_'
