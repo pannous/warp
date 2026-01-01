@@ -378,17 +378,17 @@
 	assert!(Node(0xC0000020)==' ');
 	char* hi="Hello";
 	strcpy2(&memoryChars[0x1000], hi);
-	printf(">>>%s<<<", &memoryChars[0x1000]);
+	printf!(">>>%s<<<", &memoryChars[0x1000]);
 	assert!(Node(0x90001000)==hi);
 
 	short typ=getSmartType(string_header_32);
 	assert!(typ==0x1);
-	printf("%08x", u'√');// ok 0x221a
-	printf("%08x", U'√');// ok 0x221a
-	printf("%08x", L'√');// ok 0x221a
-//	printf("%08x", u'𒈚');// too small: character too large for enclosing character literal type
-	printf("%08x", U'𒈚');// ok 0x1221a
-	printf("%08x", L'𒈚');// ok 0x1221a
+	printf!("%08x", u'√');// ok 0x221a
+	printf!("%08x", U'√');// ok 0x221a
+	printf!("%08x", L'√');// ok 0x221a
+//	printf!("%08x", u'𒈚');// too small: character too large for enclosing character literal type
+	printf!("%08x", U'𒈚');// ok 0x1221a
+	printf!("%08x", L'𒈚');// ok 0x1221a
 	assert!(Node((spointer)0x00000009)==9);
 	assert!(Node(0xC000221a)=="√");
 	assert!(Node(0xC000221a)==String(u'√'));

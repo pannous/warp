@@ -2,6 +2,9 @@
 // Type system tests
 // Migrated from tests_*.rs files
 
+use wasp::{is, skip};
+use wasp::wasp_parser::parse;
+
 #[test]
 fn testGoTypes() {
     is!("func add1(x int) int { return x + 1 };add1(41)", 42);
@@ -48,21 +51,21 @@ fn testReturnTypes() {
 
 #[test]
 fn testCast() {
-    assert! _eq("2"s, cast(Node(2), strings).value.string);
-    assert! _eq(cast(Node(2), longs).value.longy, 2); // trivial
-    assert! _eq(cast(Node(2.1), longs).value.longy, 2);
-    assert! _eq(cast(Node(2), reals).value.real, 2.0);
-    assert! _eq(cast(Node(2.1), reals).value.real, 2.1);
-    assert! _eq("2.1"s, cast(Node(2.1), strings).value.string);
-    assert! _eq("a"s, cast(Node('a'), strings).value.string);
-    assert! _eq(false, cast(Node('0'), bools).value.longy);
-    assert! _eq(false, cast(Node(u'ø'), bools).value.longy);
-    assert! _eq(false, cast(Node("False"s, false), bools).value.longy);
-    assert! _eq(false, cast(Node("ø"s, false), bools).value.longy);
-    assert! _eq(true, cast(Node("True"s, false), bools).value.longy);
-    assert! _eq(true, cast(Node("1"s, false), bools).value.longy);
-    assert! _eq(true, cast(Node(1), bools).value.longy);
-    assert! _eq(true, cast(Node("abcd"s, false), bools).value.longy);
+    is!("2"s, cast(Node(2), strings).value.string);
+    is!(cast(Node(2), longs).value.longy, 2); // trivial
+    is!(cast(Node(2.1), longs).value.longy, 2);
+    is!(cast(Node(2), reals).value.real, 2.0);
+    is!(cast(Node(2.1), reals).value.real, 2.1);
+    is!("2.1"s, cast(Node(2.1), strings).value.string);
+    is!("a"s, cast(Node('a'), strings).value.string);
+    is!(false, cast(Node('0'), bools).value.longy);
+    is!(false, cast(Node('ø'), bools).value.longy);
+    is!(false, cast(Node("False"s, false), bools).value.longy);
+    is!(false, cast(Node("ø"s, false), bools).value.longy);
+    is!(true, cast(Node("True"s, false), bools).value.longy);
+    is!(true, cast(Node("1"s, false), bools).value.longy);
+    is!(true, cast(Node(1), bools).value.longy);
+    is!(true, cast(Node("abcd"s, false), bools).value.longy);
 }
 
 #[test]
@@ -240,7 +243,6 @@ fn testTypes() {
     testTypesSimple();
     testTypeConfusion();
     skip!(
-
         testTypesSimple2();
         testEmptyTypedFunctions();
     );

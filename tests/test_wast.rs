@@ -33,7 +33,7 @@
 
 	let module = parse(wat);
 	eq!(module, "module");
-	printf("%s", module.toString());
+	printf!("%s", module.toString());
 	eq!(module.length, 8);
 //	eq!(node.length, 12);
 //	puts(node);

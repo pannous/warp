@@ -5,14 +5,18 @@ use log::warn;
 use std::fs;
 
 /// Read and parse a WASP file
-pub fn read(path: &str) -> Node {
+pub fn parseFile(path: &str) -> Node {
     match fs::read_to_string(path) {
         Ok(content) => WaspParser::parse(&content),
         _ => Error(format!("Failed to read {}", path)),
     }
 }
 
+
 pub fn parse(input: &str) -> Node {
+    if input.ends_with(".wasp") {
+        return parseFile(input);
+    }
     WaspParser::parse(input)
 }
 
