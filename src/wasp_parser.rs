@@ -67,6 +67,15 @@ impl WaspParser {
         (self.line, self.column)
     }
 
+    pub fn current_line(&self) -> &str {
+        let lines: Vec<&str> = self.input.lines().collect();
+        if self.line > 0 && self.line <= lines.len() {
+            lines[self.line - 1]
+        } else {
+            ""
+        }
+    }
+
     fn prev_char(&self) -> Option<char> {
         if self.pos > 0 {
             self.input.chars().nth(self.pos - 1)
@@ -533,5 +542,19 @@ mod tests {
         // Empty input
         let node = WaspParser::parse("");
         assert_eq!(node, Node::Empty);
+    }
+
+    #[test]
+    fn test_current_line() {
+        let input = "line1\nline2\nline3";
+        let parser = WaspParser::new(input.to_string());
+        assert_eq!(parser.current_line(), "line1");
+
+        let mut parser = WaspParser::new(input.to_string());
+        // Advance to second line
+        while parser.line == 1 && parser.current_char().is_some() {
+            parser.advance();
+        }
+        assert_eq!(parser.current_line(), "line2");
     }
 }
