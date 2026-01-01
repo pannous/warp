@@ -25,7 +25,7 @@ fn test_node_list() {
 fn test_node_index_str() {
     use wasp::node::{Bracket, Grouper};
     // Test indexing with &str on Block containing Key nodes
-    let block = Node::Block(
+    let mut block = Node::Block(
         vec![
             Node::key("name", Node::text("Alice")),
             Node::key("age", Node::int(30)),
@@ -36,6 +36,13 @@ fn test_node_index_str() {
     assert_eq!(block["name"], Node::text("Alice"));
     assert_eq!(block["age"], 30);
     assert_eq!(block["nonexistent"], Node::Empty);
+
+    // Test mutable indexing
+    block["name"] = Node::text("Bob");
+    assert_eq!(block["name"], Node::text("Bob"));
+
+    block["age"] = Node::int(25);
+    assert_eq!(block["age"], 25);
 }
 
 #[test]
