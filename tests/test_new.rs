@@ -1,4 +1,5 @@
-
+use wasp::extensions::print;
+use wasp::is;
 
 #[test] fn test_function_definitions() {
     print("Testing function definitions...");

@@ -18,6 +18,7 @@ pub mod wit_emitter;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod run;
+pub mod analyzer;
 
 pub fn init_lib(){
     println!("init lib")

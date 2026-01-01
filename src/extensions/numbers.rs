@@ -20,6 +20,14 @@ pub enum Number {
 }
 
 impl Number {
+    pub fn zero(&self) -> bool {
+        match self {
+            Number::Int(i) => *i == 0,
+            Number::Quotient(n, d) => *n == 0,
+            Number::Complex(r, i) => *r == 0.0 && *i == 0.0,
+            Number::Float(f) => *f == 0.0,
+        }
+    }
     pub fn abs(&self) -> f64 {
         match self {
             Number::Int(i) => i.abs() as f64,
@@ -154,7 +162,7 @@ impl Into<f64> for Number {
 
 use std::cmp::PartialEq;
 
-impl PartialEq for Number{
+impl PartialEq for Number {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Number::Int(i1), Number::Int(i2)) => i1 == i2,

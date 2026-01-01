@@ -126,7 +126,7 @@ fn test_while_true_forever() {
 #[test]
 fn test_random_parse() {
     let node = parse("x:40;x+1");
-    assert!(node.length == 2);
+    assert!(node.length() == 2);
     assert!(node[0]["x"] == 40); // breaks!?
     assert!(operator_list.has("+"));
     assert!(not(bool) Node("x"));
@@ -221,7 +221,7 @@ fn test_div_deep() {
     div = parse("div{ span{ class:'bold' 'text'} br}");
     Node & node = div["span"];
     node.print();
-    assert!(div["span"].length == 2);
+    assert!(div["span"].length() == 2);
     assert!(div["span"]["class"] == "bold");
 }
 
@@ -231,7 +231,7 @@ fn test_div_mark() {
     div = parse("{div {span class:'bold' 'text'} {br}}");
     Node & span = div["span"];
     span.print();
-    assert!(span.length == 2);
+    assert!(span.length() == 2);
     assert!(span["class"] == "bold");
     use_polish_notation = false;
 }

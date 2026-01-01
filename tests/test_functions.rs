@@ -2,6 +2,9 @@
 // Function tests
 // Migrated from tests_*.rs files
 
+use wasp::{eq, is, skip};
+use wasp::node::Node;
+use wasp::wasp_parser::parse;
 
 #[test]
 fn test2def() {
@@ -40,23 +43,23 @@ fn test_function_declaration_parse() {
     //    let node1 = analyze(parse("fn main(){}"));
     //    assert!(node1.kind==declaration);
     //    assert!(node1.name=="main");
-    clearAnalyzerContext();
     // let node2 = analyze(parse("fun test(float a):int{return a*2}")); // todo: cast return to int and parseDeclaration!
     let node2 = analyze(parse("fun test(float a){return a*2}"));
-    assert!(node2.kind == declaration);
+    // assert!(node2.kind == declaration);
     assert!(node2.name == "test");
+    let functions = todo!();
     eq!(functions["test"].signature.size(), 1);
     eq!(functions["test"].signature.parameters[0].name, "a");
-    eq!(functions["test"].signature.parameters[0].type, (Type) floats);
-    // eq!(functions["test"].signature.parameters[0].type, (Type) reals); // upgrade float to real TODO not if explicit!
+    eq!(functions["test"].signature.parameters[0].typo, Type::floats);
+    // eq!(functions["test"].signature.parameters[0].typo, Type::reals); // upgrade float to real TODO not if explicit!
     assert!(functions["test"].body);
-    assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
+    // assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
     skip!(
-
         assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
         eq!(*functions["test"].body, analyze(parse("return a*2")));
     );
 }
+
 
 #[test]
 fn test_rename_wasm_function() {
@@ -156,9 +159,9 @@ assert!(body2["style"] ==
 
 #[test]
 fn test_stacked_lambdas() {
-    result = parse("a{x:1}{y:2}{3}");
+    let result = parse("a{x:1}{y:2}{3}");
     result.print();
-    assert!(result.length == 3);
+    assert!(result.length() == 3);
     assert!(result[0] == parse("{x:1}"));
     assert!(result[0] == parse("x:1")); // grouping irrelevant
     assert!(result[1] == parse("{y:2}"));

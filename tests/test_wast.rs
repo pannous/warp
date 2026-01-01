@@ -40,8 +40,8 @@
 	eq!(module[0], "table");
 	eq!(module[1], "memory");
 	eq!(module[2], "export");
-	assert!(module["func"].length == 2);
-	assert!(module["func"]["$main"]["param"].length == 2);
+	assert!(module["func"].length() == 2);
+	assert!(module["func"]["$main"]["param"].length() == 2);
 
 }
 

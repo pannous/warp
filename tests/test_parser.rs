@@ -1,13 +1,4 @@
-fn assert_parses(p0: &str) -> Node {
-    todo!()
-}
 
-// fn print(p0: &str) {
-//     todo!()
-// }
-fn print(p0: String) {
-    println!("{}", p0);
-}
 
 // Parser and syntax test functions
 // Tests migrated from tests_*.rs files
@@ -344,7 +335,7 @@ fn test_deep_copy_debug_bug_bug() {
 fn test_deep_copy_debug_bug_bug2() {
     //	chars source = "{deep{a:3,b:4,c:{d:123}}}";
     //     chars
-    source = "{deep{c:{d:123}}}";
+    let source = "{deep{c:{d:123}}}";
     let result = assert_parses(source);
     let c : Node = result["deep"]['c'];
     let node : Node = c['d'];
@@ -368,9 +359,9 @@ fn test_net_base() {
     let json = fetch(url);
     //	print(json);
     let result = parse(json);
-    results = result["results"];
+    let results = result["results"];
     //	Node Erde = results[0];// todo : EEEEK, let flatten can BACKFIRE! results=[{a b c}] results[0]={a b c}[0]=a !----
-    Erde = results;
+    let Erde = results;
     //     assert!(Erde.name() == "Erde" || Erde["name"] == "Erde");
     let statements : Node = Erde["statements"];
     assert!(statements.length() >= 1); // || statements.value().node->length >=
@@ -388,7 +379,9 @@ fn test_net_base() {
     //	assert!(Erde.id==2);
 }
 
-
+fn fetch(p0: &str) -> &str {
+    todo!()
+}
 
 // test only once to understand
 #[test]
@@ -416,7 +409,7 @@ fn test_net_base() {
 // //     const char
 //     str1[9] = "عربى";
 // //     printf!("%s", (char *) str1);
-//     assert!(eq((char *) str1, str1));
+//     is!((char *) str1, str1));
 //     #[cfg(not(feature = "WASM"))]{
 //         #[cfg(feature = "std")]{
 // //             std::string
@@ -453,74 +446,15 @@ fn test_net_base() {
 //     a = "☹"; // OK
 // //     byte * b = (byte *)
 //     a;
-// //     assert!(_eq(a[0], (char) -30); // '\xe2'
-//     assert!(_eq(a[1], (char) -104); // '\x98'
-//     assert!(_eq(a[2], (char) -71); // '\xb9'
-//     assert!(_eq(b[0], (byte) 226); // '\xe2'
-//     assert!(_eq(b[1], (byte) 152); // '\x98'
-//     assert!(_eq(b[2], (byte) 185); // '\xb9'
-//     assert!(_eq(b[3], (byte) 0); // '\0'
+// //     assert!(_eq!(a[0], (char) -30); // '\xe2'
+//     assert!(_eq!(a[1], (char) -104); // '\x98'
+//     assert!(_eq!(a[2], (char) -71); // '\xb9'
+//     assert!(_eq!(b[0], (byte) 226); // '\xe2'
+//     assert!(_eq!(b[1], (byte) 152); // '\x98'
+//     assert!(_eq!(b[2], (byte) 185); // '\xb9'
+//     assert!(_eq!(b[3], (byte) 0); // '\0'
 // }
 
-// #[test]
-fn test_unicode_utf16_utf32() {
-    // constructors/ conversion maybe later
-    //	char letter = '牛';// Character too large for enclosing character literal type char ≈ byte
-    //     char16_t
-    //     character = u
-    '牛';
-    //     char32_t
-    //     hanzi = U
-    '牛';
-    //     wchar_t
-    //     word = L
-    '牛';
-    // assert!(hanzi == character);
-    assert!(hanzi == word);
-    //	use_interpreter=true
-    // todo: let wasm return strings!
-    //     assert!(interpret("ç='a'") == String(u8'a'));
-    //     assert!(interpret("ç='☺'") == String('☺'));
-    //     assert!(interpret("ç='☺'") == String('☺'));
-    //     assert!(interpret("ç='☺'") == String('☺'));
-    //	skip!(
-
-    //     assert!(interpret("ç='☺'") == String(u"☺"));
-    //     assert!(interpret("ç='☺'") == String(u8"☺"));
-    //     assert!(interpret("ç='☺'") == String(U"☺"));
-    // assert!(interpret("ç='☺'") == String(L"☺"));
-    //	);
-    assert!(String('牛') == "牛");
-    assert!(String('牛') == "牛");
-    assert!(String('牛') == "牛");
-
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == "牛");
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == '牛');
-    assert!(String('牛') == "牛");
-    assert!(String("牛") == '牛');
-    assert!(String("牛") == '牛');
-    assert!(String("牛") == '牛');
-    assert!(String("牛") == "牛");
-    //	print(character);
-    //	print(hanzi);
-    //	print(word);
-    print(sizeof(char32_t)); // 32 lol
-    print(sizeof(wchar_t));
-
-    let result = assert_parses("ç='☺'");
-    assert!(interpret("ç='☺'") == "☺");
-
-    let result = assert_parses("ç=☺");
-    //     assert!(result == "☺" || result.kind() == expression);
-}
 
 
 //testUTFø  error: stray ‘\303’ in program
@@ -781,7 +715,7 @@ fn test_bit_field() {
     }
 
     //         short word_field;
-    //     assert!(_eq(sizeof(mystruct), 2 /*bytes */);
+    //     assert!(_eq!(sizeof(mystruct), 2 /*bytes */);
 }
 
 #[test]
@@ -898,37 +832,37 @@ fn test_nodes_in_wasm() {
 //     //	assert!(a1.name() == "1");// debug only!
 //     assert!(a1 == 1);
 //     a11 = Node(1.1);
-// //     assert!(_eq(a11.name(), "1.1");
+// //     assert!(_eq!(a11.name(), "1.1");
 //     assert!(a11 == 1.1);
 //
 //     a = Node("a");
 //     // print(a);
 //     // print(a.serialize());
 //     // print(a.name());
-// //     assert!(_eq(a.name(), "a");
+// //     assert!(_eq!(a.name(), "a");
 //     assert!(a.name() == "a");
 //     assert!(a == "a");
 //     b = Node("c");
-// //     assert!(_eq(b.name(), "c");
+// //     assert!(_eq!(b.name(), "c");
 //     a.add(b.clone());
-// //     assert!(_eq(b.name(), "c"); // wow, worked before, corrupted memory!!
-//     assert!(_eq(a.length(), 1);
+// //     assert!(_eq!(b.name(), "c"); // wow, worked before, corrupted memory!!
+//     assert!(_eq!(a.length(), 1);
 //     assert!(a.children());
 //     Node * b2 = b.clone();
-//     assert!(_eq(b.name(), "c"); // wow, worked before, corrupted memory!!
+//     assert!(_eq!(b.name(), "c"); // wow, worked before, corrupted memory!!
 //     assert!(b == b2);
-// //     assert!(_eq(b, a.children()[0]);
+// //     assert!(_eq!(b, a.children()[0]);
 //
 //     //	a["b"] = "c";
-// //     assert!(_eq(b, a.children()[0]);
-// //     assert!(_eq(b.name(), "c"); // wow, worked before, corrupted memory!!
-// //     assert!(_eq(a.children()[0].name(), "c");
+// //     assert!(_eq!(b, a.children()[0]);
+// //     assert!(_eq!(b.name(), "c"); // wow, worked before, corrupted memory!!
+// //     assert!(_eq!(a.children()[0].name(), "c");
 //     assert!(a.has("c"));
 //     assert!(b == a.has("c"));
 //
 //     //	a["b"] = "c";
 //     a["d"] = "e";
-// //     assert!(_eq(a.length(), 2);
+// //     assert!(_eq!(a.length(), 2);
 //     assert!(a.has("d"));
 //     assert!(a["d"] == "e");
 //     let d : Node = a.children()[a.length() - 1];
