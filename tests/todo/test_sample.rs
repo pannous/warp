@@ -3,20 +3,19 @@
 // Sample and integration test functions
 
 // Sample tests
-#[test] fn testAllSamples();
-#[test] fn testSample();
-#[test] fn testKitchensink();
+// #[test] fn testAllSamples(){} // found in other file
+// #[test] fn testSample(){} // found in other file
+// #[test] fn testKitchensink(){} // found in other file
 
 // Main test runners
-extern "C" #[test] fn testCurrent();
-#[test] fn testAllEmit();
-#[test] fn testAllWasm();
-#[test] fn testAllAngle();
-#[test] fn testWasmGC();
+// extern "C" #[test] fn testCurrent(){} // found in other file
+// #[test] fn testAllEmit(){} // found in other file
+// #[test] fn testAllWasm(){} // found in other file
+// #[test] fn testAllAngle(){} // found in other file
+// #[test] fn testWasmGC(){} // found in other file
 
 // External references
-extern Node &result;
 
-#[cfg(feature = "WEBAPP")]{
-#[test] fn console_log(const char *s);
-}
+// #[cfg(feature = "WEBAPP")]{
+// #[test] fn console_log(const char *s){} // found in other file
+// }

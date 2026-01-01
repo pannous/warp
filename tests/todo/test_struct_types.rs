@@ -11,9 +11,9 @@
   (func $main (export "main") (result (ref $Box)));
 )"#;
     // compile(wast);
-    int ok = run_wasm_file("test/wast/box.wast");
-    Node& box = *smartNode(ok);
-    assert!(box["val"]==42);
+    let ok = run_wasm_file("test/wast/box.wast");
+    let boxx = *smartNode(ok);
+    assert!(boxx["val"]==42);
 }
 
 #[test] fn testStruct() {
@@ -36,7 +36,7 @@ record person {
 }
 
 #[test] fn testStruct2() {
-    const char *code0 = "struct point{a:int b:int c:string}";
+    let code0 = "struct point{a:int b:int c:string}";
     Node &node = parse(code0);
     //    eq!(node.kind, Kind::structs);
     eq!(node.length, 3);
@@ -55,12 +55,12 @@ record person {
     use_wasm_strings = true;
     use_wasm_arrays = true;
     //    is!("x=(1 2 3)", 0);
-    Node fun;
+    let fun=Node();
     fun.name = "first";
     fun.kind = declaration; // ≠ functor;
-    fun.type = types["u8"];
+    fun.typo = types["u8"];
 
-    Node fun_type;
+    let fun_type=Node();
     fun.name = "my_callback";
     fun.kind = clazz;
     //	fun.kind = functor; todo

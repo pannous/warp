@@ -1,6 +1,4 @@
 
-extern int tests_executed;
-
 #[test] fn test_string_basics() {
     print("Testing string basics ...");
     is!("'hello'", "hello"); // char comparison for now

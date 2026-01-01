@@ -25,7 +25,22 @@ impl WaspParser {
 
     pub fn parse(input: &str) -> Node {
         let mut parser = WaspParser::new(input.to_string());
-        parser.parse_value()
+        let mut values = Vec::new();
+
+        parser.skip_whitespace_and_comments();
+        while parser.current_char().is_some() {
+            values.push(parser.parse_value());
+            parser.skip_whitespace_and_comments();
+        }
+
+        // If only one value, return it directly for backward compatibility
+        if values.len() == 1 {
+            values.into_iter().next().unwrap()
+        } else if values.is_empty() {
+            Node::Empty
+        } else {
+            Node::List(values)
+        }
     }
 
     fn current_char(&self) -> Option<char> {
@@ -482,5 +497,41 @@ mod tests {
         if let Node::Pair(sig, body) = node {
             println!("Signature: {:?}, Body: {:?}", sig, body);
         }
+    }
+
+    #[test]
+    fn test_parse_multiple_values() {
+        // Multiple numbers
+        let node = WaspParser::parse("1 2 3");
+        if let Node::List(items) = node {
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0], 1);
+            assert_eq!(items[1], 2);
+            assert_eq!(items[2], 3);
+        } else {
+            panic!("Expected List node, got {:?}", node);
+        }
+
+        // Multiple symbols
+        let node = WaspParser::parse("hello world");
+        if let Node::List(items) = node {
+            assert_eq!(items.len(), 2);
+            if let Node::Symbol(s) = &items[0].unwrap_meta() {
+                assert_eq!(s, "hello");
+            }
+            if let Node::Symbol(s) = &items[1].unwrap_meta() {
+                assert_eq!(s, "world");
+            }
+        } else {
+            panic!("Expected List node, got {:?}", node);
+        }
+
+        // Single value should not be wrapped in List
+        let node = WaspParser::parse("42");
+        assert_eq!(node, 42);
+
+        // Empty input
+        let node = WaspParser::parse("");
+        assert_eq!(node, Node::Empty);
     }
 }
