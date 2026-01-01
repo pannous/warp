@@ -1192,6 +1192,55 @@ impl Not for Node {
     }
 }
 
+// From trait implementations for automatic conversion in assignments
+impl From<&str> for Node {
+    fn from(s: &str) -> Self {
+        Node::Text(s.to_string())
+    }
+}
+
+impl From<String> for Node {
+    fn from(s: String) -> Self {
+        Node::Text(s)
+    }
+}
+
+impl From<i32> for Node {
+    fn from(n: i32) -> Self {
+        Node::Number(Number::Int(n as i64))
+    }
+}
+
+impl From<i64> for Node {
+    fn from(n: i64) -> Self {
+        Node::Number(Number::Int(n))
+    }
+}
+
+impl From<f32> for Node {
+    fn from(n: f32) -> Self {
+        Node::Number(Number::Float(n as f64))
+    }
+}
+
+impl From<f64> for Node {
+    fn from(n: f64) -> Self {
+        Node::Number(Number::Float(n))
+    }
+}
+
+impl From<bool> for Node {
+    fn from(b: bool) -> Self {
+        if b { Node::True } else { Node::False }
+    }
+}
+
+impl From<char> for Node {
+    fn from(c: char) -> Self {
+        Node::Codepoint(c)
+    }
+}
+
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
