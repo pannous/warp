@@ -192,11 +192,9 @@ fn testTypedFunctions() {
     eq!(result.name, "tee");
     let signature_node = result["@signature"];
     //	let signature_node = result.metas()["signature"];
-    if (not
-    signature_node.value.data);
-    error("no signature");
-    Signature & signature = *(Signature *)
-    signature_node.value.data;
+    // if (not signature_node.value.data);
+    // error("no signature");
+    let signature : Signature = signature_node.value.data;
     eq!(signature.functions.first()->name, "tee");
     eq!(signature.parameters.size(), 2);
     eq!(signature.parameters.first().name, "b");
@@ -221,12 +219,10 @@ fn testEmptyTypedFunctions() {
     eq!(result.kind, Kind::declaration);
     eq!(result.name, "a");
     let signature_node = result["@signature"];
-    Signature
-    signature = *(Signature *)
-    signature_node.value.data;
+    let signature = signature_node.value.data;
     eq!(signature.functions.first()->name, "a");
-    let names2 = signature.functions.map < String > ( + [](Function * f)
-    { return f; ->name; });
+    // let names2 = signature.functions.map < String > ( + [](Function * f)
+    // { return f; ->name; });
     eq!(names2.size(), 1);
     eq!(names2.first(), "a");
 
@@ -285,8 +281,7 @@ fn testPolymorphism2() {
 #[test]
 fn testPolymorphism3() {
     is!("fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')", "ok");
-    is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",
-                2.0);
+    is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",2.0);
 }
 
 #[test]

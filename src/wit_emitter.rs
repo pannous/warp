@@ -233,7 +233,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
                 data_type
             )
         }
-        Node::WithMeta(node, meta) => {
+        Node::Meta(node, meta) => {
             let comment = if let Some(c) = &meta.comment {
                 format!("some(\"{}\")", escape_string(c))
             } else {

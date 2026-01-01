@@ -1,18 +1,18 @@
 #![allow(dead_code, unused_imports)]
 // type string = str; NO! ugly for a reason!
 extern crate regex;
-use std::fmt;
-use regex::Regex;
-use std::cmp::PartialEq;
+use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use std::ops::Index; // node[i]
-use std::any::Any;
-use crate::extensions::lists::{Filter, map, VecExtensions, VecExtensions2};
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::ser::SerializeStruct;
-use crate::wasm_gc_reader::GcObject;
 use crate::wasm_gc_emitter::NodeKind;
+use crate::wasm_gc_reader::GcObject;
+use regex::Regex;
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::any::Any;
+use std::cmp::PartialEq;
+use std::fmt;
+use std::ops::Index; // node[i]
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Meta {
@@ -23,15 +23,27 @@ pub struct Meta {
 
 impl Meta {
     pub fn new() -> Self {
-        Meta { comment: None, line: None, column: None }
+        Meta {
+            comment: None,
+            line: None,
+            column: None,
+        }
     }
 
     pub fn with_comment(comment: String) -> Self {
-        Meta { comment: Some(comment), line: None, column: None }
+        Meta {
+            comment: Some(comment),
+            line: None,
+            column: None,
+        }
     }
 
     pub fn with_position(line: usize, column: usize) -> Self {
-        Meta { comment: None, line: Some(line), column: Some(column) }
+        Meta {
+            comment: None,
+            line: Some(line),
+            column: Some(column),
+        }
     }
 }
 
@@ -60,12 +72,12 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
-    Vec,
-    Tuple,
-    Struct,
-    Primitive,
-    String,
-    Other,
+    Primitive, // map to Node(Number) early! get rid? sometimes need f16 vs f32 vs f64?
+    String,    // map to Node(String) early! get rid?
+    Vec,       // map to Node::List(…) early or keep raw for efficiency!
+    Tuple,     // - '' -
+    Struct,    // map to Node(…) early!! (if possible, else interesting Rust objects!)
+    Other,     // <- only interesting cases
 }
 
 pub struct Dada {
@@ -79,7 +91,6 @@ pub struct Dada {
 // let v = Node::data(vec![1, 2, 3]);
 // let t = Node::data((42, "answer"));
 // let n = Node::data(CustomData { id: 42, name: "test" });
-
 impl Dada {
     pub fn new<T: 'static + Clone + PartialEq>(data: T) -> Self {
         let type_name = std::any::type_name::<T>().to_string();
@@ -97,12 +108,27 @@ impl Dada {
         } else if type_name.starts_with('(') && type_name.ends_with(')') {
             DataType::Tuple
         } else if type_name.contains("::String") || type_name == "str" || type_name == "&str" {
-            DataType::String
+            DataType::String // map to Node(String) early!
         } else if type_name.contains("::") {
             DataType::Struct
-        } else if matches!(type_name, "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                                     | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
-                                     | "f32" | "f64" | "bool" | "char") {
+        } else if matches!(
+            type_name,
+            "i8" | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "isize"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "usize"
+                | "f32"
+                | "f64"
+                | "bool"
+                | "char"
+        ) {
             DataType::Primitive
         } else {
             DataType::Other
@@ -169,7 +195,6 @@ impl<'de> Deserialize<'de> for Dada {
     }
 }
 
-
 // use wasp::node::Node;
 // use wasp::node::Node::*; !
 #[derive(Clone, Serialize, Deserialize)]
@@ -183,20 +208,50 @@ pub enum Node {
     // String(String),
     Symbol(String),
     // Keyword(String), Call, Declaration … AST or here? AST!
-    // Data(Box<dyn Any>), // use via if let Some(i) = data.downcast_ref::<myType>() {
-    KeyValue(String, Box<Node>),
+    KeyValue(String, Box<Node>), // todo ? via Pair or losing specificity?
     Pair(Box<Node>, Box<Node>),
-    Tag { title: String, params: Box<Node>, body: Box<Node> }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
-    Block(Vec<Node>, Grouper, Bracket),
-    List(Vec<Node>), // same as Block
+    Tag {
+        title: String,
+        params: Box<Node>,
+        body: Box<Node>,
+    }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
+    Block(Vec<Node>, Grouper, Bracket), // todo merge into List: Grouper Bracket kinda redundant!
+    List(Vec<Node>),                    // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
-    WithMeta(Box<Node>, Meta), // Wrapper to attach metadata to any node
-    // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
-    // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
-    // List(Vec<T>) // turns whole Node into a generic type :(
+    Meta(Box<Node>, Meta), // Wrapper to attach metadata to any node
+                // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
+                // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
+                // List(Vec<T>) // turns whole Node into a generic type :(
 }
 
 impl Node {
+
+    pub fn length(&self) -> i32 {
+        match self {
+            Node::List(items) => items.len() as i32,
+            Node::Block(items, ..) => items.len() as i32,
+            Node::Meta(node, _) => node.length(),
+            _ => 0,
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            Node::Symbol(name) => name.clone(),
+            Node::Tag { title, .. } => title.clone(),
+            Node::KeyValue(k, _) => k.clone(),
+            Node::Meta(node, _) => node.name(),
+            Node::List(items) => {
+                // todo only for specific cases like expressions
+                if let Some(first) = items.first() {
+                    first.name()
+                } else {
+                    String::new()
+                }
+            }
+            _ => String::new(),
+        }
+    }
     pub fn from_gc_object(obj: &GcObject) -> Node {
         // Read the tag field to determine node type
         // If this fails, the ref is likely null
@@ -223,32 +278,26 @@ impl Node {
                 Node::Number(Number::Int(0))
             }
 
-            t if t == NodeKind::Text as i32 => {
-                match obj.text() {
-                    Ok(s) => Node::Text(s),
-                    Err(e) => Node::Text(format!("Error reading text: {}", e)),
-                }
-            }
+            t if t == NodeKind::Text as i32 => match obj.text() {
+                Ok(s) => Node::Text(s),
+                Err(e) => Node::Text(format!("Error reading text: {}", e)),
+            },
 
-            t if t == NodeKind::Codepoint as i32 => {
-                match obj.get::<i64>("int_value") {
-                    Ok(code) => {
-                        if let Some(c) = char::from_u32(code as u32) {
-                            Node::Codepoint(c)
-                        } else {
-                            Node::Codepoint('\0')
-                        }
+            t if t == NodeKind::Codepoint as i32 => match obj.get::<i64>("int_value") {
+                Ok(code) => {
+                    if let Some(c) = char::from_u32(code as u32) {
+                        Node::Codepoint(c)
+                    } else {
+                        Node::Codepoint('\0')
                     }
-                    Err(_) => Node::Codepoint('\0'),
                 }
-            }
+                Err(_) => Node::Codepoint('\0'),
+            },
 
-            t if t == NodeKind::Symbol as i32 => {
-                match obj.text() {
-                    Ok(s) => Node::Symbol(s),
-                    Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
-                }
-            }
+            t if t == NodeKind::Symbol as i32 => match obj.text() {
+                Ok(s) => Node::Symbol(s),
+                Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
+            },
 
             t if t == NodeKind::KeyValue as i32 => {
                 let key = obj.name().unwrap_or_else(|_| String::new());
@@ -284,7 +333,11 @@ impl Node {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
                     Err(_) => Box::new(Node::Empty),
                 };
-                Node::Tag { title, params, body }
+                Node::Tag {
+                    title,
+                    params,
+                    body,
+                }
             }
 
             t if t == NodeKind::Block as i32 => {
@@ -323,12 +376,11 @@ impl Index<usize> for Node {
         match self {
             Node::List(elements) => elements.get(i).unwrap_or(&Node::Empty),
             Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Node::WithMeta(node, _) => &node[i],
+            Node::Meta(node, _) => &node[i],
             _ => &Node::Empty,
         }
     }
 }
-
 
 impl Index<&String> for Node {
     type Output = Node;
@@ -344,14 +396,14 @@ impl Index<&String> for Node {
             // ).next().unwrap_or(&Node::Empty),
 
             // Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Node::Block(nodes, ..) => nodes.find2(&|node|
-                match node {
+            Node::Block(nodes, ..) => nodes
+                .find2(&|node| match node {
                     Node::KeyValue(k, _) => *k == *i,
                     Node::Text(t) => *t == *i,
-                    _ => false
-                }
-            ).unwrap_or(&Node::Empty),
-            Node::WithMeta(node, _) => &node[i],
+                    _ => false,
+                })
+                .unwrap_or(&Node::Empty),
+            Node::Meta(node, _) => &node[i],
             _ => &Node::Empty,
         }
     }
@@ -359,42 +411,78 @@ impl Index<&String> for Node {
 
 impl Node {
     // associated 'static' functions
-    pub fn new() -> Node { Node::Empty }
-    pub fn pair(a: Node, b: Node) -> Self { Node::Pair(Box::new(a), Box::new(b)) }
-    pub fn key(s: &str, v: Node) -> Self { Node::KeyValue(s.to_string(), Box::new(v)) }
+    pub fn new() -> Node {
+        Node::Empty
+    }
+    pub fn pair(a: Node, b: Node) -> Self {
+        Node::Pair(Box::new(a), Box::new(b))
+    }
+    pub fn key(s: &str, v: Node) -> Self {
+        Node::KeyValue(s.to_string(), Box::new(v))
+    }
     pub fn tag(name: &str, body: Node) -> Self {
-        Node::Tag { title: name.to_string(), params: Box::new(Node::Empty), body: Box::new(body) }
+        Node::Tag {
+            title: name.to_string(),
+            params: Box::new(Node::Empty),
+            body: Box::new(body),
+        }
     }
     pub fn tag_with_attrs(name: &str, attrs: Node, body: Node) -> Self {
-        Node::Tag { title: name.to_string(), params: Box::new(attrs), body: Box::new(body) }
+        Node::Tag {
+            title: name.to_string(),
+            params: Box::new(attrs),
+            body: Box::new(body),
+        }
     }
-    pub fn keys(s: &str, v: &str) -> Self { Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string()))) }
-    pub fn text(s: &str) -> Self { Node::Text(s.to_string()) }
-    pub fn codepoint(c: char) -> Self { Node::Codepoint(c) }
-    pub fn symbol(s: &str) -> Self { Node::Symbol(s.to_string()) }
-    pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self { Node::Data(Dada::new(value)) }
-    pub fn number(n: Number) -> Self { Node::Number(n) }
-    pub fn int(n: i64) -> Self { Node::Number(Number::Int(n)) }
-    pub fn float(n: f64) -> Self { Node::Number(Number::Float(n)) }
-    pub fn list(xs:Vec<Node>) -> Self { Node::List(xs) }
+    pub fn keys(s: &str, v: &str) -> Self {
+        Node::KeyValue(s.to_string(), Box::new(Node::Text(v.to_string())))
+    }
+    pub fn text(s: &str) -> Self {
+        Node::Text(s.to_string())
+    }
+    pub fn codepoint(c: char) -> Self {
+        Node::Codepoint(c)
+    }
+    pub fn symbol(s: &str) -> Self {
+        Node::Symbol(s.to_string())
+    }
+    pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
+        Node::Data(Dada::new(value))
+    }
+    pub fn number(n: Number) -> Self {
+        Node::Number(n)
+    }
+    pub fn int(n: i64) -> Self {
+        Node::Number(Number::Int(n))
+    }
+    pub fn float(n: f64) -> Self {
+        Node::Number(Number::Float(n))
+    }
+    pub fn list(xs: Vec<Node>) -> Self {
+        Node::List(xs)
+    }
     // pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
-    pub fn ints(xs:Vec<i32>) -> Self { Node::List(map(xs, |x| Node::Number(Number::Int(x as i64))))}
+    pub fn ints(xs: Vec<i32>) -> Self {
+        Node::List(map(xs, |x| Node::Number(Number::Int(x as i64))))
+    }
 
-    pub fn with_meta(self, meta: Meta) -> Self { Node::WithMeta(Box::new(self), meta) }
+    pub fn with_meta(self, meta: Meta) -> Self {
+        Node::Meta(Box::new(self), meta)
+    }
     pub fn with_comment(self, comment: String) -> Self {
-        Node::WithMeta(Box::new(self), Meta::with_comment(comment))
+        Node::Meta(Box::new(self), Meta::with_comment(comment))
     }
 
     pub fn get_meta(&self) -> Option<&Meta> {
         match self {
-            Node::WithMeta(_, meta) => Some(meta),
+            Node::Meta(_, meta) => Some(meta),
             _ => None,
         }
     }
 
     pub fn unwrap_meta(&self) -> &Node {
         match self {
-            Node::WithMeta(node, _) => node.unwrap_meta(),
+            Node::Meta(node, _) => node.unwrap_meta(),
             _ => self,
         }
     }
@@ -406,9 +494,9 @@ impl Node {
     // member functions taking self
     pub fn size(&self) -> usize {
         match self {
-            Node::List(elements,..)  => elements.len(),
-            Node::Block(nodes,..) => nodes.len(),
-            Node::WithMeta(node, _) => node.size(),
+            Node::List(elements, ..) => elements.len(),
+            Node::Block(nodes, ..) => nodes.len(),
+            Node::Meta(node, _) => node.size(),
             _ => 0,
         }
     }
@@ -416,8 +504,8 @@ impl Node {
     pub fn get(&self, i: usize) -> &Node {
         match self {
             Node::List(elements) => elements.get(i).unwrap(),
-            Node::Block(nodes,..) => nodes.get(i).unwrap(),
-            Node::WithMeta(node, _) => node.get(i),
+            Node::Block(nodes, ..) => nodes.get(i).unwrap(),
+            Node::Meta(node, _) => node.get(i),
             _ => &Node::Empty,
         }
     }
@@ -425,7 +513,7 @@ impl Node {
     pub fn get_key(&self) -> &str {
         match self {
             Node::KeyValue(k, _) => k,
-            Node::WithMeta(node, _) => node.get_key(),
+            Node::Meta(node, _) => node.get_key(),
             _ => "",
         }
     }
@@ -433,7 +521,7 @@ impl Node {
     pub fn get_value(&self) -> Node {
         match self {
             Node::KeyValue(_, v) => v.as_ref().clone(),
-            Node::WithMeta(node, _) => node.get_value(),
+            Node::Meta(node, _) => node.get_value(),
             _ => Node::Empty,
         }
     }
@@ -447,7 +535,7 @@ impl Node {
         match self {
             Node::List(items) => NodeIter::new(items.clone()),
             Node::Block(items, _, _) => NodeIter::new(items.clone()),
-            Node::WithMeta(node, _) => node.iter(),
+            Node::Meta(node, _) => node.iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -456,7 +544,7 @@ impl Node {
         match self {
             Node::List(items) => NodeIter::new(items),
             Node::Block(items, _, _) => NodeIter::new(items),
-            Node::WithMeta(node, _) => (*node).clone().into_iter(),
+            Node::Meta(node, _) => (*node).clone().into_iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -472,31 +560,29 @@ impl Node {
     }
 
     fn to_json_value(&self) -> serde_json::Value {
-        use serde_json::{Value, Map};
+        use serde_json::{Map, Value};
 
         match self {
             Node::Empty => Value::Null,
             Node::Number(Number::Int(n)) => Value::Number((*n).into()),
-            Node::Number(Number::Float(f)) => {
-                serde_json::Number::from_f64(*f)
-                    .map(Value::Number)
-                    .unwrap_or(Value::Null)
-            }
+            Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
             Node::Number(n) => Value::String(format!("{}", n)),
             Node::Text(s) | Node::Symbol(s) => Value::String(s.clone()),
             Node::Codepoint(c) => Value::String(c.to_string()),
-            Node::List(items) => {
-                Value::Array(items.iter().map(|n| n.to_json_value()).collect())
-            }
+            Node::List(items) => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
             Node::KeyValue(k, v) => {
                 let mut map = Map::new();
                 map.insert(k.clone(), v.to_json_value());
                 Value::Object(map)
             }
-            Node::Pair(a, b) => {
-                Value::Array(vec![a.to_json_value(), b.to_json_value()])
-            }
-            Node::Tag { title, params, body } => {
+            Node::Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
+            Node::Tag {
+                title,
+                params,
+                body,
+            } => {
                 let mut map = Map::new();
                 if **params != Node::Empty {
                     // Include attributes if present
@@ -515,11 +601,16 @@ impl Node {
                                 Node::KeyValue(k, v) => {
                                     map.insert(k.clone(), v.to_json_value());
                                 }
-                                Node::Tag { title, params, body } => {
+                                Node::Tag {
+                                    title,
+                                    params,
+                                    body,
+                                } => {
                                     // Tags become named keys
                                     if **params != Node::Empty {
                                         let mut tag_map = Map::new();
-                                        tag_map.insert("_attrs".to_string(), params.to_json_value());
+                                        tag_map
+                                            .insert("_attrs".to_string(), params.to_json_value());
                                         tag_map.insert(title.clone(), body.to_json_value());
                                         map.extend(tag_map);
                                     } else {
@@ -543,7 +634,7 @@ impl Node {
                         }
                         Value::Object(map)
                     }
-                    _ => Value::Array(items.iter().map(|n| n.to_json_value()).collect())
+                    _ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
                 }
             }
             Node::Data(d) => {
@@ -551,7 +642,7 @@ impl Node {
                 map.insert("_type".to_string(), Value::String(d.type_name.clone()));
                 Value::Object(map)
             }
-            Node::WithMeta(node, meta) => {
+            Node::Meta(node, meta) => {
                 let mut value = node.to_json_value();
                 if let Some(comment) = &meta.comment {
                     if let Value::Object(ref mut map) = value {
@@ -596,15 +687,17 @@ impl fmt::Debug for Node {
             }
             Node::KeyValue(k, v) => write!(f, "{}={:?}", k, v), // todo vs
             Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
-            Node::Tag { title, params, body } => {
-                match **params {
-                    Node::Empty => write!(f, "{}{{{:?}}}", title, body),
-                    _ => write!(f, "<{} {:?}>{:?}", title, params, body),
-                }
-            }
+            Node::Tag {
+                title,
+                params,
+                body,
+            } => match **params {
+                Node::Empty => write!(f, "{}{{{:?}}}", title, body),
+                _ => write!(f, "<{} {:?}>{:?}", title, params, body),
+            },
             Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Node::Data(d) => write!(f, "{:?}", d),
-            Node::WithMeta(node, meta) => {
+            Node::Meta(node, meta) => {
                 if let Some(comment) = &meta.comment {
                     write!(f, "{:?} /* {} */", node, comment)
                 } else {
@@ -684,10 +777,6 @@ pub enum Bracket {
     Other(char, char),
 }
 
-
-
-
-
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         match self {
@@ -697,66 +786,58 @@ impl PartialEq for Node {
                     Node::Symbol(s) => s.is_empty(), // todo disallow empty symbol
                     Node::Text(s) => s.is_empty(),
                     Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL
-                    Node::Block(b,_,_) => b.is_empty(),
+                    Node::Block(b, _, _) => b.is_empty(),
                     Node::List(l) => l.is_empty(),
                     _ => self.size() == 0,
                 }
             }
-            Node::Number(n) => {
-                match other {
-                    Node::Number(n2) => n == n2,
-                    _ => false,
-                }
-
-            }
+            Node::Number(n) => match other {
+                Node::Number(n2) => n == n2,
+                _ => false,
+            },
             Node::Symbol(s) => {
                 match other {
-                Node::Symbol(s2) => s == s2,
+                    Node::Symbol(s2) => s == s2,
                     // todo variable values? nah not here
-                _ => return false,
-            }}
-            Node::Text(s) => {
-                match other {
-                    Node::Text(s2) => s == s2,
-                    _ => false,
+                    _ => return false,
                 }
             }
-            Node::Codepoint(c) => {
-                match other {
-                    Node::Codepoint(c2) => c == c2,
-                    _ => false,
-                }
-            }
-            Node::Data(d) => {
-                match other {
-                    Node::Data(d2) => d == d2,
-                    _ => false,
-                }
-            }
-            Node::WithMeta(node, _) => {
+            Node::Text(s) => match other {
+                Node::Text(s2) => s == s2,
+                _ => false,
+            },
+            Node::Codepoint(c) => match other {
+                Node::Codepoint(c2) => c == c2,
+                _ => false,
+            },
+            Node::Data(d) => match other {
+                Node::Data(d2) => d == d2,
+                _ => false,
+            },
+            Node::Meta(node, _) => {
                 // Ignore metadata when comparing equality
                 node.as_ref().eq(other)
             }
-            Node::KeyValue(k1, v1) => {
-                match other {
-                    Node::KeyValue(k2, v2) => k1 == k2 && v1 == v2,
-                    _ => false,
-                }
-            }
-            Node::Pair(a1, b1) => {
-                match other {
-                    Node::Pair(a2, b2) => a1 == a2 && b1 == b2,
-                    _ => false,
-                }
-            }
-            Node::Tag { title: t1, params: p1, body: b1 } => {
-                match other {
-                    Node::Tag { title: t2, params: p2, body: b2 } => {
-                        t1 == t2 && p1 == p2 && b1 == b2
-                    }
-                    _ => false,
-                }
-            }
+            Node::KeyValue(k1, v1) => match other {
+                Node::KeyValue(k2, v2) => k1 == k2 && v1 == v2,
+                _ => false,
+            },
+            Node::Pair(a1, b1) => match other {
+                Node::Pair(a2, b2) => a1 == a2 && b1 == b2,
+                _ => false,
+            },
+            Node::Tag {
+                title: t1,
+                params: p1,
+                body: b1,
+            } => match other {
+                Node::Tag {
+                    title: t2,
+                    params: p2,
+                    body: b2,
+                } => t1 == t2 && p1 == p2 && b1 == b2,
+                _ => false,
+            },
             Node::Block(items1, _g1, _br1) => {
                 match other {
                     Node::Block(items2, _g2, _br2) => {
@@ -765,18 +846,14 @@ impl PartialEq for Node {
                     _ => false,
                 }
             }
-            Node::List(items1) => {
-                match other {
-                    Node::List(items2) => items1 == items2,
-                    _ => false,
-                }
-            }
-            Node::Error(e1) => {
-                match other {
-                    Node::Error(e2) => e1 == e2,
-                    _ => false,
-                }
-            }
+            Node::List(items1) => match other {
+                Node::List(items2) => items1 == items2,
+                _ => false,
+            },
+            Node::Error(e1) => match other {
+                Node::Error(e2) => e1 == e2,
+                _ => false,
+            },
         }
     }
 }
@@ -786,12 +863,11 @@ impl PartialEq<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n == other,
             Node::Number(Number::Float(f)) => *f == *other as f64,
-            Node::WithMeta(node, _) => node.as_ref().eq(other),
+            Node::Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
 }
-
 
 impl PartialEq<bool> for Node {
     fn eq(&self, other: &bool) -> bool {
@@ -803,10 +879,10 @@ impl PartialEq<bool> for Node {
             Node::Empty => !*other,
             Node::Symbol(s) => s.is_empty() == !*other,
             Node::Text(s) => s.is_empty() == !*other,
-            Node::Block(b, _ ,_) => b.is_empty() == !*other,
+            Node::Block(b, _, _) => b.is_empty() == !*other,
             Node::List(l) => l.is_empty() == !*other,
-            Node::KeyValue(_,_) => *other, // todo NEVER false OR check value k=v ?
-            Node::Pair(_, _)  => *other, // // todo NEVER false OR check value k:v ?
+            Node::KeyValue(_, _) => *other, // todo NEVER false OR check value k=v ?
+            Node::Pair(_, _) => *other,     // // todo NEVER false OR check value k:v ?
             _ => false,
         }
     }
@@ -823,7 +899,7 @@ impl PartialEq<f64> for Node {
         match self {
             Node::Number(Number::Float(f)) => f == other,
             Node::Number(Number::Int(n)) => *n as f64 == *other,
-            Node::WithMeta(node, _) => node.as_ref().eq(other),
+            Node::Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -834,7 +910,7 @@ impl PartialEq<&str> for Node {
         match self {
             Node::Text(s) => s == *other,
             Node::Symbol(s) => s == *other,
-            Node::WithMeta(node, _) => node.as_ref().eq(other),
+            Node::Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -854,7 +930,7 @@ impl PartialEq<char> for Node {
                 let mut chars = s.chars();
                 chars.next() == Some(*other) && chars.next().is_none()
             }
-            Node::WithMeta(node, _) => node.as_ref().eq(other),
+            Node::Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -871,7 +947,7 @@ impl PartialOrd<i32> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
-            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
+            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -882,7 +958,7 @@ impl PartialOrd<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n.partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
-            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
+            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -893,7 +969,7 @@ impl PartialOrd<f64> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
             Node::Number(Number::Float(f)) => f.partial_cmp(other),
-            Node::WithMeta(node, _) => node.as_ref().partial_cmp(other),
+            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -910,12 +986,14 @@ impl std::fmt::Display for Node {
             Node::List(items) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", item)?;
                 }
                 write!(f, "]")
-            },
-            Node::WithMeta(node, _) => write!(f, "{}", node),
+            }
+            Node::Meta(node, _) => write!(f, "{}", node),
             _ => write!(f, "{:?}", self),
         }
     }

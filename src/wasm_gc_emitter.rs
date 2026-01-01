@@ -837,7 +837,7 @@ impl WasmGcEmitter {
                 self.emit_node_null(func);
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
-            Node::WithMeta(_, _) => {
+            Node::Meta(_, _) => {
                 // Should not reach here since unwrap_meta is called at the start
                 func.instruction(&I32Const(0));
                 func.instruction(&I32Const(0));
