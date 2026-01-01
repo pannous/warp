@@ -257,7 +257,9 @@ pub fn node_to_wit_value(node: &Node) -> String {
                 column
             )
         }
-        Node::Error(e) => format!("error(\"{}\")", escape_string(e))
+        Node::Error(e) => format!("error(\"{}\")", escape_string(e)),
+        Node::False => "false".to_string(),
+        Node::True => "true".to_string(),
     }
 }
 

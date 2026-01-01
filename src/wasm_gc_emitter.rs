@@ -865,7 +865,8 @@ impl WasmGcEmitter {
                 self.emit_node_null(func);
                 self.emit_node_null(func);
                 func.instruction(&Instruction::StructNew(self.node_base_type));
-            }
+            },
+            &Node::False | &Node::True => todo!()
         }
     }
 

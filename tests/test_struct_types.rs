@@ -38,9 +38,9 @@ record person {
 #[test] fn testStruct2() {
     let code0 = "struct point{a:int b:int c:string}";
     Node &node = parse(code0);
-    //    eq!(node.kind, Kind::structs);
+    //    eq!(node.kind(), Kind::structs);
     eq!(node.length, 3);
-    eq!(IntegerType, node[1].type);
+    eq!(IntegerType, node[1].typo);
     //    const char *code = "struct point{a:int b:int c:string};x=point(1,2,'ok');x.b";
     // basal node_pointer act as structs
     is!("point{a:int b:int c:string};x=point(1,2,'ok');x.b", 2);
@@ -156,14 +156,14 @@ fn testFlags2() {
     // todo AddressSanitizer:DEADLYSIGNAL why? lldb does'nt fail here
     assert!(parserFlags.name == "parser-flags");
     assert!(parserFlags.kind == flags);
-    assert!(parserFlags.length == 3);
+    assert!(parserFlags.length() == 3);
     assert!(parserFlags[1].name == "arrow");
     assert!(parserFlags[2].value.longy == 4);
     Node & instance = node.last();
     print(instance);
     assert!(instance.name == "my_flags");
-    assert!(instance.type);
-    //     assert!(instance.type->name == "parser-flags") // deduced!
+    assert!(instance.typo);
+    //     assert!(instance.typo->name == "parser-flags") // deduced!
     //     assert!(instance.kind == flags) // kind? not really type! todo?
     my_flags = instance.interpret();
     print(my_flags);
@@ -184,14 +184,14 @@ fn testFlags() {
     Node & node = analyze(parsed);
     assert!(node.name == "abc");
     assert!(node.kind == flags);
-    assert!(node.length == 3);
+    assert!(node.length() == 3);
     assert!(node[0].name == "a");
     eq!(typeName(node[0].kind), typeName(flag_entry));
-    eq!(node[0].kind, flag_entry);
+    eq!(node[0].kind(), flag_entry);
     assert!(node[0].kind == flag_entry);
     assert!(node[0].value.longy == 1);
-    assert!(node[0].type);
-    assert!(node[0].type == node);
+    assert!(node[0].typo);
+    assert!(node[0].typo == node);
     assert!(node[1].value.longy == 2);
     assert!(node[2].value.longy == 4);
 }
@@ -236,7 +236,7 @@ fn testWit() {
     WitReader::read("test/merge/index.wit");
     WitReader::read("samples/wit/typenames.wit");
     WitReader::read("samples/wit/wasi_unstable.wit");
-    //    assert!(wit.length > 0);
+    //    assert!(wit.length() > 0);
 }
 
 

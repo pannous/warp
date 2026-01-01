@@ -1,13 +1,14 @@
-use wasp::Number;
-use wasp::{put};
+use wasp::{eq,put, Number};
 use wasp::Number::{Float, Int};
 // use wasp::node::Node::Number as Number;
 // use wasp::Number::{Float, Int};
 
 #[test]
 fn test_number() {
-    let n= Number::Int(1);
-    let n2= Number::Int(2);
+    let n= Int(1);
+    let n2= Int(2);
+    eq!(n,1);
+    eq!(n2,2);
     let n3 = n + n2;
     put!("n3", n3);
     assert_eq!(n3, 3);

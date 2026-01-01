@@ -113,8 +113,8 @@ fn testBadType() {
 #[test]
 fn testDeepType() {
     parse("a=$canvas.tagName");
-    //    eq!(result.kind, smarti64);
-    //    eq!(result.kind, Kind::strings);
+    //    eq!(result.kind(), smarti64);
+    //    eq!(result.kind(), Kind::strings);
 }
 
 #[test]
@@ -129,60 +129,60 @@ fn testTypeConfusion() {
 fn testTypesSimple() {
     clearAnalyzerContext();
     result = analyze(parse("chars a"));
-    eq!(result.kind, Kind::reference);
-    eq!(result.type, &ByteCharType); // todo char ≠ char* !
+    eq!(result.kind(), Kind::reference);
+    eq!(result.typo, &ByteCharType); // todo char ≠ char* !
     eq!(result.name, "a");
     result = analyze(parse("int a"));
-    eq!(result.kind, Kind::reference);
-    eq!(result.type, &IntegerType); // IntegerType
+    eq!(result.kind(), Kind::reference);
+    eq!(result.typo, &IntegerType); // IntegerType
     eq!(result.name, "a");
 
     result = analyze(parse("string b"));
-    eq!(result.kind, Kind::reference);
-    eq!(result.type, &StringType);
+    eq!(result.kind(), Kind::reference);
+    eq!(result.typo, &StringType);
     eq!(result.name, "b");
 
     result = analyze(parse("float a,string b"));
     let result0 = result[0];
-    eq!(result0.kind, Kind::reference);
-    //	eq!(result0.kind, Kind::declaration);
+    eq!(result0.kind(), Kind::reference);
+    //	eq!(result0.kind(), Kind::declaration);
     //	todo at this stage it should be a declaration?
 
-    eq!(result0.type, &DoubleType);
+    eq!(result0.typo, &DoubleType);
     eq!(result0.name, "a");
     let result1 = result[1];
-    eq!(result1.kind, Kind::reference);
-    eq!(result1.type, &StringType);
+    eq!(result1.kind(), Kind::reference);
+    eq!(result1.typo, &StringType);
     eq!(result1.name, "b");
 }
 
 #[test]
 fn testTypesSimple2() {
     result = analyze(parse("a:chars"));
-    //    eq!(result.kind, Kind::reference);
-    eq!(result.kind, Kind::key);
-    eq!(result.type, &ByteCharType);
+    //    eq!(result.kind(), Kind::reference);
+    eq!(result.kind(), Kind::key);
+    eq!(result.typo, &ByteCharType);
     eq!(result.name, "a");
     result = analyze(parse("a:int"));
-    eq!(result.kind, Kind::reference);
-    eq!(result.type, &IntegerType); // IntegerType
+    eq!(result.kind(), Kind::reference);
+    eq!(result.typo, &IntegerType); // IntegerType
     eq!(result.name, "a");
 
     result = analyze(parse("b:string"));
-    eq!(result.kind, Kind::reference);
-    eq!(result.type, &StringType);
+    eq!(result.kind(), Kind::reference);
+    eq!(result.typo, &StringType);
     eq!(result.name, "b");
 
     result = analyze(parse("a:float,b:string"));
     let result0 = result[0];
-    eq!(result0.kind, Kind::reference);
-    //	eq!(result0.kind, Kind::declaration);
+    eq!(result0.kind(), Kind::reference);
+    //	eq!(result0.kind(), Kind::declaration);
     //	todo at this stage it should be a declaration?
-    eq!(result0.type, &DoubleType);
+    eq!(result0.typo, &DoubleType);
     eq!(result0.name, "a");
     let result1 = result[1];
-    eq!(result1.kind, Kind::reference);
-    eq!(result1.type, &StringType);
+    eq!(result1.kind(), Kind::reference);
+    eq!(result1.typo, &StringType);
     eq!(result1.name, "b");
 }
 
@@ -191,7 +191,7 @@ fn testTypedFunctions() {
     // todo name 'id' clashes with 'id' in preRegisterFunctions();
     clearAnalyzerContext();
     result = analyze(parse("int tee(float b, string c){b}"));
-    eq!(result.kind, Kind::declaration);
+    eq!(result.kind(), Kind::declaration);
     eq!(result.name, "tee");
     let signature_node = result["@signature"];
     //	let signature_node = result.metas()["signature"];
@@ -201,9 +201,9 @@ fn testTypedFunctions() {
     eq!(signature.functions.first()->name, "tee");
     eq!(signature.parameters.size(), 2);
     eq!(signature.parameters.first().name, "b");
-    eq!(signature.parameters.first().type, reals); // use real / number for float64  float32
+    eq!(signature.parameters.first().typo, reals); // use real / number for float64  float32
     eq!(signature.parameters.last().name, "c");
-    eq!(signature.parameters.last().type, strings);
+    eq!(signature.parameters.last().typo, strings);
     // let params = signature.parameters.map(+[](Arg f) { return f.name; });
     // eq!(params.first(), "b");
 }
@@ -219,7 +219,7 @@ fn testEmptyTypedFunctions() {
     //		break;
     //	}
     result = analyze(parse("int a(){}"));
-    eq!(result.kind, Kind::declaration);
+    eq!(result.kind(), Kind::declaration);
     eq!(result.name, "a");
     let signature_node = result["@signature"];
     let signature = signature_node.value.data;
@@ -230,8 +230,8 @@ fn testEmptyTypedFunctions() {
     eq!(names2.first(), "a");
 
     result = analyze(parse("int a();"));
-    eq!(result.kind, Kind::declaration); // header signature
-    eq!(result.type, IntegerType);
+    eq!(result.kind(), Kind::declaration); // header signature
+    eq!(result.typo, IntegerType);
     eq!(result.name, "a");
 }
 
@@ -259,11 +259,11 @@ fn testPolymorphism() {
     eq!(function.is_polymorphic, true);
     eq!(function.variants.size(), 2);
     eq!(function.variants[0]->signature.size(), 1);
-    //	eq!(function.variants[0].signature.parameters[0].type, (Type) strings); todo
-    eq!(function.variants[0]->signature.parameters[0].type, (Type) stringp);
+    //	eq!(function.variants[0].signature.parameters[0].typo, (Type) strings); todo
+    eq!(function.variants[0]->signature.parameters[0].typo, (Type) stringp);
     let variant = function.variants[1];
     eq!(variant->signature.size(), 1);
-    eq!(variant->signature.parameters[0].type, (Type) float32t);
+    eq!(variant->signature.parameters[0].typo, (Type) float32t);
 }
 
 #[test]
@@ -275,9 +275,9 @@ fn testPolymorphism2() {
     eq!(function.is_polymorphic, true);
     eq!(function.variants.size(), 2);
     eq!(function.variants[0]->signature.size(), 1);
-    eq!(function.variants[0]->signature.parameters[0].type, (Type) int32t);
+    eq!(function.variants[0]->signature.parameters[0].typo, (Type) int32t);
     eq!(function.variants[1]->signature.size(), 1);
-    eq!(function.variants[1]->signature.parameters[0].type, (Type) float32t);
+    eq!(function.variants[1]->signature.parameters[0].typo, (Type) float32t);
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn testGenerics() {
     //    let header= typ.value & array;
     //    let header= typ.value & 0xFFFF0000; // todo <<
     let header = typ.value & 0x0000FFFF; //todo ??
-//     assert!(_eq(header, array);
+//     assert!(_eq!(header, array);
 }
 
 #[test]

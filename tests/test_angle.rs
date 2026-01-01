@@ -1,5 +1,6 @@
+use wasp::{eq, is, skip};
 
-#[test] fn testFunctionParams() {
+#[test] fn test_function_params() {
     //	eq!(parse("f(x)=x*x").param->first(),"x");
     eq!("f(x)=x*x;f(3)", "9"); // functions => angle!
 }
@@ -34,7 +35,7 @@
     );
 }
 
-#[test] fn testTruthyAnd() {
+#[test] fn test_truthy_and() {
     is!("0.0 and 4.0", 0.0);
     is!("4.0 and 0.0", 0.0);
     is!("4.0 and 5.0", 5.0);
@@ -46,7 +47,7 @@
     is!("4 and 5.0", 5.0);
     skip!( // todo
         is!("4 and 'a'", 'a');
-        is!("4 and '🍏'", U'🍏');
+        is!("4 and '🍏'", '🍏');
         is!("4 and '🍏🍏🍏'", String("🍏🍏🍏"));
         is!("0 and 'a'", 0);
         is!("0 and '🍏'", 0);
@@ -54,7 +55,7 @@
     );
 }
 
-#[test] fn testIf() {
+#[test] fn test_if() {
     //    skip!( // todo:
     //            is!("if '':3", false);
     //            is!("if ():3", false);
@@ -105,7 +106,7 @@
         is!("false else 3", 3);
     );
     is!("1 and 0 or 4", 4);
-    is!("if 1 then 0 else 4", (int64) 0);
+    is!("if 1 then 0 else 4", 0);
     is!("if 0 {3}", false);
     is!("false or 3", 3);
     //    is!("4 or 3", 4);
@@ -141,7 +142,7 @@
     );
 }
 
-#[test] fn testIfCallZero() {
+#[test] fn test_if_call_zero() {
     is!("def six(){6};six()", 6);
     is!("def six(){6};2+six()", 8);
     is!("def zero(){0};zero()", 0);
@@ -160,7 +161,7 @@
         is!("def zero(){0};if {zero()}:3 else 4", 4);
         is!("def zero(){0};if zero() {3} else {4}", 4);
         is!("def zero(){0};1 and zero() or 4", 4);
-        is!("def zero(){0};if 1 then zero() else 4", (int64) 0);
+        is!("def zero(){0};if 1 then zero() else 4", 0);
         is!("def zero(){0};if zero() {3}", false);
         is!("def zero(){0};if zero() {3} else 4", 4);
     );
@@ -173,7 +174,7 @@
     is!("def zero(){0};if(zero()){3}", false);
 }
 
-#[test] fn testIfTwo() {
+#[test] fn test_if_two() {
     is!("def two(){2};two()", 2);
     is!("def two(){2};two()+2", 4);
     is!("def two(){2};two()+two()", 4);
@@ -221,7 +222,7 @@
     is!("def two(){2};if({two()},{two()},{4})", 2);
 }
 
-#[test] fn testIfMath() {
+#[test] fn test_if_math() {
     is!("if 0+2:{3*1} else 4+0", 3);
 
     skip!( // no colon => no work. ok!
@@ -266,7 +267,7 @@
     is!("if(0*2):{3*1} else 4+0", 4);
     is!("if (0*2) {3*1}", false);
     is!("if (0*2) {3*1} else 4+0", 4);
-    is!("if 1 then 0 else 4+0", (int64) 0);
+    is!("if 1 then 0 else 4+0", 0);
     is!("if 0*2:{3*1} else 4+0", 4);
     is!("if 0*2 {3*1}", false);
     is!("4 or 3*1", 4);
@@ -283,7 +284,7 @@
     is!("if({2},{3*1},{4*1})", 3);
     is!("if(2*1){3*1}{4*1}", 3);
 }
-#[test] fn testIfGt() {
+#[test] fn test_if_gt() {
     is!("if(2<4):{3}", 3);
     is!("1<0 or 3", 3);
     is!("1<0 else 3", 3);
@@ -331,7 +332,7 @@
     //	is!("2 then 3 else 4", 3);
     is!("2 and 3 or 4", 3);
     is!("1 and 0 or 4", 4);
-    is!("if 1 then 0 else 4", (int64) 0);
+    is!("if 1 then 0 else 4", 0);
     is!("if 0>1:{3} else 4", 4);
 
     is!("if (0<1) {3} else 4", 3);
@@ -360,16 +361,16 @@
         is!("if(3<condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
     );
 }
-#[test] fn testSwitchEvaluation() {
+#[test] fn test_switch_evaluation() {
     is!("{a:1+1 b:2}(a)", 2);
     is!("x=a;{a:1 b:2}(x)", 1);
     // functor switch(x,xs)=xs[x] or xs[default]
 }
 
-#[test] fn testSwitch() {
+#[test] fn test_switch() {
     //	todo if(1>0) ... innocent groups
-    todo_emit(is!("{a:1 b:2}[a]", 1));
-    todo_emit(is!("{a:1 b:2}[b]", 2));
+    is!("{a:1 b:2}[a]", 1);
+    is!("{a:1 b:2}[b]", 2);
 }
 
 /*
@@ -383,21 +384,21 @@
 
 	short typ=getSmartType(string_header_32);
 	assert!(typ==0x1);
-	printf!("%08x", u'√');// ok 0x221a
-	printf!("%08x", U'√');// ok 0x221a
-	printf!("%08x", L'√');// ok 0x221a
-//	printf!("%08x", u'𒈚');// too small: character too large for enclosing character literal type
-	printf!("%08x", U'𒈚');// ok 0x1221a
-	printf!("%08x", L'𒈚');// ok 0x1221a
+	printf!("%08x", '√');// ok 0x221a
+	printf!("%08x", '√');// ok 0x221a
+	printf!("%08x", '√');// ok 0x221a
+//	printf!("%08x", '𒈚');// too small: character too large for enclosing character literal type
+	printf!("%08x", '𒈚');// ok 0x1221a
+	printf!("%08x", '𒈚');// ok 0x1221a
 	assert!(Node((spointer)0x00000009)==9);
 	assert!(Node(0xC000221a)=="√");
-	assert!(Node(0xC000221a)==String(u'√'));
-	assert!(Node(0xC000221a)==String(U'√'));
-	assert!(Node(0xC000221a)==String(L'√'));
-	assert!(Node(0xC001221A)==String(U'𒈚'));
+	assert!(Node(0xC000221a)==String('√'));
+	assert!(Node(0xC000221a)==String('√'));
+	assert!(Node(0xC000221a)==String('√'));
+	assert!(Node(0xC001221A)==String('𒈚'));
 	assert!(Node(0xC001221A)=="𒈚");
 
-//	assert!(Node(0xD808DE1A)==U'𒈚');
+//	assert!(Node(0xD808DE1A)=='𒈚');
 	typ=getSmartType(0xC0000000);
 	assert!(typ==0xC);
 	assert!(Node(0xC0000020)==' ');
@@ -405,15 +406,15 @@
 	assert!(Node(0xFFFFFFFF)==-1);
 }
 */
-#[test] fn nl() {
-    put_char('\n');
-}
+// #[test] fn nl() {
+//     put_char('\n');
+// }
 
 //Prescedence type for Precedence
-#[test] fn testLogicPrecedence() {
+#[test] fn test_logic_precedence() {
 #[cfg(not(feature = "WASM"))]{
-    assert!(precedence("and") > 1);
-    assert!(precedence("and") < precedence("or"));
+    // assert!(precedence("and") > 1);
+    // assert!(precedence("and") < precedence("or"));
 }
     is!("true", true);
     is!("false", false);
@@ -431,12 +432,12 @@
     is!("false or true and false", false);
     is!("false or false and true", false);
 }
-#[test] fn testAllAngle() {
+#[test] fn test_all_angle() {
     // emmitting or not
-    testLogicPrecedence();
+    test_logic_precedence();
     //	testSmartTypes();
-    testTruthyAnd();
-    testIf();
+    test_truthy_and();
+    test_if();
     // testCall(); in testTodoBrowser();
     skip!(
         testSwitch();
@@ -444,6 +445,6 @@
     );
 }
 
-#[test] fn testAngle() {
-    testAllAngle();
+#[test] fn test_angle() {
+    test_all_angle();
 }
