@@ -1,8 +1,6 @@
 #[test]
 fn test_host_integration() {
-    #[cfg(feature = "WASMTIME")]{
-        //         or
-        //         WASMEDGE
+    #[cfg(feature = "WASMTIME")]{ //         WASMEDGE
         return;
     }
     #[cfg(not(feature = "WASM"))]{
@@ -15,7 +13,6 @@ fn test_host_integration() {
     testJS();
     testFetch();
     skip!(
-
         testCanvas(); // attribute setter missing value breaks browser
     );
 }
