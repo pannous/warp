@@ -12,7 +12,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
-use std::ops::Index; // node[i]
+use std::ops::Index;
+use crate::wasp_parser::parse;
+// node[i]
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Meta {
@@ -265,11 +267,11 @@ impl Node {
             Node::Text(_) => NodeKind::Text,
             Node::Codepoint(_) => NodeKind::Codepoint,
             Node::Symbol(_) => NodeKind::Symbol,
-            Node::KeyValue(_, _) => NodeKind::key,
+            Node::KeyValue(_, _) => NodeKind::Key,
             Node::Pair(_, _) => NodeKind::Pair,
             Node::Tag { .. } => NodeKind::Tag,
             Node::Block(_, _, _) => NodeKind::Block,
-            Node::List(_) => NodeKind::list,
+            Node::List(_) => NodeKind::List,
             Node::Data(_) => NodeKind::Data,
             Node::Meta(_, _) => NodeKind::Meta,
             Node::Error(_) => NodeKind::Error,
@@ -350,7 +352,7 @@ impl Node {
                 Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
             },
 
-            t if t == NodeKind::key as i32 => {
+            t if t == NodeKind::Key as i32 => {
                 let key = obj.name().unwrap_or_else(|_| String::new());
                 // Recursively read the value node from right field
                 let value = match obj.get::<GcObject>("right") {
@@ -396,7 +398,7 @@ impl Node {
                 Node::Block(vec![], Grouper::Expression, Bracket::Curly)
             }
 
-            t if t == NodeKind::list as i32 => {
+            t if t == NodeKind::List as i32 => {
                 // TODO: read items from linked list structure
                 Node::List(vec![])
             }
@@ -1085,13 +1087,7 @@ impl std::fmt::Display for Node {
     }
 }
 
-fn assert_parses(p0: &str) -> Node {
-    todo!()
-}
 
-// fn print(p0: &str) {
-//     todo!()
-// }
 fn print(p0: String) {
     println!("{}", p0);
 }
