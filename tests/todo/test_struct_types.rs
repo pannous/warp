@@ -6,9 +6,9 @@
 #[test] fn testStructWast() {
     return; // LOST file: test/wast/box.wast
     let wast = r#"(module
-  (type $Box (struct (field $val (mut i32))))
-  (global $box (export "box") (ref $Box) (struct.new $Box (i32.const 42)))
-  (func $main (export "main") (result (ref $Box)))
+  (type $Box (struct (field $val (mut i32))));
+  (global $box (export "box") (ref $Box) (struct.new $Box (i32.const 42)));
+  (func $main (export "main") (result (ref $Box)));
 )"#;
     // compile(wast);
     int ok = run_wasm_file("test/wast/box.wast");
@@ -43,8 +43,8 @@ record person {
     eq!(IntegerType, node[1].type);
     //    const char *code = "struct point{a:int b:int c:string};x=point(1,2,'ok');x.b";
     // basal node_pointer act as structs
-    is!("point{a:int b:int c:string};x=point(1,2,'ok');x.b", 2)
-    is!("data=[1,2,3];struct point{a:int b:int c:string};x=data as struct;x.b", 2)
+    is!("point{a:int b:int c:string};x=point(1,2,'ok');x.b", 2);
+    is!("data=[1,2,3];struct point{a:int b:int c:string};x=data as struct;x.b", 2);
 }
 
 #[test] fn testWasmGC() {
@@ -79,7 +79,7 @@ record person {
     is!("x=(5 6 7);x#2", 6);
     is!("'world'#1", 'w');
     is!("y=(1 4 3)#2", 4);
-    is!(("id(3*42)≥2*3"), 1)
+    is!(("id(3*42)≥2*3"), 1);
     is!("#'abcde'", 5);
     is!("x='abcde';#x", 5);
     is!("x=(1 2 1 2 1);#x", 5);
