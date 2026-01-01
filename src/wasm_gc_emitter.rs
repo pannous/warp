@@ -612,7 +612,7 @@ impl WasmGcEmitter {
                 self.collect_and_allocate_strings(params);
                 self.collect_and_allocate_strings(body);
             }
-            Node::KeyValue(key, value) => {
+            Node::Key(key, value) => {
                 self.allocate_string(key);
                 self.collect_and_allocate_strings(value);
             }
@@ -697,7 +697,7 @@ impl WasmGcEmitter {
                 self.emit_node_instructions(func, _body);
                 func.instruction(&Instruction::Call(self.function_indices["new_tag"]));
             }
-            Node::KeyValue(key, value) => {
+            Node::Key(key, value) => {
                 let (ptr, len) = self.string_table.get(key.as_str())
                     .map(|&offset| (offset, key.len() as u32))
                     .unwrap_or((0, key.len() as u32));
@@ -826,6 +826,7 @@ impl WasmGcEmitter {
                     DataType::Primitive => 3,
                     DataType::String => 4,
                     DataType::Other => 5,
+                    DataType::Reference => 6,
                 };
                 func.instruction(&Instruction::I64Const(data_type_val));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
