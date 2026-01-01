@@ -94,7 +94,7 @@ use wasp::wasp_parser::parse;
 // ============================================================================
 
 #[test] fn test_ffi_strcmp() {
-    Module * modul = loadNativeLibrary("c");
+    let modul = loadNativeLibrary("c");
     assert!(modul);
     assert!(modul.functions.has("strcmp"));
     // int strcmp(const char* s1, const char* s2);

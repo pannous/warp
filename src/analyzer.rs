@@ -1,5 +1,6 @@
 use crate::node::Node;
 
-fn analyze(raw: Node) -> Node {
-    todo!()
+pub fn analyze(raw: Node) -> Node {
+    raw
+    // todo!()
 }
