@@ -26,4 +26,6 @@ pub mod wit_emitter;
 pub mod ast;
 
 pub mod meta;
+
+pub mod test_utils;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
