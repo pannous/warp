@@ -85,11 +85,11 @@ fn test_node(name: &str, node: Node) {
     let bytes = emitter.finish();
 
     // Verify WASM magic number
-    assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D],
+    eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D],
         "{}: Invalid WASM magic number", name);
 
     // Verify WASM version
-    assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00],
+    eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00],
         "{}: Invalid WASM version", name);
 
     // Validate with wasmparser

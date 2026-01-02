@@ -499,24 +499,25 @@ impl WaspParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::eq;
 
     #[test]
     fn test_parse_number() {
         let node = WaspParser::parse("42");
-        assert_eq!(node, 42);
+        eq!(node, 42);
     }
 
     #[test]
     fn test_parse_string() {
         let node = WaspParser::parse(r#""hello""#);
-        assert_eq!(node, "hello");
+        eq!(node, "hello");
     }
 
     #[test]
     fn test_parse_symbol() {
         let node = WaspParser::parse("red");
         if let Node::Symbol(s) = node {
-            assert_eq!(s, "red");
+            eq!(s, "red");
         }
     }
 
@@ -524,15 +525,15 @@ mod tests {
     fn test_parse_list() {
         let node = WaspParser::parse("[1, 2, 3]");
         if let Node::List(items) = node {
-            assert_eq!(items.len(), 3);
-            assert_eq!(items[0], 1);
+            eq!(items.len(), 3);
+            eq!(items[0], 1);
         }
     }
 
     #[test]
     fn test_parse_key_value() {
         let node = WaspParser::parse(r#"name: "Alice""#);
-        assert_eq!(node.get_key(), "name");
+        eq!(node.get_key(), "name");
     }
 
     #[test]
@@ -540,7 +541,7 @@ mod tests {
         let node = WaspParser::parse("html{ }");
         // Named blocks become Tags
         if let Node::Tag { title, .. } = node.unwrap_meta() {
-            assert_eq!(title, "html");
+            eq!(title, "html");
         } else {
             panic!("Expected Tag node");
         }
@@ -555,7 +556,7 @@ mod tests {
         let node = WaspParser::parse(input);
         println!("{:?}", node);
         if let Node::Tag { title, .. } = node.unwrap_meta() {
-            assert_eq!(title, "html");
+            eq!(title, "html");
         } else {
             panic!("Expected Tag node");
         }
@@ -577,10 +578,10 @@ mod tests {
         // Multiple numbers
         let node = WaspParser::parse("1 2 3");
         if let Node::List(items) = node {
-            assert_eq!(items.len(), 3);
-            assert_eq!(items[0], 1);
-            assert_eq!(items[1], 2);
-            assert_eq!(items[2], 3);
+            eq!(items.len(), 3);
+            eq!(items[0], 1);
+            eq!(items[1], 2);
+            eq!(items[2], 3);
         } else {
             panic!("Expected List node, got {:?}", node);
         }
@@ -588,12 +589,12 @@ mod tests {
         // Multiple symbols
         let node = WaspParser::parse("hello world");
         if let Node::List(items) = node {
-            assert_eq!(items.len(), 2);
+            eq!(items.len(), 2);
             if let Node::Symbol(s) = &items[0].unwrap_meta() {
-                assert_eq!(s, "hello");
+                eq!(s, "hello");
             }
             if let Node::Symbol(s) = &items[1].unwrap_meta() {
-                assert_eq!(s, "world");
+                eq!(s, "world");
             }
         } else {
             panic!("Expected List node, got {:?}", node);
@@ -601,24 +602,24 @@ mod tests {
 
         // Single value should not be wrapped in List
         let node = WaspParser::parse("42");
-        assert_eq!(node, 42);
+        eq!(node, 42);
 
         // Empty input
         let node = WaspParser::parse("");
-        assert_eq!(node, Empty);
+        eq!(node, Empty);
     }
 
     #[test]
     fn test_current_line() {
         let input = "line1\nline2\nline3";
         let parser = WaspParser::new(input.to_string());
-        assert_eq!(parser.current_line, "line1");
+        eq!(parser.current_line, "line1");
 
         let mut parser = WaspParser::new(input.to_string());
         // Advance to second line
         while parser.line == 1 && parser.current_char().is_some() {
             parser.advance();
         }
-        assert_eq!(parser.current_line, "line2");
+        eq!(parser.current_line, "line2");
     }
 }

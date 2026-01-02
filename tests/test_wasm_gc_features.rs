@@ -106,7 +106,7 @@ fn test_gc_introspection() {
                     println!("  ✓ Can read field 0: {:?}", field);
                     let i32_val = field.unwrap_i32();
                     println!("    Value: {}", i32_val);
-                    assert_eq!(i32_val, 42);
+                    eq!(i32_val, 42);
                 }
                 Err(e) => println!("  ✗ Cannot read field: {}", e)
             }

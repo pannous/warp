@@ -1,4 +1,4 @@
-use crate::node::{Node, Grouper, Bracket, MetaData, DataType};
+use crate::node::{Node, Grouper, Bracket, DataType};
 use crate::extensions::numbers::Number;
 
 pub struct WitEmitter {
@@ -262,6 +262,8 @@ fn escape_string(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::eq;
+    use crate::meta::MetaData;
     use super::*;
 
     #[test]
@@ -284,11 +286,11 @@ mod tests {
     fn test_node_to_wit_value() {
         let node = Node::int(42);
         let wit = node_to_wit_value(&node);
-        assert_eq!(wit, "number(int(42))");
+        eq!(wit, "number(int(42))");
 
         let node = Node::text("hello");
         let wit = node_to_wit_value(&node);
-        assert_eq!(wit, "text(\"hello\")");
+        eq!(wit, "text(\"hello\")");
 
         let node = Node::keys("name", "Alice");
         let wit = node_to_wit_value(&node);
@@ -299,8 +301,6 @@ mod tests {
 
     #[test]
     fn test_node_with_meta_to_wit() {
-        use crate::node::MetaData;
-
         let node = Node::int(42).with_meta(MetaData::with_position(10, 5));
         let wit = node_to_wit_value(&node);
 

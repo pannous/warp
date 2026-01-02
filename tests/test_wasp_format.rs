@@ -96,7 +96,7 @@ fn test_wasp_roundtrip() {
 
     // Verify structure - user{...} becomes Tag
     if let Node::Tag { title, .. } = node.unwrap_meta() {
-        assert_eq!(title, "user");
+        eq!(title, "user");
     } else {
         panic!("Expected Tag node");
     }
@@ -109,9 +109,9 @@ fn test_list_operations() {
 
     let value = node.get_value();
     if let Node::List(items) = value {
-        assert_eq!(items.len(), 5);
-        assert_eq!(items[0], 1);
-        assert_eq!(items[4], 5);
+        eq!(items.len(), 5);
+        eq!(items[0], 1);
+        eq!(items[4], 5);
     }
 }
 

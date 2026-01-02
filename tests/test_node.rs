@@ -18,7 +18,7 @@ fn test_node(){
 fn test_node_list() {
     let n: Node = Node::ints(vec![1, 2, 3]);
     println!("{:?}", n);
-    assert_eq!(n[0], 1);
+    eq!(n[0], 1);
 }
 
 #[test]
@@ -33,43 +33,43 @@ fn test_node_index_str() {
         Grouper::Object,
         Bracket::Curly,
     );
-    assert_eq!(block["name"], Node::text("Alice"));
-    assert_eq!(block["age"], 30);
-    assert_eq!(block["nonexistent"], Node::Empty);
+    eq!(block["name"], Node::text("Alice"));
+    eq!(block["age"], 30);
+    eq!(block["nonexistent"], Node::Empty);
 
     // Test mutable indexing with automatic conversion
     block["name"] = "Bob".into();
-    assert_eq!(block["name"], "Bob");
+    eq!(block["name"], "Bob");
 
     block["age"] = 25.into();
-    assert_eq!(block["age"], 25);
+    eq!(block["age"], 25);
 }
 
 #[test]
 fn test_node_not_operator() {
     // Boolean nodes
-    assert_eq!(!True, False);
-    assert_eq!(!False, True);
+    eq!(!True, False);
+    eq!(!False, True);
 
     // Empty/null
-    assert_eq!(!Empty, True);
+    eq!(!Empty, True);
 
     // Numbers
-    assert_eq!(!Node::int(0), True);
-    assert_eq!(!Node::int(1), False);
-    assert_eq!(!Node::int(42), False);
-    assert_eq!(!Node::float(0.0), True);
-    assert_eq!(!Node::float(3.14), False);
+    eq!(!Node::int(0), True);
+    eq!(!Node::int(1), False);
+    eq!(!Node::int(42), False);
+    eq!(!Node::float(0.0), True);
+    eq!(!Node::float(3.14), False);
 
     // Strings
-    assert_eq!(!Node::text(""), True);
-    assert_eq!(!Node::text("hello"), False);
-    assert_eq!(!Node::symbol(""), True);
-    assert_eq!(!Node::symbol("x"), False);
+    eq!(!Node::text(""), True);
+    eq!(!Node::text("hello"), False);
+    eq!(!Node::symbol(""), True);
+    eq!(!Node::symbol("x"), False);
 
     // Collections
-    assert_eq!(!Node::List(vec![]), True);
-    assert_eq!(!Node::ints(vec![1, 2, 3]), False);
+    eq!(!Node::List(vec![]), True);
+    eq!(!Node::ints(vec![1, 2, 3]), False);
 }
 
 
@@ -79,12 +79,12 @@ fn test_node_equality(){
     let n1:Node = Node::int(1);
     let n2:Node = Node::int(2);
     let n3:Node = Node::float(2.0);
-    assert_eq!(n1, 1);
-    assert_eq!(n2, 2);
-    assert_eq!(n3, 2);
-    assert_eq!(n3, 2.0);
-    assert_eq!(n1, true);
-    assert_eq!(n0, false);
+    eq!(n1, 1);
+    eq!(n2, 2);
+    eq!(n3, 2);
+    eq!(n3, 2.0);
+    eq!(n1, true);
+    eq!(n0, false);
     assert_ne!(n1, n2);
     assert_ne!(n1, 2);
 }
@@ -101,7 +101,7 @@ fn test_node_data_eq() {
 // fn test_node_box() {
 //     let n: Node = Node::Data("data".into());
 //     println!("{:?}", n);
-//     assert_eq!(n, Node::Data("data".into()));
+//     eq!(n, Node::Data("data".into()));
 // }
 
 #[test]
