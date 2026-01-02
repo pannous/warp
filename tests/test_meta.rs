@@ -1,9 +1,9 @@
 // Metadata tests
 // Migrated from tests_*.rs files
 
-use wasp::{eq, exists, skip};
 use wasp::node::Node;
 use wasp::wasp_parser::parse;
+use wasp::{eq, exists, skip};
 
 #[test]
 fn test_meta_field() {
@@ -67,9 +67,9 @@ fn test_meta_at2() {
 fn test_parent_context() {
     //     chars
     let source = "{a:'HIO' d:{} b:3 c:ø}";
-let result = parse(source);
+    let result = parse(source);
     result.print();
-    let a : Node = result["a"].clone();
+    let a: Node = result["a"].clone();
     a.print();
     // eq!(a.kind(), strings);
     eq!(a.value(), "HIO"); // we can't be sure it's to string

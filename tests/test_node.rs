@@ -1,17 +1,17 @@
-use wasp::*;
 use wasp::node::Node;
 use wasp::node::Node::{Empty, False, True};
+use wasp::*;
 // use wasp::node::Node::*;
 
 #[test]
-fn test_node(){
+fn test_node() {
     // let n:Node = Node::new();
     // eval("key=value");
-    let n:Node = Node::keys("key", "value");
+    let n: Node = Node::keys("key", "value");
     eq!(n.get_key(), "key");
     eq!(n.get_value(), &Node::text("value"));
     // let n:Node = Key("key".s(), Box::new(Text("value".s())));
-    println!("{:?}", n );
+    println!("{:?}", n);
 }
 
 #[test]
@@ -72,13 +72,12 @@ fn test_node_not_operator() {
     eq!(!Node::ints(vec![1, 2, 3]), False);
 }
 
-
 #[test]
-fn test_node_equality(){
-    let n0:Node = Node::int(0);
-    let n1:Node = Node::int(1);
-    let n2:Node = Node::int(2);
-    let n3:Node = Node::float(2.0);
+fn test_node_equality() {
+    let n0: Node = Node::int(0);
+    let n1: Node = Node::int(1);
+    let n2: Node = Node::int(2);
+    let n3: Node = Node::float(2.0);
     eq!(n1, 1);
     eq!(n2, 2);
     eq!(n3, 2);
@@ -89,12 +88,11 @@ fn test_node_equality(){
     assert_ne!(n1, 2);
 }
 
-
 #[test]
 fn test_node_data_eq() {
     let n = Node::data(vec![1, 2, 3]);
     let n2 = n.clone();
-    eq!(n,n2)
+    eq!(n, n2)
 }
 
 // #[test]

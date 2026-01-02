@@ -85,11 +85,20 @@ fn test_node_data_equality() {
     assert_ne!(s1, s3);
 
     // Custom type equality
-    let c1 = Node::data(CustomDataExample { id: 42, name: "test".to_string() });
-    let c2 = Node::data(CustomDataExample { id: 42, name: "test".to_string() });
+    let c1 = Node::data(CustomDataExample {
+        id: 42,
+        name: "test".to_string(),
+    });
+    let c2 = Node::data(CustomDataExample {
+        id: 42,
+        name: "test".to_string(),
+    });
     eq!(c1, c2);
 
-    let c3 = Node::data(CustomDataExample { id: 99, name: "test".to_string() });
+    let c3 = Node::data(CustomDataExample {
+        id: 99,
+        name: "test".to_string(),
+    });
     assert_ne!(c1, c3);
 
     // Different types should not be equal
@@ -130,7 +139,10 @@ fn test_node_data_metadata() {
     let s = Node::data("hello".to_string());
     if let Node::Data(dada) = &s {
         eq!(dada.data_type, DataType::String);
-        println!("String type: {:?}, name: {}", dada.data_type, dada.type_name);
+        println!(
+            "String type: {:?}, name: {}",
+            dada.data_type, dada.type_name
+        );
     }
 
     // Primitive metadata
@@ -138,15 +150,24 @@ fn test_node_data_metadata() {
     if let Node::Data(dada) = &p {
         eq!(dada.data_type, DataType::Primitive);
         eq!(dada.type_name, "i32");
-        println!("Primitive type: {:?}, name: {}", dada.data_type, dada.type_name);
+        println!(
+            "Primitive type: {:?}, name: {}",
+            dada.data_type, dada.type_name
+        );
     }
 
     // Custom struct metadata
-    let c = Node::data(CustomDataExample { id: 1, name: "test".to_string() });
+    let c = Node::data(CustomDataExample {
+        id: 1,
+        name: "test".to_string(),
+    });
     if let Node::Data(dada) = &c {
         eq!(dada.data_type, DataType::Struct);
         assert!(dada.type_name.contains("CustomDataExample"));
-        println!("Struct type: {:?}, name: {}", dada.data_type, dada.type_name);
+        println!(
+            "Struct type: {:?}, name: {}",
+            dada.data_type, dada.type_name
+        );
     }
 
     // Debug output shows metadata

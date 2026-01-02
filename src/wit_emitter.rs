@@ -1,5 +1,5 @@
-use crate::node::{Node, Grouper, Bracket, DataType};
 use crate::extensions::numbers::Number;
+use crate::node::{Bracket, DataType, Grouper, Node};
 
 pub struct WitEmitter {
     indent_level: usize,
@@ -175,12 +175,20 @@ pub fn node_to_wit_value(node: &Node) -> String {
         Node::Char(c) => format!("codepoint('{}')", c),
         Node::Symbol(s) => format!("symbol(\"{}\")", escape_string(s)),
         Node::Key(k, v) => {
-            format!("key-value((\"{}\", {}))", escape_string(k), node_to_wit_value(v))
+            format!(
+                "key-value((\"{}\", {}))",
+                escape_string(k),
+                node_to_wit_value(v)
+            )
         }
         Node::Pair(a, b) => {
             format!("pair(({}, {}))", node_to_wit_value(a), node_to_wit_value(b))
         }
-        Node::Tag { title, params, body } => {
+        Node::Tag {
+            title,
+            params,
+            body,
+        } => {
             format!(
                 "tag((\"{}\", {}, {}))",
                 escape_string(title),
@@ -248,7 +256,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
         Node::Error(e) => format!("error(\"{}\")", escape_string(e)),
         Node::False => "false".to_string(),
         Node::True => "true".to_string(),
-        _ => todo!()
+        _ => todo!(),
     }
 }
 
@@ -262,9 +270,9 @@ fn escape_string(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::eq;
     use crate::meta::MetaData;
-    use super::*;
 
     #[test]
     fn test_emit_wit_interface() {
@@ -312,11 +320,7 @@ mod tests {
 
     #[test]
     fn test_complex_node_to_wit() {
-        let node = Node::list(vec![
-            Node::int(1),
-            Node::int(2),
-            Node::text("hello"),
-        ]);
+        let node = Node::list(vec![Node::int(1), Node::int(2), Node::text("hello")]);
 
         let wit = node_to_wit_value(&node);
         println!("{}", wit);

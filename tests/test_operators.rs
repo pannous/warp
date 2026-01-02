@@ -83,26 +83,26 @@ fn test_while_not_call() {
     // Tests with function calls in while conditions
     // Note: These require proper handling of function calls as while conditions
     skip!(
- // todo!
-    is!("def goon():0;;while goon() : {0};42", 42);
-    is!("def goon():0;;while goon():{0};42", 42);
-        is!("def goon():0;;while goon():1;42", 42);
-        is!("def goon():0;;while goon():0;42", 42); todo
-        is!("def goon():0;;while goon():{};42", 42);
-        is!("def goon():0;;while goon():{1};42", 42);
-        is!("def goon():0;;while goon(){};42", 42);
-        is!("def goon():0;;while(goon()):0;42", 42);
-        is!("def goon():0;;while(goon()):{};42", 42);
-        is!("def goon():0;;while(goon()){};42", 42);
-        is!("def goon(){0};;while(goon()): {0};42", 42);
-    is!("def goon():0;;while(goon()): {0};42", 42);
-    is!("def goon():0;;while(goon()):{0};42", 42);
-    is!("def goon():{0};while goon() : {0};42", 42);
-    is!("def stop():1;;while !stop() : {0};42", 42);
-    is!("def stop():{1};while !stop() : {0};42", 42);
+    // todo!
+       is!("def goon():0;;while goon() : {0};42", 42);
+       is!("def goon():0;;while goon():{0};42", 42);
+           is!("def goon():0;;while goon():1;42", 42);
+           is!("def goon():0;;while goon():0;42", 42); todo
+           is!("def goon():0;;while goon():{};42", 42);
+           is!("def goon():0;;while goon():{1};42", 42);
+           is!("def goon():0;;while goon(){};42", 42);
+           is!("def goon():0;;while(goon()):0;42", 42);
+           is!("def goon():0;;while(goon()):{};42", 42);
+           is!("def goon():0;;while(goon()){};42", 42);
+           is!("def goon(){0};;while(goon()): {0};42", 42);
+       is!("def goon():0;;while(goon()): {0};42", 42);
+       is!("def goon():0;;while(goon()):{0};42", 42);
+       is!("def goon():{0};while goon() : {0};42", 42);
+       is!("def stop():1;;while !stop() : {0};42", 42);
+       is!("def stop():{1};while !stop() : {0};42", 42);
 
-    is!("def goon(){0};;while(goon()){0};42", 42);
-    );
+       is!("def goon(){0};;while(goon()){0};42", 42);
+       );
 
     is!("goon=0;while(goon){goon+=1};goon+2", 2); // Variable instead of call
     is!("goon=0;while goon{goon+=1};goon+2", 2); // Variable instead of call
@@ -131,29 +131,30 @@ fn test_while_true_forever() {
     );
 }
 
-
 #[test]
 fn test_random_parse() {
     let node = parse("x:40;x+1");
     assert!(node.length() == 2);
     assert!(node[0]["x"] == 40); // breaks!?
-    // assert!(operator_list.has("+"));
-    // assert!(not(bool) Node("x"));
-    // assert! _silent(false == (bool) Node("x"));
-    // assert!(Node("x") == false);
+                                 // assert!(operator_list.has("+"));
+                                 // assert!(not(bool) Node("x"));
+                                 // assert! _silent(false == (bool) Node("x"));
+                                 // assert!(Node("x") == false);
 }
 
 #[test]
 fn test_minus_minus() {
-    #[cfg(not(feature = "WASM"))]{ // todo square
-        is!("1 - 3 - square 3+4",  -51); // OK!
+    #[cfg(not(feature = "WASM"))]
+    {
+        // todo square
+        is!("1 - 3 - square 3+4", -51); // OK!
     }
 
     //    is!("1 -3 - square 3+4",  -51);// warn "mixing math op with list items (1, -3 … ) !"
     //    is!("1--3", 4);// todo parse error
     is!("1- -3", 4); // -1 uh ok?  warn "what are you doning?"
     is!("1 - -3", 4); // -1 uh ok?  warn "what are you doning?"
-    //    is!("1 - - 3", 4);// error ok todo parse error
+                      //    is!("1 - - 3", 4);// error ok todo parse error
 }
 
 #[test]
@@ -197,23 +198,20 @@ fn test_vector_shim() {
     is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
 }
 
-
-
 #[test]
 fn test_hypen_versus_minus() {
     // Needs variable register in parser.
-//     const char
+    //     const char
     let code = "a=-1 b=2 b-a";
     is!(code, 3);
     // kebab case
-//     const char
+    //     const char
     let data = "a-b:2 c-d:4 a-b";
     is!(data, 2);
     //    testHyphenUnits();
 
     //    let node : Node = parse(data);
 }
-
 
 #[test]
 fn test_import42() {
@@ -228,7 +226,7 @@ fn test_import42() {
 #[test]
 fn test_div_deep() {
     let div = parse("div{ span{ class:'bold' 'text'} br}");
-    let node : &Node = &div["span"];
+    let node: &Node = &div["span"];
     node.print();
     assert!(div["span"].length() == 2);
     assert!(div["span"]["class"] == "bold");
@@ -238,13 +236,12 @@ fn test_div_deep() {
 fn test_div_mark() {
     // use_polish_notation = true;
     let div = parse("{div {span class:'bold' 'text'} {br}}");
-    let span : &Node = &div["span"];
+    let span: &Node = &div["span"];
     span.print();
     assert!(span.length() == 2);
     assert!(span["class"] == "bold");
     // use_polish_notation = false;
 }
-
 
 #[test]
 fn test_errors() {
@@ -252,30 +249,28 @@ fn test_errors() {
     // throwing = true;
     // 0/0 now returns NaN (float division), not an error
     assert_throws("x"); // UNKNOWN local symbol 'x' in context main  OK
-    #[cfg(feature = "WASI")]{
-//         or
-//         WASM
-        skip!(
-"can't catch ERROR in wasm");
+    #[cfg(feature = "WASI")]
+    {
+        //         or
+        //         WASM
+        skip!("can't catch ERROR in wasm");
         return;
     }
     assert_throws("]"); // set throwing to true!!
-    // throwing = false; // error always throws
-    // result = parse("]");
-    // assert!(result == ERROR);
-    /*
-        ln -s /me/dev/apps/wasp/samples /me/dev/apps/wasp/cmake-build-wasm/out
-        ln -s /Users/me/dev/apps/wasp/samples /Users/me/dev/apps/wasp/cmake-build-default/ #out/
-      */
+                        // throwing = false; // error always throws
+                        // result = parse("]");
+                        // assert!(result == ERROR);
+                        /*
+                          ln -s /me/dev/apps/wasp/samples /me/dev/apps/wasp/cmake-build-wasm/out
+                          ln -s /Users/me/dev/apps/wasp/samples /Users/me/dev/apps/wasp/cmake-build-default/ #out/
+                        */
     // breakpoint_helper todo
     // result = /*Wasp::*/parseFile("samples/errors.wasp");
     // throwing = true;
 }
 
-
 #[test]
-fn test_for_each() {
-}
+fn test_for_each() {}
 
 #[test]
 fn test_logic() {
@@ -428,8 +423,3 @@ fn test_length_operator() {
     is!("#{a b c}", 3);
     is!("#(a b c)", 3); // todo: groups
 }
-
-
-
-
-

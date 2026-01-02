@@ -38,13 +38,15 @@ fn test_wasmtime_gc_support() {
     println!("✓ GC struct type compiled successfully");
 
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &module)
+    let instance = linker
+        .instantiate(&mut store, &module)
         .expect("Failed to instantiate module");
 
     println!("✓ GC module instantiated");
 
     // Try to call the function
-    let _make_point = instance.get_func(&mut store, "make_point")
+    let _make_point = instance
+        .get_func(&mut store, "make_point")
         .expect("make_point function not found");
 
     println!("✓ Got GC function reference");
@@ -81,13 +83,22 @@ fn test_gc_introspection() {
     let wasm_bytes = wat::parse_str(wat).expect("Failed to parse WAT");
     let module = Module::new(&engine, wasm_bytes).expect("Failed to create module");
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &module).expect("Failed to instantiate");
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("Failed to instantiate");
 
-    let create = instance.get_func(&mut store, "create").expect("create function not found");
+    let create = instance
+        .get_func(&mut store, "create")
+        .expect("create function not found");
 
     // Call and get a GC reference
     let mut results = vec![wasmtime::Val::I32(0)];
-    create.call(&mut store, &[wasmtime::Val::I32(42), wasmtime::Val::I64(123)], &mut results)
+    create
+        .call(
+            &mut store,
+            &[wasmtime::Val::I32(42), wasmtime::Val::I64(123)],
+            &mut results,
+        )
         .expect("Failed to call create");
 
     let node_ref = &results[0];
@@ -109,7 +120,7 @@ fn test_gc_introspection() {
                     println!("    Value: {}", i32_val);
                     eq!(i32_val, 42);
                 }
-                Err(e) => println!("  ✗ Cannot read field: {}", e)
+                Err(e) => println!("  ✗ Cannot read field: {}", e),
             }
         } else {
             println!("  Note: StructRef introspection not available in this wasmtime version");

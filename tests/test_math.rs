@@ -1,7 +1,8 @@
 use wasp::extensions::print;
 use wasp::is;
 
-#[test] fn test_arithmetic() {
+#[test]
+fn test_arithmetic() {
     print("Testing basic arithmetic...");
     is!("2+3", 5);
     is!("10-3", 7);
@@ -9,7 +10,8 @@ use wasp::is;
     is!("15/3", 5);
     print("✓ Basic arithmetic tests passed");
 }
-#[test] fn test_harder_arithmetic() {
+#[test]
+fn test_harder_arithmetic() {
     print("Testing harder arithmetic...");
     is!("2+3*4", 14); // precedence
     is!("10-3*2", 4); // precedence
@@ -55,8 +57,6 @@ fn test_power() {
     // is!("√3^0", 0.9710078239440918); // very rough power approximation from where?
 }
 
-
-
 #[test]
 fn test_hyphen_units() {
     //     const char *code = "1900 - 2000 AD";// (easy with units);
@@ -74,7 +74,6 @@ fn test_hypen_versus_minus() {
     is!("a-b:2 c-d:4 a-b", 2);
 }
 
-
 #[test]
 fn test_modulo() {
     //	eq!(mod_d(10007.0, 10000.0), 7);
@@ -88,13 +87,13 @@ fn test_modulo() {
     is!("i=10007.1;x=i%10000.1", 7);
 }
 
-
 // One of the few tests which can be removed because who will ever change the sin routine?
 #[test]
 fn test_sin() {
-    #[cfg(feature = "LINUX")]{
+    #[cfg(feature = "LINUX")]
+    {
         return; // only for internal sinus implementation testing
-        //         # else
+                //         # else
         eq!(sin(0), 0.);
         eq!(sin(pi / 2), 1.);
         eq!(sin(-pi / 2), -1.);
@@ -110,7 +109,6 @@ fn test_sin() {
         eq!(cos(-pi), -1.);
     }
 }
-
 
 #[test]
 fn test_primitive_types() {
@@ -136,14 +134,14 @@ fn test_primitive_types() {
     //  eq!(ftoa2(8.33333333332248946124e-03), "8.333E-3");
     is!("S1 = -1.66666666666666324348e-01;S1*100", -16);
     is!("S1 = 8.33333333332248946124e-03;S1*1000", 8);
-     is!("(2,4) == (2,4)", 1); // todo: array creation/ comparison
-     is!("(float 2, int 4.3)  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
-     is!("float 2, int 4.3  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
-        //  float  2, ( int ==( 4.3 2)), 4
+    is!("(2,4) == (2,4)", 1); // todo: array creation/ comparison
+    is!("(float 2, int 4.3)  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
+    is!("float 2, int 4.3  == 2,4", 1); //  PRECEDENCE needs to be in valueNode :(
+                                        //  float  2, ( int ==( 4.3 2)), 4
 }
 
-
-#[test] fn test_logarithm_in_runtime(){
+#[test]
+fn test_logarithm_in_runtime() {
 
     // float
     // let ℯ = 2.7182818284590;
@@ -155,7 +153,6 @@ fn test_primitive_types() {
     // eq!(ln(1),0.);
     // eq!(ln(ℯ),1.);
 }
-
 
 #[test]
 fn test_sinus_wasp_import() {

@@ -1,6 +1,6 @@
 use std::fmt::Debug; // for println!("{:?}", item)
 use std::fmt::Display; // for println!("{}", item)
-// use crate::put;
+                       // use crate::put;
 
 struct WasmString {
     length: u32,
@@ -30,7 +30,9 @@ impl CharExtensions for char {
     fn upper(&self) -> char {
         self.to_uppercase().next().unwrap()
     }
-    fn s(&self) -> String { self.to_string() }
+    fn s(&self) -> String {
+        self.to_string()
+    }
 }
 
 pub trait StringExtensions {
@@ -58,14 +60,17 @@ pub trait StringExtensions {
     fn after(&self, pat: &str) -> &str;
 }
 
-
 impl StringExtensions for String {
     fn at(&self, nr: i32) -> char {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth(wrapped_index).unwrap()
     }
-    fn codepoint_at(&self, nr: i32) -> char { self.at(nr) }
-    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap() }
+    fn codepoint_at(&self, nr: i32) -> char {
+        self.at(nr)
+    }
+    fn char(&self, nr: usize) -> char {
+        self.chars().nth(nr).unwrap()
+    }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
@@ -79,17 +84,35 @@ impl StringExtensions for String {
         // just use the range operator directly
         &self[start..end]
     }
-    fn first_char(&self) -> char { self.chars().next().unwrap() }
-    fn last_char(&self) -> char { self.chars().last().unwrap() }
-    fn first(&self) -> char { self.chars().next().unwrap() }
-    fn start(&self) -> char { self.chars().next().unwrap() }
-    fn head(&self) -> char { self.chars().next().unwrap() }
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr] }
-    fn str(&self) -> String { self.to_owned() }
+    fn first_char(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn last_char(&self) -> char {
+        self.chars().last().unwrap()
+    }
+    fn first(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn start(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn head(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn byte_at(&self, nr: usize) -> u8 {
+        self.as_bytes()[nr]
+    }
+    fn str(&self) -> String {
+        self.to_owned()
+    }
     // Function implementations
-    fn s(&self) -> String { self.to_owned() }
+    fn s(&self) -> String {
+        self.to_owned()
+    }
     // fn from(&self, start: usize) -> &str { &self[start..] }
-    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    fn start_from(&self, start: usize) -> &str {
+        &self[start..]
+    }
     fn set(&self, at: usize, value: char) -> String {
         self.clone().replace_range(at..at + 1, &value.to_string());
         self.to_string()
@@ -108,8 +131,12 @@ impl StringExtensions for str {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth(wrapped_index).unwrap()
     }
-    fn codepoint_at(&self, nr: i32) -> char { self.at(nr) }
-    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap() }
+    fn codepoint_at(&self, nr: i32) -> char {
+        self.at(nr)
+    }
+    fn char(&self, nr: usize) -> char {
+        self.chars().nth(nr).unwrap()
+    }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
@@ -123,16 +150,34 @@ impl StringExtensions for str {
         // just use the range operator directly
         &self[start..end]
     }
-    fn first_char(&self) -> char { self.chars().next().unwrap() }
-    fn last_char(&self) -> char { self.chars().last().unwrap() }
-    fn first(&self) -> char { self.chars().next().unwrap() }
-    fn start(&self) -> char { self.chars().next().unwrap() }
-    fn head(&self) -> char { self.chars().next().unwrap() }
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr] }
-    fn str(&self) -> String { self.to_string() }
+    fn first_char(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn last_char(&self) -> char {
+        self.chars().last().unwrap()
+    }
+    fn first(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn start(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn head(&self) -> char {
+        self.chars().next().unwrap()
+    }
+    fn byte_at(&self, nr: usize) -> u8 {
+        self.as_bytes()[nr]
+    }
+    fn str(&self) -> String {
+        self.to_string()
+    }
     // allow negative index into chars : -2 = next to last
-    fn s(&self) -> String { self.to_string() }
-    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    fn s(&self) -> String {
+        self.to_string()
+    }
+    fn start_from(&self, start: usize) -> &str {
+        &self[start..]
+    }
     // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 
     fn set(&self, at: usize, value: char) -> String {
@@ -164,7 +209,7 @@ impl IntegerExtensions for i32 {
             14 => 'E',
             15 => 'F',
             100 => '💯',
-            1000 => '𓆼', // 𐄢
+            1000 => '𓆼',  // 𐄢
             10000 => '𓂭', // 𐄫
             100000 => '𓆐',
             1000000 => '𓁨',
@@ -173,18 +218,16 @@ impl IntegerExtensions for i32 {
     }
 }
 
-
 // by value
 // call with &arg if you encounter "Borrow of moved value" error (later)
-pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item=T>) {
+pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
     for item in list {
         println!("{}", item);
     }
 }
 
-
-use std::cmp::PartialEq;
 use crate::eq;
+use std::cmp::PartialEq;
 // only traits defined in the current crate can be implemented for types defined outside of the crate
 // use Wrapper or compare via s == *s2
 // impl PartialEq for String {
@@ -243,7 +286,6 @@ impl PartialEqChar for String {
     }
 }
 
-
 // fn assert<T: PartialEq + Debug>(x: T) {
 //     eq!(x, true);
 // }
@@ -258,8 +300,8 @@ impl PartialEqChar for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::eq;
     use super::*;
+    use crate::eq;
 
     #[test]
     fn test_char_str_eq() {
@@ -268,11 +310,10 @@ mod tests {
         // assert!("l".is('l'));
     }
 
-
     #[test]
     fn test_str_plus() {
         // eq!("a"+"b", "ab");
-        eq!("a".s()+"b", "ab");
+        eq!("a".s() + "b", "ab");
         // eq!("a".s()+2, "a2");
     }
 }

@@ -1,7 +1,7 @@
 use wasp::eq;
-use wasp::wit_emitter::{WitEmitter, node_to_wit_value};
+use wasp::node::Node;
 use wasp::wasp_parser::WaspParser;
-use wasp::node::Node; // TODO: Meta is not exported
+use wasp::wit_emitter::{node_to_wit_value, WitEmitter}; // TODO: Meta is not exported
 
 #[test]
 fn test_wit_interface_generation() {
@@ -91,11 +91,7 @@ fn test_tag_to_wit() {
 
 #[test]
 fn test_list_to_wit() {
-    let node = Node::list(vec![
-        Node::int(1),
-        Node::int(2),
-        Node::int(3),
-    ]);
+    let node = Node::list(vec![Node::int(1), Node::int(2), Node::int(3)]);
     let wit = node_to_wit_value(&node);
 
     assert!(wit.contains("list(["));

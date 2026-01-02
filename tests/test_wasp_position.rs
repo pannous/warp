@@ -1,6 +1,6 @@
 use wasp::eq;
-use wasp::wasp_parser::WaspParser;
 use wasp::node::Node;
+use wasp::wasp_parser::WaspParser;
 
 #[test]
 fn test_position_tracking() {
@@ -15,7 +15,10 @@ city: "NYC""#;
         // First item should be at line 1
         if let Some(first) = items.get(0) {
             if let Some(meta) = first.get_meta() {
-                println!("First item position: line {:?}, column {:?}", meta.line, meta.column);
+                println!(
+                    "First item position: line {:?}, column {:?}",
+                    meta.line, meta.column
+                );
                 eq!(meta.line, Some(1));
             }
         }
@@ -23,7 +26,10 @@ city: "NYC""#;
         // Second item should be at line 2
         if let Some(second) = items.get(1) {
             if let Some(meta) = second.get_meta() {
-                println!("Second item position: line {:?}, column {:?}", meta.line, meta.column);
+                println!(
+                    "Second item position: line {:?}, column {:?}",
+                    meta.line, meta.column
+                );
                 eq!(meta.line, Some(2));
             }
         }
@@ -31,7 +37,10 @@ city: "NYC""#;
         // Third item should be at line 3
         if let Some(third) = items.get(2) {
             if let Some(meta) = third.get_meta() {
-                println!("Third item position: line {:?}, column {:?}", meta.line, meta.column);
+                println!(
+                    "Third item position: line {:?}, column {:?}",
+                    meta.line, meta.column
+                );
                 eq!(meta.line, Some(3));
             }
         }
@@ -51,8 +60,10 @@ age: 25"#;
     if let Node::Block(items, _, _) = node {
         if let Some(first) = items.get(0) {
             if let Some(meta) = first.get_meta() {
-                println!("First: line={:?}, col={:?}, comment={:?}",
-                    meta.line, meta.column, meta.comment);
+                println!(
+                    "First: line={:?}, col={:?}, comment={:?}",
+                    meta.line, meta.column, meta.comment
+                );
                 eq!(meta.line, Some(2));
                 eq!(meta.comment, Some("User data".to_string()));
             }
@@ -60,8 +71,10 @@ age: 25"#;
 
         if let Some(second) = items.get(1) {
             if let Some(meta) = second.get_meta() {
-                println!("Second: line={:?}, col={:?}, comment={:?}",
-                    meta.line, meta.column, meta.comment);
+                println!(
+                    "Second: line={:?}, col={:?}, comment={:?}",
+                    meta.line, meta.column, meta.comment
+                );
                 eq!(meta.line, Some(4));
                 eq!(meta.comment, Some("Age field".to_string()));
             }
@@ -80,7 +93,10 @@ fn test_nested_position_tracking() {
     println!("Nested structure: {:?}", node);
 
     if let Some(meta) = node.get_meta() {
-        println!("Server tag position: line={:?}, col={:?}", meta.line, meta.column);
+        println!(
+            "Server tag position: line={:?}, col={:?}",
+            meta.line, meta.column
+        );
         eq!(meta.line, Some(1));
     }
 }

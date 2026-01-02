@@ -1,6 +1,6 @@
-use wasp::*;
 use wasp::node::Node;
-use wasp::node::Node::*; // TODO: Meta is not exported
+use wasp::node::Node::*;
+use wasp::*; // TODO: Meta is not exported
 
 #[test]
 fn test_node_add_basic() {

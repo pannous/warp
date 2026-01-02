@@ -1,5 +1,5 @@
-use wasp::{eq, is};
 use wasp::wasp_parser::{parse, WaspParser};
+use wasp::{eq, is};
 // use wasp::wasp_parser::WaspParser::parse;
 use wasp::node::Node;
 
@@ -98,7 +98,6 @@ fn test_comment_with_metadata_accessor() {
         panic!("Expected metadata");
     }
 }
-
 
 // Comments
 #[test]

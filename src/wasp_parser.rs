@@ -1,9 +1,9 @@
 use crate::extensions::numbers::Number;
+use crate::meta::MetaData;
 use crate::node::Node::{Empty, Error};
 use crate::node::{Bracket, Grouper, Node};
 use log::warn;
 use std::fs;
-use crate::meta::MetaData;
 
 /// Read and parse a WASP file
 pub fn parse_file(path: &str) -> Node {
@@ -13,14 +13,12 @@ pub fn parse_file(path: &str) -> Node {
     }
 }
 
-
 pub fn parse(input: &str) -> Node {
     if input.ends_with(".wasp") {
         return parse_file(input);
     }
     WaspParser::parse(input)
 }
-
 
 pub struct WaspParser {
     input: String,
@@ -127,7 +125,6 @@ impl WaspParser {
         self.pos == 0 || self.prev_char().map_or(false, |ch| ch.is_whitespace())
     }
 
-
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char() {
             if ch.is_whitespace() {
@@ -227,7 +224,10 @@ impl WaspParser {
                     // _ if ch.is_control() => self.
                     _ => {
                         // todo implement the rest like operators, etc.
-                        warn!("Unexpected character '{}' at line {}, column {}", ch, line, column);
+                        warn!(
+                            "Unexpected character '{}' at line {}, column {}",
+                            ch, line, column
+                        );
                         self.advance();
                         Error(format!("Unexpected character '{}'", ch))
                     }
