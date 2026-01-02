@@ -119,7 +119,6 @@ impl Dada {
             DataType::Other
         }
     }
-
 }
 
 impl Clone for Dada {

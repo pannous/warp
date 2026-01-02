@@ -1,6 +1,6 @@
+use wasp::eq;
 use wasp::node::Node;
 use wasp::wasp_parser::parse;
-use wasp::eq;
 
 #[test]
 fn test_remove() {
