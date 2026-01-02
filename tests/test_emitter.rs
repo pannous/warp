@@ -23,7 +23,7 @@ pub fn test_emitter() {
     let result = run_wasm("test.wasm");
     match result {
         Ok(x) => {
-            assert_eq!(x, 42);
+            eq!(x, 42);
             println!("OK Result: {:?}", x)
         },
         Err(e) => {

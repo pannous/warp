@@ -1,3 +1,4 @@
+use wasp::eq;
 use wasp::node::Node;
 use wasp::node::{Grouper, Bracket};
 
@@ -66,12 +67,12 @@ fn test_simple_values() {
     // Numbers
     let n = Node::int(42);
     let json = n.to_json().unwrap();
-    assert_eq!(json.trim(), "42");
+    eq!(json.trim(), "42");
 
     // Strings
     let s = Node::text("hello");
     let json = s.to_json().unwrap();
-    assert_eq!(json.trim(), r#""hello""#);
+    eq!(json.trim(), r#""hello""#);
 
     // Arrays
     let arr = Node::list(vec![Node::int(1), Node::int(2), Node::int(3)]);

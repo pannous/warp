@@ -38,23 +38,23 @@ fn test_wit_interface_generation() {
 fn test_simple_node_to_wit() {
     // Empty
     let node = Node::Empty;
-    assert_eq!(node_to_wit_value(&node), "empty");
+    eq!(node_to_wit_value(&node), "empty");
 
     // Integer
     let node = Node::int(42);
-    assert_eq!(node_to_wit_value(&node), "number(int(42))");
+    eq!(node_to_wit_value(&node), "number(int(42))");
 
     // Float
     let node = Node::float(3.14);
-    assert_eq!(node_to_wit_value(&node), "number(float(3.14))");
+    eq!(node_to_wit_value(&node), "number(float(3.14))");
 
     // Text
     let node = Node::text("hello");
-    assert_eq!(node_to_wit_value(&node), "text(\"hello\")");
+    eq!(node_to_wit_value(&node), "text(\"hello\")");
 
     // Symbol
     let node = Node::symbol("foo");
-    assert_eq!(node_to_wit_value(&node), "symbol(\"foo\")");
+    eq!(node_to_wit_value(&node), "symbol(\"foo\")");
 }
 
 #[test]

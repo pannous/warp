@@ -1517,19 +1517,3 @@ pub fn text_node(p0: String) -> Node {
 pub fn node(p0: &str) -> Node {
     Text(p0.s())
 }
-
-impl<T: 'static + Clone + PartialEq> CloneAny for T {
-    fn clone_any(&self) -> Box<dyn CloneAny> {
-        Box::new(self.clone())
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn eq_any(&self, other: &dyn CloneAny) -> bool {
-        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
-            self == other_t
-        } else {
-            false
-        }
-    }
-}

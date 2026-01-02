@@ -15,7 +15,7 @@ city: "NYC""#;
         if let Some(first) = items.get(0) {
             if let Some(meta) = first.get_meta() {
                 println!("First item position: line {:?}, column {:?}", meta.line, meta.column);
-                assert_eq!(meta.line, Some(1));
+                eq!(meta.line, Some(1));
             }
         }
 
@@ -23,7 +23,7 @@ city: "NYC""#;
         if let Some(second) = items.get(1) {
             if let Some(meta) = second.get_meta() {
                 println!("Second item position: line {:?}, column {:?}", meta.line, meta.column);
-                assert_eq!(meta.line, Some(2));
+                eq!(meta.line, Some(2));
             }
         }
 
@@ -31,7 +31,7 @@ city: "NYC""#;
         if let Some(third) = items.get(2) {
             if let Some(meta) = third.get_meta() {
                 println!("Third item position: line {:?}, column {:?}", meta.line, meta.column);
-                assert_eq!(meta.line, Some(3));
+                eq!(meta.line, Some(3));
             }
         }
     }
@@ -52,8 +52,8 @@ age: 25"#;
             if let Some(meta) = first.get_meta() {
                 println!("First: line={:?}, col={:?}, comment={:?}",
                     meta.line, meta.column, meta.comment);
-                assert_eq!(meta.line, Some(2));
-                assert_eq!(meta.comment, Some("User data".to_string()));
+                eq!(meta.line, Some(2));
+                eq!(meta.comment, Some("User data".to_string()));
             }
         }
 
@@ -61,8 +61,8 @@ age: 25"#;
             if let Some(meta) = second.get_meta() {
                 println!("Second: line={:?}, col={:?}, comment={:?}",
                     meta.line, meta.column, meta.comment);
-                assert_eq!(meta.line, Some(4));
-                assert_eq!(meta.comment, Some("Age field".to_string()));
+                eq!(meta.line, Some(4));
+                eq!(meta.comment, Some("Age field".to_string()));
             }
         }
     }
@@ -80,7 +80,7 @@ fn test_nested_position_tracking() {
 
     if let Some(meta) = node.get_meta() {
         println!("Server tag position: line={:?}, col={:?}", meta.line, meta.column);
-        assert_eq!(meta.line, Some(1));
+        eq!(meta.line, Some(1));
     }
 }
 
@@ -97,7 +97,7 @@ fn test_multiline_structure() {
     // Top-level html should be at line 1
     if let Some(meta) = node.get_meta() {
         println!("HTML position: {:?}:{:?}", meta.line, meta.column);
-        assert_eq!(meta.line, Some(1));
+        eq!(meta.line, Some(1));
     }
 }
 
@@ -112,24 +112,24 @@ fn test_column_tracking() {
         if let Some(first) = items.get(0) {
             if let Some(meta) = first.get_meta() {
                 println!("First at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-                assert_eq!(meta.line, Some(1));
-                assert_eq!(meta.column, Some(1));
+                eq!(meta.line, Some(1));
+                eq!(meta.column, Some(1));
             }
         }
 
         if let Some(second) = items.get(1) {
             if let Some(meta) = second.get_meta() {
                 println!("Second at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-                assert_eq!(meta.line, Some(1));
-                assert_eq!(meta.column, Some(5));
+                eq!(meta.line, Some(1));
+                eq!(meta.column, Some(5));
             }
         }
 
         if let Some(third) = items.get(2) {
             if let Some(meta) = third.get_meta() {
                 println!("Third at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-                assert_eq!(meta.line, Some(1));
-                assert_eq!(meta.column, Some(9));
+                eq!(meta.line, Some(1));
+                eq!(meta.column, Some(9));
             }
         }
     }

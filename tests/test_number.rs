@@ -11,7 +11,7 @@ fn test_number() {
     eq!(n2,2);
     let n3 = n + n2;
     put!("n3", n3);
-    assert_eq!(n3, 3);
+    eq!(n3, 3);
 }
 
 
@@ -28,11 +28,11 @@ fn test_number_floats() {
     let n2= Float(2.2);
     let n3 = n + n2;
     put!("n3", n3);
-    // assert_eq!(n3, 3.3);
+    // eq!(n3, 3.3);
     assert!(approx_equal(n3, Float(3.3) , 1e-10), "Left: {}, Right: {}", n3, 3.3);
-    assert_eq!(n3, Float(3.3)); // ⚠️ 3.3000000000000003 
-    assert_eq!(n3, Float(3.3));
-    assert_eq!(n3, 3.3);
+    eq!(n3, Float(3.3)); // ⚠️ 3.3000000000000003
+    eq!(n3, Float(3.3));
+    eq!(n3, 3.3);
     // assert!(approx_equal_f64(n3, 3.3, 1e-10));
     if let Float(val) = n3 {
         assert!(approx_equal_f64(val, 3.3, 1e-10));
@@ -46,5 +46,5 @@ fn test_number_mix() {
     let n2= Float(2.2);
     let n3 = n + n2;
     put!("n3", n3);
-    assert_eq!(n3, 3.2);
+    eq!(n3, 3.2);
 }

@@ -41,8 +41,8 @@ use wasp::eq;
 	eq!(module[0], "table");
 	eq!(module[1], "memory");
 	eq!(module[2], "export");
-	assert_eq!(module["func"].length(), 2);
-	assert_eq!(module["func"]["$main"]["param"].length(), 2);
+	eq!(module["func"].length(), 2);
+	eq!(module["func"]["$main"]["param"].length(), 2);
 
 }
 
