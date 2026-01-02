@@ -107,7 +107,7 @@ incremental = true
 opt-level = 0          # No optimization for faster compile
 debug = 0              # Minimal debug info for faster compile
 split-debuginfo = "unpacked"  # Faster on macOS
-codegen-units = 256    # Maximum parallelism
+codegen-units = 16     # Rust default (256 was wasteful)
 
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
