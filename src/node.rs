@@ -13,67 +13,12 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use syn::Signature;
+use crate::meta::Dada;
 // use wasp::type_kinds::{AstKind, NodeKind};
 use crate::type_kinds::{AstKind, NodeKind};
-use crate::node::Node::Empty;
+use crate::node::Node::*;
 use crate::wasp_parser::parse;
 // node[i]
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-pub struct MetaData {
-    pub comment: Option<String>,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-}
-
-impl MetaData {
-    pub fn new() -> Self {
-        MetaData {
-            comment: None,
-            line: None,
-            column: None,
-        }
-    }
-
-    pub fn with_comment(comment: String) -> Self {
-        MetaData {
-            comment: Some(comment),
-            line: None,
-            column: None,
-        }
-    }
-
-    pub fn with_position(line: usize, column: usize) -> Self {
-        MetaData {
-            comment: None,
-            line: Some(line),
-            column: Some(column),
-        }
-    }
-}
-
-// Custom trait for cloneable Any types with equality support
-pub trait CloneAny: Any {
-    fn clone_any(&self) -> Box<dyn CloneAny>;
-    fn as_any(&self) -> &dyn Any;
-    fn eq_any(&self, other: &dyn CloneAny) -> bool;
-}
-
-impl<T: 'static + Clone + PartialEq> CloneAny for T {
-    fn clone_any(&self) -> Box<dyn CloneAny> {
-        Box::new(self.clone())
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn eq_any(&self, other: &dyn CloneAny) -> bool {
-        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
-            self == other_t
-        } else {
-            false
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
@@ -87,129 +32,14 @@ pub enum DataType {
     None,     // <- only interesting cases
 }
 
-pub struct Dada {
-    data: Box<dyn CloneAny>,
-    pub type_name: String,
-    pub data_type: DataType,
-}
-
-// most generic container for any kind of data not captured by other node types
-// Vec, tuples, primitives, custom structs, etc.
-// let v = Node::data(vec![1, 2, 3]);
-// let t = Node::data((42, "answer"));
-// let n = Node::data(CustomData { id: 42, name: "test" });
-// 💡 let extract = dada.downcast_ref::<MyType>(); 💡
-impl Dada {
-    pub fn new<T: 'static + Clone + PartialEq>(data: T) -> Self {
-        let type_name = std::any::type_name::<T>().to_string();
-        let data_type = Self::infer_type(&type_name);
-        Dada {
-            data: Box::new(data),
-            type_name,
-            data_type,
-        }
-    }
-
-    fn infer_type(type_name: &str) -> DataType {
-        if type_name.starts_with("alloc::vec::Vec") || type_name.starts_with("std::vec::Vec") {
-            DataType::Vec
-        } else if type_name.starts_with('(') && type_name.ends_with(')') {
-            DataType::Tuple
-        } else if type_name.contains("::String") || type_name == "str" || type_name == "&str" {
-            DataType::String // map to Node(String) early!
-        } else if type_name.contains("::") {
-            DataType::Struct
-        } else if matches!(
-            type_name,
-            "i8" | "i16"
-                | "i32"
-                | "i64"
-                | "i128"
-                | "isize"
-                | "u8"
-                | "u16"
-                | "u32"
-                | "u64"
-                | "u128"
-                | "usize"
-                | "f32"
-                | "f64"
-                | "bool"
-                | "char"
-        ) {
-            DataType::Primitive
-        } else {
-            DataType::Other
-        }
-    }
-
-    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.data.as_any().downcast_ref::<T>()
-    }
-}
-
-impl Clone for Dada {
-    fn clone(&self) -> Self {
-        Dada {
-            data: self.data.clone_any(),
-            type_name: self.type_name.clone(),
-            data_type: self.data_type.clone(),
-        }
-    }
-}
-
-impl fmt::Debug for Dada {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Dada({:?}:{})", self.data_type, self.type_name)
-    }
-}
-
-impl PartialEq for Dada {
-    fn eq(&self, other: &Self) -> bool {
-        self.data.eq_any(other.data.as_ref())
-    }
-}
-
-impl Serialize for Dada {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("Dada", 2)?;
-        state.serialize_field("type_name", &self.type_name)?;
-        state.serialize_field("data_type", &self.data_type)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Dada {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct DadaHelper {
-            type_name: String,
-            data_type: DataType,
-        }
-
-        let helper = DadaHelper::deserialize(deserializer)?;
-        // Create a placeholder Dada with empty string
-        Ok(Dada {
-            data: Box::new(String::from("<deserialized>")),
-            type_name: helper.type_name,
-            data_type: helper.data_type,
-        })
-    }
-}
-
 // use wasp::node::Node;
 // use wasp::node::Node::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node { // closed cannot be extended so anticipate all cases here
     Empty, // Null, Nill, None, Ø, ø null nill none nil
-    // Number(i32),
     Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
+    // Kind(i64), enum NodeKind in serialization
+    // Number(i64),
     Number(Number),
     Text(String),
     Error(String),
@@ -270,8 +100,8 @@ impl Node {
         // 💡use via
         // let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
         match self {
-            Node::Data(dada) => dada.clone(),
-            Node::Meta(node, _) => node.data_value(),
+            Data(dada) => dada.clone(),
+            Meta(node, _) => node.data_value(),
             _ => Dada {
                 data: Box::new(()),
                 type_name: "ø".to_string(),
@@ -286,7 +116,7 @@ impl Node {
         todo!("remove from {} to {}", from, to)
     }
     pub fn strings(p0: Vec<&str>) -> Node {
-        Node::List(map(p0, |s| Node::Text(s.to_string())))
+        List(map(p0, |s| Text(s.to_string())))
     }
     pub fn first(&self) -> Node {
         todo!()
@@ -307,37 +137,37 @@ impl Node {
 
     pub fn values(&self) -> Node {
         match self {
-            Node::Key(_, v) => *v.clone(),
-            Node::Meta(node, _) => node.values(),
+            Key(_, v) => *v.clone(),
+            Meta(node, _) => node.values(),
             _ => todo!(), //#Node::Empty,
         }
     }
 
     pub fn kind(&self) -> NodeKind {
         match self {
-            Node::Empty => NodeKind::Empty,
+            Empty => NodeKind::Empty,
             Node::Number(_) => NodeKind::Number,
-            Node::Text(_) => NodeKind::Text,
-            Node::Char(_) => NodeKind::Codepoint,
-            Node::Symbol(_) => NodeKind::Symbol,
-            Node::Key(_, _) => NodeKind::Key,
-            Node::Pair(_, _) => NodeKind::Pair,
-            Node::Tag { .. } => NodeKind::Tag,
-            Node::Block(_, _, _) => NodeKind::Block,
-            Node::List(_) => NodeKind::List,
-            Node::Data(_) => NodeKind::Data,
-            Node::Meta(_, _) => NodeKind::Meta,
-            Node::Error(_) => NodeKind::Error,
-            Node::False => NodeKind::Number, // map to 0 !
-            Node::True => NodeKind::Number, // map to 1
+            Text(_) => NodeKind::Text,
+            Char(_) => NodeKind::Codepoint,
+            Symbol(_) => NodeKind::Symbol,
+            Key(_, _) => NodeKind::Key,
+            Pair(_, _) => NodeKind::Pair,
+            Tag { .. } => NodeKind::Tag,
+            Block(_, _, _) => NodeKind::Block,
+            List(_) => NodeKind::List,
+            Data(_) => NodeKind::Data,
+            Meta(_, _) => NodeKind::Meta,
+            Error(_) => NodeKind::Error,
+            False => NodeKind::Number, // map to 0 !
+            True => NodeKind::Number, // map to 1
             _ => todo!()
         }
     }
     pub fn length(&self) -> i32 {
         match self {
-            Node::List(items) => items.len() as i32,
-            Node::Block(items, ..) => items.len() as i32,
-            Node::Meta(node, _) => node.length(),
+            List(items) => items.len() as i32,
+            Block(items, ..) => items.len() as i32,
+            Meta(node, _) => node.length(),
             _ => 0,
         }
     }
@@ -356,23 +186,23 @@ impl Node {
 
     pub fn value(&self) -> &Node {
         match self {
-            Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Data(_) => {
+            Node::Number(_) | Text(_) | Char(_) | Data(_) => {
                 self //.clone()
             }
-            Node::Meta(node, _) => node.value(),
-            Node::Key(_, v) => v.value(),
-            _ => &Node::Empty,
+            Meta(node, _) => node.value(),
+            Key(_, v) => v.value(),
+            _ => &Empty,
         }
     }
 
 
     pub fn name(&self) -> String {
         match self {
-            Node::Symbol(name) => name.clone(),
-            Node::Tag { title, .. } => title.clone(),
-            Node::Key(k, _) => k.clone(),
-            Node::Meta(node, _) => node.name(),
-            Node::List(items) => {
+            Symbol(name) => name.clone(),
+            Tag { title, .. } => title.clone(),
+            Key(k, _) => k.clone(),
+            Meta(node, _) => node.name(),
+            List(items) => {
                 // todo only for specific cases like expressions
                 if let Some(first) = items.first() {
                     first.name()
@@ -388,11 +218,11 @@ impl Node {
         // If this fails, the ref is likely null
         let tag = match obj.kind() {
             Ok(t) => t,
-            Err(_) => return Node::Empty, // Null ref becomes Empty
+            Err(_) => return Empty, // Null ref becomes Empty
         };
 
         match tag {
-            t if t == NodeKind::Empty as i32 => Node::Empty,
+            t if t == NodeKind::Empty as i32 => Empty,
 
             t if t == NodeKind::Number as i32 => {
                 // Try int first, then float
@@ -410,24 +240,24 @@ impl Node {
             }
 
             t if t == NodeKind::Text as i32 => match obj.text() {
-                Ok(s) => Node::Text(s),
-                Err(e) => Node::Text(format!("Error reading text: {}", e)),
+                Ok(s) => Text(s),
+                Err(e) => Text(format!("Error reading text: {}", e)),
             },
 
             t if t == NodeKind::Codepoint as i32 => match obj.get::<i64>("int_value") {
                 Ok(code) => {
                     if let Some(c) = char::from_u32(code as u32) {
-                        Node::Char(c)
+                        Char(c)
                     } else {
-                        Node::Char('\0')
+                        Char('\0')
                     }
                 }
-                Err(_) => Node::Char('\0'),
+                Err(_) => Char('\0'),
             },
 
             t if t == NodeKind::Symbol as i32 => match obj.text() {
-                Ok(s) => Node::Symbol(s),
-                Err(e) => Node::Symbol(format!("Error reading symbol: {}", e)),
+                Ok(s) => Symbol(s),
+                Err(e) => Symbol(format!("Error reading symbol: {}", e)),
             },
 
             t if t == NodeKind::Key as i32 => {
@@ -435,22 +265,22 @@ impl Node {
                 // Recursively read the value node from right field
                 let value = match obj.get::<GcObject>("right") {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-                    Err(_) => Box::new(Node::Empty),
+                    Err(_) => Box::new(Empty),
                 };
-                Node::Key(key, value)
+                Key(key, value)
             }
 
             t if t == NodeKind::Pair as i32 => {
                 // Recursively read left and right nodes
                 let left = match obj.get::<GcObject>("left") {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-                    Err(_) => Box::new(Node::Empty),
+                    Err(_) => Box::new(Empty),
                 };
                 let right = match obj.get::<GcObject>("right") {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-                    Err(_) => Box::new(Node::Empty),
+                    Err(_) => Box::new(Empty),
                 };
-                Node::Pair(left, right)
+                Pair(left, right)
             }
 
             t if t == NodeKind::Tag as i32 => {
@@ -458,13 +288,13 @@ impl Node {
                 // Recursively read params (left field) and body (right field)
                 let params = match obj.get::<GcObject>("left") {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-                    Err(_) => Box::new(Node::Empty),
+                    Err(_) => Box::new(Empty),
                 };
                 let body = match obj.get::<GcObject>("right") {
                     Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-                    Err(_) => Box::new(Node::Empty),
+                    Err(_) => Box::new(Empty),
                 };
-                Node::Tag {
+                Tag {
                     title,
                     params,
                     body,
@@ -473,30 +303,30 @@ impl Node {
 
             t if t == NodeKind::Block as i32 => {
                 // TODO: decode grouper/bracket info from int_value and read items
-                Node::Block(vec![], Grouper::Expression, Bracket::Curly)
+                Block(vec![], Grouper::Expression, Bracket::Curly)
             }
 
             t if t == NodeKind::List as i32 => {
                 // TODO: read items from linked list structure
-                Node::List(vec![])
+                List(vec![])
             }
 
             t if t == NodeKind::Data as i32 => {
                 let type_name = obj.name().unwrap_or_else(|_| String::new());
                 // Create placeholder Dada with the type name
-                Node::Data(Dada {
+                Data(Dada {
                     data: Box::new(format!("<wasm data: {}>", type_name)),
                     type_name,
                     data_type: DataType::Other,
                 })
             }
 
-            _ => Node::Text(format!("Unknown NodeKind: {}", tag)),
+            _ => Text(format!("Unknown NodeKind: {}", tag)),
         }
     }
 
     pub fn todo(p0: String) -> Node {
-        Node::Text(format!("TODO: {}", p0))
+        Text(format!("TODO: {}", p0))
     }
 }
 
@@ -505,10 +335,10 @@ impl Index<usize> for Node {
 
     fn index(&self, i: usize) -> &Self::Output {
         match self {
-            Node::List(elements) => elements.get(i).unwrap_or(&Node::Empty),
-            Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Node::Meta(node, _) => &node[i],
-            _ => &Node::Empty,
+            List(elements) => elements.get(i).unwrap_or(&Empty),
+            Block(nodes, ..) => nodes.get(i).unwrap_or(&Empty),
+            Meta(node, _) => &node[i],
+            _ => &Empty,
         }
     }
 }
@@ -527,23 +357,23 @@ impl Index<&String> for Node {
             // ).next().unwrap_or(&Node::Empty),
 
             // Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Node::Block(nodes, ..) => {
+            Block(nodes, ..) => {
                 if let Some(found) = nodes.find2(&|node| match node {
-                    Node::Key(k, _) => *k == *i,
-                    Node::Text(t) => *t == *i,
+                    Key(k, _) => *k == *i,
+                    Text(t) => *t == *i,
                     _ => false,
                 }) {
                     // If we found a Key, return its value instead of the whole Key
                     match found {
-                        Node::Key(_, v) => v.as_ref(),
+                        Key(_, v) => v.as_ref(),
                         other => other,
                     }
                 } else {
-                    &Node::Empty
+                    &Empty
                 }
             }
-            Node::Meta(node, _) => &node[i],
-            _ => &Node::Empty,
+            Meta(node, _) => &node[i],
+            _ => &Empty,
         }
     }
 }
@@ -561,23 +391,23 @@ impl Index<&str> for Node {
 
     fn index(&self, i: &str) -> &Self::Output {
         match self {
-            Node::Block(nodes, ..) => {
+            Block(nodes, ..) => {
                 if let Some(found) = nodes.find2(&|node| match node {
-                    Node::Key(k, _) => k == i,
-                    Node::Text(t) => t == i,
+                    Key(k, _) => k == i,
+                    Text(t) => t == i,
                     _ => false,
                 }) {
                     // If we found a Key, return its value instead of the whole Key
                     match found {
-                        Node::Key(_, v) => v.as_ref(),
+                        Key(_, v) => v.as_ref(),
                         other => other,
                     }
                 } else {
-                    &Node::Empty
+                    &Empty
                 }
             }
-            Node::Meta(node, _) => &node[i],
-            _ => &Node::Empty,
+            Meta(node, _) => &node[i],
+            _ => &Empty,
         }
     }
 }
@@ -585,21 +415,21 @@ impl Index<&str> for Node {
 impl IndexMut<usize> for Node {
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         match self {
-            Node::List(elements) => {
+            List(elements) => {
                 if i < elements.len() {
                     &mut elements[i]
                 } else {
                     panic!("Index out of bounds")
                 }
             }
-            Node::Block(nodes, ..) => {
+            Block(nodes, ..) => {
                 if i < nodes.len() {
                     &mut nodes[i]
                 } else {
                     panic!("Index out of bounds")
                 }
             }
-            Node::Meta(node, _) => &mut node[i],
+            Meta(node, _) => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -608,22 +438,22 @@ impl IndexMut<usize> for Node {
 impl IndexMut<&String> for Node {
     fn index_mut(&mut self, i: &String) -> &mut Self::Output {
         match self {
-            Node::Block(nodes, ..) => {
+            Block(nodes, ..) => {
                 if let Some(found) = nodes.iter_mut().find(|node| match node {
-                    Node::Key(k, _) => k == i,
-                    Node::Text(t) => t == i,
+                    Key(k, _) => k == i,
+                    Text(t) => t == i,
                     _ => false,
                 }) {
                     // If we found a Key, return mutable reference to its value
                     match found {
-                        Node::Key(_, v) => v.as_mut(),
+                        Key(_, v) => v.as_mut(),
                         other => other,
                     }
                 } else {
                     panic!("Key '{}' not found", i)
                 }
             }
-            Node::Meta(node, _) => &mut node[i],
+            Meta(node, _) => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -632,22 +462,22 @@ impl IndexMut<&String> for Node {
 impl IndexMut<&str> for Node {
     fn index_mut(&mut self, i: &str) -> &mut Self::Output {
         match self {
-            Node::Block(nodes, ..) => {
+            Block(nodes, ..) => {
                 if let Some(found) = nodes.iter_mut().find(|node| match node {
-                    Node::Key(k, _) => k == i,
-                    Node::Text(t) => t == i,
+                    Key(k, _) => k == i,
+                    Text(t) => t == i,
                     _ => false,
                 }) {
                     // If we found a Key, return mutable reference to its value
                     match found {
-                        Node::Key(_, v) => v.as_mut(),
+                        Key(_, v) => v.as_mut(),
                         other => other,
                     }
                 } else {
                     panic!("Key '{}' not found", i)
                 }
             }
-            Node::Meta(node, _) => &mut node[i],
+            Meta(node, _) => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -656,42 +486,42 @@ impl IndexMut<&str> for Node {
 impl Node {
     // associated 'static' functions
     pub fn new() -> Node {
-        Node::Empty
+        Empty
     }
     pub fn pair(a: Node, b: Node) -> Self {
-        Node::Pair(Box::new(a), Box::new(b))
+        Pair(Box::new(a), Box::new(b))
     }
     pub fn key(s: &str, v: Node) -> Self {
-        Node::Key(s.to_string(), Box::new(v))
+        Key(s.to_string(), Box::new(v))
     }
     pub fn tag(name: &str, body: Node) -> Self {
-        Node::Tag {
+        Tag {
             title: name.to_string(),
-            params: Box::new(Node::Empty),
+            params: Box::new(Empty),
             body: Box::new(body),
         }
     }
     pub fn tag_with_attrs(name: &str, attrs: Node, body: Node) -> Self {
-        Node::Tag {
+        Tag {
             title: name.to_string(),
             params: Box::new(attrs),
             body: Box::new(body),
         }
     }
     pub fn keys(s: &str, v: &str) -> Self {
-        Node::Key(s.to_string(), Box::new(Node::Text(v.to_string())))
+        Key(s.to_string(), Box::new(Text(v.to_string())))
     }
     pub fn text(s: &str) -> Self {
-        Node::Text(s.to_string())
+        Text(s.to_string())
     }
     pub fn codepoint(c: char) -> Self {
-        Node::Char(c)
+        Char(c)
     }
     pub fn symbol(s: &str) -> Self {
-        Node::Symbol(s.to_string())
+        Symbol(s.to_string())
     }
     pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
-        Node::Data(Dada::new(value))
+        Data(Dada::new(value))
     }
     pub fn number(n: Number) -> Self {
         Node::Number(n)
@@ -703,30 +533,30 @@ impl Node {
         Node::Number(Number::Float(n))
     }
     pub fn list(xs: Vec<Node>) -> Self {
-        Node::List(xs)
+        List(xs)
     }
     // pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
     pub fn ints(xs: Vec<i32>) -> Self {
-        Node::List(map(xs, |x| Node::Number(Number::Int(x as i64))))
+        List(map(xs, |x| Node::Number(Number::Int(x as i64))))
     }
 
     pub fn with_meta(self, meta: MetaData) -> Self {
-        Node::Meta(Box::new(self), meta)
+        Meta(Box::new(self), meta)
     }
     pub fn with_comment(self, comment: String) -> Self {
-        Node::Meta(Box::new(self), MetaData::with_comment(comment))
+        Meta(Box::new(self), MetaData::with_comment(comment))
     }
 
     pub fn get_meta(&self) -> Option<&MetaData> {
         match self {
-            Node::Meta(_, meta) => Some(meta),
+            Meta(_, meta) => Some(meta),
             _ => None,
         }
     }
 
     pub fn unwrap_meta(&self) -> &Node {
         match self {
-            Node::Meta(node, _) => node.unwrap_meta(),
+            Meta(node, _) => node.unwrap_meta(),
             _ => self,
         }
     }
@@ -738,35 +568,35 @@ impl Node {
     // member functions taking self
     pub fn size(&self) -> usize {
         match self {
-            Node::List(elements, ..) => elements.len(),
-            Node::Block(nodes, ..) => nodes.len(),
-            Node::Meta(node, _) => node.size(),
+            List(elements, ..) => elements.len(),
+            Block(nodes, ..) => nodes.len(),
+            Meta(node, _) => node.size(),
             _ => 0,
         }
     }
 
     pub fn get(&self, i: usize) -> &Node {
         match self {
-            Node::List(elements) => elements.get(i).unwrap(),
-            Node::Block(nodes, ..) => nodes.get(i).unwrap(),
-            Node::Meta(node, _) => node.get(i),
-            _ => &Node::Empty,
+            List(elements) => elements.get(i).unwrap(),
+            Block(nodes, ..) => nodes.get(i).unwrap(),
+            Meta(node, _) => node.get(i),
+            _ => &Empty,
         }
     }
 
     pub fn get_key(&self) -> &str {
         match self {
-            Node::Key(k, _) => k,
-            Node::Meta(node, _) => node.get_key(),
+            Key(k, _) => k,
+            Meta(node, _) => node.get_key(),
             _ => "",
         }
     }
 
     pub fn get_value(&self) -> Node {
         match self {
-            Node::Key(_, v) => v.as_ref().clone(),
-            Node::Meta(node, _) => node.get_value(),
-            _ => Node::Empty,
+            Key(_, v) => v.as_ref().clone(),
+            Meta(node, _) => node.get_value(),
+            _ => Empty,
         }
     }
 
@@ -777,18 +607,18 @@ impl Node {
 
     pub fn iter(&self) -> NodeIter {
         match self {
-            Node::List(items) => NodeIter::new(items.clone()),
-            Node::Block(items, _, _) => NodeIter::new(items.clone()),
-            Node::Meta(node, _) => node.iter(),
+            List(items) => NodeIter::new(items.clone()),
+            Block(items, _, _) => NodeIter::new(items.clone()),
+            Meta(node, _) => node.iter(),
             _ => NodeIter::new(vec![]),
         }
     }
 
     pub fn into_iter(self) -> NodeIter {
         match self {
-            Node::List(items) => NodeIter::new(items),
-            Node::Block(items, _, _) => NodeIter::new(items),
-            Node::Meta(node, _) => (*node).clone().into_iter(),
+            List(items) => NodeIter::new(items),
+            Block(items, _, _) => NodeIter::new(items),
+            Meta(node, _) => (*node).clone().into_iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -807,53 +637,53 @@ impl Node {
         use serde_json::{Map, Value};
 
         match self {
-            Node::True => Value::Bool(true),
-            Node::False => Value::Bool(false),
-            Node::Empty => Value::Null,
+            True => Value::Bool(true),
+            False => Value::Bool(false),
+            Empty => Value::Null,
             Node::Number(Number::Int(n)) => Value::Number((*n).into()),
             Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
                 .map(Value::Number)
                 .unwrap_or(Value::Null),
             Node::Number(n) => Value::String(format!("{}", n)),
-            Node::Text(s) | Node::Symbol(s) => Value::String(s.clone()),
-            Node::Char(c) => Value::String(c.to_string()),
-            Node::List(items) => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
-            Node::Key(k, v) => {
+            Text(s) | Symbol(s) => Value::String(s.clone()),
+            Char(c) => Value::String(c.to_string()),
+            List(items) => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
+            Key(k, v) => {
                 let mut map = Map::new();
                 map.insert(k.clone(), v.to_json_value());
                 Value::Object(map)
             }
-            Node::Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
-            Node::Tag {
+            Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
+            Tag {
                 title,
                 params,
                 body,
             } => {
                 let mut map = Map::new();
-                if **params != Node::Empty {
+                if **params != Empty {
                     // Include attributes if present
                     map.insert("_attrs".to_string(), params.to_json_value());
                 }
                 map.insert(title.clone(), body.to_json_value());
                 Value::Object(map)
             }
-            Node::Block(items, _kind, bracket) => {
+            Block(items, _kind, bracket) => {
                 // Curly braces -> object with items, Square/Round -> array
                 match bracket {
                     Bracket::Curly => {
                         let mut map = Map::new();
                         for item in items {
                             match item {
-                                Node::Key(k, v) => {
+                                Key(k, v) => {
                                     map.insert(k.clone(), v.to_json_value());
                                 }
-                                Node::Tag {
+                                Tag {
                                     title,
                                     params,
                                     body,
                                 } => {
                                     // Tags become named keys
-                                    if **params != Node::Empty {
+                                    if **params != Empty {
                                         let mut tag_map = Map::new();
                                         tag_map
                                             .insert("_attrs".to_string(), params.to_json_value());
@@ -863,10 +693,10 @@ impl Node {
                                         map.insert(title.clone(), body.to_json_value());
                                     }
                                 }
-                                Node::Block(nested, _, Bracket::Curly) => {
+                                Block(nested, _, Bracket::Curly) => {
                                     // Nested blocks become nested objects
                                     for nested_item in nested {
-                                        if let Node::Key(k, v) = nested_item {
+                                        if let Key(k, v) = nested_item {
                                             map.insert(k.clone(), v.to_json_value());
                                         }
                                     }
@@ -883,12 +713,12 @@ impl Node {
                     _ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
                 }
             }
-            Node::Data(d) => {
+            Data(d) => {
                 let mut map = Map::new();
                 map.insert("_type".to_string(), Value::String(d.type_name.clone()));
                 Value::Object(map)
             }
-            Node::Meta(node, meta) => {
+            Meta(node, meta) => {
                 let mut value = node.to_json_value();
                 if let Some(comment) = &meta.comment {
                     if let Value::Object(ref mut map) = value {
@@ -897,7 +727,7 @@ impl Node {
                 }
                 value
             }
-            Node::Error(e) => {
+            Error(e) => {
                 let mut map = Map::new();
                 map.insert("_error".to_string(), Value::String(e.clone()));
                 Value::Object(map)
@@ -915,11 +745,11 @@ impl fmt::Debug for Node {
     // impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Node::Symbol(s) => write!(f, "{}", s),
+            Symbol(s) => write!(f, "{}", s),
             Node::Number(n) => write!(f, "{}", n),
-            Node::Text(t) => write!(f, "'{}'", t),
-            Node::Char(c) => write!(f, "'{}'", c),
-            Node::Block(nodes, _kind, bracket) => {
+            Text(t) => write!(f, "'{}'", t),
+            Char(c) => write!(f, "'{}'", c),
+            Block(nodes, _kind, bracket) => {
                 if nodes.len() == 1 {
                     write!(f, "{:?} ", nodes.get(0).unwrap())
                 } else {
@@ -932,29 +762,29 @@ impl fmt::Debug for Node {
                     }
                 }
             }
-            Node::Key(k, v) => write!(f, "{}={:?}", k, v), // todo vs
-            Node::Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
-            Node::Tag {
+            Key(k, v) => write!(f, "{}={:?}", k, v), //  vs
+            Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
+            Tag {
                 title,
                 params,
                 body,
             } => match **params {
-                Node::Empty => write!(f, "{}{{{:?}}}", title, body),
+                Empty => write!(f, "{}{{{:?}}}", title, body),
                 _ => write!(f, "<{} {:?}>{:?}", title, params, body),
             },
-            Node::List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
-            Node::Data(d) => write!(f, "{:?}", d),
-            Node::Meta(node, meta) => {
+            List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
+            Data(d) => write!(f, "{:?}", d),
+            Meta(node, meta) => {
                 if let Some(comment) = &meta.comment {
                     write!(f, "{:?} /* {} */", node, comment)
                 } else {
                     write!(f, "{:?}", node)
                 }
             }
-            Node::Error(e) => write!(f, "Error({})", e),
-            Node::Empty => write!(f, "ø"),
-            Node::True => write!(f, "true"),
-            Node::False => write!(f, "false"),
+            Error(e) => write!(f, "Error({})", e),
+            Empty => write!(f, "ø"),
+            True => write!(f, "true"),
+            False => write!(f, "false"),
             _ => todo!()
         }
     }
@@ -1030,108 +860,108 @@ pub enum Bracket {
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         match self {
-            Node::True => {
+            True => {
                 match other {
-                    Node::True => true,
-                    Node::False => false,
+                    True => true,
+                    False => false,
                     _ => other == self, // flip symmetric cases
                 }
             }
-            Node::False => {
+            False => {
                 match other {
-                    Node::True => false,
-                    Node::False => true,
+                    True => false,
+                    False => true,
                     _ => other == self, // flip symmetric cases
                 }
             }, // flip symmetric cases:
-            Node::Empty => {
+            Empty => {
                 match other {
-                    Node::True => false,
-                    Node::False => true,
-                    Node::Empty => true,
-                    Node::Symbol(s) => s.is_empty(), // todo disallow empty symbol
-                    Node::Text(s) => s.is_empty(),
+                    True => false,
+                    False => true,
+                    Empty => true,
+                    Symbol(s) => s.is_empty(), // todo disallow empty symbol
+                    Text(s) => s.is_empty(),
                     Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL
-                    Node::Block(b, _, _) => b.is_empty(),
-                    Node::List(l) => l.is_empty(),
+                    Block(b, _, _) => b.is_empty(),
+                    List(l) => l.is_empty(),
                     _ => self.size() == 0,
                 }
             }
             Node::Number(n ) => match other {
-                Node::True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
+                True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
                 // Node::True => match n {
                 //     Number::Int(i) => *i == 1,
                 //     Number::Float(f) => *f == 1.0,
                 //     _ => false,
                 // }
-                Node::False => n.zero(),
+                False => n.zero(),
                 Node::Number(n2) => n == n2,
                 _ => false,
             },
-            Node::Symbol(s) => {
+            Symbol(s) => {
                 match other {
-                    Node::True => !s.is_empty(),
-                    Node::False => s.is_empty(),
-                    Node::Symbol(s2) => s == s2,
+                    True => !s.is_empty(),
+                    False => s.is_empty(),
+                    Symbol(s2) => s == s2,
                     // todo variable values? nah not here
-                    _ => return false,
+                    _ => false,
                 }
             }
-            Node::Text(s) => match other {
-                Node::True => !s.is_empty(),
-                Node::False => s.is_empty(),
-                Node::Text(s2) => s == s2,
+            Text(s) => match other {
+                True => !s.is_empty(),
+                False => s.is_empty(),
+                Text(s2) => s == s2,
                 _ => false,
             },
 
-            Node::Char(c) => match other {
-                Node::True =>  c != &'\0' ,
-                Node::False => c == &'\0' ,
-                Node::Char(c2) => c == c2,
+            Char(c) => match other {
+                True =>  c != &'\0' ,
+                False => c == &'\0' ,
+                Char(c2) => c == c2,
                 _ => false,
             },
-            Node::Data(d) => match other {
-                Node::Data(d2) => d == d2,
+            Data(d) => match other {
+                Data(d2) => d == d2,
                 _ => false,
             },
-            Node::Meta(node, _) => {
+            Meta(node, _) => {
                 // Ignore metadata when comparing equality
                 node.as_ref().eq(other)
             }
-            Node::Key(k1, v1) => match other {
-                Node::Key(k2, v2) => k1 == k2 && v1 == v2,
+            Key(k1, v1) => match other {
+                Key(k2, v2) => k1 == k2 && v1 == v2,
                 _ => false,
             },
-            Node::Pair(a1, b1) => match other {
-                Node::Pair(a2, b2) => a1 == a2 && b1 == b2,
+            Pair(a1, b1) => match other {
+                Pair(a2, b2) => a1 == a2 && b1 == b2,
                 _ => false,
             },
-            Node::Tag {
+            Tag {
                 title: t1,
                 params: p1,
                 body: b1,
             } => match other {
-                Node::Tag {
+                Tag {
                     title: t2,
                     params: p2,
                     body: b2,
                 } => t1 == t2 && p1 == p2 && b1 == b2,
                 _ => false,
             },
-            Node::Block(items1, _g1, _br1) => {
+            Block(items1, _g1, _br1) => {
                 match other {
-                    Node::Block(items2, _g2, _br2) => {
+                    Block(items2, _g2, _br2) => {
                         items1 == items2 // ignore grouper/bracket [1,2]=={1,2}
                     }
                     _ => false,
                 }
             }
-            Node::List(items1) => match other {
-                Node::List(items2) => items1 == items2,
+            List(items1) => match other {
+                List(items2) => items1 == items2,
                 _ => false,
             },
-            Node::Error(e1) => match other {
-                Node::Error(e2) => e1 == e2,
+            Error(e1) => match other {
+                Error(e2) => e1 == e2,
                 _ => false,
             },
             // _ => false,
@@ -1142,9 +972,9 @@ impl PartialEq for Node {
 impl PartialEq<str> for Node {
     fn eq(&self, other: &str) -> bool {
         match self {
-            Node::Text(s) => s == other,
-            Node::Symbol(s) => s == other,
-            Node::Meta(node, _) => node.as_ref().eq(other),
+            Text(s) => s == other,
+            Symbol(s) => s == other,
+            Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1155,7 +985,7 @@ impl PartialEq<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n == other,
             Node::Number(Number::Float(f)) => *f == *other as f64,
-            Node::Meta(node, _) => node.as_ref().eq(other),
+            Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1168,13 +998,13 @@ impl PartialEq<bool> for Node {
             Node::Number(n) => n == &if *other { 1 } else { 0 },
             // Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },
             // Node::Number(Number::Float(f)) => *f == if *other { 1.0 } else { 0.0 },
-            Node::Empty => !*other,
-            Node::Symbol(s) => s.is_empty() == !*other,
-            Node::Text(s) => s.is_empty() == !*other,
-            Node::Block(b, _, _) => b.is_empty() == !*other,
-            Node::List(l) => l.is_empty() == !*other,
-            Node::Key(_, _) => *other, // todo NEVER false OR check value k=v ?
-            Node::Pair(_, _) => *other,     // // todo NEVER false OR check value k:v ?
+            Empty => !*other,
+            Symbol(s) => s.is_empty() == !*other,
+            Text(s) => s.is_empty() == !*other,
+            Block(b, _, _) => b.is_empty() == !*other,
+            List(l) => l.is_empty() == !*other,
+            Key(_, _) => *other, // todo NEVER false OR check value k=v ?
+            Pair(_, _) => *other,     // // todo NEVER false OR check value k:v ?
             _ => false,
         }
     }
@@ -1191,7 +1021,7 @@ impl PartialEq<f64> for Node {
         match self {
             Node::Number(Number::Float(f)) => f == other,
             Node::Number(Number::Int(n)) => *n as f64 == *other,
-            Node::Meta(node, _) => node.as_ref().eq(other),
+            Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1200,9 +1030,9 @@ impl PartialEq<f64> for Node {
 impl PartialEq<&str> for Node {
     fn eq(&self, other: &&str) -> bool {
         match self {
-            Node::Text(s) => s == *other,
-            Node::Symbol(s) => s == *other,
-            Node::Meta(node, _) => node.as_ref().eq(other),
+            Text(s) => s == *other,
+            Symbol(s) => s == *other,
+            Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1211,18 +1041,18 @@ impl PartialEq<&str> for Node {
 impl PartialEq<char> for Node {
     fn eq(&self, other: &char) -> bool {
         match self {
-            Node::Char(c) => c == other,
-            Node::Text(s) => {
+            Char(c) => c == other,
+            Text(s) => {
                 // Check if string is exactly one char
                 let mut chars = s.chars();
                 chars.next() == Some(*other) && chars.next().is_none()
             }
-            Node::Symbol(s) => {
+            Symbol(s) => {
                 // Check if string is exactly one char
                 let mut chars = s.chars();
                 chars.next() == Some(*other) && chars.next().is_none()
             }
-            Node::Meta(node, _) => node.as_ref().eq(other),
+            Meta(node, _) => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1239,7 +1069,7 @@ impl PartialOrd<i32> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
-            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1250,7 +1080,7 @@ impl PartialOrd<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n.partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
-            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1261,7 +1091,7 @@ impl PartialOrd<f64> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
             Node::Number(Number::Float(f)) => f.partial_cmp(other),
-            Node::Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta(node, _) => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1272,21 +1102,21 @@ impl Not for Node {
 
     fn not(self) -> Self::Output {
         match self {
-            Node::True => Node::False,
-            Node::False => Node::True,
-            Node::Empty => Node::True,  // !null == true
-            Node::Number(ref n) if n.zero() => Node::True,  // !0 == true
-            Node::Number(_) => Node::False,  // !non-zero == false
-            Node::Text(ref s) if s.is_empty() => Node::True,  // !"" == true
-            Node::Text(_) => Node::False,  // !non-empty string == false
-            Node::Symbol(ref s) if s.is_empty() => Node::True,
-            Node::Symbol(_) => Node::False,
-            Node::List(ref items) if items.is_empty() => Node::True,  // ![] == true
-            Node::List(_) => Node::False,  // !non-empty list == false
-            Node::Block(ref items, _, _) if items.is_empty() => Node::True,
-            Node::Block(_, _, _) => Node::False,
-            Node::Meta(node, meta) => (!(*node.clone())).with_meta(meta),  // Apply not to wrapped node, preserve metadata
-            _ => Node::False,  // Other types default to falsy
+            True => False,
+            False => True,
+            Empty => True,  // !null == true
+            Node::Number(ref n) if n.zero() => True,  // !0 == true
+            Node::Number(_) => False,  // !non-zero == false
+            Text(ref s) if s.is_empty() => True,  // !"" == true
+            Text(_) => False,  // !non-empty string == false
+            Symbol(ref s) if s.is_empty() => True,
+            Symbol(_) => False,
+            List(ref items) if items.is_empty() => True,  // ![] == true
+            List(_) => False,  // !non-empty list == false
+            Block(ref items, _, _) if items.is_empty() => True,
+            Block(_, _, _) => False,
+            Meta(node, meta) => (!(*node.clone())).with_meta(meta),  // Apply not to wrapped node, preserve metadata
+            _ => False,  // Other types default to falsy
         }
     }
 }
@@ -1294,13 +1124,13 @@ impl Not for Node {
 // From trait implementations for automatic conversion in assignments
 impl From<&str> for Node {
     fn from(s: &str) -> Self {
-        Node::Text(s.to_string())
+        Text(s.to_string())
     }
 }
 
 impl From<String> for Node {
     fn from(s: String) -> Self {
-        Node::Text(s)
+        Text(s)
     }
 }
 
@@ -1330,13 +1160,13 @@ impl From<f64> for Node {
 
 impl From<bool> for Node {
     fn from(b: bool) -> Self {
-        if b { Node::True } else { Node::False }
+        if b { True } else { False }
     }
 }
 
 impl From<char> for Node {
     fn from(c: char) -> Self {
-        Node::Char(c)
+        Char(c)
     }
 }
 
@@ -1349,22 +1179,22 @@ impl Add<&Node> for &Node {
     fn add(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta(node, meta) => (node.as_ref(), Some(meta)),
             _ => (self, None)
         };
         let right = match rhs {
-            Node::Meta(node, _) => node.as_ref(),
+            Meta(node, _) => node.as_ref(),
             _ => rhs
         };
 
         // Match on types and compute
         let result = match (left, right) {
             (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 + *n2),
-            (Node::True, Node::True) => Node::Number(Number::Int(2)),
-            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) + *n),
-            (Node::Number(n), Node::True) => Node::Number(*n + Number::Int(1)),
-            (Node::False, Node::Number(n)) | (Node::Number(n), Node::False) => Node::Number(*n),
-            (Node::Empty, Node::Number(n)) | (Node::Number(n), Node::Empty) => Node::Number(*n),
+            (True, True) => Node::Number(Number::Int(2)),
+            (True, Node::Number(n)) => Node::Number(Number::Int(1) + *n),
+            (Node::Number(n), True) => Node::Number(*n + Number::Int(1)),
+            (False, Node::Number(n)) | (Node::Number(n), False) => Node::Number(*n),
+            (Empty, Node::Number(n)) | (Node::Number(n), Empty) => Node::Number(*n),
             _ => panic!("Cannot add {:?} and {:?}", left, right)
         };
 
@@ -1426,24 +1256,24 @@ impl Sub<&Node> for &Node {
     fn sub(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta(node, meta) => (node.as_ref(), Some(meta)),
             _ => (self, None)
         };
         let right = match rhs {
-            Node::Meta(node, _) => node.as_ref(),
+            Meta(node, _) => node.as_ref(),
             _ => rhs
         };
 
         // Match on types and compute
         let result = match (left, right) {
             (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 - *n2),
-            (Node::True, Node::True) => Node::Number(Number::Int(0)),
-            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) - *n),
-            (Node::Number(n), Node::True) => Node::Number(*n - Number::Int(1)),
-            (Node::Number(n), Node::False) => Node::Number(*n),
-            (Node::False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
-            (Node::Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
-            (Node::Number(n), Node::Empty) => Node::Number(*n),
+            (True, True) => Node::Number(Number::Int(0)),
+            (True, Node::Number(n)) => Node::Number(Number::Int(1) - *n),
+            (Node::Number(n), True) => Node::Number(*n - Number::Int(1)),
+            (Node::Number(n), False) => Node::Number(*n),
+            (False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
+            (Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
+            (Node::Number(n), Empty) => Node::Number(*n),
             _ => panic!("Cannot subtract {:?} and {:?}", left, right)
         };
 
@@ -1505,20 +1335,20 @@ impl Mul<&Node> for &Node {
     fn mul(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta(node, meta) => (node.as_ref(), Some(meta)),
             _ => (self, None)
         };
         let right = match rhs {
-            Node::Meta(node, _) => node.as_ref(),
+            Meta(node, _) => node.as_ref(),
             _ => rhs
         };
 
         // Match on types and compute
         let result = match (left, right) {
             (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 * *n2),
-            (Node::True, Node::Number(n)) | (Node::Number(n), Node::True) => Node::Number(*n),
-            (Node::False, _) | (_, Node::False) => Node::Number(Number::Int(0)),
-            (Node::Empty, _) | (_, Node::Empty) => Node::Number(Number::Int(0)),
+            (True, Node::Number(n)) | (Node::Number(n), True) => Node::Number(*n),
+            (False, _) | (_, False) => Node::Number(Number::Int(0)),
+            (Empty, _) | (_, Empty) => Node::Number(Number::Int(0)),
             _ => panic!("Cannot multiply {:?} and {:?}", left, right)
         };
 
@@ -1580,21 +1410,21 @@ impl Div<&Node> for &Node {
     fn div(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Node::Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta(node, meta) => (node.as_ref(), Some(meta)),
             _ => (self, None)
         };
         let right = match rhs {
-            Node::Meta(node, _) => node.as_ref(),
+            Meta(node, _) => node.as_ref(),
             _ => rhs
         };
 
         // Match on types and compute
         let result = match (left, right) {
             (Node::Number(n1), Node::Number(n2)) => Node::Number(*n1 / *n2),
-            (Node::Number(n), Node::True) => Node::Number(*n / Number::Int(1)),
-            (Node::True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
-            (Node::False, Node::Number(_)) => Node::Number(Number::Int(0)),
-            (Node::Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
+            (Node::Number(n), True) => Node::Number(*n / Number::Int(1)),
+            (True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
+            (False, Node::Number(_)) => Node::Number(Number::Int(0)),
+            (Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
             _ => panic!("Cannot divide {:?} and {:?}", left, right)
         };
 
@@ -1649,15 +1479,15 @@ impl Div<&Node> for i32 {
     }
 }
 
-impl std::fmt::Display for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Node::Number(Number::Int(n)) => write!(f, "{}", n),
             Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
             Node::Number(n) => write!(f, "{:?}", n),
-            Node::Text(s) | Node::Symbol(s) => write!(f, "{}", s),
-            Node::Char(c) => write!(f, "{}", c),
-            Node::List(items) => {
+            Text(s) | Symbol(s) => write!(f, "{}", s),
+            Char(c) => write!(f, "{}", c),
+            List(items) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {
@@ -1667,7 +1497,7 @@ impl std::fmt::Display for Node {
                 }
                 write!(f, "]")
             }
-            Node::Meta(node, _) => write!(f, "{}", node),
+            Meta(node, _) => write!(f, "{}", node),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -1679,9 +1509,66 @@ pub fn print(p0: String) {
 }
 
 pub fn text_node(p0: String) -> Node {
-    Node::Text(p0)
+    Text(p0)
 }
 
 pub fn node(p0: &str) -> Node {
-    Node::Text(p0.s())
+    Text(p0.s())
+}
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct MetaData {
+    pub comment: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
+impl MetaData {
+    pub fn new() -> Self {
+        MetaData {
+            comment: None,
+            line: None,
+            column: None,
+        }
+    }
+
+    pub fn with_comment(comment: String) -> Self {
+        MetaData {
+            comment: Some(comment),
+            line: None,
+            column: None,
+        }
+    }
+
+    pub fn with_position(line: usize, column: usize) -> Self {
+        MetaData {
+            comment: None,
+            line: Some(line),
+            column: Some(column),
+        }
+    }
+}
+
+// Custom trait for cloneable Any types with equality support
+pub trait CloneAny: Any {
+    fn clone_any(&self) -> Box<dyn CloneAny>;
+    fn as_any(&self) -> &dyn Any;
+    fn eq_any(&self, other: &dyn CloneAny) -> bool;
+}
+
+impl<T: 'static + Clone + PartialEq> CloneAny for T {
+    fn clone_any(&self) -> Box<dyn CloneAny> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn eq_any(&self, other: &dyn CloneAny) -> bool {
+        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
+            self == other_t
+        } else {
+            false
+        }
+    }
 }

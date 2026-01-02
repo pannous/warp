@@ -12,8 +12,8 @@
       <excludeFolder url="file://$MODULE_DIR$/.vscode" />
       <excludeFolder url="file://$MODULE_DIR$/vendor" />
     </content>
-    <content url="file:///Users/me/dev/apps/wasp/source">
-      <sourceFolder url="file:///Users/me/dev/apps/wasp/source" type="java-resource" />
+    <content url="file://$MODULE_DIR$/../../apps/wasp/source">
+      <excludeFolder url="file://$MODULE_DIR$/../../apps/wasp/source" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -60,27 +60,18 @@ pub trait StringExtensions {
 
 
 impl StringExtensions for String {
-    // Function implementations
-    fn s(&self) -> String { self.to_owned() }
-    fn str(&self) -> String { self.to_owned() }
     fn at(&self, nr: i32) -> char {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth(wrapped_index).unwrap()
     }
     fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
     fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
-    fn last_char(&self) -> char { self.chars().last().unwrap() }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
     fn reverse(&self) -> String {
         self.chars().rev().collect()
     }
-    fn first_char(&self) -> char { self.chars().next().unwrap() }
-    fn first(&self) -> char { self.chars().next().unwrap() }
-    fn start(&self) -> char { self.chars().next().unwrap() }
-    fn head(&self) -> char { self.chars().next().unwrap() }
     fn map(&self, f: fn(char) -> char) -> String {
         self.chars().map(f).collect()
     }
@@ -88,61 +79,70 @@ impl StringExtensions for String {
         // just use the range operator directly
         &self[start..end]
     }
+    fn first_char(&self) -> char { self.chars().next().unwrap() }
+    fn last_char(&self) -> char { self.chars().last().unwrap() }
+    fn first(&self) -> char { self.chars().next().unwrap() }
+    fn start(&self) -> char { self.chars().next().unwrap() }
+    fn head(&self) -> char { self.chars().next().unwrap() }
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn str(&self) -> String { self.to_owned() }
+    // Function implementations
+    fn s(&self) -> String { self.to_owned() }
+    // fn from(&self, start: usize) -> &str { &self[start..] }
+    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    fn set(&self, at: usize, value: char) -> String { self.clone().replace_range(at..at+1, &value.to_string()); self.to_string() }
     fn after(&self, pat: &str) -> &str {
         match self.find(pat) {
             Some(idx) => &self[idx + pat.len()..],
             None => &self[self.len()..],
         }
     }
-    fn set(&self, at: usize, value: char) -> String { self.clone().replace_range(at..at+1, &value.to_string()); self.to_string() }
-    // fn from(&self, start: usize) -> &str { &self[start..] }
-    fn start_from(&self, start: usize) -> &str { &self[start..] }
     // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 }
 
 impl StringExtensions for str {
-    // allow negative index into chars : -2 = next to last
-    fn s(&self) -> String { self.to_string() }
-    fn str(&self) -> String { self.to_string() }
     fn at(&self,nr:i32) -> char {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth( wrapped_index).unwrap()
     }
     fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
     fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
-    fn last_char(&self) -> char { self.chars().last().unwrap() }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
     fn reverse(&self) -> String {
         self.chars().rev().collect()
     }
-    fn first_char(&self) -> char { self.chars().next().unwrap() }
-    fn first(&self) -> char { self.chars().next().unwrap() }
-    fn start(&self) -> char { self.chars().next().unwrap() }
-    fn head(&self) -> char { self.chars().next().unwrap() }
     fn map(&self, f: fn(char) -> char) -> String {
         self.chars().map(f).collect()
     }
-    fn after(&self, pat: &str) -> &str {
-        match self.find(pat) {
-            Some(idx) => &self[idx + pat.len()..],
-            None => &self[self.len()..],
-        }
-    }
-    fn start_from(&self, start: usize) -> &str { &self[start..] }
-    // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
-
     fn substring(&self, start: usize, end: usize) -> &str {
         // just use the range operator directly
         &self[start..end]
     }
+    fn first_char(&self) -> char { self.chars().next().unwrap() }
+    fn last_char(&self) -> char { self.chars().last().unwrap() }
+    fn first(&self) -> char { self.chars().next().unwrap() }
+    fn start(&self) -> char { self.chars().next().unwrap() }
+    fn head(&self) -> char { self.chars().next().unwrap() }
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn str(&self) -> String { self.to_string() }
+    // allow negative index into chars : -2 = next to last
+    fn s(&self) -> String { self.to_string() }
+    fn start_from(&self, start: usize) -> &str { &self[start..] }
+    // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 
     fn set(&self, at: usize, value: char) -> String {
         let mut changed=self.to_string();
         changed.replace_range(at..at+1, &value.to_string());
         changed
+    }
+
+    fn after(&self, pat: &str) -> &str {
+        match self.find(pat) {
+            Some(idx) => &self[idx + pat.len()..],
+            None => &self[self.len()..],
+        }
     }
 }
 
