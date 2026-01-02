@@ -20,7 +20,8 @@ pub fn test_wit_parse() {
 			println!("item {}: {:#?}", i, item);
 		}
 	}
-	eq!(ast.size(), 2);
+	eq!(ast.size(), 3);
 	eq!(ast[0].name(), "package");
 	eq!(ast[1].name(), "interface");
+	eq!(ast[2].name(), "world");
 }

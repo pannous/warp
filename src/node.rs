@@ -20,6 +20,12 @@ use crate::type_kinds::{AstKind, NodeKind};
 use crate::wasp_parser::parse;
 // node[i]
 
+// Wasp ABI GC Node representation design:
+// This is a single struct that can represent any node type
+
+// todo move node layout to wasp_abi.rs
+// any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ... todo ...
+
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
 	  (field $kind i64)
@@ -56,9 +62,9 @@ pub enum Node {
 	// Kind(i64), enum NodeKind in serialization
 	// Number(i64),
 	Number(Number),
+	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
 	Error(String),
-	Char(char), // Single Unicode codepoint/character like 'a', '🍏'
 	// String(String),
 	Symbol(String),
 	// Symbol(String name, Node kind),
@@ -102,9 +108,6 @@ impl Node {
 	pub fn class(&self) -> Node {
 		todo!("class via kind and/or metadata?")
 	}
-}
-
-impl Node {
 	pub fn typ(&self) -> Node {
 		// including Ast(Node, AstKind) !
 		todo!()
