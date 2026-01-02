@@ -9,10 +9,9 @@ use wasp::compiler::wasm_reader::*;
 
 #[test]
 pub fn test_wasm_parser() {
-    let module =parse_wasm("test.wasm");
+    let module = parse_wasm("test.wasm");
     println!("module {:#?}", module);
 }
-
 
 
 #[test]
@@ -23,7 +22,7 @@ pub fn test_emitter() {
     let result = run_wasm("test.wasm");
     match result {
         Ok(x) => {
-            eq!(x, 42);
+            assert_eq!(x, 42);
             println!("OK Result: {:?}", x)
         },
         Err(e) => {

@@ -1,6 +1,7 @@
 // use wasp::Parser;
 // use crate::parser::wasp::*;
 use wasp;
+use wasp::eq;
 use wasp::node::Node;
 use wasp::parser::*;
 // use super::parser;

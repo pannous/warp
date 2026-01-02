@@ -1,7 +1,7 @@
+use wasp::extensions::numbers::Number;
+use wasp::node::Node;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
-use wasp::node::Node;
-use wasp::extensions::numbers::Number;
 use wasp::write_wasm;
 
 /// Comprehensive test covering all Node types and their WASM encoding
@@ -31,36 +31,35 @@ fn test_kitchensink_all_node_types() {
     test_node("Tag", tag_node);
 
     // Test 7: Key node
-    test_node("Key",
-        Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(123)))));
+    test_node("Key", Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(123)))));
 
     // Test 8: Pair node
     test_node("Pair",
-        Node::Pair(
-            Box::new(Node::Symbol("first".to_string())),
-            Box::new(Node::Symbol("second".to_string()))
-        ));
+              Node::Pair(
+                  Box::new(Node::Symbol("first".to_string())),
+                  Box::new(Node::Symbol("second".to_string())),
+              ));
 
     // Test 9: Block node
-    use wasp::node::{Grouper, Bracket};
+    use wasp::node::{Bracket, Grouper};
     test_node("Block",
-        Node::Block(
-            vec![
-                Node::Number(Number::Int(1)),
-                Node::Number(Number::Int(2)),
-                Node::Number(Number::Int(3)),
-            ],
-            Grouper::Group,
-            Bracket::Round
-        ));
+              Node::Block(
+                  vec![
+                      Node::Number(Number::Int(1)),
+                      Node::Number(Number::Int(2)),
+                      Node::Number(Number::Int(3)),
+                  ],
+                  Grouper::Group,
+                  Bracket::Round,
+              ));
 
     // Test 10: List node
     test_node("List",
-        Node::List(vec![
-            Node::Text("item1".to_string()),
-            Node::Text("item2".to_string()),
-            Node::Text("item3".to_string()),
-        ]));
+              Node::List(vec![
+                  Node::Text("item1".to_string()),
+                  Node::Text("item2".to_string()),
+                  Node::Text("item3".to_string()),
+              ]));
 
     // Test 11: Data node
     test_node("Data", Node::data(vec![1, 2, 3, 4, 5]));
@@ -85,12 +84,10 @@ fn test_node(name: &str, node: Node) {
     let bytes = emitter.finish();
 
     // Verify WASM magic number
-    eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D],
-        "{}: Invalid WASM magic number", name);
+    assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D], "{}: Invalid WASM magic number", name);
 
     // Verify WASM version
-    eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00],
-        "{}: Invalid WASM version", name);
+    assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00], "{}: Invalid WASM version", name);
 
     // Validate with wasmparser
     use wasmparser::{Validator, WasmFeatures};
@@ -105,7 +102,8 @@ fn test_node(name: &str, node: Node) {
     }
 
     // Write to file for inspection
-    let filename = format!("out/kitchensink_{}.wasm", name.to_lowercase().replace("::", "_").replace(" ", "_"));
+    let task = name.to_lowercase().replace("::", "_").replace(" ", "_");
+    let filename = format!("out/kitchensink_{}.wasm", task);
     if write_wasm(&filename, &bytes) {
         println!("  ✓ Written to {}", filename);
     }
@@ -119,7 +117,7 @@ fn test_kitchensink_complex_tree() {
     println!("\n=== Kitchensink: Complex Tree with All Types ===\n");
 
     // Build a complex tree containing all node types
-    use wasp::node::{Grouper, Bracket};
+    use wasp::node::{Bracket, Grouper};
 
     let complex_tree = Node::Block(
         vec![
@@ -127,7 +125,7 @@ fn test_kitchensink_complex_tree() {
             Node::Empty,
             // Numbers
             Node::Number(Number::Int(42)),
-            Node::Number(Number::Float(3.14159)),
+            Node::Number(Number::Float(std::f64::consts::PI)),
             // Strings
             Node::Text("hello".to_string()),
             Node::Symbol("world".to_string()),
@@ -157,7 +155,7 @@ fn test_kitchensink_complex_tree() {
             Node::data("custom data"),
         ],
         Grouper::Group,
-        Bracket::Square
+        Bracket::Square,
     );
 
     let mut emitter = WasmGcEmitter::new();
@@ -214,7 +212,7 @@ fn test_kitchensink_wasmtime_execution() {
     let node = Node::Tag {
         title: "html".to_string(),
         params: Box::new(Node::Empty),
-        body: Box::new(Node::Text("content".to_string()))
+        body: Box::new(Node::Text("content".to_string())),
     };
 
     let mut emitter = WasmGcEmitter::new();

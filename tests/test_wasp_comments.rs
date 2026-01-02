@@ -1,4 +1,4 @@
-use wasp::is;
+use wasp::{eq, is};
 use wasp::wasp_parser::{parse, WaspParser};
 // use wasp::wasp_parser::WaspParser::parse;
 use wasp::node::Node;
