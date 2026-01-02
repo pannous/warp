@@ -241,7 +241,7 @@ impl PartialEq<f32> for Number {
             Number::Float(f) => *f as f32 == *other,
             Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
             Number::Complex(r, i) => *r as f32 == *other && *i == 0.0,
-            Number::Nan => *other == f32::NAN,
+            Number::Nan => other.is_nan(),
             Number::Inf  => *other == f32::INFINITY,
             Number::NegInf => *other == f32::NEG_INFINITY,
             // _ => false,
