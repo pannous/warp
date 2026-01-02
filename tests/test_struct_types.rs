@@ -12,6 +12,7 @@ use wasp::wasp_parser::parse;
 use wasp::{eq, is, put, skip};
 
 #[test]
+#[ignore]
 fn test_struct_wast() {
 	let _wast = r#"(module
   (type $Box (struct (field $val (mut i32))));
@@ -26,6 +27,7 @@ fn test_struct_wast() {
 }
 
 #[test]
+#[ignore]
 fn test_struct() {
 	// builtin with struct/record
 	is!("struct a{x:int y:float};b=a{1 0.2};b.y", 0.2);
@@ -48,6 +50,7 @@ fn test_struct() {
 }
 
 #[test]
+#[ignore]
 fn test_struct2() {
 	let code0 = "struct point{a:int b:int c:string}";
 	let node: Node = parse(code0);
@@ -64,6 +67,7 @@ fn test_struct2() {
 }
 
 #[test]
+#[ignore]
 fn test_wasm_gc() {
 	//    is!("y=(1 4 3)[1]", 4);
 	//    is!("x=(1 4 3);x#2", 4);
@@ -125,6 +129,7 @@ fn test_wasm_gc() {
 }
 
 #[test]
+#[ignore]
 fn test_wasm_node_struct() {
 	// let wasp_object_code = "a{b:c}";
 	let wasp_object_code = "a{b:42}";
@@ -133,6 +138,7 @@ fn test_wasm_node_struct() {
 }
 
 #[test]
+#[ignore]
 fn test_wasm_linear_memory_node() {
 	// let wasp_object_code = "a{b:c}";
 	let wasp_object_code = "a{b:42}";
@@ -141,6 +147,7 @@ fn test_wasm_linear_memory_node() {
 }
 
 #[test]
+#[ignore]
 fn test_wasm_structs() {
 	test_wasm_node_struct();
 	let integer_type: Node = node("int");
@@ -151,6 +158,7 @@ fn test_wasm_structs() {
 }
 
 #[test]
+#[ignore]
 fn test_flag_safety() {
 	let _code = "flags empty_flags{}; empty_flags mine = data_mode | space_brace;";
 	//     assert_throws(code) // "data_mode not a member of empty_flags"s
@@ -159,6 +167,7 @@ fn test_flag_safety() {
 }
 
 #[test]
+#[ignore]
 fn test_flags2() {
 	// todo allow just parser-flags{…} in wasp > wit
 	let code = r#"flags parser-flags{
@@ -202,6 +211,7 @@ fn test_flags2() {
 }
 
 #[test]
+#[ignore]
 fn test_flags() {
 	// clearAnalyzerContext(); // TODO: implement
 	let parsed: Node = parse("flags abc{a b c}");

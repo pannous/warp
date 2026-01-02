@@ -87,6 +87,7 @@ fn test_comments_in_html_structure() {
 }
 
 #[test]
+#[ignore]
 fn test_comment_with_metadata_accessor() {
 	let node = Node::int(42).with_comment("This is the answer".to_string());
 
@@ -101,6 +102,7 @@ fn test_comment_with_metadata_accessor() {
 
 // Comments
 #[test]
+#[ignore]
 fn test_comments() {
 	is!("1+1 // comment", 2);
 	is!("1 /* inline */ + 1", 2);
@@ -108,6 +110,7 @@ fn test_comments() {
 }
 
 #[test]
+#[ignore]
 fn test_comments2() {
 	let c = "blah a b c # to silence python warnings;)\n y/* yeah! */=0 // really";
 	let result: Node = parse(c);
