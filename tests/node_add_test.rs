@@ -7,7 +7,10 @@ fn test_add_list_item() {
 
     // List + item should append
     let result = list.add(num);
-    assert_eq!(result, Node::list(vec![Node::int(1), Node::int(2), Node::int(3)]));
+    assert_eq!(
+        result,
+        Node::list(vec![Node::int(1), Node::int(2), Node::int(3)])
+    );
 }
 
 #[test]
@@ -17,7 +20,10 @@ fn test_add_item_list() {
 
     // item + List should prepend
     let result = num.add(list);
-    assert_eq!(result, Node::list(vec![Node::int(0), Node::int(1), Node::int(2)]));
+    assert_eq!(
+        result,
+        Node::list(vec![Node::int(0), Node::int(1), Node::int(2)])
+    );
 }
 
 #[test]
@@ -44,7 +50,10 @@ fn test_add_lists() {
     let list2 = Node::list(vec![Node::int(3), Node::int(4)]);
 
     let result = list1.add(list2);
-    assert_eq!(result, Node::list(vec![Node::int(1), Node::int(2), Node::int(3), Node::int(4)]));
+    assert_eq!(
+        result,
+        Node::list(vec![Node::int(1), Node::int(2), Node::int(3), Node::int(4)])
+    );
 }
 
 #[test]

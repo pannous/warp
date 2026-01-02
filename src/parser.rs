@@ -134,7 +134,6 @@ impl Parser {
         }
     }
 
-
     fn parse_block(&mut self, closing: &str) -> Node {
         let mut nodes = Vec::new();
         while !self.check(closing) && !self.eof() {
