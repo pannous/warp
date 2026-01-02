@@ -1,5 +1,5 @@
 use wasp::Number::{Float, Int};
-use wasp::{eq, put, Number};
+use wasp::{eq, is, put, Number};
 // use wasp::node::Node::Number as Number;
 // use wasp::Number::{Float, Int};
 
@@ -50,4 +50,14 @@ fn test_number_mix() {
     let n3 = n + n2;
     put!("n3", n3);
     eq!(n3, 3.2);
+}
+
+#[test]
+fn test_hex() {
+    // eq!(hex(18966001896603L), "0x113fddce4c9b");
+    is!("42", 42);
+    is!("0xFF", 255);
+    is!("0x100", 256);
+    is!("0xdce4c9b", 0xdce4c9b);
+    is!("0x113fddce4c9b", 0x113fddce4c9bi64);
 }
