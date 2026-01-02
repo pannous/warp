@@ -9,7 +9,6 @@ use extensions::strings::*;
 use extensions::utils::*;
 
 pub mod node;
-pub mod parser;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod wasp_parser;
@@ -19,8 +18,6 @@ pub mod type_kinds;
 pub mod ast;
 pub mod meta;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
-
-use parser::test_parser;
 
 // use bla::test_bla_lib;
 

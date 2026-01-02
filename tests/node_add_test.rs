@@ -60,7 +60,6 @@ fn test_add_lists() {
 fn test_add_with_meta() {
     let num1 = Node::int(5).with_comment("first".to_string());
     let num2 = Node::int(7);
-
     // Meta on left should unwrap and add
     let result = num1.add(num2);
     assert_eq!(result, 12);
@@ -70,8 +69,6 @@ fn test_add_with_meta() {
 fn test_add_meta_on_right() {
     let num1 = Node::int(5);
     let num2 = Node::int(7).with_comment("second".to_string());
-
-    // Meta on right should unwrap and add
     let result = num1.add(num2);
     assert_eq!(result, 12);
 }
