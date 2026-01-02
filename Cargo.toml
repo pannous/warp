@@ -103,6 +103,19 @@ wasmparser = "*" # A WebAssembly binary format parser
 
 [profile.dev]
 incremental = true
+# Maximum build speed optimizations
+opt-level = 0          # No optimization for faster compile
+debug = 0              # Minimal debug info for faster compile
+split-debuginfo = "unpacked"  # Faster on macOS
+codegen-units = 256    # Maximum parallelism
+
+[profile.test]
+inherits = "dev"       # Use dev profile for tests
+
+[profile.release]
+incremental = false    # Release doesn't need incremental
+opt-level = 3
+lto = "thin"           # Thin LTO for faster release builds
 
 [lib]
 # to compile to wasm using `wasm-pack build` :
