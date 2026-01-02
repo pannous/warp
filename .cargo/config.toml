@@ -2,6 +2,10 @@
 offline = true
 
 [build]
+# Maximum incremental compilation
+incremental = true
+# Parallel jobs (default uses all cores, 8 is explicit)
+jobs = 8
 # Timeout protection for tests - prevents infinite loops from hanging CI/development
 # Uses gtimeout on macOS (brew install coreutils) or timeout on Linux
 
