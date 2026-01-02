@@ -23,7 +23,7 @@ use crate::wasp_parser::parse;
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
       (field $kind i64)
-      (field $key (ref null $Node))   param?
+      (field $key (ref null $Node))   param?  bra ket ;)
       (field $value (ref null $Node)) body?
       (field $payload (ref null any))
     ) )
@@ -73,11 +73,11 @@ pub enum Node {
     // (use Empty for no attrs)
     List(Vec<Node>, Bracket), // merged Block into List, using Bracket to distinguish {}, [], ()
     // Data(Dada), // most generic container for any kind of data not captured by other node types
-    Data(Dada), // meta as wrapper or as left/right node?
+    Data(Dada),
     Meta {
         node: Box<Node>,
-        data: MetaData,
-    }, // Wrapper to attach metadata to any node
+        data: Box<Node>,
+    }, // Wrapper to attach metadata to any node (data stores metadata as Node)
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
     // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
     // List(Vec<T>) // turns whole Node into a generic type :(
@@ -567,22 +567,41 @@ impl Node {
         List(map(xs, |x| Node::Number(Number::Int(x as i64))), Bracket::Square)
     }
 
-    pub fn with_meta(self, data: MetaData) -> Self {
+    pub fn with_meta(self, metadata: MetaData) -> Self {
+        // Store MetaData as a Data node
+        let data_node = Node::data(metadata);
         Meta {
             node: Box::new(self),
-            data,
-        }
-    }
-    pub fn with_comment(self, comment: String) -> Self {
-        Meta {
-            node: Box::new(self),
-            data: MetaData::with_comment(comment),
+            data: Box::new(data_node),
         }
     }
 
-    pub fn get_meta(&self) -> Option<&MetaData> {
+    pub fn with_comment(self, comment: String) -> Self {
+        let metadata = MetaData::with_comment(comment);
+        let data_node = Node::data(metadata);
+        Meta {
+            node: Box::new(self),
+            data: Box::new(data_node),
+        }
+    }
+
+    pub fn get_meta(&self) -> Option<&Node> {
         match self {
-            Meta { data, .. } => Some(data),
+            Meta { data, .. } => Some(data.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn get_metadata(&self) -> Option<MetaData> {
+        match self {
+            Meta { data, .. } => {
+                // Extract MetaData from Data node
+                if let Data(dada) = data.as_ref() {
+                    dada.downcast_ref::<MetaData>().cloned()
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -748,9 +767,14 @@ impl Node {
             }
             Meta { node, data } => {
                 let mut value = node.to_json_value();
-                if let Some(comment) = &data.comment {
-                    if let Value::Object(ref mut map) = value {
-                        map.insert("_comment".to_string(), Value::String(comment.clone()));
+                // Extract MetaData from Data node if present
+                if let Data(dada) = data.as_ref() {
+                    if let Some(metadata) = dada.downcast_ref::<MetaData>() {
+                        if let Some(comment) = &metadata.comment {
+                            if let Value::Object(ref mut map) = value {
+                                map.insert("_comment".to_string(), Value::String(comment.clone()));
+                            }
+                        }
                     }
                 }
                 value
@@ -801,11 +825,15 @@ impl fmt::Debug for Node {
             },
             Data(d) => write!(f, "{:?}", d),
             Meta { node, data } => {
-                if let Some(comment) = &data.comment {
-                    write!(f, "{:?} /* {} */", node, comment)
-                } else {
-                    write!(f, "{:?}", node)
+                // Extract MetaData from Data node if present
+                if let Data(dada) = data.as_ref() {
+                    if let Some(metadata) = dada.downcast_ref::<MetaData>() {
+                        if let Some(comment) = &metadata.comment {
+                            return write!(f, "{:?} /* {} */", node, comment);
+                        }
+                    }
                 }
+                write!(f, "{:?}", node)
             }
             Error(e) => write!(f, "Error({})", e),
             Empty => write!(f, "ø"),
@@ -1149,7 +1177,10 @@ impl Not for Node {
             Symbol(_) => False,
             List(ref items, _) if items.is_empty() => True, // ![] == true
             List(_, _) => False,                            // !non-empty list == false
-            Meta { node, data } => (!(*node.clone())).with_meta(data),
+            Meta { node, data } => Meta {
+                node: Box::new(!(*node.clone())),
+                data: data.clone(),
+            },
             // Apply not to wrapped node, preserve metadata
             _ => False, // Other types default to falsy
         }
@@ -1238,8 +1269,11 @@ impl Add<&Node> for &Node {
         };
 
         // Preserve metadata from left operand
-        if let Some(meta) = left_meta {
-            result.with_meta(meta.clone())
+        if let Some(data) = left_meta {
+            Meta {
+                node: Box::new(result),
+                data: (*data).clone(),
+            }
         } else {
             result
         }
@@ -1317,8 +1351,11 @@ impl Sub<&Node> for &Node {
         };
 
         // Preserve metadata from left operand
-        if let Some(meta) = left_meta {
-            result.with_meta(meta.clone())
+        if let Some(data) = left_meta {
+            Meta {
+                node: Box::new(result),
+                data: (*data).clone(),
+            }
         } else {
             result
         }
@@ -1392,8 +1429,11 @@ impl Mul<&Node> for &Node {
         };
 
         // Preserve metadata from left operand
-        if let Some(meta) = left_meta {
-            result.with_meta(meta.clone())
+        if let Some(data) = left_meta {
+            Meta {
+                node: Box::new(result),
+                data: (*data).clone(),
+            }
         } else {
             result
         }
@@ -1468,8 +1508,11 @@ impl Div<&Node> for &Node {
         };
 
         // Preserve metadata from left operand
-        if let Some(meta) = left_meta {
-            result.with_meta(meta.clone())
+        if let Some(data) = left_meta {
+            Meta {
+                node: Box::new(result),
+                data: (*data).clone(),
+            }
         } else {
             result
         }
