@@ -7,8 +7,8 @@ if [ -n "$NO_TIMEOUT" ] || [ -n "$DEBUG" ]; then
     exec "$@"
 elif [ -n "$LONG_TIMEOUT" ]; then
     # Extended timeout for slower tests
-    exec gtimeout 3s "$@"
+    exec gtimeout 120s "$@"
 else
-    # Normal timeout
-    exec gtimeout 0.5s "$@"
+    # Normal timeout (enough for IDE initialization + test execution)
+    exec gtimeout 30s "$@"
 fi
