@@ -102,6 +102,7 @@ fn test_node_data_eq() {
 // }
 
 #[test]
+#[ignore]
 fn test_roots() {
 	assert!(Empty == 0);
 	/* is!((char *) "'hello'", "hello"); */

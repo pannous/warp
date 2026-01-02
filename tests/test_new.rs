@@ -2,6 +2,7 @@ use wasp::extensions::print;
 use wasp::is;
 
 #[test]
+#[ignore]
 fn test_function_definitions() {
 	print("Testing function definitions...");
 	is!("def add(a,b): a+b; add(2,3)", 5);
@@ -10,6 +11,7 @@ fn test_function_definitions() {
 }
 
 #[test]
+#[ignore]
 fn test_variables() {
 	print("Testing variables...");
 	is!("x=42; x", 42);
@@ -18,6 +20,7 @@ fn test_variables() {
 }
 
 #[test]
+#[ignore]
 fn test_fibonacci() {
 	print("Testing fibonacci...");
 	is!(

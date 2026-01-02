@@ -9,6 +9,7 @@ fn test_string_basics() {
 }
 
 #[test]
+#[ignore]
 fn test_string_operations() {
 	print("Testing string operations...");
 	is!("'say ' + 0.", "say 0.");

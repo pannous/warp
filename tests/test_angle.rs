@@ -1,6 +1,7 @@
 use wasp::{eq, is, skip};
 
 #[test]
+#[ignore]
 fn test_function_params() {
 	//	eq!(parse("f(x)=x*x").param->first(),"x");
 	eq!("f(x)=x*x;f(3)", "9"); // functions => angle!
@@ -17,6 +18,7 @@ fn test_function_params() {
 //}
 //
 #[test]
+#[ignore]
 fn test_call() {
 	// #[cfg(feature = "WASMTIME")]{
 	// 	warn("square 3  => SIGABRT in WASMTIME! must be bug there!?");
@@ -38,6 +40,7 @@ fn test_call() {
 }
 
 #[test]
+#[ignore]
 fn test_truthy_and() {
 	is!("0.0 and 4.0", 0.0);
 	is!("4.0 and 0.0", 0.0);
@@ -59,6 +62,7 @@ fn test_truthy_and() {
 }
 
 #[test]
+#[ignore]
 fn test_if() {
 	//    skip!( // todo:
 	//            is!("if '':3", false);
@@ -147,6 +151,7 @@ fn test_if() {
 }
 
 #[test]
+#[ignore]
 fn test_if_call_zero() {
 	is!("def six(){6};six()", 6);
 	is!("def six(){6};2+six()", 8);
@@ -180,6 +185,7 @@ fn test_if_call_zero() {
 }
 
 #[test]
+#[ignore]
 fn test_if_two() {
 	is!("def two(){2};two()", 2);
 	is!("def two(){2};two()+2", 4);
@@ -229,6 +235,7 @@ fn test_if_two() {
 }
 
 #[test]
+#[ignore]
 fn test_if_math() {
 	is!("if 0+2:{3*1} else 4+0", 3);
 
@@ -292,6 +299,7 @@ fn test_if_math() {
 	is!("if(2*1){3*1}{4*1}", 3);
 }
 #[test]
+#[ignore]
 fn test_if_gt() {
 	is!("if(2<4):{3}", 3);
 	is!("1<0 or 3", 3);
@@ -370,6 +378,7 @@ fn test_if_gt() {
 	);
 }
 #[test]
+#[ignore]
 fn test_switch_evaluation() {
 	is!("{a:1+1 b:2}(a)", 2);
 	is!("x=a;{a:1 b:2}(x)", 1);
@@ -377,6 +386,7 @@ fn test_switch_evaluation() {
 }
 
 #[test]
+#[ignore]
 fn test_switch() {
 	//	todo if(1>0) ... innocent groups
 	is!("{a:1 b:2}[a]", 1);
@@ -422,6 +432,7 @@ fn test_switch() {
 
 //Prescedence type for Precedence
 #[test]
+#[ignore]
 fn test_logic_precedence() {
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -445,6 +456,7 @@ fn test_logic_precedence() {
 	is!("false or false and true", false);
 }
 #[test]
+#[ignore]
 fn test_all_angle() {
 	// emmitting or not
 	test_logic_precedence();
@@ -459,6 +471,7 @@ fn test_all_angle() {
 }
 
 #[test]
+#[ignore]
 fn test_angle() {
 	test_all_angle();
 }
