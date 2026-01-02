@@ -174,28 +174,23 @@ impl Node {
         // ⚠️different semantics for different types! todo OR JUST (cons a b) for all!?
         use Node::*;
         match (self, other) {
-            // Symmetric cases (commutative)
             (Number(n), Number(m)) => Number(n.add(m)),
             (Text(s), Text(m)) => Text(format!("{}{}", s, m)),
             (List(xs), List(ys)) => List(xs.iter().cloned().chain(ys).collect()),
-
-            // Asymmetric cases - both directions
             (List(xs), b) => List(xs.iter().cloned().chain([b]).collect()),
             (a, List(ys)) => List([a.clone()].into_iter().chain(ys).collect()),
-
-            // Meta unwrapping - both directions
             (Meta { node, .. }, n) => node.add(n),
             (n, Meta { node, .. }) => n.add(*node.clone()),
-
             _ => todo!(),
         }
     }
 
-    pub fn values(&self) -> Node {
+    pub fn values(&self) -> &Node {
         match self {
-            Key(_, v) => *v.clone(),
+            Key(_, v) => v.as_ref(),
             Meta { node, .. } => node.values(),
-            _ => todo!(), //#Node::Empty,
+            List(_) => self,
+            _ => &Empty,
         }
     }
 
