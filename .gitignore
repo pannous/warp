@@ -8,3 +8,5 @@ kitchensink_*.wasm
 .vscode/
 .idea/
 out
+test_*.txt
+test_*.json

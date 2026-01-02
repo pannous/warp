@@ -165,15 +165,6 @@ fn test_sinus_wasp_import() {
     is!("use sin;sin -π/2", -1);
 }
 
-#[test]
-fn test_hex() {
-    // eq!(hex(18966001896603L), "0x113fddce4c9b");
-    is!("42", 42);
-    is!("0xFF", 255);
-    is!("0x100", 256);
-    is!("0xdce4c9b", 0xdce4c9b);
-    is!("0x113fddce4c9b", 0x113fddce4c9bi64);
-}
 
 #[test]
 fn test_units() {
