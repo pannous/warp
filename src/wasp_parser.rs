@@ -55,13 +55,22 @@ impl WaspParser {
 			let node = parser.parse_value();
 			// if node != Node::Empty { // Todo: Skip empty nodes only at END, if at all!
 			// [lame:'Joe' last:ø] meaningful nodes!
+			let is_top_level_block = match &node {
+				Node::Tag { .. } => true,
+				Node::Meta { node: inner, .. } => matches!(**inner, Node::Tag { .. }),
+				_ => false,
+			};
 			current_expression.push(node);
 			// }
 			parser.skip_whitespace_and_comments();
-			if c == Some(';') {
+			// Only treat Tag nodes as statement boundaries if we're already in multi-statement mode
+			let in_multi_statement_mode = !root_nodes.is_empty();
+			if c == Some(';') || (is_top_level_block && in_multi_statement_mode) {
 				root_nodes.push(Node::list(current_expression));
 				current_expression = Vec::new();
-				parser.advance()
+				if c == Some(';') {
+					parser.advance()
+				}
 			}
 		}
 		if root_nodes.is_empty() {
@@ -218,7 +227,16 @@ impl WaspParser {
 					'(' => self.parse_bracketed('(', ')', Bracket::Round),
 					'[' => self.parse_bracketed('[', ']', Bracket::Square),
 					'{' => self.parse_bracketed('{', '}', Bracket::Curly),
+					'<' => self.parse_bracketed('<', '>', Bracket::Round), // Generics as groups
+					';' => Empty, // Semicolons handled by main parse loop
+					'>' => Empty, // Closing angle bracket, handled by parse_bracketed
 					// assert!(!'三'.is_numeric());
+					'-' if self.peek_char(1) == Some('>') => {
+						// Arrow operator: ->
+						self.advance(); // skip -
+						self.advance(); // skip >
+						Node::Symbol("->".to_string())
+					}
 					_ if ch.is_numeric() || ch == '-' => self.parse_number(),
 					_ if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
 					// _ if ch.is_ascii_graphic()
@@ -352,7 +370,7 @@ impl WaspParser {
 		let mut symbol = String::new();
 
 		while let Some(ch) = self.current_char() {
-			if ch.is_alphanumeric() || ch == '_' {
+			if ch.is_alphanumeric() || ch == '_' || ch == '-' {
 				symbol.push(ch);
 				self.advance();
 			} else {
@@ -374,12 +392,17 @@ impl WaspParser {
 		};
 		self.skip_whitespace();
 
-		// Check for named block: name{...} or name(...)
+		// Check for named block: name{...} or name(...) or name<...>
 		match self.current_char() {
 			Some('{') => {
 				let block = self.parse_bracketed('{', '}', Bracket::Curly);
 				// Create Tag for named blocks: html{...} -> Tag("html", None, body)
 				Node::tag(&symbol, block)
+			}
+			Some('<') => {
+				// Generic type: option<string> -> Tag("option", <string>)
+				let generic = self.parse_bracketed('<', '>', Bracket::Round);
+				Node::tag(&symbol, generic)
 			}
 			Some('(') => {
 				// Function-like: def name(params){body} or name(params):value
