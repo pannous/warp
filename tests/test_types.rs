@@ -1,22 +1,19 @@
 // Type system tests
 // Migrated from tests_*.rs files
 
-use std::iter::Map;
-use syn::Signature;
-use wasm_ast::Function;
 use wasp::analyzer::analyze;
 use wasp::extensions::assert_throws;
 use wasp::node::Node;
 use wasp::node::Node::False;
 use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
-use wasp::{eq, is, skip, Number};
+use wasp::{is, skip, Number};
 
 // const functions : Map<String, Function> = wasp::analyzer::FUNCTIONS;
 
 // TODO: Stub types - these need proper implementation
 #[allow(non_camel_case_types)]
-type Type = Node;
+// type Type = Node;
 #[allow(dead_code)]
 struct AST;
 #[allow(dead_code)]
@@ -64,12 +61,12 @@ fn array() -> Node {
 }
 
 #[test]
-fn testGoTypes() {
+fn test_go_types() {
     is!("func add1(x int) int { return x + 1 };add1(41)", 42);
 }
 
 #[test]
-fn testAutoType() {
+fn test_auto_type() {
     is!("0/0", False);
     is!("0÷0", Node::Number(Number::Nan));
     is!("-1/6.", -1.0 / 6.0);
@@ -78,7 +75,7 @@ fn testAutoType() {
 }
 
 #[test]
-fn testTypeSynonyms() {
+fn test_type_synonyms() {
     // eq!(Type("i32"s),Type("int32"s));
     // eq!(Type("i32"s),Type("int"s));
     // eq!(Type("f32"s),Type("float32"s));
@@ -86,7 +83,7 @@ fn testTypeSynonyms() {
 }
 
 #[test]
-fn testReturnTypes() {
+fn test_return_types() {
     is!("fun addier(a,b){b+a};addier(42,1)", 43);
     is!("fun addier(a,b){b+a};addier(42,1)+1", 44);
     is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4);
@@ -117,7 +114,7 @@ fn cast(node: Node, to_type: NodeKind) -> Node {
     match to_type {
         NodeKind::Text => Node::Text(node.to_string()),
         NodeKind::Number => match node {
-            Node::Number(n) => node,
+            Node::Number(_n) => node,
             Node::Symbol(s) => match s.parse::<i64>() {
                 Ok(v) => Node::Number(Number::Int(v)),
                 _ => match s.parse::<f64>() {
@@ -132,7 +129,7 @@ fn cast(node: Node, to_type: NodeKind) -> Node {
 }
 
 #[test]
-fn testCast() {
+fn test_cast() {
     // is!("2", cast(Node(2),  NodeKind::Text).value.string);
     // eq!(cast(Node(2), longs), 2); // trivial
     // eq!(cast(Node(2.1), longs), 2);
@@ -152,7 +149,7 @@ fn testCast() {
 }
 
 #[test]
-fn testEmitCast() {
+fn test_emit_cast() {
     is!("(2 as float, 4.3 as int)  == 2.0 ,4", 1);
     is!("(2 as float, 4.3 as int)  == 2,4", 1);
     // advanced, needs cast() to be implemented in wasm
@@ -175,7 +172,7 @@ fn testEmitCast() {
 }
 
 #[test]
-fn testConstructorCast() {
+fn test_constructor_cast() {
     is!("int('123')", 123);
     is!("str(123)", "123");
     is!("'a'", 'a');
@@ -185,7 +182,7 @@ fn testConstructorCast() {
 }
 
 #[test]
-fn testBadType() {
+fn test_bad_type() {
     skip!(
 
         // TODO strict mode a:b=c => b is type vs data mode a:b => b is data HOW?
@@ -194,14 +191,14 @@ fn testBadType() {
 }
 
 #[test]
-fn testDeepType() {
+fn test_deep_type() {
     parse("a=$canvas.tagName");
     //    // eq!(result.kind(), smarti64);
     //    // eq!(result.kind(), AST::NodeKind::Text);
 }
 
 #[test]
-fn testTypeConfusion() {
+fn test_type_confusion() {
     assert_throws("x=1;x='ok'");
     assert_throws("x=1;x=1.0");
     assert_throws("double:=it*2"); // double is type i64!
@@ -209,7 +206,7 @@ fn testTypeConfusion() {
 }
 
 #[test]
-fn testTypesSimple() {
+fn test_types_simple() {
     // clearAnalyzerContext();
     let result = analyze(parse("chars a"));
     // eq!(result.kind(), Type::reference);
@@ -241,7 +238,7 @@ fn testTypesSimple() {
 
 #[test]
 #[ignore] // TODO: requires AST and Type implementation
-fn testTypesSimple2() {
+fn test_types_simple2() {
     let _result = analyze(parse("a:chars"));
     //    // eq!(result.kind(), AST::reference);
     // eq!(result.kind(), AST::key);
@@ -272,7 +269,7 @@ fn testTypesSimple2() {
 
 #[test]
 #[ignore] // TODO: requires complete type system and Signature implementation
-fn testTypedFunctions() {
+fn test_typed_functions() {
     // todo name 'id' clashes with 'id' in preRegisterFunctions();
     clearAnalyzerContext();
     let _result = analyze(parse("int tee(float b, string c){b}"));
@@ -295,7 +292,7 @@ fn testTypedFunctions() {
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testEmptyTypedFunctions() {
+fn test_empty_typed_functions() {
     // todo int a(){} should be compiler error
     // todo do we really want / need int a(); #[test] fn a(){} ?
     //	if(ch=='{' and next=='}' and previous==')'){
@@ -323,12 +320,12 @@ fn testEmptyTypedFunctions() {
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testTypes() {
-    testBadType();
-    testDeepType();
-    testTypedFunctions();
-    testTypesSimple();
-    testTypeConfusion();
+fn test_types() {
+    test_bad_type();
+    test_deep_type();
+    test_typed_functions();
+    test_types_simple();
+    test_type_confusion();
     skip!(
         testTypesSimple2();
         testEmptyTypedFunctions();
@@ -337,7 +334,7 @@ fn testTypes() {
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testPolymorphism() {
+fn test_polymorphism() {
     // debug:
     //	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
     //	let debug_fun = analyze(debug_node);
@@ -356,10 +353,10 @@ fn testPolymorphism() {
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testPolymorphism2() {
+fn test_polymorphism2() {
     clearAnalyzerContext();
     let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");
-    let fun = analyze(node);
+    let _fun = analyze(node);
     // let function = functions["test"];
     // eq!(function.is_polymorphic, true);
     // eq!(function.variants.size(), 2);
@@ -371,7 +368,7 @@ fn testPolymorphism2() {
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testPolymorphism3() {
+fn test_polymorphism3() {
     is!(
         "fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
         "ok"
@@ -381,17 +378,17 @@ fn testPolymorphism3() {
 
 #[test]
 #[ignore] // TODO: requires Generics implementation
-fn testGenerics() {
+fn test_generics() {
     // let typ = Type(Generics { kind: array, value_type: int16t });
     //    let header= typ.let array : value;
-    //    let header= typ.let 0xFFFF0000 : value; // todo <<
+    //    let header= typ.let 0xFFFF0000 : value; //
     // let header = typ.let 0x0000FFFF : value; //todo ?? - invalid Rust syntax
     //     assert!(_eq!(header, array);
 }
 
 #[test]
 #[ignore] // TODO: requires complete type system
-fn testFunctionArgumentCast() {
+fn test_function_argument_cast() {
     is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
     is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
     is!(

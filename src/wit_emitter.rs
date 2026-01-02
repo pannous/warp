@@ -229,7 +229,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
             // format!("list([{}])", dada) // Dada doesn't implement fmt::Display
             "[data?]".to_string() // data LOSS!
         }
-        Node::Meta(node, meta) => {
+        Node::Meta { node, data: meta } => {
             let comment = if let Some(c) = &meta.comment {
                 format!("some(\"{}\")", escape_string(c))
             } else {
