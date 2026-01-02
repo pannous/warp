@@ -101,14 +101,14 @@ fn test_comment_with_metadata_accessor() {
 
 // Comments
 #[test]
-fn testComments() {
+fn test_comments() {
     is!("1+1 // comment", 2);
     is!("1 /* inline */ + 1", 2);
     is!("/* block \n comment */ 1+1", 2);
 }
 
 #[test]
-fn testComments2() {
+fn test_comments2() {
     let c = "blah a b c # to silence python warnings;)\n y/* yeah! */=0 // really";
     let result: Node = parse(c);
     assert!(result.length() == 2);

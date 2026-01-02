@@ -202,7 +202,7 @@ fn test_complex_expression() {
     let a = &Node::int(3) + &Node::int(2); // 5
     let b = &Node::int(10) - &Node::int(4); // 6
     let c = &a * &b; // 30
-    let result = &c / &Node::int(2); // 30/2 (Quotient, not simplified to 15)
+    let _result = &c / &Node::int(2); // 30/2 (Quotient, not simplified to 15)
 
     // Integer division creates a Quotient in the Number type
     // To get a float result, use float division
