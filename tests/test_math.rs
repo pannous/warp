@@ -146,7 +146,7 @@ fn test_primitive_types() {
 #[test] fn test_logarithm_in_runtime(){
 
     // float
-    let ℯ = 2.7182818284590;
+    // let ℯ = 2.7182818284590;
     //	eq!(ln(0),-∞);
     // eq!(log(100000),5.);
     // eq!(log(10),1.);

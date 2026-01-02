@@ -23,4 +23,5 @@ pub mod run;
 pub mod analyzer;
 pub mod type_kinds;
 
+pub mod meta;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled

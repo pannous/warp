@@ -240,7 +240,7 @@ impl WaspParser {
                 }
             }
         };
-        if node == Node::Empty {
+        if node == Empty {
             return node;
         }
         // Attach metadata with position and comment
@@ -321,7 +321,7 @@ impl WaspParser {
             num_str
                 .parse::<f64>()
                 .map(Node::float)
-                .unwrap_or_else(|_| Node::Error(format!("Invalid float: {}", num_str)))
+                .unwrap_or_else(|_| Error(format!("Invalid float: {}", num_str)))
         } else {
             num_str
                 .parse::<i64>()
