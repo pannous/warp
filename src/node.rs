@@ -75,7 +75,10 @@ pub enum Node {
     List(Vec<Node>),                    // same as Block without Grouper/Bracket meta info
     // Data(Dada), // most generic container for any kind of data not captured by other node types
     Data(Dada), // meta as wrapper or as left/right node?
-    Meta { node: Box<Node>, data: MetaData }, // Wrapper to attach metadata to any node
+    Meta {
+        node: Box<Node>,
+        data: MetaData,
+    }, // Wrapper to attach metadata to any node
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
     // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
     // List(Vec<T>) // turns whole Node into a generic type :(
@@ -133,7 +136,7 @@ impl Node {
         List(map(p0, |s| Text(s.to_string())))
     }
     pub fn first(&self) -> Node {
-        todo!()
+        match  {  }
     }
     pub fn laste(&self) -> Node {
         // last() belongs to iterator trade!!
@@ -554,10 +557,16 @@ impl Node {
     }
 
     pub fn with_meta(self, data: MetaData) -> Self {
-        Meta { node: Box::new(self), data }
+        Meta {
+            node: Box::new(self),
+            data,
+        }
     }
     pub fn with_comment(self, comment: String) -> Self {
-        Meta { node: Box::new(self), data: MetaData::with_comment(comment) }
+        Meta {
+            node: Box::new(self),
+            data: MetaData::with_comment(comment),
+        }
     }
 
     pub fn get_meta(&self) -> Option<&MetaData> {
@@ -1536,12 +1545,12 @@ pub fn node(p0: &str) -> Node {
 // Now no pass can accidentally drop meta!
 fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
     match n {
-        Meta { node: inner, data } => Meta { node: Box::new(map_node(*inner, f)), data },
+        Meta { node: inner, data } => Meta {
+            node: Box::new(map_node(*inner, f)),
+            data,
+        },
         // Now no pass can accidentally drop meta!
-
-        Pair(a, b) => Pair(
-                Box::new(map_node(*a, f)),
-                Box::new(map_node(*b, f))),
+        Pair(a, b) => Pair(Box::new(map_node(*a, f)), Box::new(map_node(*b, f))),
 
         List(xs) => List(xs.into_iter().map(|x| map_node(x, f)).collect()),
 

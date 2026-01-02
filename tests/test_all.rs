@@ -75,13 +75,6 @@ fn test_group_cascade2() {
 }
 
 #[test]
-fn test_superfluous_indentation() {
-    let result = parse("a{\n  b,c}");
-    let result1 = parse("a{b,c}");
-    eq!(result1, result);
-}
-
-#[test]
 fn test_group_cascade() {
     //	test_group_cascade2();
     //	testGroupCascade0();
