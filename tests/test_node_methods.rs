@@ -35,7 +35,7 @@ fn test_mark_as_map() {
     compare["b"] = 3.into();
     compare["a"] = "HIO".into();
     let dangling : Node = compare["c"].clone();
-    assert!(dangling.isNil());
+    assert!(dangling.is_nil());
     //     assert!(Nil();
     assert!(dangling == Node::Empty);
     assert!(&dangling != &Node::Empty); // not same pointer!

@@ -263,7 +263,7 @@ impl Node {
         // including Ast(Node, AstKind) !
         todo!()
     }
-    pub fn isNil(&self) -> bool {
+    pub fn is_nil(&self) -> bool {
         *self == Empty
     }
     pub fn data_value(&self) -> Dada {
@@ -279,7 +279,7 @@ impl Node {
             },
         }
     }
-    pub fn toString(&self) -> String {
+    pub fn to_string(&self) -> String {
         self.serialize()
     }
     pub fn remove(&self, from: i32, to: i32) {
@@ -301,7 +301,7 @@ impl Node {
     pub fn children(&self) -> Vec<Node> {
         todo!()
     }
-    pub fn add(&self, p0: Node) -> Node {
+    pub fn add(&self, _p0: Node) -> Node {
         todo!()
     }
 
@@ -1678,7 +1678,7 @@ pub fn print(p0: String) {
     println!("{}", p0);
 }
 
-pub fn Node(p0: String) -> Node {
+pub fn text_node(p0: String) -> Node {
     Node::Text(p0)
 }
 
