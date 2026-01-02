@@ -76,7 +76,7 @@ impl WaspParser {
         } else if root_nodes.is_empty() {
             Empty
         } else {
-            Node::List(root_nodes)
+            Node::List(root_nodes, Bracket::Square) // Multiple statements treated as list
         }
     }
 
@@ -492,7 +492,7 @@ impl WaspParser {
             }
         }
 
-        Node::Block(items, Grouper::Object, Bracket::Curly)
+        Node::List(items, Bracket::Curly)
     }
 }
 
@@ -524,7 +524,7 @@ mod tests {
     #[test]
     fn test_parse_list() {
         let node = WaspParser::parse("[1, 2, 3]");
-        if let Node::List(items) = node {
+        if let Node::List(items, _) = node {
             eq!(items.len(), 3);
             eq!(items[0], 1);
         }
@@ -577,7 +577,7 @@ mod tests {
     fn test_parse_multiple_values() {
         // Multiple numbers
         let node = WaspParser::parse("1 2 3");
-        if let Node::List(items) = node {
+        if let Node::List(items, _) = node {
             eq!(items.len(), 3);
             eq!(items[0], 1);
             eq!(items[1], 2);
@@ -588,7 +588,7 @@ mod tests {
 
         // Multiple symbols
         let node = WaspParser::parse("hello world");
-        if let Node::List(items) = node {
+        if let Node::List(items, _) = node {
             eq!(items.len(), 2);
             if let Node::Symbol(s) = &items[0].unwrap_meta() {
                 eq!(s, "hello");

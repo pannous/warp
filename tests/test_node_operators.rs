@@ -1,4 +1,4 @@
-use wasp::node::Node;
+use wasp::node::{Bracket, Node};
 use wasp::node::Node::*;
 use wasp::*; // TODO: Meta is not exported
 
@@ -193,7 +193,7 @@ fn test_type_mismatch_mul() {
 #[test]
 #[should_panic(expected = "Cannot divide")]
 fn test_type_mismatch_div() {
-    let _ = &Node::List(vec![]) / &Node::int(5);
+    let _ = &Node::List(vec![], Bracket::Square) / &Node::int(5);
 }
 
 #[test]

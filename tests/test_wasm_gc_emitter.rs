@@ -1,4 +1,4 @@
-use wasp::node::Node;
+use wasp::node::{Bracket, Node};
 use wasp::node::Node::*;
 use wasp::run::wasmtime_runner::run;
 use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
@@ -17,8 +17,8 @@ fn normalize_blocks(node: &Node) -> Node {
             params: Box::new(normalize_blocks(params)),
             body: Box::new(normalize_blocks(body)),
         },
-        Block(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
-        List(items) if items.len() == 1 => normalize_blocks(&items[0]),
+        List(items, Bracket::Curly) if items.len() == 1 => normalize_blocks(&items[0]),
+        List(items, _) if items.len() == 1 => normalize_blocks(&items[0]),
         Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
         Pair(left, right) => Pair(
             Box::new(normalize_blocks(left)),

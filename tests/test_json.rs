@@ -17,11 +17,10 @@ fn test_node_to_json_compact() {
 #[test]
 fn test_implicit_html_structure() {
     // html{ ul{ li:"hi" li:"ok"} colors=[red, green,blue]}
-    let html = Node::Block(
+    let html = Node::List(
         vec![
-            Node::Block(
+            Node::List(
                 vec![Node::keys("li", "hi"), Node::keys("li", "ok")],
-                Grouper::Object,
                 Bracket::Curly,
             ),
             Node::Key(
@@ -33,7 +32,6 @@ fn test_implicit_html_structure() {
                 ])),
             ),
         ],
-        Grouper::Object,
         Bracket::Curly,
     );
 
@@ -115,9 +113,8 @@ fn test_nested_node_json() {
 
 #[test]
 fn test_block_node_json() {
-    let n = Node::Block(
+    let n = Node::List(
         vec![Node::int(1), Node::int(2), Node::int(3)],
-        Grouper::Object,
         Bracket::Curly,
     );
 
