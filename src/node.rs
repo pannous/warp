@@ -136,11 +136,39 @@ impl Node {
         List(map(p0, |s| Text(s.to_string())))
     }
     pub fn first(&self) -> Node {
-        match  {  }
+        match self {
+            List(items) => {
+                if let Some(first) = items.first() {
+                    first.clone()
+                } else {
+                    Empty
+                }
+            }
+            Block(items, ..) => {
+                if let Some(first) = items.first() {
+                    first.clone()
+                } else {
+                    Empty
+                }
+            }
+            // Key(k, v) => v.as_ref().clone(),// a:{b,c}.first() -> b !?
+            Key(k, v) => Error("ambiguous first() on Key node a:b.first=a / a:{b,c}.first=b ?".s()),
+            Meta { node, .. } => node.first(),
+            _ => Empty,
+        }
     }
     pub fn laste(&self) -> Node {
         // last() belongs to iterator trade!!
-        todo!()
+        match self {
+            // Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
+            Pair(_a, b) => b.as_ref().clone(),
+            List(xs) => if let Some(last) = xs.last() { last.clone() } else { Empty },
+            Key(k, v) => Error("ambiguous laste() on Key node a:b.last=b / a:{b,c}.last=c ?".s()),
+            Meta { node, .. } => node.laste(),
+            Tag { .. } => Empty,
+            Block(_, _, _) => Empty,
+            _ => Empty
+        }
     }
     pub fn print(&self) {
         println!("{:?}", self);
