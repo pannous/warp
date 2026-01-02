@@ -3,6 +3,7 @@ use wasp::node::Node;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::write_wasm;
+use wasp::node::{Bracket};
 
 /// Comprehensive test covering all Node types and their WASM encoding
 #[test]
@@ -46,7 +47,6 @@ fn test_kitchensink_all_node_types() {
     );
 
     // Test 9: Block node
-    use wasp::node::{Bracket, Grouper};
     test_node(
         "Block",
         Node::List(
@@ -135,8 +135,6 @@ fn test_kitchensink_complex_tree() {
     println!("\n=== Kitchensink: Complex Tree with All Types ===\n");
 
     // Build a complex tree containing all node types
-    use wasp::node::{Bracket, Grouper};
-
     let complex_tree = Node::List(
         vec![
             // Empty

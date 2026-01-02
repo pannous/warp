@@ -7,7 +7,7 @@ use std::fmt;
 
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::node::{Bracket, Grouper, Node};
+use crate::node::{Bracket, Node};
 use std::ops::Index; // node[i]
 
 pub struct Parser {
@@ -48,8 +48,8 @@ impl Parser {
         match tokens {
             " " => Node::Empty,
             "'" | "\"" => self.parse_quote(&token),
-            "{" => self.parse_block(&token, "}"),
-            "[" => self.parse_block(&token, "]"),
+            "{" => self.parse_block("}"),
+            "[" => self.parse_block("]"),
             _ => {
                 // we already progressed with self.current += 1;
                 // look ahead to see if it's a key value pair
@@ -134,17 +134,8 @@ impl Parser {
         }
     }
 
-    fn bracket_kind(&mut self, kind: char) -> Grouper {
-        match kind {
-            '{' => Grouper::Object,
-            '(' => Grouper::Group,
-            '[' => Grouper::Pattern,
-            ';' => Grouper::Expression,
-            _ => Grouper::Other(kind, self.closing_bracket(kind)),
-        }
-    }
 
-    fn parse_block(&mut self, bracket: &String, closing: &str) -> Node {
+    fn parse_block(&mut self, closing: &str) -> Node {
         let mut nodes = Vec::new();
         while !self.check(closing) && !self.eof() {
             let node = self.parse_code();
