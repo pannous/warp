@@ -57,7 +57,7 @@ fn test_comment_metadata() {
 
     if let Node::List(items, _) = node {
         if let Some(first) = items.get(0) {
-            if let Some(meta) = first.get_meta() {
+            if let Some(meta) = first.get_metadata() {
                 println!("Comment metadata: {:?}", meta.comment);
                 assert!(meta.comment.is_some());
             }
@@ -92,7 +92,7 @@ fn test_comment_with_metadata_accessor() {
 
     eq!(node.unwrap_meta(), &Node::int(42));
 
-    if let Some(meta) = node.get_meta() {
+    if let Some(meta) = node.get_metadata() {
         eq!(meta.comment, Some("This is the answer".to_string()));
     } else {
         panic!("Expected metadata");
