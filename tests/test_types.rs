@@ -22,21 +22,21 @@ struct Generics {
     value_type: Node,
 }
 #[allow(dead_code)]
-fn clearAnalyzerContext() {} // stub
+fn clear_analyzer_context() {} // stub
 #[allow(dead_code)]
-fn ByteCharType() -> Node {
+fn byte_char_type() -> Node {
     Node::Empty
 }
 #[allow(dead_code)]
-fn IntegerType() -> Node {
+fn integer_type() -> Node {
     Node::Empty
 }
 #[allow(dead_code)]
-fn StringType() -> Node {
+fn string_type() -> Node {
     Node::Empty
 }
 #[allow(dead_code)]
-fn DoubleType() -> Node {
+fn double_type() -> Node {
     Node::Empty
 }
 #[allow(dead_code)]
@@ -108,6 +108,7 @@ fn test_return_types() {
 }
 
 // fn cast(node: Node, to_type: &Type) -> Node {
+#[allow(dead_code)]
 fn cast(node: Node, to_type: NodeKind) -> Node {
     // stub
     // in real code this would do actual casting
@@ -208,7 +209,7 @@ fn test_type_confusion() {
 #[test]
 fn test_types_simple() {
     // clearAnalyzerContext();
-    let result = analyze(parse("chars a"));
+    let _result = analyze(parse("chars a"));
     // eq!(result.kind(), Type::reference);
     // // eq!(result.typo, &ByteCharType); // todo char ≠ char* !
     // // eq!(result.name, "a");
@@ -254,7 +255,7 @@ fn test_types_simple2() {
     // // eq!(result.typo, &StringType);
     // // eq!(result.name, "b");
 
-    let result = analyze(parse("a:float,b:string"));
+    let _result = analyze(parse("a:float,b:string"));
     // let result0 = result[0];
     // eq!(result0.kind(), AST::reference);
     //	eq!(result0.kind(), AST::declaration);
@@ -271,7 +272,7 @@ fn test_types_simple2() {
 #[ignore] // TODO: requires complete type system and Signature implementation
 fn test_typed_functions() {
     // todo name 'id' clashes with 'id' in preRegisterFunctions();
-    clearAnalyzerContext();
+    clear_analyzer_context();
     let _result = analyze(parse("int tee(float b, string c){b}"));
     // eq!(result.kind(), AST::declaration);
     // // eq!(result.name, "tee");
@@ -301,7 +302,7 @@ fn test_empty_typed_functions() {
     //		proceed();
     //		break;
     //	}
-    let result = analyze(parse("int a(){}"));
+    let _result = analyze(parse("int a(){}"));
     // eq!(result.kind(), AST::declaration);
     // // eq!(result.name, "a");
     // let signature_node = result["@signature"];
@@ -339,7 +340,7 @@ fn test_polymorphism() {
     //	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
     //	let debug_fun = analyze(debug_node);
     let node = parse("string test(string a){return a};\nfloat test(float b){return b+1}");
-    let fun = analyze(node);
+    let _fun = analyze(node);
     // let function = functions["test"];
     // eq!(function.is_polymorphic, true);
     // eq!(function.variants.size(), 2);
@@ -354,7 +355,7 @@ fn test_polymorphism() {
 #[test]
 #[ignore] // TODO: requires complete type system
 fn test_polymorphism2() {
-    clearAnalyzerContext();
+    clear_analyzer_context();
     let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");
     let _fun = analyze(node);
     // let function = functions["test"];

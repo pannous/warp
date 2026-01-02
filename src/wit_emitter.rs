@@ -292,6 +292,7 @@ mod tests {
 
     #[test]
     fn test_node_to_wit_value() {
+        // todo this has currently nothing to do with Wit lol
         let node = Node::int(42);
         let wit = node_to_wit_value(&node);
         eq!(wit, "number(int(42))");

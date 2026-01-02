@@ -1,3 +1,5 @@
+#![allow(mixed_script_confusables)]
+
 use std::process::exit;
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
@@ -230,7 +232,7 @@ fn test_wasm_function_calls() {
 
 #[test]
 fn test_const_return() {
-    is!(("42"), 42);
+    is!("42" , 42);
 }
 
 #[test]
@@ -259,22 +261,22 @@ fn test_math_primitives() {
         is!(("42.1"), 42.1) // todo: let Node : return(42.1) or print value to stdout
         is!(("-42.1"), 42.1);
     );
-    is!(("42"), 42);
+    is!("42" , 42);
     is!("-42", -42);
     skip!(
 
         is!(("2000000000"), 2000000000) // todo stupid smart pointers
         is!(("-2000000000"), -2000000000);
     );
-    is!(("2000000000000"), 2000000000000i64); // let int64
-    is!(("-2000000000000"), -2000000000000i64);
+    is!("2000000000000" , 2000000000000i64); // let int64
+    is!("-2000000000000" , -2000000000000i64);
 
     is!("x=3;x*=3", 9);
     is!("'hello';(1 2 3 4);10", 10);
     //	data_mode = false;
     is!("i=ø; !i", true);
     is!("0.0", 0); // can't emit float yet
-    is!(("x=15;x>=14"), 1);
+    is!("x=15;x>=14" , 1);
     is!("i=1.0;i", 1.0); // works first time but !later in code :(
     is!("i=0.0;i", 0.0); //
     is!("3*-1", -3);
@@ -289,20 +291,20 @@ fn test_math_primitives() {
 
 #[test]
 fn test_float_operators() {
-    is!(("3.0+3.0*3.0"), 12);
-    is!(("42.0/2.0"), 21);
-    is!(("42.0*2.0"), 84);
-    is!(("42.0+2.0"), 44);
-    is!(("42.0-2.0"), 40);
-    is!(("3.0+3.0*3.0"), 12);
-    is!(("3.1>3.0"), true);
-    is!(("2.1<3.0"), true);
+    is!("3.0+3.0*3.0" , 12);
+    is!("42.0/2.0" , 21);
+    is!("42.0*2.0" , 84);
+    is!("42.0+2.0" , 44);
+    is!("42.0-2.0" , 40);
+    is!("3.0+3.0*3.0" , 12);
+    is!("3.1>3.0" , true);
+    is!("2.1<3.0" , true);
     is!("i=123.4;i", 123.4); // main returning int
     is!("i=1.0;i", 1.0);
     is!("i=3;i", 3);
     is!("i=1.0;i", 1.0);
 
-    is!(("2.1<=3.0"), true);
+    is!("2.1<=3.0" , true);
 
     skip!(
 
@@ -312,12 +314,12 @@ fn test_float_operators() {
         is!(("3.1>=3.0"), true);
     );
 
-    is!(("3.0+3.0*3.0>3.0+3.0+3.0"), true);
-    is!(("3.0+3.0*3.0<3.0*3.0*3.0"), true);
-    is!(("3.0+3.0*3.0<3.0+3.0+3.0"), false);
-    is!(("3.0+3.0*3.0>3.0*3.0*3.0"), false); // 0x1.8p+1 == 3.0
-    is!(("3.0+3.0+3.0<3.0+3.0*3.0"), true);
-    is!(("3.0*3.0*3.0>3.0+3.0*3.0"), true);
+    is!("3.0+3.0*3.0>3.0+3.0+3.0" , true);
+    is!("3.0+3.0*3.0<3.0*3.0*3.0" , true);
+    is!("3.0+3.0*3.0<3.0+3.0+3.0" , false);
+    is!("3.0+3.0*3.0>3.0*3.0*3.0" , false); // 0x1.8p+1 == 3.0
+    is!("3.0+3.0+3.0<3.0+3.0*3.0" , true);
+    is!("3.0*3.0*3.0>3.0+3.0*3.0" , true);
 }
 
 #[test]
@@ -377,20 +379,20 @@ fn test_math_operators() {
     is!("‖-3‖", 3);
     is!("-‖-3‖", -3);
     is!("‖-3‖+1", 4);
-    is!(("7%5"), 2);
-    is!(("42/2"), 21);
+    is!("7%5" , 2);
+    is!("42/2" , 21);
     //			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
-    is!(("42/2"), 21);
-    is!(("42*2"), 84);
-    is!(("42+2"), 44);
-    is!(("42-2"), 40);
-    is!(("3+3*3"), 12);
-    is!(("3+3*3>3+3+3"), true);
-    is!(("3+3*3<3*3*3"), true);
-    is!(("3+3*3<3+3+3"), false);
-    is!(("3+3*3>3*3*3"), false);
-    is!(("3+3+3<3+3*3"), true);
-    is!(("3*3*3>3+3*3"), true);
+    is!("42/2" , 21);
+    is!("42*2" , 84);
+    is!("42+2" , 44);
+    is!("42-2" , 40);
+    is!("3+3*3" , 12);
+    is!("3+3*3>3+3+3" , true);
+    is!("3+3*3<3*3*3" , true);
+    is!("3+3*3<3+3+3" , false);
+    is!("3+3*3>3*3*3" , false);
+    is!("3+3+3<3+3*3" , true);
+    is!("3*3*3>3+3*3" , true);
     is!("i=3;i*-1", -3);
     is!("3*-1", -3);
     is!("-√9", -3);
@@ -417,7 +419,7 @@ fn test_math_operators() {
     {
         is!("√ π ²", std::f64::consts::PI);
     }
-    is!(("3²"), 9);
+    is!("3²" , 9);
     skip!(
 
         is!(("3⁰"), 1); // get UNITY of set (1->e let cast ok?);
@@ -454,24 +456,24 @@ fn test_math_operators_runtime() {
 #[test]
 fn test_comparison_math() {
     // may be evaluated by compiler!
-    is!(("3*42>2*3"), 1);
-    is!(("3*1<2*3"), 1);
-    is!(("3*42≥2*3"), 1);
-    is!(("3*2≥2*3"), 1);
-    is!(("3*2≤2*3"), 1);
-    is!(("3*2≤24*3"), 1);
-    is!(("3*13!=14*3"), 1);
-    is!(("3*13<=14*3"), 1);
-    is!(("3*15>=14*3"), 1);
-    is!(("3*42<2*3"), false);
-    is!(("3*1>2*3"), false);
-    is!(("3*452!=452*3"), false);
-    is!(("3*13>=14*3"), false);
-    is!(("3*15<=14*3"), False);
-    is!(("3*42≥112*3"), false);
-    is!(("3*2≥112*3"), false);
-    is!(("3*12≤2*3"), false);
-    is!(("3*112≤24*3"), false);
+    is!("3*42>2*3" , 1);
+    is!("3*1<2*3" , 1);
+    is!("3*42≥2*3" , 1);
+    is!("3*2≥2*3" , 1);
+    is!("3*2≤2*3" , 1);
+    is!("3*2≤24*3" , 1);
+    is!("3*13!=14*3" , 1);
+    is!("3*13<=14*3" , 1);
+    is!("3*15>=14*3" , 1);
+    is!("3*42<2*3" , false);
+    is!("3*1>2*3" , false);
+    is!("3*452!=452*3" , false);
+    is!("3*13>=14*3" , false);
+    is!("3*15<=14*3" , False);
+    is!("3*42≥112*3" , false);
+    is!("3*2≥112*3" , false);
+    is!("3*12≤2*3" , false);
+    is!("3*112≤24*3" , false);
 
     //    is!(("3*452==452*3"), 1) // forces runtime
     //    is!(("3*13==14*3"), False);
@@ -489,25 +491,25 @@ fn test_comparison_id() {
         is!("id(3*452)==452*3", 1);
         is!(("id(3*13)==14*3"), False);
     );
-    is!(("id(3*42)≥2*3"), 1);
-    is!(("id(3*2)≥2*3"), 1);
-    is!(("id(3*2)≤2*3"), 1);
-    is!(("id(3*2)≤24*3"), 1);
-    is!(("id(3*13)!=14*3"), 1);
-    is!(("id(3*13)<= id 14*3"), 1);
-    is!(("id(3*13)<= id 14*3"), 1);
+    is!("id(3*42)≥2*3" , 1);
+    is!("id(3*2)≥2*3" , 1);
+    is!("id(3*2)≤2*3" , 1);
+    is!("id(3*2)≤24*3" , 1);
+    is!("id(3*13)!=14*3" , 1);
+    is!("id(3*13)<= id 14*3" , 1);
+    is!("id(3*13)<= id 14*3" , 1);
 
-    is!(("id(3*15)>= id 14*3"), 1);
-    is!(("id(3*42)< id 2*3"), False);
-    is!(("id(3*1)> id 2*3"), False);
-    is!(("id(3*452)!=452*3"), False);
-    is!(("id(3*13)>= id 14*3"), False);
-    is!(("id(3*15)<= id 14*3"), False);
-    is!(("id(3*13)<= id 14*3"), 1);
-    is!(("id(3*42)≥112*3"), false);
-    is!(("id(3*2)≥112*3"), false);
-    is!(("id(3*12)≤2*3"), false);
-    is!(("id(3*112)≤24*3"), false);
+    is!("id(3*15)>= id 14*3" , 1);
+    is!("id(3*42)< id 2*3" , False);
+    is!("id(3*1)> id 2*3" , False);
+    is!("id(3*452)!=452*3" , False);
+    is!("id(3*13)>= id 14*3" , False);
+    is!("id(3*15)<= id 14*3" , False);
+    is!("id(3*13)<= id 14*3" , 1);
+    is!("id(3*42)≥112*3" , false);
+    is!("id(3*2)≥112*3" , false);
+    is!("id(3*12)≤2*3" , false);
+    is!("id(3*112)≤24*3" , false);
 }
 
 #[test]
@@ -524,51 +526,51 @@ fn test_comparison_id_precedence() {
     );
     is!("id(3*42)> id 2*3", 1);
     is!("id(3*1)< id 2*3", 1);
-    is!(("id 3*42≥2*3"), 1);
-    is!(("id 3*2≥2*3"), 1);
-    is!(("id 3*2≤2*3"), 1);
-    is!(("id 3*2≤24*3"), 1);
-    is!(("id 3*13!=14*3"), 1);
-    is!(("id 3*13<= id 14*3"), 1);
-    is!(("id 3*13<= id 14*3"), 1);
+    is!("id 3*42≥2*3" , 1);
+    is!("id 3*2≥2*3" , 1);
+    is!("id 3*2≤2*3" , 1);
+    is!("id 3*2≤24*3" , 1);
+    is!("id 3*13!=14*3" , 1);
+    is!("id 3*13<= id 14*3" , 1);
+    is!("id 3*13<= id 14*3" , 1);
 
-    is!(("id 3*15>= id 14*3"), 1);
-    is!(("id 3*42< id 2*3"), False);
-    is!(("id 3*1> id 2*3"), False);
-    is!(("id 3*452!=452*3"), False);
-    is!(("id 3*13>= id 14*3"), False);
-    is!(("id 3*15<= id 14*3"), False);
-    is!(("id 3*13<= id 14*3"), 1);
-    is!(("id 3*42≥112*3"), false);
-    is!(("id 3*2≥112*3"), false);
-    is!(("id 3*12≤2*3"), false);
-    is!(("id 3*112≤24*3"), false);
+    is!("id 3*15>= id 14*3" , 1);
+    is!("id 3*42< id 2*3" , False);
+    is!("id 3*1> id 2*3" , False);
+    is!("id 3*452!=452*3" , False);
+    is!("id 3*13>= id 14*3" , False);
+    is!("id 3*15<= id 14*3" , False);
+    is!("id 3*13<= id 14*3" , 1);
+    is!("id 3*42≥112*3" , false);
+    is!("id 3*2≥112*3" , false);
+    is!("id 3*12≤2*3" , false);
+    is!("id 3*112≤24*3" , false);
 }
 
 #[test]
 fn test_comparison_primitives() {
-    is!(("42>2"), 1);
-    is!(("1<2"), 1);
-    is!(("42≥2"), 1);
-    is!(("2≥2"), 1);
-    is!(("2≤2"), 1);
-    is!(("2≤24"), 1);
-    is!(("13!=14"), 1);
-    is!(("13<=14"), 1);
-    is!(("15>=14"), 1);
-    is!(("42<2"), False);
-    is!(("1>2"), False);
-    is!(("452!=452"), False);
-    is!(("13>=14"), False);
-    is!(("15<=14"), False);
-    is!(("42≥112"), false);
-    is!(("2≥112"), false);
-    is!(("12≤2"), false);
-    is!(("112≤24"), false);
+    is!("42>2" , 1);
+    is!("1<2" , 1);
+    is!("42≥2" , 1);
+    is!("2≥2" , 1);
+    is!("2≤2" , 1);
+    is!("2≤24" , 1);
+    is!("13!=14" , 1);
+    is!("13<=14" , 1);
+    is!("15>=14" , 1);
+    is!("42<2" , False);
+    is!("1>2" , False);
+    is!("452!=452" , False);
+    is!("13>=14" , False);
+    is!("15<=14" , False);
+    is!("42≥112" , false);
+    is!("2≥112" , false);
+    is!("12≤2" , false);
+    is!("112≤24" , false);
     #[cfg(not(feature = "WASM"))]
     {
-        is!(("452==452"), 1); // forces runtime eq
-        is!(("13==14"), False);
+        is!("452==452" , 1); // forces runtime eq
+        is!("13==14" , False);
     }
 }
 
@@ -1143,9 +1145,9 @@ fn test_recent_random_bugs() {
         }
     }
     //			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
-    is!(("42/2"), 21); // in WEBAPP
+    is!("42/2" , 21); // in WEBAPP
 
-    is!(("42.1"), 42.1);
+    is!("42.1" , 42.1);
     // main returns int, should be pointer to value! let array_header_32 : result => smart pointer!
     //			Ambiguous mixing of functions `ƒ 1 + ƒ 1 ` can be read as `ƒ(1 + ƒ 1)` or `ƒ(1) + ƒ 1`
     is!("id 3*42 > id 2*3", 1);
@@ -1311,11 +1313,11 @@ fn test_wasm_mutable_global_imports() {
 
 #[test]
 fn test_custom_operators() {
-    is!(("suffix operator ⁰ := 1; 3⁰"), 1); // get UNITY of set (1->e let cast ok?);
-    is!(("suffix ⁰ := 1; 3⁰"), 1); // get UNITY of set (1->e let cast ok?);
-    is!(("suffix operator ³ := it*it*it; 3³"), 27); // define inside wasp!
-    is!(("suffix operator ³ := it*it*it; .5³"), 1 / 8);
-    is!(("suffix ³ := it*it*it; 3³"), 27); // define inside wasp!
+    is!("suffix operator ⁰ := 1; 3⁰" , 1); // get UNITY of set (1->e let cast ok?);
+    is!("suffix ⁰ := 1; 3⁰" , 1); // get UNITY of set (1->e let cast ok?);
+    is!("suffix operator ³ := it*it*it; 3³" , 27); // define inside wasp!
+    is!("suffix operator ³ := it*it*it; .5³" , 1 / 8);
+    is!("suffix ³ := it*it*it; 3³" , 27); // define inside wasp!
 
     //	is!(("alias to let third : the = ³"),1);
     //	is!(("3⁴"),9*9);
@@ -1400,9 +1402,9 @@ fn test_smart_return() {
         is!("42/4", 10.5);
     );
 
-    is!(("42.0/2.0"), 21);
+    is!("42.0/2.0" , 21);
 
-    is!(("-1.1"), -1.1);
+    is!("-1.1" , -1.1);
     is!("'OK'", "OK");
 }
 #[test]
@@ -1907,9 +1909,9 @@ fn test_canvas() {
 fn test_dom() {
     print("test_dom");
     // preRegisterFunctions();
-    let mut result = analyze(parse("getElementById('canvas')"));
+    let mut _result = analyze(parse("getElementById('canvas')"));
     // eq!(result.kind, call);
-    result = eval("getElementById('canvas');");
+    _result = eval("getElementById('canvas');");
     //	print(typeName(result.kind));
     //	eq!(result.kind, strings); // why?
     //	eq!(result.kind, longs); // todo: can't use smart pointers for elusive externref
