@@ -83,6 +83,10 @@ impl Dada {
         }
     }
 
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.data.as_any().downcast_ref::<T>()
+    }
+
     fn infer_type(type_name: &str) -> DataType {
         if type_name.starts_with("alloc::vec::Vec") || type_name.starts_with("std::vec::Vec") {
             DataType::Vec
@@ -116,9 +120,6 @@ impl Dada {
         }
     }
 
-    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.data.as_any().downcast_ref::<T>()
-    }
 }
 
 impl Clone for Dada {
