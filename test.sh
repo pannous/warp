@@ -2,11 +2,14 @@
 # Simplified test runner with --no-fail-fast default
 # Creates clean test_results.txt with just pass/fail lists
 
+# Use local target dir instead of global /opt/cargo (fixes IDE/CLI cache conflicts)
+unset CARGO_TARGET_DIR
+
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 
 echo "Running all tests..."
-cargo test --no-fail-fast 2>&1 | tee "$TEMP_FILE"
+cargo test --no-fail-fast -- --test-threads=16 FAST_TIMEOUT=1 2>&1 | tee "$TEMP_FILE"
 
 # Count test results
 TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
