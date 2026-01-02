@@ -894,8 +894,12 @@ impl WasmGcEmitter {
                 warn!("Unhandled Error {}", node);
                 // panic!("Unhandled Error {}", node);
             }
-            &Node::False => {func.instruction(&I32Const(0));},
-            &Node::True => {func.instruction(&I32Const(1));},
+            &Node::False => {
+                func.instruction(&I32Const(0));
+            }
+            &Node::True => {
+                func.instruction(&I32Const(1));
+            }
             _ => todo!(),
         }
     }

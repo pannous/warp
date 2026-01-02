@@ -1,9 +1,9 @@
 use wasp::extensions::numbers::Number;
+use wasp::node::Bracket;
 use wasp::node::Node;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::write_wasm;
-use wasp::node::{Bracket};
 
 /// Comprehensive test covering all Node types and their WASM encoding
 #[test]
@@ -62,11 +62,14 @@ fn test_kitchensink_all_node_types() {
     // Test 10: List node
     test_node(
         "List",
-        Node::List(vec![
-            Node::Text("item1".to_string()),
-            Node::Text("item2".to_string()),
-            Node::Text("item3".to_string()),
-        ], Bracket::Square),
+        Node::List(
+            vec![
+                Node::Text("item1".to_string()),
+                Node::Text("item2".to_string()),
+                Node::Text("item3".to_string()),
+            ],
+            Bracket::Square,
+        ),
     );
 
     // Test 11: Data node
@@ -159,10 +162,10 @@ fn test_kitchensink_complex_tree() {
                 Bracket::Curly,
             ),
             // List (Square brackets)
-            Node::List(vec![
-                Node::Text("a".to_string()),
-                Node::Text("b".to_string()),
-            ], Bracket::Square),
+            Node::List(
+                vec![Node::Text("a".to_string()), Node::Text("b".to_string())],
+                Bracket::Square,
+            ),
             // Data
             Node::data("custom data"),
         ],
