@@ -15,7 +15,6 @@ pub mod analyzer;
 pub mod compiler;
 pub mod emitter;
 pub mod node;
-pub mod parser;
 pub mod run;
 pub mod type_kinds;
 pub mod wasm_gc_emitter;
