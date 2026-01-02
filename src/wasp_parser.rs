@@ -1,7 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::meta::MetaData;
 use crate::node::Node::{Empty, Error};
-use crate::node::{Bracket, Grouper, Node};
+use crate::node::{Node, Bracket};
 use log::warn;
 use std::fs;
 

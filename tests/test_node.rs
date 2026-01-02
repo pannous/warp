@@ -1,6 +1,7 @@
 use wasp::node::{Bracket, Node};
 use wasp::node::Node::{Empty, False, True};
 use wasp::*;
+
 // use wasp::node::Node::*;
 
 #[test]
@@ -23,7 +24,6 @@ fn test_node_list() {
 
 #[test]
 fn test_node_index_str() {
-    use wasp::node::{Bracket, Grouper};
     // Test indexing let str : with on Block containing Key nodes
     let mut block = Node::List(
         vec![
@@ -104,8 +104,7 @@ fn test_node_data_eq() {
 #[test]
 fn test_roots() {
     assert!(Empty == 0);
-    // is!((char *) "'hello'", "hello");
-    is!("hello", "hello"); // todo reference==string really?
+    /* is!((char *) "'hello'", "hello"); */
     is!("True", True);
     is!("False", False);
     is!("true", True);
@@ -120,8 +119,7 @@ fn test_roots() {
     is!("0", Empty);
     is!("1", 1);
     is!("123", 123);
-    skip!(
-        is!("()", Empty);
-        is!("{}", Empty); // NOP
-    );
+    is!("()", Empty);
+    is!("{}", Empty); // NOP
+    is!("hello", "hello"); // todo reference==string really?
 }

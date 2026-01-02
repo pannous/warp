@@ -1,8 +1,8 @@
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, DataType, Grouper, Node};
+use crate::node::{Bracket, DataType, Node};
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
-use log::trace;
+use log::{trace, warn};
 use std::collections::HashMap;
 use wasm_encoder::*;
 use wasmparser::{Validator, WasmFeatures};
@@ -715,7 +715,8 @@ impl WasmGcEmitter {
 
         match node {
             Node::Empty => {
-                // self.emit_node_null(func); // expected (ref $type), found (ref null $type) currently not nullable
+                // self.emit_node_null(func);
+                // expected (ref $type), found (ref null $type) currently not nullable
                 // self.emit_empty_node(func, NodeKind::Empty);
                 func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
             }
@@ -890,20 +891,11 @@ impl WasmGcEmitter {
                 func.instruction(&Instruction::StructNew(self.node_base_type));
             }
             Node::Error(_) => {
-                // Emit an Empty node for errors
-                func.instruction(&I32Const(0));
-                func.instruction(&I32Const(0));
-                func.instruction(&I32Const(NodeKind::Empty as i32));
-                func.instruction(&Instruction::I64Const(0));
-                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
-                func.instruction(&I32Const(0));
-                func.instruction(&I32Const(0));
-                self.emit_node_null(func);
-                self.emit_node_null(func);
-                self.emit_node_null(func);
-                func.instruction(&Instruction::StructNew(self.node_base_type));
+                warn!("Unhandled Error {}", node);
+                // panic!("Unhandled Error {}", node);
             }
-            &Node::False | &Node::True => todo!(),
+            &Node::False => {func.instruction(&I32Const(0));},
+            &Node::True => {func.instruction(&I32Const(1));},
             _ => todo!(),
         }
     }

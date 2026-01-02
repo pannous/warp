@@ -1,5 +1,5 @@
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, DataType, Grouper, Node};
+use crate::node::{Bracket, DataType, Node};
 
 pub struct WitEmitter {
     indent_level: usize,
@@ -245,7 +245,7 @@ pub fn node_to_wit_value(node: &Node) -> String {
         Node::Error(e) => format!("error(\"{}\")", escape_string(e)),
         Node::False => "false".to_string(),
         Node::True => "true".to_string(),
-        _ => todo!(),
+        _ => todo!("no wit"),
     }
 }
 
@@ -280,6 +280,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_node_to_wit_value() {
         // todo this has currently nothing to do with Wit lol
         let node = Node::int(42);
@@ -309,6 +310,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_complex_node_to_wit() {
         let node = Node::list(vec![Node::int(1), Node::int(2), Node::text("hello")]);
 

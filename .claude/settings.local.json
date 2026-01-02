@@ -16,7 +16,11 @@
       "Bash(wc -l tests/todo/*.rs | sort -n | head -20)",
       "Read(/Users/me/dev/angles/warp/tests/todo/test_list.rs)",
       "Bash(grep \"fn test.*List\\|fn test.*Array\" tests/todo/tests_1.rs | head -20)",
-      "Bash(grep -n \"fn testList\\|fn test_list\\|fn testArray\" tests/todo/tests_*.rs tests/todo/tests_original.rs | head -40)"
+      "Bash(grep -n \"fn testList\\|fn test_list\\|fn testArray\" tests/todo/tests_*.rs tests/todo/tests_original.rs | head -40)",
+      "Bash(chmod:*)",
+      "Bash(/Users/me/dev/angles/warp/failing_tests.sh)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   },
   "hooks": {
