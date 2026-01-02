@@ -214,9 +214,10 @@ impl WaspParser {
             }
             Some(ch) => {
                 match ch {
-                    '"' | '\'' | '“' | '‘' | '«' => self.parse_string(),
-                    '[' => self.parse_list(),
-                    '{' => self.parse_block(),
+                    '"' | '\'' | '«' => self.parse_string(),
+                    '(' => self.parse_bracketed('(', ')', Bracket::Round),
+                    '[' => self.parse_bracketed('[', ']', Bracket::Square),
+                    '{' => self.parse_bracketed('{', '}', Bracket::Curly),
                     // assert!(!'三'.is_numeric());
                     _ if ch.is_numeric() || ch == '-' => self.parse_number(),
                     _ if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
@@ -225,8 +226,7 @@ impl WaspParser {
                     _ => {
                         // todo implement the rest like operators, etc.
                         warn!(
-                            "Unexpected character '{}' at line {}, column {}",
-                            ch, line, column
+                            "Unexpected character '{}' at line {}, column {}",ch, line, column
                         );
                         self.advance();
                         Error(format!("Unexpected character '{}'", ch))
@@ -353,7 +353,7 @@ impl WaspParser {
         // Check for named block: name{...} or name(...)
         match self.current_char() {
             Some('{') => {
-                let block = self.parse_block();
+                let block = self.parse_bracketed('{', '}', Bracket::Curly);
                 // Create Tag for named blocks: html{...} -> Tag("html", None, body)
                 Node::tag(&symbol, block)
             }
@@ -366,7 +366,7 @@ impl WaspParser {
                 self.skip_whitespace();
 
                 if self.current_char() == Some('{') {
-                    let body = self.parse_block();
+                    let body = self.parse_bracketed('{', '}', Bracket::Curly);
                     // Use Pair for function syntax: name(params) : body
                     let signature = Node::text(&format!("{}{}", symbol, params));
                     Node::pair(signature, body)
@@ -420,54 +420,20 @@ impl WaspParser {
         Err("Unterminated parentheses".to_string())
     }
 
-    fn parse_list(&mut self) -> Node {
-        self.advance(); // skip '['
-        let mut items = Vec::new();
-
-        loop {
-            self.skip_whitespace();
-
-            if self.current_char() == Some(']') {
-                self.advance();
-                break;
-            }
-
-            let value = self.parse_value();
-            if value != Empty {
-                items.push(value);
-            }
-            self.skip_whitespace();
-
-            match self.current_char() {
-                Some(',') => {
-                    self.advance();
-                }
-                Some(']') => {
-                    self.advance();
-                    break;
-                }
-                _ => {}
-            }
-        }
-        Node::list(items)
-    }
-
-    fn parse_block(&mut self) -> Node {
-        self.advance(); // skip '{'
+    fn parse_bracketed(&mut self, open: char, close: char, bracket: Bracket) -> Node {
+        self.advance(); // skip opening bracket
         let mut items = Vec::new();
 
         loop {
             self.skip_whitespace_and_comments();
 
-            if self.current_char() == Some('}') {
+            if self.current_char() == Some(close) {
                 self.advance();
                 break;
             }
-
             if self.current_char().is_none() {
-                return Error("Unterminated block".to_string());
+                return Error(format!("Unterminated '{}' (expected '{}')", open, close));
             }
-
             let pos_before = self.pos;
             let value = self.parse_value();
             if value != Empty {
@@ -475,7 +441,7 @@ impl WaspParser {
             }
             self.skip_whitespace_and_comments();
 
-            // Optional comma/semicolon separator
+            // Optional comma/semicolon separator todo separators carry semantics see 
             if let Some(ch) = self.current_char() {
                 if ch == ',' || ch == ';' {
                     self.advance();
@@ -484,7 +450,7 @@ impl WaspParser {
 
             // Safety check: if we haven't made progress and we're not at the end,
             // we're in an infinite loop - skip the problematic character
-            if self.pos == pos_before && self.current_char() != Some('}') {
+            if self.pos == pos_before && self.current_char() != Some(close) {
                 if self.current_char().is_some() {
                     // Skip unexpected character to avoid infinite loop
                     self.advance();
@@ -492,7 +458,11 @@ impl WaspParser {
             }
         }
 
-        Node::List(items, Bracket::Curly)
+        if items.is_empty() {
+            Empty
+        } else {
+            Node::List(items, bracket)
+        }
     }
 }
 
