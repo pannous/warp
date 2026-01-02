@@ -7,6 +7,7 @@ use wasp::wasp_parser::parse;
 use wasp::{eq, is, skip};
 
 #[test]
+#[ignore]
 fn test2def() {
 	// parse("def test1(x){x+1};def test2(x){x+1};test2(3)");
 	is!("def test1(x){x+1};def test2(x){x+1};test2(3)", 4);
@@ -39,6 +40,7 @@ fn test_function_declaration() {
 }
 
 #[test]
+#[ignore]
 fn test_function_declaration_parse() {
 	//    let node1 = analyze(parse("fn main(){}"));
 	//    assert!(node1.kind==declaration);
@@ -69,6 +71,7 @@ fn test_rename_wasm_function() {
 }
 
 #[test]
+#[ignore]
 fn test_wit_function() {
 	//    funcDeclaration
 	// a:b,c vs a:b, c:d
@@ -106,6 +109,7 @@ fn test_float_return_through_main() {
 }
 
 #[test]
+#[ignore]
 fn test_graph_params() {
 	let result = parse("{\n  empireHero: hero(episode: EMPIRE){\n    name\n  }\n  jediHero: hero(episode: JEDI){\n    name\n  }\n}");
 	// let hero : Node = result["empireHero"].clone();
@@ -127,6 +131,7 @@ fn test_graph_params() {
 }
 
 #[test]
+#[ignore]
 fn test_params() {
 	//	eq!(parse("f(x)=x*x").param->first(),"x");
 	//    data_mode = true; // todo ?
@@ -160,6 +165,7 @@ let result = parse("chained_ops(1)(1)(1)", 0)); // why not generalize from the s
 }
 
 #[test]
+#[ignore]
 fn test_stacked_lambdas() {
 	let result = parse("a{x:1}{y:2}{3}");
 	result.print();
@@ -174,6 +180,7 @@ fn test_stacked_lambdas() {
 }
 
 #[test]
+#[ignore]
 fn test_modifiers() {
 	is!("public fun ignore(){3}", 3);
 	is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}",3);

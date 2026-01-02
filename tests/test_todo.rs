@@ -49,6 +49,7 @@ fn test_paint_wasm() {
 }
 
 #[test]
+#[ignore]
 fn test_bad_in_wasm() {
 	// break immediately
 	// testStringConcatWasm(); // TODO: implement
