@@ -1,7 +1,7 @@
 use wasp::extensions::numbers::Number;
 use wasp::node::Node;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::{read_bytes, run_wasm_gc_object};
+use wasp::test_utils::{read_bytes_fast, read_wasm_fast};
 use wasp::{eq, write_wasm};
 
 /// Test ergonomic reading patterns from rasm
@@ -18,8 +18,8 @@ fn test_ergonomic_node_reading() {
 
     let bytes = emitter.finish();
 
-    // Read it back ergonomically
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    // Read it back ergonomically using fast shared engine
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     println!("✓ Loaded WASM module and got root node");
 
@@ -52,7 +52,7 @@ fn test_read_text_node() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     println!("✓ Loaded text node");
 
@@ -79,7 +79,7 @@ fn test_read_symbol_node() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
     eq!(kind, 4); // NodeKind::Symbol
@@ -111,7 +111,7 @@ fn test_ergonomic_pattern() {
     let filename = "out/test_ergonomic_pattern.wasm";
     write_wasm(filename, &bytes);
 
-    let root = run_wasm_gc_object(filename).expect("Failed to read WASM file");
+    let root = read_wasm_fast(filename).expect("Failed to read WASM file");
 
     println!("✓ Read WASM file");
 
@@ -141,7 +141,7 @@ fn test_field_existence() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     // Test has() method
     assert!(root.has("tag").unwrap());
@@ -163,7 +163,7 @@ fn test_empty_node() {
     emitter.emit_node_main(&Node::Empty);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
     eq!(kind, 0); // NodeKind::Empty
@@ -183,7 +183,7 @@ fn test_codepoint_node() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
     eq!(kind, 3); // NodeKind::Char
@@ -211,7 +211,7 @@ fn test_float_node() {
     emitter.emit_node_main(&node);
 
     let bytes = emitter.finish();
-    let root = read_bytes(&bytes).expect("Failed to read WASM");
+    let root = read_bytes_fast(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
     eq!(kind, 1); // NodeKind::Number
