@@ -15,7 +15,7 @@ fn test_line_comments() {
     println!("Parsed with line comment: {:?}", node);
 
     // Should parse successfully
-    if let Node::Block(items, _, _) = node {
+    if let Node::List(items, _) = node {
         eq!(items.len(), 2);
     }
 }
@@ -32,7 +32,7 @@ fn test_block_comments() {
     let node = WaspParser::parse(wasp);
     println!("Parsed with block comment: {:?}", node);
 
-    if let Node::Block(items, _, _) = node {
+    if let Node::List(items, _) = node {
         eq!(items.len(), 2);
     }
 }
@@ -55,7 +55,7 @@ fn test_comment_metadata() {
     let node = WaspParser::parse(wasp);
     println!("Node: {:?}", node);
 
-    if let Node::Block(items, _, _) = node {
+    if let Node::List(items, _) = node {
         if let Some(first) = items.get(0) {
             if let Some(meta) = first.get_meta() {
                 println!("Comment metadata: {:?}", meta.comment);

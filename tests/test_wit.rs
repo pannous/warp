@@ -15,7 +15,7 @@ pub fn test_wit_parse() {
     // loop {} // Should be killed at .1
     let ast = parse_file("wasp-ast.wit");
     println!("serialize: {:#?}", ast.serialize());
-    if let List(ref items) = ast {
+    if let List(ref items, _) = ast {
         for (i, item) in items.iter().enumerate() {
             println!("item {}: {:#?}", i, item);
         }
