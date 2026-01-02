@@ -670,8 +670,59 @@ impl Node {
 	}
 
 	pub fn serialize(&self) -> String {
-		let s = format!("{:?}", self);
-		s.trim().to_string()
+		self.serialize_impl(0)
+	}
+
+	fn serialize_impl(&self, _depth: usize) -> String {
+		match self {
+			Symbol(s) => s.clone(),
+			Node::Number(n) => format!("{}", n),
+			Text(t) => format!("'{}'", t),
+			Char(c) => format!("'{}'", c),
+			List(nodes, bracket) => {
+				let (open, close) = match bracket {
+					Bracket::Curly => ('{', '}'),
+					Bracket::Square => ('[', ']'),
+					Bracket::Round => ('(', ')'),
+					Bracket::Other(o, c) => (*o, *c),
+				};
+				if nodes.is_empty() {
+					format!("{}{}", open, close)
+				} else if nodes.len() == 1 {
+					format!("{}{}{}", open, nodes[0].serialize_impl(_depth), close)
+				} else {
+					let items: Vec<String> = nodes.iter()
+						.map(|n| n.serialize_impl(_depth))
+						.collect();
+					format!("{}{}{}", open, items.join(", "), close)
+				}
+			}
+			Key(k, v) => format!("{}={}", k, v.serialize_impl(_depth)),
+			Pair(a, b) => format!("{}:{}", a.serialize_impl(_depth), b.serialize_impl(_depth)),
+			Tag { title, params, body } => {
+				if **params == Empty {
+					format!("{}{}", title, body.serialize_impl(_depth))
+				} else {
+					format!("{}<{}>{}", title, params.serialize_impl(_depth), body.serialize_impl(_depth))
+				}
+			}
+			Data(d) => format!("Data({})", d.type_name),
+			Meta { node, data } => {
+				if let Data(dada) = data.as_ref() {
+					if let Some(metadata) = dada.downcast_ref::<MetaData>() {
+						if let Some(comment) = &metadata.comment {
+							return format!("{} /* {} */", node.serialize_impl(_depth), comment);
+						}
+					}
+				}
+				node.serialize_impl(_depth)
+			}
+			Error(e) => format!("Error({})", e),
+			Empty => "ø".to_string(),
+			True => "true".to_string(),
+			False => "false".to_string(),
+			_ => format!("{:?}", self),
+		}
 	}
 
 	pub fn iter(&self) -> NodeIter {
