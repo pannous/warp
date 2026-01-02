@@ -137,20 +137,8 @@ impl Node {
     }
     pub fn first(&self) -> Node {
         match self {
-            List(items) => {
-                if let Some(first) = items.first() {
-                    first.clone()
-                } else {
-                    Empty
-                }
-            }
-            Block(items, ..) => {
-                if let Some(first) = items.first() {
-                    first.clone()
-                } else {
-                    Empty
-                }
-            }
+            List(xs) => if let Some(first) = xs.first() { first.clone() } else { Empty },
+            Block(xs, ..) => if let Some(first) = xs.first() { first.clone() } else { Empty },
             // Key(k, v) => v.as_ref().clone(),// a:{b,c}.first() -> b !?
             Key(k, v) => Error("ambiguous first() on Key node a:b.first=a / a:{b,c}.first=b ?".s()),
             Meta { node, .. } => node.first(),
@@ -174,10 +162,33 @@ impl Node {
         println!("{:?}", self);
     }
     pub fn children(&self) -> Vec<Node> {
-        todo!()
+        match self {
+            List(xs) => xs.clone(),
+            Block(xs, ..) => xs.clone(),
+            Meta { node, .. } => node.children(),
+            _ => vec![],
+        }
     }
-    pub fn add(&self, _p0: Node) -> Node {
-        todo!()
+
+    pub fn add(&self, other: Node) -> Node {
+        // ⚠️different semantics for different types! todo OR JUST (cons a b) for all!?
+        use Node::*;
+        match (self, other) {
+            // Symmetric cases (commutative)
+            (Number(n), Number(m)) => Number(n.add(m)),
+            (Text(s), Text(m)) => Text(format!("{}{}", s, m)),
+            (List(xs), List(ys)) => List(xs.iter().cloned().chain(ys).collect()),
+
+            // Asymmetric cases - both directions
+            (List(xs), b) => List(xs.iter().cloned().chain([b]).collect()),
+            (a, List(ys)) => List([a.clone()].into_iter().chain(ys).collect()),
+
+            // Meta unwrapping - both directions
+            (Meta { node, .. }, n) => node.add(n),
+            (n, Meta { node, .. }) => n.add(*node.clone()),
+
+            _ => todo!(),
+        }
     }
 
     pub fn values(&self) -> Node {
