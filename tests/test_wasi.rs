@@ -1,5 +1,5 @@
 use wasp::is;
-use wasp::util::loadModule;
+use wasp::util::load_module;
 
 #[test]
 fn test_fd_write() {
@@ -11,7 +11,7 @@ fn test_fd_write() {
     //    is!("len('123')", 3); // Map::len
     //    quit();
     is!("puts 'ok'",  0); // connect to wasi fd_write
-    loadModule("wasp");
+    load_module("wasp");
     is!("puts 'ok'",  0);
     is!("puti 56", 56);
     is!("putl 56", 56);
