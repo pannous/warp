@@ -71,8 +71,7 @@ pub enum Node {
         body: Box<Node>,
     }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
     // (use Empty for no attrs)
-    Block(Vec<Node>, Grouper, Bracket), // todo merge into List: Grouper Bracket kinda redundant!
-    List(Vec<Node>),                    // same as Block without Grouper/Bracket meta info
+    List(Vec<Node>, Bracket), // merged Block into List, using Bracket to distinguish {}, [], ()
     // Data(Dada), // most generic container for any kind of data not captured by other node types
     Data(Dada), // meta as wrapper or as left/right node?
     Meta {
@@ -133,13 +132,11 @@ impl Node {
         todo!("remove from {} to {}", from, to)
     }
     pub fn strings(p0: Vec<&str>) -> Node {
-        List(map(p0, |s| Text(s.to_string())))
+        List(map(p0, |s| Text(s.to_string())), Bracket::Square)
     }
     pub fn first(&self) -> Node {
         match self {
-            List(xs) => if let Some(first) = xs.first() { first.clone() } else { Empty },
-            Block(xs, ..) => if let Some(first) = xs.first() { first.clone() } else { Empty },
-            // Key(k, v) => v.as_ref().clone(),// a:{b,c}.first() -> b !?
+            List(xs, _) => if let Some(first) = xs.first() { first.clone() } else { Empty },
             Key(_k, _v) => Error("ambiguous first() on Key node a:b.first=a / a:{b,c}.first=b ?".s()),
             Meta { node, .. } => node.first(),
             _ => Empty,
@@ -150,11 +147,10 @@ impl Node {
         match self {
             // Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
             Pair(_a, b) => b.as_ref().clone(),
-            List(xs) => if let Some(last) = xs.last() { last.clone() } else { Empty },
+            List(xs, _) => if let Some(last) = xs.last() { last.clone() } else { Empty },
             Key(_k, _v) => Error("ambiguous laste() on Key node a:b.last=b / a:{b,c}.last=c ?".s()),
             Meta { node, .. } => node.laste(),
             Tag { .. } => Empty,
-            Block(_, _, _) => Empty,
             _ => Empty
         }
     }
@@ -163,8 +159,7 @@ impl Node {
     }
     pub fn children(&self) -> Vec<Node> {
         match self {
-            List(xs) => xs.clone(),
-            Block(xs, ..) => xs.clone(),
+            List(xs, _) => xs.clone(),
             Meta { node, .. } => node.children(),
             _ => vec![],
         }
@@ -176,9 +171,9 @@ impl Node {
         match (self, other) {
             (Number(n), Number(m)) => Number(n.add(m)),
             (Text(s), Text(m)) => Text(format!("{}{}", s, m)),
-            (List(xs), List(ys)) => List(xs.iter().cloned().chain(ys).collect()),
-            (List(xs), b) => List(xs.iter().cloned().chain([b]).collect()),
-            (a, List(ys)) => List([a.clone()].into_iter().chain(ys).collect()),
+            (List(xs, br), List(ys, _)) => List(xs.iter().cloned().chain(ys).collect(), br.clone()),
+            (List(xs, br), b) => List(xs.iter().cloned().chain([b]).collect(), br.clone()),
+            (a, List(ys, br)) => List([a.clone()].into_iter().chain(ys).collect(), br.clone()),
             (Meta { node, .. }, n) => node.add(n),
             (n, Meta { node, .. }) => n.add(*node.clone()),
             _ => todo!(),
@@ -189,7 +184,7 @@ impl Node {
         match self {
             Key(_, v) => v.as_ref(),
             Meta { node, .. } => node.values(),
-            List(_) => self,
+            List(_, _) => self,
             _ => &Empty,
         }
     }
@@ -204,8 +199,8 @@ impl Node {
             Key(_, _) => NodeKind::Key,
             Pair(_, _) => NodeKind::Pair,
             Tag { .. } => NodeKind::Tag,
-            Block(_, _, _) => NodeKind::Block,
-            List(_) => NodeKind::List,
+            List(_, Bracket::Curly) => NodeKind::Block, // {} still maps to Block kind
+            List(_, _) => NodeKind::List,
             Data(_) => NodeKind::Data,
             Meta { .. } => NodeKind::Meta,
             Error(_) => NodeKind::Error,
@@ -216,8 +211,7 @@ impl Node {
     }
     pub fn length(&self) -> i32 {
         match self {
-            List(items) => items.len() as i32,
-            Block(items, ..) => items.len() as i32,
+            List(items, _) => items.len() as i32,
             Meta { node, .. } => node.length(),
             _ => 0,
         }
@@ -252,7 +246,7 @@ impl Node {
             Tag { title, .. } => title.clone(),
             Key(k, _) => k.clone(),
             Meta { node, .. } => node.name(),
-            List(items) => {
+            List(items, _) => {
                 // todo only for specific cases like expressions
                 if let Some(first) = items.first() {
                     first.name()
@@ -352,13 +346,13 @@ impl Node {
             }
 
             t if t == NodeKind::Block as i32 => {
-                // TODO: decode grouper/bracket info from int_value and read items
-                Block(vec![], Grouper::Expression, Bracket::Curly)
+                // TODO: decode bracket info from int_value and read items
+                List(vec![], Bracket::Curly)
             }
 
             t if t == NodeKind::List as i32 => {
                 // TODO: read items from linked list structure
-                List(vec![])
+                List(vec![], Bracket::Square)
             }
 
             t if t == NodeKind::Data as i32 => {
@@ -385,8 +379,7 @@ impl Index<usize> for Node {
 
     fn index(&self, i: usize) -> &Self::Output {
         match self {
-            List(elements) => elements.get(i).unwrap_or(&Empty),
-            Block(nodes, ..) => nodes.get(i).unwrap_or(&Empty),
+            List(elements, _) => elements.get(i).unwrap_or(&Empty),
             Meta { node, .. } => &node[i],
             _ => &Empty,
         }
@@ -398,16 +391,7 @@ impl Index<&String> for Node {
 
     fn index(&self, i: &String) -> &Self::Output {
         match self {
-            // Node::List(elements) => elements.filter(|node|
-            //     match node {
-            //         Node::Key(k, _) => k == *i,
-            //         Node::Text(t) => t == *i,
-            //         _ => false
-            //     }
-            // ).next().unwrap_or(&Node::Empty),
-
-            // Node::Block(nodes, ..) => nodes.get(i).unwrap_or(&Node::Empty),
-            Block(nodes, ..) => {
+            List(nodes, _) => {
                 if let Some(found) = nodes.find2(&|node| match node {
                     Key(k, _) => *k == *i,
                     Text(t) => *t == *i,
@@ -441,7 +425,7 @@ impl Index<&str> for Node {
 
     fn index(&self, i: &str) -> &Self::Output {
         match self {
-            Block(nodes, ..) => {
+            List(nodes, _) => {
                 if let Some(found) = nodes.find2(&|node| match node {
                     Key(k, _) => k == i,
                     Text(t) => t == i,
@@ -465,16 +449,9 @@ impl Index<&str> for Node {
 impl IndexMut<usize> for Node {
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         match self {
-            List(elements) => {
+            List(elements, _) => {
                 if i < elements.len() {
                     &mut elements[i]
-                } else {
-                    panic!("Index out of bounds")
-                }
-            }
-            Block(nodes, ..) => {
-                if i < nodes.len() {
-                    &mut nodes[i]
                 } else {
                     panic!("Index out of bounds")
                 }
@@ -488,7 +465,7 @@ impl IndexMut<usize> for Node {
 impl IndexMut<&String> for Node {
     fn index_mut(&mut self, i: &String) -> &mut Self::Output {
         match self {
-            Block(nodes, ..) => {
+            List(nodes, _) => {
                 if let Some(found) = nodes.iter_mut().find(|node| match node {
                     Key(k, _) => k == i,
                     Text(t) => t == i,
@@ -512,7 +489,7 @@ impl IndexMut<&String> for Node {
 impl IndexMut<&str> for Node {
     fn index_mut(&mut self, i: &str) -> &mut Self::Output {
         match self {
-            Block(nodes, ..) => {
+            List(nodes, _) => {
                 if let Some(found) = nodes.iter_mut().find(|node| match node {
                     Key(k, _) => k == i,
                     Text(t) => t == i,
@@ -583,11 +560,11 @@ impl Node {
         Node::Number(Number::Float(n))
     }
     pub fn list(xs: Vec<Node>) -> Self {
-        List(xs)
+        List(xs, Bracket::Square)
     }
     // pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
     pub fn ints(xs: Vec<i32>) -> Self {
-        List(map(xs, |x| Node::Number(Number::Int(x as i64))))
+        List(map(xs, |x| Node::Number(Number::Int(x as i64))), Bracket::Square)
     }
 
     pub fn with_meta(self, data: MetaData) -> Self {
@@ -624,8 +601,7 @@ impl Node {
     // member functions taking self
     pub fn size(&self) -> usize {
         match self {
-            List(elements, ..) => elements.len(),
-            Block(nodes, ..) => nodes.len(),
+            List(elements, _) => elements.len(),
             Meta { node, .. } => node.size(),
             _ => 0,
         }
@@ -633,8 +609,7 @@ impl Node {
 
     pub fn get(&self, i: usize) -> &Node {
         match self {
-            List(elements) => elements.get(i).unwrap(),
-            Block(nodes, ..) => nodes.get(i).unwrap(),
+            List(elements, _) => elements.get(i).unwrap(),
             Meta { node, .. } => node.get(i),
             _ => &Empty,
         }
@@ -663,8 +638,7 @@ impl Node {
 
     pub fn iter(&self) -> NodeIter {
         match self {
-            List(items) => NodeIter::new(items.clone()),
-            Block(items, _, _) => NodeIter::new(items.clone()),
+            List(items, _) => NodeIter::new(items.clone()),
             Meta { node, .. } => node.iter(),
             _ => NodeIter::new(vec![]),
         }
@@ -672,8 +646,7 @@ impl Node {
 
     pub fn into_iter(self) -> NodeIter {
         match self {
-            List(items) => NodeIter::new(items),
-            Block(items, _, _) => NodeIter::new(items),
+            List(items, _) => NodeIter::new(items),
             Meta { node, .. } => (*node).clone().into_iter(),
             _ => NodeIter::new(vec![]),
         }
@@ -703,27 +676,7 @@ impl Node {
             Node::Number(n) => Value::String(format!("{}", n)),
             Text(s) | Symbol(s) => Value::String(s.clone()),
             Char(c) => Value::String(c.to_string()),
-            List(items) => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
-            Key(k, v) => {
-                let mut map = Map::new();
-                map.insert(k.clone(), v.to_json_value());
-                Value::Object(map)
-            }
-            Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
-            Tag {
-                title,
-                params,
-                body,
-            } => {
-                let mut map = Map::new();
-                if **params != Empty {
-                    // Include attributes if present
-                    map.insert("_attrs".to_string(), params.to_json_value());
-                }
-                map.insert(title.clone(), body.to_json_value());
-                Value::Object(map)
-            }
-            Block(items, _kind, bracket) => {
+            List(items, bracket) => {
                 // Curly braces -> object with items, Square/Round -> array
                 match bracket {
                     Bracket::Curly => {
@@ -749,8 +702,8 @@ impl Node {
                                         map.insert(title.clone(), body.to_json_value());
                                     }
                                 }
-                                Block(nested, _, Bracket::Curly) => {
-                                    // Nested blocks become nested objects
+                                List(nested, Bracket::Curly) => {
+                                    // Nested curly lists become nested objects
                                     for nested_item in nested {
                                         if let Key(k, v) = nested_item {
                                             map.insert(k.clone(), v.to_json_value());
@@ -768,6 +721,25 @@ impl Node {
                     }
                     _ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
                 }
+            }
+            Key(k, v) => {
+                let mut map = Map::new();
+                map.insert(k.clone(), v.to_json_value());
+                Value::Object(map)
+            }
+            Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
+            Tag {
+                title,
+                params,
+                body,
+            } => {
+                let mut map = Map::new();
+                if **params != Empty {
+                    // Include attributes if present
+                    map.insert("_attrs".to_string(), params.to_json_value());
+                }
+                map.insert(title.clone(), body.to_json_value());
+                Value::Object(map)
             }
             Data(d) => {
                 let mut map = Map::new();
@@ -805,7 +777,7 @@ impl fmt::Debug for Node {
             Node::Number(n) => write!(f, "{}", n),
             Text(t) => write!(f, "'{}'", t),
             Char(c) => write!(f, "'{}'", c),
-            Block(nodes, _kind, bracket) => {
+            List(nodes, bracket) => {
                 if nodes.len() == 1 {
                     write!(f, "{:?} ", nodes.get(0).unwrap())
                 } else {
@@ -814,7 +786,6 @@ impl fmt::Debug for Node {
                         Bracket::Square => write!(f, "[{:?}]", nodes),
                         Bracket::Round => write!(f, "({:?})", nodes),
                         Bracket::Other(open, close) => write!(f, "{}{:?}{}", open, nodes, close),
-                        // _ => panic!("Unknown bracket type {:?}", bracket.into())
                     }
                 }
             }
@@ -828,7 +799,6 @@ impl fmt::Debug for Node {
                 Empty => write!(f, "{}{{{:?}}}", title, body),
                 _ => write!(f, "<{} {:?}>{:?}", title, params, body),
             },
-            List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Data(d) => write!(f, "{:?}", d),
             Meta { node, data } => {
                 if let Some(comment) = &data.comment {
@@ -938,8 +908,7 @@ impl PartialEq for Node {
                     Symbol(s) => s.is_empty(), // todo disallow empty symbol
                     Text(s) => s.is_empty(),
                     Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL
-                    Block(b, _, _) => b.is_empty(),
-                    List(l) => l.is_empty(),
+                    List(l, _) => l.is_empty(),
                     _ => self.size() == 0,
                 }
             }
@@ -1004,16 +973,8 @@ impl PartialEq for Node {
                 } => t1 == t2 && p1 == p2 && b1 == b2,
                 _ => false,
             },
-            Block(items1, _g1, _br1) => {
-                match other {
-                    Block(items2, _g2, _br2) => {
-                        items1 == items2 // ignore grouper/bracket [1,2]=={1,2}
-                    }
-                    _ => false,
-                }
-            }
-            List(items1) => match other {
-                List(items2) => items1 == items2,
+            List(items1, _br1) => match other {
+                List(items2, _br2) => items1 == items2, // ignore bracket [1,2]=={1,2}
                 _ => false,
             },
             Error(e1) => match other {
@@ -1057,8 +1018,7 @@ impl PartialEq<bool> for Node {
             Empty => !*other,
             Symbol(s) => s.is_empty() == !*other,
             Text(s) => s.is_empty() == !*other,
-            Block(b, _, _) => b.is_empty() == !*other,
-            List(l) => l.is_empty() == !*other,
+            List(l, _) => l.is_empty() == !*other,
             Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
             Pair(_, _) => *other, // // todo NEVER false OR check value k:v ?
             _ => false,
@@ -1201,10 +1161,8 @@ impl Not for Node {
             Text(_) => False,                        // !non-empty string == false
             Symbol(ref s) if s.is_empty() => True,
             Symbol(_) => False,
-            List(ref items) if items.is_empty() => True, // ![] == true
-            List(_) => False,                            // !non-empty list == false
-            Block(ref items, _, _) if items.is_empty() => True,
-            Block(_, _, _) => False,
+            List(ref items, _) if items.is_empty() => True, // ![] == true
+            List(_, _) => False,                            // !non-empty list == false
             Meta { node, data } => (!(*node.clone())).with_meta(data),
             // Apply not to wrapped node, preserve metadata
             _ => False, // Other types default to falsy
@@ -1582,7 +1540,7 @@ impl fmt::Display for Node {
             Node::Number(n) => write!(f, "{:?}", n),
             Text(s) | Symbol(s) => write!(f, "{}", s),
             Char(c) => write!(f, "{}", c),
-            List(items) => {
+            List(items, _) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {
@@ -1620,7 +1578,7 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
         // Now no pass can accidentally drop meta!
         Pair(a, b) => Pair(Box::new(map_node(*a, f)), Box::new(map_node(*b, f))),
 
-        List(xs) => List(xs.into_iter().map(|x| map_node(x, f)).collect()),
+        List(xs, br) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br),
 
         other => f(other),
     }

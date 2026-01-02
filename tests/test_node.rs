@@ -1,4 +1,4 @@
-use wasp::node::Node;
+use wasp::node::{Bracket, Node};
 use wasp::node::Node::{Empty, False, True};
 use wasp::*;
 // use wasp::node::Node::*;
@@ -25,12 +25,11 @@ fn test_node_list() {
 fn test_node_index_str() {
     use wasp::node::{Bracket, Grouper};
     // Test indexing let str : with on Block containing Key nodes
-    let mut block = Node::Block(
+    let mut block = Node::List(
         vec![
             Node::key("name", Node::text("Alice")),
             Node::key("age", Node::int(30)),
         ],
-        Grouper::Object,
         Bracket::Curly,
     );
     eq!(block["name"], Node::text("Alice"));
@@ -68,7 +67,7 @@ fn test_node_not_operator() {
     eq!(!Node::symbol("x"), False);
 
     // Collections
-    eq!(!Node::List(vec![]), True);
+    eq!(!Node::List(vec![], Bracket::Square), True);
     eq!(!Node::ints(vec![1, 2, 3]), False);
 }
 

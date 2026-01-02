@@ -109,7 +109,7 @@ fn test_list_operations() {
     let node = WaspParser::parse(wasp);
 
     let value = node.get_value();
-    if let Node::List(items) = value {
+    if let Node::List(items, _) = value {
         eq!(items.len(), 5);
         eq!(items[0], 1);
         eq!(items[4], 5);

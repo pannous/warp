@@ -690,7 +690,7 @@ impl WasmGcEmitter {
                 self.collect_and_allocate_strings(left);
                 self.collect_and_allocate_strings(right);
             }
-            Node::Block(items, _, _) | Node::List(items) => {
+            Node::List(items, _) => {
                 for item in items {
                     self.collect_and_allocate_strings(item);
                 }
@@ -791,62 +791,7 @@ impl WasmGcEmitter {
                 self.emit_node_instructions(func, _right);
                 func.instruction(&Instruction::Call(self.function_indices["new_pair"]));
             }
-            Node::Block(items, grouper, bracket) => {
-                // Special case: single-item blocks emit the item directly
-                if items.len() == 1 {
-                    self.emit_node_instructions(func, &items[0]);
-                    return;
-                }
-                // Empty block
-                if items.is_empty() {
-                    func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
-                    return;
-                }
-                // name_ptr, name_len
-                func.instruction(&I32Const(0));
-                func.instruction(&I32Const(0));
-                // kind
-                func.instruction(&I32Const(NodeKind::Block as i32));
-                // int_value (store grouper/bracket info as encoded value), float_value
-                let grouper_val = match grouper {
-                    Grouper::Object => 0i64,
-                    Grouper::Group => 1,
-                    Grouper::Pattern => 2,
-                    Grouper::Expression => 3,
-                    Grouper::Other(_, _) => 4,
-                };
-                let bracket_val = match bracket {
-                    Bracket::Curly => 0i64,
-                    Bracket::Square => 1,
-                    Bracket::Round => 2,
-                    Bracket::Other(_, _) => 3,
-                };
-                let group_info = grouper_val << 8 | bracket_val;
-                func.instruction(&Instruction::I64Const(group_info));
-                func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
-                // text_ptr (item count), text_len
-                func.instruction(&I32Const(items.len() as i32));
-                func.instruction(&I32Const(0));
-                // Encode items as linked list: left=first, right=rest
-                // Emit first item
-                self.emit_node_instructions(func, &items[0]);
-                // Emit rest as a Block or null if no more items
-                if items.len() > 2 {
-                    // More than 2 items: create nested Block with remaining items
-                    let rest = Node::Block(items[1..].to_vec(), grouper.clone(), bracket.clone());
-                    self.emit_node_instructions(func, &rest);
-                } else if items.len() == 2 {
-                    // Exactly 2 items: emit second item directly
-                    self.emit_node_instructions(func, &items[1]);
-                } else {
-                    // Should never happen (len must be >= 2 here)
-                    self.emit_node_null(func);
-                }
-                // meta
-                self.emit_node_null(func);
-                func.instruction(&Instruction::StructNew(self.node_base_type));
-            }
-            Node::List(items) => {
+            Node::List(items, bracket) => {
                 // Special case: single-item lists emit the item directly
                 if items.len() == 1 {
                     self.emit_node_instructions(func, &items[0]);
@@ -860,10 +805,20 @@ impl WasmGcEmitter {
                 // name_ptr, name_len
                 func.instruction(&I32Const(0));
                 func.instruction(&I32Const(0));
-                // kind
-                func.instruction(&I32Const(NodeKind::List as i32));
-                // int_value, float_value
-                func.instruction(&Instruction::I64Const(0));
+                // kind - Curly brackets map to Block kind, others to List kind
+                let kind = match bracket {
+                    Bracket::Curly => NodeKind::Block,
+                    _ => NodeKind::List,
+                };
+                func.instruction(&I32Const(kind as i32));
+                // int_value (store bracket info), float_value
+                let bracket_val = match bracket {
+                    Bracket::Curly => 0i64,
+                    Bracket::Square => 1,
+                    Bracket::Round => 2,
+                    Bracket::Other(_, _) => 3,
+                };
+                func.instruction(&Instruction::I64Const(bracket_val));
                 func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
                 // text_ptr (item count), text_len
                 func.instruction(&I32Const(items.len() as i32));
@@ -874,7 +829,7 @@ impl WasmGcEmitter {
                 // Emit rest as a List or null if no more items
                 if items.len() > 2 {
                     // More than 2 items: create nested List with remaining items
-                    let rest = Node::List(items[1..].to_vec());
+                    let rest = Node::List(items[1..].to_vec(), bracket.clone());
                     self.emit_node_instructions(func, &rest);
                 } else if items.len() == 2 {
                     // Exactly 2 items: emit second item directly

@@ -97,7 +97,7 @@ impl Parser {
                 }
             }
         }
-        Node::List(sequence)
+        Node::List(sequence, Bracket::Square)
     }
 
     fn parse_quote(&mut self, kind: &String) -> Node {
@@ -156,11 +156,7 @@ impl Parser {
             }
         }
         self.expect_token(closing);
-        Node::Block(
-            nodes,
-            self.bracket_kind(bracket.first_char()),
-            Bracket::Curly,
-        )
+        Node::List(nodes, Bracket::Curly)
     }
 
     fn skip_token(&mut self, expected: &str) {
