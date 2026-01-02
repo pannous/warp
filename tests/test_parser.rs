@@ -1,26 +1,15 @@
-
+// MILESTONE 185/425 test PASS with timeout
 
 // Parser and syntax test functions
-// Tests migrated from tests_*.rs files
-
 // Basic parsing
-
-
 // Data mode and representations
-
-
 // Significant whitespace
-
-
-
-
-
 // Dedentation
 
 use log::warn;
 use Node::{False, True};
-use wasp::{eq, is, printf, skip};
-use wasp::extensions::{print, prints};
+use wasp::{eq, is, skip};
+use wasp::extensions::{prints};
 use wasp::node::Node;
 use wasp::node::Node::Empty;
 use wasp::type_kinds::NodeKind::Key;
@@ -37,7 +26,7 @@ fn test_mark_simple() {
 
 #[test]
 fn test_deep_colon() {
-    let mut result: Node = parse("current-user: func() -> string");
+    let result: Node = parse("current-user: func() -> string");
     eq!(result.kind(), Key);
     eq!(result.values().name(), "func");
     eq!(result.values().values().name(), "string");
@@ -343,7 +332,7 @@ fn test_net_base() {
     //     if (1 > 0)
     //     return;
     //     chars
-    let url = "http://de.netbase.pannous.com:8080/json/verbose/2";
+    let url = "https://de.netbase.pannous.com:8080/json/verbose/2";
 
     //==============================================================================
     // NETWORK/WEB TESTS (see web_tests.h);
@@ -355,10 +344,9 @@ fn test_net_base() {
     //	print(json);
     let result = parse(json);
     let results = result["results"].clone();
-    //	Node Erde = results[0];// todo : EEEEK, let flatten can BACKFIRE! results=[{a b c}] results[0]={a b c}[0]=a !----
-    let Erde = results;
-    //     assert!(Erde.name() == "Erde" || Erde["name"] == "Erde");
-    let statements : Node = Erde["statements"].clone();
+    let erde = results;
+    //     assert!(erde.name() == "erde" || erde["name"] == "erde");
+    let statements : Node = erde["statements"].clone();
     assert!(statements.length() >= 1); // || statements.value().node->length >=
     eq!(result["query"], "2");
     eq!(result["count"], "1");
@@ -367,92 +355,18 @@ fn test_net_base() {
     //	skip!(
 
     //			 );
-    eq!(Erde["name"], "Erde");
-    //	assert!(Erde.name() == "Erde");
-    eq!(Erde["id"], 2); // todo : let numbers when?
-    eq!(Erde["kind"], -104);
-    //	assert!(Erde.id==2);
+    eq!(erde["name"], "erde");
+    //	assert!(erde.name() == "erde");
+    eq!(erde["id"], 2);
+    eq!(erde["kind"], -104);
+    //	assert!(erde.id==2);
 }
 
-fn fetch(p0: &str) -> &str {
+fn fetch(_p0: &str) -> &str {
     todo!()
 }
 
-// test only once to understand
-#[test]
-// fn testUTFinCPP() {
-// //     char32_t
-// //     wc
-// //     [] = U
-//     "zß水🍌"; // or
-// //     printf!("%s", (char *) wc);
-//
-//     //	char32_t wc2[] = "z\u{00df}\u{6c34}\U0001f34c";/* */ Initializing wide char array with non-wide string literal
-// //     let wc2 = "z\u{00df}\u{6c34}\U0001f34c";
-//     printf!("%s", wc2);
-//
-//     //	let wc3 = "z\udf\u{6c34}\U1f34c";// not ok in cpp
-//
-//     // char = byte % 128   char<0 => utf || something;);
-//     //	using namespace std;
-//     #[cfg(not(feature = "WASM"))]{
-// //         const char8_t
-// //         str[9] = u8
-//         "عربى"; // wow, 9 bytes!
-// //         printf!("%s", (char *) str);
-//     }
-// //     const char
-//     str1[9] = "عربى";
-// //     printf!("%s", (char *) str1);
-//     is!((char *) str1, str1));
-//     #[cfg(not(feature = "WASM"))]{
-//         #[cfg(feature = "std")]{
-// //             std::string
-//             x = "0☺2√";
-//             // 2009 :  std::string is a complete joke if yo're looking for Unicode support
-//             let smile0 = x[1];
-// //             char16_t
-//             smile1 = x[1];
-// //             char32_t
-//             smile = x[1];
-//             //	assert!(smile == smile1);
-//         }
-//     }
-//     //	wstring_convert<codecvt_utf8<char32_t>, char32_t> wasm_condition;
-//     //	let str32 = wasm_condition.from_bytes(str);
-// //     char16_t
-// //     character = u
-//     '牛';
-// //     char32_t
-// //     hanzi = U
-//     '牛';
-// //     wchar_t
-// //     word = L
-//     '牛';
-//     printf!("%c", character);
-//     printf!("%c", hanzi);
-//     printf!("%c", word);
-//
-//     //	for(let c : str32);
-//     //		cout << uint_least32_t(c) << '\n';
-//     //		char a = '☹';// char (by definition) is one byte (WTF);
-//     //		char[10] a='☹';// NOPE
-// //     chars
-//     a = "☹"; // OK
-// //     byte * b = (byte *)
-//     a;
-// //     assert!(_eq!(a[0], (char) -30); // '\xe2'
-//     assert!(_eq!(a[1], (char) -104); // '\x98'
-//     assert!(_eq!(a[2], (char) -71); // '\xb9'
-//     assert!(_eq!(b[0], (byte) 226); // '\xe2'
-//     assert!(_eq!(b[1], (byte) 152); // '\x98'
-//     assert!(_eq!(b[2], (byte) 185); // '\xb9'
-//     assert!(_eq!(b[3], (byte) 0); // '\0'
-// }
 
-
-
-//testUTFø  error: stray ‘\303’ in program
 #[test]
 fn test_utf() {
     //    	testUTFinCPP();
@@ -480,7 +394,7 @@ testUnicode_UTF16_UTF32());
     let result = parse("{ç:☺}");
     eq!(result["ç"], "☺");
 
-    let result = parse("ç:'☺'");
+    let _result = parse("ç:'☺'");
     skip!(
 
         assert!(result == "☺");
@@ -500,19 +414,19 @@ testUnicode_UTF16_UTF32());
     //	assert!(node == "ø"); //=> OK
 }
 
-fn is_operator(p0: char) -> bool {
+fn is_operator(_p0: char) -> bool {
     todo!()
 }
 
 fn utf8_byte_count(p0: char) -> i8 {
-    if (p0 as u32 <= 0x7F) {
-        return 1;
-    } else if (p0 as u32 <= 0x7FF) {
-        return 2;
-    } else if (p0 as u32 <= 0xFFFF) {
-        return 3;
+    if p0 as u32 <= 0x7F {
+        1
+    } else if p0 as u32 <= 0x7FF {
+        2
+    } else if p0 as u32 <= 0xFFFF {
+        3
     } else {
-        return 4;
+        4
     }
 }
 
@@ -590,7 +504,7 @@ fn test_overwrite() {
 
 #[test]
 fn test_sample() {
-    let result = /*Wasp::*/parse("samples/comments.wasp");
+    let _result = /*Wasp::*/parse("samples/comments.wasp");
 }
 
 #[test]
@@ -826,7 +740,7 @@ fn test_nodes_in_wasm() {
 }
 
 
-#[test]
+// #[test]
 // fn testNodeBasics() {
 //     a1 = Node(1);
 //     //	assert!(a1.name() == "1");// debug only!
