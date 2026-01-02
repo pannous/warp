@@ -26,16 +26,16 @@ fn test_ergonomic_node_reading() {
     // Test field access
     let kind: i32 = root.get("tag").expect("Failed to get tag");
     println!("  Root kind (tag): {}", kind);
-    assert_eq!(kind, 1); // NodeKind::Number
+    eq!(kind, 1); // NodeKind::Number
 
     let int_value: i64 = root.get("int_value").expect("Failed to get int_value");
     println!("  Int value: {}", int_value);
-    assert_eq!(int_value, 42);
+    eq!(int_value, 42);
 
     // Test convenience method
     let kind2 = root.kind().expect("Failed to get kind");
     println!("  Using .kind(): {}", kind2);
-    assert_eq!(kind2, 1);
+    eq!(kind2, 1);
 
     println!("\n✓ Ergonomic field access works!");
 }
@@ -57,12 +57,12 @@ fn test_read_text_node() {
     println!("✓ Loaded text node");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 2); // NodeKind::Text
+    eq!(kind, 2); // NodeKind::Text
 
     // Read text from linear memory
     let text = root.text().expect("Failed to read text");
     println!("  Text: '{}'", text);
-    assert_eq!(text, "hello");
+    eq!(text, "hello");
 
     println!("\n✓ Text reading from linear memory works!");
 }
@@ -82,11 +82,11 @@ fn test_read_symbol_node() {
     let root = read_bytes(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 4); // NodeKind::Symbol
+    eq!(kind, 4); // NodeKind::Symbol
 
     let text = root.text().expect("Failed to read symbol");
     println!("  Symbol: '{}'", text);
-    assert_eq!(text, "my_var");
+    eq!(text, "my_var");
 
     println!("\n✓ Symbol reading works!");
 }
@@ -120,13 +120,13 @@ fn test_ergonomic_pattern() {
     println!("  Name: '{}'", name);
 
     // The pattern: is!(root.name, "html")
-    assert_eq!(name, "html");
+    eq!(name, "html");
     println!("\n✓ Pattern works: root.name() == \"html\"");
 
     // Verify kind
     let kind = root.kind().expect("Failed to get kind");
     println!("  Kind: {}", kind);
-    assert_eq!(kind, 7); // NodeKind::Tag
+    eq!(kind, 7); // NodeKind::Tag
 }
 
 /// Test field existence checking
@@ -166,7 +166,7 @@ fn test_empty_node() {
     let root = read_bytes(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 0); // NodeKind::Empty
+    eq!(kind, 0); // NodeKind::Empty
 
     println!("✓ Empty node works");
 }
@@ -186,11 +186,11 @@ fn test_codepoint_node() {
     let root = read_bytes(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 3); // NodeKind::Char
+    eq!(kind, 3); // NodeKind::Char
 
     let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
     println!("  Char value: {} ({})", codepoint, char::from_u32(codepoint as u32).unwrap_or('?'));
-    assert_eq!(codepoint, '🦀' as i64);
+    eq!(codepoint, '🦀' as i64);
 
     println!("✓ Char node works");
 }
@@ -210,11 +210,11 @@ fn test_float_node() {
     let root = read_bytes(&bytes).expect("Failed to read WASM");
 
     let kind = root.kind().expect("Failed to get kind");
-    assert_eq!(kind, 1); // NodeKind::Number
+    eq!(kind, 1); // NodeKind::Number
 
     let float_value: f64 = root.get("float_value").expect("Failed to get float");
     println!("  Float value: {}", float_value);
-    assert_eq!(float_value, 3.14);
+    eq!(float_value, 3.14);
 
     println!("✓ Float node works");
 }

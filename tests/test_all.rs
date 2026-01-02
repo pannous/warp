@@ -17,7 +17,7 @@ fn test_did_you_mean_alias() {
 #[test]
 fn test_empty() {
     let result = parse("{  }");
-    assert_eq!(result, Empty);
+    eq!(result, Empty);
 }
 
 #[test]
@@ -31,8 +31,8 @@ fn test_node_name() {
     let a = Node::Symbol("xor".to_string()); // NOT type string by default!
 //     bool
     let ok1 = a == "xor";
-    assert_eq!(a, "xor");
-    assert_eq!(a.name(), "xor");
+    eq!(a, "xor");
+    eq!(a.name(), "xor");
     assert!(ok1);
 }
 
@@ -51,8 +51,8 @@ fn test_indent_as_block() {
 #[test]
 fn test_group_cascade1() {
     let result0 = parse("a b; c d");
-    assert_eq!(result0.length(), 2);
-    assert_eq!(result0[1].length(), 2);
+    eq!(result0.length(), 2);
+    eq!(result0[1].length(), 2);
     let result = parse("{ a b c, d e f }");
     let result1 = parse("a b c, d e f ");
     eq!(result1, result);
@@ -85,7 +85,7 @@ fn test_group_cascade2() {
 fn test_superfluous_indentation() {
     let result = parse("a{\n  b,c}");
     let result1 = parse("a{b,c}");
-    assert_eq!(result1, result);
+    eq!(result1, result);
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn test_group_cascade() {
     eq!(result[1][1][0][1][2], "f4");
     let reparse = parse(result.serialize().as_str());
     // print(reparse.serialize());
-    assert_eq!(result, reparse);
+    eq!(result, reparse);
 }
 
 

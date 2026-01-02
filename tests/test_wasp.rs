@@ -16,14 +16,14 @@ pub fn test_parser() {
     let serial = ast.serialize();
     // let right= "key: {[value, {[key2: value2, num: 123, text: 'yeah']}]}";
     let right="key={[value, {[key2=value2, num=123, text='yeah']}]}";
-    assert_eq!(serial, right);
+    eq!(serial, right);
     println!("serialize: {:#?}", ast);
-    assert_eq!(ast.size(), 1);
+    eq!(ast.size(), 1);
     // ast["key"]
 
 }
 
 //#[test]
 //pub fn test_tests() {
-//    assert_eq!(1, 1);
+//    eq!(1, 1);
 //}

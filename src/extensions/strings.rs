@@ -184,6 +184,7 @@ pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item=T>) {
 
 
 use std::cmp::PartialEq;
+use crate::eq;
 // only traits defined in the current crate can be implemented for types defined outside of the crate
 // use Wrapper or compare via s == *s2
 // impl PartialEq for String {
@@ -244,14 +245,14 @@ impl PartialEqChar for String {
 
 
 // fn assert<T: PartialEq + Debug>(x: T) {
-//     assert_eq!(x, true);
+//     eq!(x, true);
 // }
 // fn assert(x: bool) {
-//     assert_eq!(x, true);
+//     eq!(x, true);
 // }
 // macro_rules! assert {
 //     ($x:expr) => {
-//         assert_eq!($x, true);
+//         eq!($x, true);
 //     };
 // }
 
@@ -287,6 +288,5 @@ macro_rules! s {
 fn main() {
     let s1 = String::from("RustRover");
     let s2 = &String::from("RustRover");
-
-    assert_eq!(s1 == *s2, true);
+    eq!(s1 == *s2, true);
 }

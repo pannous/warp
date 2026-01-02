@@ -1,4 +1,5 @@
 use wasmtime::{Engine, Linker, Module, Store};
+use wasp::eq;
 
 /// Demonstration of WASM GC reading patterns inspired by ~/dev/script/rust/rasm
 /// NOTE: This test requires wasmtime 28.0+ for full GC introspection support
@@ -50,7 +51,7 @@ fn test_wasm_gc_node_reading_concept() {
 
     println!("✓ Step 2: Called WASM function");
     println!("  make_number(42) returned tag: {}", tag);
-    assert_eq!(tag, 1); // NodeTag::Number
+    eq!(tag, 1); // NodeTag::Number
 
     println!();
     println!("Next steps (requiring wasmtime 28.0+ features):");
