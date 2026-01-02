@@ -1,6 +1,6 @@
 use wasp::eq;
+use wasp::node::Bracket;
 use wasp::node::Node;
-use wasp::node::{Bracket};
 
 #[test]
 fn test_node_to_json_compact() {

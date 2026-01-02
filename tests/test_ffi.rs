@@ -49,10 +49,10 @@ fn test_ffi_floor() {
 #[test]
 fn test_ffi_strlen() {
     return; // clashes with wasp runtime strlen!
-    // Test: char* . int32 (strlen from libc);
-    // is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
-    // is!("import strlen from \"c\"\nstrlen(\"\")", 0);
-    // is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
+            // Test: char* . int32 (strlen from libc);
+            // is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
+            // is!("import strlen from \"c\"\nstrlen(\"\")", 0);
+            // is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
 }
 
 #[test]
