@@ -4,6 +4,7 @@ extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
+use crate::meta::{CloneAny, Dada, MetaData};
 use crate::wasm_gc_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
@@ -13,10 +14,9 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use syn::Signature;
-use crate::meta::{CloneAny, Dada, MetaData};
 // use wasp::type_kinds::{AstKind, NodeKind};
-use crate::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
+use crate::type_kinds::{AstKind, NodeKind};
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -27,16 +27,17 @@ pub enum DataType {
     Vec,       // map to Node::List(…) early or keep raw for efficiency!
     Tuple,     // - '' -
     Reference,
-    Struct,    // map to Node(…) early!! (if possible, else interesting Rust objects!)
-    Other,     // <- only interesting cases
-    None,     // <- only interesting cases
+    Struct, // map to Node(…) early!! (if possible, else interesting Rust objects!)
+    Other,  // <- only interesting cases
+    None,   // <- only interesting cases
 }
 
 // use wasp::node::Node;
 // use wasp::node::Node::*; !
 #[derive(Clone, Serialize, Deserialize)]
-pub enum Node { // closed cannot be extended so anticipate all cases here
-    Empty, // Null, Nill, None, Ø, ø null nill none nil
+pub enum Node {
+    // closed cannot be extended so anticipate all cases here
+    Empty,   // Null, Nill, None, Ø, ø null nill none nil
     Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
     // Kind(i64), enum NodeKind in serialization
     // Number(i64),
@@ -80,7 +81,6 @@ pub enum Node { // closed cannot be extended so anticipate all cases here
     //         Pair(Symbol("span"), List(vec![Number(12), Number(15)])),
     //     ])
     // )
-
 }
 
 impl Node {
@@ -160,8 +160,8 @@ impl Node {
             Meta(_, _) => NodeKind::Meta,
             Error(_) => NodeKind::Error,
             False => NodeKind::Number, // map to 0 !
-            True => NodeKind::Number, // map to 1
-            _ => todo!()
+            True => NodeKind::Number,  // map to 1
+            _ => todo!(),
         }
     }
     pub fn length(&self) -> i32 {
@@ -195,7 +195,6 @@ impl Node {
             _ => &Empty,
         }
     }
-
 
     pub fn name(&self) -> String {
         match self {
@@ -733,7 +732,7 @@ impl Node {
                 map.insert("_error".to_string(), Value::String(e.clone()));
                 Value::Object(map)
             }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 
@@ -786,7 +785,7 @@ impl fmt::Debug for Node {
             Empty => write!(f, "ø"),
             True => write!(f, "true"),
             False => write!(f, "false"),
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -966,7 +965,7 @@ impl PartialEq for Node {
                 _ => false,
             },
             // _ => false,
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -1004,8 +1003,8 @@ impl PartialEq<bool> for Node {
             Text(s) => s.is_empty() == !*other,
             Block(b, _, _) => b.is_empty() == !*other,
             List(l) => l.is_empty() == !*other,
-            Key(_, _) => *other, // todo NEVER false OR check value k=v ?
-            Pair(_, _) => *other,     // // todo NEVER false OR check value k:v ?
+            Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
+            Pair(_, _) => *other, // // todo NEVER false OR check value k:v ?
             _ => false,
         }
     }
@@ -1105,20 +1104,20 @@ impl Not for Node {
         match self {
             True => False,
             False => True,
-            Empty => True,  // !null == true
-            Node::Number(ref n) if n.zero() => True,  // !0 == true
-            Node::Number(_) => False,  // !non-zero == false
-            Text(ref s) if s.is_empty() => True,  // !"" == true
-            Text(_) => False,  // !non-empty string == false
+            Empty => True,                           // !null == true
+            Node::Number(ref n) if n.zero() => True, // !0 == true
+            Node::Number(_) => False,                // !non-zero == false
+            Text(ref s) if s.is_empty() => True,     // !"" == true
+            Text(_) => False,                        // !non-empty string == false
             Symbol(ref s) if s.is_empty() => True,
             Symbol(_) => False,
-            List(ref items) if items.is_empty() => True,  // ![] == true
-            List(_) => False,  // !non-empty list == false
+            List(ref items) if items.is_empty() => True, // ![] == true
+            List(_) => False,                            // !non-empty list == false
             Block(ref items, _, _) if items.is_empty() => True,
             Block(_, _, _) => False,
             Meta(node, meta) => (!(*node.clone())).with_meta(meta),
             // Apply not to wrapped node, preserve metadata
-            _ => False,  // Other types default to falsy
+            _ => False, // Other types default to falsy
         }
     }
 }
@@ -1162,7 +1161,11 @@ impl From<f64> for Node {
 
 impl From<bool> for Node {
     fn from(b: bool) -> Self {
-        if b { True } else { False }
+        if b {
+            True
+        } else {
+            False
+        }
     }
 }
 
@@ -1182,11 +1185,11 @@ impl Add<&Node> for &Node {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
             Meta(node, meta) => (node.as_ref(), Some(meta)),
-            _ => (self, None)
+            _ => (self, None),
         };
         let right = match rhs {
             Meta(node, _) => node.as_ref(),
-            _ => rhs
+            _ => rhs,
         };
 
         // Match on types and compute
@@ -1197,7 +1200,7 @@ impl Add<&Node> for &Node {
             (Node::Number(n), True) => Node::Number(*n + Number::Int(1)),
             (False, Node::Number(n)) | (Node::Number(n), False) => Node::Number(*n),
             (Empty, Node::Number(n)) | (Node::Number(n), Empty) => Node::Number(*n),
-            _ => panic!("Cannot add {:?} and {:?}", left, right)
+            _ => panic!("Cannot add {:?} and {:?}", left, right),
         };
 
         // Preserve metadata from left operand
@@ -1259,11 +1262,11 @@ impl Sub<&Node> for &Node {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
             Meta(node, meta) => (node.as_ref(), Some(meta)),
-            _ => (self, None)
+            _ => (self, None),
         };
         let right = match rhs {
             Meta(node, _) => node.as_ref(),
-            _ => rhs
+            _ => rhs,
         };
 
         // Match on types and compute
@@ -1276,7 +1279,7 @@ impl Sub<&Node> for &Node {
             (False, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
             (Empty, Node::Number(n)) => Node::Number(Number::Int(0) - *n),
             (Node::Number(n), Empty) => Node::Number(*n),
-            _ => panic!("Cannot subtract {:?} and {:?}", left, right)
+            _ => panic!("Cannot subtract {:?} and {:?}", left, right),
         };
 
         // Preserve metadata from left operand
@@ -1338,11 +1341,11 @@ impl Mul<&Node> for &Node {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
             Meta(node, meta) => (node.as_ref(), Some(meta)),
-            _ => (self, None)
+            _ => (self, None),
         };
         let right = match rhs {
             Meta(node, _) => node.as_ref(),
-            _ => rhs
+            _ => rhs,
         };
 
         // Match on types and compute
@@ -1351,7 +1354,7 @@ impl Mul<&Node> for &Node {
             (True, Node::Number(n)) | (Node::Number(n), True) => Node::Number(*n),
             (False, _) | (_, False) => Node::Number(Number::Int(0)),
             (Empty, _) | (_, Empty) => Node::Number(Number::Int(0)),
-            _ => panic!("Cannot multiply {:?} and {:?}", left, right)
+            _ => panic!("Cannot multiply {:?} and {:?}", left, right),
         };
 
         // Preserve metadata from left operand
@@ -1413,11 +1416,11 @@ impl Div<&Node> for &Node {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
             Meta(node, meta) => (node.as_ref(), Some(meta)),
-            _ => (self, None)
+            _ => (self, None),
         };
         let right = match rhs {
             Meta(node, _) => node.as_ref(),
-            _ => rhs
+            _ => rhs,
         };
 
         // Match on types and compute
@@ -1427,7 +1430,7 @@ impl Div<&Node> for &Node {
             (True, Node::Number(n)) => Node::Number(Number::Int(1) / *n),
             (False, Node::Number(_)) => Node::Number(Number::Int(0)),
             (Empty, Node::Number(_)) => Node::Number(Number::Int(0)),
-            _ => panic!("Cannot divide {:?} and {:?}", left, right)
+            _ => panic!("Cannot divide {:?} and {:?}", left, right),
         };
 
         // Preserve metadata from left operand
@@ -1504,7 +1507,6 @@ impl fmt::Display for Node {
         }
     }
 }
-
 
 pub fn print(p0: String) {
     println!("{}", p0);

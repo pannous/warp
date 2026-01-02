@@ -1,8 +1,8 @@
-use wasmtime::*;
-use std::fs::read;
-use std::path::Path;
 use crate::node::Node;
 use crate::wasm_gc_reader;
+use std::fs::read;
+use std::path::Path;
+use wasmtime::*;
 
 pub fn run_wasm(path: &str) -> Result<i32> {
     let engine = Engine::default();
@@ -27,9 +27,7 @@ pub fn run_wasm(path: &str) -> Result<i32> {
     // let external_func = Func::new(&mut store, typ, test_func);
     // linker.func_new("namespace", "external_func",typ, external_func);
     let typ = FuncType::new(&engine, [ValType::I32], [ValType::I32]);
-    linker.func_new("namespace", "external_func", typ, move |_, _, _| {
-        Ok(())
-    })?;
+    linker.func_new("namespace", "external_func", typ, move |_, _, _| Ok(()))?;
     linker.func_wrap("", "", || {})?;
     let instance = linker.instantiate(&mut store, &module)?;
 
@@ -45,8 +43,7 @@ fn test_func(_caller: Caller<'_, u32>, param: &[Val], _xyz: &mut [Val]) -> Resul
     Ok(param[0].unwrap_i32() * 2) // Dummy implementation
 }
 
-pub fn run(path: &str) -> Node
-{
+pub fn run(path: &str) -> Node {
     let result = wasm_gc_reader::run_wasm_gc_object(path).unwrap();
     Node::from_gc_object(&result)
 }

@@ -31,35 +31,44 @@ fn test_kitchensink_all_node_types() {
     test_node("Tag", tag_node);
 
     // Test 7: Key node
-    test_node("Key", Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(123)))));
+    test_node(
+        "Key",
+        Node::Key("key".to_string(), Box::new(Node::Number(Number::Int(123)))),
+    );
 
     // Test 8: Pair node
-    test_node("Pair",
-              Node::Pair(
-                  Box::new(Node::Symbol("first".to_string())),
-                  Box::new(Node::Symbol("second".to_string())),
-              ));
+    test_node(
+        "Pair",
+        Node::Pair(
+            Box::new(Node::Symbol("first".to_string())),
+            Box::new(Node::Symbol("second".to_string())),
+        ),
+    );
 
     // Test 9: Block node
     use wasp::node::{Bracket, Grouper};
-    test_node("Block",
-              Node::Block(
-                  vec![
-                      Node::Number(Number::Int(1)),
-                      Node::Number(Number::Int(2)),
-                      Node::Number(Number::Int(3)),
-                  ],
-                  Grouper::Group,
-                  Bracket::Round,
-              ));
+    test_node(
+        "Block",
+        Node::Block(
+            vec![
+                Node::Number(Number::Int(1)),
+                Node::Number(Number::Int(2)),
+                Node::Number(Number::Int(3)),
+            ],
+            Grouper::Group,
+            Bracket::Round,
+        ),
+    );
 
     // Test 10: List node
-    test_node("List",
-              Node::List(vec![
-                  Node::Text("item1".to_string()),
-                  Node::Text("item2".to_string()),
-                  Node::Text("item3".to_string()),
-              ]));
+    test_node(
+        "List",
+        Node::List(vec![
+            Node::Text("item1".to_string()),
+            Node::Text("item2".to_string()),
+            Node::Text("item3".to_string()),
+        ]),
+    );
 
     // Test 11: Data node
     test_node("Data", Node::data(vec![1, 2, 3, 4, 5]));
@@ -84,10 +93,20 @@ fn test_node(name: &str, node: Node) {
     let bytes = emitter.finish();
 
     // Verify WASM magic number
-    assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D], "{}: Invalid WASM magic number", name);
+    assert_eq!(
+        &bytes[0..4],
+        &[0x00, 0x61, 0x73, 0x6D],
+        "{}: Invalid WASM magic number",
+        name
+    );
 
     // Verify WASM version
-    assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00], "{}: Invalid WASM version", name);
+    assert_eq!(
+        &bytes[4..8],
+        &[0x01, 0x00, 0x00, 0x00],
+        "{}: Invalid WASM version",
+        name
+    );
 
     // Validate with wasmparser
     use wasmparser::{Validator, WasmFeatures};
@@ -135,16 +154,13 @@ fn test_kitchensink_complex_tree() {
             // Nested Pair
             Node::Pair(
                 Box::new(Node::Symbol("left".to_string())),
-                Box::new(Node::Symbol("right".to_string()))
+                Box::new(Node::Symbol("right".to_string())),
             ),
             // Nested Block
             Node::Block(
-                vec![
-                    Node::Number(Number::Int(1)),
-                    Node::Number(Number::Int(2)),
-                ],
+                vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],
                 Grouper::Object,
-                Bracket::Curly
+                Bracket::Curly,
             ),
             // List
             Node::List(vec![
@@ -171,7 +187,9 @@ fn test_kitchensink_complex_tree() {
     features.set(WasmFeatures::GC, true);
 
     let mut validator = Validator::new_with_features(features);
-    validator.validate_all(&bytes).expect("Complex tree WASM validation failed");
+    validator
+        .validate_all(&bytes)
+        .expect("Complex tree WASM validation failed");
 
     // Check data section has all strings
     let filename = "out/kitchensink_complex_tree.wasm";
@@ -196,9 +214,18 @@ fn test_kitchensink_complex_tree() {
         }
 
         // Verify specific strings are present
-        assert!(wat.contains("hello"), "String 'hello' not found in data section");
-        assert!(wat.contains("world"), "String 'world' not found in data section");
-        assert!(wat.contains("key"), "String 'key' not found in data section");
+        assert!(
+            wat.contains("hello"),
+            "String 'hello' not found in data section"
+        );
+        assert!(
+            wat.contains("world"),
+            "String 'world' not found in data section"
+        );
+        assert!(
+            wat.contains("key"),
+            "String 'key' not found in data section"
+        );
         println!("\n✅ All expected strings found in data section");
     }
 }
@@ -226,9 +253,7 @@ fn test_kitchensink_wasmtime_execution() {
 
     // Try to run with wasmtime
     use std::process::Command;
-    let output = Command::new("wasmtime")
-        .args(&["--version"])
-        .output();
+    let output = Command::new("wasmtime").args(&["--version"]).output();
 
     if let Ok(result) = output {
         let version = String::from_utf8_lossy(&result.stdout);
@@ -237,7 +262,10 @@ fn test_kitchensink_wasmtime_execution() {
         // Note: Actually running the WASM module would require proper host function setup
         // and GC support which is complex. For now, we verify the file is valid.
         println!("✓ WASM module generated successfully for wasmtime");
-        println!("  To run manually: wasmtime run --wasm-features=gc {}", filename);
+        println!(
+            "  To run manually: wasmtime run --wasm-features=gc {}",
+            filename
+        );
     } else {
         println!("⚠ Wasmtime not found, skipping execution test");
     }

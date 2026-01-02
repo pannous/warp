@@ -1,13 +1,15 @@
 use wasp::extensions::print;
 use wasp::is;
 
-#[test] fn test_string_basics() {
+#[test]
+fn test_string_basics() {
     print("Testing string basics ...");
     is!("'hello'", "hello"); // char comparison for now
     print("✓ String operations tests passed");
 }
 
-#[test] fn test_string_operations() {
+#[test]
+fn test_string_operations() {
     print("Testing string operations...");
     is!("'say ' + 0.", "say 0.");
     is!("'hello'", "hello"); // char comparison for now

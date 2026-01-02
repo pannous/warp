@@ -1,6 +1,6 @@
 use wasp::eq;
 use wasp::node::Node;
-use wasp::node::{Grouper, Bracket};
+use wasp::node::{Bracket, Grouper};
 
 #[test]
 fn test_node_to_json_compact() {
@@ -20,10 +20,7 @@ fn test_implicit_html_structure() {
     let html = Node::Block(
         vec![
             Node::Block(
-                vec![
-                    Node::keys("li", "hi"),
-                    Node::keys("li", "ok"),
-                ],
+                vec![Node::keys("li", "hi"), Node::keys("li", "ok")],
                 Grouper::Object,
                 Bracket::Curly,
             ),
@@ -103,10 +100,10 @@ fn test_complex_node_json() {
 
 #[test]
 fn test_nested_node_json() {
-    let n = Node::key("user", Node::list(vec![
-        Node::keys("name", "Alice"),
-        Node::keys("age", "30"),
-    ]));
+    let n = Node::key(
+        "user",
+        Node::list(vec![Node::keys("name", "Alice"), Node::keys("age", "30")]),
+    );
 
     let json = n.to_json().unwrap();
     println!("Nested JSON:\n{}", json);

@@ -1,17 +1,16 @@
-
 // Type system tests
 // Migrated from tests_*.rs files
 
 use std::iter::Map;
 use syn::Signature;
 use wasm_ast::Function;
-use wasp::{eq, is, skip, Number};
 use wasp::analyzer::analyze;
 use wasp::extensions::assert_throws;
 use wasp::node::Node;
 use wasp::node::Node::False;
 use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
+use wasp::{eq, is, skip, Number};
 
 // const functions : Map<String, Function> = wasp::analyzer::FUNCTIONS;
 
@@ -21,27 +20,48 @@ type Type = Node;
 #[allow(dead_code)]
 struct AST;
 #[allow(dead_code)]
-struct Generics { kind: Node, value_type: Node }
+struct Generics {
+    kind: Node,
+    value_type: Node,
+}
 #[allow(dead_code)]
 fn clearAnalyzerContext() {} // stub
 #[allow(dead_code)]
-fn ByteCharType() -> Node { Node::Empty }
+fn ByteCharType() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn IntegerType() -> Node { Node::Empty }
+fn IntegerType() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn StringType() -> Node { Node::Empty }
+fn StringType() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn DoubleType() -> Node { Node::Empty }
+fn DoubleType() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn int16t() -> Node { Node::Empty }
+fn int16t() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn int32t() -> Node { Node::Empty }
+fn int32t() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn float32t() -> Node { Node::Empty }
+fn float32t() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn stringp() -> Node { Node::Empty }
+fn stringp() -> Node {
+    Node::Empty
+}
 #[allow(dead_code)]
-fn array() -> Node { Node::Empty }
+fn array() -> Node {
+    Node::Empty
+}
 
 #[test]
 fn testGoTypes() {
@@ -52,9 +72,9 @@ fn testGoTypes() {
 fn testAutoType() {
     is!("0/0", False);
     is!("0÷0", Node::Number(Number::Nan));
-    is!("-1/6.", -1.0/6.0);
-    is!("-1/6", -1.0/6.0); // Auto-promote int/int division to float
-    is!("-1÷6", -1.0/6.0); // Auto-promote int/int division to float
+    is!("-1/6.", -1.0 / 6.0);
+    is!("-1/6", -1.0 / 6.0); // Auto-promote int/int division to float
+    is!("-1÷6", -1.0 / 6.0); // Auto-promote int/int division to float
 }
 
 #[test]
@@ -71,8 +91,11 @@ fn testReturnTypes() {
     is!("fun addier(a,b){b+a};addier(42,1)+1", 44);
     is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4);
     is!("float addi(x,y){x+y};addi(2.2,2.2)", 4.4);
-    is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
-    is!("add1 x:=x+1;add1 3",  4);
+    is!(
+        "fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)",
+        55
+    );
+    is!("add1 x:=x+1;add1 3", 4);
     is!("int x = $bla", 123);
     is!("`${1+1}`", "2");
     is!("real x = $bla", 123.);
@@ -87,32 +110,23 @@ fn testReturnTypes() {
     //==============================================================================
 }
 
-
 // fn cast(node: Node, to_type: &Type) -> Node {
 fn cast(node: Node, to_type: NodeKind) -> Node {
     // stub
     // in real code this would do actual casting
     match to_type {
-        NodeKind::Text => {
-            Node::Text(node.to_string())
-        }
-        NodeKind::Number => {
-            match node {
-                Node::Number(n) => node,
-                Node::Symbol(s) => {
-                    match s.parse::<i64>() {
-                        Ok(v) => Node::Number(Number::Int(v)),
-                        _ => {
-                            match s.parse::<f64>(){
-                                Ok(f) => Node::Number(Number::Float(f)),
-                                _ => Node::Number(Number::Nan),
-                            }
-                        }
-                    }
-                }
-                _ => Node::Number(Number::Nan)
-            }
-        }
+        NodeKind::Text => Node::Text(node.to_string()),
+        NodeKind::Number => match node {
+            Node::Number(n) => node,
+            Node::Symbol(s) => match s.parse::<i64>() {
+                Ok(v) => Node::Number(Number::Int(v)),
+                _ => match s.parse::<f64>() {
+                    Ok(f) => Node::Number(Number::Float(f)),
+                    _ => Node::Number(Number::Nan),
+                },
+            },
+            _ => Node::Number(Number::Nan),
+        },
         _ => todo!("cast not implemented for type {:?}", to_type),
     }
 }
@@ -191,7 +205,7 @@ fn testTypeConfusion() {
     assert_throws("x=1;x='ok'");
     assert_throws("x=1;x=1.0");
     assert_throws("double:=it*2"); // double is type i64!
-    // todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
+                                   // todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
 }
 
 #[test]
@@ -358,7 +372,10 @@ fn testPolymorphism2() {
 #[test]
 #[ignore] // TODO: requires complete type system
 fn testPolymorphism3() {
-    is!("fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')", "ok");
+    is!(
+        "fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
+        "ok"
+    );
     is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",2.0);
 }
 
@@ -369,7 +386,7 @@ fn testGenerics() {
     //    let header= typ.let array : value;
     //    let header= typ.let 0xFFFF0000 : value; // todo <<
     // let header = typ.let 0x0000FFFF : value; //todo ?? - invalid Rust syntax
-//     assert!(_eq!(header, array);
+    //     assert!(_eq!(header, array);
 }
 
 #[test]
@@ -377,8 +394,11 @@ fn testGenerics() {
 fn testFunctionArgumentCast() {
     is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
     is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
-    is!("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "hello4.");
-//     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
+    is!(
+        "float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)",
+        "hello4."
+    );
+    //     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
 
     is!("fun addier(a,b){b+a};addier(42.0,1.0)", 43);
     is!("fun addier(int a,int b){b+a};addier(42,1)+1", 44);
@@ -387,4 +407,3 @@ fn testFunctionArgumentCast() {
     is!("float addi(int x,int y){x+y};addi(2.2,2.2)", 4.4);
     is!("fun addier(float a,float b){b+a};addier(42,1)+1", 44);
 }
-

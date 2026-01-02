@@ -1,4 +1,3 @@
-
 // Comprehensive FFI Tests
 // All FFI-related tests consolidated from:
 //   - test_dynlib_import.h
@@ -20,10 +19,11 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use wasp::{eq, is, skip};
 use wasp::wasp_parser::parse;
+use wasp::{eq, is, skip};
 
-#[test] fn test_dynlib_import_emit() {
+#[test]
+fn test_dynlib_import_emit() {
     // Test FFI import and usage with 'use' keyword
     // These are actual C library functions, not WASM builtins
     // Note: FFI only works in native mode, not when compiled to WASM
@@ -38,22 +38,25 @@ use wasp::wasp_parser::parse;
 // ============================================================================
 // Basic FFI Tests - Core functionality
 // ============================================================================
-#[test] fn test_ffi_floor() {
+#[test]
+fn test_ffi_floor() {
     // Test: float64 . float64 (floor from libm);
     is!("import floor from 'm'\nfloor(3.7)", 3.0);
     is!("import floor from 'm'\nfloor(-2.3)", -3.0);
     is!("import floor from 'm'\nfloor(5.0)", 5.0);
 }
 
-#[test] fn test_ffi_strlen() {
+#[test]
+fn test_ffi_strlen() {
     return; // clashes with wasp runtime strlen!
-    // Test: char* . int32 (strlen from libc);
+            // Test: char* . int32 (strlen from libc);
     is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
     is!("import strlen from \"c\"\nstrlen(\"\")", 0);
     // is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
 }
 
-#[test] fn test_ffi_atof() {
+#[test]
+fn test_ffi_atof() {
     // let modul = loadNativeLibrary("c");
     // todo!(
     // skip!(
@@ -71,32 +74,42 @@ use wasp::wasp_parser::parse;
     //     )
 }
 
-#[test] fn test_ffi_fmin_wasp_file() {
+#[test]
+fn test_ffi_fmin_wasp_file() {
     is!("test/wasp/ffi/test_ffi_fmin.wasp", 2.1);
 }
 
-#[test] fn test_ffi_fmin() {
+#[test]
+fn test_ffi_fmin() {
     // Test: float64, float64 . float64 (fmin from libm);
     is!("import fmin from 'm'\nfmin(3.5, 2.1)", 2.1);
     is!("import fmin from 'm'\nfmin(100.0, 50.0)", 50.0);
     is!("import fmin from 'm'\nfmin(-5.0, -10.0)", -10.0);
 }
 
-#[test] fn test_ffi_combined() {
+#[test]
+fn test_ffi_combined() {
     // Combined tests using multiple FFI functions together
 
     // sqrt(abs(-16)) = sqrt(16) = 4.0
-    is!("import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))", 4.0);
+    is!(
+        "import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))",
+        4.0
+    );
 
     // floor(fmin(3.7, 2.9)) = floor(2.9) = 2.0
-    is!("import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))", 2.0);
+    is!(
+        "import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))",
+        2.0
+    );
 }
 
 // ============================================================================
 // let Comparison Functions
 // ============================================================================
 
-#[test] fn test_ffi_strcmp() {
+#[test]
+fn test_ffi_strcmp() {
     // let modul = loadNativeLibrary("c");
     // // assert!(modul);
     // assert!(modul.functions.has("strcmp"));
@@ -108,22 +121,36 @@ use wasp::wasp_parser::parse;
     // assert!(modul.functions["strcmp"].signature.return_types[0] == int32t);
     // Test: int strcmp(const char* s1, const char* s2);
     is!("import strcmp from \"c\"\nstrcmp(\"hello\", \"hello\")", 0);
-    is!("import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0", 1);
-    is!("import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0", 1);
+    is!(
+        "import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0",
+        1
+    );
+    is!(
+        "import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0",
+        1
+    );
     is!("import strcmp from \"c\"\nstrcmp(\"\", \"\")", 0);
 }
 
-#[test] fn test_ffi_strncmp() {
+#[test]
+fn test_ffi_strncmp() {
     // Test: int strncmp(const char* s1, const char* s2, size_t n);
-    is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)", 0);
-    is!("import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0", 1);
+    is!(
+        "import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)",
+        0
+    );
+    is!(
+        "import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0",
+        1
+    );
 }
 
 // ============================================================================
 // Additional Math Functions
 // ============================================================================
 
-#[test] fn test_ffi_ceil() {
+#[test]
+fn test_ffi_ceil() {
     // Test: double ceil(double x);
     is!("import ceil from 'm'\nceil(3.2)", 4.0);
     is!("import ceil from 'm'\nceil(-2.8)", -2.0);
@@ -131,27 +158,37 @@ use wasp::wasp_parser::parse;
     is!("import ceil from 'm'\nceil(0.1)", 1.0);
 }
 
-#[test] fn test_ffi_sin() {
+#[test]
+fn test_ffi_sin() {
     // Test: double sin(double x);
     is!("import sin from 'm'\nsin(0.0)", 0.0);
     is!("import sin from 'm'\nsin(1.5707963267948966)", 1.0);
-    is!("import sin from 'm'\nimport abs from \"c\"\nabs(sin(3.141592653589793))<0.001", 1);
+    is!(
+        "import sin from 'm'\nimport abs from \"c\"\nabs(sin(3.141592653589793))<0.001",
+        1
+    );
 }
 
-#[test] fn test_ffi_cos() {
+#[test]
+fn test_ffi_cos() {
     // Test: double cos(double x);
     is!("import cos from 'm'\ncos(0.0)", 1.0);
-    is!("import cos from 'm'\nimport abs from \"c\"\nabs(cos(1.5707963267948966))<0.001", 1);
+    is!(
+        "import cos from 'm'\nimport abs from \"c\"\nabs(cos(1.5707963267948966))<0.001",
+        1
+    );
     is!("import cos from 'm'\ncos(3.141592653589793)", -1.0);
 }
 
-#[test] fn test_ffi_tan() {
+#[test]
+fn test_ffi_tan() {
     // Test: double tan(double x);
     is!("import tan from 'm'\ntan(0.0)", 0.0);
     is!("import tan from 'm'\ntan(0.7853981633974483)", 1.0);
 }
 
-#[test] fn test_ffi_fabs() {
+#[test]
+fn test_ffi_fabs() {
     // Test: double fabs(double x);
     // Test: int32 . int32 (abs from libc);
     // Test: double . double (fabs from libc);
@@ -161,14 +198,16 @@ use wasp::wasp_parser::parse;
     // is!("import fabs from 'm'\nfabs(0.0)", 0.0);
 }
 
-#[test] fn test_ffi_fmax() {
+#[test]
+fn test_ffi_fmax() {
     // Test: double fmax(double x, double y);
     is!("import fmax from 'm'\nfmax(3.5, 2.1)", 3.5);
     is!("import fmax from 'm'\nfmax(100.0, 200.0)", 200.0);
     is!("import fmax from 'm'\nfmax(-5.0, -10.0)", -5.0);
 }
 
-#[test] fn test_ffi_fmod() {
+#[test]
+fn test_ffi_fmod() {
     // Test: double fmod(double x, double y);
     is!("import fmod from 'm'\nfmod(5.5, 2.0)", 1.5);
     is!("import fmod from 'm'\nfmod(10.0, 3.0)", 1.0);
@@ -178,7 +217,8 @@ use wasp::wasp_parser::parse;
 // let Conversion Functions
 // ============================================================================
 
-#[test] fn test_ffi_atoi() {
+#[test]
+fn test_ffi_atoi() {
     // Test: int atoi(const char* str);
     is!("import atoi from \"c\"\natoi(\"42\")", 42);
     is!("import atoi from \"c\"\natoi(\"-123\")", -123);
@@ -186,7 +226,8 @@ use wasp::wasp_parser::parse;
     is!("import atoi from \"c\"\natoi(\"999\")", 999);
 }
 
-#[test] fn test_ffi_atol() {
+#[test]
+fn test_ffi_atol() {
     // Test: long atol(const char* str);
     is!("import atol from \"c\"\natol(\"1234567\")", 1234567);
     is!("import atol from \"c\"\natol(\"-999999\")", -999999);
@@ -196,7 +237,8 @@ use wasp::wasp_parser::parse;
 // Zero-Parameter Functions
 // ============================================================================
 
-#[test] fn test_ffi_rand() {
+#[test]
+fn test_ffi_rand() {
     // Test: int rand(void);
     is!("import rand from \"c\"\nx=rand();x>=0", 1);
     is!("import rand from \"c\"\nx=rand();y=rand();x!=y", 1);
@@ -206,9 +248,11 @@ use wasp::wasp_parser::parse;
 // Combined/Complex Tests
 // ============================================================================
 
-#[test] fn test_ffi_trigonometry_combined() {
+#[test]
+fn test_ffi_trigonometry_combined() {
     // Test: sin²(x) + cos²(x) = 1 (Pythagorean identity);
-    is!(r#"
+    is!(
+        r#"
         import sin from 'm'
         import cos from 'm'
         x = 0.5
@@ -220,45 +264,54 @@ use wasp::wasp_parser::parse;
     );
 }
 
-#[test] fn test_ffi_string_math_combined() {
+#[test]
+fn test_ffi_string_math_combined() {
     // Test: Parse string numbers and do math
-    is!(r#"import atoi from "c"
+    is!(
+        r#"import atoi from "c"
         x = atoi("10")
         y = atoi("20")
         x + y"#,
         30
     );
 
-    is!("import atof from c;import ceil from 'm';ceil(atof('3.7'))",
+    is!(
+        "import atof from c;import ceil from 'm';ceil(atof('3.7'))",
         4.0
     );
 }
 
-#[test] fn test_ffi_string_comparison_logic() {
+#[test]
+fn test_ffi_string_comparison_logic() {
     // Test: Use strcmp for conditional logic
-    is!(r#"import strcmp from "c"
+    is!(
+        r#"import strcmp from "c"
 result = strcmp("test", "test")
 if result == 0 then 100 else 200"#,
         100
     );
 
-    is!(r#"import strcmp from "c"
+    is!(
+        r#"import strcmp from "c"
 result = strcmp("aaa", "bbb")
 if result < 0 then 1 else 0"#,
         1
     );
 }
 
-#[test] fn test_ffi_math_pipeline() {
+#[test]
+fn test_ffi_math_pipeline() {
     // Test: Chain multiple math functions
-    is!(r#"import sin from 'm'
+    is!(
+        r#"import sin from 'm'
 import floor from 'm'
 import fabs from 'm'
 fabs(floor(sin(3.14159)))"#,
         0.0
     );
 
-    is!(r#"import ceil from 'm'
+    is!(
+        r#"import ceil from 'm'
 import floor from 'm'
 import fmax from 'm'
 fmax(ceil(2.3), floor(5.9))"#,
@@ -270,11 +323,11 @@ fmax(ceil(2.3), floor(5.9))"#,
 // Signature Detection and Coverage Tests
 // ============================================================================
 
-
 // Import Pattern Tests
 // ============================================================================
 
-#[test] fn test_import_from_pattern_parse() {
+#[test]
+fn test_import_from_pattern_parse() {
     let code1 = "import abs from \"c\"";
     let parsed1 = parse(code1);
     eq!(parsed1.name(), "import");
@@ -283,7 +336,8 @@ fmax(ceil(2.3), floor(5.9))"#,
     let parsed2 = parse(code2);
 }
 
-#[test] fn test_import_from_pattern_emit() {
+#[test]
+fn test_import_from_pattern_emit() {
     skip!(
 
         is!("import abs from \"c\"\nabs(-42)", 42);
@@ -292,7 +346,8 @@ fmax(ceil(2.3), floor(5.9))"#,
     );
 }
 
-#[test] fn test_import_from_vs_include() {
+#[test]
+fn test_import_from_vs_include() {
     let ffi_import = "import abs from \"c\"";
     let ffi_node = parse(ffi_import);
 }
@@ -301,7 +356,8 @@ fmax(ceil(2.3), floor(5.9))"#,
 // C Header Parser Tests
 // ============================================================================
 
-#[test] fn test_extract_function_signature() {
+#[test]
+fn test_extract_function_signature() {
     let c_code1 = "double sqrt(double x);";
     let parsed1 = parse(c_code1);
     // extractFunctionSignature(c_code1, sig1);
@@ -329,7 +385,6 @@ fmax(ceil(2.3), floor(5.9))"#,
     // eq!(sig3.return_type, "int");
     // eq!(sig3.param_types.size(), 1);
     // eq!(sig3.param_types[0], "char*");
-
 }
 
 // #[test] fn test_c_type_mapping() {
@@ -346,7 +401,8 @@ fmax(ceil(2.3), floor(5.9))"#,
 // Main Test Runners
 // ============================================================================
 
-#[test] fn test_ffi_extended_emit() {
+#[test]
+fn test_ffi_extended_emit() {
     test_ffi_strcmp();
     test_ffi_ceil();
     test_ffi_sin();
@@ -364,13 +420,15 @@ fmax(ceil(2.3), floor(5.9))"#,
     // test_ffi_signature_coverage();
 }
 
-#[test] fn test_ffi_import_pattern() {
+#[test]
+fn test_ffi_import_pattern() {
     test_import_from_pattern_parse();
     test_import_from_pattern_emit();
     test_import_from_vs_include();
 }
 
-#[test] fn test_ffi_header_parser() {
+#[test]
+fn test_ffi_header_parser() {
     test_extract_function_signature();
     // test_c_type_mapping();
 }
@@ -379,7 +437,8 @@ fmax(ceil(2.3), floor(5.9))"#,
 // SDL Graphics FFI Tests
 // ============================================================================
 
-#[test] fn test_ffi_sdl_init() {
+#[test]
+fn test_ffi_sdl_init() {
     // Test: SDL_Init - Initialize SDL with timer subsystem (works headless);
     // SDL_INIT_TIMER = 0x00000001 (doesn't require display);
     // Returns 0 on success, non-zero on error
@@ -389,33 +448,39 @@ fmax(ceil(2.3), floor(5.9))"#,
     is!("import SDL_Quit from 'SDL2'\nSDL_Quit()\n42", 42);
 }
 
-#[test] fn test_ffi_sdl_window() {
+#[test]
+fn test_ffi_sdl_window() {
     is!("test/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
-#[test] fn test_ffi_sdl_version() {
+#[test]
+fn test_ffi_sdl_version() {
     // Test: SDL_GetVersion - Get SDL version info
     // This tests struct parameter passing via FFI
     is!("test/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
-#[test] fn test_ffi_sdl_combined() {
+#[test]
+fn test_ffi_sdl_combined() {
     // Combined test: Multiple SDL function imports
     // Tests that we can import multiple SDL functions in one program
     is!("test/wasp/ffi/sdl/sdl_get_ticks.wasp", 100);
 }
-#[test] fn test_ffi_sdl_debug() {
+#[test]
+fn test_ffi_sdl_debug() {
     // print results of SDL functions to debug FFI
     is!("test/wasp/ffi/sdl/sdl_debug.wasp", 1);
 }
 
-#[test] fn test_ffi_sdl_red_square_demo() {
+#[test]
+fn test_ffi_sdl_red_square_demo() {
     // DEMO: Display a red square using SDL2 via FFI
     // This will show an actual window with graphics
     is!("test/wasp/ffi/sdl/sdl_red_square_demo.wasp", 1);
 }
 
-#[test] fn test_ffi_sdl() {
+#[test]
+fn test_ffi_sdl() {
     test_ffi_sdl_init();
     test_ffi_sdl_window();
     test_ffi_sdl_version();
@@ -429,19 +494,24 @@ fmax(ceil(2.3), floor(5.9))"#,
 // ============================================================================
 // Raylib Graphics FFI Tests
 // ============================================================================
-#[test] fn test_ffi_raylib_combined() {
+#[test]
+fn test_ffi_raylib_combined() {
     // Test: Multiple raylib imports in one program
-    is!(r#"
+    is!(
+        r#"
 import InitWindow from 'raylib'
 import SetTargetFPS from 'raylib'
 import CloseWindow from 'raylib'
 InitWindow(800, 600, "Test")
 SetTargetFPS(60)
 CloseWindow()
-100 "#,100);
+100 "#,
+        100
+    );
 }
 
-#[test] fn test_ffi_raylib_simple_use_import() {
+#[test]
+fn test_ffi_raylib_simple_use_import() {
     let modul = loadNativeLibrary("raylib");
     // assert!(modul);
     // assert!(modul.functions.has("InitWindow"));
@@ -454,13 +524,14 @@ CloseWindow()
     // eq!(modul.functions["WindowShouldClose"].signature.return_types[0],bools); // bool as int32
     // eq!(modul.functions["DrawCircle"].signature.parameters[3].typo,int32t);
 
-    is!("samples/raylib_circle.wasp",0);
+    is!("samples/raylib_circle.wasp", 0);
     // is!("samples/raylib_simple.wasp",0);
 
     // is!("samples/raylib_simple_use.wasp",0);
 }
 
-#[test] fn test_ffi_raylib() {
+#[test]
+fn test_ffi_raylib() {
     let modul = loadNativeLibrary("raylib");
     // assert!(modul);
     // assert!(modul.functions.has("InitWindow"));
@@ -475,7 +546,8 @@ CloseWindow()
     // test_ffi_raylib_combined();
 }
 
-#[test] fn test_ffi_all() {
+#[test]
+fn test_ffi_all() {
     // Main comprehensive test function that runs all FFI tests
     let modul = loadNativeLibrary("m");
     // assert!(modul);
