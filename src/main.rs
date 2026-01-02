@@ -3,16 +3,16 @@
 mod extensions;
 
 // use crate::extensions::*; // crate for F12
+use extensions::lists::*;
 use extensions::numbers::*;
 use extensions::strings::*;
-use extensions::lists::*;
 use extensions::utils::*;
 
 pub mod node;
 pub mod parser;
-pub mod wasp_parser;
-pub mod wasm_gc_reader;
 pub mod wasm_gc_emitter;
+pub mod wasm_gc_reader;
+pub mod wasp_parser;
 
 pub mod type_kinds;
 
@@ -23,12 +23,10 @@ use parser::test_parser;
 
 // use bla::test_bla_lib;
 
-
 // glob import doesn't reexport anything because no candidate is public enough
 // reexporting is done by pub use
 // pub mod extensions;
 // pub use extensions::*;
-
 
 // typedef Vec<String> StringVec in rust:
 type Strings = Vec<String>;

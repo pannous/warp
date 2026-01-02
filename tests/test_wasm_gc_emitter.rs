@@ -1,14 +1,18 @@
-use wasp::StringExtensions;
 use wasp::node::Node;
 use wasp::node::Node::*;
 use wasp::run::wasmtime_runner::run;
-use wasp::wasm_gc_emitter::{WasmGcEmitter,eval};
+use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
+use wasp::StringExtensions;
 use wasp::{eq, is, write_wasm};
 
 fn normalize_blocks(node: &Node) -> Node {
     let node = node.unwrap_meta();
     match node {
-        Tag { title, params, body } => Tag {
+        Tag {
+            title,
+            params,
+            body,
+        } => Tag {
             title: title.clone(),
             params: Box::new(normalize_blocks(params)),
             body: Box::new(normalize_blocks(body)),
@@ -16,12 +20,15 @@ fn normalize_blocks(node: &Node) -> Node {
         Block(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
         List(items) if items.len() == 1 => normalize_blocks(&items[0]),
         Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
-        Pair(left, right) => Pair(Box::new(normalize_blocks(left)), Box::new(normalize_blocks(right))),
+        Pair(left, right) => Pair(
+            Box::new(normalize_blocks(left)),
+            Box::new(normalize_blocks(right)),
+        ),
         _ => node.clone(),
     }
 }
-use wasp::Number::Int;
 use wasp::type_kinds::NodeKind;
+use wasp::Number::Int;
 
 #[test]
 fn test_wasm_roundtrip() {
@@ -54,15 +61,17 @@ fn test_wasm_roundtrip() {
 fn test_wasm_roundtrip_via_is() {
     // Parser treats {test=1} as body containing Key, not params
     let x = Key("test".s(), Box::new(Number(Int(1))));
-    let _ok:Node = eval("html{test=1}");
+    let _ok: Node = eval("html{test=1}");
     // After single-item block unwrapping, body becomes just the Key
-    is!("html{test=1}", Tag {
-        title: "html".s(),
-        params: Box::new(Empty),
-        body: Box::new(x),
-    });
+    is!(
+        "html{test=1}",
+        Tag {
+            title: "html".s(),
+            params: Box::new(Empty),
+            body: Box::new(x),
+        }
+    );
 }
-
 
 #[test]
 fn test_emit_gc_types() {
@@ -88,7 +97,8 @@ fn test_generate_wasm() {
 }
 
 #[test]
-fn test_node_kind_enum_abi() { // ensure enum values match expected ABI
+fn test_node_kind_enum_abi() {
+    // ensure enum values match expected ABI
     eq!(NodeKind::Empty as u32, 0);
     eq!(NodeKind::Number as u32, 1);
     eq!(NodeKind::Codepoint as u32, 3);

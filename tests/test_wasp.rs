@@ -13,15 +13,14 @@ use wasp::parser::*;
 pub fn test_parser() {
     let code = "{ key: [ value, { key2: value2, num:123, text:'yeah' } ] }";
     let mut parser = Parser::new(code);
-    let ast:Node = parser.parse();
+    let ast: Node = parser.parse();
     let serial = ast.serialize();
     // let right= "key: {[value, {[key2: value2, num: 123, text: 'yeah']}]}";
-    let right="key={[value, {[key2=value2, num=123, text='yeah']}]}";
+    let right = "key={[value, {[key2=value2, num=123, text='yeah']}]}";
     eq!(serial, right);
     println!("serialize: {:#?}", ast);
     eq!(ast.size(), 1);
     // ast["key"]
-
 }
 
 //#[test]

@@ -1,7 +1,7 @@
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
-use std::rc::Rc;
-use std::cell::RefCell;
 use anyhow::{anyhow, Result};
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
     inner: Val,
@@ -39,7 +39,8 @@ impl FieldMap {
         // 7: left (ref null node)
         // 8: right (ref null node)
         // 9: meta (ref null node)
-        match name { // todo these don't need to be hardcoded, see rasm 
+        match name {
+            // todo these don't need to be hardcoded, see rasm
             "name_ptr" => Ok(0),
             "name_len" => Ok(1),
             "tag" => Ok(2),
@@ -52,7 +53,7 @@ impl FieldMap {
             "meta" => Ok(9),
             // Convenience aliases
             "kind" => Ok(2), // tag
-            _ => Err(anyhow!("Unknown field: {}", name))
+            _ => Err(anyhow!("Unknown field: {}", name)),
         }
     }
 }
@@ -112,7 +113,9 @@ impl GcObject {
         }
 
         let mut store = self.store.borrow_mut();
-        let memory = self.instance.get_memory(&mut *store, "memory")
+        let memory = self
+            .instance
+            .get_memory(&mut *store, "memory")
             .ok_or_else(|| anyhow!("No memory export"))?;
 
         let mut buf = vec![0u8; len as usize];
@@ -143,33 +146,57 @@ impl GcObject {
 
 /// Trait for converting Val to Rust types
 pub trait FromVal: Sized {
-    fn from_val(val: Val, store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self>;
+    fn from_val(
+        val: Val,
+        store: &mut Store<()>,
+        instance: &Instance,
+        store_rc: &Rc<RefCell<Store<()>>>,
+    ) -> Result<Self>;
 }
 
 impl FromVal for i32 {
-    fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+    fn from_val(
+        val: Val,
+        _store: &mut Store<()>,
+        _instance: &Instance,
+        _store_rc: &Rc<RefCell<Store<()>>>,
+    ) -> Result<Self> {
         Ok(val.unwrap_i32())
     }
 }
 
 impl FromVal for i64 {
-    fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+    fn from_val(
+        val: Val,
+        _store: &mut Store<()>,
+        _instance: &Instance,
+        _store_rc: &Rc<RefCell<Store<()>>>,
+    ) -> Result<Self> {
         Ok(val.unwrap_i64())
     }
 }
 
 impl FromVal for f64 {
-    fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+    fn from_val(
+        val: Val,
+        _store: &mut Store<()>,
+        _instance: &Instance,
+        _store_rc: &Rc<RefCell<Store<()>>>,
+    ) -> Result<Self> {
         Ok(val.unwrap_f64())
     }
 }
 
 impl FromVal for GcObject {
-    fn from_val(val: Val, _store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+    fn from_val(
+        val: Val,
+        _store: &mut Store<()>,
+        instance: &Instance,
+        store_rc: &Rc<RefCell<Store<()>>>,
+    ) -> Result<Self> {
         Ok(GcObject::new(val, store_rc.clone(), instance.clone()))
     }
 }
-
 
 /// Load a WASM module with GC support and return root object
 pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
@@ -193,7 +220,8 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
     // Call main() to get the root node
     let main = {
         let mut s = store_rc.borrow_mut();
-        instance.get_func(&mut *s, "main")
+        instance
+            .get_func(&mut *s, "main")
             .ok_or_else(|| anyhow!("No main function"))?
     };
 
@@ -227,7 +255,8 @@ pub fn read_bytes(bytes: &[u8]) -> Result<GcObject> {
     // Call main() to get the root node
     let main = {
         let mut s = store_rc.borrow_mut();
-        instance.get_func(&mut *s, "main")
+        instance
+            .get_func(&mut *s, "main")
             .ok_or_else(|| anyhow!("No main function"))?
     };
 
@@ -240,7 +269,6 @@ pub fn read_bytes(bytes: &[u8]) -> Result<GcObject> {
     Ok(GcObject::new(results[0].clone(), store_rc, instance))
 }
 
-
 /// Create a node by calling a constructor function
 pub fn call_constructor(
     func_name: &str,
@@ -250,7 +278,8 @@ pub fn call_constructor(
 ) -> Result<GcObject> {
     let func = {
         let mut s = store.borrow_mut();
-        instance.get_func(&mut *s, func_name)
+        instance
+            .get_func(&mut *s, func_name)
             .ok_or_else(|| anyhow!("Function {} not found", func_name))?
     };
 

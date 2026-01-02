@@ -1,4 +1,3 @@
-
 // Function tests
 // Migrated from tests_*.rs files
 
@@ -21,22 +20,22 @@ fn test_function_declaration() {
     // 💡we already have a working syntax so this has low priority
     // ⚠️ DO we really have a working syntax??
     skip!(
- // TODO!
-        testFunctionParams(); // TODO!
-        testFibonacci(); // much TODO!
-        is!("fun x{42} x+1", 43);
-        is!("def x{42};x+1", 43);
-        is!("def x(){42};x+1", 43);
-        is!("def x(){42};x()+1", 43);
-        is!("define x={42};x()+1", 43);
-        is!("function x(){42};x()+1", 43);
-        is!("def x(a){42+a};x(1)+1", 44);
-        is!("define x={42+it};x(1)+1", 44);
-        is!("function x(a){42+a};x(1)+1", 44);
-        is!("function x(){42+it};x(1)+1", 44);
-        is!("def x(a=3){42+a};x+1", 46); // default value
-        is!("def x(a){42+a};x+1", 43);
-    );
+    // TODO!
+           testFunctionParams(); // TODO!
+           testFibonacci(); // much TODO!
+           is!("fun x{42} x+1", 43);
+           is!("def x{42};x+1", 43);
+           is!("def x(){42};x+1", 43);
+           is!("def x(){42};x()+1", 43);
+           is!("define x={42};x()+1", 43);
+           is!("function x(){42};x()+1", 43);
+           is!("def x(a){42+a};x(1)+1", 44);
+           is!("define x={42+it};x(1)+1", 44);
+           is!("function x(a){42+a};x(1)+1", 44);
+           is!("function x(){42+it};x(1)+1", 44);
+           is!("def x(a=3){42+a};x+1", 46); // default value
+           is!("def x(a){42+a};x+1", 43);
+       );
 }
 
 #[test]
@@ -60,7 +59,6 @@ fn test_function_declaration_parse() {
         eq!(*functions["test"].body, analyze(parse("return a*2")));
     );
 }
-
 
 #[test]
 fn test_rename_wasm_function() {
@@ -88,22 +86,22 @@ fn test_wit_function() {
 
 #[test]
 fn test_float_return_through_main() {
-//     double
-//     let x = 0.0000001; // 3e...
+    //     double
+    //     let x = 0.0000001; // 3e...
     //	double x=1000000000.1;// 4...
     //	double x=-1000000000.1;// c1…
     //	double x=9999999999999999.99999999;// 43…
     //	double x=-9999999999999999.99999999;// c3…
     //	double x=1.1;// 3ff199999999999a
     //	double x=-1.1;// bff199999999999a
-//     int64
-//     y = *(int64 *) & x;
-    let y : i64 = 0x00FF000000000000; // -> 0.000000 OK
-    // #[cfg(not(feature = "WASM"))]{
-        // printf!("%llx\n", y);
-    // }
-    // x = *(double *) & y;
-    // printf!("%lf\n", x);
+    //     int64
+    //     y = *(int64 *) & x;
+    let y: i64 = 0x00FF000000000000; // -> 0.000000 OK
+                                     // #[cfg(not(feature = "WASM"))]{
+                                     // printf!("%llx\n", y);
+                                     // }
+                                     // x = *(double *) & y;
+                                     // printf!("%lf\n", x);
     is!(y.to_string().as_str(), 0x00FF000000000000i64);
 }
 
@@ -114,18 +112,18 @@ fn test_graph_params() {
     let hero: &Node = &result["empireHero"];
     hero.print();
     eq!(hero["episode"], "EMPIRE");
-//     let result = parse("\nfragment comparisonFields on Character{\n"
-//                   "  name\n  appearsIn\n  friends{\n    name\n  }\n }");
-//     let result = parse("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
+    //     let result = parse("\nfragment comparisonFields on Character{\n"
+    //                   "  name\n  appearsIn\n  friends{\n    name\n  }\n }");
+    //     let result = parse("\nfragment comparisonFields on Character{\n  name\n  appearsIn\n  friends{\n    name\n  }\n}");
     // VARIAblE: { "episode": "JEDI" }
-//     let result = parse("query HeroNameAndFriends($episode: Episode){\n"
-//                   "  hero(episode: $episode){\n"
-//                   "    name\n"
-//                   "    friends{\n"
-//                   "      name\n"
-//                   "    }\n"
-//                   "  }\n"
-//                   "}");
+    //     let result = parse("query HeroNameAndFriends($episode: Episode){\n"
+    //                   "  hero(episode: $episode){\n"
+    //                   "    name\n"
+    //                   "    friends{\n"
+    //                   "      name\n"
+    //                   "    }\n"
+    //                   "  }\n"
+    //                   "}");
 }
 
 #[test]
@@ -150,17 +148,16 @@ let result = parse("chained_ops(1)(1)(1)", 0)); // why not generalize from the s
     parse("while(x<3){y:z}");
     skip!(
 
-        Node body2 = let result = parse(
-            "body(style='blue'){style:green}"); // is that whole xml compatibility a good idea?
-        skip!(
-assert!(body2["style"] ==
-            "green", 0)); // body has prescedence over param, semantically param provide extra data to body
-        assert!(body2[".style"] == "blue");
-    );
+            Node body2 = let result = parse(
+                "body(style='blue'){style:green}"); // is that whole xml compatibility a good idea?
+            skip!(
+    assert!(body2["style"] ==
+                "green", 0)); // body has prescedence over param, semantically param provide extra data to body
+            assert!(body2[".style"] == "blue");
+        );
     //	let result = parse("a(href='#'){'a link'}");
     //	let result = parse("(markdown link)[www]");
 }
-
 
 #[test]
 fn test_stacked_lambdas() {
@@ -175,7 +172,6 @@ fn test_stacked_lambdas() {
 
     assert_ne!(parse("a{x}{y z}"), parse("a{x,{y z}}"));
 }
-
 
 #[test]
 fn test_modifiers() {

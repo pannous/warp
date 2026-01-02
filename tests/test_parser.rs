@@ -7,14 +7,14 @@
 // Dedentation
 
 use log::warn;
-use Node::{False, True};
-use wasp::{eq, is, skip};
-use wasp::extensions::{prints};
+use wasp::extensions::prints;
 use wasp::node::Node;
 use wasp::node::Node::Empty;
-use wasp::type_kinds::NodeKind::Key;
 use wasp::type_kinds::NodeKind;
+use wasp::type_kinds::NodeKind::Key;
 use wasp::wasp_parser::{parse, parse_file};
+use wasp::{eq, is, skip};
+use Node::{False, True};
 
 // Mark (data notation) tests
 #[test]
@@ -22,7 +22,6 @@ fn test_mark_simple() {
     let no = parse("html(body(p(\"hello\")))");
     is!("html{body{p:'hello'}}", no);
 }
-
 
 #[test]
 fn test_deep_colon() {
@@ -40,7 +39,6 @@ fn test_deep_colon2() {
     eq!(result.values().values().values().name(), "d");
 }
 
-
 fn test_hypen_versus_minus() {
     // Needs variable register in parser.
     is!("a=-1 b=2 b-a", 3);
@@ -51,7 +49,6 @@ fn test_hypen_versus_minus() {
 fn test_kebab_case() {
     test_hypen_versus_minus();
 }
-
 
 #[test]
 fn test_equals_binding() {
@@ -67,11 +64,15 @@ fn test_colon_immediate_binding() {
     let result = parse("a: float32, b: float32");
     eq!(result.length(), 2);
     eq!(result["a"], "float32");
-    eq!(result[0], Node::Symbol("a".to_string()).add(Node::Symbol("float32".to_string())));
-    eq!(result[1], Node::Symbol("b".to_string()).add(Node::Symbol("float32".to_string())));
+    eq!(
+        result[0],
+        Node::Symbol("a".to_string()).add(Node::Symbol("float32".to_string()))
+    );
+    eq!(
+        result[1],
+        Node::Symbol("b".to_string()).add(Node::Symbol("float32".to_string()))
+    );
 }
-
-
 
 // https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md#item-use
 #[test]
@@ -84,7 +85,7 @@ fn test_use() {
     parse("use all from other-file"); // MY SYNTAX redundant
     parse("use name from yet-another-file"); // MY SYNTAX
     parse("use name from yet-another-file as other-name"); // MY SYNTAX
-    //    parse("use name as other-name from yet-another-file");// MY SYNTAX
+                                                           //    parse("use name as other-name from yet-another-file");// MY SYNTAX
 }
 
 #[test]
@@ -93,12 +94,9 @@ fn test_group_cascade0() {
     eq!(result.length(), 3);
 }
 
-
 #[test]
 fn test_significant_whitespace() {
-    skip!(
-testDataMode()
-    );
+    skip!(testDataMode());
     let result = parse("a b (c)");
     eq!(result.length(), 3);
     let result = parse("a b(c)");
@@ -106,11 +104,11 @@ testDataMode()
     let result = parse("a b:c");
     eq!(result.length(), 2); // a , b:c
     eq!(result.laste().kind(), Key); // a , b:c
-    //     let result = parse("a: b c d", { colon_immediate: false });
+                                     //     let result = parse("a: b c d", { colon_immediate: false });
     eq!(result.length(), 3);
     eq!(result.name(), "a"); // "a"(b c d), NOT ((a:b) c d);
     eq!(result.kind(), NodeKind::List); // not key!
-    //     let result = parse("a b : c", { colon_immediate: false });
+                                        //     let result = parse("a b : c", { colon_immediate: false });
     assert!(result.length() == 1 || result.length() == 2); // (a b):c
     eq!(result.kind(), Key);
     skip!(
@@ -130,7 +128,6 @@ testDataMode()
         assert!(eval("1 +1 ≠ 1 + 1"));
     );
 }
-
 
 #[test]
 fn test_empty_line_grouping() {
@@ -172,7 +169,6 @@ e
     eq!(parsed[1].name(), "c");
 }
 
-
 #[test]
 fn test_div() {
     let result = parse("div{ class:'bold' 'text'}");
@@ -192,14 +188,14 @@ fn test_paramized_keys() {
     // 0. parameters accessible
     let label0 = parse("label(for:password)");
     label0.print();
-    let node : &Node = &label0["for"];
+    let node: &Node = &label0["for"];
     eq!(node, "password");
     eq!(label0["for"], "password");
 
     // 1. paramize keys: label{param=(for:password)}:"Text"
     let label1 = parse("label(for:password):'Passwort'"); // declaration syntax :(
-    // Node label1 = parse("label{for:password}:'Passwort'");
-    // Node label1 = parse("label[for:password]:'Passwort'");
+                                                          // Node label1 = parse("label{for:password}:'Passwort'");
+                                                          // Node label1 = parse("label[for:password]:'Passwort'");
     label1.print();
     eq!(label1, "Passwort");
     eq!(label1["for"], "password");
@@ -225,8 +221,6 @@ fn test_paramized_keys() {
     );
 }
 
-
-
 #[test]
 fn test_dedent() {
     let indented = r#"
@@ -251,33 +245,32 @@ e
 /*
 #[test] fn testWasmSpeed() {
 
-	struct timeval stop, start;
-	gettimeofday(&start, NULL);
-	time_t s, e;
-	time(&s);
-	// todo: let compiler comprinte constant expressions like 1024*65536/4
-	//out of bounds memory access if only one Memory page!
-	//	is!("i=0;k='hi';while(i<1024*65536/4){i++;k#i=65};k[1]", 65)// wow SLOOW!!!
-	is!("i=0;k='hi';while(i<16777216){i++;k#i=65};k[1]", 65)// still slow, but < 1s
-	//	is!("i=0;k='hi';while(i<16){i++;k#i=65};k[1]", 65)// still slow, but < 1s
-	//	70 ms PURE C -O3   123 ms  PURE C -O1  475 ms in PURE C without optimization
-	//  141 ms wasmtime very fast (similar to wasmer);
-	//  150 ms wasmer very fast!
-	//  546 ms in WebKit (todo: test V8/WebView2!);
-	//	465 - 3511 ms in WASM3  VERY inconsistent, but ok, it's an interpreter!
-	//	1687 ms wasmx (node.js);
-	//  1000-3000 ms in wasm-micro-runtime :( MESSES with system clock! // wow, SLOWER HOW!?
-	//	so we can never draw 4k by hand wow. but why? only GPU can do more than 20 frames per second
-	//	sleep(1);
-	gettimeofday(&stop, NULL);
-	time(&e);
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
+    time_t s, e;
+    time(&s);
+    // todo: let compiler comprinte constant expressions like 1024*65536/4
+    //out of bounds memory access if only one Memory page!
+    //	is!("i=0;k='hi';while(i<1024*65536/4){i++;k#i=65};k[1]", 65)// wow SLOOW!!!
+    is!("i=0;k='hi';while(i<16777216){i++;k#i=65};k[1]", 65)// still slow, but < 1s
+    //	is!("i=0;k='hi';while(i<16){i++;k#i=65};k[1]", 65)// still slow, but < 1s
+    //	70 ms PURE C -O3   123 ms  PURE C -O1  475 ms in PURE C without optimization
+    //  141 ms wasmtime very fast (similar to wasmer);
+    //  150 ms wasmer very fast!
+    //  546 ms in WebKit (todo: test V8/WebView2!);
+    //	465 - 3511 ms in WASM3  VERY inconsistent, but ok, it's an interpreter!
+    //	1687 ms wasmx (node.js);
+    //  1000-3000 ms in wasm-micro-runtime :( MESSES with system clock! // wow, SLOWER HOW!?
+    //	so we can never draw 4k by hand wow. but why? only GPU can do more than 20 frames per second
+    //	sleep(1);
+    gettimeofday(&stop, NULL);
+    time(&e);
 
-	printf!("took %ld sec\n", e - s);
-	printf!("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
+    printf!("took %ld sec\n", e - s);
+    printf!("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
 
-	exit(0);
+    exit(0);
 }*/
-
 
 //
 //#[test] fn testWaspInitializationIntegrity() {
@@ -287,7 +280,7 @@ e
 
 #[test]
 fn test_colon_lists() {
-        let parsed = parse("a: b c d");//, { colon_immediate: false });
+    let parsed = parse("a: b c d"); //, { colon_immediate: false });
     eq!(parsed.length(), 3);
     eq!(parsed[1], "c");
     eq!(parsed.name(), "a");
@@ -308,11 +301,11 @@ fn test_deep_copy_debug_bug_bug() {
     let result = parse(source);
     eq!(result.name(), "deep");
     result.print();
-    let c : Node = result["deep"]["c"].clone();
-    let node : Node = c["d"].clone();
+    let c: Node = result["deep"]["c"].clone();
+    let node: Node = c["d"].clone();
     // eq!(node.to_i64(),  1); // TODO: implement to_i64 method
-    eq!(node,  true); // Actually a bool based on the source
-    eq!(node,  1);
+    eq!(node, true); // Actually a bool based on the source
+    eq!(node, 1);
 }
 
 #[test]
@@ -321,10 +314,10 @@ fn test_deep_copy_debug_bug_bug2() {
     //     chars
     let source = "{deep{c:{d:123}}}";
     let result = parse(source);
-    let c : Node = result["deep"]["c"].clone();
-    let node : Node = c["d"].clone();
+    let c: Node = result["deep"]["c"].clone();
+    let node: Node = c["d"].clone();
     // eq!(node.to_i64(),  123); // TODO: implement to_i64 method
-    eq!(node,  123);
+    eq!(node, 123);
 }
 #[test]
 fn test_net_base() {
@@ -346,7 +339,7 @@ fn test_net_base() {
     let results = result["results"].clone();
     let erde = results;
     //     assert!(erde.name() == "erde" || erde["name"] == "erde");
-    let statements : Node = erde["statements"].clone();
+    let statements: Node = erde["statements"].clone();
     assert!(statements.length() >= 1); // || statements.value().node->length >=
     eq!(result["query"], "2");
     eq!(result["count"], "1");
@@ -366,12 +359,10 @@ fn fetch(_p0: &str) -> &str {
     todo!()
 }
 
-
 #[test]
 fn test_utf() {
     //    	testUTFinCPP();
-    skip!(
-testUnicode_UTF16_UTF32());
+    skip!(testUnicode_UTF16_UTF32());
     eq!(utf8_byte_count('ç'), 2);
     eq!(utf8_byte_count('√'), 3);
     eq!(utf8_byte_count('🥲'), 4);
@@ -386,7 +377,9 @@ testUnicode_UTF16_UTF32());
     //     codepoint
     let i = x.chars().nth(1).unwrap();
     eq!('牛', i);
-    #[cfg(not(feature = "WASM"))]{  // why??
+    #[cfg(not(feature = "WASM"))]
+    {
+        // why??
         eq!("a牛c".chars().nth(1).unwrap(), '牛');
         eq!(i, '牛'); // owh wow it works reversed
     }
@@ -436,8 +429,8 @@ fn test_mark_multi_deep() {
     //     chars
     let source = "{deep{a:3,b:4,c:{d:'hi'}}}";
     let result = parse(source);
-    let c : Node = result["deep"]["c"].clone();
-    let node : Node = result["deep"]["c"]["d"].clone();
+    let c: Node = result["deep"]["c"].clone();
+    let node: Node = result["deep"]["c"]["d"].clone();
     eq!(node, "hi");
     eq!(node, "hi");
 
@@ -454,7 +447,7 @@ fn test_mark_multi() {
     //     chars
     let source = "{a:'HIO' b:3}";
     let result = parse(source);
-    let node : Node = result["b"].clone();
+    let node: Node = result["b"].clone();
     result["a"].clone().print();
     result["b"].clone().print();
     eq!(result["b"], 3);
@@ -476,8 +469,6 @@ fn test_overwrite() {
     eq!(result["b"], 4);
     eq!(result["b"], 4);
 }
-
-
 
 // #[cfg(not(feature = "WASM"))]{
 // #[cfg(not(feature = "WASI"))]{
@@ -509,7 +500,8 @@ fn test_sample() {
 
 #[test]
 fn test_newline_lists() {
-    let result = parse("  c: \"commas optional\"\n d: \"semicolons optional\"\n e: \"trailing comments\"");
+    let result =
+        parse("  c: \"commas optional\"\n d: \"semicolons optional\"\n e: \"trailing comments\"");
     eq!(result["d"], "semicolons optional");
 }
 
@@ -545,22 +537,18 @@ fn test_deep_lists() {
     eq!(result["x"][2], 3);
 }
 
-
-
-
 #[test]
 fn test_maps_as_lists() {
-let _result = parse("{1,2,3}");
-let _result = parse("{'a'\n'b'\n'c'}");
-let _result = parse("{add x y}"); // expression?
-let _result = parse("{'a' 'b' 'c'}"); // expression?
-let _result = parse("{'a','b','c'}"); // list
+    let _result = parse("{1,2,3}");
+    let _result = parse("{'a'\n'b'\n'c'}");
+    let _result = parse("{add x y}"); // expression?
+    let _result = parse("{'a' 'b' 'c'}"); // expression?
+    let _result = parse("{'a','b','c'}"); // list
     let result = parse("{'a';'b';'c'}"); // list
     eq!(result.length(), 3);
     eq!(result[1], "b");
     //	is!("[1,2,3]",1); what?
 }
-
 
 // use the bool() function to determine if a value is truthy || falsy.
 #[test]
@@ -602,7 +590,6 @@ fn test_truthiness() {
     // empty referenceIndices are falsey! OK
 }
 
-
 #[test]
 fn test_equalities() {
     is!("1≠2", True);
@@ -619,13 +606,13 @@ fn test_equalities() {
 #[test]
 fn test_bit_field() {
     // union MyStruct {
-        // bit fields
-        //         struct {
-        //         short Reserved1: 3;
-        //         short WordErr: 1;
-        //         short SyncErr: 1;
-        //         short WordCntErr: 1;
-        //            short Reserved2: 10;
+    // bit fields
+    //         struct {
+    //         short Reserved1: 3;
+    //         short WordErr: 1;
+    //         short SyncErr: 1;
+    //         short WordCntErr: 1;
+    //            short Reserved2: 10;
     // }
 
     //         short word_field;
@@ -652,7 +639,7 @@ fn test_graph_simple() {
 fn test_graph_ql_query_bug() {
     let graph_result = "{friends: [ {name:x}, {name:y}]}";
     let result = parse(graph_result);
-    let friends : Node = result["friends"].clone();
+    let friends: Node = result["friends"].clone();
     eq!(friends[0]["name"], "x");
 }
 
@@ -675,18 +662,18 @@ fn test_graph_ql_query() {
     }"#;
     let result = parse(graph_result);
     result.print();
-    let data : Node = result["data"].clone();
+    let data: Node = result["data"].clone();
     data.print();
-    let hero : Node = data["hero"].clone();
+    let hero: Node = data["hero"].clone();
     hero.print();
-    let height : Node = data["hero"]["height"].clone();
+    let height: Node = data["hero"]["height"].clone();
     height.print();
-    let id : Node = hero["id"].clone();
+    let id: Node = hero["id"].clone();
     id.print();
     eq!(id, "R2-D2");
     eq!(height, 5.6430448);
     //	assert!(height==5.643);
-    let friends : Node = result["data"]["hero"]["friends"].clone();
+    let friends: Node = result["data"]["hero"]["friends"].clone();
     eq!(friends[0]["name"], "Luke Skywalker");
     //todo	assert!(result["hero"] == result["data"]["hero"]);
     //	assert!(result["hero"]["friends"][0]["name"] == "Luke Skywalker")// if 1-child, treat as root
@@ -696,11 +683,8 @@ fn test_graph_ql_query() {
 fn test_graph_ql_query_significant_whitespace() {
     let result = parse("{\n  human(id: \"1000\") {\n    name\n    height(unit: FOOT)\n  }\n}");
     eq!(result["human"]["id"], 1000);
-    skip!(
-assert!(result["id"] == 1000, 0)
-    ); // if length==1 descend!
+    skip!(assert!(result["id"] == 1000, 0)); // if length==1 descend!
 }
-
 
 #[test]
 fn test_sub_grouping_flatten() {
@@ -715,7 +699,7 @@ fn test_sub_grouping_flatten() {
 #[test]
 fn test_sub_grouping() {
     // todo dangling ',' should make '\n' not close
-    let result=parse("a\nb,c,\nd;e");
+    let result = parse("a\nb,c,\nd;e");
     //     let result = parse("a\n"
     //                    "b,c,\n"
     //                    "d;\n"
@@ -738,7 +722,6 @@ fn test_nodes_in_wasm() {
     is!("{b:c}", parse("{b:c}"));
     is!("a{b:c}", parse("a{b:c}"));
 }
-
 
 // #[test]
 // fn testNodeBasics() {
@@ -785,7 +768,6 @@ fn test_nodes_in_wasm() {
 //     assert!(d.kind() == key);
 //     a.addSmart(b); // why?
 // }
-
 
 #[test]
 fn test_node_emit() {

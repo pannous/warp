@@ -1,10 +1,10 @@
 // List and array test functions
 
+use wasp::analyzer::analyze;
 use wasp::node::Node;
 use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
 use wasp::*;
-use wasp::analyzer::analyze;
 
 // Array size tests
 #[test]

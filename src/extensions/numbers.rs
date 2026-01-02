@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::ops::{Add, Sub, Mul, Div};
-use serde::{Serialize, Deserialize};
+use std::ops::{Add, Div, Mul, Sub};
 // use num_bigint::BigInt;
 
 // pub mod Numbers{
@@ -62,7 +62,6 @@ impl Number {
     }
 }
 
-
 impl Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -96,7 +95,6 @@ impl Add for Number {
         }
     }
 }
-
 
 impl Sub for Number {
     type Output = Self;
@@ -145,24 +143,32 @@ impl Div for Number {
 
     fn div(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => Number::Quotient(n1 * d2, d1 * n2),
+            (Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
+                Number::Quotient(n1 * d2, d1 * n2)
+            }
             (Number::Quotient(q1, q2), Number::Int(n2)) => Number::Quotient(q1, q2 * n2),
-            (Number::Quotient(q1, q2), Number::Float(n2)) => Number::Float(q1 as f64 / q2 as f64 * n2),
+            (Number::Quotient(q1, q2), Number::Float(n2)) => {
+                Number::Float(q1 as f64 / q2 as f64 * n2)
+            }
             (Number::Int(n1), Number::Quotient(q1, q2)) => Number::Quotient(n1 * q2, q1),
-            (Number::Float(n1), Number::Quotient(q1, q2)) => Number::Float(n1 / q1 as f64 / q2 as f64),
+            (Number::Float(n1), Number::Quotient(q1, q2)) => {
+                Number::Float(n1 / q1 as f64 / q2 as f64)
+            }
             (Number::Int(n1), Number::Int(n2)) => Number::Quotient(n1, n2),
             (Number::Float(n1), Number::Float(n2)) => Number::Float(n1 / n2),
             (Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 / n2),
             (Number::Float(n1), Number::Int(n2)) => Number::Float(n1 / n2 as f64),
             (Number::Complex(r1, i1), Number::Complex(r2, i2)) => {
                 // (a + bi) / (c + di) = (a + bi)(c - di) / (c^2 + d^2)
-                Number::Complex((r1 * r2 + i1 * i2) / (r2 * r2 + i2 * i2), (i1 * r2 - r1 * i2) / (r2 * r2 + i2 * i2))
+                Number::Complex(
+                    (r1 * r2 + i1 * i2) / (r2 * r2 + i2 * i2),
+                    (i1 * r2 - r1 * i2) / (r2 * r2 + i2 * i2),
+                )
             }
             _ => panic!("unsupported types"),
         }
     }
 }
-
 
 impl Into<f64> for Number {
     fn into(self) -> f64 {
@@ -177,7 +183,6 @@ impl Into<f64> for Number {
         }
     }
 }
-
 
 use std::cmp::PartialEq;
 
@@ -195,7 +200,6 @@ impl PartialEq for Number {
         }
     }
 }
-
 
 impl PartialEq<i32> for Number {
     fn eq(&self, other: &i32) -> bool {

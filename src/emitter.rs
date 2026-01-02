@@ -1,10 +1,10 @@
-use crate::{FileExtensions, s, StringExtensions}; // fucking "".to_string()
+use crate::{s, FileExtensions, StringExtensions}; // fucking "".to_string()
 
-use wasm_ast::*;
-use wasm_ast::model::Module;
 use wasm_ast::emitter::emit_binary;
+use wasm_ast::model::Module;
 use wasm_ast::Instruction::*;
 use wasm_ast::NumericInstruction::*;
+use wasm_ast::*;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -34,9 +34,7 @@ pub fn build(file_name: &str) {
 
     let main_function_type = FunctionType::new(void.clone(), int_result.clone());
     let _ = builder.add_function_type(main_function_type);
-    let main_body = Expression::new(vec![
-        I32Constant(42).into(),
-    ]);
+    let main_body = Expression::new(vec![I32Constant(42).into()]);
     let main_func = Function::new(0, void.clone(), main_body);
 
     let parameters = ResultType::new(vec![I32, I32]);
@@ -49,8 +47,8 @@ pub fn build(file_name: &str) {
         // I32Constant(3).into(),
         I32Constant(4).into(),
         Multiply(NumberType::I32).into(),
-    ].into();
-
+    ]
+    .into();
 
     let fun = Function::new(1, locals.clone(), body);
     let _ = builder.add_function(main_func);
@@ -70,7 +68,6 @@ pub fn build(file_name: &str) {
     let _ = file.write_all(&buffer);
     // println!("Wrote to file {}", file.name());
     println!("Wrote to file {} {}", file_name, file.path());
-
 
     // module.emit_wasm();
     // module.

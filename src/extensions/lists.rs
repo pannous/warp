@@ -1,21 +1,20 @@
 // LIST AND VECTOR EXTENSIONS
 
-use std::array::IntoIter;
-use std::iter::Enumerate;
 use crate::extensions::numbers::Number;
 use crate::node::Node;
+use std::array::IntoIter;
+use std::iter::Enumerate;
 
 use std::ops::Range;
 use wasmparser::{FromReader, SectionLimited};
 
 // [a,b,c] => [(0,a), (1,b), (2,c)] aka enumerate
 pub trait Indexed<T> {
-    fn indexed(self) -> impl Iterator<Item=(usize, T)>;
+    fn indexed(self) -> impl Iterator<Item = (usize, T)>;
 }
 
-impl<T> Indexed<T> for Vec<T>
-{
-    fn indexed(self) -> impl Iterator<Item=(usize, T)> {
+impl<T> Indexed<T> for Vec<T> {
+    fn indexed(self) -> impl Iterator<Item = (usize, T)> {
         self.into_iter()
             // .map(|item| item.into_result())
             .enumerate()
@@ -24,7 +23,7 @@ impl<T> Indexed<T> for Vec<T>
 
 // Implement Indexed for Node to support enumerating List nodes
 impl Indexed<Node> for Node {
-    fn indexed(self) -> impl Iterator<Item=(usize, Node)> {
+    fn indexed(self) -> impl Iterator<Item = (usize, Node)> {
         match self {
             Node::List(items) => items.into_iter().enumerate(),
             Node::Block(items, _, _) => items.into_iter().enumerate(),
@@ -77,11 +76,10 @@ impl FromRange<i32> for Vec<i32> {
 //     }
 // }
 
-
 // use std::Vec;
 // | |                `Vec` is not defined in the current crate
 // | impl doesn't use only types from inside the current crate
-// {} is for strings and other values which can be displayed directly to the user. 
+// {} is for strings and other values which can be displayed directly to the user.
 // There's no single way to show a vector to a user.
 // The {:?} formatter can be used to debug it, and it will look like:
 // println!("{:?}", vec![1; 10]); // OK
@@ -98,12 +96,10 @@ impl FromRange<i32> for Vec<i32> {
 //     }
 // }
 
-
 pub enum List<T> {
     Vector(Vec<T>),
     // Array([T; 5]), // makes no sense to have a list of fixed array length
 }
-
 
 impl From<[i32; 5]> for List<Number> {
     fn from(array: [i32; 5]) -> Self {
@@ -136,7 +132,6 @@ impl From<[i32; 5]> for List<Number> {
 // impl_from_array!(7);
 // impl_from_array!(8);
 // impl_from_array!(9);
-
 
 pub trait StringVecExtensions<String> {
     fn with(&self, n: &str) -> Vec<String>;
@@ -206,7 +201,6 @@ impl<T: Clone> ArrayExtensions<T> for [T; 5] {
     }
 }
 
-
 // The "From" trait is used when you want to define your own custom conversion from one type to ano
 // it is used with let b:B=a.into() short form for From::from(a) or B::from(a)
 struct MyVec<T>(Vec<T>);
@@ -219,7 +213,7 @@ impl<T: Clone> From<[T; 5]> for MyVec<T> {
 impl<T: Clone> From<MyVec<T>> for Vec<T> {
     fn from(arr: MyVec<T>) -> Self {
         arr.0 // first element of the struct
-        // arr.to_vec()
+              // arr.to_vec()
     }
 }
 // impl<T> From<[T; 5]> for Vec<T> {
@@ -233,7 +227,6 @@ impl<T: Clone> From<MyVec<T>> for Vec<T> {
 //     v.push(n);
 //     v
 // }
-
 
 // Overload via traits:
 pub trait Adds<T> {

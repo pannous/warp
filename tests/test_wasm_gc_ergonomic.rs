@@ -1,7 +1,7 @@
-use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::{run_wasm_gc_object, read_bytes};
-use wasp::node::Node;
 use wasp::extensions::numbers::Number;
+use wasp::node::Node;
+use wasp::wasm_gc_emitter::WasmGcEmitter;
+use wasp::wasm_gc_reader::{read_bytes, run_wasm_gc_object};
 use wasp::{eq, write_wasm};
 
 /// Test ergonomic reading patterns from rasm
@@ -102,8 +102,8 @@ fn test_ergonomic_pattern() {
 
     let node = Node::Tag {
         title: "html".to_string(),
-        params: Box::new(Node::keys("param","test")),
-        body: Box::new(Node::keys("body","ok")),
+        params: Box::new(Node::keys("param", "test")),
+        body: Box::new(Node::keys("body", "ok")),
     };
     emitter.emit_node_main(&node);
 
@@ -189,7 +189,11 @@ fn test_codepoint_node() {
     eq!(kind, 3); // NodeKind::Char
 
     let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
-    println!("  Char value: {} ({})", codepoint, char::from_u32(codepoint as u32).unwrap_or('?'));
+    println!(
+        "  Char value: {} ({})",
+        codepoint,
+        char::from_u32(codepoint as u32).unwrap_or('?')
+    );
     eq!(codepoint, '🦀' as i64);
 
     println!("✓ Char node works");

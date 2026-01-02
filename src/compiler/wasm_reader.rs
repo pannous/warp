@@ -3,17 +3,16 @@ mod wasm_parser {}
 use std::any::{Any, TypeId};
 use wasmparser::*;
 
-use std::collections::HashMap;
-use std::io::Write;
-use wasmparser::{BinaryReaderError, Chunk, Parser, Payload::*};
-use std::io::Read;
 use parity_wasm::*;
-use std::io::Cursor;
+use std::collections::HashMap;
+use std::fs::read;
 use std::fs::File;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::str::from_utf8;
-use std::fs::read;
-
+use wasmparser::{BinaryReaderError, Chunk, Parser, Payload::*};
 
 pub fn parse_wasm(file: &str) -> Result<()> {
     let data = read(Path::new(file)).unwrap();
@@ -25,7 +24,9 @@ pub fn parse_wasm(file: &str) -> Result<()> {
     for payload in parser.parse_all(&data) {
         match payload? {
             // Sections for WebAssembly modules
-            Version { num, .. } => { println!("num {num}"); }
+            Version { num, .. } => {
+                println!("num {num}");
+            }
             TypeSection(a) => {
                 println!("TypeSection {:#?}", a);
                 for func in a {
@@ -80,13 +81,10 @@ pub fn parse_wasm(file: &str) -> Result<()> {
 
             // most likely you'd return an error here
             // UnknownSection { id, .. } => { return Err(BinaryReaderError::UnknownSection { id }); }
-            _ => {}
-
-
-            // Once we've reached the end of a parser we either resume
-            // at the parent parser or the payload iterator is at its
-            // end and we're done.
-            // End(_) => {}
+            _ => {} // Once we've reached the end of a parser we either resume
+                    // at the parent parser or the payload iterator is at its
+                    // end and we're done.
+                    // End(_) => {}
         }
     }
 
@@ -95,9 +93,7 @@ pub fn parse_wasm(file: &str) -> Result<()> {
     // println!("{:?}", module);
     // module.
     // let mut parser = Parser::new(0);
-
 }
-
 
 pub fn parse_wasm_parity(_file: &str) {
     // parity_wasm::deserialize_file()

@@ -1,8 +1,8 @@
-use std::any::Any;
-use std::fmt;
+use crate::node::DataType;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::node::DataType;
+use std::any::Any;
+use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct MetaData {
@@ -59,7 +59,6 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
         }
     }
 }
-
 
 pub struct Dada {
     pub(crate) data: Box<dyn CloneAny>,
@@ -121,7 +120,6 @@ impl Dada {
         self.data.as_any().downcast_ref::<T>()
     }
 }
-
 
 impl Clone for Dada {
     fn clone(&self) -> Self {

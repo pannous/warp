@@ -37,5 +37,4 @@ fn test_ast() {
     // println!("{}", generated);
 }
 
-
 // Use quote to generate Rust code from the modified AST.
