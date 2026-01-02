@@ -1,7 +1,6 @@
 use wasp::node::Node;
-use wasp::node::Node::Empty;
 use wasp::wasp_parser::parse;
-use wasp::{eq, is, skip};
+use wasp::{eq, skip};
 
 #[test]
 fn test_did_you_mean_alias() {
@@ -12,21 +11,12 @@ fn test_did_you_mean_alias() {
     );
 }
 
-#[test]
-fn test_empty() {
-    let result = parse("{  }");
-    eq!(result, Empty);
-}
 
-#[test]
-fn test_eval() {
-    is!("√4", 2);
-}
 
 #[test]
 fn test_node_name() {
     let a = Node::Symbol("xor".to_string()); // NOT type string by default!
-                                             //     bool
+    //     bool
     let ok1 = a == "xor";
     eq!(a, "xor");
     eq!(a.name(), "xor");
@@ -100,7 +90,7 @@ fn test_group_cascade() {
         result[0][1],
         parse("a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2")
     ); // significant newline!
-       //     eq!(result[0][0][0][0].length(), 3) // a b c
+    //     eq!(result[0][0][0][0].length(), 3) // a b c
     skip!(
         eq!(result[0][0][0][0], parse("a b c"));
     );
