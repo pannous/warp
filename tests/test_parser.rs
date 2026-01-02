@@ -791,3 +791,17 @@ fn test_superfluous_indentation() {
     eq!(a2.laste().name(), "b");
     eq!(a2, a1);
 }
+
+#[test]
+fn test_empty() {
+    eq!(parse(""), Empty);
+    eq!(parse("()"), Empty);
+    eq!(parse("{}"), Empty);
+    eq!(parse("{ }"), Empty);
+    eq!(parse("{  }"), Empty);
+    eq!(parse("( )"), Empty);
+    eq!(parse("(())"), Empty); // dangerous?
+    eq!(parse("{{}}"), Empty); // dangerous?
+    eq!(parse("([])"), Empty); // review dangerous?
+    // eq!(parse("0"), Empty); // sure?
+}
