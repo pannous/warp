@@ -1,7 +1,6 @@
 // 2368 | |     ) -> *mut WasmEdge_FunctionInstanceContext;
 // | |_______________________________________________- similarly named function `WasmEdge_FunctionInstanceCreate` defined here
 
-
 // use wasmedge_sdk::{
 //     error::HostFuncError, host_function, params, Caller, ImportObjectBuilder, NeverType, VmBuilder,
 //     WasmValue,

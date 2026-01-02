@@ -1,20 +1,19 @@
-
 // Web/Browser tests
 // Migrated from tests_*.rs files
 
-use wasp::{eq, is, put, skip};
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
 use wasp::type_kinds::{AstKind, NodeKind};
 use wasp::util::fetch;
 use wasp::wasm_gc_emitter::eval;
 use wasp::wasp_parser::parse;
+use wasp::{eq, is, put, skip};
 
 #[test]
 fn testHtmlWasp() {
     eval("html{bold{Hello}}"); // => <html><body><bold>Hello</bold></body></html> via appendChild bold to body
     eval("html: h1: 'Hello, World!'"); // => <html><h1>Hello, World!</h1></html>
-    //	eval("html{bold($myid style=red){Hello}}"); // => <bold id=myid style=red>Hello</bold>
+                                       //	eval("html{bold($myid style=red){Hello}}"); // => <bold id=myid style=red>Hello</bold>
 }
 
 #[test]
@@ -30,7 +29,8 @@ fn testJS() {
 
 #[test]
 fn test_inner_html() {
-    #[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]{
+    #[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]
+    {
         return;
     }
     let html = parse("<html><bold>test</bold></html>");
@@ -39,14 +39,16 @@ fn test_inner_html() {
     eq!(serialized, "<html><bold>test</bold></html>");
     //	eval("<html><script>alert('ok')");
     //	eval("<html><script>alert('ok')</script></html>");
-    #[cfg(feature = "WEBAPP")]{ // todo browser "too"
+    #[cfg(feature = "WEBAPP")]
+    {
+        // todo browser "too"
         // skip!(
 
         eval("<html><bold id=b ok=123>test</bold></html>");
         is!("$b.ok", 123); // TODO emitAttributeSetter
         eval("<script>console.log('ok!')</script>");
         eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
-        // );
+                                                     // );
     }
 
     //	eval("$b.innerHTML='<i>ok</i>'");
@@ -113,12 +115,13 @@ fn test_dom() {
 
 #[test]
 fn test_dom_property() {
-    #[cfg(not(feature = "WEBAPP"))]{
+    #[cfg(not(feature = "WEBAPP"))]
+    {
         return;
     }
     let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
     eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-    //	result = eval("width='width';$canvas.width");
+                               //	result = eval("width='width';$canvas.width");
     result = eval("$canvas.width");
     eq!(result.value(), &300);
     //	return;
@@ -135,4 +138,3 @@ fn test_dom_property() {
     //	embedder.trace('canvas = document.getElementById("canvas");');
     //	print(nod);
 }
-
