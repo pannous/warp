@@ -45,7 +45,7 @@ impl Number {
             Number::Complex(r, i) => (r * r + i * i).sqrt(),
             Number::Float(f) => f.abs(),
             Number::Nan => f64::NAN,
-            Number::Inf  => f64::INFINITY,
+            Number::Inf => f64::INFINITY,
             Number::NegInf => f64::NEG_INFINITY,
         }
     }
@@ -172,7 +172,7 @@ impl Into<f64> for Number {
             Number::Quotient(numer, denom) => numer as f64 / denom as f64,
             Number::Complex(_, _) => unimplemented!(),
             Number::Nan => f64::NAN,
-            Number::Inf  => f64::INFINITY,
+            Number::Inf => f64::INFINITY,
             Number::NegInf => f64::NEG_INFINITY,
         }
     }
@@ -202,7 +202,7 @@ impl PartialEq<i32> for Number {
         match self {
             Number::Int(i) => *i == *other as i64,
             Number::Float(f) => *f == *other as f64,
-            Number::Quotient(n, d) => *n/d == *other as i64,
+            Number::Quotient(n, d) => *n / d == *other as i64,
             Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
             _ => false,
         }
@@ -214,7 +214,7 @@ impl PartialEq<i64> for Number {
         match self {
             Number::Int(i) => *i == *other,
             Number::Float(f) => *f == *other as f64,
-            Number::Quotient(n, d) => *n/d == *other,
+            Number::Quotient(n, d) => *n / d == *other,
             Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
             _ => false,
         }
@@ -242,7 +242,7 @@ impl PartialEq<f32> for Number {
             Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
             Number::Complex(r, i) => *r as f32 == *other && *i == 0.0,
             Number::Nan => other.is_nan(),
-            Number::Inf  => *other == f32::INFINITY,
+            Number::Inf => *other == f32::INFINITY,
             Number::NegInf => *other == f32::NEG_INFINITY,
             // _ => false,
         }

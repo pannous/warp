@@ -10,12 +10,12 @@ use wasmparser::{FromReader, SectionLimited};
 
 // [a,b,c] => [(0,a), (1,b), (2,c)] aka enumerate
 pub trait Indexed<T> {
-    fn indexed(self) -> impl Iterator<Item = (usize, T)>;
+    fn indexed(self) -> impl Iterator<Item=(usize, T)>;
 }
 
 impl<T> Indexed<T> for Vec<T>
 {
-    fn indexed(self)-> impl Iterator<Item = (usize, T)>{
+    fn indexed(self) -> impl Iterator<Item=(usize, T)> {
         self.into_iter()
             // .map(|item| item.into_result())
             .enumerate()
@@ -24,7 +24,7 @@ impl<T> Indexed<T> for Vec<T>
 
 // Implement Indexed for Node to support enumerating List nodes
 impl Indexed<Node> for Node {
-    fn indexed(self) -> impl Iterator<Item = (usize, Node)> {
+    fn indexed(self) -> impl Iterator<Item=(usize, Node)> {
         match self {
             Node::List(items) => items.into_iter().enumerate(),
             Node::Block(items, _, _) => items.into_iter().enumerate(),
@@ -81,7 +81,8 @@ impl FromRange<i32> for Vec<i32> {
 // use std::Vec;
 // | |                `Vec` is not defined in the current crate
 // | impl doesn't use only types from inside the current crate
-// {} is for strings and other values which can be displayed directly to the user. There's no single way to show a vector to a user.
+// {} is for strings and other values which can be displayed directly to the user. 
+// There's no single way to show a vector to a user.
 // The {:?} formatter can be used to debug it, and it will look like:
 // println!("{:?}", vec![1; 10]); // OK
 // impl Display for Vec<i32> {
@@ -98,7 +99,7 @@ impl FromRange<i32> for Vec<i32> {
 // }
 
 
-pub enum List<T>{
+pub enum List<T> {
     Vector(Vec<T>),
     // Array([T; 5]), // makes no sense to have a list of fixed array length
 }
@@ -206,8 +207,7 @@ impl<T: Clone> ArrayExtensions<T> for [T; 5] {
 }
 
 
-
-// The "From" trait is used when you want to define your own custom conversion from one type to another.
+// The "From" trait is used when you want to define your own custom conversion from one type to ano
 // it is used with let b:B=a.into() short form for From::from(a) or B::from(a)
 struct MyVec<T>(Vec<T>);
 
@@ -268,8 +268,8 @@ impl Adds<&str> for Vec<String> {
 }
 
 pub fn map<T, U, F>(items: Vec<T>, func: F) -> Vec<U>
-    where
-        F: FnMut(T) -> U,
+where
+    F: FnMut(T) -> U,
 {
     items.into_iter().map(func).collect()
 }
