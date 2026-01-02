@@ -39,11 +39,11 @@ pub fn build(file_name: &str) {
     ]);
     let main_func= Function::new(0, void.clone(), main_body);
 
-    let parameters = ResultType::new(vec![ValueType::I32, ValueType::I32]);
-    let results = ResultType::new(vec![ValueType::I32]);
+    let parameters = ResultType::new(vec![I32, I32]);
+    let results = ResultType::new(vec![I32]);
     let function_type = FunctionType::new(parameters, results);
     let _ = builder.add_function_type(function_type);
-    let locals: ResultType = vec![ValueType::I32].into();
+    let locals: ResultType = vec![I32].into();
     let body: Expression = vec![
         42i32.into(),
         // I32Constant(3).into(),

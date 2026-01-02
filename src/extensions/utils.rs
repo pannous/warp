@@ -27,13 +27,10 @@ pub fn download(url: &str) -> String {
         Ok(res) => res,
         Err(_) => return empty
     };
-    return match response.bytes() {
+    match response.bytes() {
         Ok(bytes) => {
             let s = String::from_utf8(bytes.to_vec());
-            match s {
-                Ok(s) => s,
-                Err(_) => empty
-            }
+            s.unwrap_or_else(|_| empty)
         },
         Err(_) => empty
     }
@@ -46,7 +43,7 @@ pub trait FileExtensions {
     fn path(&self) -> String;
 }
 
-impl FileExtensions for std::fs::File {
+impl FileExtensions for File {
     fn name(&self) -> String {
         "std::fs::File does not expose the file name. ".to_string()
     }
