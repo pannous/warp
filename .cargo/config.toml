@@ -1,3 +1,6 @@
+[net]
+offline = true
+
 [build]
 # Timeout protection for tests - prevents infinite loops from hanging CI/development
 # Uses gtimeout on macOS (brew install coreutils) or timeout on Linux
