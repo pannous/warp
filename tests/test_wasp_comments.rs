@@ -16,7 +16,7 @@ fn test_line_comments() {
 
     // Should parse successfully
     if let Node::Block(items, _, _) = node {
-        assert_eq!(items.len(), 2);
+        eq!(items.len(), 2);
     }
 }
 
@@ -33,7 +33,7 @@ fn test_block_comments() {
     println!("Parsed with block comment: {:?}", node);
 
     if let Node::Block(items, _, _) = node {
-        assert_eq!(items.len(), 2);
+        eq!(items.len(), 2);
     }
 }
 
@@ -90,10 +90,10 @@ fn test_comments_in_html_structure() {
 fn test_comment_with_metadata_accessor() {
     let node = Node::int(42).with_comment("This is the answer".to_string());
 
-    assert_eq!(node.unwrap_meta(), &Node::int(42));
+    eq!(node.unwrap_meta(), &Node::int(42));
 
     if let Some(meta) = node.get_meta() {
-        assert_eq!(meta.comment, Some("This is the answer".to_string()));
+        eq!(meta.comment, Some("This is the answer".to_string()));
     } else {
         panic!("Expected metadata");
     }

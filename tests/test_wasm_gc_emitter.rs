@@ -70,8 +70,8 @@ fn test_emit_gc_types() {
     // emitter.emit();
     // Verify unified type indices are valid (can be 0 for first type)
     // private
-    // assert_eq!(emitter.node_base_type, 0); // First type
-    // assert_eq!(emitter.node_array_type, 1); // Second type
+    // eq!(emitter.node_base_type, 0); // First type
+    // eq!(emitter.node_array_type, 1); // Second type
     // assert!(emitter.next_type_idx > 1); // We defined at least 2 types
 }
 
@@ -82,21 +82,21 @@ fn test_generate_wasm() {
     let bytes = emitter.finish();
 
     // Should have WASM magic number
-    assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6d]);
+    eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6d]);
     // Should have version 1
-    assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00]);
+    eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00]);
 }
 
 #[test]
 fn test_node_kind_enum_abi() { // ensure enum values match expected ABI
-    assert_eq!(NodeKind::Empty as u32, 0);
-    assert_eq!(NodeKind::Number as u32, 1);
-    assert_eq!(NodeKind::Codepoint as u32, 3);
-    assert_eq!(NodeKind::Symbol as u32, 4);
-    assert_eq!(NodeKind::Key as u32, 5);
-    assert_eq!(NodeKind::Pair as u32, 6);
-    assert_eq!(NodeKind::Tag as u32, 7);
-    assert_eq!(NodeKind::Block as u32, 8);
-    assert_eq!(NodeKind::List as u32, 9);
-    assert_eq!(NodeKind::Data as u32, 10);
+    eq!(NodeKind::Empty as u32, 0);
+    eq!(NodeKind::Number as u32, 1);
+    eq!(NodeKind::Codepoint as u32, 3);
+    eq!(NodeKind::Symbol as u32, 4);
+    eq!(NodeKind::Key as u32, 5);
+    eq!(NodeKind::Pair as u32, 6);
+    eq!(NodeKind::Tag as u32, 7);
+    eq!(NodeKind::Block as u32, 8);
+    eq!(NodeKind::List as u32, 9);
+    eq!(NodeKind::Data as u32, 10);
 }

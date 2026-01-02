@@ -266,14 +266,15 @@ pub fn call_constructor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::eq;
 
     #[test]
     fn test_field_map() {
         let map = FieldMap::new();
-        assert_eq!(map.field_index("tag").unwrap(), 2);
-        assert_eq!(map.field_index("kind").unwrap(), 2); // alias
-        assert_eq!(map.field_index("int_value").unwrap(), 3);
-        assert_eq!(map.field_index("name_ptr").unwrap(), 0);
+        eq!(map.field_index("tag").unwrap(), 2);
+        eq!(map.field_index("kind").unwrap(), 2); // alias
+        eq!(map.field_index("int_value").unwrap(), 3);
+        eq!(map.field_index("name_ptr").unwrap(), 0);
         assert!(map.field_index("invalid").is_err());
     }
 }
