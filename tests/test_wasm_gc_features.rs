@@ -1,4 +1,5 @@
 use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasp::eq;
 
 /// Test that wasmtime 40.0.0 supports GC features
 #[test]
