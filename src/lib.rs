@@ -4,7 +4,7 @@
 // only lib.rs allows reexporting as:
 // use wasp::extensions::*; etc
 pub mod util;
-pub mod extensions;// reexported for tests
+pub mod extensions; // reexported for tests
 
 // use crate::extensions::*; // crate for F12
 pub use extensions::numbers::*;

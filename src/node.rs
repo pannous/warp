@@ -13,7 +13,7 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use syn::Signature;
-use crate::meta::Dada;
+use crate::meta::{CloneAny, Dada, MetaData};
 // use wasp::type_kinds::{AstKind, NodeKind};
 use crate::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
@@ -54,7 +54,8 @@ pub enum Node { // closed cannot be extended so anticipate all cases here
         title: String,
         params: Box<Node>,
         body: Box<Node>,
-    }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}  (use Empty for no attrs)
+    }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
+    // (use Empty for no attrs)
     Block(Vec<Node>, Grouper, Bracket), // todo merge into List: Grouper Bracket kinda redundant!
     List(Vec<Node>),                    // same as Block
     Data(Dada), // most generic container for any kind of data not captured by other node types
@@ -71,14 +72,14 @@ pub enum Node { // closed cannot be extended so anticipate all cases here
     // Class(String, Box<Node>), // name, body // class A{a:int}
     // Type via  Meta(node, MetaData { Type })
     // e.g.
-//     Meta(
-//     Symbol("bob"),
-//     List(vec![
-//         Pair(Symbol("type"), Meta(Symbol("Bob"), Id(32))), // SOFT LINK VIA SYMBOL, not FAT Tree!
-//         Pair(Symbol("type"), Symbol("Bob")),
-//         Pair(Symbol("span"), List(vec![Number(12), Number(15)])),
-//     ])
-// )
+    //     Meta(
+    //     Symbol("bob"),
+    //     List(vec![
+    //         Pair(Symbol("type"), Meta(Symbol("Bob"), Id(32))), // SOFT LINK VIA SYMBOL, not FAT Tree!
+    //         Pair(Symbol("type"), Symbol("Bob")),
+    //         Pair(Symbol("span"), List(vec![Number(12), Number(15)])),
+    //     ])
+    // )
 
 }
 
@@ -873,7 +874,7 @@ impl PartialEq for Node {
                     False => true,
                     _ => other == self, // flip symmetric cases
                 }
-            }, // flip symmetric cases:
+            } // flip symmetric cases:
             Empty => {
                 match other {
                     True => false,
@@ -887,7 +888,7 @@ impl PartialEq for Node {
                     _ => self.size() == 0,
                 }
             }
-            Node::Number(n ) => match other {
+            Node::Number(n) => match other {
                 True => !n.zero(), //  2 == true ? sUrE?? hardcore todo Truthy rules
                 // Node::True => match n {
                 //     Number::Int(i) => *i == 1,
@@ -915,8 +916,8 @@ impl PartialEq for Node {
             },
 
             Char(c) => match other {
-                True =>  c != &'\0' ,
-                False => c == &'\0' ,
+                True => c != &'\0',
+                False => c == &'\0',
                 Char(c2) => c == c2,
                 _ => false,
             },
@@ -1115,7 +1116,8 @@ impl Not for Node {
             List(_) => False,  // !non-empty list == false
             Block(ref items, _, _) if items.is_empty() => True,
             Block(_, _, _) => False,
-            Meta(node, meta) => (!(*node.clone())).with_meta(meta),  // Apply not to wrapped node, preserve metadata
+            Meta(node, meta) => (!(*node.clone())).with_meta(meta),
+            // Apply not to wrapped node, preserve metadata
             _ => False,  // Other types default to falsy
         }
     }
@@ -1514,47 +1516,6 @@ pub fn text_node(p0: String) -> Node {
 
 pub fn node(p0: &str) -> Node {
     Text(p0.s())
-}
-
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-pub struct MetaData {
-    pub comment: Option<String>,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-}
-
-impl MetaData {
-    pub fn new() -> Self {
-        MetaData {
-            comment: None,
-            line: None,
-            column: None,
-        }
-    }
-
-    pub fn with_comment(comment: String) -> Self {
-        MetaData {
-            comment: Some(comment),
-            line: None,
-            column: None,
-        }
-    }
-
-    pub fn with_position(line: usize, column: usize) -> Self {
-        MetaData {
-            comment: None,
-            line: Some(line),
-            column: Some(column),
-        }
-    }
-}
-
-// Custom trait for cloneable Any types with equality support
-pub trait CloneAny: Any {
-    fn clone_any(&self) -> Box<dyn CloneAny>;
-    fn as_any(&self) -> &dyn Any;
-    fn eq_any(&self, other: &dyn CloneAny) -> bool;
 }
 
 impl<T: 'static + Clone + PartialEq> CloneAny for T {

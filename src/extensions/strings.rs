@@ -34,9 +34,9 @@ impl CharExtensions for char {
 }
 
 pub trait StringExtensions {
-    fn at(&self,nr:i32) -> char;
-    fn codepoint_at(&self, nr:i32) -> char;
-    fn char(&self,nr:usize) -> char;
+    fn at(&self, nr: i32) -> char;
+    fn codepoint_at(&self, nr: i32) -> char;
+    fn char(&self, nr: usize) -> char;
     fn upper(&self) -> String;
     fn reverse(&self) -> String;
     fn map(&self, f: fn(char) -> char) -> String;
@@ -64,8 +64,8 @@ impl StringExtensions for String {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
         self.chars().nth(wrapped_index).unwrap()
     }
-    fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
-    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
+    fn codepoint_at(&self, nr: i32) -> char { self.at(nr) }
+    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap() }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
@@ -84,13 +84,16 @@ impl StringExtensions for String {
     fn first(&self) -> char { self.chars().next().unwrap() }
     fn start(&self) -> char { self.chars().next().unwrap() }
     fn head(&self) -> char { self.chars().next().unwrap() }
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr] }
     fn str(&self) -> String { self.to_owned() }
     // Function implementations
     fn s(&self) -> String { self.to_owned() }
     // fn from(&self, start: usize) -> &str { &self[start..] }
     fn start_from(&self, start: usize) -> &str { &self[start..] }
-    fn set(&self, at: usize, value: char) -> String { self.clone().replace_range(at..at+1, &value.to_string()); self.to_string() }
+    fn set(&self, at: usize, value: char) -> String {
+        self.clone().replace_range(at..at + 1, &value.to_string());
+        self.to_string()
+    }
     fn after(&self, pat: &str) -> &str {
         match self.find(pat) {
             Some(idx) => &self[idx + pat.len()..],
@@ -101,12 +104,12 @@ impl StringExtensions for String {
 }
 
 impl StringExtensions for str {
-    fn at(&self,nr:i32) -> char {
+    fn at(&self, nr: i32) -> char {
         let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
-        self.chars().nth( wrapped_index).unwrap()
+        self.chars().nth(wrapped_index).unwrap()
     }
-    fn codepoint_at(&self, nr:i32) -> char {self.at(nr)}
-    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap()}
+    fn codepoint_at(&self, nr: i32) -> char { self.at(nr) }
+    fn char(&self, nr: usize) -> char { self.chars().nth(nr).unwrap() }
     fn upper(&self) -> String {
         self.to_uppercase()
     }
@@ -125,7 +128,7 @@ impl StringExtensions for str {
     fn first(&self) -> char { self.chars().next().unwrap() }
     fn start(&self) -> char { self.chars().next().unwrap() }
     fn head(&self) -> char { self.chars().next().unwrap() }
-    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr]}
+    fn byte_at(&self, nr: usize) -> u8 { self.as_bytes()[nr] }
     fn str(&self) -> String { self.to_string() }
     // allow negative index into chars : -2 = next to last
     fn s(&self) -> String { self.to_string() }
@@ -133,8 +136,8 @@ impl StringExtensions for str {
     // fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 
     fn set(&self, at: usize, value: char) -> String {
-        let mut changed=self.to_string();
-        changed.replace_range(at..at+1, &value.to_string());
+        let mut changed = self.to_string();
+        changed.replace_range(at..at + 1, &value.to_string());
         changed
     }
 
@@ -168,16 +171,14 @@ impl IntegerExtensions for i32 {
             _ => '…',
         }
     }
-
 }
-
 
 
 // by value
 // call with &arg if you encounter "Borrow of moved value" error (later)
-pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
+pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item=T>) {
     for item in list {
-        println!("{}",item);
+        println!("{}", item);
     }
 }
 
@@ -273,7 +274,6 @@ mod tests {
         eq!("a".s()+"b", "ab");
         // eq!("a".s()+2, "a2");
     }
-
 }
 
 #[allow(unused)]
