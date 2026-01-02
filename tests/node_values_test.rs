@@ -29,7 +29,7 @@ fn test_values_meta() {
     let key = Node::key("x", Node::int(10)).with_comment("test".to_string());
     let result = key.values();
     // Meta unwraps and calls values on inner node
-    assert_eq!(result, &Node::int(10));
+    assert_eq!(result, 10);
 }
 
 #[test]
