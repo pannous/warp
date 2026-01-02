@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 // use once_cell::unsync::Lazy;
 
 pub static FUNCTIONS: Lazy<HashMap<String, Function>> = Lazy::new(|| {
-    let mut m = HashMap::new();
+    let m = HashMap::new();
     // m.insert("foo".into(), Function { ... });
     m
 });

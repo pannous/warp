@@ -1,8 +1,8 @@
 // more specific than NodeKind! i32 ≠ int64 etc
 enum Type{
-    longs,
-    reals,
-    bools,
+    Longs,
+    Reals,
+    Bools,
 }
 
 /// Node variant tags (for runtime type checking)
