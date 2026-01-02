@@ -20,7 +20,6 @@ pub mod type_kinds;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod wasp_parser;
-pub mod wit_emitter;
 
 pub mod ast;
 
