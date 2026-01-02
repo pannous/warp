@@ -23,5 +23,7 @@ pub mod wasm_gc_reader;
 pub mod wasp_parser;
 pub mod wit_emitter;
 
+pub mod ast;
+
 pub mod meta;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
