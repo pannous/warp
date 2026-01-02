@@ -3,10 +3,10 @@ use wasp::wasp_parser::parse;
 
 #[test]
 fn test_parse() {
-    //	Mark::markmode();
-    //	const let node : Node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
+	//	Mark::markmode();
+	//	const let node : Node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
 
-    let wat = r#"(module
+	let wat = r#"(module
   (table (;0;) 1 1 funcref);
   (memory (;0;) 2);
   (export "memory" (memory 0));
@@ -32,22 +32,22 @@ fn test_parse() {
   );
 )"#;
 
-    let module = parse(wat);
-    eq!(module, "module");
-    // printf!("%s", module.toString());
-    eq!(module.length(), 8);
-    //	eq!(node.length(), 12);
-    //	puts(node);
-    eq!(module[0], "table");
-    eq!(module[1], "memory");
-    eq!(module[2], "export");
-    eq!(module["func"].length(), 2);
-    eq!(module["func"]["$main"]["param"].length(), 2);
+	let module = parse(wat);
+	eq!(module, "module");
+	// printf!("%s", module.toString());
+	eq!(module.length(), 8);
+	//	eq!(node.length(), 12);
+	//	puts(node);
+	eq!(module[0], "table");
+	eq!(module[1], "memory");
+	eq!(module[2], "export");
+	eq!(module["func"].length(), 2);
+	eq!(module["func"]["$main"]["param"].length(), 2);
 }
 
 #[test]
 fn test_wast() {
-    // use_polish_notation = true;
-    test_parse();
-    // use_polish_notation = false;
+	// use_polish_notation = true;
+	test_parse();
+	// use_polish_notation = false;
 }
