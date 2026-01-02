@@ -172,11 +172,15 @@ fn test_hex() {
     is!("0xFF", 255);
     is!("0x100", 256);
     is!("0xdce4c9b", 0xdce4c9b);
-    //    is!("0x113fddce4c9b", 0x113fddce4c9bl); todo
-    //	is!("0x113fddce4c9b", 0x113fddce4c9bL);
+    is!("0x113fddce4c9b", 0x113fddce4c9bi64);
 }
 
 #[test]
 fn test_units() {
-    // is!("1 m + 1km", Node(1001).setType(types["m"]));
+    is!("1 m + 1km", 1001); // todo m
+}
+
+#[test]
+fn test_eval() {
+    is!("√4", 2);
 }

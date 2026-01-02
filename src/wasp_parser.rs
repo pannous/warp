@@ -297,6 +297,29 @@ impl WaspParser {
             self.advance();
         }
 
+        // Check for hexadecimal: 0x or 0X
+        if self.current_char() == Some('0') {
+            if let Some(next_ch) = self.peek_char(1) {
+                if next_ch == 'x' || next_ch == 'X' {
+                    // Parse hexadecimal
+                    self.advance(); // skip '0'
+                    self.advance(); // skip 'x'
+                    let mut hex_str = String::new();
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_ascii_hexdigit() {
+                            hex_str.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    return i64::from_str_radix(&hex_str, 16)
+                        .map(Node::int)
+                        .unwrap_or_else(|_| Error(format!("Invalid hex: 0x{}", hex_str)));
+                }
+            }
+        }
+
         while let Some(ch) = self.current_char() {
             // assert!(!'三'.is_numeric());
             if ch.is_numeric() {
@@ -441,7 +464,8 @@ impl WaspParser {
             }
             self.skip_whitespace_and_comments();
 
-            // Optional comma/semicolon separator todo separators carry semantics see 
+            // todo separators carry semantics see test_group_cascade
+            // ƒ Optional comma/semicolon separator
             if let Some(ch) = self.current_char() {
                 if ch == ',' || ch == ';' {
                     self.advance();
