@@ -212,7 +212,7 @@ impl WasmGcEmitter {
     fn get_node_constructors(&self) -> Vec<NodeConstructor> {
         use FieldValue::*;
 
-        let node_ref_type = ValType::Ref(RefType {
+        let node_ref_type = Ref(RefType {
             nullable: true,
             heap_type: HeapType::Concrete(self.node_base_type),
         });
@@ -317,7 +317,7 @@ impl WasmGcEmitter {
             heap_type: HeapType::Concrete(self.node_base_type),
         };
         let func_type = self.types.len();
-        self.types.ty().function(desc.params.clone(), vec![ValType::Ref(node_ref)]);
+        self.types.ty().function(desc.params.clone(), vec![Ref(node_ref)]);
         self.functions.function(func_type);
 
         // 2. Create function body (no additional locals needed beyond parameters)

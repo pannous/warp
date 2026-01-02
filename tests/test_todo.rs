@@ -1,4 +1,4 @@
-use wasp::{eq, is};
+use wasp::is;
 
 #[test]
 // fn testPaint() {
