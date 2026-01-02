@@ -55,7 +55,6 @@ macro_rules! ast_type {
 //     }
 // }
 
-
 ast_type!(ClassDeclaration, "class");
 ast_type!(TypeExpr, "type");
 ast_type!(Record, "record");
@@ -63,7 +62,6 @@ ast_type!(FunctionDeclaration, "function");
 ast_type!(IfExpression, "if");
 ast_type!(WhileExpression, "while");
 ast_type!(ForExpression, "for");
-
 
 fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     f(n);
