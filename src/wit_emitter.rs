@@ -196,34 +196,23 @@ pub fn node_to_wit_value(node: &Node) -> String {
                 node_to_wit_value(body)
             )
         }
-        Node::Block(items, kind, bracket) => {
+        Node::List(items, bracket) => {
             let items_str = items
                 .iter()
                 .map(node_to_wit_value)
                 .collect::<Vec<_>>()
                 .join(", ");
-            let kind_str = match kind {
-                Grouper::Object => "object",
-                Grouper::Group => "group",
-                Grouper::Pattern => "pattern",
-                Grouper::Expression => "expression",
-                Grouper::Other(_, _) => "object", // fallback
-            };
             let bracket_str = match bracket {
                 Bracket::Curly => "curly",
                 Bracket::Square => "square",
                 Bracket::Round => "round",
                 Bracket::Other(_, _) => "curly", // fallback
             };
-            format!("block(([{}], {}, {}))", items_str, kind_str, bracket_str)
-        }
-        Node::List(items) => {
-            let items_str = items
-                .iter()
-                .map(node_to_wit_value)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("list([{}])", items_str)
+            // Curly brackets -> block, others -> list
+            match bracket {
+                Bracket::Curly => format!("block(([{}], {}))", items_str, bracket_str),
+                _ => format!("list(([{}], {}))", items_str, bracket_str),
+            }
         }
         Node::Data(_dada) => {
             // format!("list([{}])", dada) // Dada doesn't implement fmt::Display

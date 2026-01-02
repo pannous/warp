@@ -49,13 +49,12 @@ fn test_kitchensink_all_node_types() {
     use wasp::node::{Bracket, Grouper};
     test_node(
         "Block",
-        Node::Block(
+        Node::List(
             vec![
                 Node::Number(Number::Int(1)),
                 Node::Number(Number::Int(2)),
                 Node::Number(Number::Int(3)),
             ],
-            Grouper::Group,
             Bracket::Round,
         ),
     );
@@ -67,7 +66,7 @@ fn test_kitchensink_all_node_types() {
             Node::Text("item1".to_string()),
             Node::Text("item2".to_string()),
             Node::Text("item3".to_string()),
-        ]),
+        ], Bracket::Square),
     );
 
     // Test 11: Data node
@@ -138,7 +137,7 @@ fn test_kitchensink_complex_tree() {
     // Build a complex tree containing all node types
     use wasp::node::{Bracket, Grouper};
 
-    let complex_tree = Node::Block(
+    let complex_tree = Node::List(
         vec![
             // Empty
             Node::Empty,
@@ -156,21 +155,19 @@ fn test_kitchensink_complex_tree() {
                 Box::new(Node::Symbol("left".to_string())),
                 Box::new(Node::Symbol("right".to_string())),
             ),
-            // Nested Block
-            Node::Block(
+            // Nested Block (Curly brackets)
+            Node::List(
                 vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],
-                Grouper::Object,
                 Bracket::Curly,
             ),
-            // List
+            // List (Square brackets)
             Node::List(vec![
                 Node::Text("a".to_string()),
                 Node::Text("b".to_string()),
-            ]),
+            ], Bracket::Square),
             // Data
             Node::data("custom data"),
         ],
-        Grouper::Group,
         Bracket::Square,
     );
 
