@@ -1,3 +1,4 @@
+use wasp::eq;
 use wasp::wasp_parser::WaspParser;
 use wasp::node::Node;
 
