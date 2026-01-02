@@ -8,10 +8,10 @@ TEMP_FILE=$(mktemp)
 echo "Running all tests..."
 cargo test --no-fail-fast 2>&1 | tee "$TEMP_FILE"
 
-# Extract counts from all test result lines
-TOTAL_PASSED=$(grep -E "test result:" "$TEMP_FILE" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" | awk '{s+=$1} END {print s}')
-TOTAL_FAILED=$(grep -E "test result:" "$TEMP_FILE" | grep -oE "[0-9]+ failed" | grep -oE "[0-9]+" | awk '{s+=$1} END {print s}')
-TOTAL_IGNORED=$(grep -E "test result:" "$TEMP_FILE" | grep -oE "[0-9]+ ignored" | grep -oE "[0-9]+" | awk '{s+=$1} END {print s}')
+# Count test results
+TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
+TOTAL_FAILED=$(grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | wc -l | tr -d ' ')
+TOTAL_IGNORED=$(grep -E "^test .* \.\.\. ignored$" "$TEMP_FILE" | wc -l | tr -d ' ')
 
 # Create clean summary file
 {
@@ -26,7 +26,7 @@ TOTAL_IGNORED=$(grep -E "test result:" "$TEMP_FILE" | grep -oE "[0-9]+ ignored" 
 
 	echo ""
 	echo "SUMMARY:"
-	echo "  ${TOTAL_PASSED:-0} passed, ${TOTAL_FAILED:-0} failed, ${TOTAL_IGNORED:-0} ignored"
+	echo "  ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_IGNORED} ignored"
 } > "$OUTPUT_FILE"
 
 rm "$TEMP_FILE"
