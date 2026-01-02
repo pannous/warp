@@ -20,6 +20,20 @@ use crate::type_kinds::{AstKind, NodeKind};
 use crate::wasp_parser::parse;
 // node[i]
 
+/* restructure the whole emitter serialization to use
+(type $Node (struct
+      (field $kind i64)
+      (field $key (ref null $Node))
+      (field $value (ref null $Node))
+      (field $payload (ref null any))
+    ) )
+**/
+// flag enum and variant are wit / component-model types ONLY
+// ref.i31 i31ref
+// (ref.cast (<operand>) (<rtt>))
+// (rtt.canon <type>)
+// (br_on_cast $label (<operand>) (<rtt>)) <<<
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
     Primitive, // map to Node(Number) early! get rid? sometimes need f16 vs f32 vs f64?
@@ -49,8 +63,8 @@ pub enum Node {
     Symbol(String),
     // Symbol(String name, Node kind),
     // Keyword(String), Call, Declaration … AST or here? AST!
-    Key(String, Box<Node>), // todo ? via Pair or losing specificity?
     Pair(Box<Node>, Box<Node>),
+    Key(String, Box<Node>), // todo ? via Pair or losing specificity?
     Tag {
         title: String,
         params: Box<Node>,
@@ -58,11 +72,10 @@ pub enum Node {
     }, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
     // (use Empty for no attrs)
     Block(Vec<Node>, Grouper, Bracket), // todo merge into List: Grouper Bracket kinda redundant!
-    List(Vec<Node>),                    // same as Block
-    Data(Dada), // most generic container for any kind of data not captured by other node types
-    // Meta{ node: Box<Node>, data: Box<Node>}, // so not to confuse payload, metadata <<<
-    // Meta(Box<Node>, Box<Node>), // payload, metadata
-    Meta(Box<Node>, MetaData), // Wrapper to attach metadata to any node
+    List(Vec<Node>),                    // same as Block without Grouper/Bracket meta info
+    // Data(Dada), // most generic container for any kind of data not captured by other node types
+    Data(Dada), // meta as wrapper or as left/right node?
+    Meta { node: Box<Node>, data: MetaData }, // Wrapper to attach metadata to any node
     // List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
     // List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
     // List(Vec<T>) // turns whole Node into a generic type :(
@@ -102,7 +115,7 @@ impl Node {
         // let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
         match self {
             Data(dada) => dada.clone(),
-            Meta(node, _) => node.data_value(),
+            Meta { node, .. } => node.data_value(),
             _ => Dada {
                 data: Box::new(()),
                 type_name: "ø".to_string(),
@@ -139,7 +152,7 @@ impl Node {
     pub fn values(&self) -> Node {
         match self {
             Key(_, v) => *v.clone(),
-            Meta(node, _) => node.values(),
+            Meta { node, .. } => node.values(),
             _ => todo!(), //#Node::Empty,
         }
     }
@@ -157,7 +170,7 @@ impl Node {
             Block(_, _, _) => NodeKind::Block,
             List(_) => NodeKind::List,
             Data(_) => NodeKind::Data,
-            Meta(_, _) => NodeKind::Meta,
+            Meta { .. } => NodeKind::Meta,
             Error(_) => NodeKind::Error,
             False => NodeKind::Number, // map to 0 !
             True => NodeKind::Number,  // map to 1
@@ -168,7 +181,7 @@ impl Node {
         match self {
             List(items) => items.len() as i32,
             Block(items, ..) => items.len() as i32,
-            Meta(node, _) => node.length(),
+            Meta { node, .. } => node.length(),
             _ => 0,
         }
     }
@@ -190,7 +203,7 @@ impl Node {
             Node::Number(_) | Text(_) | Char(_) | Data(_) => {
                 self //.clone()
             }
-            Meta(node, _) => node.value(),
+            Meta { node, .. } => node.value(),
             Key(_, v) => v.value(),
             _ => &Empty,
         }
@@ -201,7 +214,7 @@ impl Node {
             Symbol(name) => name.clone(),
             Tag { title, .. } => title.clone(),
             Key(k, _) => k.clone(),
-            Meta(node, _) => node.name(),
+            Meta { node, .. } => node.name(),
             List(items) => {
                 // todo only for specific cases like expressions
                 if let Some(first) = items.first() {
@@ -337,7 +350,7 @@ impl Index<usize> for Node {
         match self {
             List(elements) => elements.get(i).unwrap_or(&Empty),
             Block(nodes, ..) => nodes.get(i).unwrap_or(&Empty),
-            Meta(node, _) => &node[i],
+            Meta { node, .. } => &node[i],
             _ => &Empty,
         }
     }
@@ -372,7 +385,7 @@ impl Index<&String> for Node {
                     &Empty
                 }
             }
-            Meta(node, _) => &node[i],
+            Meta { node, .. } => &node[i],
             _ => &Empty,
         }
     }
@@ -406,7 +419,7 @@ impl Index<&str> for Node {
                     &Empty
                 }
             }
-            Meta(node, _) => &node[i],
+            Meta { node, .. } => &node[i],
             _ => &Empty,
         }
     }
@@ -429,7 +442,7 @@ impl IndexMut<usize> for Node {
                     panic!("Index out of bounds")
                 }
             }
-            Meta(node, _) => &mut node[i],
+            Meta { node, .. } => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -453,7 +466,7 @@ impl IndexMut<&String> for Node {
                     panic!("Key '{}' not found", i)
                 }
             }
-            Meta(node, _) => &mut node[i],
+            Meta { node, .. } => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -477,7 +490,7 @@ impl IndexMut<&str> for Node {
                     panic!("Key '{}' not found", i)
                 }
             }
-            Meta(node, _) => &mut node[i],
+            Meta { node, .. } => &mut node[i],
             _ => panic!("Cannot mutably index this node type"),
         }
     }
@@ -540,23 +553,23 @@ impl Node {
         List(map(xs, |x| Node::Number(Number::Int(x as i64))))
     }
 
-    pub fn with_meta(self, meta: MetaData) -> Self {
-        Meta(Box::new(self), meta)
+    pub fn with_meta(self, data: MetaData) -> Self {
+        Meta { node: Box::new(self), data }
     }
     pub fn with_comment(self, comment: String) -> Self {
-        Meta(Box::new(self), MetaData::with_comment(comment))
+        Meta { node: Box::new(self), data: MetaData::with_comment(comment) }
     }
 
     pub fn get_meta(&self) -> Option<&MetaData> {
         match self {
-            Meta(_, meta) => Some(meta),
+            Meta { data, .. } => Some(data),
             _ => None,
         }
     }
 
     pub fn unwrap_meta(&self) -> &Node {
         match self {
-            Meta(node, _) => node.unwrap_meta(),
+            Meta { node, .. } => node.unwrap_meta(),
             _ => self,
         }
     }
@@ -570,7 +583,7 @@ impl Node {
         match self {
             List(elements, ..) => elements.len(),
             Block(nodes, ..) => nodes.len(),
-            Meta(node, _) => node.size(),
+            Meta { node, .. } => node.size(),
             _ => 0,
         }
     }
@@ -579,7 +592,7 @@ impl Node {
         match self {
             List(elements) => elements.get(i).unwrap(),
             Block(nodes, ..) => nodes.get(i).unwrap(),
-            Meta(node, _) => node.get(i),
+            Meta { node, .. } => node.get(i),
             _ => &Empty,
         }
     }
@@ -587,7 +600,7 @@ impl Node {
     pub fn get_key(&self) -> &str {
         match self {
             Key(k, _) => k,
-            Meta(node, _) => node.get_key(),
+            Meta { node, .. } => node.get_key(),
             _ => "",
         }
     }
@@ -595,7 +608,7 @@ impl Node {
     pub fn get_value(&self) -> Node {
         match self {
             Key(_, v) => v.as_ref().clone(),
-            Meta(node, _) => node.get_value(),
+            Meta { node, .. } => node.get_value(),
             _ => Empty,
         }
     }
@@ -609,7 +622,7 @@ impl Node {
         match self {
             List(items) => NodeIter::new(items.clone()),
             Block(items, _, _) => NodeIter::new(items.clone()),
-            Meta(node, _) => node.iter(),
+            Meta { node, .. } => node.iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -618,7 +631,7 @@ impl Node {
         match self {
             List(items) => NodeIter::new(items),
             Block(items, _, _) => NodeIter::new(items),
-            Meta(node, _) => (*node).clone().into_iter(),
+            Meta { node, .. } => (*node).clone().into_iter(),
             _ => NodeIter::new(vec![]),
         }
     }
@@ -718,9 +731,9 @@ impl Node {
                 map.insert("_type".to_string(), Value::String(d.type_name.clone()));
                 Value::Object(map)
             }
-            Meta(node, meta) => {
+            Meta { node, data } => {
                 let mut value = node.to_json_value();
-                if let Some(comment) = &meta.comment {
+                if let Some(comment) = &data.comment {
                     if let Value::Object(ref mut map) = value {
                         map.insert("_comment".to_string(), Value::String(comment.clone()));
                     }
@@ -774,8 +787,8 @@ impl fmt::Debug for Node {
             },
             List(l) => write!(f, "{:?}", l), // always as [a,b,c] !
             Data(d) => write!(f, "{:?}", d),
-            Meta(node, meta) => {
-                if let Some(comment) = &meta.comment {
+            Meta { node, data } => {
+                if let Some(comment) = &data.comment {
                     write!(f, "{:?} /* {} */", node, comment)
                 } else {
                     write!(f, "{:?}", node)
@@ -924,7 +937,7 @@ impl PartialEq for Node {
                 Data(d2) => d == d2,
                 _ => false,
             },
-            Meta(node, _) => {
+            Meta { node, .. } => {
                 // Ignore metadata when comparing equality
                 node.as_ref().eq(other)
             }
@@ -974,7 +987,7 @@ impl PartialEq<str> for Node {
         match self {
             Text(s) => s == other,
             Symbol(s) => s == other,
-            Meta(node, _) => node.as_ref().eq(other),
+            Meta { node, .. } => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -985,7 +998,7 @@ impl PartialEq<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n == other,
             Node::Number(Number::Float(f)) => *f == *other as f64,
-            Meta(node, _) => node.as_ref().eq(other),
+            Meta { node, .. } => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1021,7 +1034,7 @@ impl PartialEq<f64> for Node {
         match self {
             Node::Number(Number::Float(f)) => f == other,
             Node::Number(Number::Int(n)) => *n as f64 == *other,
-            Meta(node, _) => node.as_ref().eq(other),
+            Meta { node, .. } => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1032,7 +1045,7 @@ impl PartialEq<&str> for Node {
         match self {
             Text(s) => s == *other,
             Symbol(s) => s == *other,
-            Meta(node, _) => node.as_ref().eq(other),
+            Meta { node, .. } => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1052,7 +1065,7 @@ impl PartialEq<char> for Node {
                 let mut chars = s.chars();
                 chars.next() == Some(*other) && chars.next().is_none()
             }
-            Meta(node, _) => node.as_ref().eq(other),
+            Meta { node, .. } => node.as_ref().eq(other),
             _ => false,
         }
     }
@@ -1069,7 +1082,7 @@ impl PartialOrd<i32> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
-            Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta { node, .. } => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1080,7 +1093,7 @@ impl PartialOrd<i64> for Node {
         match self {
             Node::Number(Number::Int(n)) => n.partial_cmp(other),
             Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
-            Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta { node, .. } => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1091,7 +1104,7 @@ impl PartialOrd<f64> for Node {
         match self {
             Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
             Node::Number(Number::Float(f)) => f.partial_cmp(other),
-            Meta(node, _) => node.as_ref().partial_cmp(other),
+            Meta { node, .. } => node.as_ref().partial_cmp(other),
             _ => None,
         }
     }
@@ -1115,7 +1128,7 @@ impl Not for Node {
             List(_) => False,                            // !non-empty list == false
             Block(ref items, _, _) if items.is_empty() => True,
             Block(_, _, _) => False,
-            Meta(node, meta) => (!(*node.clone())).with_meta(meta),
+            Meta { node, data } => (!(*node.clone())).with_meta(data),
             // Apply not to wrapped node, preserve metadata
             _ => False, // Other types default to falsy
         }
@@ -1184,11 +1197,11 @@ impl Add<&Node> for &Node {
     fn add(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta { node, data } => (node.as_ref(), Some(data)),
             _ => (self, None),
         };
         let right = match rhs {
-            Meta(node, _) => node.as_ref(),
+            Meta { node, .. } => node.as_ref(),
             _ => rhs,
         };
 
@@ -1261,11 +1274,11 @@ impl Sub<&Node> for &Node {
     fn sub(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta { node, data } => (node.as_ref(), Some(data)),
             _ => (self, None),
         };
         let right = match rhs {
-            Meta(node, _) => node.as_ref(),
+            Meta { node, .. } => node.as_ref(),
             _ => rhs,
         };
 
@@ -1340,11 +1353,11 @@ impl Mul<&Node> for &Node {
     fn mul(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta { node, data } => (node.as_ref(), Some(data)),
             _ => (self, None),
         };
         let right = match rhs {
-            Meta(node, _) => node.as_ref(),
+            Meta { node, .. } => node.as_ref(),
             _ => rhs,
         };
 
@@ -1415,11 +1428,11 @@ impl Div<&Node> for &Node {
     fn div(self, rhs: &Node) -> Self::Output {
         // Handle Meta wrappers
         let (left, left_meta) = match self {
-            Meta(node, meta) => (node.as_ref(), Some(meta)),
+            Meta { node, data } => (node.as_ref(), Some(data)),
             _ => (self, None),
         };
         let right = match rhs {
-            Meta(node, _) => node.as_ref(),
+            Meta { node, .. } => node.as_ref(),
             _ => rhs,
         };
 
@@ -1502,7 +1515,7 @@ impl fmt::Display for Node {
                 }
                 write!(f, "]")
             }
-            Meta(node, _) => write!(f, "{}", node),
+            Meta { node, .. } => write!(f, "{}", node),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -1518,4 +1531,20 @@ pub fn text_node(p0: String) -> Node {
 
 pub fn node(p0: &str) -> Node {
     Text(p0.s())
+}
+
+// Now no pass can accidentally drop meta!
+fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
+    match n {
+        Meta { node: inner, data } => Meta { node: Box::new(map_node(*inner, f)), data },
+        // Now no pass can accidentally drop meta!
+
+        Pair(a, b) => Pair(
+                Box::new(map_node(*a, f)),
+                Box::new(map_node(*b, f))),
+
+        List(xs) => List(xs.into_iter().map(|x| map_node(x, f)).collect()),
+
+        other => f(other),
+    }
 }

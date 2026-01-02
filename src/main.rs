@@ -17,6 +17,7 @@ pub mod wasp_parser;
 pub mod type_kinds;
 
 pub mod meta;
+pub mod ast;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 use parser::test_parser;

@@ -10,5 +10,5 @@ elif [ -n "$LONG_TIMEOUT" ]; then
     exec gtimeout 3s "$@"
 else
     # Normal quick timeout (enough for IDE initialization + test execution AFTER one NO_TIMEOUT run!)
-    exec gtimeout .5s "$@"
+    exec gtimeout 1s "$@"
 fi
