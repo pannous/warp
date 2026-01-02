@@ -1,11 +1,11 @@
-mod wasm_parser{}
+mod wasm_parser {}
 
 use std::any::{Any, TypeId};
 use wasmparser::*;
 
 use std::collections::HashMap;
 use std::io::Write;
-use wasmparser::{BinaryReaderError, Chunk,  Parser, Payload::*};
+use wasmparser::{BinaryReaderError, Chunk, Parser, Payload::*};
 use std::io::Read;
 use parity_wasm::*;
 use std::io::Cursor;
@@ -15,8 +15,7 @@ use std::str::from_utf8;
 use std::fs::read;
 
 
-
-pub fn parse_wasm(file:&str)-> Result<()>{
+pub fn parse_wasm(file: &str) -> Result<()> {
     let data = read(Path::new(file)).unwrap();
     // let mut parser = Parser::new(0);
     // let mut module = ModuleReader::new(Cursor::new(&data)).unwrap();
@@ -100,10 +99,10 @@ pub fn parse_wasm(file:&str)-> Result<()>{
 }
 
 
-pub fn parse_wasm_parity(_file:&str){
+pub fn parse_wasm_parity(_file: &str) {
     // parity_wasm::deserialize_file()
 }
 
-pub fn main(){
+pub fn main() {
     let _ = parse_wasm("test.wasm");
 }

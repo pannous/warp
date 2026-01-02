@@ -11,7 +11,9 @@ use crate::extensions::strings::StringExtensions;
 
 // #[cfg(any(feature = "wasm",test))]
 #[cfg(feature = "wasm")]
-extern { fn download(url: &str) -> String; } // String not FFI-safe
+extern {
+    fn download(url: &str) -> String;
+} // String not FFI-safe
 
 #[cfg(test)]
 fn download(url: &str) -> String { String::from("mock".s() + url) }
@@ -21,7 +23,7 @@ fn download(url: &str) -> String { String::from("mock".s() + url) }
 #[cfg(not(feature = "wasm"))]
 #[cfg(not(test))]
 pub fn download(url: &str) -> String {
-    let empty:String = String::from("");
+    let empty: String = String::from("");
 
     let response = match get(url) {
         Ok(res) => res,
@@ -31,7 +33,7 @@ pub fn download(url: &str) -> String {
         Ok(bytes) => {
             let s = String::from_utf8(bytes.to_vec());
             s.unwrap_or_else(|_| empty)
-        },
+        }
         Err(_) => empty
     }
 }
@@ -51,7 +53,6 @@ impl FileExtensions for File {
     fn path(&self) -> String {
         "std::fs::File does not expose the file name or path.".to_string()
     }
-
 }
 
 /// Write bytes to a WASM file, creating parent directories if needed
