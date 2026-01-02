@@ -1,4 +1,3 @@
-
 // 2368 | |     ) -> *mut WasmEdge_FunctionInstanceContext;
 // | |_______________________________________________- similarly named function `WasmEdge_FunctionInstanceCreate` defined here
 

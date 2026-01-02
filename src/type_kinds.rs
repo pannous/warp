@@ -1,5 +1,5 @@
 // more specific than NodeKind! i32 ≠ int64 etc
-enum Type{
+enum Type {
     Longs,
     Reals,
     Bools,
@@ -25,7 +25,7 @@ pub enum NodeKind {
     Externref,
 }
 
-pub enum AstKind{
+pub enum AstKind {
     Declaration,
     Expression,
     Statement,

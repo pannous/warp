@@ -37,7 +37,7 @@ pub fn build(file_name: &str) {
     let main_body = Expression::new(vec![
         I32Constant(42).into(),
     ]);
-    let main_func= Function::new(0, void.clone(), main_body);
+    let main_func = Function::new(0, void.clone(), main_body);
 
     let parameters = ResultType::new(vec![I32, I32]);
     let results = ResultType::new(vec![I32]);
@@ -63,14 +63,13 @@ pub fn build(file_name: &str) {
 
     let mut buffer = Vec::new();
     let size = emit_binary(&module, &mut buffer).unwrap();
-    println!("{:?}",size);
-    println!("{:?}",buffer);
+    println!("{:?}", size);
+    println!("{:?}", buffer);
 
     let mut file = File::create(file_name).unwrap();
     let _ = file.write_all(&buffer);
     // println!("Wrote to file {}", file.name());
     println!("Wrote to file {} {}", file_name, file.path());
-
 
 
     // module.emit_wasm();
