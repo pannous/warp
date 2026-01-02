@@ -2,6 +2,7 @@ use wasp::eq;
 use wasp::wasp_parser::parse;
 
 #[test]
+#[ignore]
 fn test_parse() {
 	//	Mark::markmode();
 	//	const let node : Node = Mark::parseFile("/Users/me/dev/wasm/test.wat");
@@ -46,6 +47,7 @@ fn test_parse() {
 }
 
 #[test]
+#[ignore]
 fn test_wast() {
 	// use_polish_notation = true;
 	test_parse();

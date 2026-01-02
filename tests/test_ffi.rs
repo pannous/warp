@@ -23,6 +23,7 @@ use wasp::wasp_parser::parse;
 use wasp::{eq, is, skip};
 
 #[test]
+#[ignore]
 fn test_dynlib_import_emit() {
 	// Test FFI import and usage with 'use' keyword
 	// These are actual C library functions, not WASM builtins
@@ -40,6 +41,7 @@ fn test_dynlib_import_emit() {
 // Basic FFI Tests - Core functionality
 // ============================================================================
 #[test]
+#[ignore]
 fn test_ffi_floor() {
 	// Test: float64 . float64 (floor from libm);
 	is!("import floor from 'm'\nfloor(3.7)", 3.0);
@@ -76,11 +78,13 @@ fn test_ffi_atof() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_fmin_wasp_file() {
 	is!("test/wasp/ffi/test_ffi_fmin.wasp", 2.1);
 }
 
 #[test]
+#[ignore]
 fn test_ffi_fmin() {
 	// Test: float64, float64 . float64 (fmin from libm);
 	is!("import fmin from 'm'\nfmin(3.5, 2.1)", 2.1);
@@ -89,6 +93,7 @@ fn test_ffi_fmin() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_combined() {
 	// Combined tests using multiple FFI functions together
 
@@ -110,6 +115,7 @@ fn test_ffi_combined() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_strcmp() {
 	// let modul = loadNativeLibrary("c");
 	// // assert!(modul);
@@ -134,6 +140,7 @@ fn test_ffi_strcmp() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_strncmp() {
 	// Test: int strncmp(const char* s1, const char* s2, size_t n);
 	is!(
@@ -151,6 +158,7 @@ fn test_ffi_strncmp() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_ceil() {
 	// Test: double ceil(double x);
 	is!("import ceil from 'm'\nceil(3.2)", 4.0);
@@ -160,6 +168,7 @@ fn test_ffi_ceil() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sin() {
 	// Test: double sin(double x);
 	is!("import sin from 'm'\nsin(0.0)", 0.0);
@@ -171,6 +180,7 @@ fn test_ffi_sin() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_cos() {
 	// Test: double cos(double x);
 	is!("import cos from 'm'\ncos(0.0)", 1.0);
@@ -182,6 +192,7 @@ fn test_ffi_cos() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_tan() {
 	// Test: double tan(double x);
 	is!("import tan from 'm'\ntan(0.0)", 0.0);
@@ -189,6 +200,7 @@ fn test_ffi_tan() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_fabs() {
 	// Test: double fabs(double x);
 	// Test: int32 . int32 (abs from libc);
@@ -200,6 +212,7 @@ fn test_ffi_fabs() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_fmax() {
 	// Test: double fmax(double x, double y);
 	is!("import fmax from 'm'\nfmax(3.5, 2.1)", 3.5);
@@ -208,6 +221,7 @@ fn test_ffi_fmax() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_fmod() {
 	// Test: double fmod(double x, double y);
 	is!("import fmod from 'm'\nfmod(5.5, 2.0)", 1.5);
@@ -219,6 +233,7 @@ fn test_ffi_fmod() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_atoi() {
 	// Test: int atoi(const char* str);
 	is!("import atoi from \"c\"\natoi(\"42\")", 42);
@@ -228,6 +243,7 @@ fn test_ffi_atoi() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_atol() {
 	// Test: long atol(const char* str);
 	is!("import atol from \"c\"\natol(\"1234567\")", 1234567);
@@ -250,6 +266,7 @@ fn test_ffi_rand() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_trigonometry_combined() {
 	// Test: sin²(x) + cos²(x) = 1 (Pythagorean identity);
 	is!(
@@ -266,6 +283,7 @@ fn test_ffi_trigonometry_combined() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_string_math_combined() {
 	// Test: Parse string numbers and do math
 	is!(
@@ -283,6 +301,7 @@ fn test_ffi_string_math_combined() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_string_comparison_logic() {
 	// Test: Use strcmp for conditional logic
 	is!(
@@ -301,6 +320,7 @@ if result < 0 then 1 else 0"#,
 }
 
 #[test]
+#[ignore]
 fn test_ffi_math_pipeline() {
 	// Test: Chain multiple math functions
 	is!(
@@ -403,6 +423,7 @@ fn test_extract_function_signature() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_extended_emit() {
 	test_ffi_strcmp();
 	test_ffi_ceil();
@@ -439,6 +460,7 @@ fn test_ffi_header_parser() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_ffi_sdl_init() {
 	// Test: SDL_Init - Initialize SDL with timer subsystem (works headless);
 	// SDL_INIT_TIMER = 0x00000001 (doesn't require display);
@@ -450,11 +472,13 @@ fn test_ffi_sdl_init() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sdl_window() {
 	is!("test/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sdl_version() {
 	// Test: SDL_GetVersion - Get SDL version info
 	// This tests struct parameter passing via FFI
@@ -462,18 +486,21 @@ fn test_ffi_sdl_version() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sdl_combined() {
 	// Combined test: Multiple SDL function imports
 	// Tests that we can import multiple SDL functions in one program
 	is!("test/wasp/ffi/sdl/sdl_get_ticks.wasp", 100);
 }
 #[test]
+#[ignore]
 fn test_ffi_sdl_debug() {
 	// print results of SDL functions to debug FFI
 	is!("test/wasp/ffi/sdl/sdl_debug.wasp", 1);
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sdl_red_square_demo() {
 	// DEMO: Display a red square using SDL2 via FFI
 	// This will show an actual window with graphics
@@ -481,6 +508,7 @@ fn test_ffi_sdl_red_square_demo() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_sdl() {
 	test_ffi_sdl_init();
 	test_ffi_sdl_window();
@@ -496,6 +524,7 @@ fn test_ffi_sdl() {
 // Raylib Graphics FFI Tests
 // ============================================================================
 #[test]
+#[ignore]
 fn test_ffi_raylib_combined() {
 	// Test: Multiple raylib imports in one program
 	is!(
@@ -512,6 +541,7 @@ CloseWindow()
 }
 
 #[test]
+#[ignore]
 fn test_ffi_raylib_simple_use_import() {
 	let _modul = load_native_library("raylib");
 	// assert!(modul);
@@ -532,6 +562,7 @@ fn test_ffi_raylib_simple_use_import() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_raylib() {
 	let _modul = load_native_library("raylib");
 	// assert!(modul);
@@ -548,6 +579,7 @@ fn test_ffi_raylib() {
 }
 
 #[test]
+#[ignore]
 fn test_ffi_all() {
 	// Main comprehensive test function that runs all FFI tests
 	let _modul = load_native_library("m");

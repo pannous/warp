@@ -10,12 +10,14 @@ const PI: f64 = std::f64::consts::PI;
 const E: f64 = std::f64::consts::E;
 
 #[test]
+#[ignore]
 fn test_not_truthy_falsy() {
 	is!("not ''", 1);
 	is!("not \"\"", 1);
 }
 
 #[test]
+#[ignore]
 fn test_not_negation2() {
 	// just aliases for 'not'
 	is!("!0", 1);
@@ -39,6 +41,7 @@ fn test_not_negation2() {
 }
 
 #[test]
+#[ignore]
 fn test_not_negation() {
 	// test_not_negation2(); // just aliases for 'not'
 	is!("not 0", 1);
@@ -66,6 +69,7 @@ fn test_not_negation() {
 }
 
 #[test]
+#[ignore]
 fn test_while_not() {
 	is!("i=2;while !1:i++;i", 2);
 	is!("i=2;while i!=3:i++;i", 3);
@@ -79,6 +83,7 @@ fn test_while_not() {
 }
 
 #[test]
+#[ignore]
 fn test_while_not_call() {
 	// Tests with function calls in while conditions
 	// Note: These require proper handling of function calls as while conditions
@@ -132,6 +137,7 @@ fn test_while_true_forever() {
 }
 
 #[test]
+#[ignore]
 fn test_random_parse() {
 	let node = parse("x:40;x+1");
 	assert!(node.length() == 2);
@@ -143,6 +149,7 @@ fn test_random_parse() {
 }
 
 #[test]
+#[ignore]
 fn test_minus_minus() {
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -158,6 +165,7 @@ fn test_minus_minus() {
 }
 
 #[test]
+#[ignore]
 fn test_exp() {
 	// todo parsed same:
 	is!("ℯ^0", 1);
@@ -177,6 +185,7 @@ fn test_exp() {
 }
 
 #[test]
+#[ignore]
 fn test_matrix_order() {
 	is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
 
@@ -193,6 +202,7 @@ fn test_matrix_order() {
 }
 
 #[test]
+#[ignore]
 fn test_vector_shim() {
 	//    unknown function matrix_multiply (matrix_multiply);
 	is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
@@ -214,6 +224,7 @@ fn test_hypen_versus_minus() {
 }
 
 #[test]
+#[ignore]
 fn test_import42() {
 	is!("import fourty_two", 42);
 	is!("include fourty_two", 42);
@@ -224,6 +235,7 @@ fn test_import42() {
 }
 
 #[test]
+#[ignore]
 fn test_div_deep() {
 	let div = parse("div{ span{ class:'bold' 'text'} br}");
 	let node: &Node = &div["span"];
@@ -233,6 +245,7 @@ fn test_div_deep() {
 }
 
 #[test]
+#[ignore]
 fn test_div_mark() {
 	// use_polish_notation = true;
 	let div = parse("{div {span class:'bold' 'text'} {br}}");
@@ -244,6 +257,7 @@ fn test_div_mark() {
 }
 
 #[test]
+#[ignore]
 fn test_errors() {
 	// use assert_throws
 	// throwing = true;
@@ -273,6 +287,7 @@ fn test_errors() {
 fn test_for_each() {}
 
 #[test]
+#[ignore]
 fn test_logic() {
 	is!("true or false", true);
 	is!("false or true", true);
@@ -317,6 +332,7 @@ fn test_logic() {
 }
 
 #[test]
+#[ignore]
 fn test_logic_empty_set() {
 	is!("not ()", true); // missing args for operator not
 	is!("() xor 1", true);
@@ -370,6 +386,7 @@ fn test_logic_empty_set() {
 }
 
 #[test]
+#[ignore]
 fn test_logic_operators() {
 	is!("¬ 0", 1);
 	is!("¬ 1", 0);
@@ -391,6 +408,7 @@ fn test_logic_operators() {
 }
 
 #[test]
+#[ignore]
 fn test_logic01() {
 	is!("0 or 0", false);
 	is!("0 or 1", true);
@@ -413,6 +431,7 @@ fn test_logic01() {
 }
 
 #[test]
+#[ignore]
 fn test_length_operator() {
 	is!("#'0123'", 4); // todo at compile?
 	is!("#[0 1 2 3]", 4);

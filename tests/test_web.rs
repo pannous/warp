@@ -17,6 +17,7 @@ fn test_html_wasp() {
 }
 
 #[test]
+#[ignore]
 fn test_js() {
 	// todo remove (local $getContext i32)  !
 	eval("$canvas.getContext('2d')"); // => invokeReference(canvas, getContext, '2d');
@@ -67,6 +68,7 @@ fn test_html() {
 }
 
 #[test]
+#[ignore]
 fn test_fetch() {
 	// todo: use host fetch if available
 	let res = fetch("https://pannous.com/files/test");

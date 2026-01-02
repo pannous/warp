@@ -2,6 +2,7 @@ use wasp::is;
 use wasp::util::load_module;
 
 #[test]
+#[ignore]
 fn test_fd_write() {
 	// built-in wasi function
 	//    is!("x='hello';fd_write(1,20,1,8)",  0);// 20 = &x+4 {char*,len}

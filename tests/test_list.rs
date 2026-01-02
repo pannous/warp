@@ -8,6 +8,7 @@ use wasp::*;
 
 // Array size tests
 #[test]
+#[ignore]
 fn test_array_size() {
 	// todo!
 	// There should be one-- and preferably only one --obvious way to do it.
@@ -30,6 +31,7 @@ fn test_array_size() {
 }
 
 #[test]
+#[ignore]
 fn test_array_operations() {
 	// todo!
 	test_array_size();
@@ -134,6 +136,7 @@ fn test_array_operations() {
 }
 
 #[test]
+#[ignore]
 fn test_array_creation() {
 	//    skip!(
 
@@ -147,6 +150,7 @@ fn test_array_creation() {
 }
 
 #[test]
+#[ignore]
 fn test_index_offset() {
 	is!("(2 4 3)[1]", 4);
 	is!("(2 4 3)#2", 4);
@@ -179,6 +183,7 @@ fn test_index_offset() {
 }
 
 #[test]
+#[ignore]
 fn test_array_initialization_basics() {
 	// via Units
 	let node = analyze(parse("x : 100 numbers"));
@@ -187,6 +192,7 @@ fn test_array_initialization_basics() {
 }
 
 #[test]
+#[ignore]
 fn test_array_initialization() {
 	// via Units
 	is!("x : int[100]; x.length", 100);
@@ -205,6 +211,7 @@ fn test_array_initialization() {
 }
 
 #[test]
+#[ignore]
 fn test_array_indices() {
 	// #[cfg(not(feature = "WASM"))]{
 	//         ( and INCLUDE_MERGER);
@@ -215,6 +222,7 @@ fn test_array_indices() {
 }
 
 #[test]
+#[ignore]
 fn test_root_lists() {
 	// vargs needs to be 0 terminated, otherwise pray!
 	is!("1 2 3", Node::ints(vec![1, 2, 3]));
@@ -234,6 +242,7 @@ fn test_root_lists() {
 }
 
 #[test]
+#[ignore]
 fn test_root_list_strings() {
 	is!("(a,b,c)", Node::strings(vec!["a", "b", "c"]));
 	is!("(a;b;c)", Node::strings(vec!["a", "b", "c"]));

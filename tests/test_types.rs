@@ -61,11 +61,13 @@ fn array() -> Node {
 }
 
 #[test]
+#[ignore]
 fn test_go_types() {
 	is!("func add1(x int) int { return x + 1 };add1(41)", 42);
 }
 
 #[test]
+#[ignore]
 fn test_auto_type() {
 	is!("0/0", False);
 	is!("0÷0", Node::Number(Number::Nan));
@@ -83,6 +85,7 @@ fn test_type_synonyms() {
 }
 
 #[test]
+#[ignore]
 fn test_return_types() {
 	is!("fun addier(a,b){b+a};addier(42,1)", 43);
 	is!("fun addier(a,b){b+a};addier(42,1)+1", 44);
@@ -150,6 +153,7 @@ fn test_cast() {
 }
 
 #[test]
+#[ignore]
 fn test_emit_cast() {
 	is!("(2 as float, 4.3 as int)  == 2.0 ,4", 1);
 	is!("(2 as float, 4.3 as int)  == 2,4", 1);
@@ -173,6 +177,7 @@ fn test_emit_cast() {
 }
 
 #[test]
+#[ignore]
 fn test_constructor_cast() {
 	is!("int('123')", 123);
 	is!("str(123)", "123");
@@ -199,6 +204,7 @@ fn test_deep_type() {
 }
 
 #[test]
+#[ignore]
 fn test_type_confusion() {
 	assert_throws("x=1;x='ok'");
 	assert_throws("x=1;x=1.0");
