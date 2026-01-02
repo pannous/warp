@@ -3,21 +3,21 @@
 
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
-use wasp::type_kinds::{AstKind, NodeKind};
+use wasp::type_kinds::NodeKind;
 use wasp::util::fetch;
 use wasp::wasm_gc_emitter::eval;
 use wasp::wasp_parser::parse;
 use wasp::{eq, is, put, skip};
 
 #[test]
-fn testHtmlWasp() {
+fn test_html_wasp() {
     eval("html{bold{Hello}}"); // => <html><body><bold>Hello</bold></body></html> via appendChild bold to body
     eval("html: h1: 'Hello, World!'"); // => <html><h1>Hello, World!</h1></html>
                                        //	eval("html{bold($myid style=red){Hello}}"); // => <bold id=myid style=red>Hello</bold>
 }
 
 #[test]
-fn testJS() {
+fn test_js() {
     // todo remove (local $getContext i32)  !
     eval("$canvas.getContext('2d')"); // => invokeReference(canvas, getContext, '2d');
     skip!(
@@ -33,10 +33,10 @@ fn test_inner_html() {
     {
         return;
     }
-    let html = parse("<html><bold>test</bold></html>");
-    eq!(*html.value(), "<bold>test</bold>");
-    let serialized = html.serialize();
-    eq!(serialized, "<html><bold>test</bold></html>");
+    // let html = parse("<html><bold>test</bold></html>");
+    // eq!(*html.value(), "<bold>test</bold>");
+    // let serialized = html.serialize();
+    // eq!(serialized, "<html><bold>test</bold></html>");
     //	eval("<html><script>alert('ok')");
     //	eval("<html><script>alert('ok')</script></html>");
     #[cfg(feature = "WEBAPP")]
@@ -70,7 +70,7 @@ fn test_html() {
 fn test_fetch() {
     // todo: use host fetch if available
     let res = fetch("https://pannous.com/files/test");
-    if (res.contains("not available")) {
+    if res.contains("not available") {
         print("fetch not available. set CURL=1 in CMakelists.txt or use host function");
         return;
     }
@@ -96,9 +96,9 @@ fn test_canvas() {
 fn test_dom() {
     print("test_dom");
     // preRegisterFunctions();
-    let mut result = analyze(parse("getElementById('canvas')"));
+    let mut _result = analyze(parse("getElementById('canvas')"));
     // eq!(result.kind(), AstKind::Call);
-    result = eval("getElementById('canvas');");
+    _result = eval("getElementById('canvas');");
     //	print(typeName(result.kind));
     //	eq!(result.kind(), strings); // why?
     //	eq!(result.kind(), longs); // todo: can't use smart pointers for elusive externref
@@ -119,13 +119,16 @@ fn test_dom_property() {
     {
         return;
     }
-    let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
-    eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-                               //	result = eval("width='width';$canvas.width");
-    result = eval("$canvas.width");
-    eq!(result.value(), &300);
-    //	return;
-    result = eval("$canvas.style");
+    #[cfg(feature = "WEBAPP")]
+    {
+        let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
+        eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
+                                   //	result = eval("width='width';$canvas.width");
+        result = eval("$canvas.width");
+        eq!(result.value(), &300);
+        //	return;
+        result = eval("$canvas.style");
+    }
     // eq!(result.kind(), strings);
     //	eq!(result.kind(), stringp);
     // if (result.value()));

@@ -5,15 +5,15 @@
 // let compile : Node(String);
 
 use wasp::analyzer::analyze;
-use wasp::extensions::{assert_throws, print};
+use wasp::extensions::assert_throws;
 use wasp::node::{node, Node};
 use wasp::run::wasmtime_runner::run;
 use wasp::wasp_parser::parse;
 use wasp::{eq, is, put, skip};
 
 #[test]
-fn testStructWast() {
-    let wast = r#"(module
+fn test_struct_wast() {
+    let _wast = r#"(module
   (type $Box (struct (field $val (mut i32))));
   (global $box (export "box") (ref $Box) (struct.new $Box (i32.const 42)));
   (func $main (export "main") (result (ref $Box)));
@@ -26,29 +26,29 @@ fn testStructWast() {
 }
 
 #[test]
-fn testStruct() {
+fn test_struct() {
     // builtin with struct/record
     is!("struct a{x:int y:float};b=a{1 0.2};b.y", 0.2);
     return;
-    is!("struct a{x:int y:int z:int};a{1 3 4}.y", 3);
-    is!("struct a{x:int y:float};a{1 3.2}.y", 3.2);
-    is!("struct a{x:int y:float};b a{1 0.2};b.y", 0.2);
-    is!("struct a{x:int y:float};b:a{1 0.2};b.y", 0.2);
-    is!("struct a{x:int y:float};a b{1 0.2};b.y", 0.2);
-    is!("record a{x:u32 y:float32};a b{1 0.2};b.y", 0.2);
-    is!(
-        r#"
-record person {
-    name: string,
-    age: u32,
-    has-lego-action-figure: bool,
-}; x=person{age:22}; x.age"#,
-        22
-    ); // todo require optional fields marked as such with '?'
+    // is!("struct a{x:int y:int z:int};a{1 3 4}.y", 3);
+    // is!("struct a{x:int y:float};a{1 3.2}.y", 3.2);
+    // is!("struct a{x:int y:float};b a{1 0.2};b.y", 0.2);
+    // is!("struct a{x:int y:float};b:a{1 0.2};b.y", 0.2);
+    // is!("struct a{x:int y:float};a b{1 0.2};b.y", 0.2);
+    // is!("record a{x:u32 y:float32};a b{1 0.2};b.y", 0.2);
+    // is!(
+    //     r#"
+    // record person {
+    //     name: string,
+    //     age: u32,
+    //     has-lego-action-figure: bool,
+    // }; x=person{age:22}; x.age"#,
+    //     22
+    // ); // todo require optional fields marked as such with '?'
 }
 
 #[test]
-fn testStruct2() {
+fn test_struct2() {
     let code0 = "struct point{a:int b:int c:string}";
     let node: Node = parse(code0);
     //    eq!(node.kind(), Kind::structs);
@@ -64,7 +64,7 @@ fn testStruct2() {
 }
 
 #[test]
-fn testWasmGC() {
+fn test_wasm_gc() {
     //    is!("y=(1 4 3)[1]", 4);
     //    is!("x=(1 4 3);x#2", 4);
     //is!("42",42);
@@ -99,7 +99,7 @@ fn testWasmGC() {
     is!("x=(5 6 7);x#2", 6);
     is!("'world'#1", 'w');
     is!("y=(1 4 3)#2", 4);
-    is!(("id(3*42)≥2*3"), 1);
+    is!("id(3*42)≥2*3", 1);
     is!("#'abcde'", 5);
     is!("x='abcde';#x", 5);
     is!("x=(1 2 1 2 1);#x", 5);
@@ -128,38 +128,38 @@ fn testWasmGC() {
 fn test_wasm_node_struct() {
     // let wasp_object_code = "a{b:c}";
     let wasp_object_code = "a{b:42}";
-    let aNode = parse(wasp_object_code);
-    is!(wasp_object_code, aNode);
+    let a_node = parse(wasp_object_code);
+    is!(wasp_object_code, a_node);
 }
 
 #[test]
 fn test_wasm_linear_memory_node() {
     // let wasp_object_code = "a{b:c}";
     let wasp_object_code = "a{b:42}";
-    let aNode = parse(wasp_object_code);
-    is!(wasp_object_code, aNode);
+    let a_node = parse(wasp_object_code);
+    is!(wasp_object_code, a_node);
 }
 
 #[test]
 fn test_wasm_structs() {
     test_wasm_node_struct();
-    let IntegerType: Node = node("int");
-    let aNode = Node::tag("A", Node::key("a", IntegerType)); // TODO: Class -> tag constructor
+    let integer_type: Node = node("int");
+    let a_node = Node::tag("A", Node::key("a", integer_type)); // TODO: Class -> tag constructor
     let a2 = analyze(parse("class A{a:int}"));
-    eq!(aNode, a2);
-    is!("class A{a:int}", aNode);
+    eq!(a_node, a2);
+    is!("class A{a:int}", a_node);
 }
 
 #[test]
-fn testFlagSafety() {
-    let code = "flags empty_flags{}; empty_flags mine = data_mode | space_brace;";
+fn test_flag_safety() {
+    let _code = "flags empty_flags{}; empty_flags mine = data_mode | space_brace;";
     //     assert_throws(code) // "data_mode not a member of empty_flags"s
     assert_throws("enum cant_combine{a;b}; a+b;");
     assert_throws("enum context_x{a;b};enum context_y{b;c};b;");
 }
 
 #[test]
-fn testFlags2() {
+fn test_flags2() {
     // todo allow just parser-flags{…} in wasp > wit
     let code = r#"flags parser-flags{
         data_mode
@@ -175,13 +175,13 @@ fn testFlags2() {
     // assert!(types.has("parser-flags"));
     // assert!(globals.has("data_mode"));
     //     assert!(globals.has("parser-flags.data_mode")) //
-    let parserFlags: Node = node1.first();
+    let parser_flags: Node = node1.first();
     // todo AddressSanitizer:DEADLYSIGNAL why? lldb does'nt fail here
-    assert!(parserFlags.name() == "parser-flags");
-    let Flags = node("flags");
-    assert!(parserFlags.class() == Flags);
-    assert!(parserFlags.length() == 3);
-    assert!(parserFlags[1].name() == "arrow");
+    assert!(parser_flags.name() == "parser-flags");
+    let flags = node("flags");
+    assert!(parser_flags.class() == flags);
+    assert!(parser_flags.length() == 3);
+    assert!(parser_flags[1].name() == "arrow");
     // assert!(parserFlags[2].value() == 4); // TODO: fix comparison or value() method
     let instance: Node = node1.laste();
     put!(instance);
@@ -202,7 +202,7 @@ fn testFlags2() {
 }
 
 #[test]
-fn testFlags() {
+fn test_flags() {
     // clearAnalyzerContext(); // TODO: implement
     let parsed: Node = parse("flags abc{a b c}");
     // backtrace_line(); // TODO: implement
@@ -222,21 +222,21 @@ fn testFlags() {
 }
 
 #[test]
-fn testWitInterface() {
+fn test_wit_interface() {
     //     let mod : Node = Node("host-funcs").setKind(modul).add(Node("current-user").setKind(functor).add(StringType));
     // is!("interface host-funcs {current-user: func() -> string}", mod);
 }
 
 #[test]
-fn testWitExport() {
+fn test_wit_export() {
     //     const char
     let code = "struct point{x:int y:float}";
-    let node: Node = parse(code);
+    let _node: Node = parse(code);
     // bindgen(node);
 }
 
 #[test]
-fn testWitFunction() {
+fn test_wit_function() {
     //    funcDeclaration
     // a:b,c vs a:b, c:d
 
@@ -249,10 +249,10 @@ fn testWitFunction() {
 }
 
 #[test]
-fn testWitImport() {}
+fn test_wit_import() {}
 
 #[test]
-fn testWit() {
+fn test_wit() {
     //    testWitFunction();
     //    testWitInterface();
     /*
@@ -267,7 +267,7 @@ fn testWit() {
 }
 
 #[test]
-fn testClass() {
+fn test_class() {
     analyze(parse(
         "public data class Person(string FirstName, string LastName);",
     ));

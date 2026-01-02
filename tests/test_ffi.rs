@@ -49,9 +49,9 @@ fn test_ffi_floor() {
 #[test]
 fn test_ffi_strlen() {
     return; // clashes with wasp runtime strlen!
-            // Test: char* . int32 (strlen from libc);
-    is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
-    is!("import strlen from \"c\"\nstrlen(\"\")", 0);
+    // Test: char* . int32 (strlen from libc);
+    // is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
+    // is!("import strlen from \"c\"\nstrlen(\"\")", 0);
     // is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
 }
 
@@ -333,7 +333,7 @@ fn test_import_from_pattern_parse() {
     eq!(parsed1.name(), "import");
 
     let code2 = "import sqrt from \"m\"";
-    let parsed2 = parse(code2);
+    let _parsed2 = parse(code2);
 }
 
 #[test]
@@ -349,7 +349,7 @@ fn test_import_from_pattern_emit() {
 #[test]
 fn test_import_from_vs_include() {
     let ffi_import = "import abs from \"c\"";
-    let ffi_node = parse(ffi_import);
+    let _ffi_node = parse(ffi_import);
 }
 
 // ============================================================================
@@ -359,7 +359,7 @@ fn test_import_from_vs_include() {
 #[test]
 fn test_extract_function_signature() {
     let c_code1 = "double sqrt(double x);";
-    let parsed1 = parse(c_code1);
+    let _parsed1 = parse(c_code1);
     // extractFunctionSignature(c_code1, sig1);
     // eq!(sig1.name, "sqrt");
     // eq!(sig1.return_type, "double");
@@ -367,7 +367,7 @@ fn test_extract_function_signature() {
     // eq!(sig1.param_types[0], "double");
 
     let c_code2 = "double fmin(double x, double y);";
-    let parsed2 = parse(c_code2);
+    let _parsed2 = parse(c_code2);
     // let sig2;
     // sig2.library = "m";
     // extractFunctionSignature(c_code2, sig2);
@@ -512,7 +512,7 @@ CloseWindow()
 
 #[test]
 fn test_ffi_raylib_simple_use_import() {
-    let modul = loadNativeLibrary("raylib");
+    let _modul = load_native_library("raylib");
     // assert!(modul);
     // assert!(modul.functions.has("InitWindow"));
     // assert!(modul.functions.has("DrawCircle"));
@@ -532,7 +532,7 @@ fn test_ffi_raylib_simple_use_import() {
 
 #[test]
 fn test_ffi_raylib() {
-    let modul = loadNativeLibrary("raylib");
+    let _modul = load_native_library("raylib");
     // assert!(modul);
     // assert!(modul.functions.has("InitWindow"));
     // assert!(modul.functions.has("DrawCircle"));
@@ -549,7 +549,7 @@ fn test_ffi_raylib() {
 #[test]
 fn test_ffi_all() {
     // Main comprehensive test function that runs all FFI tests
-    let modul = loadNativeLibrary("m");
+    let _modul = load_native_library("m");
     // assert!(modul);
     // assert!(modul.functions.has("fmin"));
     test_ffi_atof(); // careful this is already a built-in wasp library function
@@ -567,6 +567,6 @@ fn test_ffi_all() {
     // test_dynlib_import_emit();
 }
 
-fn loadNativeLibrary(p0: &str) -> () {
+fn load_native_library(_p0: &str) -> () {
     todo!()
 }
