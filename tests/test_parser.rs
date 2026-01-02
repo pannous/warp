@@ -583,9 +583,9 @@ fn test_truthiness() {
         is!("{x:1}", true);
     );
     todo!( // UNKNOWN local symbol ‘x’ in context main OK
-               //                is!("x", false);
-               //     is!("{x}", false);
-               //     is!("cat{}", false);
+           //                is!("x", false);
+           //     is!("{x}", false);
+           //     is!("cat{}", false);
     );
     // empty referenceIndices are falsey! OK
 }
@@ -777,4 +777,17 @@ fn test_node_emit() {
     is!("y{x}", true); // emitData( node! ) emitNode();
     is!("{x:1}", true); // emitData( node! ) emitNode();
     is!("y={x:{z:1}};y", true); // emitData( node! ) emitNode();
+}
+
+#[test]
+fn test_superfluous_indentation() {
+    let a1 = parse("a{\n  b,c}");
+    let a2 = parse("a{b,c}");
+    eq!(a1.name(), "a");
+    eq!(a2.name(), "a");
+    eq!(a1.first().name(), "b");
+    eq!(a2.first().name(), "b");
+    eq!(a1.laste().name(), "b");
+    eq!(a2.laste().name(), "b");
+    eq!(a2, a1);
 }
