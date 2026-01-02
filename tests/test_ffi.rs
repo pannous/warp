@@ -28,6 +28,7 @@ fn test_dynlib_import_emit() {
 	// These are actual C library functions, not WASM builtins
 	// Note: FFI only works in native mode, not when compiled to WASM
 
+
 	// Math library functions (libm) - using functions that work reliably
 	is!("use m; ceil(3.2)", 4.0);
 	is!("use math; floor(3.7)", 3.0);
