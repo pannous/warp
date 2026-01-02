@@ -1,3 +1,4 @@
+use wasp::eq;
 use wasp::wit_emitter::{WitEmitter, node_to_wit_value};
 use wasp::wasp_parser::WaspParser;
 use wasp::node::Node; // TODO: Meta is not exported

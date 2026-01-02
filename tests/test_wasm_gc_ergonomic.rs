@@ -2,7 +2,7 @@ use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasm_gc_reader::{run_wasm_gc_object, read_bytes};
 use wasp::node::Node;
 use wasp::extensions::numbers::Number;
-use wasp::write_wasm;
+use wasp::{eq, write_wasm};
 
 /// Test ergonomic reading patterns from rasm
 #[test]
