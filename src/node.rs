@@ -1120,6 +1120,40 @@ impl PartialEq<&Node> for Node {
     }
 }
 
+// Allow &Node == primitive comparisons
+impl PartialEq<i64> for &Node {
+    fn eq(&self, other: &i64) -> bool {
+        (*self).eq(other)
+    }
+}
+
+impl PartialEq<i32> for &Node {
+    fn eq(&self, other: &i32) -> bool {
+        (*self).eq(other)
+    }
+}
+
+impl PartialEq<f64> for &Node {
+    fn eq(&self, other: &f64) -> bool {
+        (*self).eq(other)
+    }
+}
+
+impl PartialEq<bool> for &Node {
+    fn eq(&self, other: &bool) -> bool {
+        (*self).eq(other)
+    }
+}
+
+impl PartialEq<char> for &Node {
+    fn eq(&self, other: &char) -> bool {
+        (*self).eq(other)
+    }
+}
+
+// Note: &str comparison works via blanket impl: impl<A,B> PartialEq<&B> for &A where A: PartialEq<B>
+// Since Node implements PartialEq<str>, &Node automatically gets PartialEq<&str>
+
 impl PartialOrd<i32> for Node {
     fn partial_cmp(&self, other: &i32) -> Option<std::cmp::Ordering> {
         match self {
