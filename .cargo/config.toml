@@ -6,7 +6,7 @@ offline = true
 # Uses gtimeout on macOS (brew install coreutils) or timeout on Linux
 
 [target.aarch64-apple-darwin]
-# Smart timeout: 0.1s default, disable with NO_TIMEOUT=1 or DEBUG=1
+# Smart timeout: 0.1s enable with FAST_TIMEOUT (or use default / disable with NO_TIMEOUT=1 or DEBUG=1)
 runner = [".cargo/timeout-runner.sh"]
 
 [target.x86_64-apple-darwin]
@@ -14,3 +14,8 @@ runner = [".cargo/timeout-runner.sh"]
 
 [target.x86_64-unknown-linux-gnu]
 runner = [".cargo/timeout-runner.sh"]
+
+# Note: Use 'cargo test --no-fail-fast' to run all tests
+# Or use the 't' alias: cargo t
+[alias]
+t = "test --no-fail-fast"
