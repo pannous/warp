@@ -1,4 +1,5 @@
 use crate::extensions::numbers::Number;
+use crate::meta::MetaData;
 use crate::node::{Bracket, DataType, Node};
 
 pub struct WitEmitter {
@@ -218,21 +219,31 @@ pub fn node_to_wit_value(node: &Node) -> String {
             // format!("list([{}])", dada) // Dada doesn't implement fmt::Display
             "[data?]".to_string() // data LOSS!
         }
-        Node::Meta { node, data: meta } => {
-            let comment = if let Some(c) = &meta.comment {
-                format!("some(\"{}\")", escape_string(c))
+        Node::Meta { node, data } => {
+            // Extract MetaData from Data node if present
+            let (comment, line, column) = if let Node::Data(dada) = data.as_ref() {
+                if let Some(metadata) = dada.downcast_ref::<MetaData>() {
+                    let c = if let Some(c) = &metadata.comment {
+                        format!("some(\"{}\")", escape_string(c))
+                    } else {
+                        "none".to_string()
+                    };
+                    let l = if let Some(l) = metadata.line {
+                        format!("some({})", l)
+                    } else {
+                        "none".to_string()
+                    };
+                    let col = if let Some(c) = metadata.column {
+                        format!("some({})", c)
+                    } else {
+                        "none".to_string()
+                    };
+                    (c, l, col)
+                } else {
+                    ("none".to_string(), "none".to_string(), "none".to_string())
+                }
             } else {
-                "none".to_string()
-            };
-            let line = if let Some(l) = meta.line {
-                format!("some({})", l)
-            } else {
-                "none".to_string()
-            };
-            let column = if let Some(c) = meta.column {
-                format!("some({})", c)
-            } else {
-                "none".to_string()
+                ("none".to_string(), "none".to_string(), "none".to_string())
             };
             format!(
                 "with-meta(({}, {{ comment: {}, line: {}, column: {} }}))",
