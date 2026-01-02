@@ -22,11 +22,11 @@ use crate::wasp_parser::parse;
 
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
-      (field $kind i64)
-      (field $key (ref null $Node))   param?  bra ket ;)
-      (field $value (ref null $Node)) body?
-      (field $payload (ref null any))
-    ) )
+	  (field $kind i64)
+	  (field $key (ref null $Node))   param?  bra ket ;)
+	  (field $value (ref null $Node)) body?
+	  (field $payload (ref null any))
+	) )
 **/
 // flag enum and variant are wit / component-model types ONLY
 // ref.i31 i31ref
@@ -594,11 +594,10 @@ impl Node {
 	}
 
 	pub fn with_comment(self, comment: String) -> Self {
-		let metadata = MetaData::with_comment(comment);
-		let data_node = Node::data(metadata);
+		let comment = Node::key("comment", Node::text(&comment));
 		Meta {
 			node: Box::new(self),
-			data: Box::new(data_node),
+			data: Box::new(comment),
 		}
 	}
 

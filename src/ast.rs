@@ -2,28 +2,28 @@ use crate::node::Node;
 use std::ops::Deref;
 
 macro_rules! ast_type {
-    ($name:ident, $tag:literal) => {
-        #[derive(Clone, Copy, Debug)]
-        struct $name<'a>(&'a Node);
+	($name:ident, $tag:literal) => {
+		#[derive(Clone, Copy, Debug)]
+		struct $name<'a>(&'a Node);
 
-        impl<'a> $name<'a> {
-            #[inline]
-            fn try_from(n: &'a Node) -> Option<Self> {
-                match n {
-                    Node::Tag { title, .. } if title == $tag => Some(Self(n)),
-                    _ => None,
-                }
-            }
-        }
+		impl<'a> $name<'a> {
+			#[inline]
+			fn try_from(n: &'a Node) -> Option<Self> {
+				match n {
+					Node::Tag { title, .. } if title == $tag => Some(Self(n)),
+					_ => None,
+				}
+			}
+		}
 
-        impl<'a> std::ops::Deref for $name<'a> {
-            type Target = Node;
-            #[inline]
-            fn deref(&self) -> &Node {
-                self.0
-            }
-        }
-    };
+		impl<'a> std::ops::Deref for $name<'a> {
+			type Target = Node;
+			#[inline]
+			fn deref(&self) -> &Node {
+				self.0
+			}
+		}
+	};
 }
 
 // - zero-sized wrapper
@@ -64,19 +64,19 @@ ast_type!(WhileExpression, "while");
 ast_type!(ForExpression, "for");
 
 fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
-    f(n);
-    match n {
-        Node::Tag { params, body, .. } => {
-            walk(params, f);
-            walk(body, f);
-        }
-        Node::Pair(a, b) => {
-            walk(a, f);
-            walk(b, f);
-        }
-        Node::Key(_, v) => walk(v, f),
-        _ => {}
-    }
+	f(n);
+	match n {
+		Node::Tag { params, body, .. } => {
+			walk(params, f);
+			walk(body, f);
+		}
+		Node::Pair(a, b) => {
+			walk(a, f);
+			walk(b, f);
+		}
+		Node::Key(_, v) => walk(v, f),
+		_ => {}
+	}
 }
 
 // fn upgrade(n: Node) -> Node {
