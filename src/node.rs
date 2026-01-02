@@ -20,11 +20,11 @@ use crate::type_kinds::{AstKind, NodeKind};
 use crate::wasp_parser::parse;
 // node[i]
 
-/* restructure the whole emitter serialization to use
+/* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
       (field $kind i64)
-      (field $key (ref null $Node))
-      (field $value (ref null $Node))
+      (field $key (ref null $Node))   param?
+      (field $value (ref null $Node)) body?
       (field $payload (ref null any))
     ) )
 **/
@@ -859,20 +859,6 @@ impl<'a> IntoIterator for &'a Node {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum Grouper {
-    // see Type
-    Object,
-    // {}
-    Group,
-    // ()
-    Pattern,
-    // []
-    // Other, // <…>
-    Expression, // List of Symbols/Nodes to be evaluated without grouping () // MAYBE ';' ;)
-    // Other(String, String),
-    Other(char, char),
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Bracket {
