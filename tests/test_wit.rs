@@ -1,5 +1,6 @@
 use wasp::eq;
 use wasp::node::Node::*;
+use wasp::node::{Bracket, Separator};
 use wasp::wasp_parser::parse_file;
 
 #[test]
@@ -15,7 +16,7 @@ pub fn test_wit_parse() {
 	// loop {} // Should be killed at .1
 	let ast = parse_file("wasp-ast.wit");
 	println!("serialize: {:#?}", ast.serialize());
-	if let List(ref items, _) = ast {
+	if let List(ref items, _, _) = ast {
 		for (i, item) in items.iter().enumerate() {
 			println!("item {}: {:#?}", i, item);
 		}

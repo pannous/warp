@@ -690,7 +690,7 @@ impl WasmGcEmitter {
 				self.collect_and_allocate_strings(left);
 				self.collect_and_allocate_strings(right);
 			}
-			Node::List(items, _) => {
+			Node::List(items, _, _) => {
 				for item in items {
 					self.collect_and_allocate_strings(item);
 				}
@@ -792,7 +792,7 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, _right);
 				func.instruction(&Instruction::Call(self.function_indices["new_pair"]));
 			}
-			Node::List(items, bracket) => {
+			Node::List(items, bracket, _separator) => {
 				// Special case: single-item lists emit the item directly
 				if items.len() == 1 {
 					self.emit_node_instructions(func, &items[0]);
@@ -830,7 +830,7 @@ impl WasmGcEmitter {
 				// Emit rest as a List or null if no more items
 				if items.len() > 2 {
 					// More than 2 items: create nested List with remaining items
-					let rest = Node::List(items[1..].to_vec(), bracket.clone());
+					let rest = Node::List(items[1..].to_vec(), bracket.clone(), _separator.clone());
 					self.emit_node_instructions(func, &rest);
 				} else if items.len() == 2 {
 					// Exactly 2 items: emit second item directly

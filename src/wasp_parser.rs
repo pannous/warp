@@ -1,7 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Error};
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use log::warn;
 use std::fs;
 
@@ -44,49 +44,113 @@ impl WaspParser {
 
 	pub fn parse(input: &str) -> Node {
 		let mut parser = WaspParser::new(input.to_string());
-		let mut current_expression = Vec::new();
-		let mut root_nodes = Vec::new();
 
-		parser.skip_whitespace_and_comments();
-		let char_count = parser.input.chars().count(); // for unicode correctness
-		let _len = parser.input.len();
-		while parser.pos < char_count {
-			let c = parser.current_char();
-			let node = parser.parse_value();
-			// if node != Node::Empty { // Todo: Skip empty nodes only at END, if at all!
-			// [lame:'Joe' last:ø] meaningful nodes!
-			let is_top_level_block = match &node {
-				Node::Tag { .. } => true,
-				Node::Meta { node: inner, .. } => matches!(**inner, Node::Tag { .. }),
-				_ => false,
+		// Use the separator-aware parsing logic
+		let result = parser.parse_top_level();
+
+		result
+	}
+
+	fn parse_top_level(&mut self) -> Node {
+		// Build nested structure dynamically like C++ parseListSeparator
+		let mut actual = Node::List(vec![], Bracket::Square, Separator::None);
+
+		self.skip_whitespace_and_comments();
+
+		while self.pos < self.input.chars().count() {
+			let pos_before = self.pos;
+			let item = self.parse_value();
+
+			if item == Empty {
+				if self.pos == pos_before {
+					if self.current_char().is_some() {
+						self.advance();
+					} else {
+						break;
+					}
+				}
+				continue;
+			}
+
+			// Add item FIRST, before checking separators
+			if let Node::List(ref mut items, _, _) = actual {
+				items.push(item);
+			}
+
+			let had_newline = self.skip_whitespace_and_comments();
+
+			// Determine separator after this item
+			let sep = if let Some(ch) = self.current_char() {
+				if ch == ',' {
+					self.advance();
+					Separator::Comma
+				} else if ch == ';' {
+					self.advance();
+					Separator::Semicolon
+				} else if had_newline && self.pos < self.input.chars().count() {
+					Separator::Newline
+				} else {
+					Separator::Space
+				}
+			} else if had_newline {
+				Separator::Newline
+			} else {
+				Separator::None
 			};
-			current_expression.push(node);
-			// }
-			parser.skip_whitespace_and_comments();
-			// Only treat Tag nodes as statement boundaries if we're already in multi-statement mode
-			let in_multi_statement_mode = !root_nodes.is_empty();
-			if c == Some(';') || (is_top_level_block && in_multi_statement_mode) {
-				root_nodes.push(Node::list(current_expression));
-				current_expression = Vec::new();
-				if c == Some(';') {
-					parser.advance()
+
+			// C++ logic: if separator changes, wrap existing content and start new group
+			let current_sep = match &actual {
+				Node::List(_, _, s) => s.clone(),
+				_ => Separator::None,
+			};
+
+			if current_sep == Separator::None && sep != Separator::None {
+				// First separator - just set it
+				if let Node::List(_, _, ref mut s) = actual {
+					*s = sep.clone();
+				}
+			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None {
+				// Only wrap when moving to a LOOSER separator (higher precedence value)
+				if sep.precedence() > current_sep.precedence() {
+					// Separator changed to looser - wrap existing content and start new group
+					let old_actual = std::mem::replace(&mut actual, Node::List(vec![], Bracket::Square, sep.clone()));
+					if let Node::List(items, b, _) = old_actual {
+						if items.len() > 1 {
+							// Multiple items - wrap them
+							let wrapped = Node::List(items, b, current_sep);
+							actual = Node::List(vec![wrapped], Bracket::Square, sep);
+						} else if items.len() == 1 {
+							// Single item - just change separator
+							actual = Node::List(items, b, sep);
+						}
+					}
+				} else {
+					// Moving to tighter separator - just update
+					if let Node::List(_, _, ref mut s) = actual {
+						*s = sep.clone();
+					}
+				}
+			}
+
+			// Safety check
+			if self.pos == pos_before {
+				if self.current_char().is_some() {
+					self.advance();
+				} else {
+					break;
 				}
 			}
 		}
-		if root_nodes.is_empty() {
-			root_nodes = current_expression
-		} else if !current_expression.is_empty() {
-			root_nodes.push(Node::list(current_expression));
+
+		// Unwrap if only single item
+		if let Node::List(mut items, _, sep) = actual {
+			if items.len() == 1 && sep == Separator::None {
+				return items.remove(0);
+			}
+			actual = Node::List(items, Bracket::Square, sep);
 		}
 
-		// If only one value, return it directly for backward compatibility
-		if root_nodes.len() == 1 {
-			root_nodes[0].clone()
-		} else if root_nodes.is_empty() {
-			Empty
-		} else {
-			Node::List(root_nodes, Bracket::Square) // Multiple statements treated as list
-		}
+		actual
 	}
 
 	fn current_char(&self) -> Option<char> {
@@ -134,14 +198,19 @@ impl WaspParser {
 		self.pos == 0 || self.prev_char().map_or(false, |ch| ch.is_whitespace())
 	}
 
-	fn skip_whitespace(&mut self) {
+	fn skip_whitespace(&mut self) -> bool {
+		let mut had_newline = false;
 		while let Some(ch) = self.current_char() {
 			if ch.is_whitespace() {
+				if ch == '\n' {
+					had_newline = true;
+				}
 				self.advance();
 			} else {
 				break;
 			}
 		}
+		had_newline
 	}
 
 	fn consume_rest_of_line(&mut self) -> String {
@@ -157,15 +226,16 @@ impl WaspParser {
 		line_comment.trim().to_string()
 	}
 
-	fn skip_whitespace_and_comments(&mut self) -> Option<String> {
-		let mut comment = None;
+	fn skip_whitespace_and_comments(&mut self) -> bool {
+		let mut had_newline = false;
 		loop {
-			self.skip_whitespace();
+			had_newline = self.skip_whitespace() || had_newline;
 			// Check for # line comment (shell-style, shebang)
 			// Only treat # as comment if at line start (to allow list#index later)
 			if self.current_char() == Some('#') && self.is_at_line_start() {
 				self.advance(); // skip #
-				comment = Some(self.consume_rest_of_line());
+				self.consume_rest_of_line();
+				had_newline = true;
 				continue;
 			}
 
@@ -173,35 +243,36 @@ impl WaspParser {
 			if self.current_char() == Some('/') && self.peek_char(1) == Some('/') {
 				self.advance(); // skip first /
 				self.advance(); // skip second /
-				comment = Some(self.consume_rest_of_line());
+				self.consume_rest_of_line();
+				had_newline = true;
 				continue;
 			}
 
 			if self.pos >= self.input.len() {
-				return None;
+				return had_newline;
 			}
 
 			// Check for /* block comment */
 			if self.current_char() == Some('/') && self.peek_char(1) == Some('*') {
 				self.advance(); // skip /
 				self.advance(); // skip *
-				let mut block_comment = String::new();
 				while let Some(ch) = self.current_char() {
 					if ch == '*' && self.peek_char(1) == Some('/') {
 						self.advance(); // skip *
 						self.advance(); // skip /
 						break;
 					}
-					block_comment.push(ch);
+					if ch == '\n' {
+						had_newline = true;
+					}
 					self.advance();
 				}
-				comment = Some(block_comment.trim().to_string());
 				continue;
 			}
 
 			break;
 		}
-		comment
+		had_newline
 	}
 
 	fn is_at_line_end(&self) -> bool {
@@ -209,7 +280,7 @@ impl WaspParser {
 	}
 
 	fn parse_value(&mut self) -> Node {
-		let comment = self.skip_whitespace_and_comments();
+		let _comment = self.skip_whitespace_and_comments();
 
 		// Capture position before parsing
 		let (line, column) = self.get_position();
@@ -256,13 +327,12 @@ impl WaspParser {
 		if node == Empty {
 			return node;
 		}
-		// Attach metadata with position and comment
+		// Attach metadata with position
 		node = node.with_meta(LineInfo::with_position(line, column));
-		if let Some(c) = comment {
-			// node.wrap_meta(Node::key("comment", Node::text(&c)))
-			node = Node::meta(node,Node::key("comment", Node::text(&c)))
-			// node["comment"] = Node::text(&c);
-		}
+		// TODO: Re-enable comment tracking after separator implementation
+		// if let Some(c) = comment {
+		// 	node = Node::meta(node,Node::key("comment", Node::text(&c)))
+		// }
 		node
 	}
 
@@ -470,7 +540,13 @@ impl WaspParser {
 
 	fn parse_bracketed(&mut self, open: char, close: char, bracket: Bracket) -> Node {
 		self.advance(); // skip opening bracket
-		let mut items = Vec::new();
+		self.parse_list_with_separators(close, bracket)
+	}
+
+	fn parse_list_with_separators(&mut self, close: char, bracket: Bracket) -> Node {
+		// Build nested structure dynamically like C++ parseListSeparator
+		let bracket = bracket; // Ensure we own it
+		let mut actual = Node::List(vec![], bracket.clone(), Separator::None);
 
 		loop {
 			self.skip_whitespace_and_comments();
@@ -480,37 +556,183 @@ impl WaspParser {
 				break;
 			}
 			if self.current_char().is_none() {
-				return Error(format!("Unterminated '{}' (expected '{}')", open, close));
+				return Error(format!("Unterminated (expected '{}')", close));
 			}
-			let pos_before = self.pos;
-			let value = self.parse_value();
-			if value != Empty {
-				items.push(value);
-			}
-			self.skip_whitespace_and_comments();
 
-			// todo separators carry semantics see test_group_cascade
-			// ƒ Optional comma/semicolon separator
-			if let Some(ch) = self.current_char() {
-				if ch == ',' || ch == ';' {
+			let pos_before = self.pos;
+			let item = self.parse_value();
+
+			if item == Empty {
+				if self.pos == pos_before && self.current_char() != Some(close) {
+					if self.current_char().is_some() {
+						self.advance();
+					}
+				}
+				continue;
+			}
+
+			// Add item FIRST, before checking separators
+			if let Node::List(ref mut items, _, _) = actual {
+				items.push(item);
+			}
+
+			let had_newline = self.skip_whitespace_and_comments();
+
+			// Determine separator after this item
+			let sep = if let Some(ch) = self.current_char() {
+				if ch == ',' {
 					self.advance();
+					Separator::Comma
+				} else if ch == ';' {
+					self.advance();
+					Separator::Semicolon
+				} else if ch == close {
+					Separator::None // Last item
+				} else if had_newline {
+					Separator::Newline
+				} else {
+					Separator::Space
+				}
+			} else if had_newline {
+				Separator::Newline
+			} else {
+				Separator::None
+			};
+
+			// C++ logic: if separator changes, wrap existing content and start new group
+			let current_sep = match &actual {
+				Node::List(_, _, s) => s.clone(),
+				_ => Separator::None,
+			};
+
+			if current_sep == Separator::None && sep != Separator::None {
+				// First separator - just set it
+				if let Node::List(_, _, ref mut s) = actual {
+					*s = sep.clone();
+				}
+			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None {
+				// Only wrap when moving to a LOOSER separator (higher precedence value)
+				if sep.precedence() > current_sep.precedence() {
+					// Separator changed to looser - wrap existing content and start new group
+					let old_actual = std::mem::replace(&mut actual, Node::List(vec![], bracket.clone(), sep.clone()));
+					if let Node::List(items, b, _) = old_actual {
+						if items.len() > 1 {
+							// Multiple items - wrap them
+							let wrapped = Node::List(items, b, current_sep);
+							actual = Node::List(vec![wrapped], bracket.clone(), sep);
+						} else if items.len() == 1 {
+							// Single item - just change separator
+							actual = Node::List(items, b, sep);
+						}
+					}
+				} else {
+					// Moving to tighter separator - just update
+					if let Node::List(_, _, ref mut s) = actual {
+						*s = sep.clone();
+					}
 				}
 			}
 
-			// Safety check: if we haven't made progress and we're not at the end,
-			// we're in an infinite loop - skip the problematic character
+			// Safety check
 			if self.pos == pos_before && self.current_char() != Some(close) {
 				if self.current_char().is_some() {
-					// Skip unexpected character to avoid infinite loop
 					self.advance();
 				}
 			}
 		}
 
-		if items.is_empty() {
-			Empty
+		// Unwrap if only single item
+		if let Node::List(mut items, _, sep) = actual {
+			if items.len() == 1 && sep == Separator::None {
+				return items.remove(0);
+			}
+			actual = Node::List(items, bracket, sep);
+		}
+
+		actual
+	}
+
+	fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
+		if items_with_seps.is_empty() {
+			return Empty;
+		}
+
+		if items_with_seps.len() == 1 {
+			return items_with_seps[0].0.clone();
+		}
+
+		// Collect all unique separator precedences (excluding None)
+		let mut precedences: Vec<u8> = items_with_seps.iter()
+			.map(|(_, sep)| sep.precedence())
+			.filter(|&p| p < 255)
+			.collect();
+		precedences.sort();
+		precedences.dedup();
+
+		if precedences.is_empty() {
+			// All items have None separator - return as space-separated list
+			let items: Vec<Node> = items_with_seps.into_iter().map(|(node, _)| node).collect();
+			if items.len() == 1 {
+				return items[0].clone();
+			}
+			return Node::List(items, bracket, Separator::Space);
+		}
+
+		// Start with the loosest (highest precedence value) separator
+		let max_prec = *precedences.last().unwrap();
+		let split_sep = items_with_seps.iter()
+			.find(|(_, sep)| sep.precedence() == max_prec)
+			.map(|(_, sep)| sep.clone())
+			.unwrap_or(Separator::Space);
+
+		// Split items into groups by this separator
+		let mut groups: Vec<Vec<(Node, Separator)>> = Vec::new();
+		let mut current_group = Vec::new();
+
+		for (item, sep) in items_with_seps {
+			if sep.precedence() == max_prec {
+				// Found a split point - add item and close group
+				current_group.push((item, Separator::None));
+				if !current_group.is_empty() {
+					groups.push(current_group);
+					current_group = Vec::new();
+				}
+			} else {
+				// Keep this separator for processing in sub-groups
+				current_group.push((item, sep));
+			}
+		}
+
+		// Add final group
+		if !current_group.is_empty() {
+			groups.push(current_group);
+		}
+
+		// Filter empty groups
+		groups.retain(|g| !g.is_empty());
+
+		if groups.is_empty() {
+			return Empty;
+		}
+
+		// Recursively process each group for tighter separators
+		let grouped_nodes: Vec<Node> = groups.into_iter()
+			.map(|group| {
+				if group.len() == 1 && group[0].1 == Separator::None {
+					// Single item with no further separators
+					group[0].0.clone()
+				} else {
+					// Has multiple items or tighter separators - recurse
+					self.group_by_separators(group, bracket.clone())
+				}
+			})
+			.collect();
+
+		// Return result
+		if grouped_nodes.len() == 1 {
+			grouped_nodes[0].clone()
 		} else {
-			Node::List(items, bracket)
+			Node::List(grouped_nodes, bracket, split_sep)
 		}
 	}
 }
@@ -543,7 +765,7 @@ mod tests {
 	#[test]
 	fn test_parse_list() {
 		let node = WaspParser::parse("[1, 2, 3]");
-		if let Node::List(items, _) = node {
+		if let Node::List(items, _, _) = node {
 			eq!(items.len(), 3);
 			eq!(items[0], 1);
 		}
@@ -596,7 +818,7 @@ mod tests {
 	fn test_parse_multiple_values() {
 		// Multiple numbers
 		let node = WaspParser::parse("1 2 3");
-		if let Node::List(items, _) = node {
+		if let Node::List(items, _, _) = node {
 			eq!(items.len(), 3);
 			eq!(items[0], 1);
 			eq!(items[1], 2);
@@ -607,7 +829,7 @@ mod tests {
 
 		// Multiple symbols
 		let node = WaspParser::parse("hello world");
-		if let Node::List(items, _) = node {
+		if let Node::List(items, _, _) = node {
 			eq!(items.len(), 2);
 			if let Node::Symbol(s) = &items[0].unwrap_meta() {
 				eq!(s, "hello");
