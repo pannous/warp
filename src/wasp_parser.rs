@@ -864,4 +864,9 @@ mod tests {
 		eq!(result[1], "b");
 		eq!(result[2], "c");
 	}
+
+	#[test]
+	fn parse_list_separators_equivalent() {
+		eq!(WaspParser::parse("a b c"), WaspParser::parse("a, b, c"));
+	}
 }
