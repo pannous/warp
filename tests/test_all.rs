@@ -23,6 +23,9 @@ fn test_node_name() {
 
 #[test]
 fn test_indent_as_block() {
+	let result0 = parse("a\n\tb\n\tc\nd");
+	eq!(result0.length(), 2);   //   a… d
+	eq!(result0[0].length(), 2); // b, c
 	// 0x0E 	SO 	␎ 	^N 		Shift Out
 	// 0x0F 	SI 	␏ 	^O 		Shift In
 	//	indent/dedent  0xF03B looks like pause!?   0xF032…  it does, what's going on CLion? Using STSong!
