@@ -14,8 +14,11 @@ fn test_line_comments() {
 	let node = WaspParser::parse(wasp);
 	println!("Parsed with line comment: {:?}", node);
 
-	// Should parse successfully: comment + name + age = 3 items
-	eq!(node.len(), 3);
+	// Comments are attached as metadata to the following node
+	// So we get 2 items: name (with comment metadata) + age
+	eq!(node.len(), 2);
+	// Verify comment is attached to the first item
+	assert!(node[0]["comment"].to_string().contains("This is a comment"));
 }
 
 #[test]
@@ -30,9 +33,12 @@ fn test_block_comments() {
 	let node = WaspParser::parse(wasp);
 	println!("Parsed with block comment: {:?}", node);
 
-	// comment + name + age = 3 items
+	// Comments are attached as metadata to the following node
+	// So we get 2 items: name (with comment metadata) + age
 	if let Node::List(items, _, _) = node {
-		eq!(items.len(), 3);
+		eq!(items.len(), 2);
+		// Verify comment is attached to the first item
+		assert!(items[0]["comment"].to_string().contains("multi-line comment"));
 	}
 }
 

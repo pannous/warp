@@ -58,7 +58,7 @@ impl WaspParser {
 	fn parse_top_level(&mut self) -> Node {
 		let mut actual = Node::List(vec![], Bracket::Square, Separator::None);
 
-		self.skip_whitespace_and_comments();
+		// Note: don't skip comments here - let parse_value handle them so they get attached
 
 		while self.pos < self.chars.len() {
 			let pos_before = self.pos;
@@ -77,7 +77,7 @@ impl WaspParser {
 				items.push(item);
 			}
 
-			let had_newline = self.skip_whitespace_and_comments();
+			let (had_newline, _) = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
 			let ch = self.current_char();
@@ -220,15 +220,19 @@ impl WaspParser {
 		line_comment.trim().to_string()
 	}
 
-	fn skip_whitespace_and_comments(&mut self) -> bool {
+	fn skip_whitespace_and_comments(&mut self) -> (bool, Option<String>) {
 		let mut had_newline = false;
+		let mut comments = Vec::new();
 		loop {
 			had_newline = self.skip_whitespace() || had_newline;
 			// Check for # line comment (shell-style, shebang)
 			// Only treat # as comment if at line start (to allow list#index later)
 			if self.current_char() == '#' && self.is_at_line_start() {
 				self.advance(); // skip #
-				self.consume_rest_of_line();
+				let text = self.consume_rest_of_line();
+				if !text.is_empty() {
+					comments.push(text);
+				}
 				had_newline = true;
 				continue;
 			}
@@ -237,19 +241,24 @@ impl WaspParser {
 			if self.current_char() == '/' && self.peek_char(1) == '/' {
 				self.advance(); // skip first /
 				self.advance(); // skip second /
-				self.consume_rest_of_line();
+				let text = self.consume_rest_of_line();
+				if !text.is_empty() {
+					comments.push(text);
+				}
 				had_newline = true;
 				continue;
 			}
 
 			if self.pos >= self.input.len() {
-				return had_newline;
+				let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
+				return (had_newline, comment);
 			}
 
 			// Check for /* block comment */
 			if self.current_char() == '/' && self.peek_char(1) == '*' {
 				self.advance(); // skip /
 				self.advance(); // skip *
+				let mut block_comment = String::new();
 				loop {
 					let ch = self.current_char();
 					if ch == '\0' { break; } // unterminated comment
@@ -259,14 +268,20 @@ impl WaspParser {
 						break;
 					}
 					if ch == '\n' { had_newline = true; }
+					block_comment.push(ch);
 					self.advance();
+				}
+				let trimmed = block_comment.trim();
+				if !trimmed.is_empty() {
+					comments.push(trimmed.to_string());
 				}
 				continue;
 			}
 
 			break;
 		}
-		had_newline
+		let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
+		(had_newline, comment)
 	}
 
 	fn is_at_line_end(&self) -> bool {
@@ -274,7 +289,7 @@ impl WaspParser {
 	}
 
 	fn parse_value(&mut self) -> Node {
-		let _comment = self.skip_whitespace_and_comments();
+		let (_, comment) = self.skip_whitespace_and_comments();
 
 		// Capture position before parsing
 		let (line_nr, column) = self.get_position();
@@ -317,11 +332,17 @@ impl WaspParser {
 		if node == Empty {
 			return node;
 		}
-		node.with_meta_data(LineInfo {
+		let node = node.with_meta_data(LineInfo {
 			line_nr,
 			column,
 			line: self.current_line.s(),
-		})
+		});
+		// Attach preceding comment as metadata
+		if let Some(comment_text) = comment {
+			node.with_comment(comment_text)
+		} else {
+			node
+		}
 	}
 
 	fn parse_string(&mut self) -> Node {
@@ -522,7 +543,7 @@ impl WaspParser {
 		let mut actual = Node::List(vec![], bracket.clone(), Separator::None);
 
 		loop {
-			self.skip_whitespace_and_comments();
+			let _ = self.skip_whitespace_and_comments();
 
 			if self.current_char() == close {
 				self.advance();
@@ -544,7 +565,7 @@ impl WaspParser {
 				items.push(item);
 			}
 
-			let had_newline = self.skip_whitespace_and_comments();
+			let (had_newline, _) = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
 			let ch = self.current_char();
