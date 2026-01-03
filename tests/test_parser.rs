@@ -881,3 +881,128 @@ fn parse_list_via_separator3(){
 	// parse("a b c") == parse("a, b, c");
 	eq!(parse("a b c"), parse("a, b, c"));
 }
+
+// Tests moved from src/wasp_parser.rs
+
+#[test]
+fn test_parse_number() {
+	let node = parse("42");
+	eq!(node, 42);
+}
+
+#[test]
+fn test_parse_string() {
+	let node = parse(r#""hello""#);
+	eq!(node, "hello");
+}
+
+#[test]
+fn test_parse_symbol() {
+	let node = parse("red");
+	if let Node::Symbol(s) = node {
+		eq!(s, "red");
+	}
+}
+
+#[test]
+fn test_parse_list() {
+	let node = parse("[1, 2, 3]");
+	if let Node::List(items, _, _) = node {
+		eq!(items.len(), 3);
+		eq!(items[0], 1);
+	}
+}
+
+#[test]
+fn test_parse_key_value() {
+	let node = parse(r#"name: "Alice""#);
+	eq!(node.get_key(), "name");
+}
+
+#[test]
+fn test_parse_named_block() {
+	let node = parse("html{ }");
+	if let Node::Tag { title, .. } = node.unwrap_meta() {
+		eq!(title, "html");
+	} else {
+		panic!("Expected Tag node");
+	}
+}
+
+#[test]
+fn test_parse_complex() {
+	let input = r#"html{
+		ul{ li:"hi" li:"ok" }
+		colors=[red, green, blue]
+	}"#;
+	let node = parse(input);
+	println!("{:?}", node);
+	if let Node::Tag { title, .. } = node.unwrap_meta() {
+		eq!(title, "html");
+	} else {
+		panic!("Expected Tag node");
+	}
+}
+
+#[test]
+fn test_parse_function() {
+	let input = "def myfun(a, b){ return a + b }";
+	let node = parse(input);
+	println!("{:?}", node);
+	if let Node::Pair(sig, body) = node {
+		println!("Signature: {:?}, Body: {:?}", sig, body);
+	}
+}
+
+#[test]
+fn test_parse_multiple_values() {
+	let node = parse("1 2 3");
+	if let Node::List(items, _, _) = node {
+		eq!(items.len(), 3);
+		eq!(items[0], 1);
+		eq!(items[1], 2);
+		eq!(items[2], 3);
+	} else {
+		panic!("Expected List node, got {:?}", node);
+	}
+
+	let node = parse("hello world");
+	if let Node::List(items, _, _) = node {
+		eq!(items.len(), 2);
+		if let Node::Symbol(s) = &items[0].unwrap_meta() {
+			eq!(s, "hello");
+		}
+		if let Node::Symbol(s) = &items[1].unwrap_meta() {
+			eq!(s, "world");
+		}
+	} else {
+		panic!("Expected List node, got {:?}", node);
+	}
+
+	let node = parse("42");
+	eq!(node, 42);
+}
+
+#[test]
+fn test_semicolon_groups() {
+	let result = parse("a b c; d e f");
+	println!("result: {:?}", result);
+	println!("length: {}", result.length());
+	eq!(result.length(), 2);
+}
+
+#[test]
+fn test_newline_groups() {
+	let result = parse("a b c\nd e f");
+	eq!(result.length(), 2);
+}
+
+#[test]
+fn test_roundtrip() {
+	let result = parse("{a b c\nd e f}");
+	let serialized = result.serialize();
+	println!("serialized: {:?}", serialized);
+	let reparse = parse(&serialized);
+	println!("result: {:?}, reparse: {:?}", result, reparse);
+	eq!(result, reparse);
+}
