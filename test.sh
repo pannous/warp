@@ -9,6 +9,10 @@ OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 
 echo "Compiling tests..."
+# Skip debug info for faster initial compilation, but not if we already have a build
+if [ ! -d "target/debug/deps" ] || [ -z "$(ls -A target/debug/deps/*.rlib 2>/dev/null)" ]; then
+	export CARGO_PROFILE_DEV_DEBUG=false
+fi
 cargo test --no-run || exit 1
 
 echo "Running all tests..."
