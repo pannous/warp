@@ -105,6 +105,15 @@ pub enum Node {
 }
 
 impl Node {
+	pub fn meta(node: Node, meta: Node) -> Node {
+		Meta {
+			node: Box::new(node),
+			data: Box::new(meta),
+		}
+	}
+}
+
+impl Node {
 	pub fn class(&self) -> Node {
 		todo!("class via kind and/or metadata?")
 	}
@@ -423,7 +432,13 @@ impl Index<&String> for Node {
 					&Empty
 				}
 			}
-			Meta { node, .. } => &node[i],
+			Meta { node, data } => {
+				if node[i] != Empty {
+					&node[i]
+				} else {
+					&data[i]
+				}
+			},
 			_ => &Empty,
 		}
 	}
@@ -457,8 +472,29 @@ impl Index<&str> for Node {
 					&Empty
 				}
 			}
-			Meta { node, .. } => &node[i],
-			_ => &Empty,
+			Pair(k, v) => {
+				if **k == *i {
+					v.as_ref()
+				} else {
+					&Empty
+				}
+			}
+			Key(k, v) => {
+				if k == i {
+					v.as_ref()
+				} else {
+					&Empty
+				}
+			}
+			Meta { node, data} => {
+				if node[i] != Empty {
+					&node[i]
+				} else {
+					println!("fdsa indexing meta  by string: {}", i);
+					&data[i]
+				}
+			}
+			_ => todo!("index for {}", self) // &Empty,
 		}
 	}
 }
@@ -691,31 +727,32 @@ impl Node {
 				} else if nodes.len() == 1 {
 					format!("{}{}{}", open, nodes[0].serialize_impl(_depth), close)
 				} else {
-					let items: Vec<String> = nodes.iter()
-						.map(|n| n.serialize_impl(_depth))
-						.collect();
+					let items: Vec<String> =
+						nodes.iter().map(|n| n.serialize_impl(_depth)).collect();
 					format!("{}{}{}", open, items.join(", "), close)
 				}
 			}
 			Key(k, v) => format!("{}={}", k, v.serialize_impl(_depth)),
 			Pair(a, b) => format!("{}:{}", a.serialize_impl(_depth), b.serialize_impl(_depth)),
-			Tag { title, params, body } => {
+			Tag {
+				title,
+				params,
+				body,
+			} => {
 				if **params == Empty {
 					format!("{}{}", title, body.serialize_impl(_depth))
 				} else {
-					format!("{}<{}>{}", title, params.serialize_impl(_depth), body.serialize_impl(_depth))
+					format!(
+						"{}<{}>{}",
+						title,
+						params.serialize_impl(_depth),
+						body.serialize_impl(_depth)
+					)
 				}
 			}
 			Data(d) => format!("Data({})", d.type_name),
 			Meta { node, data } => {
-				if let Data(dada) = data.as_ref() {
-					if let Some(metadata) = dada.downcast_ref::<MetaData>() {
-						if let Some(comment) = &metadata.comment {
-							return format!("{} /* {} */", node.serialize_impl(_depth), comment);
-						}
-					}
-				}
-				node.serialize_impl(_depth)
+				format!("{} /* {} */", node.serialize_impl(_depth), data)
 			}
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
@@ -836,18 +873,8 @@ impl Node {
 				Value::Object(map)
 			}
 			Meta { node, data } => {
-				let mut value = node.to_json_value();
-				// Extract MetaData from Data node if present
-				if let Data(dada) = data.as_ref() {
-					if let Some(metadata) = dada.downcast_ref::<MetaData>() {
-						if let Some(comment) = &metadata.comment {
-							if let Value::Object(ref mut map) = value {
-								map.insert("_comment".to_string(), Value::String(comment.clone()));
-							}
-						}
-					}
-				}
-				value
+				// fucking json has no comments
+				node.to_json_value()
 			}
 			Error(e) => {
 				let mut map = Map::new();
@@ -896,11 +923,14 @@ impl fmt::Debug for Node {
 			Data(d) => write!(f, "{:?}", d),
 			Meta { node, data } => {
 				// Extract MetaData from Data node if present
-				if let Data(dada) = data.as_ref() {
+				if data["comment"] != Empty {
+					return write!(f, "{:?} /* {} */", node, data["comment"]);
+				}
+				if let Data(dada ) = data.as_ref() {
 					if let Some(metadata) = dada.downcast_ref::<MetaData>() {
-						if let Some(comment) = &metadata.comment {
-							return write!(f, "{:?} /* {} */", node, comment);
-						}
+						// return write!(f, "{:?} /* {}:{} */", node, metadata.line, metadata.column);
+					} else {
+						return write!(f, "{:?} /* {} */", node, dada);
 					}
 				}
 				write!(f, "{:?}", node)
@@ -1134,6 +1164,13 @@ impl PartialEq<&str> for Node {
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
+	}
+}
+
+// Reverse comparison: &str == Node
+impl PartialEq<Node> for &str {
+	fn eq(&self, other: &Node) -> bool {
+		other.eq(self)
 	}
 }
 
