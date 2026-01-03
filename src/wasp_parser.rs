@@ -29,6 +29,7 @@ pub struct WaspParser {
 	column: usize,
 	char: char,
 	pub current_line: String,
+	base_indent: usize,
 }
 
 impl WaspParser {
@@ -43,6 +44,7 @@ impl WaspParser {
 			column: 1,
 			char: '\0',
 			current_line,
+			base_indent: 0,
 		}
 	}
 
@@ -95,15 +97,23 @@ impl WaspParser {
 		self.pos == 0 || self.prev_char().is_whitespace()
 	}
 
-	fn skip_whitespace(&mut self) -> bool {
+	/// Skip whitespace, return (had_newline, current_line_indent)
+	/// Only tabs count as semantic indent (not spaces)
+	fn skip_whitespace(&mut self) -> (bool, usize) {
 		let mut had_newline = false;
+		let mut line_indent = 0;
 		loop {
 			let ch = self.current_char();
 			if !ch.is_whitespace() { break; }
-			if ch == '\n' { had_newline = true; }
+			if ch == '\n' {
+				had_newline = true;
+				line_indent = 0; // reset for new line
+			} else if ch == '\t' {
+				line_indent += 1; // only tabs count as indent
+			}
 			self.advance();
 		}
-		had_newline
+		(had_newline, line_indent)
 	}
 
 	fn skip_spaces(&mut self) {
@@ -124,11 +134,14 @@ impl WaspParser {
 		line_comment.trim().to_string()
 	}
 
-	fn skip_whitespace_and_comments(&mut self) -> (bool, Option<String>) {
+	fn skip_whitespace_and_comments(&mut self) -> (bool, usize, Option<String>) {
 		let mut had_newline = false;
+		let mut line_indent = 0;
 		let mut comments = Vec::new();
 		loop {
-			had_newline = self.skip_whitespace() || had_newline;
+			let (newline, indent) = self.skip_whitespace();
+			had_newline = newline || had_newline;
+			if newline { line_indent = indent; }
 			// Check for # line comment (shell-style, shebang)
 			// Only treat # as comment if at line start (to allow list#index later)
 			if self.current_char() == '#' && self.is_at_line_start() {
@@ -155,7 +168,7 @@ impl WaspParser {
 
 			if self.pos >= self.input.len() {
 				let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
-				return (had_newline, comment);
+				return (had_newline, line_indent, comment);
 			}
 
 			// Check for /* block comment */
@@ -185,7 +198,7 @@ impl WaspParser {
 			break;
 		}
 		let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
-		(had_newline, comment)
+		(had_newline, line_indent, comment)
 	}
 
 	fn is_at_line_end(&self) -> bool {
@@ -193,7 +206,7 @@ impl WaspParser {
 	}
 
 	fn parse_value(&mut self) -> Node {
-		let (_, comment) = self.skip_whitespace_and_comments();
+		let (_, _, comment) = self.skip_whitespace_and_comments();
 
 		// Capture position before parsing
 		let (line_nr, column) = self.get_position();
@@ -381,7 +394,7 @@ impl WaspParser {
 					Ok(p) => p,
 					Err(e) => return Error(e),
 				};
-				self.skip_whitespace();
+				let _ = self.skip_whitespace();
 
 				if self.current_char() == '{' {
 					let body = self.parse_bracketed('{', '}', Bracket::Curly);
@@ -391,7 +404,7 @@ impl WaspParser {
 				} else if self.current_char() == ':' || self.current_char() == '=' {
 					// name(params):value or name(params)=value
 					self.advance();
-					self.skip_whitespace();
+					let _ = self.skip_whitespace();
 					let value = self.parse_value();
 					let key = format!("{}{}", symbol, params);
 					Node::key(&key, value)
@@ -403,7 +416,7 @@ impl WaspParser {
 			':' | '=' => {
 				// Key-value pair (both a:b and a=b are supported)
 				self.advance();
-				self.skip_whitespace();
+				let _ = self.skip_whitespace();
 				let value = self.parse_value();
 				Node::key(&symbol, value)
 			}
@@ -446,8 +459,13 @@ impl WaspParser {
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
 
 		loop {
-			// Only skip whitespace here - parse_value() handles comments and attaches them
-			self.skip_whitespace();
+			// Skip whitespace but track indent for dedent detection
+			let (had_newline, line_indent) = self.skip_whitespace();
+
+			// Check for dedent - exit this block if we're back to lower indent
+			if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
+				break;
+			}
 
 			// Check for end condition
 			let at_end = match close {
@@ -471,7 +489,28 @@ impl WaspParser {
 				continue;
 			}
 
-			let (had_newline, _) = self.skip_whitespace_and_comments();
+			let (had_newline, line_indent, _) = self.skip_whitespace_and_comments();
+
+			// Handle indentation-based blocks
+			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None {
+				// Indented block follows - parse it as body of current item
+				let old_indent = self.base_indent;
+				self.base_indent = line_indent;
+				let body = self.parse_list_with_separators(None, Bracket::None);
+				self.base_indent = old_indent;
+				// Combine item with indented body as Tag
+				Node::Tag {
+					title: item.name(),
+					params: Box::new(Empty),
+					body: Box::new(body),
+				}
+			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
+				// Dedent - push item and exit this level
+				items_with_seps.push((item, Separator::None));
+				break;
+			} else {
+				item
+			};
 
 			// Determine separator after this item
 			let ch = self.current_char();
