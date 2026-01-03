@@ -17,31 +17,25 @@ city: "NYC""#;
 			if let Some(meta) = first.get_lineinfo() {
 				println!(
 					"First item position: line {:?}, column {:?}",
-					meta.line, meta.column
+					meta.line_nr, meta.column
 				);
-				eq!(meta.line, Some(1));
+				eq!(meta.line_nr, 1);
 			}
 		}
 
 		// Second item should be at line 2
 		if let Some(second) = items.get(1) {
 			if let Some(meta) = second.get_lineinfo() {
-				println!(
-					"Second item position: line {:?}, column {:?}",
-					meta.line, meta.column
-				);
-				eq!(meta.line, Some(2));
+				println!("Second item position: line {:?}, column {:?}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 2);
 			}
 		}
 
 		// Third item should be at line 3
 		if let Some(third) = items.get(2) {
 			if let Some(meta) = third.get_lineinfo() {
-				println!(
-					"Third item position: line {:?}, column {:?}",
-					meta.line, meta.column
-				);
-				eq!(meta.line, Some(3));
+				println!("Third item position: line {:?}, column {:?}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 3);
 			}
 		}
 	}
@@ -60,21 +54,15 @@ age: 25"#;
 	if let Node::List(items, _, _) = node {
 		if let Some(first) = items.get(0) {
 			if let Some(meta) = first.get_lineinfo() {
-				println!(
-					"First: line={:?}, col={:?}",
-					meta.line, meta.column
-				);
-				eq!(meta.line, Some(2));
+				println!("First: line={:?}, col={:?}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 2);
 			}
 		}
 
 		if let Some(second) = items.get(1) {
 			if let Some(meta) = second.get_lineinfo() {
-				println!(
-					"Second: line={:?}, col={:?}",
-					meta.line, meta.column
-				);
-				eq!(meta.line, Some(4));
+				println!("Second: line={:?}, col={:?}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 4);
 			}
 		}
 	}
@@ -89,13 +77,9 @@ fn test_nested_position_tracking() {
 
 	let node = WaspParser::parse(wasp);
 	println!("Nested structure: {:?}", node);
-
 	if let Some(meta) = node.get_lineinfo() {
-		println!(
-			"Server tag position: line={:?}, col={:?}",
-			meta.line, meta.column
-		);
-		eq!(meta.line, Some(1));
+		println!("Server tag position: line={:?}, col={:?}", meta.line_nr, meta.column);
+		eq!(meta.line_nr, 1);
 	}
 }
 
@@ -111,8 +95,8 @@ fn test_multiline_structure() {
 
 	// Top-level html should be at line 1
 	if let Some(meta) = node.get_lineinfo() {
-		println!("HTML position: {:?}:{:?}", meta.line, meta.column);
-		eq!(meta.line, Some(1));
+		println!("HTML position: {:?}:{:?}", meta.line_nr, meta.column);
+		eq!(meta.line_nr, 1);
 	}
 }
 
@@ -126,25 +110,25 @@ fn test_column_tracking() {
 	if let Node::List(items, _, _) = node {
 		if let Some(first) = items.get(0) {
 			if let Some(meta) = first.get_lineinfo() {
-				println!("First at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-				eq!(meta.line, Some(1));
-				eq!(meta.column, Some(1));
+				println!("First at: {}:{}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 1);
+				eq!(meta.column, 1);
 			}
 		}
 
 		if let Some(second) = items.get(1) {
 			if let Some(meta) = second.get_lineinfo() {
-				println!("Second at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-				eq!(meta.line, Some(1));
-				eq!(meta.column, Some(5));
+				println!("Second at: {}:{}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 1);
+				eq!(meta.column, 5);
 			}
 		}
 
 		if let Some(third) = items.get(2) {
 			if let Some(meta) = third.get_lineinfo() {
-				println!("Third at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
-				eq!(meta.line, Some(1));
-				eq!(meta.column, Some(9));
+				println!("Third at: {}:{}", meta.line_nr, meta.column);
+				eq!(meta.line_nr, 1);
+				eq!(meta.column, 9);
 			}
 		}
 	}

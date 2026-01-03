@@ -216,5 +216,14 @@ is!("def square:=it*it; square(3)",9);
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 
 # Important
-Before and after each task run ./test.sh to ensure all tests pass.
-If previously passing test fail after the task try to fix it and if it doesn't work roll back
+Don't cargo clean unless absolutely necessary!
+
+Before and after each task run git status and ./test.sh to ensure we are in a clean state and all tests pass.
+If previously passing test fail after the task as seen via git diff test_results.txt
+try to fix failing tests and if it doesn't work roll back
+
+When fixing a problem do not modify the test itself without consulting!
+
+git status before and after each task should show
+Your branch is up to date with 'origin/main'.
+nothing to commit
