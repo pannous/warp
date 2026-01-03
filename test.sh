@@ -2,15 +2,13 @@
 # Simplified test runner with --no-fail-fast default
 # Creates clean test_results.txt with just pass/fail lists
 
-# Use local target dir instead of global /opt/cargo (fixes IDE/CLI cache conflicts)
-unset CARGO_TARGET_DIR
-
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 
 echo "Compiling tests..."
 # Skip debug info for faster initial compilation, but not if we already have a build
-if [ ! -d "target/debug/deps" ] || [ -z "$(ls -A target/debug/deps/*.rlib 2>/dev/null)" ]; then
+if [ ! -d "$TARGET_DIR/debug/deps" ] || [ -z "$(ls -A $TARGET_DIR/debug/deps/*.rlib 2>/dev/null)" ]; then
 	export CARGO_PROFILE_DEV_DEBUG=false
 fi
 cargo test --no-run || exit 1
