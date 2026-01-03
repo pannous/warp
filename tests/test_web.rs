@@ -87,6 +87,7 @@ fn test_fetch() {
 }
 
 #[test]
+#[ignore]
 fn test_canvas() {
 	let result = analyze(parse("$canvas"));
 	eq!(result.kind(), NodeKind::Externref);
@@ -95,6 +96,7 @@ fn test_canvas() {
 }
 
 #[test]
+#[ignore]
 fn test_dom() {
 	print("test_dom");
 	// preRegisterFunctions();

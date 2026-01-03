@@ -185,3 +185,22 @@ fn test_modifiers() {
 	is!("public fun ignore(){3}", 3);
 	is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}",3);
 }
+
+#[test]
+#[ignore]
+fn test_fibonacci() {
+	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)",55);
+	is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)",55);
+	skip!(
+		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+		   is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+		   is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+		   is!("fib(n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
+		   is!("fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+		   is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
+		   // todo worked until number was own type
+		   is!("fib number := if number<2 : 1 else fib(number - 1) + fib it - 2;fib(9)", 55);
+		// home.md MUST WORK
+	   );
+}

@@ -1,7 +1,7 @@
-use wasp::wasp_parser::{parse, WaspParser};
-use wasp::{eq, is};
 // use wasp::wasp_parser::WaspParser::parse;
 use wasp::node::Node;
+use wasp::wasp_parser::{parse, WaspParser};
+use wasp::{eq, is};
 
 #[test]
 fn test_line_comments() {
@@ -51,18 +51,10 @@ fn test_inline_comments() {
 #[test]
 fn test_comment_metadata() {
 	let wasp = "// Important config\nport: 8080";
-
 	let node = WaspParser::parse(wasp);
 	println!("Node: {:?}", node);
-
-	if let Node::List(items, _) = node {
-		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_metadata() {
-				println!("Comment metadata: {:?}", meta.comment);
-				assert!(meta.comment.is_some());
-			}
-		}
-	}
+	println!("Comment metadata: {:?}", node["comment"]);
+	assert!(node["comment"].to_string().contains("Important config"));
 }
 
 #[test]
@@ -87,16 +79,17 @@ fn test_comments_in_html_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_comment_with_metadata_accessor() {
 	let node = Node::int(42).with_comment("This is the answer".to_string());
-
+	println!("{}", node);
+	println!("{}", node.serialize());
+	println!("{}", node["comment"]);
 	eq!(node.unwrap_meta(), &Node::int(42));
-
-	if let Some(meta) = node.get_metadata() {
-		eq!(meta.comment, Some("This is the answer".to_string()));
-	} else {
+	// Use &node["comment"] to explicitly use Not for &Node
+	if !&node["comment"] {
 		panic!("Expected metadata");
+	} else {
+		eq!(node["comment"], "This is the answer");
 	}
 }
 

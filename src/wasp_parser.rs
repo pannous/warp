@@ -1,5 +1,5 @@
 use crate::extensions::numbers::Number;
-use crate::meta::MetaData;
+use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Error};
 use crate::node::{Bracket, Node};
 use log::warn;
@@ -257,11 +257,12 @@ impl WaspParser {
 			return node;
 		}
 		// Attach metadata with position and comment
-		let mut meta = MetaData::with_position(line, column);
+		node = node.with_meta(LineInfo::with_position(line, column));
 		if let Some(c) = comment {
-			meta.comment = Some(c);
+			// node.wrap_meta(Node::key("comment", Node::text(&c)))
+			node = Node::meta(node,Node::key("comment", Node::text(&c)))
+			// node["comment"] = Node::text(&c);
 		}
-		node = node.with_meta(meta);
 		node
 	}
 

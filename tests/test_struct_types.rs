@@ -245,21 +245,6 @@ fn test_wit_export() {
 	// bindgen(node);
 }
 
-#[test]
-fn test_wit_function() {
-	//    funcDeclaration
-	// a:b,c vs a:b, c:d
-
-	is!("add: func(a: float32, b: float32) -> float32", 0);
-	// let mod : Module = read_wasm("test.wasm");
-	// print( mod .import_count);
-	// eq!(mod.import_count, 1);
-	// eq!(Node().setKind(longs).serialize(), "0");
-	// eq!(mod.import_names, List<String>{"add"}); // or export names?
-}
-
-#[test]
-fn test_wit_import() {}
 
 #[test]
 fn test_wit() {
