@@ -858,7 +858,7 @@ fn parse_list_via_separator(){
 
 
 #[test]
-fn parse_list_via_separator2(){
+fn parse_list_via_separator_semicolon(){
 	let result = parse("a; b; c");
 	eq!(result.length(), 3);
 	eq!(result[0], "a");
@@ -868,6 +868,16 @@ fn parse_list_via_separator2(){
 
 
 #[test]
+fn parse_list_via_separator_space(){
+	let result = parse("a b c");
+	eq!(result.length(), 3);
+	eq!(result[0], "a");
+	eq!(result[1], "b");
+	eq!(result[2], "c");
+}
+
+#[test]
 fn parse_list_via_separator3(){
-	eq!("a b c", parse("a, b, c"));
+	parse("a b c") == parse("a, b, c");
+	eq!(parse("a b c"), parse("a, b, c"));
 }
