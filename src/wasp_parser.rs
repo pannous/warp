@@ -539,7 +539,7 @@ impl WaspParser {
 		Err("Unterminated parentheses".to_string())
 	}
 
-	fn parse_bracketed(&mut self, open: char, close: char, bracket: Bracket) -> Node {
+	fn parse_bracketed(&mut self, _open: char, close: char, bracket: Bracket) -> Node {
 		self.advance(); // skip opening bracket
 		self.parse_list_with_separators(close, bracket)
 	}
