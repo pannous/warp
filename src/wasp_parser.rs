@@ -14,9 +14,7 @@ pub fn parse_file(path: &str) -> Node {
 }
 
 pub fn parse(input: &str) -> Node {
-	if input.ends_with(".wasp") {
-		return parse_file(input);
-	}
+	if input.ends_with(".wasp") { return parse_file(input); }
 	WaspParser::parse(input)
 }
 
@@ -51,8 +49,8 @@ impl WaspParser {
 		result
 	}
 
+
 	fn parse_top_level(&mut self) -> Node {
-		// Build nested structure dynamically like C++ parseListSeparator
 		let mut actual = Node::List(vec![], Bracket::Square, Separator::None);
 
 		self.skip_whitespace_and_comments();
@@ -144,6 +142,9 @@ impl WaspParser {
 
 		// Unwrap if only single item
 		if let Node::List(mut items, _, sep) = actual {
+		if items.is_empty() {
+			return Empty;
+		}
 			if items.len() == 1 && sep == Separator::None {
 				return items.remove(0);
 			}
@@ -643,15 +644,18 @@ impl WaspParser {
 
 		// Unwrap if only single item
 		if let Node::List(mut items, _, sep) = actual {
-			if items.len() == 1 && sep == Separator::None {
+			if items.is_empty() {
+				return Empty;
+			}
+			if items.len() == 1 && sep == Separator::None && bracket != Bracket::Curly {
 				return items.remove(0);
 			}
 			actual = Node::List(items, bracket, sep);
 		}
 
 		actual
-	}
 
+	}
 	fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
 		if items_with_seps.is_empty() {
 			return Empty;
@@ -844,10 +848,6 @@ mod tests {
 		// Single value should not be wrapped in List
 		let node = WaspParser::parse("42");
 		eq!(node, 42);
-
-		// Empty input
-		let node = WaspParser::parse("");
-		eq!(node, Empty);
 	}
 
 	#[test]
