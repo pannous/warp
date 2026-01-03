@@ -23,6 +23,7 @@ TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
 TOTAL_FAILED=$(grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | wc -l | tr -d ' ')
 TOTAL_IGNORED=$(grep -E "^test .* \.\.\. ignored$" "$TEMP_FILE" | wc -l | tr -d ' ')
 TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
+TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 
 
 # Create clean summary file
@@ -38,7 +39,8 @@ TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
 
 	echo ""
 	echo "SUMMARY:"
-	echo "  ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_IGNORED} ignored, ${TOTAL} total" > "$OUTPUT_FILE"
+	echo "${TOTAL_IGNORED} ignored, "
+	echo "  ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_TESTED} total tested" > "$OUTPUT_FILE"
 }
 rm "$TEMP_FILE"
 
