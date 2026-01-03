@@ -1076,8 +1076,8 @@ impl fmt::Display for Separator {
 			Separator::Space => write!(f, " "),
 			Separator::Comma => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
-			Separator::Newline => write!(f, "\\n"),
-			Separator::Tab => write!(f, "\\t"),
+			Separator::Newline => write!(f, "\n"),
+			Separator::Tab => write!(f, "\t"),
 			Separator::None => Ok(()),
 		}
 	}
