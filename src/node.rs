@@ -807,7 +807,7 @@ impl Node {
 	}
 
 	// fixme unify with size() ?
-	// fixme create one variant which counts meta notes and one which ignores them
+	// fixme create one variant which counts meta comment nodes and one which ignores them
 	pub fn len(&self) -> usize {
 		match self {
 			List(items, _, _) => items.len(),

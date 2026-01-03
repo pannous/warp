@@ -1,4 +1,5 @@
 use crate::extensions::numbers::Number;
+use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Error};
 use crate::node::{Bracket, Node, Separator};
@@ -14,14 +15,17 @@ pub fn parse_file(path: &str) -> Node {
 }
 
 pub fn parse(input: &str) -> Node {
-	if input.ends_with(".wasp") { return parse_file(input); }
+	if input.ends_with(".wasp") {
+		return parse_file(input);
+	}
 	WaspParser::parse(input)
 }
 
 pub struct WaspParser {
 	input: String,
+	chars: Vec<char>,
 	pos: usize,
-	line: usize,
+	line_nr: usize,
 	column: usize,
 	char: char,
 	pub current_line: String,
@@ -30,10 +34,12 @@ pub struct WaspParser {
 impl WaspParser {
 	pub fn new(input: String) -> Self {
 		let current_line = input.lines().next().unwrap_or("").to_string();
+		let chars: Vec<char> = input.chars().collect();
 		WaspParser {
 			input,
+			chars,
 			pos: 0,
-			line: 1,
+			line_nr: 1,
 			column: 1,
 			char: '\0',
 			current_line,
@@ -49,23 +55,19 @@ impl WaspParser {
 		result
 	}
 
-
 	fn parse_top_level(&mut self) -> Node {
 		let mut actual = Node::List(vec![], Bracket::Square, Separator::None);
 
 		self.skip_whitespace_and_comments();
 
-		while self.pos < self.input.chars().count() {
+		while self.pos < self.chars.len() {
 			let pos_before = self.pos;
 			let item = self.parse_value();
 
 			if item == Empty {
 				if self.pos == pos_before {
-					if self.current_char().is_some() {
-						self.advance();
-					} else {
-						break;
-					}
+					// todo what is this Candice be removed?
+					self.advance();
 				}
 				continue;
 			}
@@ -78,14 +80,14 @@ impl WaspParser {
 			let had_newline = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
-			let sep = if let Some(ch) = self.current_char() {
+			let sep = if let ch = self.current_char() {
 				if ch == ',' {
 					self.advance();
 					Separator::Comma
 				} else if ch == ';' {
 					self.advance();
 					Separator::Semicolon
-				} else if had_newline && self.pos < self.input.chars().count() {
+				} else if had_newline && self.pos < self.chars.len() {
 					Separator::Newline
 				} else {
 					Separator::Space
@@ -107,11 +109,15 @@ impl WaspParser {
 				if let Node::List(_, _, ref mut s) = actual {
 					*s = sep.clone();
 				}
-			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None {
+			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None
+			{
 				// Only wrap when moving to a LOOSER separator (higher precedence value)
 				if sep.precedence() > current_sep.precedence() {
 					// Separator changed to looser - wrap existing content and start new group
-					let old_actual = std::mem::replace(&mut actual, Node::List(vec![], Bracket::Square, sep.clone()));
+					let old_actual = std::mem::replace(
+						&mut actual,
+						Node::List(vec![], Bracket::Square, sep.clone()),
+					);
 					if let Node::List(items, b, _) = old_actual {
 						if items.len() > 1 {
 							// Multiple items - wrap them
@@ -132,19 +138,15 @@ impl WaspParser {
 
 			// Safety check
 			if self.pos == pos_before {
-				if self.current_char().is_some() {
-					self.advance();
-				} else {
-					break;
-				}
+				self.advance();
 			}
 		}
 
 		// Unwrap if only single item
 		if let Node::List(mut items, _, sep) = actual {
-		if items.is_empty() {
-			return Empty;
-		}
+			if items.is_empty() {
+				return Empty;
+			}
 			if items.len() == 1 && sep == Separator::None {
 				return items.remove(0);
 			}
@@ -154,24 +156,28 @@ impl WaspParser {
 		actual
 	}
 
-	fn current_char(&self) -> Option<char> {
-		self.input.chars().nth(self.pos)
+	fn end_of_input(&self) -> bool {
+		self.pos >= self.chars.len()
 	}
 
-	fn peek_char(&self, offset: usize) -> Option<char> {
-		self.input.chars().nth(self.pos + offset)
+	fn current_char(&self) -> char {
+		*self.chars.get(self.pos).unwrap_or(&'\0')
+	}
+
+	fn peek_char(&self, offset: usize) -> char {
+		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
 	fn advance(&mut self) {
-		if let Some(ch) = self.current_char() {
+		if let ch = self.current_char() {
 			self.char = ch; // debug
 			if ch == '\n' {
-				self.line += 1;
+				self.line_nr += 1;
 				self.column = 1;
 				// Update current_line to the new line
 				let lines: Vec<&str> = self.input.lines().collect();
-				if self.line > 0 && self.line <= lines.len() {
-					self.current_line = lines[self.line - 1].to_string();
+				if self.line_nr > 0 && self.line_nr <= lines.len() {
+					self.current_line = lines[self.line_nr - 1].to_string();
 				} else {
 					self.current_line = String::new();
 				}
@@ -183,25 +189,21 @@ impl WaspParser {
 	}
 
 	fn get_position(&self) -> (usize, usize) {
-		(self.line, self.column)
+		(self.line_nr, self.column)
 	}
 
-	fn prev_char(&self) -> Option<char> {
-		if self.pos > 0 {
-			self.input.chars().nth(self.pos - 1)
-		} else {
-			None
-		}
+	fn prev_char(&self) -> char {
+		self.chars.get(self.pos - 1).unwrap_or(&'\0').clone()
 	}
 
 	fn is_at_line_start(&self) -> bool {
 		// Check if we're at the very beginning or right after whitespace/newline
-		self.pos == 0 || self.prev_char().map_or(false, |ch| ch.is_whitespace())
+		self.pos == 0 || self.prev_char().is_whitespace()
 	}
 
 	fn skip_whitespace(&mut self) -> bool {
 		let mut had_newline = false;
-		while let Some(ch) = self.current_char() {
+		while let ch = self.current_char() {
 			if ch.is_whitespace() {
 				if ch == '\n' {
 					had_newline = true;
@@ -216,7 +218,7 @@ impl WaspParser {
 
 	fn consume_rest_of_line(&mut self) -> String {
 		let mut line_comment = String::new();
-		while let Some(ch) = self.current_char() {
+		while let ch = self.current_char() {
 			if ch == '\n' {
 				self.advance();
 				break;
@@ -233,7 +235,7 @@ impl WaspParser {
 			had_newline = self.skip_whitespace() || had_newline;
 			// Check for # line comment (shell-style, shebang)
 			// Only treat # as comment if at line start (to allow list#index later)
-			if self.current_char() == Some('#') && self.is_at_line_start() {
+			if self.current_char() == '#' && self.is_at_line_start() {
 				self.advance(); // skip #
 				self.consume_rest_of_line();
 				had_newline = true;
@@ -241,7 +243,7 @@ impl WaspParser {
 			}
 
 			// Check for // line comment
-			if self.current_char() == Some('/') && self.peek_char(1) == Some('/') {
+			if self.current_char() == '/' && self.peek_char(1) == '/' {
 				self.advance(); // skip first /
 				self.advance(); // skip second /
 				self.consume_rest_of_line();
@@ -254,11 +256,11 @@ impl WaspParser {
 			}
 
 			// Check for /* block comment */
-			if self.current_char() == Some('/') && self.peek_char(1) == Some('*') {
+			if self.current_char() == '/' && self.peek_char(1) == '*' {
 				self.advance(); // skip /
 				self.advance(); // skip *
-				while let Some(ch) = self.current_char() {
-					if ch == '*' && self.peek_char(1) == Some('/') {
+				while let ch = self.current_char() {
+					if ch == '*' && self.peek_char(1) == '/' {
 						self.advance(); // skip *
 						self.advance(); // skip /
 						break;
@@ -277,7 +279,7 @@ impl WaspParser {
 	}
 
 	fn is_at_line_end(&self) -> bool {
-		self.column == 0 && self.current_char() == Some('\n') || self.pos >= self.input.len()
+		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
 
 	fn parse_value(&mut self) -> Node {
@@ -289,20 +291,16 @@ impl WaspParser {
 			return Empty;
 		};
 		let node = match self.current_char() {
-			None => {
-				self.advance();
-				Empty // end of input ≠ ø !
-			}
-			Some(ch) => {
+			ch => {
 				match ch {
 					'"' | '\'' | '«' => self.parse_string(),
 					'(' => self.parse_bracketed('(', ')', Bracket::Round),
 					'[' => self.parse_bracketed('[', ']', Bracket::Square),
 					'{' => self.parse_bracketed('{', '}', Bracket::Curly),
 					'<' => self.parse_bracketed('<', '>', Bracket::Round), // Generics as groups
-					';' => Empty, // Semicolons handled by main parse loop
+					';' => Empty,                                          // Semicolons handled by main parse loop
 					'>' => Empty, // Closing angle bracket, handled by parse_bracketed
-					'-' if self.peek_char(1) == Some('>') => {
+					'-' if self.peek_char(1) == '>' => {
 						// Arrow operator: ->
 						self.advance(); // skip -
 						self.advance(); // skip >
@@ -315,7 +313,8 @@ impl WaspParser {
 					_ => {
 						// todo implement the rest like operators, etc.
 						warn!(
-							"Unexpected character '{}' at line {}, column {}",ch, line_nr, column
+							"Unexpected character '{}' at line {}, column {}",
+							ch, line_nr, column
 						);
 						warn!("Current line: {}", self.current_line); // todo ---^ 'here' via offset
 						self.advance();
@@ -327,26 +326,27 @@ impl WaspParser {
 		if node == Empty {
 			return node;
 		}
-		node.with_meta_data(LineInfo { line_nr, column, line : self.current_line.clone() })
+		node.with_meta_data(LineInfo {
+			line_nr,
+			column,
+			line: self.current_line.s(),
+		})
 	}
 
 	fn parse_string(&mut self) -> Node {
-		let quote = self.current_char().unwrap_or('"');
+		let quote = self.current_char();
 		self.advance(); // skip opening quote
 
 		let mut s = String::new();
-		while let Some(ch) = self.current_char() {
+		while let ch = self.current_char() {
 			if ch == quote {
 				self.advance(); // skip closing quote
 
-				// Single quotes with exactly one character become Codepoint
-				if quote == '\'' {
-					let mut chars = s.chars();
-					if let Some(c) = chars.next() {
-						if chars.next().is_none() {
-							// Exactly one character
-							return Node::codepoint(c);
-						}
+				// quotes with exactly one character become Codepoint
+				let mut chars = s.chars();
+				if let Some(c) = chars.next() {
+					if chars.next().is_none() {
+						return Node::codepoint(c);
 					}
 				}
 
@@ -354,15 +354,13 @@ impl WaspParser {
 			}
 			if ch == '\\' {
 				self.advance();
-				if let Some(escaped) = self.current_char() {
-					match escaped {
-						'n' => s.push('\n'),
-						't' => s.push('\t'),
-						'r' => s.push('\r'),
-						_ => s.push(escaped),
-					}
-					self.advance();
+				match self.current_char() {
+					'n' => s.push('\n'),
+					't' => s.push('\t'),
+					'r' => s.push('\r'),
+					c => s.push(c),
 				}
+				self.advance();
 			} else {
 				s.push(ch);
 				self.advance();
@@ -376,20 +374,20 @@ impl WaspParser {
 		let mut has_dot = false;
 
 		// todo edge case: leading plus
-		if self.current_char() == Some('-') {
+		if self.current_char() == '-' {
 			num_str.push('-');
 			self.advance();
 		}
 
 		// Check for hexadecimal: 0x or 0X
-		if self.current_char() == Some('0') {
-			if let Some(next_ch) = self.peek_char(1) {
+		if self.current_char() == '0' {
+			if let next_ch = self.peek_char(1) {
 				if next_ch == 'x' || next_ch == 'X' {
 					// Parse hexadecimal
 					self.advance(); // skip '0'
 					self.advance(); // skip 'x'
 					let mut hex_str = String::new();
-					while let Some(ch) = self.current_char() {
+					while let ch = self.current_char() {
 						if ch.is_ascii_hexdigit() {
 							hex_str.push(ch);
 							self.advance();
@@ -404,7 +402,7 @@ impl WaspParser {
 			}
 		}
 
-		while let Some(ch) = self.current_char() {
+		while let ch = self.current_char() {
 			// assert!(!'三'.is_numeric());
 			if ch.is_numeric() {
 				num_str.push(ch);
@@ -434,7 +432,7 @@ impl WaspParser {
 	fn parse_symbol(&mut self) -> Result<String, String> {
 		let mut symbol = String::new();
 
-		while let Some(ch) = self.current_char() {
+		while let ch = self.current_char() {
 			if ch.is_alphanumeric() || ch == '_' || ch == '-' {
 				symbol.push(ch);
 				self.advance();
@@ -459,17 +457,17 @@ impl WaspParser {
 
 		// Check for named block: name{...} or name(...) or name<...>
 		match self.current_char() {
-			Some('{') => {
+			'{' => {
 				let block = self.parse_bracketed('{', '}', Bracket::Curly);
 				// Create Tag for named blocks: html{...} -> Tag("html", None, body)
 				Node::tag(&symbol, block)
 			}
-			Some('<') => {
+			'<' => {
 				// Generic type: option<string> -> Tag("option", <string>)
 				let generic = self.parse_bracketed('<', '>', Bracket::Round);
 				Node::tag(&symbol, generic)
 			}
-			Some('(') => {
+			'(' => {
 				// Function-like: def name(params){body} or name(params):value
 				let params = match self.parse_parenthesized() {
 					Ok(p) => p,
@@ -477,12 +475,12 @@ impl WaspParser {
 				};
 				self.skip_whitespace();
 
-				if self.current_char() == Some('{') {
+				if self.current_char() == '{' {
 					let body = self.parse_bracketed('{', '}', Bracket::Curly);
 					// Use Pair for function syntax: name(params) : body
 					let signature = Node::text(&format!("{}{}", symbol, params));
 					Node::pair(signature, body)
-				} else if self.current_char() == Some(':') || self.current_char() == Some('=') {
+				} else if self.current_char() == ':' || self.current_char() == '=' {
 					// name(params):value or name(params)=value
 					self.advance();
 					self.skip_whitespace();
@@ -494,17 +492,14 @@ impl WaspParser {
 					Node::text(&format!("{}{}", symbol, params))
 				}
 			}
-			Some(':') | Some('=') => {
-				// Key-value pair (both : and = are supported)
+			':' | '=' => {
+				// Key-value pair (both a:b and a=b are supported)
 				self.advance();
 				self.skip_whitespace();
 				let value = self.parse_value();
 				Node::key(&symbol, value)
 			}
-			_ => {
-				// Just a symbol
-				Node::symbol(&symbol)
-			}
+			_ => Node::symbol(&symbol),
 		}
 	}
 
@@ -514,7 +509,8 @@ impl WaspParser {
 		self.advance(); // skip '('
 
 		let mut depth = 1;
-		while let Some(ch) = self.current_char() {
+		while !self.end_of_input() {
+			let ch = self.current_char();
 			result.push(ch);
 			if ch == '(' {
 				depth += 1;
@@ -545,22 +541,17 @@ impl WaspParser {
 		loop {
 			self.skip_whitespace_and_comments();
 
-			if self.current_char() == Some(close) {
+			if self.current_char() == close {
 				self.advance();
 				break;
-			}
-			if self.current_char().is_none() {
-				return Error(format!("Unterminated (expected '{}')", close));
 			}
 
 			let pos_before = self.pos;
 			let item = self.parse_value();
 
 			if item == Empty {
-				if self.pos == pos_before && self.current_char() != Some(close) {
-					if self.current_char().is_some() {
-						self.advance();
-					}
+				if self.pos == pos_before && self.current_char() != close {
+					self.advance();
 				}
 				continue;
 			}
@@ -573,7 +564,7 @@ impl WaspParser {
 			let had_newline = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
-			let sep = if let Some(ch) = self.current_char() {
+			let sep = if let ch = self.current_char() {
 				if ch == ',' {
 					self.advance();
 					Separator::Comma
@@ -604,11 +595,16 @@ impl WaspParser {
 				if let Node::List(_, _, ref mut s) = actual {
 					*s = sep.clone();
 				}
-			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None {
+			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None
+			{
 				// Only wrap when moving to a LOOSER separator (higher precedence value)
 				if sep.precedence() > current_sep.precedence() {
 					// Separator changed to looser - wrap existing content and start new group
-					let old_actual = std::mem::replace(&mut actual, Node::List(vec![], bracket.clone(), sep.clone()));
+					// todo unhack!!
+					let old_actual = std::mem::replace(
+						&mut actual,
+						Node::List(vec![], bracket.clone(), sep.clone()),
+					);
 					if let Node::List(items, b, _) = old_actual {
 						if items.len() > 1 {
 							// Multiple items - wrap them
@@ -628,10 +624,8 @@ impl WaspParser {
 			}
 
 			// Safety check
-			if self.pos == pos_before && self.current_char() != Some(close) {
-				if self.current_char().is_some() {
-					self.advance();
-				}
+			if self.pos == pos_before && self.current_char() != close {
+				self.advance();
 			}
 		}
 
@@ -647,9 +641,12 @@ impl WaspParser {
 		}
 
 		actual
-
 	}
-	fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
+	fn group_by_separators(
+		&self,
+		items_with_seps: Vec<(Node, Separator)>,
+		bracket: Bracket,
+	) -> Node {
 		if items_with_seps.is_empty() {
 			return Empty;
 		}
@@ -659,7 +656,8 @@ impl WaspParser {
 		}
 
 		// Collect all unique separator precedences (excluding None)
-		let mut precedences: Vec<u8> = items_with_seps.iter()
+		let mut precedences: Vec<u8> = items_with_seps
+			.iter()
 			.map(|(_, sep)| sep.precedence())
 			.filter(|&p| p < 255)
 			.collect();
@@ -677,7 +675,8 @@ impl WaspParser {
 
 		// Start with the loosest (highest precedence value) separator
 		let max_prec = *precedences.last().unwrap();
-		let split_sep = items_with_seps.iter()
+		let split_sep = items_with_seps
+			.iter()
 			.find(|(_, sep)| sep.precedence() == max_prec)
 			.map(|(_, sep)| sep.clone())
 			.unwrap_or(Separator::Space);
@@ -713,7 +712,8 @@ impl WaspParser {
 		}
 
 		// Recursively process each group for tighter separators
-		let grouped_nodes: Vec<Node> = groups.into_iter()
+		let grouped_nodes: Vec<Node> = groups
+			.into_iter()
 			.map(|group| {
 				if group.len() == 1 && group[0].1 == Separator::None {
 					// Single item with no further separators
@@ -851,7 +851,7 @@ mod tests {
 
 		let mut parser = WaspParser::new(input.to_string());
 		// Advance to second line
-		while parser.line == 1 && parser.current_char().is_some() {
+		while parser.line_nr == 1 && parser.current_char() != '\0' {
 			parser.advance();
 		}
 		eq!(parser.current_line, "line2");
