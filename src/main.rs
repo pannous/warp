@@ -65,7 +65,3 @@ fn main() {
 	// let numbers_as_strings = numbers.map(|n| n.to_string());
 }
 
-#[cfg(test)]
-fn main() {
-	print!("test");
-}
