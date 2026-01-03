@@ -42,6 +42,8 @@ fn test_deep_colon2() {
 	eq!(result.values().values().values().name(), "d");
 }
 
+#[test]
+#[ignore]
 fn test_hypen_versus_minus() {
 	// Needs variable register in parser.
 	is!("a=-1 b=2 b-a", 3);
@@ -91,7 +93,7 @@ fn test_use() {
 	parse("use all from other-file"); // MY SYNTAX redundant
 	parse("use name from yet-another-file"); // MY SYNTAX
 	parse("use name from yet-another-file as other-name"); // MY SYNTAX
-	                                                    //    parse("use name as other-name from yet-another-file");// MY SYNTAX
+	//    parse("use name as other-name from yet-another-file");// MY SYNTAX
 }
 
 #[test]
@@ -111,11 +113,11 @@ fn test_significant_whitespace() {
 	let result = parse("a b:c");
 	eq!(result.length(), 2); // a , b:c
 	eq!(result.laste().kind(), Key); // a , b:c
-								  //     let result = parse("a: b c d", { colon_immediate: false });
+	//     let result = parse("a: b c d", { colon_immediate: false });
 	eq!(result.length(), 3);
 	eq!(result.name(), "a"); // "a"(b c d), NOT ((a:b) c d);
 	eq!(result.kind(), NodeKind::List); // not key!
-									 //     let result = parse("a b : c", { colon_immediate: false });
+	//     let result = parse("a b : c", { colon_immediate: false });
 	assert!(result.length() == 1 || result.length() == 2); // (a b):c
 	eq!(result.kind(), Key);
 	skip!(
@@ -205,17 +207,17 @@ fn test_paramized_keys() {
 
 	// 1. paramize keys: label{param=(for:password)}:"Text"
 	let label1 = parse("label(for:password):'Passwort'"); // declaration syntax :(
-													   // Node label1 = parse("label{for:password}:'Passwort'");
-													   // Node label1 = parse("label[for:password]:'Passwort'");
+	// Node label1 = parse("label{for:password}:'Passwort'");
+	// Node label1 = parse("label[for:password]:'Passwort'");
 	label1.print();
 	eq!(label1, "Passwort");
 	eq!(label1["for"], "password");
 	//	eq!(label1["for:password"],"Passwort");
 
 	// 2. paramize values
-	// TODO 1. move params of Passwort up to lable   OR 2. preserve Passwort as object in stead of making it string value of label!
+	// TODO 1. move params of Passwort up to lable   OR
+	// TODO 2. preserve Passwort as object in stead of making it string value of label!
 	skip!(
-
 		Node label2 = parse("label:'Passwort'(for:password)");
 		assert!(label2 == "Passwort");
 		eq!(label2, "Passwort");
@@ -279,7 +281,8 @@ e
 	time(&e);
 
 	printf!("took %ld sec\n", e - s);
-	printf!("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start.tv_usec) / 100);
+	printf!("took %lu ms\n", ((stop.tv_sec - start.tv_sec) * 100000 + stop.tv_usec - start
+	.tv_usec)  / 100);
 
 	exit(0);
 }*/
@@ -372,7 +375,7 @@ fn test_net_base() {
 }
 
 fn fetch(_p0: &str) -> &str {
-	todo!()
+	todo!("fetch not implemented")
 }
 
 #[test]
@@ -425,7 +428,7 @@ fn test_utf() {
 }
 
 fn is_operator(_p0: char) -> bool {
-	todo!()
+	todo!("is_operator not implemented")
 }
 
 fn utf8_byte_count(p0: char) -> i8 {
@@ -609,9 +612,9 @@ fn test_truthiness() {
 		is!("{x:1}", true);
 	);
 	todo!( // UNKNOWN local symbol ‘x’ in context main OK
-		   //                is!("x", false);
-		   //     is!("{x}", false);
-		   //     is!("cat{}", false);
+	       //                is!("x", false);
+	       //     is!("{x}", false);
+	       //     is!("cat{}", false);
 	);
 	// empty referenceIndices are falsey! OK
 }
@@ -706,7 +709,8 @@ fn test_graph_ql_query() {
 	let friends: Node = result["data"]["hero"]["friends"].clone();
 	eq!(friends[0]["name"], "Luke Skywalker");
 	//todo	assert!(result["hero"] == result["data"]["hero"]);
-	//	assert!(result["hero"]["friends"][0]["name"] == "Luke Skywalker")// if 1-child, treat as root
+	//	assert!(result["hero"]["friends"][0]["name"] == "Luke Skywalker")
+	// if 1-child, treat as root
 }
 
 #[test]
@@ -840,5 +844,5 @@ fn test_empty() {
 	eq!(parse("(())"), Empty); // dangerous?
 	eq!(parse("{{}}"), Empty); // dangerous?
 	eq!(parse("([])"), Empty); // review dangerous?
-	                        // eq!(parse("0"), Empty); // sure?
+	// eq!(parse("0"), Empty); // sure?
 }

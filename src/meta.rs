@@ -5,32 +5,21 @@ use std::any::Any;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-pub struct MetaData {
-	pub comment: Option<String>,
+pub struct LineInfo {
 	pub line: Option<usize>,
 	pub column: Option<usize>,
 }
 
-impl MetaData {
+impl LineInfo {
 	pub fn new() -> Self {
-		MetaData {
-			comment: None,
-			line: None,
-			column: None,
-		}
-	}
-
-	pub fn with_comment(comment: String) -> Self {
-		MetaData {
-			comment: Some(comment),
+		LineInfo {
 			line: None,
 			column: None,
 		}
 	}
 
 	pub fn with_position(line: usize, column: usize) -> Self {
-		MetaData {
-			comment: None,
+		LineInfo {
 			line: Some(line),
 			column: Some(column),
 		}
@@ -123,6 +112,13 @@ impl Clone for Dada {
 		}
 	}
 }
+
+impl fmt::Display for Dada {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "Dada({:?}:{})", self.data_type, self.type_name)
+	}
+}
+
 
 impl fmt::Debug for Dada {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

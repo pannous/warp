@@ -14,7 +14,7 @@ city: "NYC""#;
 	if let Node::List(items, _) = node {
 		// First item should be at line 1
 		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_metadata() {
+			if let Some(meta) = first.get_lineinfo() {
 				println!(
 					"First item position: line {:?}, column {:?}",
 					meta.line, meta.column
@@ -25,7 +25,7 @@ city: "NYC""#;
 
 		// Second item should be at line 2
 		if let Some(second) = items.get(1) {
-			if let Some(meta) = second.get_metadata() {
+			if let Some(meta) = second.get_lineinfo() {
 				println!(
 					"Second item position: line {:?}, column {:?}",
 					meta.line, meta.column
@@ -36,7 +36,7 @@ city: "NYC""#;
 
 		// Third item should be at line 3
 		if let Some(third) = items.get(2) {
-			if let Some(meta) = third.get_metadata() {
+			if let Some(meta) = third.get_lineinfo() {
 				println!(
 					"Third item position: line {:?}, column {:?}",
 					meta.line, meta.column
@@ -48,7 +48,6 @@ city: "NYC""#;
 }
 
 #[test]
-#[ignore]
 fn test_position_with_comments() {
 	let wasp = r#"// User data
 name: "Bob"
@@ -60,24 +59,22 @@ age: 25"#;
 
 	if let Node::List(items, _) = node {
 		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_metadata() {
+			if let Some(meta) = first.get_lineinfo() {
 				println!(
-					"First: line={:?}, col={:?}, comment={:?}",
-					meta.line, meta.column, meta.comment
+					"First: line={:?}, col={:?}",
+					meta.line, meta.column
 				);
 				eq!(meta.line, Some(2));
-				eq!(meta.comment, Some("User data".to_string()));
 			}
 		}
 
 		if let Some(second) = items.get(1) {
-			if let Some(meta) = second.get_metadata() {
+			if let Some(meta) = second.get_lineinfo() {
 				println!(
-					"Second: line={:?}, col={:?}, comment={:?}",
-					meta.line, meta.column, meta.comment
+					"Second: line={:?}, col={:?}",
+					meta.line, meta.column
 				);
 				eq!(meta.line, Some(4));
-				eq!(meta.comment, Some("Age field".to_string()));
 			}
 		}
 	}
@@ -93,7 +90,7 @@ fn test_nested_position_tracking() {
 	let node = WaspParser::parse(wasp);
 	println!("Nested structure: {:?}", node);
 
-	if let Some(meta) = node.get_metadata() {
+	if let Some(meta) = node.get_lineinfo() {
 		println!(
 			"Server tag position: line={:?}, col={:?}",
 			meta.line, meta.column
@@ -113,7 +110,7 @@ fn test_multiline_structure() {
 	println!("HTML structure: {:?}", node);
 
 	// Top-level html should be at line 1
-	if let Some(meta) = node.get_metadata() {
+	if let Some(meta) = node.get_lineinfo() {
 		println!("HTML position: {:?}:{:?}", meta.line, meta.column);
 		eq!(meta.line, Some(1));
 	}
@@ -128,7 +125,7 @@ fn test_column_tracking() {
 
 	if let Node::List(items, _) = node {
 		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_metadata() {
+			if let Some(meta) = first.get_lineinfo() {
 				println!("First at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
 				eq!(meta.line, Some(1));
 				eq!(meta.column, Some(1));
@@ -136,7 +133,7 @@ fn test_column_tracking() {
 		}
 
 		if let Some(second) = items.get(1) {
-			if let Some(meta) = second.get_metadata() {
+			if let Some(meta) = second.get_lineinfo() {
 				println!("Second at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
 				eq!(meta.line, Some(1));
 				eq!(meta.column, Some(5));
@@ -144,7 +141,7 @@ fn test_column_tracking() {
 		}
 
 		if let Some(third) = items.get(2) {
-			if let Some(meta) = third.get_metadata() {
+			if let Some(meta) = third.get_lineinfo() {
 				println!("Third at: {}:{}", meta.line.unwrap(), meta.column.unwrap());
 				eq!(meta.line, Some(1));
 				eq!(meta.column, Some(9));

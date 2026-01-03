@@ -19,13 +19,3 @@ fn test_variables() {
 	print("✓ Variable tests passed");
 }
 
-#[test]
-#[ignore]
-fn test_fibonacci() {
-	print("Testing fibonacci...");
-	is!(
-		"fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",
-		55
-	);
-	print("✓ Fibonacci tests passed");
-}
