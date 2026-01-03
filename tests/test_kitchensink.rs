@@ -1,6 +1,7 @@
 use wasp::extensions::numbers::Number;
 use wasp::node::Bracket;
 use wasp::node::Node;
+use wasp::node::Separator;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::write_wasm;
@@ -55,7 +56,7 @@ fn test_kitchensink_all_node_types() {
 				Node::Number(Number::Int(2)),
 				Node::Number(Number::Int(3)),
 			],
-			Bracket::Round,
+			Bracket::Round, Separator::None,
 		),
 	);
 
@@ -68,7 +69,7 @@ fn test_kitchensink_all_node_types() {
 				Node::Text("item2".to_string()),
 				Node::Text("item3".to_string()),
 			],
-			Bracket::Square,
+			Bracket::Square, Separator::None,
 		),
 	);
 
@@ -159,17 +160,17 @@ fn test_kitchensink_complex_tree() {
 			// Nested Block (Curly brackets)
 			Node::List(
 				vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],
-				Bracket::Curly,
+				Bracket::Curly, Separator::None,
 			),
 			// List (Square brackets)
 			Node::List(
 				vec![Node::Text("a".to_string()), Node::Text("b".to_string())],
-				Bracket::Square,
+				Bracket::Square, Separator::None,
 			),
 			// Data
 			Node::data("custom data"),
 		],
-		Bracket::Square,
+		Bracket::Square, Separator::None,
 	);
 
 	let mut emitter = WasmGcEmitter::new();

@@ -25,7 +25,7 @@ impl<T> Indexed<T> for Vec<T> {
 impl Indexed<Node> for Node {
 	fn indexed(self) -> impl Iterator<Item = (usize, Node)> {
 		match self {
-			Node::List(items, _) => items.into_iter().enumerate(),
+			Node::List(items, _, _) => items.into_iter().enumerate(),
 			_ => vec![].into_iter().enumerate(),
 		}
 	}
@@ -52,7 +52,7 @@ impl<T> Filter<T> for Vec<T> {
 impl Filter<Node> for Node {
 	fn filter(self, f: fn(&Node) -> bool) -> Vec<Node> {
 		match self {
-			Node::List(items, _) => items.into_iter().filter(f).collect(),
+			Node::List(items, _, _) => items.into_iter().filter(f).collect(),
 			_ => vec![],
 		}
 	}

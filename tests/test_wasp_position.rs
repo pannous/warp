@@ -11,7 +11,7 @@ city: "NYC""#;
 	let node = WaspParser::parse(wasp);
 	println!("Parsed: {:?}", node);
 
-	if let Node::List(items, _) = node {
+	if let Node::List(items, _, _) = node {
 		// First item should be at line 1
 		if let Some(first) = items.get(0) {
 			if let Some(meta) = first.get_lineinfo() {
@@ -57,7 +57,7 @@ age: 25"#;
 	let node = WaspParser::parse(wasp);
 	println!("Parsed with comments: {:?}", node);
 
-	if let Node::List(items, _) = node {
+	if let Node::List(items, _, _) = node {
 		if let Some(first) = items.get(0) {
 			if let Some(meta) = first.get_lineinfo() {
 				println!(
@@ -123,7 +123,7 @@ fn test_column_tracking() {
 	let node = WaspParser::parse(wasp);
 	println!("Parsed: {:?}", node);
 
-	if let Node::List(items, _) = node {
+	if let Node::List(items, _, _) = node {
 		if let Some(first) = items.get(0) {
 			if let Some(meta) = first.get_lineinfo() {
 				println!("First at: {}:{}", meta.line.unwrap(), meta.column.unwrap());

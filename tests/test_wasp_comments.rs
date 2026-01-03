@@ -15,7 +15,7 @@ fn test_line_comments() {
 	println!("Parsed with line comment: {:?}", node);
 
 	// Should parse successfully
-	if let Node::List(items, _) = node {
+	if let Node::List(items, _, _) = node {
 		eq!(items.len(), 2);
 	}
 }
@@ -32,7 +32,7 @@ fn test_block_comments() {
 	let node = WaspParser::parse(wasp);
 	println!("Parsed with block comment: {:?}", node);
 
-	if let Node::List(items, _) = node {
+	if let Node::List(items, _, _) = node {
 		eq!(items.len(), 2);
 	}
 }
