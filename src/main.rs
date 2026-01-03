@@ -1,13 +1,10 @@
 #![allow(dead_code, unused_imports)]
-
 mod extensions;
-
 // use crate::extensions::*; // crate for F12
 use extensions::lists::*;
 use extensions::numbers::*;
 use extensions::strings::*;
 use extensions::utils::*;
-
 pub mod node;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
@@ -27,15 +24,14 @@ pub mod meta;
 // pub use extensions::*;
 
 // typedef Vec<String> StringVec in rust:
-type Strings = Vec<String>;
 
 #[allow(unused_variables)] // for testing
 #[cfg(not(any(feature = "wasm", test)))]
 fn main() {
 	println!("Warp 🎡𐃏 ☸ WASM Building Program");
 	// test_bla_lib();
-	let url = "https://files.pannous.com/test";
-	let test: String = download(url);
+	// let url = "https://files.pannous.com/test";
+	// let test: String = download(url);
 	let n = Number::Int(5);
 	let f = Number::Float(5.0);
 	let c = Number::Complex(5.0, 7.0);
@@ -43,7 +39,6 @@ fn main() {
 	let f: f64 = (q / n).into();
 	// put!((q/n) as f64);
 	// put!("q.sign();
-	put!("test ", test);
 
 	let ranges = 1..10;
 	let range: Vec<i32> = ranges.collect();
@@ -64,4 +59,3 @@ fn main() {
 	print_list(numbers_as_chars);
 	// let numbers_as_strings = numbers.map(|n| n.to_string());
 }
-

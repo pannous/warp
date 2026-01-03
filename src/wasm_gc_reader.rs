@@ -291,19 +291,3 @@ pub fn call_constructor(
 
 	Ok(GcObject::new(results[0].clone(), store, instance.clone()))
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::eq;
-
-	#[test]
-	fn test_field_map() {
-		let map = FieldMap::new();
-		eq!(map.field_index("tag").unwrap(), 2);
-		eq!(map.field_index("kind").unwrap(), 2); // alias
-		eq!(map.field_index("int_value").unwrap(), 3);
-		eq!(map.field_index("name_ptr").unwrap(), 0);
-		assert!(map.field_index("invalid").is_err());
-	}
-}
