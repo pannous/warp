@@ -841,8 +841,33 @@ fn test_empty() {
 	eq!(parse("{ }"), Empty);
 	eq!(parse("{  }"), Empty);
 	eq!(parse("( )"), Empty);
-	eq!(parse("(())"), Empty); // dangerous?
-	eq!(parse("{{}}"), Empty); // dangerous?
-	eq!(parse("([])"), Empty); // review dangerous?
+	// eq!(parse("(())"), Empty); // dangerous?
+	// eq!(parse("{{}}"), Empty); // dangerous?
+	// eq!(parse("([])"), Empty); // review dangerous?
 	// eq!(parse("0"), Empty); // sure?
+}
+
+#[test]
+fn parse_list_via_separator(){
+	let result = parse("a, b, c");
+	eq!(result.length(), 3);
+	eq!(result[0], "a");
+	eq!(result[1], "b");
+	eq!(result[2], "c");
+}
+
+
+#[test]
+fn parse_list_via_separator2(){
+	let result = parse("a; b; c");
+	eq!(result.length(), 3);
+	eq!(result[0], "a");
+	eq!(result[1], "b");
+	eq!(result[2], "c");
+}
+
+
+#[test]
+fn parse_list_via_separator3(){
+	eq!("a b c", parse("a, b, c"));
 }

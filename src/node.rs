@@ -919,12 +919,12 @@ impl fmt::Debug for Node {
 					write!(f, "{:?} ", nodes.get(0).unwrap())
 				} else {
 					match bracket {
-						Bracket::Curly => write!(f, "{{{:?}}}", nodes),
-						Bracket::Square => write!(f, "[{:?}]", nodes),
+						Bracket::None => write!(f, "{:?}", nodes),
 						Bracket::Round => write!(f, "({:?})", nodes),
+						Bracket::Square => write!(f, "[{:?}]", nodes),
+						Bracket::Curly => write!(f, "{{{:?}}}", nodes),
 						Bracket::Less => write!(f, "<{:?}>", nodes),
 						Bracket::Other(open, close) => write!(f, "{}{:?}{}", open, nodes, close),
-						Bracket::None => write!(f, "{:?}", nodes),
 					}
 				}
 			}
@@ -1814,10 +1814,10 @@ impl fmt::Display for Node {
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),
 			List(items, bracket, separator) => {
-				write!(f, "{}", bracket);
+				write!(f, "{}", bracket)?;
 				for (i, item) in items.iter().enumerate() {
 					if i > 0 {
-						write!(f, "{} ", separator);
+						write!(f, "{} ", separator)?;
 					}
 					write!(f, "{}", item)?;
 				}
