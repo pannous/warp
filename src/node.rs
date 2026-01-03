@@ -989,40 +989,35 @@ pub enum Bracket {
 	Other(char, char),
 }
 
-impl fmt::Display for Bracket {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Bracket {
+	fn opening(&self) -> char {
 		match self {
-			Bracket::Curly => write!(f, "{{"),
-			Bracket::Square => write!(f, "["),
-			Bracket::Round => write!(f, "("),
-			Bracket::Less => write!(f, "<"),
-			Bracket::None => write!(f, ""),
-			Bracket::Other(open, _) => write!(f, "{}", open),
+			Bracket::None => ' ',
+			Bracket::Curly => '{',
+			Bracket::Square => '[',
+			Bracket::Round => '(',
+			Bracket::Less => '<',
+			Bracket::Other(open, _) => *open
+		}
+	}
+	pub fn closing(&self) -> char {
+		match self {
+			Bracket::None => ' ',
+			Bracket::Curly => '}',
+			Bracket::Square => ']',
+			Bracket::Round => ')',
+			Bracket::Less => '>',
+			Bracket::Other(_, close) => *close
 		}
 	}
 }
 
-impl Bracket {
-	pub fn closing(&self) -> &str {
-		match self {
-			Bracket::Curly => "}",
-			Bracket::Square => "]",
-			Bracket::Round => ")",
-			Bracket::Less => ">",
-			Bracket::None => "",
-			Bracket::Other(_, close) => {
-				// Return a static str for common cases
-				match *close {
-					')' => ")",
-					']' => "]",
-					'}' => "}",
-					'>' => ">",
-					_ => "",
-				}
-			}
-		}
+impl fmt::Display for Bracket {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.opening())
 	}
 }
+
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
@@ -1061,11 +1056,14 @@ impl Separator {
 	pub fn precedence(&self) -> u8 {
 		match self {
 			Separator::Space => 0,
-			Separator::Comma => 1,
-			Separator::Semicolon => 2,
-			Separator::Newline => 3,
-			Separator::Tab => 4,
-			Separator::None => 255,
+			// Separator::Tab => 1, //  "a,b,c d,e,f"  == "a b (c d) e f " in csv!
+			// todo Tab depends on context!, also indent vs dedent !!
+			Separator::Comma => 2,
+			Separator::Semicolon => 3,
+			Separator::Tab => 4, //  "a;b;c d;e;f"  == "((a b c) (d e f))" in tsv!
+			Separator::Newline => 5,
+			// Separator::Block => 5, //
+			Separator::None => 255, // or -1?
 		}
 	}
 }
