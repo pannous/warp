@@ -24,7 +24,7 @@ use crate::wasp_parser::parse;
 // This is a single struct that can represent any node type
 
 // todo move node layout to wasp_abi.rs
-// any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ... todo ...
+// todo ... any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ...
 
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
@@ -58,9 +58,10 @@ pub enum DataType {
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
 	Empty,   // Null, Nill, None, Ø, ø null nill none nil
+	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
+	True,
 	Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
 	// Kind(i64), enum NodeKind in serialization
-	// Number(i64),
 	Number(Number),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
@@ -77,31 +78,14 @@ pub enum Node {
 		body: Box<Node>,
 	}, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
 	// (use Empty for no attrs)
-	List(Vec<Node>, Bracket, Separator), // merged Block into List, using Bracket to distinguish {}, [], ()
-	// Data(Dada), // most generic container for any kind of data not captured by other node types
-	Data(Dada),
-	Meta {
-		node: Box<Node>,
-		data: Box<Node>,
-	}, // Wrapper to attach metadata to any node (data stores metadata as Node)
-	// List(Vec<Box<dyn Any>>), // ⚠️ Any means MIXTURE of any type, not just Node or int …
-	// List(Vec<AllowedListTypes>), // ⚠️ must be explicit types
-	// List(Vec<T>) // turns whole Node into a generic type :(
-	False,
-	True,
+	List(Vec<Node>, Bracket, Separator),
+	Data(Dada), // most generic container for any kind of data not captured by other node types
+	Meta { node: Box<Node>, data: Box<Node> },
+
 	// Type(Box<Node>, Box<Node>), // Special Class Ast(Node, AstKind) !)
 	// Ast(Node, AstKind), // wrap AST nodes if needed
 	// Class(String, Box<Node>), // name, body // class A{a:int}
-	// Type via  Meta(node, MetaData { Type })
-	// e.g.
-	//     Meta(
-	//     Symbol("bob"),
-	//     List(vec![
-	//         Pair(Symbol("type"), Meta(Symbol("Bob"), Id(32))), // SOFT LINK VIA SYMBOL, not FAT Tree!
-	//         Pair(Symbol("type"), Symbol("Bob")),
-	//         Pair(Symbol("span"), List(vec![Number(12), Number(15)])),
-	//     ])
-	// )
+	// Type via  Meta(node, Data { Type }) ? NAH Type is essential!!
 }
 
 impl Node {
@@ -119,7 +103,7 @@ impl Node {
 	}
 	pub fn typ(&self) -> Node {
 		// including Ast(Node, AstKind) !
-		todo!()
+		todo!("typ via kind or field and/or metadata?")
 	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
@@ -144,7 +128,11 @@ impl Node {
 		todo!("remove from {} to {}", from, to)
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
-		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
+		List(
+			map(p0, |s| Text(s.to_string())),
+			Bracket::Square,
+			Separator::None,
+		)
 	}
 	pub fn first(&self) -> Node {
 		match self {
@@ -197,12 +185,24 @@ impl Node {
 		match (self, other) {
 			(Number(n), Number(m)) => Number(n.add(m)),
 			(Text(s), Text(m)) => Text(format!("{}{}", s, m)),
-			(List(xs, br, sep), List(ys, _, _)) => List(xs.iter().cloned().chain(ys).collect(), br.clone(), sep.clone()),
-			(List(xs, br, sep), b) => List(xs.iter().cloned().chain([b]).collect(), br.clone(), sep.clone()),
-			(a, List(ys, br, sep)) => List([a.clone()].into_iter().chain(ys).collect(), br.clone(), sep.clone()),
+			(List(xs, br, sep), List(ys, _, _)) => List(
+				xs.iter().cloned().chain(ys).collect(),
+				br.clone(),
+				sep.clone(),
+			),
+			(List(xs, br, sep), b) => List(
+				xs.iter().cloned().chain([b]).collect(),
+				br.clone(),
+				sep.clone(),
+			),
+			(a, List(ys, br, sep)) => List(
+				[a.clone()].into_iter().chain(ys).collect(),
+				br.clone(),
+				sep.clone(),
+			),
 			(Meta { node, .. }, n) => node.add(n),
 			(n, Meta { node, .. }) => n.add(*node.clone()),
-			_ => todo!(),
+			_ => todo!("rewrap a.add(b) => (a b) ?"),
 		}
 	}
 
@@ -283,6 +283,8 @@ impl Node {
 			_ => String::new(),
 		}
 	}
+
+	// fixme todo completely rework this function and move it to another file!
 	pub fn from_gc_object(obj: &GcObject) -> Node {
 		// Read the tag field to determine node type
 		// If this fails, the ref is likely null
@@ -461,7 +463,7 @@ impl Index<&String> for Node {
 				} else {
 					&data[i]
 				}
-			},
+			}
 			_ => &Empty,
 		}
 	}
@@ -509,7 +511,7 @@ impl Index<&str> for Node {
 					&Empty
 				}
 			}
-			Meta { node, data} => {
+			Meta { node, data } => {
 				if node[i] != Empty {
 					&node[i]
 				} else {
@@ -563,25 +565,7 @@ impl IndexMut<&String> for Node {
 
 impl IndexMut<&str> for Node {
 	fn index_mut(&mut self, i: &str) -> &mut Self::Output {
-		match self {
-			List(nodes, _, _) => {
-				if let Some(found) = nodes.iter_mut().find(|node| match node {
-					Key(k, _) => k == i,
-					Text(t) => t == i,
-					_ => false,
-				}) {
-					// If we found a Key, return mutable reference to its value
-					match found {
-						Key(_, v) => v.as_mut(),
-						other => other,
-					}
-				} else {
-					panic!("Key '{}' not found", i)
-				}
-			}
-			Meta { node, .. } => &mut node[i],
-			_ => panic!("Cannot mutably index this node type"),
-		}
+		&mut self[&i.to_string()]
 	}
 }
 
@@ -646,9 +630,9 @@ impl Node {
 		)
 	}
 
-	pub fn with_meta(self, metadata: LineInfo) -> Self {
-		// Store MetaData as a Data node
-		let data_node = Node::data(metadata);
+	pub fn with_meta_data<T: 'static + Clone + PartialEq>(self, data: T) -> Self {
+		// Store arbitrary MetaData as a Data node
+		let data_node = Node::data(data);
 		Meta {
 			node: Box::new(self),
 			data: Box::new(data_node),
@@ -728,7 +712,28 @@ impl Node {
 	}
 
 	pub fn serialize(&self) -> String {
+		self.serialize_recurse(false)
+	}
 
+	pub fn meta_string(&self) -> String {
+		// todo as impl for Meta?
+		// Extract MetaData from Data node if present
+		if self["comment"] != Empty {
+			return format!("/* {} */", self["comment"]);
+		}
+		if let Data(dada) = self {
+			if let Some(_info) = dada.downcast_ref::<LineInfo>() {
+				// if line_info { // noone ever cares!
+				// 	format!("/* line:{} column:{} */", info.line, info.column);
+				// }
+			} else {
+				return format!("{:?}", dada);
+			}
+		}
+		"".to_string()
+	}
+
+	pub fn serialize_recurse(&self, meta: bool) -> String {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
@@ -742,24 +747,29 @@ impl Node {
 					format!("{}{}{}", bracket, nodes[0].serialize(), close)
 				} else {
 					let items: Vec<String> = nodes.iter().map(|n| n.serialize()).collect();
-					format!("{}{}{}", bracket, items.join(&*(separator.to_string() + " ")), close)
+					format!(
+						"{}{}{}",
+						bracket,
+						items.join(&*(separator.to_string() + " ")),
+						close
+					)
 				}
 			}
-			Key(k, v) => format!("{}={}", k, v.serialize_recurse()),
-			Pair(a, b) => format!("{}:{}", a.serialize_recurse(), b.serialize_recurse()),
+			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
+			Pair(a, b) => format!("{}:{}", a.serialize_recurse(meta), b.serialize_recurse(meta)),
 			Tag {
 				title,
 				params,
 				body,
 			} => {
 				if **params == Empty {
-					format!("{}{}", title, body.serialize_recurse())
+					format!("{}{}", title, body.serialize_recurse(meta))
 				} else {
 					format!(
 						"{}<{}>{}",
 						title,
-						params.serialize_recurse(),
-						body.serialize_recurse()
+						params.serialize_recurse(meta),
+						body.serialize_recurse(meta)
 					)
 				}
 			}
@@ -768,14 +778,16 @@ impl Node {
 			True => "true".to_string(),
 			False => "false".to_string(),
 			// Meta { node, data } => format!("{} /* {} */", node.serialize_impl(), data),
-			Meta { node, data:_ } => node.serialize_recurse(),// ignore metadata
+			Meta { node, data: _ } => {
+				if meta {
+					node.meta_string()
+				} else {
+					"".s()
+				}
+			}
 			Data(d) => format!("Data({})", d.type_name),
 			_ => format!("{:?}", self),
 		}
-	}
-
-	pub fn serialize_recurse(&self) -> String { // todo why?
-		self.serialize()
 	}
 
 	pub fn iter(&self) -> NodeIter {
@@ -791,6 +803,16 @@ impl Node {
 			List(items, _, _) => NodeIter::new(items),
 			Meta { node, .. } => (*node).clone().into_iter(),
 			_ => NodeIter::new(vec![]),
+		}
+	}
+
+	// fixme unify with size() ?
+	// fixme create one variant which counts meta notes and one which ignores them
+	pub fn len(&self) -> usize {
+		match self {
+			List(items, _, _) => items.len(),
+			Meta { node, .. } => node.len(),
+			_ => 0,
 		}
 	}
 
@@ -888,7 +910,7 @@ impl Node {
 				map.insert("_type".to_string(), Value::String(d.type_name.clone()));
 				Value::Object(map)
 			}
-			Meta { node, data:_ } => {
+			Meta { node, data: _ } => {
 				// fucking json has no comments
 				node.to_json_value()
 			}
@@ -897,7 +919,7 @@ impl Node {
 				map.insert("_error".to_string(), Value::String(e.clone()));
 				Value::Object(map)
 			}
-			_ => todo!(),
+			_ => todo!("to_json_value for {:?}", self),
 		}
 	}
 
@@ -909,56 +931,7 @@ impl Node {
 impl fmt::Debug for Node {
 	// impl fmt::Debug for Node {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Symbol(s) => write!(f, "{}", s),
-			Node::Number(n) => write!(f, "{}", n),
-			Text(t) => write!(f, "'{}'", t),
-			Char(c) => write!(f, "'{}'", c),
-			List(nodes, bracket, _) => {
-				if nodes.len() == 1 {
-					write!(f, "{:?} ", nodes.get(0).unwrap())
-				} else {
-					match bracket {
-						Bracket::None => write!(f, "{:?}", nodes),
-						Bracket::Round => write!(f, "({:?})", nodes),
-						Bracket::Square => write!(f, "[{:?}]", nodes),
-						Bracket::Curly => write!(f, "{{{:?}}}", nodes),
-						Bracket::Less => write!(f, "<{:?}>", nodes),
-						Bracket::Other(open, close) => write!(f, "{}{:?}{}", open, nodes, close),
-					}
-				}
-			}
-			Key(k, v) => write!(f, "{}={:?}", k, v), //  vs
-			Pair(a, b) => write!(f, "{:?}:{:?}", a, b),
-			Tag {
-				title,
-				params,
-				body,
-			} => match **params {
-				Empty => write!(f, "{}{{{:?}}}", title, body),
-				_ => write!(f, "<{} {:?}>{:?}", title, params, body),
-			},
-			Data(d) => write!(f, "{:?}", d),
-			Meta { node, data } => {
-				// Extract MetaData from Data node if present
-				if data["comment"] != Empty {
-					return write!(f, "{:?} /* {} */", node, data["comment"]);
-				}
-				if let Data(dada ) = data.as_ref() {
-					if let Some(info) = dada.downcast_ref::<LineInfo>() {
-						return write!(f, "{:?} /* {:?}:{:?} */", node, info.line, info.column);
-					} else {
-						return write!(f, "{:?} /* {} */", node, dada);
-					}
-				}
-				write!(f, "{:?}", node)
-			}
-			Error(e) => write!(f, "Error({})", e),
-			Empty => write!(f, "ø"),
-			True => write!(f, "true"),
-			False => write!(f, "false"),
-			_ => todo!(),
-		}
+		write!(f, "{}", self.serialize())
 	}
 }
 
@@ -1007,16 +980,14 @@ impl<'a> IntoIterator for &'a Node {
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Bracket {
-	Curly, // '{'
+	Curly,  // '{'
 	Square, // '['
-	Round, // '('
-	Less, // '<' rename to ?
-	None,  // list via separator 1,2,3
+	Round,  // '('
+	Less,   // '<' rename to ?
+	None,   // list via separator 1,2,3
 	// brace or parenthesis
 	Other(char, char),
 }
-
-
 
 impl fmt::Display for Bracket {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1048,19 +1019,19 @@ impl Bracket {
 					'>' => ">",
 					_ => "",
 				}
-			},
+			}
 		}
 	}
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
-	Space,    // ' ' - tightest binding
-	Comma,    // ','
-	Semicolon,// ';'
-	Newline,  // '\n'
-	Tab,      // '\t'
-	None,     // no separator (default)
+	Space,     // ' ' - tightest binding
+	Comma,     // ','
+	Semicolon, // ';'
+	Newline,   // '\n'
+	Tab,       // '\t'
+	None,      // no separator (default)
 }
 
 impl Separator {
@@ -1211,7 +1182,7 @@ impl PartialEq for Node {
 				_ => false,
 			},
 			// _ => false,
-			_ => todo!(),
+			_ => todo!("PartialEq not implemented for {:?}", self),
 		}
 	}
 }

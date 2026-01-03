@@ -7,25 +7,12 @@ use log::trace;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct LineInfo {
-	pub line: Option<usize>,
-	pub column: Option<usize>,
+	// #cfg(DEBUG!)]{  TODO conditional compilation
+	pub line_nr: usize,
+	pub column: usize,
+	pub line : String, // debug! expensive but useful
 }
 
-impl LineInfo {
-	pub fn new() -> Self {
-		LineInfo {
-			line: None,
-			column: None,
-		}
-	}
-
-	pub fn with_position(line: usize, column: usize) -> Self {
-		LineInfo {
-			line: Some(line),
-			column: Some(column),
-		}
-	}
-}
 
 // Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {

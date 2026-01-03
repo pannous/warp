@@ -1,7 +1,7 @@
 // use wasp::wasp_parser::WaspParser::parse;
 use wasp::node::Node;
 use wasp::wasp_parser::{parse, WaspParser};
-use wasp::{eq, is};
+use wasp::{eq, is, put};
 
 #[test]
 fn test_line_comments() {
@@ -15,9 +15,7 @@ fn test_line_comments() {
 	println!("Parsed with line comment: {:?}", node);
 
 	// Should parse successfully: comment + name + age = 3 items
-	if let Node::List(items, _, _) = node {
-		eq!(items.len(), 3);
-	}
+	eq!(node.len(), 3);
 }
 
 #[test]
@@ -53,6 +51,9 @@ fn test_inline_comments() {
 fn test_comment_metadata() {
 	let wasp = "// Important config\nport: 8080";
 	let node = WaspParser::parse(wasp);
+	put!(node.serialize());
+	put!(node.serialize_recurse(true));
+	println!("Node: {}", node);
 	println!("Node: {:?}", node);
 	println!("Comment metadata: {:?}", node["comment"]);
 	assert!(node["comment"].to_string().contains("Important config"));
