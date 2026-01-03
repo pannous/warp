@@ -20,7 +20,8 @@
       "Bash(chmod:*)",
       "Bash(/Users/me/dev/angles/warp/failing_tests.sh)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cat:*)"
     ]
   },
   "hooks": {
