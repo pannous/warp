@@ -1,17 +1,20 @@
 #!/bin/bash
-# Simplified test runner with --no-fail-fast default
+# Simplified test runner - matches IDE configuration exactly
 # Creates clean test_results.txt with just pass/fail lists
 
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 
-echo "Compiling tests... (profile: fast)"
-# Match RustRover flags exactly for fingerprint consistency
+# Match IDE: unset CARGO_TARGET_DIR to use ./target
+unset CARGO_TARGET_DIR
+
+echo "Compiling tests..."
+# Match RustRover's runner injection exactly
 RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
-cargo --offline test --color=always --profile fast --no-fail-fast --config "$RUNNER" --no-run || exit 1
+cargo --offline test --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
 
 echo "Running all tests..."
-FAST_TIMEOUT=1 cargo --offline test --color=always --profile fast --no-fail-fast --config "$RUNNER" -- --test-threads=16 -Z unstable-options --show-output 2>&1 | tee "$TEMP_FILE"
+cargo --offline test --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=16 2>&1 | tee "$TEMP_FILE"
 
 # Count test results
 TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')

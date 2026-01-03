@@ -114,9 +114,10 @@ codegen-units = 16     # Rust default (256 was wasteful)
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
 
-[profile.fast]
-inherits = "dev"
-debug = false          # No debug symbols → /opt/cargo/fast/
+# don't use for now to see if it helps with IDEs using same build cache
+#[profile.fast]
+#inherits = "dev"
+#debug = false          # No debug symbols → /opt/cargo/fast/
 
 [profile.release]
 incremental = false    # Release doesn't need incremental
