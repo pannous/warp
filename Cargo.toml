@@ -105,7 +105,8 @@ wasmparser = "*" # A WebAssembly binary format parser
 incremental = true
 # Maximum build speed optimizations
 opt-level = 0          # No optimization for faster compile
-debug = 0              # Minimal debug info for faster compile
+#debug = 0              # Minimal debug info for faster compile (override with CARGO_PROFILE_DEV_DEBUG=true)
+debug = 1              # if we need stepping (override with CARGO_PROFILE_DEV_DEBUG=false)
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
