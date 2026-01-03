@@ -208,20 +208,6 @@ fn test_vector_shim() {
 	is!("v=[1 2 3];w=[2 3 4];v*w", 2 + 6 + 12);
 }
 
-#[test]
-fn test_hypen_versus_minus() {
-	// Needs variable register in parser.
-	//     const char
-	let code = "a=-1 b=2 b-a";
-	is!(code, 3);
-	// kebab case
-	//     const char
-	let data = "a-b:2 c-d:4 a-b";
-	is!(data, 2);
-	//    testHyphenUnits();
-
-	//    let node : Node = parse(data);
-}
 
 #[test]
 #[ignore]

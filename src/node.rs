@@ -4,7 +4,7 @@ extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{CloneAny, Dada, MetaData};
+use crate::meta::{CloneAny, Dada, LineInfo};
 use crate::wasm_gc_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
@@ -398,6 +398,29 @@ impl Node {
 	pub fn todo(p0: String) -> Node {
 		Text(format!("TODO: {}", p0))
 	}
+
+	/// Convert Node to bool following truthiness rules:
+	/// - Empty, False, 0, "", [] -> false
+	/// - Everything else -> true
+	pub fn to_bool(&self) -> bool {
+		match self {
+			False => false,
+			True => true,
+			Empty => false,
+			Node::Number(ref n) if n.zero() => false,
+			Node::Number(_) => true,
+			Text(ref s) if s.is_empty() => false,
+			Text(_) => true,
+			Symbol(ref s) if s.is_empty() => false,
+			Symbol(_) => true,
+			Char(c) if c == &'\0' => false,
+			Char(_) => true,
+			List(ref items, _) if items.is_empty() => false,
+			List(_, _) => true,
+			Meta { node, .. } => node.to_bool(),
+			_ => true, // Other types (Data, Key, Pair, Tag) are truthy
+		}
+	}
 }
 
 impl Index<usize> for Node {
@@ -490,11 +513,10 @@ impl Index<&str> for Node {
 				if node[i] != Empty {
 					&node[i]
 				} else {
-					println!("fdsa indexing meta  by string: {}", i);
 					&data[i]
 				}
 			}
-			_ => todo!("index for {}", self) // &Empty,
+			_ => &Empty,
 		}
 	}
 }
@@ -623,7 +645,7 @@ impl Node {
 		)
 	}
 
-	pub fn with_meta(self, metadata: MetaData) -> Self {
+	pub fn with_meta(self, metadata: LineInfo) -> Self {
 		// Store MetaData as a Data node
 		let data_node = Node::data(metadata);
 		Meta {
@@ -647,12 +669,11 @@ impl Node {
 		}
 	}
 
-	pub fn get_metadata(&self) -> Option<MetaData> {
+	pub fn get_lineinfo(&self) -> Option<LineInfo> {
 		match self {
 			Meta { data, .. } => {
-				// Extract MetaData from Data node
 				if let Data(dada) = data.as_ref() {
-					dada.downcast_ref::<MetaData>().cloned()
+					dada.downcast_ref::<LineInfo>().cloned()
 				} else {
 					None
 				}
@@ -872,7 +893,7 @@ impl Node {
 				map.insert("_type".to_string(), Value::String(d.type_name.clone()));
 				Value::Object(map)
 			}
-			Meta { node, data } => {
+			Meta { node, data:_ } => {
 				// fucking json has no comments
 				node.to_json_value()
 			}
@@ -927,8 +948,8 @@ impl fmt::Debug for Node {
 					return write!(f, "{:?} /* {} */", node, data["comment"]);
 				}
 				if let Data(dada ) = data.as_ref() {
-					if let Some(metadata) = dada.downcast_ref::<MetaData>() {
-						// return write!(f, "{:?} /* {}:{} */", node, metadata.line, metadata.column);
+					if let Some(info) = dada.downcast_ref::<LineInfo>() {
+						return write!(f, "{:?} /* {:?}:{:?} */", node, info.line, info.column);
 					} else {
 						return write!(f, "{:?} /* {} */", node, dada);
 					}
@@ -1225,6 +1246,19 @@ impl PartialEq<bool> for &Node {
 	}
 }
 
+// Reverse: bool == Node and bool == &Node
+impl PartialEq<Node> for bool {
+	fn eq(&self, other: &Node) -> bool {
+		other.eq(self)
+	}
+}
+
+impl PartialEq<&Node> for bool {
+	fn eq(&self, other: &&Node) -> bool {
+		(*other).eq(self)
+	}
+}
+
 impl PartialEq<char> for &Node {
 	fn eq(&self, other: &char) -> bool {
 		(*self).eq(other)
@@ -1267,29 +1301,25 @@ impl PartialOrd<f64> for Node {
 	}
 }
 
+// Implement Not for owned Node - returns Node for compatibility with existing tests
 impl Not for Node {
 	type Output = Node;
 
 	fn not(self) -> Self::Output {
-		match self {
-			True => False,
-			False => True,
-			Empty => True,                           // !null == true
-			Node::Number(ref n) if n.zero() => True, // !0 == true
-			Node::Number(_) => False,                // !non-zero == false
-			Text(ref s) if s.is_empty() => True,     // !"" == true
-			Text(_) => False,                        // !non-empty string == false
-			Symbol(ref s) if s.is_empty() => True,
-			Symbol(_) => False,
-			List(ref items, _) if items.is_empty() => True, // ![] == true
-			List(_, _) => False,                            // !non-empty list == false
-			Meta { node, data } => Meta {
-				node: Box::new(!(*node.clone())),
-				data: data.clone(),
-			},
-			// Apply not to wrapped node, preserve metadata
-			_ => False, // Other types default to falsy
+		if self.to_bool() {
+			False
+		} else {
+			True
 		}
+	}
+}
+
+// Implement Not for &Node to support !&node["key"] syntax - returns bool
+impl Not for &Node {
+	type Output = bool;
+
+	fn not(self) -> Self::Output {
+		!self.to_bool()
 	}
 }
 
@@ -1343,6 +1373,19 @@ impl From<bool> for Node {
 impl From<char> for Node {
 	fn from(c: char) -> Self {
 		Char(c)
+	}
+}
+
+// Allow Node to be converted to bool via .into() or bool::from()
+impl From<Node> for bool {
+	fn from(node: Node) -> Self {
+		node.to_bool()
+	}
+}
+
+impl From<&Node> for bool {
+	fn from(node: &Node) -> Self {
+		node.to_bool()
 	}
 }
 

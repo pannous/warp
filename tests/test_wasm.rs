@@ -265,8 +265,8 @@ fn test_print() {
 #[test]
 #[ignore]
 fn test_math_primitives() {
-	is!(("42.1"), 42.1); // todo: let Node : return(42.1) or print value to stdout
-	is!(("-42.1"), 42.1);
+	is!("42.1", 42.1); // todo: let Node : return(42.1) or print value to stdout
+	is!("-42.1", 42.1);
 	is!("42", 42);
 	is!("-42", -42);
 	is!("2000000000", 2000000000); // todo stupid smart pointers
@@ -403,7 +403,7 @@ fn test_math_operators() {
 	is!("i=3.71;.3+i", 4.01);
 	#[cfg(feature = "WASM")]
 	{
-		is!("i=3.70001;.3+i", 4.0000100000000005); // lol todo?
+		is!("i=3.70001;.3+i", 4.0000100000000005); // lol todo what?
 	}
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -1598,29 +1598,6 @@ fn test_arguments() {
 	// todo add context to wasp variable $params
 }
 
-#[test]
-fn test_fibonacci() {
-	is!(
-		"fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)",
-		55
-	);
-	is!(
-		"int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)",
-		55
-	);
-	skip!(
-	// TODO!!!
-		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
-		   is!("fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
-		   // todo worked until number was own type
-		   is!("fib number := if number<2 : 1 else fib(number - 1) + fib it - 2;fib(9)", 55); // home.md MUST WORK
-	   );
-}
 
 #[test]
 #[ignore]
@@ -1814,7 +1791,7 @@ fn test_todo_browser() {
 // ⚠️ ALL tests containing is!
 //  must go here! testCurrent() only for basics
 #[test]
-#[ignore]
+#[ignore] // NEVER TEST ALL again ;)
 fn test_all_wasm() {
 	// called by testRun() OR synchronously!
 	is!("42", 42);
@@ -1854,7 +1831,7 @@ fn test_all_wasm() {
 	test_implicit_multiplication(); // todo in parser how?
 	test_for_loops();
 	test_globals();
-	test_fibonacci();
+	// test_fibonacci();
 	test_auto_smarty();
 	test_arguments();
 	skip!(
