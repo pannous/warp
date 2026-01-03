@@ -1,0 +1,6 @@
+[profile.default]
+test-threads = 16
+#- Run all tests even if some fail
+fail-fast = false
+#- Warn after 3s, kill after 6s (2 periods)
+slow-timeout = { period = "3s", terminate-after = 2 }

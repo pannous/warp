@@ -30,7 +30,6 @@ fn test_indent_as_block() {
 } // 􀖯􀉶𠿜🕻🗠🂿	𝄉
 
 #[test]
-#[ignore]
 fn test_group_cascade1() {
 	let result0 = parse("a b; c d");
 	eq!(result0.length(), 2);
@@ -53,7 +52,6 @@ fn test_group_cascade1() {
 }
 
 #[test]
-#[ignore]
 fn test_group_cascade2() {
 	let result = parse("{ a b , c d ; e f , g h }");
 	let result1 = parse("{ a b , c d \n e f , g h }");
