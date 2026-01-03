@@ -17,8 +17,8 @@ fn normalize_blocks(node: &Node) -> Node {
 			params: Box::new(normalize_blocks(params)),
 			body: Box::new(normalize_blocks(body)),
 		},
-		List(items, Bracket::Curly) if items.len() == 1 => normalize_blocks(&items[0]),
-		List(items, _) if items.len() == 1 => normalize_blocks(&items[0]),
+		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
+		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
 		Pair(left, right) => Pair(
 			Box::new(normalize_blocks(left)),

@@ -77,7 +77,7 @@ pub enum Node {
 		body: Box<Node>,
 	}, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
 	// (use Empty for no attrs)
-	List(Vec<Node>, Bracket), // merged Block into List, using Bracket to distinguish {}, [], ()
+	List(Vec<Node>, Bracket, Separator), // merged Block into List, using Bracket to distinguish {}, [], ()
 	// Data(Dada), // most generic container for any kind of data not captured by other node types
 	Data(Dada),
 	Meta {
@@ -144,11 +144,11 @@ impl Node {
 		todo!("remove from {} to {}", from, to)
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
-		List(map(p0, |s| Text(s.to_string())), Bracket::Square)
+		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 	}
 	pub fn first(&self) -> Node {
 		match self {
-			List(xs, _) => {
+			List(xs, _, _) => {
 				if let Some(first) = xs.first() {
 					first.clone()
 				} else {
@@ -167,7 +167,7 @@ impl Node {
 		match self {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
 			Pair(_a, b) => b.as_ref().clone(),
-			List(xs, _) => {
+			List(xs, _, _) => {
 				if let Some(last) = xs.last() {
 					last.clone()
 				} else {
@@ -185,7 +185,7 @@ impl Node {
 	}
 	pub fn children(&self) -> Vec<Node> {
 		match self {
-			List(xs, _) => xs.clone(),
+			List(xs, _, _) => xs.clone(),
 			Meta { node, .. } => node.children(),
 			_ => vec![],
 		}
@@ -197,9 +197,9 @@ impl Node {
 		match (self, other) {
 			(Number(n), Number(m)) => Number(n.add(m)),
 			(Text(s), Text(m)) => Text(format!("{}{}", s, m)),
-			(List(xs, br), List(ys, _)) => List(xs.iter().cloned().chain(ys).collect(), br.clone()),
-			(List(xs, br), b) => List(xs.iter().cloned().chain([b]).collect(), br.clone()),
-			(a, List(ys, br)) => List([a.clone()].into_iter().chain(ys).collect(), br.clone()),
+			(List(xs, br, sep), List(ys, _, _)) => List(xs.iter().cloned().chain(ys).collect(), br.clone(), sep.clone()),
+			(List(xs, br, sep), b) => List(xs.iter().cloned().chain([b]).collect(), br.clone(), sep.clone()),
+			(a, List(ys, br, sep)) => List([a.clone()].into_iter().chain(ys).collect(), br.clone(), sep.clone()),
 			(Meta { node, .. }, n) => node.add(n),
 			(n, Meta { node, .. }) => n.add(*node.clone()),
 			_ => todo!(),
@@ -210,7 +210,7 @@ impl Node {
 		match self {
 			Key(_, v) => v.as_ref(),
 			Meta { node, .. } => node.values(),
-			List(_, _) => self,
+			List(_, _, _) => self,
 			_ => &Empty,
 		}
 	}
@@ -225,8 +225,8 @@ impl Node {
 			Key(_, _) => NodeKind::Key,
 			Pair(_, _) => NodeKind::Pair,
 			Tag { .. } => NodeKind::Tag,
-			List(_, Bracket::Curly) => NodeKind::Block, // {} still maps to Block kind
-			List(_, _) => NodeKind::List,
+			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
+			List(_, _, _) => NodeKind::List,
 			Data(_) => NodeKind::Data,
 			Meta { .. } => NodeKind::Meta,
 			Error(_) => NodeKind::Error,
@@ -237,7 +237,7 @@ impl Node {
 	}
 	pub fn length(&self) -> i32 {
 		match self {
-			List(items, _) => items.len() as i32,
+			List(items, _, _) => items.len() as i32,
 			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
@@ -272,7 +272,7 @@ impl Node {
 			Tag { title, .. } => title.clone(),
 			Key(k, _) => k.clone(),
 			Meta { node, .. } => node.name(),
-			List(items, _) => {
+			List(items, _, _) => {
 				// todo only for specific cases like expressions
 				if let Some(first) = items.first() {
 					first.name()
@@ -373,12 +373,12 @@ impl Node {
 
 			t if t == NodeKind::Block as i32 => {
 				// TODO: decode bracket info from int_value and read items
-				List(vec![], Bracket::Curly)
+				List(vec![], Bracket::Curly, Separator::None)
 			}
 
 			t if t == NodeKind::List as i32 => {
 				// TODO: read items from linked list structure
-				List(vec![], Bracket::Square)
+				List(vec![], Bracket::Square, Separator::None)
 			}
 
 			t if t == NodeKind::Data as i32 => {
@@ -415,8 +415,8 @@ impl Node {
 			Symbol(_) => true,
 			Char(c) if c == &'\0' => false,
 			Char(_) => true,
-			List(ref items, _) if items.is_empty() => false,
-			List(_, _) => true,
+			List(ref items, _, _) if items.is_empty() => false,
+			List(_, _, _) => true,
 			Meta { node, .. } => node.to_bool(),
 			_ => true, // Other types (Data, Key, Pair, Tag) are truthy
 		}
@@ -428,7 +428,7 @@ impl Index<usize> for Node {
 
 	fn index(&self, i: usize) -> &Self::Output {
 		match self {
-			List(elements, _) => elements.get(i).unwrap_or(&Empty),
+			List(elements, _, _) => elements.get(i).unwrap_or(&Empty),
 			Meta { node, .. } => &node[i],
 			_ => &Empty,
 		}
@@ -440,7 +440,7 @@ impl Index<&String> for Node {
 
 	fn index(&self, i: &String) -> &Self::Output {
 		match self {
-			List(nodes, _) => {
+			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
 					Key(k, _) => *k == *i,
 					Text(t) => *t == *i,
@@ -480,7 +480,7 @@ impl Index<&str> for Node {
 
 	fn index(&self, i: &str) -> &Self::Output {
 		match self {
-			List(nodes, _) => {
+			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
 					Key(k, _) => k == i,
 					Text(t) => t == i,
@@ -524,7 +524,7 @@ impl Index<&str> for Node {
 impl IndexMut<usize> for Node {
 	fn index_mut(&mut self, i: usize) -> &mut Self::Output {
 		match self {
-			List(elements, _) => {
+			List(elements, _, _) => {
 				if i < elements.len() {
 					&mut elements[i]
 				} else {
@@ -540,7 +540,7 @@ impl IndexMut<usize> for Node {
 impl IndexMut<&String> for Node {
 	fn index_mut(&mut self, i: &String) -> &mut Self::Output {
 		match self {
-			List(nodes, _) => {
+			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node {
 					Key(k, _) => k == i,
 					Text(t) => t == i,
@@ -564,7 +564,7 @@ impl IndexMut<&String> for Node {
 impl IndexMut<&str> for Node {
 	fn index_mut(&mut self, i: &str) -> &mut Self::Output {
 		match self {
-			List(nodes, _) => {
+			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node {
 					Key(k, _) => k == i,
 					Text(t) => t == i,
@@ -635,13 +635,14 @@ impl Node {
 		Node::Number(Number::Float(n))
 	}
 	pub fn list(xs: Vec<Node>) -> Self {
-		List(xs, Bracket::Square)
+		List(xs, Bracket::Square, Separator::None)
 	}
 	// pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
 	pub fn ints(xs: Vec<i32>) -> Self {
 		List(
 			map(xs, |x| Node::Number(Number::Int(x as i64))),
 			Bracket::Square,
+			Separator::None,
 		)
 	}
 
@@ -696,7 +697,7 @@ impl Node {
 	// member functions taking self
 	pub fn size(&self) -> usize {
 		match self {
-			List(elements, _) => elements.len(),
+			List(elements, _, _) => elements.len(),
 			Meta { node, .. } => node.size(),
 			_ => 0,
 		}
@@ -704,7 +705,7 @@ impl Node {
 
 	pub fn get(&self, i: usize) -> &Node {
 		match self {
-			List(elements, _) => elements.get(i).unwrap(),
+			List(elements, _, _) => elements.get(i).unwrap(),
 			Meta { node, .. } => node.get(i),
 			_ => &Empty,
 		}
@@ -727,65 +728,59 @@ impl Node {
 	}
 
 	pub fn serialize(&self) -> String {
-		self.serialize_impl(0)
+		self.serialize_recurse()
 	}
 
-	fn serialize_impl(&self, _depth: usize) -> String {
+	pub fn serialize_recurse(&self) -> String {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
 			Text(t) => format!("'{}'", t),
 			Char(c) => format!("'{}'", c),
-			List(nodes, bracket) => {
-				let (open, close) = match bracket {
-					Bracket::Curly => ('{', '}'),
-					Bracket::Square => ('[', ']'),
-					Bracket::Round => ('(', ')'),
-					Bracket::Other(o, c) => (*o, *c),
-				};
+			List(nodes, bracket, separator) => {
+				let close = bracket.closing();
 				if nodes.is_empty() {
-					format!("{}{}", open, close)
+					format!("{}{}", bracket, close)
 				} else if nodes.len() == 1 {
-					format!("{}{}{}", open, nodes[0].serialize_impl(_depth), close)
+					format!("{}{}{}", bracket, nodes[0].serialize_recurse(), close)
 				} else {
 					let items: Vec<String> =
-						nodes.iter().map(|n| n.serialize_impl(_depth)).collect();
-					format!("{}{}{}", open, items.join(", "), close)
+						nodes.iter().map(|n| n.serialize_recurse()).collect();
+					format!("{}{}{}", bracket, items.join(separator + " "), close)
 				}
 			}
-			Key(k, v) => format!("{}={}", k, v.serialize_impl(_depth)),
-			Pair(a, b) => format!("{}:{}", a.serialize_impl(_depth), b.serialize_impl(_depth)),
+			Key(k, v) => format!("{}={}", k, v.serialize_recurse()),
+			Pair(a, b) => format!("{}:{}", a.serialize_recurse(), b.serialize_recurse()),
 			Tag {
 				title,
 				params,
 				body,
 			} => {
 				if **params == Empty {
-					format!("{}{}", title, body.serialize_impl(_depth))
+					format!("{}{}", title, body.serialize_recurse())
 				} else {
 					format!(
 						"{}<{}>{}",
 						title,
-						params.serialize_impl(_depth),
-						body.serialize_impl(_depth)
+						params.serialize_recurse(),
+						body.serialize_recurse()
 					)
 				}
-			}
-			Data(d) => format!("Data({})", d.type_name),
-			Meta { node, data } => {
-				format!("{} /* {} */", node.serialize_impl(_depth), data)
 			}
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
 			False => "false".to_string(),
+			// Meta { node, data } => format!("{} /* {} */", node.serialize_impl(), data),
+			Meta { node, data:_ } => node.serialize_recurse(),// ignore metadata
+			Data(d) => format!("Data({})", d.type_name),
 			_ => format!("{:?}", self),
 		}
 	}
 
 	pub fn iter(&self) -> NodeIter {
 		match self {
-			List(items, _) => NodeIter::new(items.clone()),
+			List(items, _, _) => NodeIter::new(items.clone()),
 			Meta { node, .. } => node.iter(),
 			_ => NodeIter::new(vec![]),
 		}
@@ -793,7 +788,7 @@ impl Node {
 
 	pub fn into_iter(self) -> NodeIter {
 		match self {
-			List(items, _) => NodeIter::new(items),
+			List(items, _, _) => NodeIter::new(items),
 			Meta { node, .. } => (*node).clone().into_iter(),
 			_ => NodeIter::new(vec![]),
 		}
@@ -823,7 +818,7 @@ impl Node {
 			Node::Number(n) => Value::String(format!("{}", n)),
 			Text(s) | Symbol(s) => Value::String(s.clone()),
 			Char(c) => Value::String(c.to_string()),
-			List(items, bracket) => {
+			List(items, bracket, _) => {
 				// Curly braces -> object with items, Square/Round -> array
 				match bracket {
 					Bracket::Curly => {
@@ -849,7 +844,7 @@ impl Node {
 										map.insert(title.clone(), body.to_json_value());
 									}
 								}
-								List(nested, Bracket::Curly) => {
+								List(nested, Bracket::Curly, _) => {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
 										if let Key(k, v) = nested_item {
@@ -919,7 +914,7 @@ impl fmt::Debug for Node {
 			Node::Number(n) => write!(f, "{}", n),
 			Text(t) => write!(f, "'{}'", t),
 			Char(c) => write!(f, "'{}'", c),
-			List(nodes, bracket) => {
+			List(nodes, bracket, _) => {
 				if nodes.len() == 1 {
 					write!(f, "{:?} ", nodes.get(0).unwrap())
 				} else {
@@ -1017,6 +1012,98 @@ pub enum Bracket {
 	Other(char, char),
 }
 
+
+
+impl fmt::Display for Bracket {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Bracket::Curly => write!(f, "{{"),
+			Bracket::Square => write!(f, "["),
+			Bracket::Round => write!(f, "("),
+			Bracket::Other(open, _) => write!(f, "{}", open),
+		}
+	}
+}
+
+impl Bracket {
+	pub fn closing(&self) -> &str {
+		match self {
+			Bracket::Curly => "}",
+			Bracket::Square => "]",
+			Bracket::Round => ")",
+			Bracket::Other(_, close) => {
+				// Return a static str for common cases
+				match *close {
+					')' => ")",
+					']' => "]",
+					'}' => "}",
+					'>' => ">",
+					_ => "",
+				}
+			},
+		}
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Separator {
+	Space,    // ' ' - tightest binding
+	Comma,    // ','
+	Semicolon,// ';'
+	Newline,  // '\n'
+	Tab,      // '\t'
+	None,     // no separator (default)
+}
+
+impl Separator {
+	pub fn from_char(ch: char) -> Self {
+		match ch {
+			' ' => Separator::Space,
+			',' => Separator::Comma,
+			';' => Separator::Semicolon,
+			'\n' => Separator::Newline,
+			'\t' => Separator::Tab,
+			_ => Separator::None,
+		}
+	}
+
+	pub fn to_char(&self) -> Option<char> {
+		match self {
+			Separator::Space => Some(' '),
+			Separator::Comma => Some(','),
+			Separator::Semicolon => Some(';'),
+			Separator::Newline => Some('\n'),
+			Separator::Tab => Some('\t'),
+			Separator::None => None,
+		}
+	}
+
+	// Returns precedence: lower number = tighter binding
+	pub fn precedence(&self) -> u8 {
+		match self {
+			Separator::Space => 0,
+			Separator::Comma => 1,
+			Separator::Semicolon => 2,
+			Separator::Newline => 3,
+			Separator::Tab => 4,
+			Separator::None => 255,
+		}
+	}
+}
+
+impl fmt::Display for Separator {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Separator::Space => write!(f, " "),
+			Separator::Comma => write!(f, ","),
+			Separator::Semicolon => write!(f, ";"),
+			Separator::Newline => write!(f, "\\n"),
+			Separator::Tab => write!(f, "\\t"),
+			Separator::None => Ok(()),
+		}
+	}
+}
+
 impl PartialEq for Node {
 	fn eq(&self, other: &Self) -> bool {
 		match self {
@@ -1042,7 +1129,7 @@ impl PartialEq for Node {
 					Symbol(s) => s.is_empty(), // todo disallow empty symbol
 					Text(s) => s.is_empty(),
 					Node::Number(n) => n == &Number::Int(0), // ⚠️ CAREFUL
-					List(l, _) => l.is_empty(),
+					List(l, _, _) => l.is_empty(),
 					_ => self.size() == 0,
 				}
 			}
@@ -1107,8 +1194,8 @@ impl PartialEq for Node {
 				} => t1 == t2 && p1 == p2 && b1 == b2,
 				_ => false,
 			},
-			List(items1, _br1) => match other {
-				List(items2, _br2) => items1 == items2, // ignore bracket [1,2]=={1,2}
+			List(items1, _br1, _) => match other {
+				List(items2, _br2, _) => items1 == items2, // ignore bracket [1,2]=={1,2}
 				_ => false,
 			},
 			Error(e1) => match other {
@@ -1152,7 +1239,7 @@ impl PartialEq<bool> for Node {
 			Empty => !*other,
 			Symbol(s) => s.is_empty() == !*other,
 			Text(s) => s.is_empty() == !*other,
-			List(l, _) => l.is_empty() == !*other,
+			List(l, _, _) => l.is_empty() == !*other,
 			Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
 			Pair(_, _) => *other, // // todo NEVER false OR check value k:v ?
 			_ => false,
@@ -1718,15 +1805,15 @@ impl fmt::Display for Node {
 			Node::Number(n) => write!(f, "{:?}", n),
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),
-			List(items, _) => {
-				write!(f, "[")?;
+			List(items, bracket, separator) => {
+				write!(f, "{}", bracket);
 				for (i, item) in items.iter().enumerate() {
 					if i > 0 {
-						write!(f, ", ")?;
+						write!(f, "{} ", separator);
 					}
 					write!(f, "{}", item)?;
 				}
-				write!(f, "]")
+				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
 			_ => write!(f, "{:?}", self),
@@ -1756,7 +1843,7 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 		// Now no pass can accidentally drop meta!
 		Pair(a, b) => Pair(Box::new(map_node(*a, f)), Box::new(map_node(*b, f))),
 
-		List(xs, br) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br),
+		List(xs, br, sep) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br, sep),
 
 		other => f(other),
 	}

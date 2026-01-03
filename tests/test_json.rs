@@ -1,6 +1,7 @@
 use wasp::eq;
 use wasp::node::Bracket;
 use wasp::node::Node;
+use wasp::node::Separator;
 
 #[test]
 fn test_node_to_json_compact() {
@@ -21,7 +22,7 @@ fn test_implicit_html_structure() {
 		vec![
 			Node::List(
 				vec![Node::keys("li", "hi"), Node::keys("li", "ok")],
-				Bracket::Curly,
+				Bracket::Curly, Separator::None,
 			),
 			Node::Key(
 				"colors".to_string(),
@@ -32,7 +33,7 @@ fn test_implicit_html_structure() {
 				])),
 			),
 		],
-		Bracket::Curly,
+		Bracket::Curly, Separator::None,
 	);
 
 	let json = html.to_json().unwrap();
@@ -115,7 +116,7 @@ fn test_nested_node_json() {
 fn test_block_node_json() {
 	let n = Node::List(
 		vec![Node::int(1), Node::int(2), Node::int(3)],
-		Bracket::Curly,
+		Bracket::Curly, Separator::None,
 	);
 
 	let json = n.to_json().unwrap();
