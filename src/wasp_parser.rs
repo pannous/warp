@@ -855,4 +855,13 @@ mod tests {
 		}
 		eq!(parser.current_line, "line2");
 	}
+
+	#[test]
+	fn parse_list_via_separator_space() {
+		let result = WaspParser::parse("a b c");
+		eq!(result.length(), 3);
+		eq!(result[0], "a");
+		eq!(result[1], "b");
+		eq!(result[2], "c");
+	}
 }
