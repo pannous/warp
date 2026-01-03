@@ -1,6 +1,5 @@
 use wasp::eq;
 use wasp::node::Node::*;
-use wasp::node::{Bracket, Separator};
 use wasp::wasp_parser::parse_file;
 
 #[test]
