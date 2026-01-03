@@ -106,12 +106,17 @@ incremental = true
 # Maximum build speed optimizations
 opt-level = 0          # No optimization for faster compile
 #debug = 0              # Minimal debug info for faster compile (override with CARGO_PROFILE_DEV_DEBUG=true)
-debug = 1              # if we need stepping (override with CARGO_PROFILE_DEV_DEBUG=false)
+#debug = false         # fast by default (IDE overrides with CARGO_PROFILE_DEV_DEBUG=true or use [profile.fast])
+debug = true           # IDE needs debug symbols for breakpoints
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
+
+[profile.fast]
+inherits = "dev"
+debug = false          # No debug symbols → /opt/cargo/fast/
 
 [profile.release]
 incremental = false    # Release doesn't need incremental

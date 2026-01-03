@@ -4,17 +4,14 @@
 
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
-TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 
-echo "Compiling tests..."
-# Skip debug info for faster initial compilation, but not if we already have a build
-if [ ! -d "$TARGET_DIR/debug/deps" ] || [ -z "$(ls -A $TARGET_DIR/debug/deps/*.rlib 2>/dev/null)" ]; then
-	export CARGO_PROFILE_DEV_DEBUG=false
-fi
-cargo test --no-run || exit 1
+echo "Compiling tests... (profile: fast)"
+# Match RustRover flags exactly for fingerprint consistency
+RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
+cargo --offline test --color=always --profile fast --no-fail-fast --config "$RUNNER" --no-run || exit 1
 
 echo "Running all tests..."
-FAST_TIMEOUT=1 cargo test --no-fail-fast -- --test-threads=16 2>&1 | tee "$TEMP_FILE"
+FAST_TIMEOUT=1 cargo --offline test --color=always --profile fast --no-fail-fast --config "$RUNNER" -- --test-threads=16 -Z unstable-options --show-output 2>&1 | tee "$TEMP_FILE"
 
 # Count test results
 TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')

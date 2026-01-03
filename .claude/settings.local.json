@@ -21,7 +21,9 @@
       "Bash(/Users/me/dev/angles/warp/failing_tests.sh)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(./test.sh:*)",
+      "Bash(grep:*)"
     ]
   },
   "hooks": {
