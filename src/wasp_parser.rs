@@ -80,22 +80,19 @@ impl WaspParser {
 			let had_newline = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
-			let sep = if let ch = self.current_char() {
-				if ch == ',' {
-					self.advance();
-					Separator::Comma
-				} else if ch == ';' {
-					self.advance();
-					Separator::Semicolon
-				} else if had_newline && self.pos < self.chars.len() {
-					Separator::Newline
-				} else {
-					Separator::Space
-				}
+			let ch = self.current_char();
+			let sep = if self.end_of_input() {
+				if had_newline { Separator::Newline } else { Separator::None }
+			} else if ch == ',' {
+				self.advance();
+				Separator::Comma
+			} else if ch == ';' {
+				self.advance();
+				Separator::Semicolon
 			} else if had_newline {
 				Separator::Newline
 			} else {
-				Separator::None
+				Separator::Space
 			};
 
 			// C++ logic: if separator changes, wrap existing content and start new group
@@ -169,21 +166,20 @@ impl WaspParser {
 	}
 
 	fn advance(&mut self) {
-		if let ch = self.current_char() {
-			self.char = ch; // debug
-			if ch == '\n' {
-				self.line_nr += 1;
-				self.column = 1;
-				// Update current_line to the new line
-				let lines: Vec<&str> = self.input.lines().collect();
-				if self.line_nr > 0 && self.line_nr <= lines.len() {
-					self.current_line = lines[self.line_nr - 1].to_string();
-				} else {
-					self.current_line = String::new();
-				}
+		let ch = self.current_char();
+		self.char = ch; // debug
+		if ch == '\n' {
+			self.line_nr += 1;
+			self.column = 1;
+			// Update current_line to the new line
+			let lines: Vec<&str> = self.input.lines().collect();
+			if self.line_nr > 0 && self.line_nr <= lines.len() {
+				self.current_line = lines[self.line_nr - 1].to_string();
 			} else {
-				self.column += 1;
+				self.current_line = String::new();
 			}
+		} else {
+			self.column += 1;
 		}
 		self.pos += 1;
 	}
@@ -203,26 +199,21 @@ impl WaspParser {
 
 	fn skip_whitespace(&mut self) -> bool {
 		let mut had_newline = false;
-		while let ch = self.current_char() {
-			if ch.is_whitespace() {
-				if ch == '\n' {
-					had_newline = true;
-				}
-				self.advance();
-			} else {
-				break;
-			}
+		loop {
+			let ch = self.current_char();
+			if !ch.is_whitespace() { break; }
+			if ch == '\n' { had_newline = true; }
+			self.advance();
 		}
 		had_newline
 	}
 
 	fn consume_rest_of_line(&mut self) -> String {
 		let mut line_comment = String::new();
-		while let ch = self.current_char() {
-			if ch == '\n' {
-				self.advance();
-				break;
-			}
+		loop {
+			let ch = self.current_char();
+			if ch == '\0' { break; }
+			if ch == '\n' { self.advance(); break; }
 			line_comment.push(ch);
 			self.advance();
 		}
@@ -259,15 +250,15 @@ impl WaspParser {
 			if self.current_char() == '/' && self.peek_char(1) == '*' {
 				self.advance(); // skip /
 				self.advance(); // skip *
-				while let ch = self.current_char() {
+				loop {
+					let ch = self.current_char();
+					if ch == '\0' { break; } // unterminated comment
 					if ch == '*' && self.peek_char(1) == '/' {
 						self.advance(); // skip *
 						self.advance(); // skip /
 						break;
 					}
-					if ch == '\n' {
-						had_newline = true;
-					}
+					if ch == '\n' { had_newline = true; }
 					self.advance();
 				}
 				continue;
@@ -338,10 +329,11 @@ impl WaspParser {
 		self.advance(); // skip opening quote
 
 		let mut s = String::new();
-		while let ch = self.current_char() {
+		loop {
+			let ch = self.current_char();
+			if ch == '\0' { return Error("Unterminated string".to_string()); }
 			if ch == quote {
 				self.advance(); // skip closing quote
-
 				// quotes with exactly one character become Codepoint
 				let mut chars = s.chars();
 				if let Some(c) = chars.next() {
@@ -349,7 +341,6 @@ impl WaspParser {
 						return Node::codepoint(c);
 					}
 				}
-
 				return Node::text(&s);
 			}
 			if ch == '\\' {
@@ -366,7 +357,6 @@ impl WaspParser {
 				self.advance();
 			}
 		}
-		Error("Unterminated string".to_string())
 	}
 
 	fn parse_number(&mut self) -> Node {
@@ -381,29 +371,27 @@ impl WaspParser {
 
 		// Check for hexadecimal: 0x or 0X
 		if self.current_char() == '0' {
-			if let next_ch = self.peek_char(1) {
-				if next_ch == 'x' || next_ch == 'X' {
-					// Parse hexadecimal
-					self.advance(); // skip '0'
-					self.advance(); // skip 'x'
-					let mut hex_str = String::new();
-					while let ch = self.current_char() {
-						if ch.is_ascii_hexdigit() {
-							hex_str.push(ch);
-							self.advance();
-						} else {
-							break;
-						}
-					}
-					return i64::from_str_radix(&hex_str, 16)
-						.map(Node::int)
-						.unwrap_or_else(|_| Error(format!("Invalid hex: 0x{}", hex_str)));
+			let next_ch = self.peek_char(1);
+			if next_ch == 'x' || next_ch == 'X' {
+				// Parse hexadecimal
+				self.advance(); // skip '0'
+				self.advance(); // skip 'x'
+				let mut hex_str = String::new();
+				loop {
+					let ch = self.current_char();
+					if !ch.is_ascii_hexdigit() { break; }
+					hex_str.push(ch);
+					self.advance();
 				}
+				return i64::from_str_radix(&hex_str, 16)
+					.map(Node::int)
+					.unwrap_or_else(|_| Error(format!("Invalid hex: 0x{}", hex_str)));
 			}
 		}
 
-		while let ch = self.current_char() {
-			// assert!(!'三'.is_numeric());
+		loop {
+			let ch = self.current_char();
+			// '三'.is_numeric() is true but not ASCII
 			if ch.is_numeric() {
 				num_str.push(ch);
 				self.advance();
@@ -431,8 +419,8 @@ impl WaspParser {
 
 	fn parse_symbol(&mut self) -> Result<String, String> {
 		let mut symbol = String::new();
-
-		while let ch = self.current_char() {
+		loop {
+			let ch = self.current_char();
 			if ch.is_alphanumeric() || ch == '_' || ch == '-' {
 				symbol.push(ch);
 				self.advance();
@@ -440,12 +428,7 @@ impl WaspParser {
 				break;
 			}
 		}
-
-		if symbol.is_empty() {
-			Err("Empty symbol".to_string())
-		} else {
-			Ok(symbol)
-		}
+		if symbol.is_empty() { Err("Empty symbol".to_string()) } else { Ok(symbol) }
 	}
 
 	fn parse_symbol_or_named_block(&mut self) -> Node {
@@ -564,24 +547,19 @@ impl WaspParser {
 			let had_newline = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
-			let sep = if let ch = self.current_char() {
-				if ch == ',' {
-					self.advance();
-					Separator::Comma
-				} else if ch == ';' {
-					self.advance();
-					Separator::Semicolon
-				} else if ch == close {
-					Separator::None // Last item
-				} else if had_newline {
-					Separator::Newline
-				} else {
-					Separator::Space
-				}
+			let ch = self.current_char();
+			let sep = if ch == '\0' || ch == close {
+				if had_newline { Separator::Newline } else { Separator::None }
+			} else if ch == ',' {
+				self.advance();
+				Separator::Comma
+			} else if ch == ';' {
+				self.advance();
+				Separator::Semicolon
 			} else if had_newline {
 				Separator::Newline
 			} else {
-				Separator::None
+				Separator::Space
 			};
 
 			// C++ logic: if separator changes, wrap existing content and start new group
