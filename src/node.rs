@@ -728,10 +728,7 @@ impl Node {
 	}
 
 	pub fn serialize(&self) -> String {
-		self.serialize_recurse()
-	}
 
-	pub fn serialize_recurse(&self) -> String {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
@@ -742,11 +739,10 @@ impl Node {
 				if nodes.is_empty() {
 					format!("{}{}", bracket, close)
 				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].serialize_recurse(), close)
+					format!("{}{}{}", bracket, nodes[0].serialize(), close)
 				} else {
-					let items: Vec<String> =
-						nodes.iter().map(|n| n.serialize_recurse()).collect();
-					format!("{}{}{}", bracket, items.join(separator + " "), close)
+					let items: Vec<String> = nodes.iter().map(|n| n.serialize()).collect();
+					format!("{}{}{}", bracket, items.join(&*(separator.to_string() + " ")), close)
 				}
 			}
 			Key(k, v) => format!("{}={}", k, v.serialize_recurse()),
@@ -776,6 +772,10 @@ impl Node {
 			Data(d) => format!("Data({})", d.type_name),
 			_ => format!("{:?}", self),
 		}
+	}
+
+	pub fn serialize_recurse(&self) -> String { // todo why?
+		self.serialize()
 	}
 
 	pub fn iter(&self) -> NodeIter {
@@ -922,7 +922,9 @@ impl fmt::Debug for Node {
 						Bracket::Curly => write!(f, "{{{:?}}}", nodes),
 						Bracket::Square => write!(f, "[{:?}]", nodes),
 						Bracket::Round => write!(f, "({:?})", nodes),
+						Bracket::Less => write!(f, "<{:?}>", nodes),
 						Bracket::Other(open, close) => write!(f, "{}{:?}{}", open, nodes, close),
+						Bracket::None => write!(f, "{:?}", nodes),
 					}
 				}
 			}
@@ -1003,11 +1005,13 @@ impl<'a> IntoIterator for &'a Node {
 	}
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Bracket {
-	Curly,
-	Square,
-	Round,
+	Curly, // '{'
+	Square, // '['
+	Round, // '('
+	Less, // '<' rename to ?
+	None,  // list via separator 1,2,3
 	// brace or parenthesis
 	Other(char, char),
 }
@@ -1020,6 +1024,8 @@ impl fmt::Display for Bracket {
 			Bracket::Curly => write!(f, "{{"),
 			Bracket::Square => write!(f, "["),
 			Bracket::Round => write!(f, "("),
+			Bracket::Less => write!(f, "<"),
+			Bracket::None => write!(f, ""),
 			Bracket::Other(open, _) => write!(f, "{}", open),
 		}
 	}
@@ -1031,6 +1037,8 @@ impl Bracket {
 			Bracket::Curly => "}",
 			Bracket::Square => "]",
 			Bracket::Round => ")",
+			Bracket::Less => ">",
+			Bracket::None => "",
 			Bracket::Other(_, close) => {
 				// Return a static str for common cases
 				match *close {

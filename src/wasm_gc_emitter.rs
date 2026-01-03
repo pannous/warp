@@ -817,7 +817,9 @@ impl WasmGcEmitter {
 					Bracket::Curly => 0i64,
 					Bracket::Square => 1,
 					Bracket::Round => 2,
+				Bracket::Less => 5,
 					Bracket::Other(_, _) => 3,
+					Bracket::None => 4,
 				};
 				func.instruction(&Instruction::I64Const(bracket_val));
 				func.instruction(&Instruction::F64Const(Ieee64::new(0.0_f64.to_bits())));
