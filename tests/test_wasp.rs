@@ -9,7 +9,6 @@ pub fn test_parser_serialize() {
 	let serial = ast.serialize();
 	let right = "{key=[value, {key2=value2, num=123, text='yeah'}]}";
 	eq!(serial, right);
-	println!("serialize: {:#?}", ast);
 	eq!(ast.size(), 1);
 }
 
