@@ -48,109 +48,7 @@ impl WaspParser {
 
 	pub fn parse(input: &str) -> Node {
 		let mut parser = WaspParser::new(input.to_string());
-
-		// Use the separator-aware parsing logic
-		let result = parser.parse_top_level();
-
-		result
-	}
-
-	fn parse_top_level(&mut self) -> Node {
-		let mut actual = Node::List(vec![], Bracket::Square, Separator::None);
-
-		// Note: don't skip comments here - let parse_value handle them so they get attached
-
-		while self.pos < self.chars.len() {
-			let pos_before = self.pos;
-			let item = self.parse_value();
-
-			if item == Empty {
-				if self.pos == pos_before {
-					// todo what is this Candice be removed?
-					self.advance();
-				}
-				continue;
-			}
-
-			// Add item FIRST, before checking separators
-			if let Node::List(ref mut items, _, _) = actual {
-				items.push(item);
-			}
-
-			let (had_newline, _) = self.skip_whitespace_and_comments();
-
-			// Determine separator after this item
-			let ch = self.current_char();
-			let sep = if self.end_of_input() {
-				if had_newline { Separator::Newline } else { Separator::None }
-			} else if ch == ',' {
-				self.advance();
-				Separator::Comma
-			} else if ch == ';' {
-				self.advance();
-				Separator::Semicolon
-			} else if had_newline {
-				Separator::Newline
-			} else {
-				Separator::Space
-			};
-
-			// C++ logic: if separator changes, wrap existing content and start new group
-			let current_sep = match &actual {
-				Node::List(_, _, s) => s.clone(),
-				_ => Separator::None,
-			};
-
-			if current_sep == Separator::None && sep != Separator::None {
-				// First separator - just set it
-				if let Node::List(_, _, ref mut s) = actual {
-					*s = sep.clone();
-				}
-			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None
-			{
-				// Only wrap when moving to a LOOSER separator (higher precedence value)
-				if sep.precedence() > current_sep.precedence() {
-					// Separator changed to looser - wrap existing content and start new group
-					let old_actual = std::mem::replace(
-						&mut actual,
-						Node::List(vec![], Bracket::Square, sep.clone()),
-					);
-					if let Node::List(items, b, _) = old_actual {
-						if items.len() > 1 {
-							// Multiple items - wrap them
-							let wrapped = Node::List(items, b, current_sep);
-							actual = Node::List(vec![wrapped], Bracket::Square, sep);
-						} else if items.len() == 1 {
-							// Single item - just change separator
-							actual = Node::List(items, b, sep);
-						}
-					}
-				} else {
-					// Moving to tighter separator - just update
-					if let Node::List(_, _, ref mut s) = actual {
-						*s = sep.clone();
-					}
-				}
-			}
-
-			// Safety check
-			if self.pos == pos_before {
-				self.advance();
-			}
-		}
-
-		// Unwrap if only single item
-		if let Node::List(mut items, _, sep) = actual {
-			if items.is_empty() {
-				return Empty;
-			}
-			if items.len() == 1 && sep == Separator::None {
-				return items.remove(0);
-			}
-			actual = Node::List(items, Bracket::Square, sep);
-		}
-
-		actual
+		parser.parse_list_with_separators(None, Bracket::None)
 	}
 
 	fn end_of_input(&self) -> bool {
@@ -206,6 +104,12 @@ impl WaspParser {
 			self.advance();
 		}
 		had_newline
+	}
+
+	fn skip_spaces(&mut self) {
+		while self.current_char() == ' ' || self.current_char() == '\t' {
+			self.advance();
+		}
 	}
 
 	fn consume_rest_of_line(&mut self) -> String {
@@ -457,7 +361,7 @@ impl WaspParser {
 			Ok(s) => s,
 			Err(e) => return Error(e),
 		};
-		self.skip_whitespace();
+		self.skip_spaces(); // Only spaces, not newlines
 
 		// Check for named block: name{...} or name(...) or name<...>
 		match self.current_char() {
@@ -534,19 +438,26 @@ impl WaspParser {
 
 	fn parse_bracketed(&mut self, _open: char, close: char, bracket: Bracket) -> Node {
 		self.advance(); // skip opening bracket
-		self.parse_list_with_separators(close, bracket)
+		self.parse_list_with_separators(Some(close), bracket)
 	}
 
-	fn parse_list_with_separators(&mut self, close: char, bracket: Bracket) -> Node {
-		// Build nested structure dynamically like C++ parseListSeparator
-		let bracket = bracket; // Ensure we own it
-		let mut actual = Node::List(vec![], bracket.clone(), Separator::None);
+	fn parse_list_with_separators(&mut self, close: Option<char>, bracket: Bracket) -> Node {
+		// Collect all items with their following separators
+		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
 
 		loop {
-			let _ = self.skip_whitespace_and_comments();
+			// Only skip whitespace here - parse_value() handles comments and attaches them
+			self.skip_whitespace();
 
-			if self.current_char() == close {
-				self.advance();
+			// Check for end condition
+			let at_end = match close {
+				Some(c) => self.current_char() == c,
+				None => self.end_of_input(),
+			};
+			if at_end {
+				if close.is_some() {
+					self.advance(); // consume closing bracket
+				}
 				break;
 			}
 
@@ -554,23 +465,22 @@ impl WaspParser {
 			let item = self.parse_value();
 
 			if item == Empty {
-				if self.pos == pos_before && self.current_char() != close {
+				if self.pos == pos_before {
 					self.advance();
 				}
 				continue;
-			}
-
-			// Add item FIRST, before checking separators
-			if let Node::List(ref mut items, _, _) = actual {
-				items.push(item);
 			}
 
 			let (had_newline, _) = self.skip_whitespace_and_comments();
 
 			// Determine separator after this item
 			let ch = self.current_char();
-			let sep = if ch == '\0' || ch == close {
-				if had_newline { Separator::Newline } else { Separator::None }
+			let at_end = match close {
+				Some(c) => ch == c || ch == '\0',
+				None => self.end_of_input(),
+			};
+			let sep = if at_end {
+				Separator::None
 			} else if ch == ',' {
 				self.advance();
 				Separator::Comma
@@ -583,63 +493,15 @@ impl WaspParser {
 				Separator::Space
 			};
 
-			// C++ logic: if separator changes, wrap existing content and start new group
-			let current_sep = match &actual {
-				Node::List(_, _, s) => s.clone(),
-				_ => Separator::None,
-			};
+			items_with_seps.push((item, sep));
 
-			if current_sep == Separator::None && sep != Separator::None {
-				// First separator - just set it
-				if let Node::List(_, _, ref mut s) = actual {
-					*s = sep.clone();
-				}
-			} else if current_sep != Separator::None && sep != current_sep && sep != Separator::None
-			{
-				// Only wrap when moving to a LOOSER separator (higher precedence value)
-				if sep.precedence() > current_sep.precedence() {
-					// Separator changed to looser - wrap existing content and start new group
-					// todo unhack!!
-					let old_actual = std::mem::replace(
-						&mut actual,
-						Node::List(vec![], bracket.clone(), sep.clone()),
-					);
-					if let Node::List(items, b, _) = old_actual {
-						if items.len() > 1 {
-							// Multiple items - wrap them
-							let wrapped = Node::List(items, b, current_sep);
-							actual = Node::List(vec![wrapped], bracket.clone(), sep);
-						} else if items.len() == 1 {
-							// Single item - just change separator
-							actual = Node::List(items, b, sep);
-						}
-					}
-				} else {
-					// Moving to tighter separator - just update
-					if let Node::List(_, _, ref mut s) = actual {
-						*s = sep.clone();
-					}
-				}
-			}
-
-			// Safety check
-			if self.pos == pos_before && self.current_char() != close {
+			if self.pos == pos_before {
 				self.advance();
 			}
 		}
 
-		// Unwrap if only single item
-		if let Node::List(mut items, _, sep) = actual {
-			if items.is_empty() {
-				return Empty;
-			}
-			if items.len() == 1 && sep == Separator::None && bracket != Bracket::Curly {
-				return items.remove(0);
-			}
-			actual = Node::List(items, bracket, sep);
-		}
-
-		actual
+		// Use recursive grouping
+		self.group_by_separators(items_with_seps, bracket)
 	}
 	fn group_by_separators(
 		&self,
@@ -650,7 +512,8 @@ impl WaspParser {
 			return Empty;
 		}
 
-		if items_with_seps.len() == 1 {
+		if items_with_seps.len() == 1 && bracket == Bracket::None {
+			// Only unwrap single items for implicit groupings
 			return items_with_seps[0].0.clone();
 		}
 
@@ -666,7 +529,8 @@ impl WaspParser {
 		if precedences.is_empty() {
 			// All items have None separator - return as space-separated list
 			let items: Vec<Node> = items_with_seps.into_iter().map(|(node, _)| node).collect();
-			if items.len() == 1 {
+			if items.len() == 1 && bracket == Bracket::None {
+				// Only unwrap single items for implicit groupings
 				return items[0].clone();
 			}
 			return Node::List(items, bracket, Separator::Space);
@@ -719,13 +583,16 @@ impl WaspParser {
 					group[0].0.clone()
 				} else {
 					// Has multiple items or tighter separators - recurse
-					self.group_by_separators(group, bracket.clone())
+					// Inner groups use Bracket::None to avoid extra braces in serialization
+					self.group_by_separators(group, Bracket::None)
 				}
 			})
 			.collect();
 
 		// Return result
-		if grouped_nodes.len() == 1 {
+		if grouped_nodes.len() == 1 && bracket == Bracket::None {
+			// Only unwrap single items for implicit groupings (Bracket::None)
+			// Explicit brackets like {x} or [x] should preserve the wrapper
 			grouped_nodes[0].clone()
 		} else {
 			Node::List(grouped_nodes, bracket, split_sep)
@@ -869,4 +736,31 @@ mod tests {
 	fn parse_list_separators_equivalent() {
 		eq!(WaspParser::parse("a b c"), WaspParser::parse("a, b, c"));
 	}
+
+	#[test]
+	fn test_semicolon_groups() {
+		let result = WaspParser::parse("a b c; d e f");
+		println!("result: {:?}", result);
+		println!("length: {}", result.length());
+		// Should be 2 groups: [a b c] and [d e f]
+		eq!(result.length(), 2);
+	}
+
+	#[test]
+	fn test_newline_groups() {
+		let result = WaspParser::parse("a b c\nd e f");
+		// Should be 2 groups separated by newline
+		eq!(result.length(), 2);
+	}
+
+	#[test]
+	fn test_roundtrip() {
+		let result = WaspParser::parse("{a b c\nd e f}");
+		let serialized = result.serialize();
+		println!("serialized: {:?}", serialized);
+		let reparse = WaspParser::parse(&serialized);
+		println!("result: {:?}, reparse: {:?}", result, reparse);
+		eq!(result, reparse);
+	}
+
 }
