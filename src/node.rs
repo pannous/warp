@@ -1178,6 +1178,7 @@ impl PartialEq for Node {
 			List(items1, _, _) => match other {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
+				Meta { node, .. } => self == node.as_ref(), // unwrap Meta
 				_ => false,
 			},
 			Error(e1) => match other {
