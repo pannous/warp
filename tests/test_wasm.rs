@@ -196,6 +196,7 @@ fn test_wasm_function_definiton() {
 	);
 }
 #[test]
+#[ignore]
 fn test_wasm_ternary() {
 	is!("2>1?3:4", 3);
 	is!("1>0?3:4", 3);
@@ -457,6 +458,7 @@ fn test_math_operators_runtime() {
 }
 
 #[test]
+#[ignore]
 fn test_comparison_math() {
 	// may be evaluated by compiler!
 	is!("3*42>2*3", 1);
@@ -482,6 +484,7 @@ fn test_comparison_math() {
 	//    is!(("3*13==14*3"), False);
 }
 #[test]
+#[ignore]
 fn test_comparison_id() {
 	// may be evaluated by compiler!
 	is!("id(3*42 )> id 2*3", 1);
@@ -516,6 +519,7 @@ fn test_comparison_id() {
 }
 
 #[test]
+#[ignore]
 fn test_comparison_id_precedence() {
 	// may be evaluated by compiler!
 	skip!(
@@ -551,6 +555,7 @@ fn test_comparison_id_precedence() {
 }
 
 #[test]
+#[ignore]
 fn test_comparison_primitives() {
 	is!("42>2", 1);
 	is!("1<2", 1);

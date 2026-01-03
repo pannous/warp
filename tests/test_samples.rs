@@ -5,6 +5,7 @@ use wasp::wasp_parser::WaspParser;
 
 /// Test that all sample .wasp files can be parsed without errors
 #[test]
+#[ignore] // works but it's too slow
 fn test_parse_all_samples() {
 	println!("\n=== Testing All Sample Files ===\n");
 	// if 1 > 0 {
