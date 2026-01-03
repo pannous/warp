@@ -1150,8 +1150,12 @@ impl PartialEq for Node {
 				_ => false,
 			},
 			Meta { node, .. } => {
-				// Ignore metadata when comparing equality
-				node.as_ref().eq(other)
+				// Ignore metadata when comparing equality - unwrap both sides
+				let other_unwrapped = match other {
+					Meta { node: other_node, .. } => other_node.as_ref(),
+					_ => other,
+				};
+				node.as_ref().eq(other_unwrapped)
 			}
 			Key(k1, v1) => match other {
 				Key(k2, v2) => k1 == k2 && v1 == v2,
@@ -1173,8 +1177,9 @@ impl PartialEq for Node {
 				} => t1 == t2 && p1 == p2 && b1 == b2,
 				_ => false,
 			},
-			List(items1, _br1, _) => match other {
-				List(items2, _br2, _) => items1 == items2, // ignore bracket [1,2]=={1,2}
+			List(items1, _, _) => match other {
+				List(items2, _, _) => items1 == items2,
+				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
 				_ => false,
 			},
 			Error(e1) => match other {
