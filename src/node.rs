@@ -777,12 +777,12 @@ impl Node {
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
 			False => "false".to_string(),
-			// Meta { node, data } => format!("{} /* {} */", node.serialize_impl(), data),
-			Meta { node, data: _ } => {
+			Meta { node, data } => {
+				let inner = node.serialize_recurse(meta);
 				if meta {
-					node.meta_string()
+					format!("{} {}", inner, data.meta_string())
 				} else {
-					"".s()
+					inner
 				}
 			}
 			Data(d) => format!("Data({})", d.type_name),
