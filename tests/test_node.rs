@@ -85,6 +85,14 @@ fn test_node_equality() {
 	eq!(n0, false);
 	assert_ne!(n1, n2);
 	assert_ne!(n1, 2);
+
+	// Test string comparisons in both directions
+	let text_node = Node::text("hello");
+	let symbol_node = Node::symbol("world");
+	assert!(text_node == "hello");
+	assert!("hello" == text_node);  // Reverse comparison
+	assert!(symbol_node == "world");
+	assert!("world" == symbol_node);  // Reverse comparison
 }
 
 #[test]
