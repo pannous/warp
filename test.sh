@@ -26,11 +26,11 @@ TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
 	echo "=== Test Results ==="
 	echo ""
 	echo "PASSED:"
-	grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//'
+	grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//' | tee $OUTPUT_FILE
 
 	echo ""
 	echo "FAILED:"
-	grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//'
+	grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | tee $OUTPUT_FILE
 
 	echo ""
 	echo "SUMMARY:"

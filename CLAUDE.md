@@ -214,3 +214,7 @@ compiletime and runtime evaluation
 is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
 is!("def square:=it*it; square(3)",9);
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
+
+# Important
+Before and after each task run ./test.sh to ensure all tests pass.
+If previously passing test fail after the task try to fix it and if it doesn't work roll back
