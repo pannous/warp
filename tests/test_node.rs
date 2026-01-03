@@ -1,5 +1,5 @@
 use wasp::node::Node::{Empty, False, True};
-use wasp::node::{Bracket, Node};
+use wasp::node::{Bracket, Node, Separator};
 use wasp::*;
 
 // use wasp::node::Node::*;
@@ -30,7 +30,7 @@ fn test_node_index_str() {
 			Node::key("name", Node::text("Alice")),
 			Node::key("age", Node::int(30)),
 		],
-		Bracket::Curly,
+		Bracket::Curly, Separator::None,
 	);
 	eq!(block["name"], Node::text("Alice"));
 	eq!(block["age"], 30);
@@ -67,7 +67,7 @@ fn test_node_not_operator() {
 	eq!(!Node::symbol("x"), False);
 
 	// Collections
-	eq!(!Node::List(vec![], Bracket::Square), True);
+	eq!(!Node::List(vec![], Bracket::Square, Separator::None), True);
 	eq!(!Node::ints(vec![1, 2, 3]), False);
 }
 
