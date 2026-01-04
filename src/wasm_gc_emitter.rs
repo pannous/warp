@@ -673,15 +673,6 @@ impl WasmGcEmitter {
 			Node::Text(s) | Node::Symbol(s) => {
 				self.allocate_string(s);
 			}
-			Node::Tag {
-				title,
-				params,
-				body,
-			} => {
-				self.allocate_string(title);
-				self.collect_and_allocate_strings(params);
-				self.collect_and_allocate_strings(body);
-			}
 			Node::Key(key, value) => {
 				self.allocate_string(key);
 				self.collect_and_allocate_strings(value);
@@ -759,22 +750,6 @@ impl WasmGcEmitter {
 				func.instruction(&I32Const(ptr as i32));
 				func.instruction(&I32Const(len as i32));
 				func.instruction(&Instruction::Call(self.function_indices["new_symbol"]));
-			}
-			Node::Tag {
-				title,
-				params: _params,
-				body: _body,
-			} => {
-				let (ptr, len) = self
-					.string_table
-					.get(title.as_str())
-					.map(|&offset| (offset, title.len() as u32))
-					.unwrap_or((0, title.len() as u32));
-				func.instruction(&I32Const(ptr as i32));
-				func.instruction(&I32Const(len as i32));
-				self.emit_node_instructions(func, _params);
-				self.emit_node_instructions(func, _body);
-				func.instruction(&Instruction::Call(self.function_indices["new_tag"]));
 			}
 			Node::Key(key, value) => {
 				let (ptr, len) = self
