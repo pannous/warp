@@ -933,13 +933,13 @@ impl Node {
 						}
 						// Add the wrapped value
 						map.insert("_value".to_string(), node.to_json_value());
-						return Value::Object(map);
+						Value::Object(map)
 					} else {
 						// Non-Key metadata: use .meta array
 						let mut map = Map::new();
 						map.insert(".meta".to_string(), data.to_json_value());
 						map.insert("_value".to_string(), node.to_json_value());
-						return Value::Object(map);
+						Value::Object(map)
 					}
 				} else if **data != Empty {
 					// Single non-Key metadata
