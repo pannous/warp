@@ -125,3 +125,37 @@ fn test_function_usage_tracking() {
 	// Verify unused count is significant (for tree-shaking validation)
 	assert!(unused.len() >= 5, "Should have at least 5 unused functions, got {}", unused.len());
 }
+
+#[test]
+fn test_emit_for_node_tree_shaking() {
+	use wasp::wasp_parser::WaspParser;
+
+	// Without tree-shaking
+	let node = WaspParser::parse("'🦀'");
+	let mut emitter_full = WasmGcEmitter::new();
+	emitter_full.emit();
+	emitter_full.emit_node_main(&node);
+	let bytes_full = emitter_full.finish();
+
+	// With tree-shaking
+	let mut emitter_slim = WasmGcEmitter::new();
+	emitter_slim.emit_for_node(&node);
+	let bytes_slim = emitter_slim.finish();
+
+	println!(
+		"Tree-shaking at emit time: {} -> {} bytes ({}% reduction)",
+		bytes_full.len(),
+		bytes_slim.len(),
+		(bytes_full.len() - bytes_slim.len()) * 100 / bytes_full.len()
+	);
+
+	// Tree-shaking should reduce size (we skip unused constructor functions)
+	// Note: external wasm-opt/wasm-metadce achieves ~50% more reduction by also
+	// removing getters, names section entries, etc.
+	assert!(
+		bytes_slim.len() < bytes_full.len() * 85 / 100,
+		"Tree-shaking should reduce size by at least 15%: {} vs {}",
+		bytes_slim.len(),
+		bytes_full.len()
+	);
+}

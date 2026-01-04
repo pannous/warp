@@ -30,6 +30,8 @@ pub struct WasmGcEmitter {
 	next_func_idx: u32,
 	function_indices: HashMap<&'static str, u32>, //  (Constructor and later others)
 	used_functions: HashSet<&'static str>,        // Functions actually called during emission
+	required_functions: HashSet<&'static str>,    // Functions needed (determined by pre-analysis)
+	emit_all_functions: bool,                     // If true, emit all functions (library mode)
 	// String storage for linear memory
 	string_table: HashMap<String, u32>, // Maps string -> memory offset
 	next_data_offset: u32,
@@ -76,11 +78,83 @@ impl WasmGcEmitter {
 			next_func_idx: 0,
 			function_indices: HashMap::new(),
 			used_functions: HashSet::new(),
+			required_functions: HashSet::new(),
+			emit_all_functions: true, // Default: library mode (emit all)
 			string_table: HashMap::new(),
 			next_data_offset: 8, // Start at offset 8 to avoid confusion with null (0)
 			data_segment_names: Vec::new(),
 			next_data_segment_idx: 0,
 		}
+	}
+
+	/// Enable tree-shaking mode: only emit functions actually used by the node
+	pub fn set_tree_shaking(&mut self, enabled: bool) {
+		self.emit_all_functions = !enabled;
+	}
+
+	/// Pre-analyze a node to determine which constructor functions are required
+	pub fn analyze_required_functions(&mut self, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			Node::Empty => {
+				self.required_functions.insert("new_empty");
+			}
+			Node::Number(num) => {
+				match num {
+					crate::extensions::numbers::Number::Int(_) => {
+						self.required_functions.insert("new_int");
+					}
+					crate::extensions::numbers::Number::Float(_) => {
+						self.required_functions.insert("new_float");
+					}
+					_ => {
+						self.required_functions.insert("new_empty");
+					}
+				}
+			}
+			Node::Text(_) => {
+				self.required_functions.insert("new_text");
+			}
+			Node::Char(_) => {
+				self.required_functions.insert("new_codepoint");
+			}
+			Node::Symbol(_) => {
+				self.required_functions.insert("new_symbol");
+			}
+			Node::Key(_, value) => {
+				self.required_functions.insert("new_keyvalue");
+				self.analyze_required_functions(value);
+			}
+			Node::Pair(left, right) => {
+				self.required_functions.insert("new_pair");
+				self.analyze_required_functions(left);
+				self.analyze_required_functions(right);
+			}
+			Node::List(items, _, _) => {
+				if items.is_empty() {
+					self.required_functions.insert("new_empty");
+				} else if items.len() == 1 {
+					self.analyze_required_functions(&items[0]);
+				} else {
+					// Multi-item list uses inline struct.new, no constructor call
+					for item in items {
+						self.analyze_required_functions(item);
+					}
+				}
+			}
+			Node::Data(_) => {
+				self.required_functions.insert("new_symbol");
+			}
+			Node::Meta { node, .. } => {
+				self.analyze_required_functions(node);
+			}
+			_ => {}
+		}
+	}
+
+	/// Check if a function should be emitted (based on tree-shaking settings)
+	fn should_emit_function(&self, name: &str) -> bool {
+		self.emit_all_functions || self.required_functions.contains(name)
 	}
 
 	/// Generate all type definitions and functions
@@ -99,6 +173,20 @@ impl WasmGcEmitter {
 
 		self.emit_gc_types();
 		self.emit_constructor_functions();
+	}
+
+	/// Emit with tree-shaking: only emit functions required by the node
+	/// This is more efficient than emit() + emit_node_main() for single-node modules
+	pub fn emit_for_node(&mut self, node: &Node) {
+		self.emit_all_functions = false;
+		self.analyze_required_functions(node);
+		trace!(
+			"tree-shaking: {} functions required: {:?}",
+			self.required_functions.len(),
+			self.required_functions
+		);
+		self.emit();
+		self.emit_node_main(node);
 	}
 
 	/// Sanitize a string to create a valid WASM identifier name
@@ -446,12 +534,22 @@ impl WasmGcEmitter {
 	/// Emit constructor functions for creating Node instances using unified struct
 	fn emit_constructor_functions(&mut self) {
 		let constructors = self.get_node_constructors();
+		let mut emitted = 0;
+		let mut skipped = 0;
 
 		for desc in &constructors {
-			let fn_idx = self.emit_node_constructor(desc);
+			if self.should_emit_function(desc.export_name) {
+				let fn_idx = self.emit_node_constructor(desc);
+				self.function_indices.insert(desc.export_name, fn_idx);
+				emitted += 1;
+			} else {
+				trace!("tree-shaking: skipping unused function '{}'", desc.export_name);
+				skipped += 1;
+			}
+		}
 
-			// Save function index for later use in emit_node_instructions
-			self.function_indices.insert(desc.export_name, fn_idx);
+		if skipped > 0 {
+			trace!("tree-shaking: emitted {} functions, skipped {}", emitted, skipped);
 		}
 
 		self.emit_get_node_kind();
