@@ -1,34 +1,51 @@
-//! This crate contains the part of the implementation of the `#[wasm_bindgen]` optsibute that is
-//! not in the shared backend crate.
+//! This crate contains implementation APIs for the `#[wasm_bindgen]` attribute.
 
 #![doc(html_root_url = "https://docs.rs/wasm-bindgen-macro-support/0.2")]
 
-extern crate proc_macro2;
-extern crate quote;
 #[macro_use]
-extern crate syn;
-#[macro_use]
-extern crate wasm_bindgen_backend as backend;
-extern crate wasm_bindgen_shared as shared;
+mod error;
 
-pub use crate::parser::BindgenAttrs;
-use crate::parser::MacroParse;
-use backend::{Diagnostic, TryToTokens};
+mod ast;
+mod codegen;
+mod encode;
+mod hash;
+mod parser;
+
+use codegen::TryToTokens;
+use error::Diagnostic;
+pub use parser::BindgenAttrs;
+use parser::{ConvertToAst, MacroParse};
 use proc_macro2::TokenStream;
+use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt;
 use syn::parse::{Parse, ParseStream, Result as SynResult};
-
-mod parser;
+use syn::Token;
 
 /// Takes the parsed input from a `#[wasm_bindgen]` macro and returns the generated bindings
 pub fn expand(attr: TokenStream, input: TokenStream) -> Result<TokenStream, Diagnostic> {
     parser::reset_attrs_used();
+    // if struct is encountered, add `derive` attribute and let everything happen there (workaround
+    // to help parsing cfg_attr correctly).
     let item = syn::parse2::<syn::Item>(input)?;
-    let opts = syn::parse2(attr)?;
+    if let syn::Item::Struct(s) = item {
+        let opts: BindgenAttrs = syn::parse2(attr.clone())?;
+        let wasm_bindgen = opts
+            .wasm_bindgen()
+            .cloned()
+            .unwrap_or_else(|| syn::parse_quote! { ::wasm_bindgen });
 
+        let item = quote! {
+            #[derive(#wasm_bindgen::__rt::BindgenedStruct)]
+            #[wasm_bindgen(#attr)]
+            #s
+        };
+        return Ok(item);
+    }
+
+    let opts = syn::parse2(attr)?;
     let mut tokens = proc_macro2::TokenStream::new();
-    let mut program = backend::ast::Program::default();
+    let mut program = ast::Program::default();
     item.macro_parse(&mut program, (Some(opts), &mut tokens))?;
     program.try_to_tokens(&mut tokens)?;
 
@@ -61,7 +78,7 @@ pub fn expand_class_marker(
     let mut item = syn::parse2::<syn::ImplItemFn>(input)?;
     let opts: ClassMarker = syn::parse2(attr)?;
 
-    let mut program = backend::ast::Program::default();
+    let mut program = ast::Program::default();
     item.macro_parse(&mut program, &opts)?;
 
     // This is where things are slightly different, we are being expanded in the
@@ -115,7 +132,11 @@ impl Parse for ClassMarker {
     fn parse(input: ParseStream) -> SynResult<Self> {
         let class = input.parse::<syn::Ident>()?;
         input.parse::<Token![=]>()?;
-        let js_class = input.parse::<syn::LitStr>()?.value();
+        let mut js_class = input.parse::<syn::LitStr>()?.value();
+        js_class = js_class
+            .strip_prefix("r#")
+            .map(String::from)
+            .unwrap_or(js_class);
 
         let mut wasm_bindgen = None;
         let mut wasm_bindgen_futures = None;
@@ -163,4 +184,20 @@ impl Parse for ClassMarker {
                 .unwrap_or_else(|| syn::parse_quote! { wasm_bindgen_futures }),
         })
     }
+}
+
+pub fn expand_struct_marker(item: TokenStream) -> Result<TokenStream, Diagnostic> {
+    parser::reset_attrs_used();
+
+    let mut s: syn::ItemStruct = syn::parse2(item)?;
+
+    let mut program = ast::Program::default();
+    program.structs.push((&mut s).convert(&program)?);
+
+    let mut tokens = proc_macro2::TokenStream::new();
+    program.try_to_tokens(&mut tokens)?;
+
+    parser::check_unused_attrs(&mut tokens);
+
+    Ok(tokens)
 }

@@ -4,46 +4,28 @@
 //! Use `BLESS=1` in the environment to auto-update `*.err` files. Be sure to
 //! look at the diff!
 
-use rayon::prelude::*;
+use libtest_mimic::{Arguments, Trial};
 use std::env;
 use std::path::{Path, PathBuf};
 
 fn main() {
     let mut tests = Vec::new();
     find_tests("tests/parse-fail".as_ref(), &mut tests);
-    let filter = std::env::args().nth(1);
-
     let bless = env::var("BLESS").is_ok();
-    let tests = tests
-        .iter()
-        .filter(|test| {
-            if let Some(filter) = &filter {
-                if let Some(s) = test.file_name().and_then(|s| s.to_str()) {
-                    if !s.contains(filter) {
-                        return false;
-                    }
-                }
-            }
-            true
-        })
-        .collect::<Vec<_>>();
 
-    println!("running {} tests\n", tests.len());
-
-    let errors = tests
-        .par_iter()
-        .filter_map(|test| run_test(test, bless).err())
-        .collect::<Vec<_>>();
-
-    if !errors.is_empty() {
-        for msg in errors.iter() {
-            eprintln!("{}", msg);
-        }
-
-        panic!("{} tests failed", errors.len())
+    let mut trials = Vec::new();
+    for test in tests {
+        let trial = Trial::test(format!("{test:?}"), move || {
+            run_test(&test, bless).map_err(|e| format!("{e:?}").into())
+        });
+        trials.push(trial);
     }
 
-    println!("test result: ok. {} passed\n", tests.len());
+    let mut args = Arguments::from_args();
+    if cfg!(target_family = "wasm") && !cfg!(target_feature = "atomics") {
+        args.test_threads = Some(1);
+    }
+    libtest_mimic::run(&args, trials).exit();
 }
 
 fn run_test(test: &Path, bless: bool) -> anyhow::Result<()> {
@@ -53,7 +35,7 @@ fn run_test(test: &Path, bless: bool) -> anyhow::Result<()> {
     };
     let assert = test.with_extension("wat.err");
     if bless {
-        std::fs::write(assert, err.to_string())?;
+        std::fs::write(assert, err)?;
         return Ok(());
     }
 
@@ -62,8 +44,7 @@ fn run_test(test: &Path, bless: bool) -> anyhow::Result<()> {
         .unwrap_or(String::new())
         .replace("\r\n", "\n");
 
-    // Compare normalize verisons which handles weirdness like path differences
-    if normalize(&assert) == normalize(&err) {
+    if assert == err {
         return Ok(());
     }
 
@@ -73,10 +54,6 @@ fn run_test(test: &Path, bless: bool) -> anyhow::Result<()> {
         tab(&err),
     );
 
-    fn normalize(s: &str) -> String {
-        s.replace("\\", "/")
-    }
-
     fn tab(s: &str) -> String {
         s.replace("\n", "\n\t")
     }
@@ -85,14 +62,22 @@ fn run_test(test: &Path, bless: bool) -> anyhow::Result<()> {
 fn find_tests(path: &Path, tests: &mut Vec<PathBuf>) {
     for f in path.read_dir().unwrap() {
         let f = f.unwrap();
+        // The .wat.err files contain relative file paths with forward slashes.
+        // On Windows we need to normalize the paths, otherwise BLESS will
+        // overwrite all .err files with updated paths.
+        let path: PathBuf = f
+            .path()
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, "/")
+            .into();
         if f.file_type().unwrap().is_dir() {
-            find_tests(&f.path(), tests);
+            find_tests(&path, tests);
             continue;
         }
-        match f.path().extension().and_then(|s| s.to_str()) {
+        match path.extension().and_then(|s| s.to_str()) {
             Some("wat") => {}
             _ => continue,
         }
-        tests.push(f.path());
+        tests.push(path);
     }
 }

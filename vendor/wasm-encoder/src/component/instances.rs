@@ -1,7 +1,8 @@
 use super::CORE_INSTANCE_SORT;
 use crate::{
-    encode_section, ComponentExportKind, ComponentSection, ComponentSectionId, Encode, ExportKind,
+    ComponentExportKind, ComponentSection, ComponentSectionId, Encode, ExportKind, encode_section,
 };
+use alloc::vec::Vec;
 
 /// Represents an argument to a module instantiation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -177,8 +178,7 @@ impl ComponentInstanceSection {
         self.bytes.push(0x01);
         exports.len().encode(&mut self.bytes);
         for (name, kind, index) in exports {
-            crate::push_extern_name_byte(&mut self.bytes, name);
-            name.encode(&mut self.bytes);
+            crate::encode_component_export_name(&mut self.bytes, name);
             kind.encode(&mut self.bytes);
             index.encode(&mut self.bytes);
         }

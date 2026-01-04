@@ -1,4 +1,5 @@
-use crate::{encode_section, ConstExpr, Encode, Section, SectionId, ValType};
+use crate::{ConstExpr, Encode, Section, SectionId, ValType, encode_section};
+use alloc::vec::Vec;
 
 /// An encoder for the global section.
 ///
@@ -14,6 +15,7 @@ use crate::{encode_section, ConstExpr, Encode, Section, SectionId, ValType};
 ///     GlobalType {
 ///         val_type: ValType::I32,
 ///         mutable: false,
+///         shared: false,
 ///     },
 ///     &ConstExpr::i32_const(42),
 /// );
@@ -80,22 +82,20 @@ pub struct GlobalType {
     pub val_type: ValType,
     /// Whether this global is mutable or not.
     pub mutable: bool,
+    /// Whether this global is shared or not.
+    pub shared: bool,
 }
 
 impl Encode for GlobalType {
     fn encode(&self, sink: &mut Vec<u8>) {
         self.val_type.encode(sink);
-        sink.push(self.mutable as u8);
-    }
-}
-
-#[cfg(feature = "wasmparser")]
-impl TryFrom<wasmparser::GlobalType> for GlobalType {
-    type Error = ();
-    fn try_from(global_ty: wasmparser::GlobalType) -> Result<Self, Self::Error> {
-        Ok(GlobalType {
-            val_type: global_ty.content_type.try_into()?,
-            mutable: global_ty.mutable,
-        })
+        let mut flag = 0;
+        if self.mutable {
+            flag |= 0b01;
+        }
+        if self.shared {
+            flag |= 0b10;
+        }
+        sink.push(flag);
     }
 }

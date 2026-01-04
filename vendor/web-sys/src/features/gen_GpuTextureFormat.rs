@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 #[doc = "*This API requires the following crate features to be activated: `GpuTextureFormat`*"]
 #[doc = ""]
 #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-#[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+#[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuTextureFormat {
     R8unorm = "r8unorm",
@@ -36,6 +36,7 @@ pub enum GpuTextureFormat {
     Bgra8unorm = "bgra8unorm",
     Bgra8unormSrgb = "bgra8unorm-srgb",
     Rgb9e5ufloat = "rgb9e5ufloat",
+    Rgb10a2uint = "rgb10a2uint",
     Rgb10a2unorm = "rgb10a2unorm",
     Rg11b10ufloat = "rg11b10ufloat",
     Rg32uint = "rg32uint",

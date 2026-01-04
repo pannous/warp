@@ -2,6 +2,7 @@
 
 use crate::loom::sync::atomic::AtomicUsize;
 use crate::loom::sync::{Arc, Condvar, Mutex};
+use crate::util::{waker, Wake};
 
 use std::sync::atomic::Ordering::SeqCst;
 use std::time::Duration;
@@ -35,7 +36,7 @@ tokio_thread_local! {
 // Bit of a hack, but it is only for loom
 #[cfg(loom)]
 tokio_thread_local! {
-    static CURRENT_THREAD_PARK_COUNT: AtomicUsize = AtomicUsize::new(0);
+    pub(crate) static CURRENT_THREAD_PARK_COUNT: AtomicUsize = AtomicUsize::new(0);
 }
 
 // ==== impl ParkThread ====
@@ -65,12 +66,7 @@ impl ParkThread {
     pub(crate) fn park_timeout(&mut self, duration: Duration) {
         #[cfg(loom)]
         CURRENT_THREAD_PARK_COUNT.with(|count| count.fetch_add(1, SeqCst));
-
-        // Wasm doesn't have threads, so just sleep.
-        #[cfg(not(target_family = "wasm"))]
         self.inner.park_timeout(duration);
-        #[cfg(target_family = "wasm")]
-        std::thread::sleep(duration);
     }
 
     pub(crate) fn shutdown(&mut self) {
@@ -109,7 +105,7 @@ impl Inner {
 
                 return;
             }
-            Err(actual) => panic!("inconsistent park state; actual = {}", actual),
+            Err(actual) => panic!("inconsistent park state; actual = {actual}"),
         }
 
         loop {
@@ -155,19 +151,27 @@ impl Inner {
 
                 return;
             }
-            Err(actual) => panic!("inconsistent park_timeout state; actual = {}", actual),
+            Err(actual) => panic!("inconsistent park_timeout state; actual = {actual}"),
         }
 
+        #[cfg(not(all(target_family = "wasm", not(target_feature = "atomics"))))]
         // Wait with a timeout, and if we spuriously wake up or otherwise wake up
         // from a notification, we just want to unconditionally set the state back to
         // empty, either consuming a notification or un-flagging ourselves as
         // parked.
         let (_m, _result) = self.condvar.wait_timeout(m, dur).unwrap();
 
+        #[cfg(all(target_family = "wasm", not(target_feature = "atomics")))]
+        // Wasm without atomics doesn't have threads, so just sleep.
+        {
+            let _m = m;
+            std::thread::sleep(dur);
+        }
+
         match self.state.swap(EMPTY, SeqCst) {
             NOTIFIED => {} // got a notification, hurray!
             PARKED => {}   // no notification, alas
-            n => panic!("inconsistent park_timeout state: {}", n),
+            n => panic!("inconsistent park_timeout state: {n}"),
         }
     }
 
@@ -223,7 +227,7 @@ use crate::loom::thread::AccessError;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use std::task::{RawWaker, RawWakerVTable, Waker};
+use std::task::Waker;
 
 /// Blocks the current thread using a condition variable.
 #[derive(Debug)]
@@ -278,7 +282,7 @@ impl CachedParkThread {
         pin!(f);
 
         loop {
-            if let Ready(v) = crate::runtime::coop::budget(|| f.as_mut().poll(&mut cx)) {
+            if let Ready(v) = crate::task::coop::budget(|| f.as_mut().poll(&mut cx)) {
                 return Ok(v);
             }
 
@@ -289,48 +293,18 @@ impl CachedParkThread {
 
 impl UnparkThread {
     pub(crate) fn into_waker(self) -> Waker {
-        unsafe {
-            let raw = unparker_to_raw_waker(self.inner);
-            Waker::from_raw(raw)
-        }
+        waker(self.inner)
     }
 }
 
-impl Inner {
-    #[allow(clippy::wrong_self_convention)]
-    fn into_raw(this: Arc<Inner>) -> *const () {
-        Arc::into_raw(this) as *const ()
+impl Wake for Inner {
+    fn wake(arc_self: Arc<Self>) {
+        arc_self.unpark();
     }
 
-    unsafe fn from_raw(ptr: *const ()) -> Arc<Inner> {
-        Arc::from_raw(ptr as *const Inner)
+    fn wake_by_ref(arc_self: &Arc<Self>) {
+        arc_self.unpark();
     }
-}
-
-unsafe fn unparker_to_raw_waker(unparker: Arc<Inner>) -> RawWaker {
-    RawWaker::new(
-        Inner::into_raw(unparker),
-        &RawWakerVTable::new(clone, wake, wake_by_ref, drop_waker),
-    )
-}
-
-unsafe fn clone(raw: *const ()) -> RawWaker {
-    Arc::increment_strong_count(raw as *const Inner);
-    unparker_to_raw_waker(Inner::from_raw(raw))
-}
-
-unsafe fn drop_waker(raw: *const ()) {
-    drop(Inner::from_raw(raw));
-}
-
-unsafe fn wake(raw: *const ()) {
-    let unparker = Inner::from_raw(raw);
-    unparker.unpark();
-}
-
-unsafe fn wake_by_ref(raw: *const ()) {
-    let raw = raw as *const Inner;
-    (*raw).unpark();
 }
 
 #[cfg(loom)]

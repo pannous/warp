@@ -9,7 +9,7 @@
 //!
 //! ```
 //! # use indexmap::IndexMap;
-//! # use serde_derive::{Deserialize, Serialize};
+//! # use serde::{Deserialize, Serialize};
 //! #[derive(Deserialize, Serialize)]
 //! struct Data {
 //!     #[serde(with = "indexmap::map::serde_seq")]
@@ -18,14 +18,15 @@
 //! }
 //! ```
 
-use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
-use serde::ser::{Serialize, Serializer};
+use serde_core::de::{Deserialize, Deserializer, SeqAccess, Visitor};
+use serde_core::ser::{Serialize, Serializer};
 
 use core::fmt::{self, Formatter};
 use core::hash::{BuildHasher, Hash};
 use core::marker::PhantomData;
 
 use crate::map::Slice as MapSlice;
+use crate::serde::cautious_capacity;
 use crate::set::Slice as SetSlice;
 use crate::IndexMap;
 
@@ -65,7 +66,7 @@ where
 ///
 /// ```
 /// # use indexmap::IndexMap;
-/// # use serde_derive::Serialize;
+/// # use serde::Serialize;
 /// #[derive(Serialize)]
 /// struct Data {
 ///     #[serde(serialize_with = "indexmap::map::serde_seq::serialize")]
@@ -101,7 +102,7 @@ where
     where
         A: SeqAccess<'de>,
     {
-        let capacity = seq.size_hint().unwrap_or(0);
+        let capacity = cautious_capacity::<K, V>(seq.size_hint());
         let mut map = IndexMap::with_capacity_and_hasher(capacity, S::default());
 
         while let Some((key, value)) = seq.next_element()? {
@@ -118,7 +119,7 @@ where
 ///
 /// ```
 /// # use indexmap::IndexMap;
-/// # use serde_derive::Deserialize;
+/// # use serde::Deserialize;
 /// #[derive(Deserialize)]
 /// struct Data {
 ///     #[serde(deserialize_with = "indexmap::map::serde_seq::deserialize")]

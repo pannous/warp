@@ -45,7 +45,9 @@
 use crate::sync::watch::Receiver;
 use std::task::{Context, Poll};
 
+#[cfg(feature = "signal")]
 mod ctrl_c;
+#[cfg(feature = "signal")]
 pub use ctrl_c::ctrl_c;
 
 pub(crate) mod registry;
@@ -82,7 +84,7 @@ impl RxFuture {
     }
 
     async fn recv(&mut self) -> Option<()> {
-        use crate::future::poll_fn;
+        use std::future::poll_fn;
         poll_fn(|cx| self.poll_recv(cx)).await
     }
 

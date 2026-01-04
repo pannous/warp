@@ -6,7 +6,7 @@ use crate::util::trace;
 /// A barrier enables multiple tasks to synchronize the beginning of some computation.
 ///
 /// ```
-/// # #[tokio::main]
+/// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
 /// use tokio::sync::Barrier;
 /// use std::sync::Arc;
@@ -118,6 +118,10 @@ impl Barrier {
     /// A single (arbitrary) future will receive a [`BarrierWaitResult`] that returns `true` from
     /// [`BarrierWaitResult::is_leader`] when returning from this function, and all other tasks
     /// will receive a result that will return `false` from `is_leader`.
+    ///
+    /// # Cancel safety
+    ///
+    /// This method is not cancel safe.
     pub async fn wait(&self) -> BarrierWaitResult {
         #[cfg(all(tokio_unstable, feature = "tracing"))]
         return trace::async_op(

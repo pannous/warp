@@ -28,7 +28,7 @@ use std::marker::PhantomPinned;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering::*;
-use std::task::{Context, Poll, Waker};
+use std::task::{ready, Context, Poll, Waker};
 use std::{cmp, fmt};
 
 /// An asynchronous counting semaphore which permits waiting on multiple permits at once.
@@ -127,7 +127,7 @@ impl Semaphore {
     /// implementation used three bits, so we will continue to reserve them to
     /// avoid a breaking change if additional flags need to be added in the
     /// future.
-    pub(crate) const MAX_PERMITS: usize = std::usize::MAX >> 3;
+    pub(crate) const MAX_PERMITS: usize = usize::MAX >> 3;
     const CLOSED: usize = 1;
     // The least-significant bit in the number of permits is reserved to use
     // as a flag indicating that the semaphore has been closed. Consequently
@@ -147,6 +147,7 @@ impl Semaphore {
         #[cfg(all(tokio_unstable, feature = "tracing"))]
         let resource_span = {
             let resource_span = tracing::trace_span!(
+                parent: None,
                 "runtime.resource",
                 concrete_type = "Semaphore",
                 kind = "Sync",
@@ -368,6 +369,31 @@ impl Semaphore {
         assert_eq!(rem, 0);
     }
 
+    /// Decrease a semaphore's permits by a maximum of `n`.
+    ///
+    /// If there are insufficient permits and it's not possible to reduce by `n`,
+    /// return the number of permits that were actually reduced.
+    pub(crate) fn forget_permits(&self, n: usize) -> usize {
+        if n == 0 {
+            return 0;
+        }
+
+        let mut curr_bits = self.permits.load(Acquire);
+        loop {
+            let curr = curr_bits >> Self::PERMIT_SHIFT;
+            let new = curr.saturating_sub(n);
+            match self.permits.compare_exchange_weak(
+                curr_bits,
+                new << Self::PERMIT_SHIFT,
+                AcqRel,
+                Acquire,
+            ) {
+                Ok(_) => return std::cmp::min(curr, n),
+                Err(actual) => curr_bits = actual,
+            };
+        }
+    }
+
     fn poll_acquire(
         &self,
         cx: &mut Context<'_>,
@@ -476,7 +502,7 @@ impl Semaphore {
                 .as_ref()
                 .map_or(true, |waker| !waker.will_wake(cx.waker()))
             {
-                old_waker = std::mem::replace(waker, Some(cx.waker().clone()));
+                old_waker = waker.replace(cx.waker().clone());
             }
         });
 
@@ -550,6 +576,8 @@ impl Future for Acquire<'_> {
     type Output = Result<(), AcquireError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        ready!(crate::trace::trace_leaf(cx));
+
         #[cfg(all(tokio_unstable, feature = "tracing"))]
         let _resource_span = self.node.ctx.resource_span.clone().entered();
         #[cfg(all(tokio_unstable, feature = "tracing"))]
@@ -563,11 +591,11 @@ impl Future for Acquire<'_> {
         #[cfg(all(tokio_unstable, feature = "tracing"))]
         let coop = ready!(trace_poll_op!(
             "poll_acquire",
-            crate::runtime::coop::poll_proceed(cx),
+            crate::task::coop::poll_proceed(cx),
         ));
 
         #[cfg(not(all(tokio_unstable, feature = "tracing")))]
-        let coop = ready!(crate::runtime::coop::poll_proceed(cx));
+        let coop = ready!(crate::task::coop::poll_proceed(cx));
 
         let result = match semaphore.poll_acquire(cx, needed, node, *queued) {
             Poll::Pending => {

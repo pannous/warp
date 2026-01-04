@@ -10,6 +10,18 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `PermissionDescriptor`*"]
     pub type PermissionDescriptor;
+    #[cfg(feature = "PermissionName")]
+    #[doc = "Get the `name` field of this object."]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `PermissionDescriptor`, `PermissionName`*"]
+    #[wasm_bindgen(method, getter = "name")]
+    pub fn get_name(this: &PermissionDescriptor) -> PermissionName;
+    #[cfg(feature = "PermissionName")]
+    #[doc = "Change the `name` field of this object."]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `PermissionDescriptor`, `PermissionName`*"]
+    #[wasm_bindgen(method, setter = "name")]
+    pub fn set_name(this: &PermissionDescriptor, val: PermissionName);
 }
 impl PermissionDescriptor {
     #[cfg(feature = "PermissionName")]
@@ -19,21 +31,13 @@ impl PermissionDescriptor {
     pub fn new(name: PermissionName) -> Self {
         #[allow(unused_mut)]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
-        ret.name(name);
+        ret.set_name(name);
         ret
     }
     #[cfg(feature = "PermissionName")]
-    #[doc = "Change the `name` field of this object."]
-    #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `PermissionDescriptor`, `PermissionName`*"]
+    #[deprecated = "Use `set_name()` instead."]
     pub fn name(&mut self, val: PermissionName) -> &mut Self {
-        use wasm_bindgen::JsValue;
-        let r = ::js_sys::Reflect::set(self.as_ref(), &JsValue::from("name"), &JsValue::from(val));
-        debug_assert!(
-            r.is_ok(),
-            "setting properties should never fail on our dictionary objects"
-        );
-        let _ = r;
+        self.set_name(val);
         self
     }
 }

@@ -14,7 +14,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub type XrFrame;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "XrSession")]
@@ -26,7 +26,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrSession`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn session(this: &XrFrame) -> XrSession;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "XRFrame" , js_name = predictedDisplayTime)]
@@ -37,10 +37,10 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn predicted_display_time(this: &XrFrame) -> f64;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "XRFrame" , js_name = fillJointRadii)]
+    # [wasm_bindgen (catch , method , structural , js_class = "XRFrame" , js_name = fillJointRadii)]
     #[doc = "The `fillJointRadii()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/XRFrame/fillJointRadii)"]
@@ -48,15 +48,30 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn fill_joint_radii(
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn fill_joint_radii_with_f32_slice(
         this: &XrFrame,
         joint_spaces: &::wasm_bindgen::JsValue,
         radii: &mut [f32],
-    ) -> bool;
+    ) -> Result<bool, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (catch , method , structural , js_class = "XRFrame" , js_name = fillJointRadii)]
+    #[doc = "The `fillJointRadii()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/XRFrame/fillJointRadii)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `XrFrame`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn fill_joint_radii_with_f32_array(
+        this: &XrFrame,
+        joint_spaces: &::wasm_bindgen::JsValue,
+        radii: &::js_sys::Float32Array,
+    ) -> Result<bool, JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "XrSpace")]
-    # [wasm_bindgen (method , structural , js_class = "XRFrame" , js_name = fillPoses)]
+    # [wasm_bindgen (catch , method , structural , js_class = "XRFrame" , js_name = fillPoses)]
     #[doc = "The `fillPoses()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/XRFrame/fillPoses)"]
@@ -64,13 +79,30 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrSpace`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn fill_poses(
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn fill_poses_with_f32_slice(
         this: &XrFrame,
         spaces: &::wasm_bindgen::JsValue,
         base_space: &XrSpace,
         transforms: &mut [f32],
-    ) -> bool;
+    ) -> Result<bool, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    #[cfg(feature = "XrSpace")]
+    # [wasm_bindgen (catch , method , structural , js_class = "XRFrame" , js_name = fillPoses)]
+    #[doc = "The `fillPoses()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/XRFrame/fillPoses)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrSpace`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn fill_poses_with_f32_array(
+        this: &XrFrame,
+        spaces: &::wasm_bindgen::JsValue,
+        base_space: &XrSpace,
+        transforms: &::js_sys::Float32Array,
+    ) -> Result<bool, JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(all(feature = "XrJointPose", feature = "XrJointSpace", feature = "XrSpace",))]
     # [wasm_bindgen (method , structural , js_class = "XRFrame" , js_name = getJointPose)]
@@ -81,7 +113,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrJointPose`, `XrJointSpace`, `XrSpace`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn get_joint_pose(
         this: &XrFrame,
         joint: &XrJointSpace,
@@ -97,7 +129,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrPose`, `XrSpace`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn get_pose(this: &XrFrame, space: &XrSpace, base_space: &XrSpace) -> Option<XrPose>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(all(feature = "XrReferenceSpace", feature = "XrViewerPose",))]
@@ -109,7 +141,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `XrFrame`, `XrReferenceSpace`, `XrViewerPose`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn get_viewer_pose(
         this: &XrFrame,
         reference_space: &XrReferenceSpace,

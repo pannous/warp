@@ -1,6 +1,8 @@
-use std::borrow::Cow;
-
-use crate::{CustomSection, Encode, Section};
+use crate::{CustomSection, Encode, Ieee32, Ieee64, Section};
+use alloc::borrow::Cow;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// The "core" custom section for coredumps, as described in the
 /// [tool-conventions
@@ -303,9 +305,9 @@ pub enum CoreDumpValue {
     /// An i64 value
     I64(i64),
     /// An f32 value
-    F32(f32),
+    F32(Ieee32),
     /// An f64 value
-    F64(f64),
+    F64(Ieee64),
 }
 
 impl Encode for CoreDumpValue {
@@ -336,7 +338,7 @@ impl Encode for CoreDumpValue {
 mod tests {
     use super::*;
     use crate::Module;
-    use wasmparser::{BinaryReader, FromReader, Parser, Payload};
+    use wasmparser::{KnownCustom, Parser, Payload};
 
     // Create new core dump section and test whether it is properly encoded and
     // parsed back out by wasmparser
@@ -361,10 +363,10 @@ mod tests {
         match payload {
             Payload::CustomSection(section) => {
                 assert_eq!(section.name(), "core");
-                let core = wasmparser::CoreDumpSection::from_reader(&mut BinaryReader::new(
-                    section.data(),
-                ))
-                .expect("data is readable into a core dump section");
+                let core = match section.as_known() {
+                    KnownCustom::CoreDump(s) => s,
+                    _ => panic!("not coredump"),
+                };
                 assert_eq!(core.name, "test.wasm");
             }
             _ => panic!("unexpected payload"),
@@ -394,10 +396,10 @@ mod tests {
         match payload {
             Payload::CustomSection(section) => {
                 assert_eq!(section.name(), "coremodules");
-                let modules = wasmparser::CoreDumpModulesSection::from_reader(
-                    &mut BinaryReader::new(section.data()),
-                )
-                .expect("data is readable into a core dump modules section");
+                let modules = match section.as_known() {
+                    KnownCustom::CoreDumpModules(s) => s,
+                    _ => panic!("not coremodules"),
+                };
                 assert_eq!(modules.modules[0], "test_module");
             }
             _ => panic!("unexpected payload"),
@@ -429,10 +431,10 @@ mod tests {
         match payload {
             Payload::CustomSection(section) => {
                 assert_eq!(section.name(), "coreinstances");
-                let coreinstances = wasmparser::CoreDumpInstancesSection::from_reader(
-                    &mut BinaryReader::new(section.data()),
-                )
-                .expect("data is readable into a core dump instances section");
+                let coreinstances = match section.as_known() {
+                    KnownCustom::CoreDumpInstances(s) => s,
+                    _ => panic!("not coreinstances"),
+                };
                 assert_eq!(coreinstances.instances.len(), 1);
                 let instance = coreinstances
                     .instances
@@ -475,10 +477,10 @@ mod tests {
         match payload {
             Payload::CustomSection(section) => {
                 assert_eq!(section.name(), "corestack");
-                let corestack = wasmparser::CoreDumpStackSection::from_reader(
-                    &mut BinaryReader::new(section.data()),
-                )
-                .expect("data is readable into a core dump stack section");
+                let corestack = match section.as_known() {
+                    KnownCustom::CoreDumpStack(s) => s,
+                    _ => panic!("not a corestack section"),
+                };
                 assert_eq!(corestack.name, "main");
                 assert_eq!(corestack.frames.len(), 1);
                 let frame = corestack
@@ -570,7 +572,7 @@ mod tests {
             // 0x0, module_idx
             0x0, 0,
             // memories count, memories
-            1, 42, 
+            1, 42,
             // globals count, globals
             1, 17
         ]);
@@ -595,7 +597,7 @@ mod tests {
             encoded,
             vec![
                 // section length
-                27, 
+                27,
                 // length of name.
                 9,
                 // section name (corestack)

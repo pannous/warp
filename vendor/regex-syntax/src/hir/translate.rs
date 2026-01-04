@@ -30,7 +30,7 @@ impl Default for TranslatorBuilder {
 }
 
 impl TranslatorBuilder {
-    /// Create a new translator builder with a default c onfiguration.
+    /// Create a new translator builder with a default configuration.
     pub fn new() -> TranslatorBuilder {
         TranslatorBuilder {
             utf8: true,
@@ -254,7 +254,7 @@ impl HirFrame {
         match self {
             HirFrame::Expr(expr) => expr,
             HirFrame::Literal(lit) => Hir::literal(lit),
-            _ => panic!("tried to unwrap expr from HirFrame, got: {:?}", self),
+            _ => panic!("tried to unwrap expr from HirFrame, got: {self:?}"),
         }
     }
 
@@ -291,8 +291,7 @@ impl HirFrame {
             HirFrame::Repetition => {}
             _ => {
                 panic!(
-                    "tried to unwrap repetition from HirFrame, got: {:?}",
-                    self
+                    "tried to unwrap repetition from HirFrame, got: {self:?}"
                 )
             }
         }
@@ -305,7 +304,7 @@ impl HirFrame {
         match self {
             HirFrame::Group { old_flags } => old_flags,
             _ => {
-                panic!("tried to unwrap group from HirFrame, got: {:?}", self)
+                panic!("tried to unwrap group from HirFrame, got: {self:?}")
             }
         }
     }
@@ -316,10 +315,7 @@ impl HirFrame {
         match self {
             HirFrame::AlternationBranch => {}
             _ => {
-                panic!(
-                    "tried to unwrap alt pipe from HirFrame, got: {:?}",
-                    self
-                )
+                panic!("tried to unwrap alt pipe from HirFrame, got: {self:?}")
             }
         }
     }
@@ -1358,9 +1354,8 @@ fn ascii_class_as_chars(
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::{self, parse::ParserBuilder, Ast, Position, Span},
-        hir::{self, Hir, HirKind, Look, Properties},
-        unicode::{self, ClassQuery},
+        ast::{parse::ParserBuilder, Position},
+        hir::{Look, Properties},
     };
 
     use super::*;
@@ -3144,10 +3139,31 @@ mod tests {
         #[cfg(feature = "unicode-script")]
         assert_eq!(
             t(r"[\p{sc:Greek}~~\p{scx:Greek}]"),
+            // Class({
+            //     '·'..='·',
+            //     '\u{300}'..='\u{301}',
+            //     '\u{304}'..='\u{304}',
+            //     '\u{306}'..='\u{306}',
+            //     '\u{308}'..='\u{308}',
+            //     '\u{313}'..='\u{313}',
+            //     '\u{342}'..='\u{342}',
+            //     '\u{345}'..='\u{345}',
+            //     'ʹ'..='ʹ',
+            //     '\u{1dc0}'..='\u{1dc1}',
+            //     '⁝'..='⁝',
+            // })
             hir_uclass(&[
+                ('·', '·'),
+                ('\u{0300}', '\u{0301}'),
+                ('\u{0304}', '\u{0304}'),
+                ('\u{0306}', '\u{0306}'),
+                ('\u{0308}', '\u{0308}'),
+                ('\u{0313}', '\u{0313}'),
                 ('\u{0342}', '\u{0342}'),
                 ('\u{0345}', '\u{0345}'),
+                ('ʹ', 'ʹ'),
                 ('\u{1DC0}', '\u{1DC1}'),
+                ('⁝', '⁝'),
             ])
         );
         assert_eq!(t(r"[a-g~~c-j]"), hir_uclass(&[('a', 'b'), ('h', 'j')]));

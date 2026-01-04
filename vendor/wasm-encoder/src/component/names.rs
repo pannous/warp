@@ -1,7 +1,8 @@
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::vec::Vec;
 
 use super::*;
-use crate::{encoding_size, CustomSection, Encode, ExportKind, NameMap, SectionId};
+use crate::{ExportKind, NameMap, SectionId, encoding_size};
 
 /// Encoding for the `component-name` custom section which assigns
 /// human-readable names to items within a component.
@@ -56,6 +57,12 @@ impl ComponentNameSection {
         self.core_decls(ExportKind::Global as u8, names)
     }
 
+    /// Appends a decls name subsection to name core tags within the
+    /// component.
+    pub fn core_tags(&mut self, names: &NameMap) {
+        self.core_decls(ExportKind::Tag as u8, names)
+    }
+
     /// Appends a decls name subsection to name core types within the
     /// component.
     pub fn core_types(&mut self, names: &NameMap) {
@@ -102,6 +109,12 @@ impl ComponentNameSection {
     /// component.
     pub fn instances(&mut self, names: &NameMap) {
         self.component_decls(INSTANCE_SORT, names)
+    }
+
+    /// Appends a raw subsection with the given id and data.
+    pub fn raw(&mut self, id: u8, data: &[u8]) {
+        self.bytes.push(id);
+        data.encode(&mut self.bytes);
     }
 
     fn component_decls(&mut self, kind: u8, names: &NameMap) {

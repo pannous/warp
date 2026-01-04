@@ -124,6 +124,7 @@ pub struct ParserBuilder {
     ignore_whitespace: bool,
     nest_limit: u32,
     octal: bool,
+    empty_min_range: bool,
 }
 
 impl Default for ParserBuilder {
@@ -139,6 +140,7 @@ impl ParserBuilder {
             ignore_whitespace: false,
             nest_limit: 250,
             octal: false,
+            empty_min_range: false,
         }
     }
 
@@ -149,6 +151,7 @@ impl ParserBuilder {
             capture_index: Cell::new(0),
             nest_limit: self.nest_limit,
             octal: self.octal,
+            empty_min_range: self.empty_min_range,
             initial_ignore_whitespace: self.ignore_whitespace,
             ignore_whitespace: Cell::new(self.ignore_whitespace),
             comments: RefCell::new(vec![]),
@@ -221,6 +224,18 @@ impl ParserBuilder {
         self.ignore_whitespace = yes;
         self
     }
+
+    /// Allow using `{,n}` as an equivalent to `{0,n}`.
+    ///
+    /// When enabled, the parser accepts `{,n}` as valid syntax for `{0,n}`.
+    /// Most regular expression engines don't support the `{,n}` syntax, but
+    /// some others do it, namely Python's `re` library.
+    ///
+    /// This is disabled by default.
+    pub fn empty_min_range(&mut self, yes: bool) -> &mut ParserBuilder {
+        self.empty_min_range = yes;
+        self
+    }
 }
 
 /// A regular expression parser.
@@ -246,6 +261,9 @@ pub struct Parser {
     /// The initial setting for `ignore_whitespace` as provided by
     /// `ParserBuilder`. It is used when resetting the parser's state.
     initial_ignore_whitespace: bool,
+    /// Whether the parser supports `{,n}` repetitions as an equivalent to
+    /// `{0,n}.`
+    empty_min_range: bool,
     /// Whether whitespace should be ignored. When enabled, comments are
     /// also permitted.
     ignore_whitespace: Cell<bool>,
@@ -466,7 +484,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         self.pattern()[i..]
             .chars()
             .next()
-            .unwrap_or_else(|| panic!("expected char at offset {}", i))
+            .unwrap_or_else(|| panic!("expected char at offset {i}"))
     }
 
     /// Bump the parser to the next Unicode scalar value.
@@ -1114,15 +1132,14 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             self.parse_decimal(),
             ast::ErrorKind::DecimalEmpty,
             ast::ErrorKind::RepetitionCountDecimalEmpty,
-        )?;
-        let mut range = ast::RepetitionRange::Exactly(count_start);
+        );
         if self.is_eof() {
             return Err(self.error(
                 Span::new(start, self.pos()),
                 ast::ErrorKind::RepetitionCountUnclosed,
             ));
         }
-        if self.char() == ',' {
+        let range = if self.char() == ',' {
             if !self.bump_and_bump_space() {
                 return Err(self.error(
                     Span::new(start, self.pos()),
@@ -1130,16 +1147,33 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ));
             }
             if self.char() != '}' {
+                let count_start = match count_start {
+                    Ok(c) => c,
+                    Err(err)
+                        if err.kind
+                            == ast::ErrorKind::RepetitionCountDecimalEmpty =>
+                    {
+                        if self.parser().empty_min_range {
+                            0
+                        } else {
+                            return Err(err);
+                        }
+                    }
+                    err => err?,
+                };
                 let count_end = specialize_err(
                     self.parse_decimal(),
                     ast::ErrorKind::DecimalEmpty,
                     ast::ErrorKind::RepetitionCountDecimalEmpty,
                 )?;
-                range = ast::RepetitionRange::Bounded(count_start, count_end);
+                ast::RepetitionRange::Bounded(count_start, count_end)
             } else {
-                range = ast::RepetitionRange::AtLeast(count_start);
+                ast::RepetitionRange::AtLeast(count_start?)
             }
-        }
+        } else {
+            ast::RepetitionRange::Exactly(count_start?)
+        };
+
         if self.is_eof() || self.char() != '}' {
             return Err(self.error(
                 Span::new(start, self.pos()),
@@ -2220,7 +2254,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             'S' => (true, ast::ClassPerlKind::Space),
             'w' => (false, ast::ClassPerlKind::Word),
             'W' => (true, ast::ClassPerlKind::Word),
-            c => panic!("expected valid Perl class but got '{}'", c),
+            c => panic!("expected valid Perl class but got '{c}'"),
         };
         ast::ClassPerl { span, kind, negated }
     }
@@ -2405,8 +2439,6 @@ mod tests {
 
     use alloc::format;
 
-    use crate::ast::{self, Ast, Position, Span};
-
     use super::*;
 
     // Our own assert_eq, which has slightly better formatting (but honestly
@@ -2458,6 +2490,11 @@ mod tests {
 
     fn parser_octal(pattern: &str) -> ParserI<'_, Parser> {
         let parser = ParserBuilder::new().octal(true).build();
+        ParserI::new(parser, pattern)
+    }
+
+    fn parser_empty_min_range(pattern: &str) -> ParserI<'_, Parser> {
+        let parser = ParserBuilder::new().empty_min_range(true).build();
         ParserI::new(parser, pattern)
     }
 
@@ -3372,6 +3409,20 @@ bar
                     span: span(1..10),
                     kind: ast::RepetitionKind::Range(
                         ast::RepetitionRange::Bounded(5, 9)
+                    ),
+                },
+                greedy: true,
+                ast: Box::new(lit('a', 0)),
+            }))
+        );
+        assert_eq!(
+            parser_empty_min_range(r"a{,9}").parse(),
+            Ok(Ast::repetition(ast::Repetition {
+                span: span(0..5),
+                op: ast::RepetitionOp {
+                    span: span(1..5),
+                    kind: ast::RepetitionKind::Range(
+                        ast::RepetitionRange::Bounded(0, 9)
                     ),
                 },
                 greedy: true,
@@ -4547,7 +4598,7 @@ bar
 
         // We also support superfluous escapes in most cases now too.
         for c in ['!', '@', '%', '"', '\'', '/', ' '] {
-            let pat = format!(r"\{}", c);
+            let pat = format!(r"\{c}");
             assert_eq!(
                 parser(&pat).parse_primitive(),
                 Ok(Primitive::Literal(ast::Literal {
@@ -4598,8 +4649,8 @@ bar
         assert_eq!(
             parser(r"\b{ ").parse().unwrap_err(),
             TestError {
-                span: span(4..4),
-                kind: ast::ErrorKind::RepetitionCountDecimalEmpty,
+                span: span(2..4),
+                kind: ast::ErrorKind::RepetitionCountUnclosed,
             }
         );
         // In this case, we got some valid chars that makes it look like the
@@ -4662,7 +4713,7 @@ bar
     #[test]
     fn parse_octal() {
         for i in 0..511 {
-            let pat = format!(r"\{:o}", i);
+            let pat = format!(r"\{i:o}");
             assert_eq!(
                 parser_octal(&pat).parse_escape(),
                 Ok(Primitive::Literal(ast::Literal {
@@ -4737,7 +4788,7 @@ bar
     #[test]
     fn parse_hex_two() {
         for i in 0..256 {
-            let pat = format!(r"\x{:02x}", i);
+            let pat = format!(r"\x{i:02x}");
             assert_eq!(
                 parser(&pat).parse_escape(),
                 Ok(Primitive::Literal(ast::Literal {
@@ -4778,7 +4829,7 @@ bar
                 None => continue,
                 Some(c) => c,
             };
-            let pat = format!(r"\u{:04x}", i);
+            let pat = format!(r"\u{i:04x}");
             assert_eq!(
                 parser(&pat).parse_escape(),
                 Ok(Primitive::Literal(ast::Literal {
@@ -4842,7 +4893,7 @@ bar
                 None => continue,
                 Some(c) => c,
             };
-            let pat = format!(r"\U{:08x}", i);
+            let pat = format!(r"\U{i:08x}");
             assert_eq!(
                 parser(&pat).parse_escape(),
                 Ok(Primitive::Literal(ast::Literal {

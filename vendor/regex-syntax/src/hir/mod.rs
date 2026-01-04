@@ -249,7 +249,7 @@ impl Hir {
 /// just get back the original `expr` since it's precisely equivalent.
 ///
 /// Smart constructors enable maintaining invariants about the HIR data type
-/// while also simulanteously keeping the representation as simple as possible.
+/// while also simultaneously keeping the representation as simple as possible.
 impl Hir {
     /// Returns an empty HIR expression.
     ///
@@ -321,6 +321,22 @@ impl Hir {
     /// // single `Literal`, to the point where there is no explicit `Concat`!
     /// let expected = HirKind::Literal(Literal(Box::from("☃".as_bytes())));
     /// assert_eq!(&expected, concat.kind());
+    /// ```
+    ///
+    /// # Example: building a literal from a `char`
+    ///
+    /// This example shows how to build a single `Hir` literal from a `char`
+    /// value. Since a [`Literal`] is just bytes, we just need to UTF-8
+    /// encode a `char` value:
+    ///
+    /// ```
+    /// use regex_syntax::hir::{Hir, HirKind, Literal};
+    ///
+    /// let ch = '☃';
+    /// let got = Hir::literal(ch.encode_utf8(&mut [0; 4]).as_bytes());
+    ///
+    /// let expected = HirKind::Literal(Literal(Box::from("☃".as_bytes())));
+    /// assert_eq!(&expected, got.kind());
     /// ```
     #[inline]
     pub fn literal<B: Into<Box<[u8]>>>(lit: B) -> Hir {
@@ -642,16 +658,12 @@ impl Hir {
     #[inline]
     pub fn dot(dot: Dot) -> Hir {
         match dot {
-            Dot::AnyChar => {
-                let mut cls = ClassUnicode::empty();
-                cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
-                Hir::class(Class::Unicode(cls))
-            }
-            Dot::AnyByte => {
-                let mut cls = ClassBytes::empty();
-                cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
-                Hir::class(Class::Bytes(cls))
-            }
+            Dot::AnyChar => Hir::class(Class::Unicode(ClassUnicode::new([
+                ClassUnicodeRange::new('\0', '\u{10FFFF}'),
+            ]))),
+            Dot::AnyByte => Hir::class(Class::Bytes(ClassBytes::new([
+                ClassBytesRange::new(b'\0', b'\xFF'),
+            ]))),
             Dot::AnyCharExcept(ch) => {
                 let mut cls =
                     ClassUnicode::new([ClassUnicodeRange::new(ch, ch)]);
@@ -659,17 +671,17 @@ impl Hir {
                 Hir::class(Class::Unicode(cls))
             }
             Dot::AnyCharExceptLF => {
-                let mut cls = ClassUnicode::empty();
-                cls.push(ClassUnicodeRange::new('\0', '\x09'));
-                cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
-                Hir::class(Class::Unicode(cls))
+                Hir::class(Class::Unicode(ClassUnicode::new([
+                    ClassUnicodeRange::new('\0', '\x09'),
+                    ClassUnicodeRange::new('\x0B', '\u{10FFFF}'),
+                ])))
             }
             Dot::AnyCharExceptCRLF => {
-                let mut cls = ClassUnicode::empty();
-                cls.push(ClassUnicodeRange::new('\0', '\x09'));
-                cls.push(ClassUnicodeRange::new('\x0B', '\x0C'));
-                cls.push(ClassUnicodeRange::new('\x0E', '\u{10FFFF}'));
-                Hir::class(Class::Unicode(cls))
+                Hir::class(Class::Unicode(ClassUnicode::new([
+                    ClassUnicodeRange::new('\0', '\x09'),
+                    ClassUnicodeRange::new('\x0B', '\x0C'),
+                    ClassUnicodeRange::new('\x0E', '\u{10FFFF}'),
+                ])))
             }
             Dot::AnyByteExcept(byte) => {
                 let mut cls =
@@ -678,17 +690,17 @@ impl Hir {
                 Hir::class(Class::Bytes(cls))
             }
             Dot::AnyByteExceptLF => {
-                let mut cls = ClassBytes::empty();
-                cls.push(ClassBytesRange::new(b'\0', b'\x09'));
-                cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
-                Hir::class(Class::Bytes(cls))
+                Hir::class(Class::Bytes(ClassBytes::new([
+                    ClassBytesRange::new(b'\0', b'\x09'),
+                    ClassBytesRange::new(b'\x0B', b'\xFF'),
+                ])))
             }
             Dot::AnyByteExceptCRLF => {
-                let mut cls = ClassBytes::empty();
-                cls.push(ClassBytesRange::new(b'\0', b'\x09'));
-                cls.push(ClassBytesRange::new(b'\x0B', b'\x0C'));
-                cls.push(ClassBytesRange::new(b'\x0E', b'\xFF'));
-                Hir::class(Class::Bytes(cls))
+                Hir::class(Class::Bytes(ClassBytes::new([
+                    ClassBytesRange::new(b'\0', b'\x09'),
+                    ClassBytesRange::new(b'\x0B', b'\x0C'),
+                    ClassBytesRange::new(b'\x0E', b'\xFF'),
+                ])))
             }
         }
     }
@@ -706,7 +718,7 @@ pub enum HirKind {
     /// The empty regular expression, which matches everything, including the
     /// empty string.
     Empty,
-    /// A literalstring that matches exactly these bytes.
+    /// A literal string that matches exactly these bytes.
     Literal(Literal),
     /// A single character class that matches any of the characters in the
     /// class. A class can either consist of Unicode scalar values as
@@ -803,7 +815,7 @@ impl core::fmt::Debug for Literal {
 /// sequence of non-overlapping non-adjacent ranges of characters.
 ///
 /// There are no guarantees about which class variant is used. Generally
-/// speaking, the Unicode variat is used whenever a class needs to contain
+/// speaking, the Unicode variant is used whenever a class needs to contain
 /// non-ASCII Unicode scalar values. But the Unicode variant can be used even
 /// when Unicode mode is disabled. For example, at the time of writing, the
 /// regex `(?-u:a|\xc2\xa0)` will compile down to HIR for the Unicode class

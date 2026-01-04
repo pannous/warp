@@ -28,6 +28,175 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 3.19.1
+
+Released 2025-12-16.
+
+### Changed
+
+* Annotated `bumpalo::collections::String::from_str_in` as `#[inline]`.
+
+### Fixed
+
+* Fixed compilation failures with the latest nightly Rust when enabling the
+  unstable `allocator_api` feature.
+
+--------------------------------------------------------------------------------
+
+## 3.19.0
+
+Released 2025-06-24.
+
+### Added
+
+* Added `bumpalo::collections::Vec::retain_mut`, similar to
+  `std::vec::Vec::retain_mut`.
+
+--------------------------------------------------------------------------------
+
+## 3.18.1
+
+Released 2025-06-05.
+
+### Removed
+
+* Removed the `allocator-api2` version bump from 3.18.0, as it was not actually
+  semver compatible.
+
+--------------------------------------------------------------------------------
+
+## 3.18.0 (yanked)
+
+Released 2025-06-05.
+
+### Added
+
+* Added support for enforcing a minimum alignment on all allocations inside a
+  `Bump` arena, which can provide speed ups when allocating objects whose
+  alignment is less than or equal to that minimum.
+* Added `serde` serialization support for `bumpalo::collections::String`.
+* Added some missing fallible slice allocation function variants.
+
+### Changed
+
+* Replaced `extend_from_slice` implementation with a formally-verified version
+  that is also faster and more-optimizable for LLVM.
+* Updated `allocator-api2` support to version `0.3.*`.
+
+### Fixed
+
+* Fixed a bug where the `allocated_bytes` metrics helper was accidentally
+  including the size of `bumpalo`'s footer, rather than just reporting the
+  user-allocated bytes.
+
+--------------------------------------------------------------------------------
+
+## 3.17.0
+
+Released 2025-01-28.
+
+### Added
+
+* Added a bunch of `try_` allocation methods for slices and `str`:
+  * `try_alloc_slice_fill_default`
+  * `try_alloc_slice_fill_iter`
+  * `try_alloc_slice_fill_clone`
+  * `try_alloc_slice_fill_copy`
+  * `try_alloc_slice_fill_with`
+  * `try_alloc_str`
+  * `try_alloc_slice_clone`
+  * `try_alloc_slice_copy`
+
+### Changed
+
+* Minimum supported Rust version reduced to 1.71.1
+
+### Fixed
+
+* Fixed a stacked-borrows MIRI bug in `dealloc`
+
+--------------------------------------------------------------------------------
+
+## 3.16.0
+
+Released 2024-04-08.
+
+### Added
+
+* Added an optional, off-by-default dependency on the `serde` crate. Enabling
+  this dependency allows you to serialize Bumpalo's collection and box
+  types. Deserialization is not implemented, due to constraints of the
+  deserialization trait.
+
+--------------------------------------------------------------------------------
+
+## 3.15.4
+
+Released 2024-03-07.
+
+### Added
+
+* Added the `bumpalo::collections::Vec::extend_from_slices_copy` method, which
+  is a faster way to extend a vec from multiple slices when the element is
+  `Copy` than calling `extend_from_slice_copy` N times.
+
+--------------------------------------------------------------------------------
+
+## 3.15.3
+
+Released 2024-02-22.
+
+### Added
+
+* Added additional performance improvements to `bumpalo::collections::Vec`
+  related to reserving capacity.
+
+--------------------------------------------------------------------------------
+
+## 3.15.2
+
+Released 2024-02-21.
+
+### Added
+
+* Add a `bumpalo::collections::Vec::extend_from_slice_copy` method. This doesn't
+  exist on the standard library's `Vec` but they have access to specialization,
+  so their regular `extend_from_slice` has a specialization for `Copy`
+  types. Using this new method for `Copy` types is a ~80x performance
+  improvement over the plain `extend_from_slice` method.
+
+--------------------------------------------------------------------------------
+
+## 3.15.1
+
+Released 2024-02-20.
+
+### Fixed
+
+* Fixed the MSRV listed in `Cargo.toml`, whose update was forgotten when the
+  MSRV bumped in release 3.15.0.
+
+--------------------------------------------------------------------------------
+
+## 3.15.0
+
+Released 2024-02-15.
+
+### Changed
+
+* The minimum supported Rust version (MSRV) is now 1.73.0.
+* `bumpalo::collections::String::push_str` and
+  `bumpalo::collections::String::from_str_in` received significant performance
+  improvements.
+* Allocator trait methods are now marked `#[inline]`, increasing performance for
+  some callers.
+
+### Fixed
+
+* Fixed an edge-case bug in the `Allocator::shrink` method.
+
+--------------------------------------------------------------------------------
+
 ## 3.14.0
 
 Released 2023-09-14.

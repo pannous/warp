@@ -1,6 +1,8 @@
-use crate::common::*;
+use crate::common::{ceil_log2_pow5, log2_pow5};
 use crate::f2s;
-use crate::f2s_intrinsics::*;
+use crate::f2s_intrinsics::{
+    mul_pow5_div_pow2, mul_pow5_inv_div_pow2, multiple_of_power_of_2_32, multiple_of_power_of_5_32,
+};
 use crate::parse::Error;
 #[cfg(feature = "no-panic")]
 use no_panic::no_panic;
@@ -55,7 +57,7 @@ pub fn s2f(buffer: &[u8]) -> Result<f32, Error> {
         i += 1;
     }
 
-    if let Some(b'e') | Some(b'E') = buffer.get(i) {
+    if let Some(b'e' | b'E') = buffer.get(i) {
         e_index = i;
         i += 1;
         match buffer.get(i) {

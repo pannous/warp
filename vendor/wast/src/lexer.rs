@@ -24,13 +24,14 @@
 //!
 //! [`Lexer`]: crate::lexer::Lexer
 
-use crate::token::Span;
 use crate::Error;
+use crate::token::Span;
 use std::borrow::Cow;
 use std::char;
 use std::fmt;
 use std::slice;
 use std::str;
+use std::str::Utf8Error;
 
 /// A structure used to lex the s-expression syntax of WAT files.
 ///
@@ -60,9 +61,10 @@ pub struct Token {
     pub len: u32,
 }
 
-const _: () = {
+#[test]
+fn token_is_not_too_big() {
     assert!(std::mem::size_of::<Token>() <= std::mem::size_of::<u64>() * 2);
-};
+}
 
 /// Classification of what was parsed from the input stream.
 ///
@@ -98,6 +100,12 @@ pub enum TokenKind {
     ///
     /// The payload here is the original source text.
     Keyword,
+
+    /// An annotation (like `@foo`).
+    ///
+    /// All annotations start with `@` and the payload will be the name of the
+    /// annotation.
+    Annotation,
 
     /// A reserved series of `idchar` symbols. Unknown what this is meant to be
     /// used for, you'll probably generate an error about an unexpected token.
@@ -136,8 +144,15 @@ pub enum FloatKind {
 }
 
 enum ReservedKind {
+    /// "..."
     String,
+    /// anything that's just a sequence of `idchars!()`
     Idchars,
+    /// $"..."
+    IdString,
+    /// @"..."
+    AnnotationString,
+    /// everything else (a conglomeration of strings, idchars, etc)
     Reserved,
 }
 
@@ -199,6 +214,16 @@ pub enum LexError {
     /// version to behave differently than the compiler-visible version, so
     /// these are simply rejected for now.
     ConfusingUnicode(char),
+
+    /// An invalid utf-8 sequence was found in a quoted identifier, such as
+    /// `$"\ff"`.
+    InvalidUtf8Id(Utf8Error),
+
+    /// An empty identifier was found, or a lone `$`.
+    EmptyId,
+
+    /// An empty identifier was found, or a lone `@`.
+    EmptyAnnotation,
 }
 
 /// A sign token for an integer.
@@ -236,13 +261,13 @@ pub enum Float<'a> {
     },
     /// A parsed and separated floating point value
     Val {
-        /// Whether or not the `integral` and `decimal` are specified in hex
+        /// Whether or not the `integral` and `fractional` are specified in hex
         hex: bool,
         /// The float parts before the `.`
         integral: Cow<'a, str>,
         /// The float parts after the `.`
-        decimal: Option<Cow<'a, str>>,
-        /// The exponent to multiple this `integral.decimal` portion of the
+        fractional: Option<Cow<'a, str>>,
+        /// The exponent to multiple this `integral.fractional` portion of the
         /// float by. If `hex` is true this is `2^exponent` and otherwise it's
         /// `10^exponent`
         exponent: Option<Cow<'a, str>>,
@@ -420,13 +445,20 @@ impl<'a> Lexer<'a> {
                         if let Some(ret) = self.classify_number(src) {
                             return Ok(Some(ret));
                         // https://webassembly.github.io/spec/core/text/values.html#text-id
-                        } else if *c == b'$' && src.len() > 1 {
+                        } else if *c == b'$' {
                             return Ok(Some(TokenKind::Id));
+                        // part of the WebAssembly/annotations proposal
+                        // (no online url yet)
+                        } else if *c == b'@' {
+                            return Ok(Some(TokenKind::Annotation));
                         // https://webassembly.github.io/spec/core/text/lexical.html#text-keyword
                         } else if b'a' <= *c && *c <= b'z' {
                             return Ok(Some(TokenKind::Keyword));
                         }
                     }
+
+                    ReservedKind::IdString => return Ok(Some(TokenKind::Id)),
+                    ReservedKind::AnnotationString => return Ok(Some(TokenKind::Annotation)),
 
                     // ... otherwise this was a conglomeration of idchars,
                     // strings, or just idchars that don't match a prior rule,
@@ -445,7 +477,11 @@ impl<'a> Lexer<'a> {
             // `reserved` token is part of the annotations proposal.
             b';' => match remaining.get(1) {
                 Some(b';') => {
-                    let comment = self.split_until(pos, b'\n');
+                    let remaining = &self.input[*pos..];
+                    let byte_pos = memchr::memchr2(b'\n', b'\r', remaining.as_bytes())
+                        .unwrap_or(remaining.len());
+                    *pos += byte_pos;
+                    let comment = &remaining[..byte_pos];
                     self.check_confusing_comment(*pos, comment)?;
                     Ok(Some(TokenKind::LineComment))
                 }
@@ -469,13 +505,6 @@ impl<'a> Lexer<'a> {
                 Err(self.error(*pos, LexError::Unexpected(ch)))
             }
         }
-    }
-
-    fn split_until(&self, pos: &mut usize, byte: u8) -> &'a str {
-        let remaining = &self.input[*pos..];
-        let byte_pos = memchr::memchr(byte, remaining.as_bytes()).unwrap_or(remaining.len());
-        *pos += byte_pos;
-        &remaining[..byte_pos]
     }
 
     fn skip_ws(&self, pos: &mut usize) {
@@ -541,7 +570,7 @@ impl<'a> Lexer<'a> {
     /// eaten. The classification assists in determining what the actual token
     /// here eaten looks like.
     fn parse_reserved(&self, pos: &mut usize) -> Result<(ReservedKind, &'a str), Error> {
-        let mut idchars = false;
+        let mut idchars = 0u32;
         let mut strings = 0u32;
         let start = *pos;
         while let Some(byte) = self.input.as_bytes().get(*pos) {
@@ -549,7 +578,7 @@ impl<'a> Lexer<'a> {
                 // Normal `idchars` production which appends to the reserved
                 // token that's being produced.
                 idchars!() => {
-                    idchars = true;
+                    idchars += 1;
                     *pos += 1;
                 }
 
@@ -578,9 +607,13 @@ impl<'a> Lexer<'a> {
         }
         let ret = &self.input[start..*pos];
         Ok(match (idchars, strings) {
-            (false, 0) => unreachable!(),
-            (false, 1) => (ReservedKind::String, ret),
-            (true, 0) => (ReservedKind::Idchars, ret),
+            (0, 0) => unreachable!(),
+            (0, 1) => (ReservedKind::String, ret),
+            (_, 0) => (ReservedKind::Idchars, ret),
+            // Pattern match `@"..."` and `$"..."` for string-based
+            // identifiers and annotations.
+            (1, 1) if ret.starts_with("$") => (ReservedKind::IdString, ret),
+            (1, 1) if ret.starts_with("@") => (ReservedKind::AnnotationString, ret),
             _ => (ReservedKind::Reserved, ret),
         })
     }
@@ -636,11 +669,11 @@ impl<'a> Lexer<'a> {
                     has_underscores,
                     sign,
                     hex,
-                }))
+                }));
             }
         }
 
-        // A number can optionally be after the decimal so only actually try to
+        // A number can optionally be after the dot so only actually try to
         // parse one if it's there.
         if it.clone().next() == Some(&b'.') {
             it.next();
@@ -686,10 +719,7 @@ impl<'a> Lexer<'a> {
             hex,
         }));
 
-        fn skip_underscores<'a>(
-            it: &mut slice::Iter<'_, u8>,
-            good: fn(u8) -> bool,
-        ) -> Option<bool> {
+        fn skip_underscores(it: &mut slice::Iter<'_, u8>, good: fn(u8) -> bool) -> Option<bool> {
             let mut last_underscore = false;
             let mut has_underscores = false;
             let first = *it.next()?;
@@ -797,10 +827,10 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                    return Err(LexError::InvalidStringElement(c))
+                    return Err(LexError::InvalidStringElement(c));
                 }
                 c if !allow_confusing_unicode && is_confusing_unicode(c) => {
-                    return Err(LexError::ConfusingUnicode(c))
+                    return Err(LexError::ConfusingUnicode(c));
                 }
                 c => match &mut state {
                     State::Start => {}
@@ -813,6 +843,37 @@ impl<'a> Lexer<'a> {
         match state {
             State::Start => Ok(orig[..orig.len() - it.as_str().len() - 1].as_bytes().into()),
             State::String(s) => Ok(s.into()),
+        }
+    }
+
+    /// Parses an id-or-string-based name from `it`.
+    ///
+    /// Note that `it` should already have been lexed and this is just
+    /// extracting the value. If the token lexed was `@a` then this should point
+    /// to `a`.
+    ///
+    /// This will automatically detect quoted syntax such as `@"..."` and the
+    /// byte string will be parsed and validated as utf-8.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a quoted byte string is found and contains invalid
+    /// utf-8.
+    fn parse_name(it: &mut str::Chars<'a>) -> Result<Cow<'a, str>, LexError> {
+        if it.clone().next() == Some('"') {
+            it.next();
+            match Lexer::parse_str(it, true)? {
+                Cow::Borrowed(bytes) => match std::str::from_utf8(bytes) {
+                    Ok(s) => Ok(Cow::Borrowed(s)),
+                    Err(e) => Err(LexError::InvalidUtf8Id(e)),
+                },
+                Cow::Owned(bytes) => match String::from_utf8(bytes) {
+                    Ok(s) => Ok(Cow::Owned(s)),
+                    Err(e) => Err(LexError::InvalidUtf8Id(e.utf8_error())),
+                },
+            }
+        } else {
+            Ok(Cow::Borrowed(it.as_str()))
         }
     }
 
@@ -881,28 +942,23 @@ impl<'a> Lexer<'a> {
         std::iter::from_fn(move || self.parse(&mut pos).transpose())
     }
 
-    /// Returns whether an annotation is present at `pos` and the name of the
-    /// annotation.
-    pub fn annotation(&self, mut pos: usize) -> Option<&'a str> {
+    /// Returns whether an annotation is present at `pos`. If it is present then
+    /// `Ok(Some(token))` is returned corresponding to the token, otherwise
+    /// `Ok(None)` is returned. If the next token cannot be parsed then an error
+    /// is returned.
+    pub fn annotation(&self, mut pos: usize) -> Result<Option<Token>, Error> {
         let bytes = self.input.as_bytes();
         // Quickly reject anything that for sure isn't an annotation since this
         // method is used every time an lparen is parsed.
         if bytes.get(pos) != Some(&b'@') {
-            return None;
+            return Ok(None);
         }
-        match self.parse(&mut pos) {
-            Ok(Some(token)) => {
-                match token.kind {
-                    TokenKind::Reserved => {}
-                    _ => return None,
-                }
-                if token.len == 1 {
-                    None // just the `@` character isn't a valid annotation
-                } else {
-                    Some(&token.src(self.input)[1..])
-                }
-            }
-            Ok(None) | Err(_) => None,
+        match self.parse(&mut pos)? {
+            Some(token) => match token.kind {
+                TokenKind::Annotation => Ok(Some(token)),
+                _ => Ok(None),
+            },
+            None => Ok(None),
         }
     }
 }
@@ -916,9 +972,49 @@ impl Token {
     /// Returns the identifier, without the leading `$` symbol, that this token
     /// represents.
     ///
+    /// Note that this method returns the contents of the identifier. With a
+    /// string-based identifier this means that escapes have been resolved to
+    /// their string-based equivalent.
+    ///
     /// Should only be used with `TokenKind::Id`.
-    pub fn id<'a>(&self, s: &'a str) -> &'a str {
-        &self.src(s)[1..]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a string-based identifier (e.g. `$"..."`)
+    /// which is invalid utf-8.
+    pub fn id<'a>(&self, s: &'a str) -> Result<Cow<'a, str>, Error> {
+        let mut ch = self.src(s).chars();
+        let dollar = ch.next();
+        debug_assert_eq!(dollar, Some('$'));
+        let id = Lexer::parse_name(&mut ch).map_err(|e| self.error(s, e))?;
+        if id.is_empty() {
+            return Err(self.error(s, LexError::EmptyId));
+        }
+        Ok(id)
+    }
+
+    /// Returns the annotation, without the leading `@` symbol, that this token
+    /// represents.
+    ///
+    /// Note that this method returns the contents of the identifier. With a
+    /// string-based identifier this means that escapes have been resolved to
+    /// their string-based equivalent.
+    ///
+    /// Should only be used with `TokenKind::Annotation`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a string-based identifier (e.g. `$"..."`)
+    /// which is invalid utf-8.
+    pub fn annotation<'a>(&self, s: &'a str) -> Result<Cow<'a, str>, Error> {
+        let mut ch = self.src(s).chars();
+        let at = ch.next();
+        debug_assert_eq!(at, Some('@'));
+        let id = Lexer::parse_name(&mut ch).map_err(|e| self.error(s, e))?;
+        if id.is_empty() {
+            return Err(self.error(s, LexError::EmptyAnnotation));
+        }
+        Ok(id)
     }
 
     /// Returns the keyword this token represents.
@@ -980,7 +1076,7 @@ impl Token {
                 hex,
             } => {
                 let src = self.src(s);
-                let (integral, decimal, exponent) = match src.find('.') {
+                let (integral, fractional, exponent) = match src.find('.') {
                     Some(i) => {
                         let integral = &src[..i];
                         let rest = &src[i + 1..];
@@ -1007,7 +1103,7 @@ impl Token {
                     }
                 };
                 let mut integral = Cow::Borrowed(integral.strip_prefix('+').unwrap_or(integral));
-                let mut decimal = decimal.and_then(|s| {
+                let mut fractional = fractional.and_then(|s| {
                     if s.is_empty() {
                         None
                     } else {
@@ -1018,8 +1114,8 @@ impl Token {
                     exponent.map(|s| Cow::Borrowed(s.strip_prefix('+').unwrap_or(s)));
                 if has_underscores {
                     *integral.to_mut() = integral.replace("_", "");
-                    if let Some(decimal) = &mut decimal {
-                        *decimal.to_mut() = decimal.replace("_", "");
+                    if let Some(fractional) = &mut fractional {
+                        *fractional.to_mut() = fractional.replace("_", "");
                     }
                     if let Some(exponent) = &mut exponent {
                         *exponent.to_mut() = exponent.replace("_", "");
@@ -1031,7 +1127,7 @@ impl Token {
                 Float::Val {
                     hex,
                     integral,
-                    decimal,
+                    fractional,
                     exponent,
                 }
             }
@@ -1063,6 +1159,16 @@ impl Token {
             hex: kind.hex,
             val,
         }
+    }
+
+    fn error(&self, src: &str, err: LexError) -> Error {
+        Error::lex(
+            Span {
+                offset: self.offset,
+            },
+            src,
+            err,
+        )
     }
 }
 
@@ -1107,9 +1213,12 @@ impl fmt::Display for LexError {
             )?,
             UnexpectedEof => write!(f, "unexpected end-of-file")?,
             NumberTooBig => f.write_str("number is too big to parse")?,
-            InvalidUnicodeValue(c) => write!(f, "invalid unicode scalar value 0x{:x}", c)?,
+            InvalidUnicodeValue(c) => write!(f, "invalid unicode scalar value 0x{c:x}")?,
             LoneUnderscore => write!(f, "bare underscore in numeric literal")?,
-            ConfusingUnicode(c) => write!(f, "likely-confusing unicode character found {:?}", c)?,
+            ConfusingUnicode(c) => write!(f, "likely-confusing unicode character found {c:?}")?,
+            InvalidUtf8Id(_) => write!(f, "malformed UTF-8 encoding of string-based id")?,
+            EmptyId => write!(f, "empty identifier")?,
+            EmptyAnnotation => write!(f, "empty annotation id")?,
         }
         Ok(())
     }
@@ -1161,7 +1270,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::Whitespace => token.src(input),
-                other => panic!("unexpected {:?}", other),
+                other => panic!("unexpected {other:?}"),
             }
         }
         assert_eq!(get_whitespace(" "), " ");
@@ -1177,7 +1286,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::LineComment => token.src(input),
-                other => panic!("unexpected {:?}", other),
+                other => panic!("unexpected {other:?}"),
             }
         }
         assert_eq!(get_line_comment(";;"), ";;");
@@ -1185,6 +1294,8 @@ mod tests {
         assert_eq!(get_line_comment(";; xyz\nabc"), ";; xyz");
         assert_eq!(get_line_comment(";;\nabc"), ";;");
         assert_eq!(get_line_comment(";;   \nabc"), ";;   ");
+        assert_eq!(get_line_comment(";;   \rabc"), ";;   ");
+        assert_eq!(get_line_comment(";;   \r\nabc"), ";;   ");
     }
 
     #[test]
@@ -1193,7 +1304,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::BlockComment => token.src(input),
-                other => panic!("unexpected {:?}", other),
+                other => panic!("unexpected {other:?}"),
             }
         }
         assert_eq!(get_block_comment("(;;)"), "(;;)");
@@ -1224,7 +1335,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::String => token.string(input).to_vec(),
-                other => panic!("not keyword {:?}", other),
+                other => panic!("not keyword {other:?}"),
             }
         }
         assert_eq!(&*get_string("\"\""), b"");
@@ -1248,18 +1359,18 @@ mod tests {
         );
 
         for i in 0..=255i32 {
-            let s = format!("\"\\{:02x}\"", i);
+            let s = format!("\"\\{i:02x}\"");
             assert_eq!(&*get_string(&s), &[i as u8]);
         }
     }
 
     #[test]
     fn id() {
-        fn get_id(input: &str) -> &str {
+        fn get_id(input: &str) -> String {
             let token = get_token(input);
             match token.kind {
-                TokenKind::Id => token.id(input),
-                other => panic!("not id {:?}", other),
+                TokenKind::Id => token.id(input).unwrap().to_string(),
+                other => panic!("not id {other:?}"),
             }
         }
         assert_eq!(get_id("$x"), "x");
@@ -1268,6 +1379,23 @@ mod tests {
         assert_eq!(get_id("$0^"), "0^");
         assert_eq!(get_id("$0^;;"), "0^");
         assert_eq!(get_id("$0^ ;;"), "0^");
+        assert_eq!(get_id("$\"x\" ;;"), "x");
+    }
+
+    #[test]
+    fn annotation() {
+        fn get_annotation(input: &str) -> String {
+            let token = get_token(input);
+            match token.kind {
+                TokenKind::Annotation => token.annotation(input).unwrap().to_string(),
+                other => panic!("not annotation {other:?}"),
+            }
+        }
+        assert_eq!(get_annotation("@foo"), "foo");
+        assert_eq!(get_annotation("@foo "), "foo");
+        assert_eq!(get_annotation("@f "), "f");
+        assert_eq!(get_annotation("@\"x\" "), "x");
+        assert_eq!(get_annotation("@0 "), "0");
     }
 
     #[test]
@@ -1276,7 +1404,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::Keyword => token.keyword(input),
-                other => panic!("not keyword {:?}", other),
+                other => panic!("not keyword {other:?}"),
             }
         }
         assert_eq!(get_keyword("x"), "x");
@@ -1292,10 +1420,9 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::Reserved => token.reserved(input),
-                other => panic!("not reserved {:?}", other),
+                other => panic!("not reserved {other:?}"),
             }
         }
-        assert_eq!(get_reserved("$ "), "$");
         assert_eq!(get_reserved("^_x "), "^_x");
     }
 
@@ -1305,7 +1432,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::Integer(i) => token.integer(input, i).val.to_string(),
-                other => panic!("not integer {:?}", other),
+                other => panic!("not integer {other:?}"),
             }
         }
         assert_eq!(get_integer("1"), "1");
@@ -1325,7 +1452,7 @@ mod tests {
             let token = get_token(input);
             match token.kind {
                 TokenKind::Float(f) => token.float(input, f),
-                other => panic!("not float {:?}", other),
+                other => panic!("not float {other:?}"),
             }
         }
         assert_eq!(
@@ -1371,7 +1498,7 @@ mod tests {
             get_float("1.2"),
             Float::Val {
                 integral: "1".into(),
-                decimal: Some("2".into()),
+                fractional: Some("2".into()),
                 exponent: None,
                 hex: false,
             },
@@ -1380,7 +1507,7 @@ mod tests {
             get_float("1.2e3"),
             Float::Val {
                 integral: "1".into(),
-                decimal: Some("2".into()),
+                fractional: Some("2".into()),
                 exponent: Some("3".into()),
                 hex: false,
             },
@@ -1389,7 +1516,7 @@ mod tests {
             get_float("-1_2.1_1E+0_1"),
             Float::Val {
                 integral: "-12".into(),
-                decimal: Some("11".into()),
+                fractional: Some("11".into()),
                 exponent: Some("01".into()),
                 hex: false,
             },
@@ -1398,7 +1525,7 @@ mod tests {
             get_float("+1_2.1_1E-0_1"),
             Float::Val {
                 integral: "12".into(),
-                decimal: Some("11".into()),
+                fractional: Some("11".into()),
                 exponent: Some("-01".into()),
                 hex: false,
             },
@@ -1407,7 +1534,7 @@ mod tests {
             get_float("0x1_2.3_4p5_6"),
             Float::Val {
                 integral: "12".into(),
-                decimal: Some("34".into()),
+                fractional: Some("34".into()),
                 exponent: Some("56".into()),
                 hex: true,
             },
@@ -1416,7 +1543,7 @@ mod tests {
             get_float("+0x1_2.3_4P-5_6"),
             Float::Val {
                 integral: "12".into(),
-                decimal: Some("34".into()),
+                fractional: Some("34".into()),
                 exponent: Some("-56".into()),
                 hex: true,
             },
@@ -1425,7 +1552,7 @@ mod tests {
             get_float("1."),
             Float::Val {
                 integral: "1".into(),
-                decimal: None,
+                fractional: None,
                 exponent: None,
                 hex: false,
             },
@@ -1434,7 +1561,7 @@ mod tests {
             get_float("0x1p-24"),
             Float::Val {
                 integral: "1".into(),
-                decimal: None,
+                fractional: None,
                 exponent: Some("-24".into()),
                 hex: true,
             },

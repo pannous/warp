@@ -19,8 +19,8 @@ use std::hash::Hash;
 use std::ops::Bound;
 use std::ops::Deref;
 
-use indexmap::map::Entry as OEntry;
-use std::collections::hash_map::Entry as HEntry;
+use indexmap::map::Entry;
+use std::collections::hash_map::Entry as StdEntry;
 
 fn set<'a, T: 'a, I>(iter: I) -> HashSet<T>
 where
@@ -113,6 +113,117 @@ quickcheck_limit! {
         true
     }
 
+    fn insert_sorted(insert: Vec<(u32, u32)>) -> bool {
+        let mut hmap = HashMap::new();
+        let mut map = IndexMap::new();
+        let mut map2 = IndexMap::new();
+        for &(key, value) in &insert {
+            hmap.insert(key, value);
+            map.insert_sorted(key, value);
+            match map2.entry(key) {
+                Entry::Occupied(e) => *e.into_mut() = value,
+                Entry::Vacant(e) => { e.insert_sorted(value); }
+            }
+        }
+        itertools::assert_equal(hmap.iter().sorted(), &map);
+        itertools::assert_equal(&map, &map2);
+        true
+    }
+
+    fn insert_sorted_by(insert: Vec<(u32, u32)>) -> bool {
+        let mut hmap = HashMap::new();
+        let mut map = IndexMap::new();
+        let mut map2 = IndexMap::new();
+        for &(key, value) in &insert {
+            hmap.insert(key, value);
+            map.insert_sorted_by(key, value, |key1, _, key2, _| key2.cmp(key1));
+            match map2.entry(key) {
+                Entry::Occupied(e) => *e.into_mut() = value,
+                Entry::Vacant(e) => {
+                    e.insert_sorted_by(value, |key1, _, key2, _| key2.cmp(key1));
+                }
+            }
+        }
+        let hsorted = hmap.iter().sorted_by(|(key1, _), (key2, _)| key2.cmp(key1));
+        itertools::assert_equal(hsorted, &map);
+        itertools::assert_equal(&map, &map2);
+        true
+    }
+
+    fn insert_sorted_by_key(insert: Vec<(i32, u32)>) -> bool {
+        let mut hmap = HashMap::new();
+        let mut map = IndexMap::new();
+        let mut map2 = IndexMap::new();
+        for &(key, value) in &insert {
+            hmap.insert(key, value);
+            map.insert_sorted_by_key(key, value, |&k, _| (k.unsigned_abs(), k));
+            match map2.entry(key) {
+                Entry::Occupied(e) => *e.into_mut() = value,
+                Entry::Vacant(e) => {
+                    e.insert_sorted_by_key(value, |&k, _| (k.unsigned_abs(), k));
+                }
+            }
+        }
+        let hsorted = hmap.iter().sorted_by_key(|(&k, _)| (k.unsigned_abs(), k));
+        itertools::assert_equal(hsorted, &map);
+        itertools::assert_equal(&map, &map2);
+        true
+    }
+
+    fn replace_index(insert: Vec<u8>, index: u8, new_key: u8) -> TestResult {
+        if insert.is_empty() {
+            return TestResult::discard();
+        }
+        let mut map = IndexMap::new();
+        for &key in &insert {
+            map.insert(key, ());
+        }
+        let mut index = usize::from(index);
+        if index < map.len() {
+            match map.replace_index(index, new_key) {
+                Ok(old_key) => {
+                    assert!(old_key == new_key || !map.contains_key(&old_key));
+                }
+                Err((i, key)) => {
+                    assert_eq!(key, new_key);
+                    index = i;
+                }
+            }
+            assert_eq!(map.get_index_of(&new_key), Some(index));
+            assert_eq!(map.get_index(index), Some((&new_key, &())));
+            TestResult::passed()
+        } else {
+            TestResult::must_fail(move || map.replace_index(index, new_key))
+        }
+    }
+
+    fn vacant_replace_index(insert: Vec<u8>, index: u8, new_key: u8) -> TestResult {
+        if insert.is_empty() {
+            return TestResult::discard();
+        }
+        let mut map = IndexMap::new();
+        for &key in &insert {
+            map.insert(key, ());
+        }
+        let index = usize::from(index);
+        if let Some((&old_key, &())) = map.get_index(index) {
+            match map.entry(new_key) {
+                Entry::Occupied(_) => return TestResult::discard(),
+                Entry::Vacant(entry) => {
+                    let (replaced_key, entry) = entry.replace_index(index);
+                    assert_eq!(old_key, replaced_key);
+                    assert_eq!(*entry.key(), new_key);
+                }
+            };
+            assert!(!map.contains_key(&old_key));
+            assert_eq!(map.get_index_of(&new_key), Some(index));
+            assert_eq!(map.get_index(index), Some((&new_key, &())));
+            TestResult::passed()
+        } else {
+            TestResult::must_fail(move || map.replace_index(index, new_key))
+        }
+    }
+
     fn pop(insert: Vec<u8>) -> bool {
         let mut map = IndexMap::new();
         for &key in &insert {
@@ -174,6 +285,47 @@ quickcheck_limit! {
         }
     }
 
+    fn extract_if_odd(insert: Vec<u8>) -> bool {
+        let mut map = IndexMap::new();
+        for &x in &insert {
+            map.insert(x, x.to_string());
+        }
+
+        let (odd, even): (Vec<_>, Vec<_>) = map.keys().copied().partition(|k| k % 2 == 1);
+
+        let extracted: Vec<_> = map
+            .extract_if(.., |k, _| k % 2 == 1)
+            .map(|(k, _)| k)
+            .collect();
+
+        even.iter().all(|k| map.contains_key(k))
+            && map.keys().eq(&even)
+            && extracted == odd
+    }
+
+    fn extract_if_odd_limit(insert: Vec<u8>, limit: usize) -> bool {
+        let mut map = IndexMap::new();
+        for &x in &insert {
+            map.insert(x, x.to_string());
+        }
+        let limit = limit % (map.len() + 1);
+
+        let mut i = 0;
+        let (odd, other): (Vec<_>, Vec<_>) = map.keys().copied().partition(|k| {
+            k % 2 == 1 && i < limit && { i += 1; true }
+        });
+
+        let extracted: Vec<_> = map
+            .extract_if(.., |k, _| k % 2 == 1)
+            .map(|(k, _)| k)
+            .take(limit)
+            .collect();
+
+        other.iter().all(|k| map.contains_key(k))
+            && map.keys().eq(&other)
+            && extracted == odd
+    }
+
     fn shift_remove(insert: Vec<u8>, remove: Vec<u8>) -> bool {
         let mut map = IndexMap::new();
         for &key in &insert {
@@ -218,7 +370,7 @@ quickcheck_limit! {
     }
 
     // Use `u8` test indices so quickcheck is less likely to go out of bounds.
-    fn swap_indices(vec: Vec<u8>, a: u8, b: u8) -> TestResult {
+    fn set_swap_indices(vec: Vec<u8>, a: u8, b: u8) -> TestResult {
         let mut set = IndexSet::<u8>::from_iter(vec);
         let a = usize::from(a);
         let b = usize::from(b);
@@ -240,8 +392,39 @@ quickcheck_limit! {
         TestResult::passed()
     }
 
+    fn map_swap_indices(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_swap_indices(vec, from, to, IndexMap::swap_indices)
+    }
+
+    fn occupied_entry_swap_indices(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_swap_indices(vec, from, to, |map, from, to| {
+            let key = map.keys()[from];
+            match map.entry(key) {
+                Entry::Occupied(entry) => entry.swap_indices(to),
+                _ => unreachable!(),
+            }
+        })
+    }
+
+    fn indexed_entry_swap_indices(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_swap_indices(vec, from, to, |map, from, to| {
+            map.get_index_entry(from).unwrap().swap_indices(to);
+        })
+    }
+
+    fn raw_occupied_entry_swap_indices(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        use indexmap::map::raw_entry_v1::{RawEntryApiV1, RawEntryMut};
+        test_map_swap_indices(vec, from, to, |map, from, to| {
+            let key = map.keys()[from];
+            match map.raw_entry_mut_v1().from_key(&key) {
+                RawEntryMut::Occupied(entry) => entry.swap_indices(to),
+                _ => unreachable!(),
+            }
+        })
+    }
+
     // Use `u8` test indices so quickcheck is less likely to go out of bounds.
-    fn move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+    fn set_move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
         let mut set = IndexSet::<u8>::from_iter(vec);
         let from = usize::from(from);
         let to = usize::from(to);
@@ -263,6 +446,138 @@ quickcheck_limit! {
         }));
         TestResult::passed()
     }
+
+    fn map_move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_move_index(vec, from, to, IndexMap::move_index)
+    }
+
+    fn occupied_entry_move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_move_index(vec, from, to, |map, from, to| {
+            let key = map.keys()[from];
+            match map.entry(key) {
+                Entry::Occupied(entry) => entry.move_index(to),
+                _ => unreachable!(),
+            }
+        })
+    }
+
+    fn indexed_entry_move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        test_map_move_index(vec, from, to, |map, from, to| {
+            map.get_index_entry(from).unwrap().move_index(to);
+        })
+    }
+
+    fn raw_occupied_entry_move_index(vec: Vec<u8>, from: u8, to: u8) -> TestResult {
+        use indexmap::map::raw_entry_v1::{RawEntryApiV1, RawEntryMut};
+        test_map_move_index(vec, from, to, |map, from, to| {
+            let key = map.keys()[from];
+            match map.raw_entry_mut_v1().from_key(&key) {
+                RawEntryMut::Occupied(entry) => entry.move_index(to),
+                _ => unreachable!(),
+            }
+        })
+    }
+
+    fn occupied_entry_shift_insert(vec: Vec<u8>, i: u8) -> TestResult {
+        test_map_shift_insert(vec, i, |map, i, key| {
+            match map.entry(key) {
+                Entry::Vacant(entry) => entry.shift_insert(i, ()),
+                _ => unreachable!(),
+            };
+        })
+    }
+
+    fn raw_occupied_entry_shift_insert(vec: Vec<u8>, i: u8) -> TestResult {
+        use indexmap::map::raw_entry_v1::{RawEntryApiV1, RawEntryMut};
+        test_map_shift_insert(vec, i, |map, i, key| {
+            match map.raw_entry_mut_v1().from_key(&key) {
+                RawEntryMut::Vacant(entry) => entry.shift_insert(i, key, ()),
+                _ => unreachable!(),
+            };
+        })
+    }
+}
+
+fn test_map_swap_indices<F>(vec: Vec<u8>, a: u8, b: u8, swap_indices: F) -> TestResult
+where
+    F: FnOnce(&mut IndexMap<u8, ()>, usize, usize),
+{
+    let mut map = IndexMap::<u8, ()>::from_iter(vec.into_iter().map(|k| (k, ())));
+    let a = usize::from(a);
+    let b = usize::from(b);
+
+    if a >= map.len() || b >= map.len() {
+        return TestResult::discard();
+    }
+
+    let mut vec = Vec::from_iter(map.keys().copied());
+    vec.swap(a, b);
+
+    swap_indices(&mut map, a, b);
+
+    // Check both iteration order and hash lookups
+    assert!(map.keys().eq(vec.iter()));
+    assert!(vec
+        .iter()
+        .enumerate()
+        .all(|(i, x)| { map.get_index_of(x) == Some(i) }));
+    TestResult::passed()
+}
+
+fn test_map_move_index<F>(vec: Vec<u8>, from: u8, to: u8, move_index: F) -> TestResult
+where
+    F: FnOnce(&mut IndexMap<u8, ()>, usize, usize),
+{
+    let mut map = IndexMap::<u8, ()>::from_iter(vec.into_iter().map(|k| (k, ())));
+    let from = usize::from(from);
+    let to = usize::from(to);
+
+    if from >= map.len() || to >= map.len() {
+        return TestResult::discard();
+    }
+
+    let mut vec = Vec::from_iter(map.keys().copied());
+    let x = vec.remove(from);
+    vec.insert(to, x);
+
+    move_index(&mut map, from, to);
+
+    // Check both iteration order and hash lookups
+    assert!(map.keys().eq(vec.iter()));
+    assert!(vec
+        .iter()
+        .enumerate()
+        .all(|(i, x)| { map.get_index_of(x) == Some(i) }));
+    TestResult::passed()
+}
+
+fn test_map_shift_insert<F>(vec: Vec<u8>, i: u8, shift_insert: F) -> TestResult
+where
+    F: FnOnce(&mut IndexMap<u8, ()>, usize, u8),
+{
+    let mut map = IndexMap::<u8, ()>::from_iter(vec.into_iter().map(|k| (k, ())));
+    let i = usize::from(i);
+    if i >= map.len() {
+        return TestResult::discard();
+    }
+
+    let mut vec = Vec::from_iter(map.keys().copied());
+    let x = vec.pop().unwrap();
+    vec.insert(i, x);
+
+    let (last, ()) = map.pop().unwrap();
+    assert_eq!(x, last);
+    map.shrink_to_fit(); // so we might have to grow and rehash the table
+
+    shift_insert(&mut map, i, last);
+
+    // Check both iteration order and hash lookups
+    assert!(map.keys().eq(vec.iter()));
+    assert!(vec
+        .iter()
+        .enumerate()
+        .all(|(i, x)| { map.get_index_of(x) == Some(i) }));
+    TestResult::passed()
 }
 
 use crate::Op::*;
@@ -310,10 +625,10 @@ where
                 b.remove(k);
             }
             RemoveEntry(ref k) => {
-                if let OEntry::Occupied(ent) = a.entry(k.clone()) {
+                if let Entry::Occupied(ent) = a.entry(k.clone()) {
                     ent.swap_remove_entry();
                 }
-                if let HEntry::Occupied(ent) = b.entry(k.clone()) {
+                if let StdEntry::Occupied(ent) = b.entry(k.clone()) {
                     ent.remove_entry();
                 }
             }
@@ -514,8 +829,7 @@ quickcheck_limit! {
 
 fn assert_sorted_by_key<I, Key, X>(iterable: I, key: Key)
 where
-    I: IntoIterator,
-    I::Item: Ord + Clone + Debug,
+    I: IntoIterator<Item: Ord + Clone + Debug>,
     Key: Fn(&I::Item) -> X,
     X: Ord,
 {

@@ -18,14 +18,14 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/PresentationConnection/id)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `PresentationConnection`*"]
-    pub fn id(this: &PresentationConnection) -> String;
+    pub fn id(this: &PresentationConnection) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "PresentationConnection" , js_name = url)]
     #[doc = "Getter for the `url` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/PresentationConnection/url)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `PresentationConnection`*"]
-    pub fn url(this: &PresentationConnection) -> String;
+    pub fn url(this: &PresentationConnection) -> ::alloc::string::String;
     #[cfg(feature = "PresentationConnectionState")]
     # [wasm_bindgen (structural , method , getter , js_class = "PresentationConnection" , js_name = state)]
     #[doc = "Getter for the `state` field of this object."]
@@ -155,6 +155,16 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `PresentationConnection`*"]
     pub fn send_with_u8_array(this: &PresentationConnection, data: &[u8]) -> Result<(), JsValue>;
+    # [wasm_bindgen (catch , method , structural , js_class = "PresentationConnection" , js_name = send)]
+    #[doc = "The `send()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/PresentationConnection/send)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `PresentationConnection`*"]
+    pub fn send_with_js_u8_array(
+        this: &PresentationConnection,
+        data: &::js_sys::Uint8Array,
+    ) -> Result<(), JsValue>;
     # [wasm_bindgen (catch , method , structural , js_class = "PresentationConnection" , js_name = terminate)]
     #[doc = "The `terminate()` method."]
     #[doc = ""]
