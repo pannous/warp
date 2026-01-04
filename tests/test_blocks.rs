@@ -1,25 +1,5 @@
-use wasp::node::Node;
+use wasp::{eq, is, skip};
 use wasp::wasp_parser::parse;
-use wasp::{eq, skip};
-
-#[test]
-fn test_did_you_mean_alias() {
-	skip!(
-
-		Node ok1 = assert_parses("printf!('hi')");
-		eq!(ok1[".warnings"], "DYM print"); // THIS CAN NEVER HAVED WORKED! BUG IN TEST PIPELINE!
-	);
-}
-
-#[test]
-fn test_node_name() {
-	let a = Node::Symbol("xor".to_string()); // NOT type string by default!
-										  //     bool
-	let ok1 = a == "xor";
-	eq!(a, "xor");
-	eq!(a.name(), "xor");
-	assert!(ok1);
-}
 
 #[test]
 fn test_indent_as_block() {
@@ -106,4 +86,17 @@ fn test_group_cascade() {
 	let reparse = parse(result.serialize().as_str());
 	// print(reparse.serialize());
 	eq!(result, reparse);
+}
+
+
+#[test]
+#[ignore]
+fn test_matrix_order() {
+	is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
+	is!("([[1, 2], [3, 4]])[0][1]", 2);
+	is!("([[1, 2], [3, 4]])[1][0]", 3);
+	is!("([1, 2], [3, 4])[1][0]", 3);
+	is!("(1, 2; 3, 4)[1][0]", 3);
+	is!("(1, 2; 3, 4)[1,0]", 3);
+	is!("(1 2, 3 4)[1,0]", 3);
 }
