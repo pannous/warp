@@ -10,7 +10,7 @@ macro_rules! ast_type {
 			#[inline]
 			fn try_from(n: &'a Node) -> Option<Self> {
 				match n {
-					Node::Tag { title, .. } if title == $tag => Some(Self(n)),
+					Node::Key(title, ..) if title == $tag => Some(Self(n)),
 					_ => None,
 				}
 			}
@@ -66,10 +66,6 @@ ast_type!(ForExpression, "for");
 fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 	f(n);
 	match n {
-		Node::Tag { params, body, .. } => {
-			walk(params, f);
-			walk(body, f);
-		}
 		Node::Pair(a, b) => {
 			walk(a, f);
 			walk(b, f);
