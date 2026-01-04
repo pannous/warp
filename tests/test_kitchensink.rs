@@ -1,9 +1,4 @@
-use wasp::extensions::numbers::Number;
-use wasp::Bracket;
-use wasp::Node;
-use wasp::Node::Symbol;
-use wasp::Op;
-use wasp::Separator;
+use wasp::{block, float, int, key, list, parens, symbol, text, Node};
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::write_wasm;
@@ -17,17 +12,17 @@ fn test_kitchensink_all_node_types() {
 	test_node("Empty", Node::Empty);
 
 	// Test 2: Number nodes (Int and Float)
-	test_node("Number::Int", Node::Number(Number::Int(42)));
-	test_node("Number::Float", Node::Number(Number::Float(1.23)));
+	test_node("Number::Int", int(42));
+	test_node("Number::Float", float(1.23));
 
 	// Test 3: Text node
-	test_node("Text", Node::Text("hello world".to_string()));
+	test_node("Text", text("hello world"));
 
 	// Test 4: Char node
 	test_node("Char", Node::Char('🦀'));
 
 	// Test 5: Symbol node
-	test_node("Symbol", Node::Symbol("my_var".to_string()));
+	test_node("Symbol", symbol("my_var"));
 
 	// Test 6: Tag node (from parser)
 	let tag_input = "div{class=container}";
@@ -35,36 +30,13 @@ fn test_kitchensink_all_node_types() {
 	test_node("Tag", tag_node);
 
 	// Test 7: Key node
-	test_node(
-		"Key",
-		Node::Key(Box::new(Symbol("key".to_string())), Op::Colon, Box::new(Node::Number(Number::Int(123)))),
-	);
+	test_node("Key", key("key", int(123)));
 
 	// Test 8: Block node
-	test_node(
-		"Block",
-		Node::List(
-			vec![
-				Node::Number(Number::Int(1)),
-				Node::Number(Number::Int(2)),
-				Node::Number(Number::Int(3)),
-			],
-			Bracket::Round, Separator::None,
-		),
-	);
+	test_node("Block", parens(vec![int(1), int(2), int(3)]));
 
 	// Test 10: List node
-	test_node(
-		"List",
-		Node::List(
-			vec![
-				Node::Text("item1".to_string()),
-				Node::Text("item2".to_string()),
-				Node::Text("item3".to_string()),
-			],
-			Bracket::Square, Separator::None,
-		),
-	);
+	test_node("List", list(vec![text("item1"), text("item2"), text("item3")]));
 
 	// Test 11: Data node
 	test_node("Data", Node::data(vec![1, 2, 3, 4, 5]));
@@ -132,34 +104,25 @@ fn test_kitchensink_complex_tree() {
 	println!("\n=== Kitchensink: Complex Tree with All Types ===\n");
 
 	// Build a complex tree containing all node types
-	let complex_tree = Node::List(
-		vec![
-			// Empty
-			Node::Empty,
-			// Numbers
-			Node::Number(Number::Int(42)),
-			Node::Number(Number::Float(std::f64::consts::PI)),
-			// Strings
-			Node::Text("hello".to_string()),
-			Node::Symbol("world".to_string()),
-			Node::Char('🚀'),
-			// Key
-			Node::Key(Box::new(Symbol("key".to_string())), Op::Colon, Box::new(Node::Number(Number::Int(100)))),
-			// Nested Block (Curly brackets)
-			Node::List(
-				vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],
-				Bracket::Curly, Separator::None,
-			),
-			// List (Square brackets)
-			Node::List(
-				vec![Node::Text("a".to_string()), Node::Text("b".to_string())],
-				Bracket::Square, Separator::None,
-			),
-			// Data
-			Node::data("custom data"),
-		],
-		Bracket::Square, Separator::None,
-	);
+	let complex_tree = list(vec![
+		// Empty
+		Node::Empty,
+		// Numbers
+		int(42),
+		float(std::f64::consts::PI),
+		// Strings
+		text("hello"),
+		symbol("world"),
+		Node::Char('🚀'),
+		// Key
+		key("key", int(100)),
+		// Nested Block (Curly brackets)
+		block(vec![int(1), int(2)]),
+		// List (Square brackets)
+		list(vec![text("a"), text("b")]),
+		// Data
+		Node::data("custom data"),
+	]);
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
@@ -223,7 +186,7 @@ fn test_kitchensink_wasmtime_execution() {
 	println!("\n=== Kitchensink: Wasmtime Execution Test ===\n");
 
 	// Create a simple node
-	let node = Node::Key(Box::new(Symbol("html".to_string())), Op::Colon, Box::new(Node::Text("content".to_string())));
+	let node = key("html", text("content"));
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();

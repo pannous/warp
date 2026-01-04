@@ -1,9 +1,8 @@
 use wasp::eq;
 use wasp::Node;
 use wasp::Node::Empty;
-use wasp::node::int;
+use wasp::int;
 use wasp::NodeKind::Key;
-use wasp::Number::Int;
 use wasp::wasp_parser::parse;
 
 #[test]
