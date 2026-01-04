@@ -397,11 +397,11 @@ fn test_switch() {
 }
 
 #[test]
-fn testSmartTypes() {
+fn test_smart_types() {
 	// smarty32  is pretty useless but serves as nice demonstration of smart64,
 	// which   is pretty useless but serves as nice demonstration of multi return
 	// which  is pretty useless but serves as nice demonstration of node as wit/gc type
-	// which is pretty useless but serves as nice demonstration of emitted structs 
+	// which is pretty useless but serves as nice demonstration of emitted structs
 	assert_eq!(smarty32(0xC000221a), '√');
 	assert_eq!(smarty32(0xC000221a), "√");
 	assert_eq!(smarty32(0xC0000020), ' ');
@@ -467,7 +467,7 @@ fn test_logic_precedence() {
 fn test_all_angle() {
 	// emmitting or not
 	test_logic_precedence();
-	//	testSmartTypes();
+	//	test_smart_types();
 	test_truthy_and();
 	test_if();
 	// test_call(); in testTodoBrowser();

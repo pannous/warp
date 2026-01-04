@@ -57,10 +57,10 @@ pub enum DataType {
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
-	Empty, // Null, Nill, None, Ø, ø null nill none nil
-	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
 	True,
-	Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
+	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
+	Empty, // Null, Nill, None, Ø, ø null nill none nil
+	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
 	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
@@ -68,11 +68,14 @@ pub enum Node {
 	Error(String),
 	// String(String),
 	Symbol(String),
-	// Symbol(String name, Node kind),
-	// Keyword(String), Call, Declaration … AST or here? AST!
-	Pair(Box<Node>, Box<Node>),
+	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
+
+	// emit as .name for special semantics .meta:{} .pair=[a,b] .data={type=T, b64=[] id} .type=T …
 	Key(String, Box<Node>), // todo ? via Pair or losing specificity?
+	// pair in json via .pair=[a,b] or just list [a,b] in special context map:{[k,v],…}
+	Pair(Box<Node>, Box<Node>), // via list with Separator a:b a=b a->b ?
 	List(Vec<Node>, Bracket, Separator),
+	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
 	// Type(Box<Node>, Box<Node>), // Special Class Ast(Node, AstKind) !)
@@ -210,7 +213,6 @@ impl Node {
 	pub fn kind(&self) -> NodeKind {
 		match self {
 			Empty => NodeKind::Empty,
-			Node::Number(_) => NodeKind::Number,
 			Text(_) => NodeKind::Text,
 			Char(_) => NodeKind::Codepoint,
 			Symbol(_) => NodeKind::Symbol,
@@ -223,7 +225,9 @@ impl Node {
 			Error(_) => NodeKind::Error,
 			False => NodeKind::Number, // map to 0 !
 			True => NodeKind::Number,  // map to 1
-			_ => todo!(),
+			Node::Number(_) => NodeKind::Number,
+			// List(_, Separator::Colon, _) => NodeKind::Pair, // a:b maps to Pair kind
+			// List(_, Separator::Equals, _) => NodeKind::Pair, // a=b maps to Pair kind
 		}
 	}
 	pub fn length(&self) -> i32 {
@@ -739,7 +743,7 @@ impl Node {
 				}
 			}
 			Data(d) => format!("Data({})", d.type_name),
-			_ => format!("{:?}", self),
+			// _ => format!("{:?}", self),
 		}
 	}
 
@@ -956,7 +960,6 @@ impl Node {
 				map.insert("_error".to_string(), Value::String(e.clone()));
 				Value::Object(map)
 			}
-			_ => todo!("to_json_value for {:?}", self),
 		}
 	}
 
@@ -1058,7 +1061,7 @@ impl fmt::Display for Bracket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
 	Space,     // ' ' - tightest binding
-	Comma,     // ','
+	Colon,     // ','
 	Semicolon, // ';'
 	Newline,   // '\n'
 	Tab,       // '\t'
@@ -1069,7 +1072,7 @@ impl Separator {
 	pub fn from_char(ch: char) -> Self {
 		match ch {
 			' ' => Separator::Space,
-			',' => Separator::Comma,
+			',' => Separator::Colon,
 			';' => Separator::Semicolon,
 			'\n' => Separator::Newline,
 			'\t' => Separator::Tab,
@@ -1080,7 +1083,7 @@ impl Separator {
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),
-			Separator::Comma => Some(','),
+			Separator::Colon => Some(','),
 			Separator::Semicolon => Some(';'),
 			Separator::Newline => Some('\n'),
 			Separator::Tab => Some('\t'),
@@ -1094,7 +1097,7 @@ impl Separator {
 			Separator::Space => 0,
 			// Separator::Tab => 1, //  "a,b,c d,e,f"  == "a b (c d) e f " in csv!
 			// todo Tab depends on context!, also indent vs dedent !!
-			Separator::Comma => 2,
+			Separator::Colon => 2,
 			Separator::Semicolon => 3,
 			Separator::Tab => 4, //  "a;b;c d;e;f"  == "((a b c) (d e f))" in tsv!
 			Separator::Newline => 5,
@@ -1108,7 +1111,7 @@ impl fmt::Display for Separator {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Separator::Space => write!(f, " "),
-			Separator::Comma => write!(f, ","),
+			Separator::Colon => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
 			Separator::Newline => write!(f, "\n"),
 			Separator::Tab => write!(f, "\t"),
@@ -1177,6 +1180,7 @@ impl PartialEq for Node {
 				True => c != &'\0',
 				False => c == &'\0',
 				Char(c2) => c == c2,
+				Text(c2) => *c == c2.first(),
 				_ => false,
 			},
 			Data(d) => match other {
@@ -1211,8 +1215,6 @@ impl PartialEq for Node {
 				Error(e2) => e1 == e2,
 				_ => false,
 			},
-			// _ => false,
-			_ => todo!("PartialEq not implemented for {:?}", self),
 		}
 	}
 }
