@@ -166,9 +166,6 @@ fn test_parse_function() {
 	let input = "def myfun(a, b){ return a + b }";
 	let node = parse(input);
 	println!("{:?}", node);
-	if let Node::Pair(sig, body) = node {
-		println!("Signature: {:?}, Body: {:?}", sig, body);
-	}
 }
 
 #[test]
