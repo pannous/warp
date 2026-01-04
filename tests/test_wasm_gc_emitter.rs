@@ -1,12 +1,12 @@
 use wasp::node::Node::*;
-use wasp::node::{Bracket, Node, Separator};
+use wasp::node::{Bracket, Node};
 use wasp::run::wasmtime_runner::run;
 use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
 use wasp::StringExtensions;
 use wasp::{eq, is, write_wasm};
 
 fn normalize_blocks(node: &Node) -> Node {
-	let node = node.unwrap_meta();
+	let node = node.drop_meta();
 	match node {
 		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),

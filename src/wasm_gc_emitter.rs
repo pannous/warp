@@ -651,7 +651,7 @@ impl WasmGcEmitter {
 
 	/// Recursively collect and allocate all strings from a node tree
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
-		let node = node.unwrap_meta();
+		let node = node.drop_meta();
 		match node {
 			Node::Text(s) | Node::Symbol(s) => {
 				self.allocate_string(s);
@@ -685,7 +685,7 @@ impl WasmGcEmitter {
 	/// Emit WASM instructions to construct a Node in the unified struct format
 	fn emit_node_instructions(&self, func: &mut Function, node: &Node) {
 		// Unwrap metadata if present
-		let node = node.unwrap_meta();
+		let node = node.drop_meta();
 
 		match node {
 			Node::Empty => {
@@ -837,7 +837,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::StructNew(self.node_base_type));
 			}
 			Node::Meta { .. } => {
-				// Should not reach here since unwrap_meta is called at the start
+				// Should not reach here since drop_meta is called at the start
 				func.instruction(&I32Const(0));
 				func.instruction(&I32Const(0));
 				func.instruction(&I32Const(NodeKind::Empty as i32));
