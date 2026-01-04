@@ -6,6 +6,26 @@ use crate::node::{Bracket, Node, Separator};
 use log::warn;
 use std::fs;
 
+/// Parser options for handling different file formats
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ParserOptions {
+	/// XML mode: treat <tag> as XML tags, not C++ generics
+	pub xml_mode: bool,
+	// Future: other format-specific options can be added here
+}
+
+impl Default for ParserOptions {
+	fn default() -> Self {
+		ParserOptions { xml_mode: false }
+	}
+}
+
+impl ParserOptions {
+	pub fn xml() -> Self {
+		ParserOptions { xml_mode: true }
+	}
+}
+
 /// Read and parse a WASP file
 pub fn parse_file(path: &str) -> Node {
 	match fs::read_to_string(path) {
@@ -21,6 +41,10 @@ pub fn parse(input: &str) -> Node {
 	WaspParser::parse(input)
 }
 
+pub fn parse_xml(input: &str) -> Node {
+	WaspParser::parse_with_options(input, ParserOptions::xml())
+}
+
 pub struct WaspParser {
 	input: String,
 	chars: Vec<char>,
@@ -30,10 +54,15 @@ pub struct WaspParser {
 	char: char,
 	pub current_line: String,
 	base_indent: usize,
+	options: ParserOptions,
 }
 
 impl WaspParser {
 	pub fn new(input: String) -> Self {
+		Self::new_with_options(input, ParserOptions::default())
+	}
+
+	pub fn new_with_options(input: String, options: ParserOptions) -> Self {
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		WaspParser {
@@ -45,11 +74,16 @@ impl WaspParser {
 			char: '\0',
 			current_line,
 			base_indent: 0,
+			options,
 		}
 	}
 
 	pub fn parse(input: &str) -> Node {
-		let mut parser = WaspParser::new(input.to_string());
+		Self::parse_with_options(input, ParserOptions::default())
+	}
+
+	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
+		let mut parser = WaspParser::new_with_options(input.to_string(), options);
 		parser.parse_list_with_separators(None, Bracket::None)
 	}
 
@@ -201,6 +235,23 @@ impl WaspParser {
 		(had_newline, line_indent, comment)
 	}
 
+	/// Skip characters until the target character is found
+	fn skip_until(&mut self, target: char) {
+		while !self.end_of_input() && self.current_char() != target {
+			self.advance();
+		}
+	}
+
+	/// Parse XML text content (everything until '<' or end of input)
+	fn parse_xml_text_content(&mut self) -> String {
+		let mut text = String::new();
+		while !self.end_of_input() && self.current_char() != '<' {
+			text.push(self.current_char());
+			self.advance();
+		}
+		text.trim().to_string()
+	}
+
 	fn is_at_line_end(&self) -> bool {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
@@ -220,7 +271,8 @@ impl WaspParser {
 					'(' => self.parse_bracketed('(', ')', Bracket::Round),
 					'[' => self.parse_bracketed('[', ']', Bracket::Square),
 					'{' => self.parse_bracketed('{', '}', Bracket::Curly),
-					'<' => self.parse_bracketed('<', '>', Bracket::Round), // Generics as groups
+					'<' if self.options.xml_mode => self.parse_xml_tag(),
+					'<' => self.parse_bracketed('<', '>', Bracket::Round), // C++ generics as groups
 					';' => Empty,                                          // Semicolons handled by main parse loop
 					'>' => Empty, // Closing angle bracket, handled by parse_bracketed
 					'-' if self.peek_char(1) == '>' => {
@@ -452,6 +504,144 @@ impl WaspParser {
 	fn parse_bracketed(&mut self, _open: char, close: char, bracket: Bracket) -> Node {
 		self.advance(); // skip opening bracket
 		self.parse_list_with_separators(Some(close), bracket)
+	}
+
+	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
+	fn parse_xml_tag(&mut self) -> Node {
+		self.advance(); // skip '<'
+
+		// Check for closing tag </tag>
+		if self.current_char() == '/' {
+			// This is a closing tag, should be handled by parent
+			// Return error for unmatched closing tag
+			self.advance(); // skip '/'
+			let tag_name = self.parse_symbol().unwrap_or_default();
+			self.skip_until('>');
+			self.advance(); // skip '>'
+			return Error(format!("Unmatched closing tag </{}>", tag_name));
+		}
+
+		// Parse tag name
+		let tag_name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(e) => return Error(e),
+		};
+
+		// Parse attributes
+		let mut attributes = Vec::new();
+		self.skip_whitespace_and_comments();
+
+		while self.current_char() != '>' && self.current_char() != '/' && !self.end_of_input() {
+			let attr_name = match self.parse_symbol() {
+				Ok(name) => name,
+				Err(_) => break,
+			};
+
+			self.skip_whitespace_and_comments();
+
+			// Check for = sign
+			if self.current_char() == '=' {
+				self.advance(); // skip '='
+				self.skip_whitespace_and_comments();
+
+				// Parse attribute value (must be quoted)
+				let attr_value = if self.current_char() == '"' || self.current_char() == '\'' {
+					self.parse_string()
+				} else {
+					// Try to parse unquoted value
+					match self.parse_symbol() {
+						Ok(val) => Node::Text(val),
+						Err(_) => Node::Empty,
+					}
+				};
+
+				// Store attribute as dotted key
+				attributes.push(Node::Key(format!(".{}", attr_name), Box::new(attr_value)));
+			} else {
+				// Boolean attribute (no value)
+				attributes.push(Node::Key(
+					format!(".{}", attr_name),
+					Box::new(Node::True),
+				));
+			}
+
+			self.skip_whitespace_and_comments();
+		}
+
+		// Check for self-closing tag
+		if self.current_char() == '/' {
+			self.advance(); // skip '/'
+			self.skip_whitespace_and_comments();
+			if self.current_char() == '>' {
+				self.advance(); // skip '>'
+			}
+			// Return self-closing tag with only attributes
+			return if attributes.is_empty() {
+				Node::Key(tag_name, Box::new(Node::Empty))
+			} else {
+				Node::Key(
+					tag_name,
+					Box::new(Node::List(attributes, Bracket::Curly, Separator::None)),
+				)
+			};
+		}
+
+		// Skip closing '>' of opening tag
+		if self.current_char() == '>' {
+			self.advance();
+		}
+
+		// Parse content until closing tag
+		let mut content_items = Vec::new();
+
+		while !self.end_of_input() {
+			// Check for closing tag (before skipping whitespace)
+			if self.current_char() == '<' && self.peek_char(1) == '/' {
+				self.advance(); // skip '<'
+				self.advance(); // skip '/'
+				let closing_name = self.parse_symbol().unwrap_or_default();
+				self.skip_until('>');
+				self.advance(); // skip '>'
+
+				if closing_name != tag_name {
+					return Error(format!(
+						"Mismatched tags: <{}> closed with </{}>",
+						tag_name, closing_name
+					));
+				}
+				break; // Successfully closed
+			}
+
+			// Check for nested tag
+			if self.current_char() == '<' && self.peek_char(1) != '/' {
+				let nested = self.parse_xml_tag();
+				if nested != Empty {
+					content_items.push(nested);
+				}
+				continue;
+			}
+
+			// Parse text content until next tag
+			let text = self.parse_xml_text_content();
+			if !text.is_empty() {
+				content_items.push(Node::Text(text));
+			}
+		}
+
+		// Combine attributes and content
+		let mut body_items = attributes;
+		body_items.extend(content_items);
+
+		if body_items.is_empty() {
+			Node::Key(tag_name, Box::new(Node::Empty))
+		} else if body_items.len() == 1 {
+			Node::Key(tag_name, Box::new(body_items.into_iter().next().unwrap()))
+		} else {
+			Node::Key(
+				tag_name,
+				Box::new(Node::List(body_items, Bracket::Curly, Separator::None)),
+			)
+		}
 	}
 
 	fn parse_list_with_separators(&mut self, close: Option<char>, bracket: Bracket) -> Node {
