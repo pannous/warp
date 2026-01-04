@@ -552,8 +552,13 @@ impl WasmGcEmitter {
 			trace!("tree-shaking: emitted {} functions, skipped {}", emitted, skipped);
 		}
 
-		self.emit_get_node_kind();
-		self.emit_node_field_getters();
+		// Only emit getters in library mode (they're not used by emit_node_instructions)
+		if self.emit_all_functions {
+			self.emit_get_node_kind();
+			self.emit_node_field_getters();
+		} else {
+			trace!("tree-shaking: skipping getters (not needed for node emission)");
+		}
 	}
 
 	/// Helper: Emit all 10 node fields and StructNew instruction (empty node pattern)
@@ -1024,29 +1029,23 @@ impl WasmGcEmitter {
 
 	/// Emit comprehensive WASM names for types, functions, and fields
 	fn emit_names(&mut self) {
+		// In tree-shaking mode, skip names section entirely for smaller output
+		if !self.emit_all_functions {
+			trace!("tree-shaking: skipping names section");
+			return;
+		}
+
 		// Module name
 		self.names.module("wasp_node_ast");
 
-		// Type names
+		// Type names (always emit base types)
 		let mut type_names = NameMap::new();
 		type_names.append(0, "node");
 		type_names.append(1, "node_array");
-		// Function signature types (created by emit_node_constructor and emit_node_field_getters)
-		type_names.append(2, "func_new_empty");
-		type_names.append(3, "func_new_int");
-		type_names.append(4, "func_new_float");
-		type_names.append(5, "func_new_codepoint");
-		type_names.append(6, "func_new_text");
-		type_names.append(7, "func_new_symbol");
-		type_names.append(8, "func_new_tag");
-		type_names.append(9, "func_new_pair");
-		type_names.append(10, "func_new_keyvalue");
-		type_names.append(11, "func_get_node_kind");
-		type_names.append(12, "func_get_tag");
-		type_names.append(13, "func_get_int_value");
-		type_names.append(14, "func_get_float_value");
-		type_names.append(15, "func_get_name_len");
-		type_names.append(16, "func_main");
+		// Add type names for emitted functions
+		for (name, &idx) in &self.function_indices {
+			type_names.append(idx + 2, &format!("func_{}", name));
+		}
 		self.names.types(&type_names);
 
 		// Field names for the unified node struct
@@ -1066,24 +1065,13 @@ impl WasmGcEmitter {
 		type_field_names.append(self.node_base_type, &field_names);
 		self.names.fields(&type_field_names);
 
-		// Function names
+		// Function names - only for emitted functions
 		let mut func_names = NameMap::new();
-		//
-		func_names.append(0, "new_empty");
-		func_names.append(1, "new_int");
-		func_names.append(2, "new_float");
-		func_names.append(3, "new_codepoint");
-		func_names.append(4, "new_text");
-		func_names.append(5, "new_symbol");
-		func_names.append(6, "new_tag");
-		func_names.append(7, "new_pair");
-		func_names.append(8, "new_keyvalue");
-		func_names.append(9, "get_node_kind");
-		func_names.append(10, "get_tag");
-		func_names.append(11, "get_int_value");
-		func_names.append(12, "get_float_value");
-		func_names.append(13, "get_name_len");
-		func_names.append(14, "main");
+		for (name, &idx) in &self.function_indices {
+			func_names.append(idx, name);
+		}
+		// Add main function (always emitted after constructors)
+		func_names.append(self.next_func_idx - 1, "main");
 		self.names.functions(&func_names);
 
 		// Data segment names (based on string content)
