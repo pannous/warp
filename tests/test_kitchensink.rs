@@ -1,8 +1,8 @@
 use wasp::extensions::numbers::Number;
-use wasp::node::Bracket;
-use wasp::node::Node;
-use wasp::node::Node::Symbol;
-use wasp::node::Separator;
+use wasp::Bracket;
+use wasp::Node;
+use wasp::Node::Symbol;
+use wasp::Separator;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
 use wasp::write_wasm;

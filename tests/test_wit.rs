@@ -1,5 +1,5 @@
 use wasp::eq;
-use wasp::node::Node::*;
+use wasp::Node::*;
 use wasp::wasp_parser::parse_file;
 
 #[test]
