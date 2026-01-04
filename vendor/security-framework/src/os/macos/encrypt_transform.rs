@@ -7,7 +7,7 @@ use core_foundation::string::CFString;
 use core_foundation_sys::data::CFDataRef;
 use core_foundation_sys::string::CFStringRef;
 use security_framework_sys::encrypt_transform::*;
-use security_framework_sys::transform::*;
+use security_framework_sys::transform::kSecTransformInputAttributeName;
 use std::ptr;
 
 use crate::key::SecKey;
@@ -146,6 +146,7 @@ impl Builder {
     }
 
     /// Encrypts data with a provided key.
+    // FIXME: deprecate and remove: don't expose CFData in Rust APIs.
     pub fn encrypt(&self, key: &SecKey, data: &CFData) -> Result<CFData, CFError> {
         unsafe {
             let mut error = ptr::null_mut();
@@ -160,6 +161,7 @@ impl Builder {
     }
 
     /// Decrypts data with a provided key.
+    // FIXME: deprecate and remove: don't expose CFData in Rust APIs.
     pub fn decrypt(&self, key: &SecKey, data: &CFData) -> Result<CFData, CFError> {
         unsafe {
             let mut error = ptr::null_mut();
@@ -194,20 +196,16 @@ impl Builder {
             transform.set_attribute(&key, data)?;
 
             let result = transform.execute()?;
-            Ok(CFData::wrap_under_get_rule(
-                result.as_CFTypeRef() as CFDataRef
-            ))
+            Ok(CFData::wrap_under_get_rule(result.as_CFTypeRef() as CFDataRef))
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use core_foundation::data::CFData;
     use hex::FromHex;
 
     use super::*;
-    use crate::key::SecKey;
     use crate::os::macos::item::KeyType;
     use crate::os::macos::key::SecKeyExt;
 

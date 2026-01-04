@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.10
+
+* Minimum rust version is now 1.55, and the non-const-generic impls are removed.
+  This reduces build times by over a second on average, which is
+  significant enough for a library crate.
+
+## 1.9
+
+* Adds a `latest_stable_rust` cargo feature, which will automatically pull in
+  other cargo features related to the latest Stable version of rust.
+* Adds `ArrayVec::try_from_array_len`
+* Adds `TinyVec::into_vec` and `TinyVec::into_boxed_slice`
+* Adds support for `generic-array` crate
+* Adds support for the `borsh` crate
+
+## 1.8.1
+
+* [e00E](https://github.com/e00E) updated the rustc features so that they all
+  correctly depend on the lower version feature.
+  [pr 199](https://github.com/Lokathor/tinyvec/pull/199)
+
+## 1.8
+
+* [Fuuzetsu](https://github.com/Fuuzetsu) added the `ArrayVec::as_inner` method.
+  [pr 197](https://github.com/Lokathor/tinyvec/pull/197)
+
+## 1.7
+
+* [Fuuzetsu](https://github.com/Fuuzetsu) added the `rustc_1_61` cargo feature, which adds the `retain_mut` method.
+  [pr 198](https://github.com/Lokathor/tinyvec/pull/198) 
+
+## 1.6.1
+
+* [e00E](https://github.com/e00E) fixed the Arbitrary impl to work on Stable
+  without using a feature gate.
+  [pr 180](https://github.com/Lokathor/tinyvec/pull/180)
+
 ## 1.6.0
 
 * [i509VCB](https://github.com/i509VCB) added the `try_` functions for fallable reallocation.
@@ -52,13 +89,13 @@
 ## 1.1.0
 
 * [slightlyoutofphase](https://github.com/slightlyoutofphase)
-added "array splat" style syntax to the `array_vec!` and `tiny_vec!` macros.
-You can now write `array_vec![true; 5]` and get a length 5 array vec full of `true`,
-just like normal array initialization allows. Same goes for `tiny_vec!`.
-([pr 118](https://github.com/Lokathor/tinyvec/pull/118))
+  added "array splat" style syntax to the `array_vec!` and `tiny_vec!` macros.
+  You can now write `array_vec![true; 5]` and get a length 5 array vec full of `true`,
+  just like normal array initialization allows. Same goes for `tiny_vec!`.
+  ([pr 118](https://github.com/Lokathor/tinyvec/pull/118))
 * [not-a-seagull](https://github.com/not-a-seagull)
-added `ArrayVec::into_inner` so that you can get the array out of an `ArrayVec`.
-([pr 124](https://github.com/Lokathor/tinyvec/pull/124))
+  added `ArrayVec::into_inner` so that you can get the array out of an `ArrayVec`.
+  ([pr 124](https://github.com/Lokathor/tinyvec/pull/124))
 
 ## 1.0.2
 

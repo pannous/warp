@@ -12,7 +12,7 @@ use crate::util::{
 ///
 /// A DFA has a single starting state in the typical textbook description. That
 /// is, it corresponds to the set of all starting states for the NFA that built
-/// it, along with their espsilon closures. In this crate, however, DFAs have
+/// it, along with their epsilon closures. In this crate, however, DFAs have
 /// many possible start states due to a few factors:
 ///
 /// * DFAs support the ability to run either anchored or unanchored searches.
@@ -323,7 +323,7 @@ impl core::fmt::Debug for StartByteMap {
 
 /// Represents the six possible starting configurations of a DFA search.
 ///
-/// The starting configuration is determined by inspecting the the beginning
+/// The starting configuration is determined by inspecting the beginning
 /// of the haystack (up to 1 byte). Ultimately, this along with a pattern ID
 /// (if specified) and the type of search (anchored or not) is what selects the
 /// start state to use in a DFA.

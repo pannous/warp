@@ -711,7 +711,7 @@ pub enum LiteralKind {
     /// The literal is written as an octal escape, e.g., `\141`.
     Octal,
     /// The literal is written as a hex code with a fixed number of digits
-    /// depending on the type of the escape, e.g., `\x61` or or `\u0061` or
+    /// depending on the type of the escape, e.g., `\x61` or `\u0061` or
     /// `\U00000061`.
     HexFixed(HexLiteralKind),
     /// The literal is written as a hex code with a bracketed number of
@@ -839,7 +839,7 @@ pub enum ClassAsciiKind {
     Lower,
     /// `[ -~]`
     Print,
-    /// `[!-/:-@\[-`{-~]`
+    /// ``[!-/:-@\[-`{-~]``
     Punct,
     /// `[\t\n\v\f\r ]`
     Space,
@@ -1801,9 +1801,7 @@ mod tests {
         let size = core::mem::size_of::<Ast>();
         assert!(
             size <= max,
-            "Ast size of {} bytes is bigger than suggested max {}",
-            size,
-            max
+            "Ast size of {size} bytes is bigger than suggested max {max}",
         );
     }
 }

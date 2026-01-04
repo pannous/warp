@@ -1,10 +1,10 @@
 use crate::io::util::poll_proceed_and_make_progress;
-use crate::io::{AsyncBufRead, AsyncRead, AsyncWrite, ReadBuf};
+use crate::io::{AsyncBufRead, AsyncRead, AsyncSeek, AsyncWrite, ReadBuf};
 
 use std::fmt;
-use std::io;
+use std::io::{self, SeekFrom};
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{ready, Context, Poll};
 
 cfg_io_util! {
     /// `Empty` ignores any data written via [`AsyncWrite`], and will always be empty
@@ -39,12 +39,12 @@ cfg_io_util! {
     /// ```
     /// use tokio::io::{self, AsyncReadExt};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     ///     let mut buffer = String::new();
     ///     io::empty().read_to_string(&mut buffer).await.unwrap();
     ///     assert!(buffer.is_empty());
-    /// }
+    /// # }
     /// ```
     ///
     /// A convoluted way of getting the length of a buffer:
@@ -52,12 +52,12 @@ cfg_io_util! {
     /// ```
     /// use tokio::io::{self, AsyncWriteExt};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let buffer = vec![1, 2, 3, 5, 8];
-    ///     let num_bytes = io::empty().write(&buffer).await.unwrap();
-    ///     assert_eq!(num_bytes, 5);
-    /// }
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    /// let buffer = vec![1, 2, 3, 5, 8];
+    /// let num_bytes = io::empty().write(&buffer).await.unwrap();
+    /// assert_eq!(num_bytes, 5);
+    /// # }
     /// ```
     pub fn empty() -> Empty {
         Empty { _p: () }
@@ -130,6 +130,20 @@ impl AsyncWrite for Empty {
         ready!(poll_proceed_and_make_progress(cx));
         let num_bytes = bufs.iter().map(|b| b.len()).sum();
         Poll::Ready(Ok(num_bytes))
+    }
+}
+
+impl AsyncSeek for Empty {
+    #[inline]
+    fn start_seek(self: Pin<&mut Self>, _position: SeekFrom) -> io::Result<()> {
+        Ok(())
+    }
+
+    #[inline]
+    fn poll_complete(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<u64>> {
+        ready!(crate::trace::trace_leaf(cx));
+        ready!(poll_proceed_and_make_progress(cx));
+        Poll::Ready(Ok(0))
     }
 }
 

@@ -2,6 +2,11 @@
 cfg_signal_internal_and_unix! {
     mod signal;
 }
+cfg_io_uring! {
+    mod uring;
+    use uring::UringContext;
+    use crate::loom::sync::atomic::AtomicUsize;
+}
 
 use crate::io::interest::Interest;
 use crate::io::ready::Ready;
@@ -45,6 +50,24 @@ pub(crate) struct Handle {
     waker: mio::Waker,
 
     pub(crate) metrics: IoDriverMetrics,
+
+    #[cfg(all(
+        tokio_unstable,
+        feature = "io-uring",
+        feature = "rt",
+        feature = "fs",
+        target_os = "linux",
+    ))]
+    pub(crate) uring_context: Mutex<UringContext>,
+
+    #[cfg(all(
+        tokio_unstable,
+        feature = "io-uring",
+        feature = "rt",
+        feature = "fs",
+        target_os = "linux",
+    ))]
+    pub(crate) uring_state: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -112,6 +135,22 @@ impl Driver {
             #[cfg(not(target_os = "wasi"))]
             waker,
             metrics: IoDriverMetrics::default(),
+            #[cfg(all(
+                tokio_unstable,
+                feature = "io-uring",
+                feature = "rt",
+                feature = "fs",
+                target_os = "linux",
+            ))]
+            uring_context: Mutex::new(UringContext::new()),
+            #[cfg(all(
+                tokio_unstable,
+                feature = "io-uring",
+                feature = "rt",
+                feature = "fs",
+                target_os = "linux",
+            ))]
+            uring_state: AtomicUsize::new(0),
         };
 
         Ok((driver, handle))
@@ -154,7 +193,7 @@ impl Driver {
                 // In case of wasm32_wasi this error happens, when trying to poll without subscriptions
                 // just return from the park, as there would be nothing, which wakes us up.
             }
-            Err(e) => panic!("unexpected error when polling the I/O driver: {:?}", e),
+            Err(e) => panic!("unexpected error when polling the I/O driver: {e:?}"),
         }
 
         // Process all the events that came in, dispatching appropriately
@@ -168,8 +207,7 @@ impl Driver {
                 self.signal_ready = true;
             } else {
                 let ready = Ready::from_mio(event);
-                // Use std::ptr::from_exposed_addr when stable
-                let ptr: *const ScheduledIo = token.0 as *const _;
+                let ptr = super::EXPOSE_IO.from_exposed_addr(token.0);
 
                 // Safety: we ensure that the pointers used as tokens are not freed
                 // until they are both deregistered from mio **and** we know the I/O
@@ -182,6 +220,19 @@ impl Driver {
 
                 ready_count += 1;
             }
+        }
+
+        #[cfg(all(
+            tokio_unstable,
+            feature = "io-uring",
+            feature = "rt",
+            feature = "fs",
+            target_os = "linux",
+        ))]
+        {
+            let mut guard = handle.get_uring().lock();
+            let ctx = &mut *guard;
+            ctx.dispatch_completions();
         }
 
         handle.metrics.incr_ready_count_by(ready_count);
@@ -220,8 +271,17 @@ impl Handle {
         let scheduled_io = self.registrations.allocate(&mut self.synced.lock())?;
         let token = scheduled_io.token();
 
-        // TODO: if this returns an err, the `ScheduledIo` leaks...
-        self.registry.register(source, token, interest.to_mio())?;
+        // we should remove the `scheduled_io` from the `registrations` set if registering
+        // the `source` with the OS fails. Otherwise it will leak the `scheduled_io`.
+        if let Err(e) = self.registry.register(source, token, interest.to_mio()) {
+            // safety: `scheduled_io` is part of the `registrations` set.
+            unsafe {
+                self.registrations
+                    .remove(&mut self.synced.lock(), &scheduled_io)
+            };
+
+            return Err(e);
+        }
 
         // TODO: move this logic to `RegistrationSet` and use a `CountedLinkedList`
         self.metrics.incr_fd_count();

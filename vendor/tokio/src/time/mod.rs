@@ -27,11 +27,11 @@
 //! use std::time::Duration;
 //! use tokio::time::sleep;
 //!
-//! #[tokio::main]
-//! async fn main() {
-//!     sleep(Duration::from_millis(100)).await;
-//!     println!("100 ms have elapsed");
-//! }
+//! # #[tokio::main(flavor = "current_thread")]
+//! # async fn main() {
+//! sleep(Duration::from_millis(100)).await;
+//! println!("100 ms have elapsed");
+//! # }
 //! ```
 //!
 //! Require that an operation takes no more than 1s.
@@ -71,14 +71,14 @@
 //!     time::sleep(time::Duration::from_secs(1)).await
 //! }
 //!
-//! #[tokio::main]
-//! async fn main() {
-//!     let mut interval = time::interval(time::Duration::from_secs(2));
-//!     for _i in 0..5 {
-//!         interval.tick().await;
-//!         task_that_takes_a_second().await;
-//!     }
+//! # #[tokio::main(flavor = "current_thread")]
+//! # async fn main() {
+//! let mut interval = time::interval(time::Duration::from_secs(2));
+//! for _i in 0..5 {
+//!     interval.tick().await;
+//!     task_that_takes_a_second().await;
 //! }
+//! # }
 //! ```
 //!
 //! [`interval`]: crate::time::interval()
@@ -86,8 +86,9 @@
 
 mod clock;
 pub(crate) use self::clock::Clock;
-#[cfg(feature = "test-util")]
-pub use clock::{advance, pause, resume};
+cfg_test_util! {
+    pub use clock::{advance, pause, resume};
+}
 
 pub mod error;
 

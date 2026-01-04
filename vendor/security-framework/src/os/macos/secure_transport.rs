@@ -8,8 +8,8 @@ use std::slice;
 
 use crate::base::Result;
 use crate::certificate::SecCertificate;
+use crate::cvt;
 use crate::secure_transport::{MidHandshakeSslStream, SslContext};
-use crate::{cvt, AsInner};
 
 /// An extension trait adding OSX specific functionality to the `SslContext`
 /// type.
@@ -42,65 +42,52 @@ pub trait SslContextExt {
     /// If enabled, server identity changes are allowed during renegotiation.
     ///
     /// It is disabled by default to protect against triple handshake attacks.
-    ///
-    /// Requires the `OSX_10_11` (or greater) feature.
-    #[cfg(feature = "OSX_10_11")]
     fn allow_server_identity_change(&self) -> Result<bool>;
 
     /// If enabled, server identity changes are allowed during renegotiation.
     ///
     /// It is disabled by default to protect against triple handshake attacks.
-    ///
-    /// Requires the `OSX_10_11` (or greater) feature.
-    #[cfg(feature = "OSX_10_11")]
+    #[deprecated(note = "kSSLSessionOptionAllowServerIdentityChange is deprecated by Apple")]
     fn set_allow_server_identity_change(&mut self, value: bool) -> Result<()>;
 
     /// If enabled, fallback countermeasures will be used during negotiation.
     ///
     /// It should be enabled when renegotiating with a peer with a lower
     /// maximum protocol version due to an earlier failure to connect.
-    ///
-    /// Requires the `OSX_10_10` (or greater) feature.
-    #[cfg(feature = "OSX_10_10")]
     fn fallback(&self) -> Result<bool>;
 
     /// If enabled, fallback countermeasures will be used during negotiation.
     ///
     /// It should be enabled when renegotiating with a peer with a lower
     /// maximum protocol version due to an earlier failure to connect.
-    ///
-    /// Requires the `OSX_10_10` (or greater) feature.
-    #[cfg(feature = "OSX_10_10")]
+    #[deprecated(note = "kSSLSessionOptionFallback is deprecated by Apple")]
     fn set_fallback(&mut self, value: bool) -> Result<()>;
 
     /// If enabled, the handshake process will pause and return when the client
     /// hello is recieved to support server name identification.
-    ///
-    /// Requires the `OSX_10_11` (or greater) feature.
-    #[cfg(feature = "OSX_10_11")]
     fn break_on_client_hello(&self) -> Result<bool>;
 
     /// If enabled, the handshake process will pause and return when the client
     /// hello is recieved to support server name identification.
-    ///
-    /// Requires the `OSX_10_11` (or greater) feature.
-    #[cfg(feature = "OSX_10_11")]
+    #[deprecated(note = "kSSLSessionOptionBreakOnClientHello is deprecated by Apple")]
     fn set_break_on_client_hello(&mut self, value: bool) -> Result<()>;
 }
 
 macro_rules! impl_options {
     ($($(#[$a:meta])* const $opt:ident: $get:ident & $set:ident,)*) => {
         $(
+            #[allow(deprecated)]
             $(#[$a])*
             #[inline]
             fn $set(&mut self, value: bool) -> Result<()> {
                 unsafe {
                     cvt(SSLSetSessionOption(self.as_inner(),
                                             $opt,
-                                            value as ::core_foundation::base::Boolean))
+                                            ::core_foundation::base::Boolean::from(value)))
                 }
             }
 
+            #[allow(deprecated)]
             $(#[$a])*
             #[inline]
             fn $get(&self) -> Result<bool> {
@@ -182,11 +169,8 @@ impl SslContextExt for SslContext {
     }
 
     impl_options! {
-        #[cfg(feature = "OSX_10_11")]
         const kSSLSessionOptionAllowServerIdentityChange: allow_server_identity_change & set_allow_server_identity_change,
-        #[cfg(feature = "OSX_10_10")]
         const kSSLSessionOptionFallback: fallback & set_fallback,
-        #[cfg(feature = "OSX_10_11")]
         const kSSLSessionOptionBreakOnClientHello: break_on_client_hello & set_break_on_client_hello,
     }
 }
@@ -196,14 +180,10 @@ impl SslContextExt for SslContext {
 pub trait MidHandshakeSslStreamExt {
     /// Returns `true` iff `break_on_client_hello` was set and the handshake
     /// has progressed to that point.
-    ///
-    /// Requires the `OSX_10_11` (or greater) feature.
-    #[cfg(feature = "OSX_10_11")]
     fn client_hello_received(&self) -> bool;
 }
 
 impl<S> MidHandshakeSslStreamExt for MidHandshakeSslStream<S> {
-    #[cfg(feature = "OSX_10_11")]
     fn client_hello_received(&self) -> bool {
         self.error().code() == errSSLClientHelloReceived
     }
@@ -223,6 +203,7 @@ mod test {
     use crate::test::certificate;
 
     #[test]
+    #[ignore = "needs certs re-generated"]
     fn server_client() {
         let listener = p!(TcpListener::bind("localhost:0"));
         let port = p!(listener.local_addr()).port();
@@ -230,10 +211,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
 
@@ -245,17 +223,14 @@ mod test {
             assert_eq!(&buf[..], b"hello world!");
         });
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::CLIENT,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::CLIENT, SslConnectionType::STREAM));
         p!(ctx.set_break_on_server_auth(true));
         let stream = p!(TcpStream::connect(("localhost", port)));
 
         let stream = match ctx.handshake(stream) {
             Ok(_) => panic!("unexpected success"),
             Err(HandshakeError::Interrupted(stream)) => stream,
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(err) => panic!("unexpected error {err:?}"),
         };
 
         assert!(stream.server_auth_completed());
@@ -309,10 +284,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
 
@@ -321,9 +293,7 @@ mod test {
         });
 
         let stream = p!(TcpStream::connect(("localhost", port)));
-        assert!(ClientBuilder::new()
-            .handshake("foobar.com", stream)
-            .is_err());
+        assert!(ClientBuilder::new().handshake("foobar.com", stream).is_err());
 
         handle.join().unwrap();
     }
@@ -337,10 +307,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
 
@@ -369,10 +336,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
             p!(ctx.set_enabled_ciphers(&[
@@ -390,10 +354,7 @@ mod test {
             p!(stream.read(&mut buf));
         });
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::CLIENT,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::CLIENT, SslConnectionType::STREAM));
         p!(ctx.set_break_on_server_auth(true));
         p!(ctx.set_enabled_ciphers(&[
             CipherSuite::TLS_DHE_PSK_WITH_AES_128_CBC_SHA256,
@@ -404,7 +365,7 @@ mod test {
         let stream = match ctx.handshake(stream) {
             Ok(_) => panic!("unexpected success"),
             Err(HandshakeError::Interrupted(stream)) => stream,
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(err) => panic!("unexpected error {err:?}"),
         };
 
         let mut stream = p!(stream.handshake());
@@ -421,10 +382,7 @@ mod test {
     fn dh_params() {
         let params = include_bytes!("../../../test/dhparam.der");
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::SERVER,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
         assert!(p!(ctx.diffie_hellman_params()).is_none());
         p!(ctx.set_diffie_hellman_params(params));
         assert_eq!(p!(ctx.diffie_hellman_params()).unwrap(), &params[..]);
@@ -438,10 +396,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
             p!(ctx.set_client_side_authenticate(SslAuthenticate::TRY));
@@ -454,17 +409,14 @@ mod test {
             p!(stream.read(&mut buf));
         });
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::CLIENT,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::CLIENT, SslConnectionType::STREAM));
         p!(ctx.set_break_on_server_auth(true));
         let stream = p!(TcpStream::connect(("localhost", port)));
 
         let stream = match ctx.handshake(stream) {
             Ok(_) => panic!("unexpected success"),
             Err(HandshakeError::Interrupted(stream)) => stream,
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(err) => panic!("unexpected error {err:?}"),
         };
 
         let mut stream = p!(stream.handshake());
@@ -481,10 +433,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
             p!(ctx.set_client_side_authenticate(SslAuthenticate::ALWAYS));
@@ -493,28 +442,25 @@ mod test {
 
             match ctx.handshake(stream) {
                 Ok(_) => panic!("unexpected success"),
-                Err(HandshakeError::Failure(_)) => {}
-                Err(err) => panic!("unexpected error {:?}", err),
+                Err(HandshakeError::Failure(_)) => {},
+                Err(err) => panic!("unexpected error {err:?}"),
             }
         });
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::CLIENT,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::CLIENT, SslConnectionType::STREAM));
         p!(ctx.set_break_on_server_auth(true));
         let stream = p!(TcpStream::connect(("localhost", port)));
 
         let stream = match ctx.handshake(stream) {
             Ok(_) => panic!("unexpected success"),
             Err(HandshakeError::Interrupted(stream)) => stream,
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(err) => panic!("unexpected error {err:?}"),
         };
 
         match stream.handshake() {
             Ok(_) => panic!("unexpected success"),
-            Err(HandshakeError::Failure(_)) => {}
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(HandshakeError::Failure(_)) => {},
+            Err(err) => panic!("unexpected error {err:?}"),
         }
 
         handle.join().unwrap();
@@ -528,10 +474,7 @@ mod test {
         let handle = thread::spawn(move || {
             let dir = p!(tempdir());
 
-            let mut ctx = p!(SslContext::new(
-                SslProtocolSide::SERVER,
-                SslConnectionType::STREAM
-            ));
+            let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
             let identity = identity(dir.path());
             p!(ctx.set_certificate(&identity, &[]));
             p!(ctx.set_client_side_authenticate(SslAuthenticate::ALWAYS));
@@ -540,15 +483,12 @@ mod test {
 
             match ctx.handshake(stream) {
                 Ok(_) => panic!("unexpected success"),
-                Err(HandshakeError::Failure(_)) => {}
-                Err(err) => panic!("unexpected error {:?}", err),
+                Err(HandshakeError::Failure(_)) => {},
+                Err(err) => panic!("unexpected error {err:?}"),
             }
         });
 
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::CLIENT,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::CLIENT, SslConnectionType::STREAM));
         p!(ctx.set_break_on_server_auth(true));
         let dir = p!(tempdir());
         let identity = identity(dir.path());
@@ -558,13 +498,13 @@ mod test {
         let stream = match ctx.handshake(stream) {
             Ok(_) => panic!("unexpected success"),
             Err(HandshakeError::Interrupted(stream)) => stream,
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(err) => panic!("unexpected error {err:?}"),
         };
 
         match stream.handshake() {
             Ok(_) => panic!("unexpected success"),
-            Err(HandshakeError::Failure(_)) => {}
-            Err(err) => panic!("unexpected error {:?}", err),
+            Err(HandshakeError::Failure(_)) => {},
+            Err(err) => panic!("unexpected error {err:?}"),
         }
 
         handle.join().unwrap();
@@ -572,10 +512,7 @@ mod test {
 
     #[test]
     fn certificate_authorities() {
-        let mut ctx = p!(SslContext::new(
-            SslProtocolSide::SERVER,
-            SslConnectionType::STREAM
-        ));
+        let mut ctx = p!(SslContext::new(SslProtocolSide::SERVER, SslConnectionType::STREAM));
         assert!(p!(ctx.certificate_authorities()).is_none());
         p!(ctx.set_certificate_authorities(&[certificate()]));
         assert_eq!(p!(ctx.certificate_authorities()).unwrap().len(), 1);

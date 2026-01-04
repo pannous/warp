@@ -13,12 +13,60 @@
 //! not required to configure a [`Runtime`] manually, and a user may just use the
 //! [`tokio::main`] attribute macro, which creates a [`Runtime`] under the hood.
 //!
+//! # Choose your runtime
+//!
+//! Here is the rules of thumb to choose the right runtime for your application.
+//!
+//! ```plaintext
+//!    +------------------------------------------------------+
+//!    | Do you want work-stealing or multi-thread scheduler? |
+//!    +------------------------------------------------------+
+//!                    | Yes              | No
+//!                    |                  |
+//!                    |                  |
+//!                    v                  |
+//!      +------------------------+       |
+//!      | Multi-threaded Runtime |       |
+//!      +------------------------+       |
+//!                                       |
+//!                                       V
+//!                      +--------------------------------+
+//!                      | Do you execute `!Send` Future? |
+//!                      +--------------------------------+
+//!                            | Yes                 | No
+//!                            |                     |
+//!                            V                     |
+//!              +--------------------------+        |
+//!              | Local Runtime (unstable) |        |
+//!              +--------------------------+        |
+//!                                                  |
+//!                                                  v
+//!                                      +------------------------+
+//!                                      | Current-thread Runtime |
+//!                                      +------------------------+
+//! ```
+//!
+//! The above decision tree is not exhaustive. there are other factors that
+//! may influence your decision.
+//!
+//! ## Bridging with sync code
+//!
+//! See <https://tokio.rs/tokio/topics/bridging> for details.
+//!
+//! ## NUMA awareness
+//!
+//! The tokio runtime is not NUMA (Non-Uniform Memory Access) aware.
+//! You may want to start multiple runtimes instead of a single runtime
+//! for better performance on NUMA systems.
+//!
 //! # Usage
 //!
 //! When no fine tuning is required, the [`tokio::main`] attribute macro can be
 //! used.
 //!
 //! ```no_run
+//! # #[cfg(not(target_family = "wasm"))]
+//! # {
 //! use tokio::net::TcpListener;
 //! use tokio::io::{AsyncReadExt, AsyncWriteExt};
 //!
@@ -36,7 +84,7 @@
 //!             loop {
 //!                 let n = match socket.read(&mut buf).await {
 //!                     // socket closed
-//!                     Ok(n) if n == 0 => return,
+//!                     Ok(0) => return,
 //!                     Ok(n) => n,
 //!                     Err(e) => {
 //!                         println!("failed to read from socket; err = {:?}", e);
@@ -53,6 +101,7 @@
 //!         });
 //!     }
 //! }
+//! # }
 //! ```
 //!
 //! From within the context of the runtime, additional tasks are spawned using
@@ -62,6 +111,8 @@
 //! A [`Runtime`] instance can also be used directly.
 //!
 //! ```no_run
+//! # #[cfg(not(target_family = "wasm"))]
+//! # {
 //! use tokio::net::TcpListener;
 //! use tokio::io::{AsyncReadExt, AsyncWriteExt};
 //! use tokio::runtime::Runtime;
@@ -84,7 +135,7 @@
 //!                 loop {
 //!                     let n = match socket.read(&mut buf).await {
 //!                         // socket closed
-//!                         Ok(n) if n == 0 => return,
+//!                         Ok(0) => return,
 //!                         Ok(n) => n,
 //!                         Err(e) => {
 //!                             println!("failed to read from socket; err = {:?}", e);
@@ -102,6 +153,7 @@
 //!         }
 //!     })
 //! }
+//! # }
 //! ```
 //!
 //! ## Runtime Configurations
@@ -118,11 +170,14 @@
 //! for most applications. The multi-thread scheduler requires the `rt-multi-thread`
 //! feature flag, and is selected by default:
 //! ```
+//! # #[cfg(not(target_family = "wasm"))]
+//! # {
 //! use tokio::runtime;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let threaded_rt = runtime::Runtime::new()?;
 //! # Ok(()) }
+//! # }
 //! ```
 //!
 //! Most applications should use the multi-thread scheduler, except in some
@@ -168,7 +223,6 @@
 //! [`tokio::main`]: ../attr.main.html
 //! [runtime builder]: crate::runtime::Builder
 //! [`Runtime::new`]: crate::runtime::Runtime::new
-//! [`Builder::threaded_scheduler`]: crate::runtime::Builder::threaded_scheduler
 //! [`Builder::enable_io`]: crate::runtime::Builder::enable_io
 //! [`Builder::enable_time`]: crate::runtime::Builder::enable_time
 //! [`Builder::enable_all`]: crate::runtime::Builder::enable_all
@@ -310,7 +364,7 @@
 //! [`event_interval`]: crate::runtime::Builder::event_interval
 //! [`disable_lifo_slot`]: crate::runtime::Builder::disable_lifo_slot
 //! [the lifo slot optimization]: crate::runtime::Builder::disable_lifo_slot
-//! [coop budget]: crate::task#cooperative-scheduling
+//! [coop budget]: crate::task::coop#cooperative-scheduling
 //! [`worker_mean_poll_time`]: crate::runtime::RuntimeMetrics::worker_mean_poll_time
 
 // At the top due to macros
@@ -321,11 +375,9 @@ mod tests;
 
 pub(crate) mod context;
 
-pub(crate) mod coop;
-
 pub(crate) mod park;
 
-mod driver;
+pub(crate) mod driver;
 
 pub(crate) mod scheduler;
 
@@ -372,6 +424,9 @@ cfg_rt! {
 
         pub use self::builder::UnhandledPanic;
         pub use crate::util::rand::RngSeed;
+
+        mod local_runtime;
+        pub use local_runtime::{LocalRuntime, LocalOptions};
     }
 
     cfg_taskdump! {
@@ -379,30 +434,43 @@ cfg_rt! {
         pub use dump::Dump;
     }
 
+    mod task_hooks;
+    pub(crate) use task_hooks::{TaskHooks, TaskCallback};
+    cfg_unstable! {
+        pub use task_hooks::TaskMeta;
+    }
+    #[cfg(not(tokio_unstable))]
+    pub(crate) use task_hooks::TaskMeta;
+
     mod handle;
     pub use handle::{EnterGuard, Handle, TryCurrentError};
 
     mod runtime;
     pub use runtime::{Runtime, RuntimeFlavor};
 
+    /// Boundary value to prevent stack overflow caused by a large-sized
+    /// Future being placed in the stack.
+    pub(crate) const BOX_FUTURE_THRESHOLD: usize = if cfg!(debug_assertions)  {
+        2048
+    } else {
+        16384
+    };
+
     mod thread_id;
     pub(crate) use thread_id::ThreadId;
 
-    cfg_metrics! {
-        mod metrics;
-        pub use metrics::{RuntimeMetrics, HistogramScale};
+    pub(crate) mod metrics;
+    pub use metrics::RuntimeMetrics;
 
-        pub(crate) use metrics::{MetricsBatch, SchedulerMetrics, WorkerMetrics, HistogramBuilder};
+    cfg_unstable_metrics! {
+        pub use metrics::{HistogramScale, HistogramConfiguration, LogHistogram, LogHistogramBuilder, InvalidHistogramConfiguration} ;
 
         cfg_net! {
-        pub(crate) use metrics::IoDriverMetrics;
+            pub(crate) use metrics::IoDriverMetrics;
         }
     }
 
-    cfg_not_metrics! {
-        pub(crate) mod metrics;
-        pub(crate) use metrics::{SchedulerMetrics, WorkerMetrics, MetricsBatch, HistogramBuilder};
-    }
+    pub(crate) use metrics::{MetricsBatch, SchedulerMetrics, WorkerMetrics, HistogramBuilder};
 
     /// After thread starts / before thread stops
     type Callback = std::sync::Arc<dyn Fn() + Send + Sync>;

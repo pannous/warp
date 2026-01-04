@@ -18,7 +18,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DedicatedWorkerGlobalScope/name)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `DedicatedWorkerGlobalScope`*"]
-    pub fn name(this: &DedicatedWorkerGlobalScope) -> String;
+    pub fn name(this: &DedicatedWorkerGlobalScope) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "DedicatedWorkerGlobalScope" , js_name = onmessage)]
     #[doc = "Getter for the `onmessage` field of this object."]
     #[doc = ""]
@@ -47,6 +47,31 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `DedicatedWorkerGlobalScope`*"]
     pub fn set_onmessageerror(
+        this: &DedicatedWorkerGlobalScope,
+        value: Option<&::js_sys::Function>,
+    );
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , getter , js_class = "DedicatedWorkerGlobalScope" , js_name = onrtctransform)]
+    #[doc = "Getter for the `onrtctransform` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DedicatedWorkerGlobalScope/onrtctransform)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `DedicatedWorkerGlobalScope`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn onrtctransform(this: &DedicatedWorkerGlobalScope) -> Option<::js_sys::Function>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , setter , js_class = "DedicatedWorkerGlobalScope" , js_name = onrtctransform)]
+    #[doc = "Setter for the `onrtctransform` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DedicatedWorkerGlobalScope/onrtctransform)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `DedicatedWorkerGlobalScope`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn set_onrtctransform(
         this: &DedicatedWorkerGlobalScope,
         value: Option<&::js_sys::Function>,
     );

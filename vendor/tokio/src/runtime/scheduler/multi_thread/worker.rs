@@ -58,25 +58,23 @@
 
 use crate::loom::sync::{Arc, Mutex};
 use crate::runtime;
-use crate::runtime::context;
 use crate::runtime::scheduler::multi_thread::{
     idle, queue, Counters, Handle, Idle, Overflow, Parker, Stats, TraceStatus, Unparker,
 };
 use crate::runtime::scheduler::{inject, Defer, Lock};
 use crate::runtime::task::OwnedTasks;
-use crate::runtime::{
-    blocking, coop, driver, scheduler, task, Config, SchedulerMetrics, WorkerMetrics,
-};
+use crate::runtime::{blocking, driver, scheduler, task, Config, SchedulerMetrics, WorkerMetrics};
+use crate::runtime::{context, TaskHooks};
+use crate::task::coop;
 use crate::util::atomic_cell::AtomicCell;
 use crate::util::rand::{FastRand, RngSeedGenerator};
 
 use std::cell::RefCell;
 use std::task::Waker;
+use std::thread;
 use std::time::Duration;
 
-cfg_metrics! {
-    mod metrics;
-}
+mod metrics;
 
 cfg_taskdump! {
     mod taskdump;
@@ -227,15 +225,12 @@ pub(crate) struct Launch(Vec<Arc<Worker>>);
 /// to stop processing.
 type RunResult = Result<Box<Core>, ()>;
 
-/// A task handle
-type Task = task::Task<Arc<Handle>>;
-
 /// A notified task handle
 type Notified = task::Notified<Arc<Handle>>;
 
 /// Value picked out of thin-air. Running the LIFO slot a handful of times
 /// seems sufficient to benefit from locality. More than 3 times probably is
-/// overweighing. The value can be tuned in the future with data that shows
+/// over-weighting. The value can be tuned in the future with data that shows
 /// improvements.
 const MAX_LIFO_POLLS_PER_TICK: usize = 3;
 
@@ -283,6 +278,7 @@ pub(super) fn create(
 
     let remotes_len = remotes.len();
     let handle = Arc::new(Handle {
+        task_hooks: TaskHooks::from_config(&config),
         shared: Shared {
             remotes: remotes.into_boxed_slice(),
             inject,
@@ -334,6 +330,12 @@ where
                 if let Some(cx) = maybe_cx {
                     if self.take_core {
                         let core = cx.worker.core.take();
+
+                        if core.is_some() {
+                            cx.worker.handle.shared.worker_metrics[cx.worker.index]
+                                .set_thread_id(thread::current().id());
+                        }
+
                         let mut cx_core = cx.core.borrow_mut();
                         assert!(cx_core.is_none());
                         *cx_core = core;
@@ -395,10 +397,18 @@ where
         let cx = maybe_cx.expect("no .is_some() == false cases above should lead here");
 
         // Get the worker core. If none is set, then blocking is fine!
-        let core = match cx.core.borrow_mut().take() {
+        let mut core = match cx.core.borrow_mut().take() {
             Some(core) => core,
             None => return Ok(()),
         };
+
+        // If we heavily call `spawn_blocking`, there might be no available thread to
+        // run this core. Except for the task in the lifo_slot, all tasks can be
+        // stolen, so we move the task out of the lifo_slot to the run_queue.
+        if let Some(task) = core.lifo_slot.take() {
+            core.run_queue
+                .push_back_or_overflow(task, &*cx.worker.handle, &mut core.stats);
+        }
 
         // We are taking the core from the context and sending it to another
         // thread.
@@ -450,6 +460,7 @@ impl Launch {
 }
 
 fn run(worker: Arc<Worker>) {
+    #[allow(dead_code)]
     struct AbortOnPanic;
 
     impl Drop for AbortOnPanic {
@@ -472,6 +483,8 @@ fn run(worker: Arc<Worker>) {
         Some(core) => core,
         None => return,
     };
+
+    worker.handle.shared.worker_metrics[worker.index].set_thread_id(thread::current().id());
 
     let handle = scheduler::Handle::MultiThread(worker.handle.clone());
 
@@ -554,6 +567,9 @@ impl Context {
     }
 
     fn run_task(&self, task: Notified, mut core: Box<Core>) -> RunResult {
+        #[cfg(tokio_unstable)]
+        let task_meta = task.task_meta();
+
         let task = self.worker.handle.shared.owned.assert_owner(task);
 
         // Make sure the worker is not in the **searching** state. This enables
@@ -573,7 +589,19 @@ impl Context {
 
         // Run the task
         coop::budget(|| {
+            // Unlike the poll time above, poll start callback is attached to the task id,
+            // so it is tightly associated with the actual poll invocation.
+            #[cfg(tokio_unstable)]
+            self.worker
+                .handle
+                .task_hooks
+                .poll_start_callback(&task_meta);
+
             task.run();
+
+            #[cfg(tokio_unstable)]
+            self.worker.handle.task_hooks.poll_stop_callback(&task_meta);
+
             let mut lifo_polls = 0;
 
             // As long as there is budget remaining and a task exists in the
@@ -636,7 +664,20 @@ impl Context {
                 // Run the LIFO task, then loop
                 *self.core.borrow_mut() = Some(core);
                 let task = self.worker.handle.shared.owned.assert_owner(task);
+
+                #[cfg(tokio_unstable)]
+                let task_meta = task.task_meta();
+
+                #[cfg(tokio_unstable)]
+                self.worker
+                    .handle
+                    .task_hooks
+                    .poll_start_callback(&task_meta);
+
                 task.run();
+
+                #[cfg(tokio_unstable)]
+                self.worker.handle.task_hooks.poll_stop_callback(&task_meta);
             }
         })
     }
@@ -690,7 +731,12 @@ impl Context {
         if core.transition_to_parked(&self.worker) {
             while !core.is_shutdown && !core.is_traced {
                 core.stats.about_to_park();
+                core.stats
+                    .submit(&self.worker.handle.shared.worker_metrics[self.worker.index]);
+
                 core = self.park_timeout(core, None);
+
+                core.stats.unparked();
 
                 // Run regularly scheduled maintenance
                 core.maintenance(&self.worker);
@@ -739,7 +785,13 @@ impl Context {
     }
 
     pub(crate) fn defer(&self, waker: &Waker) {
-        self.defer.defer(waker);
+        if self.core.borrow().is_none() {
+            // If there is no core, then the worker is currently in a block_in_place. In this case,
+            // we cannot use the defer queue as we aren't really in the current runtime.
+            waker.wake_by_ref();
+        } else {
+            self.defer.defer(waker);
+        }
     }
 }
 
@@ -985,10 +1037,8 @@ impl Core {
             .stats
             .tuned_global_queue_interval(&worker.handle.shared.config);
 
-        debug_assert!(next > 1);
-
         // Smooth out jitter
-        if abs_diff(self.global_queue_interval, next) > 2 {
+        if u32::abs_diff(self.global_queue_interval, next) > 2 {
             self.global_queue_interval = next;
         }
     }
@@ -998,21 +1048,6 @@ impl Worker {
     /// Returns a reference to the scheduler's injection queue.
     fn inject(&self) -> &inject::Shared<Arc<Handle>> {
         &self.handle.shared.inject
-    }
-}
-
-// TODO: Move `Handle` impls into handle.rs
-impl task::Schedule for Arc<Handle> {
-    fn release(&self, task: &Task) -> Option<Task> {
-        self.shared.owned.remove(task)
-    }
-
-    fn schedule(&self, task: Notified) {
-        self.schedule_task(task, false);
-    }
-
-    fn yield_now(&self, task: Notified) {
-        self.schedule_task(task, true);
     }
 }
 
@@ -1222,13 +1257,4 @@ fn with_current<R>(f: impl FnOnce(Option<&Context>) -> R) -> R {
         Some(MultiThread(ctx)) => f(Some(ctx)),
         _ => f(None),
     })
-}
-
-// `u32::abs_diff` is not available on Tokio's MSRV.
-fn abs_diff(a: u32, b: u32) -> u32 {
-    if a > b {
-        a - b
-    } else {
-        b - a
-    }
 }

@@ -2,6 +2,8 @@
 use mockall::mock;
 
 use crate::sync::oneshot;
+#[cfg(all(test, unix))]
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::{
     cell::RefCell,
     collections::VecDeque,
@@ -30,6 +32,7 @@ mock! {
         pub fn open(pb: PathBuf) -> io::Result<Self>;
         pub fn set_len(&self, size: u64) -> io::Result<()>;
         pub fn set_permissions(&self, _perm: Permissions) -> io::Result<()>;
+        pub fn set_max_buf_size(&self, max_buf_size: usize);
         pub fn sync_all(&self) -> io::Result<()>;
         pub fn sync_data(&self) -> io::Result<()>;
         pub fn try_clone(&self) -> io::Result<Self>;
@@ -55,12 +58,26 @@ mock! {
 
 impl Read for MockFile {
     fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
+        // Placate Miri.  Tokio will call this method with an uninitialized
+        // buffer, which is ok because std::io::Read::read implementations don't usually read
+        // from their input buffers.  But Mockall 0.12-0.13 will try to Debug::fmt the
+        // buffer, even if there is no failure, triggering an uninitialized data access alert from
+        // Miri.  Initialize the data here just to prevent those Miri alerts.
+        // This can be removed after upgrading to Mockall 0.14.
+        dst.fill(0);
         self.inner_read(dst)
     }
 }
 
 impl Read for &'_ MockFile {
     fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
+        // Placate Miri.  Tokio will call this method with an uninitialized
+        // buffer, which is ok because std::io::Read::read implementations don't usually read
+        // from their input buffers.  But Mockall 0.12-0.13 will try to Debug::fmt the
+        // buffer, even if there is no failure, triggering an uninitialized data access alert from
+        // Miri.  Initialize the data here just to prevent those Miri alerts.
+        // This can be removed after upgrading to Mockall 0.14.
+        dst.fill(0);
         self.inner_read(dst)
     }
 }
@@ -78,6 +95,14 @@ impl Write for &'_ MockFile {
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner_flush()
+    }
+}
+
+#[cfg(all(test, unix))]
+impl From<MockFile> for OwnedFd {
+    #[inline]
+    fn from(file: MockFile) -> OwnedFd {
+        unsafe { OwnedFd::from_raw_fd(file.as_raw_fd()) }
     }
 }
 
@@ -128,7 +153,7 @@ impl<T> Future for JoinHandle<T> {
 
         match Pin::new(&mut self.rx).poll(cx) {
             Poll::Ready(Ok(v)) => Poll::Ready(Ok(v)),
-            Poll::Ready(Err(e)) => panic!("error = {:?}", e),
+            Poll::Ready(Err(e)) => panic!("error = {e:?}"),
             Poll::Pending => Poll::Pending,
         }
     }

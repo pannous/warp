@@ -15,7 +15,7 @@ use std::mem::MaybeUninit;
 use std::net::Ipv6Addr;
 use std::net::{self, Ipv4Addr, Shutdown};
 #[cfg(unix)]
-use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::os::fd::{FromRawFd, IntoRawFd};
 #[cfg(windows)]
 use std::os::windows::io::{FromRawSocket, IntoRawSocket};
 use std::time::Duration;
@@ -73,11 +73,8 @@ use crate::{MaybeUninitSlice, MsgHdr, RecvFlags};
 /// # Ok(()) }
 /// ```
 pub struct Socket {
-    inner: Inner,
+    inner: sys::Socket,
 }
-
-/// Store a `TcpStream` internally to take advantage of its niche optimizations on Unix platforms.
-pub(crate) type Inner = std::net::TcpStream;
 
 impl Socket {
     /// # Safety
@@ -86,34 +83,21 @@ impl Socket {
     /// this should really be marked `unsafe`, but this being an internal
     /// function, often passed as mapping function, it's makes it very
     /// inconvenient to mark it as `unsafe`.
-    pub(crate) fn from_raw(raw: sys::Socket) -> Socket {
+    pub(crate) fn from_raw(raw: sys::RawSocket) -> Socket {
         Socket {
-            inner: unsafe {
-                // SAFETY: the caller must ensure that `raw` is a valid file
-                // descriptor, but when it isn't it could return I/O errors, or
-                // potentially close a fd it doesn't own. All of that isn't
-                // memory unsafe, so it's not desired but never memory unsafe or
-                // causes UB.
-                //
-                // However there is one exception. We use `TcpStream` to
-                // represent the `Socket` internally (see `Inner` type),
-                // `TcpStream` has a layout optimisation that doesn't allow for
-                // negative file descriptors (as those are always invalid).
-                // Violating this assumption (fd never negative) causes UB,
-                // something we don't want. So check for that we have this
-                // `assert!`.
-                #[cfg(unix)]
-                assert!(raw >= 0, "tried to create a `Socket` with an invalid fd");
-                sys::socket_from_raw(raw)
-            },
+            // SAFETY: the caller must ensure that `raw` is a valid file
+            // descriptor, but when it isn't it could return I/O errors, or
+            // potentially close a fd it doesn't own. All of that isn't memory
+            // unsafe, so it's not desired but never memory unsafe or causes UB.
+            inner: unsafe { sys::socket_from_raw(raw) },
         }
     }
 
-    pub(crate) fn as_raw(&self) -> sys::Socket {
+    pub(crate) fn as_raw(&self) -> sys::RawSocket {
         sys::socket_as_raw(&self.inner)
     }
 
-    pub(crate) fn into_raw(self) -> sys::Socket {
+    pub(crate) fn into_raw(self) -> sys::RawSocket {
         sys::socket_into_raw(self.inner)
     }
 
@@ -150,7 +134,6 @@ impl Socket {
     /// [`Socket::pair_raw`] can be used if you don't want to set those flags.
     #[doc = man_links!(unix: socketpair(2))]
     #[cfg(all(feature = "all", unix))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", unix))))]
     pub fn pair(
         domain: Domain,
         ty: Type,
@@ -167,7 +150,6 @@ impl Socket {
     ///
     /// This function corresponds to `socketpair(2)`.
     #[cfg(all(feature = "all", unix))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", unix))))]
     pub fn pair_raw(
         domain: Domain,
         ty: Type,
@@ -202,6 +184,11 @@ impl Socket {
     /// non-blocking mode before calling this function), socket option can't be
     /// set *while connecting*. This will cause errors on Windows. Socket
     /// options can be safely set before and after connecting the socket.
+    ///
+    /// On Cygwin, a Unix domain socket connect blocks until the server accepts
+    /// it. If the behavior is not expected, try [`Socket::set_no_peercred`]
+    /// (Cygwin only).
+    #[allow(rustdoc::broken_intra_doc_links)] // Socket::set_no_peercred
     pub fn connect(&self, address: &SockAddr) -> io::Result<()> {
         sys::connect(self.as_raw(), address)
     }
@@ -262,6 +249,13 @@ impl Socket {
     /// This function sets the same flags as in done for [`Socket::new`],
     /// [`Socket::accept_raw`] can be used if you don't want to set those flags.
     #[doc = man_links!(accept(2))]
+    ///
+    /// # Notes
+    ///
+    /// On Cygwin, a Unix domain socket connect blocks until the server accepts
+    /// it. If the behavior is not expected, try [`Socket::set_no_peercred`]
+    /// (Cygwin only).
+    #[allow(rustdoc::broken_intra_doc_links)] // Socket::set_no_peercred
     pub fn accept(&self) -> io::Result<(Socket, SockAddr)> {
         // Use `accept4` on platforms that support it.
         #[cfg(any(
@@ -273,6 +267,7 @@ impl Socket {
             target_os = "linux",
             target_os = "netbsd",
             target_os = "openbsd",
+            target_os = "cygwin",
         ))]
         return self._accept4(libc::SOCK_CLOEXEC);
 
@@ -286,6 +281,7 @@ impl Socket {
             target_os = "linux",
             target_os = "netbsd",
             target_os = "openbsd",
+            target_os = "cygwin",
         )))]
         {
             let (socket, addr) = self.accept_raw()?;
@@ -369,7 +365,6 @@ impl Socket {
     ///
     /// On Windows it is not possible retrieve the nonblocking mode status.
     #[cfg(all(feature = "all", unix))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", unix))))]
     pub fn nonblocking(&self) -> io::Result<bool> {
         sys::nonblocking(self.as_raw())
     }
@@ -471,7 +466,6 @@ impl Socket {
     /// function with `buf`s of type `&mut [IoSliceMut]`, allowing initialised
     /// buffers to be used without using `unsafe`.
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn recv_vectored(
         &self,
         bufs: &mut [MaybeUninitSlice<'_>],
@@ -491,7 +485,6 @@ impl Socket {
     ///
     /// [`recv_vectored`]: Socket::recv_vectored
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn recv_vectored_with_flags(
         &self,
         bufs: &mut [MaybeUninitSlice<'_>],
@@ -557,7 +550,6 @@ impl Socket {
     ///
     /// [`recv_vectored`]: Socket::recv_vectored
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn recv_from_vectored(
         &self,
         bufs: &mut [MaybeUninitSlice<'_>],
@@ -577,7 +569,6 @@ impl Socket {
     ///
     /// [`recv_vectored`]: Socket::recv_vectored
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn recv_from_vectored_with_flags(
         &self,
         bufs: &mut [MaybeUninitSlice<'_>],
@@ -637,7 +628,6 @@ impl Socket {
     /// for an example (in C++).
     #[doc = man_links!(recvmsg(2))]
     #[cfg(all(unix, not(target_os = "redox")))]
-    #[cfg_attr(docsrs, doc(cfg(all(unix, not(target_os = "redox")))))]
     pub fn recvmsg(&self, msg: &mut MsgHdrMut<'_, '_, '_>, flags: sys::c_int) -> io::Result<usize> {
         sys::recvmsg(self.as_raw(), msg, flags)
     }
@@ -663,7 +653,6 @@ impl Socket {
 
     /// Send data to the connected peer. Returns the amount of bytes written.
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn send_vectored(&self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
         self.send_vectored_with_flags(bufs, 0)
     }
@@ -674,7 +663,6 @@ impl Socket {
     ///
     /// [`send_vectored`]: Socket::send_vectored
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn send_vectored_with_flags(
         &self,
         bufs: &[IoSlice<'_>],
@@ -721,7 +709,6 @@ impl Socket {
     /// written.
     #[doc = man_links!(sendmsg(2))]
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn send_to_vectored(&self, bufs: &[IoSlice<'_>], addr: &SockAddr) -> io::Result<usize> {
         self.send_to_vectored_with_flags(bufs, addr, 0)
     }
@@ -731,7 +718,6 @@ impl Socket {
     ///
     /// [`send_to_vectored`]: Socket::send_to_vectored
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn send_to_vectored_with_flags(
         &self,
         bufs: &[IoSlice<'_>],
@@ -744,7 +730,6 @@ impl Socket {
     /// Send a message on a socket using a message structure.
     #[doc = man_links!(sendmsg(2))]
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn sendmsg(&self, msg: &MsgHdr<'_, '_, '_>, flags: sys::c_int) -> io::Result<usize> {
         sys::sendmsg(self.as_raw(), msg, flags)
     }
@@ -760,10 +745,12 @@ const fn set_common_type(ty: Type) -> Type {
         target_os = "dragonfly",
         target_os = "freebsd",
         target_os = "fuchsia",
+        target_os = "hurd",
         target_os = "illumos",
         target_os = "linux",
         target_os = "netbsd",
         target_os = "openbsd",
+        target_os = "cygwin",
     ))]
     let ty = ty._cloexec();
 
@@ -786,12 +773,14 @@ fn set_common_flags(socket: Socket) -> io::Result<Socket> {
             target_os = "dragonfly",
             target_os = "freebsd",
             target_os = "fuchsia",
+            target_os = "hurd",
             target_os = "illumos",
             target_os = "linux",
             target_os = "netbsd",
             target_os = "openbsd",
             target_os = "espidf",
             target_os = "vita",
+            target_os = "cygwin",
         ))
     ))]
     socket._set_cloexec(true)?;
@@ -799,6 +788,7 @@ fn set_common_flags(socket: Socket) -> io::Result<Socket> {
     // On Apple platforms set `NOSIGPIPE`.
     #[cfg(any(
         target_os = "ios",
+        target_os = "visionos",
         target_os = "macos",
         target_os = "tvos",
         target_os = "watchos",
@@ -819,7 +809,7 @@ fn set_common_flags(socket: Socket) -> io::Result<Socket> {
     target_os = "redox",
     target_os = "solaris",
 )))]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum InterfaceIndexOrAddress {
     /// An interface index.
     Index(u32),
@@ -881,7 +871,7 @@ impl Socket {
     pub fn keepalive(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<Bool>(self.as_raw(), sys::SOL_SOCKET, sys::SO_KEEPALIVE)
-                .map(|keepalive| keepalive != 0)
+                .map(|keepalive| keepalive != false as Bool)
         }
     }
 
@@ -936,7 +926,6 @@ impl Socket {
     ///
     /// [`set_out_of_band_inline`]: Socket::set_out_of_band_inline
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn out_of_band_inline(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::SOL_SOCKET, sys::SO_OOBINLINE)
@@ -951,7 +940,6 @@ impl Socket {
     /// `MSG_OOB` flag is set during receiving. As per RFC6093, TCP sockets
     /// using the Urgent mechanism are encouraged to set this flag.
     #[cfg(not(target_os = "redox"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
     pub fn set_out_of_band_inline(&self, oob_inline: bool) -> io::Result<()> {
         unsafe {
             setsockopt(
@@ -959,6 +947,70 @@ impl Socket {
                 sys::SOL_SOCKET,
                 sys::SO_OOBINLINE,
                 oob_inline as c_int,
+            )
+        }
+    }
+
+    /// Get value for the `SO_PASSCRED` option on this socket.
+    ///
+    /// For more information about this option, see [`set_passcred`].
+    ///
+    /// [`set_passcred`]: Socket::set_passcred
+    #[cfg(any(target_os = "linux", target_os = "cygwin"))]
+    pub fn passcred(&self) -> io::Result<bool> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::SOL_SOCKET, sys::SO_PASSCRED)
+                .map(|passcred| passcred != 0)
+        }
+    }
+
+    /// Set value for the `SO_PASSCRED` option on this socket.
+    ///
+    /// If this option is enabled, enables the receiving of the `SCM_CREDENTIALS`
+    /// control messages.
+    #[cfg(any(target_os = "linux", target_os = "cygwin"))]
+    pub fn set_passcred(&self, passcred: bool) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::SOL_SOCKET,
+                sys::SO_PASSCRED,
+                passcred as c_int,
+            )
+        }
+    }
+
+    /// Get value for the `SO_PRIORITY` option on this socket.
+    ///
+    /// For more information about this option, see [`set_priority`].
+    ///
+    /// [`set_priority`]: Socket::set_priority
+    #[cfg(all(
+        feature = "all",
+        any(target_os = "linux", target_os = "android", target_os = "fuchsia")
+    ))]
+    pub fn priority(&self) -> io::Result<u32> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::SOL_SOCKET, sys::SO_PRIORITY)
+                .map(|prio| prio as u32)
+        }
+    }
+
+    /// Set value for the `SO_PRIORITY` option on this socket.
+    ///
+    /// Packets with a higher priority may be processed earlier depending on the selected device
+    /// queueing discipline.
+    #[cfg(all(
+        feature = "all",
+        any(target_os = "linux", target_os = "android", target_os = "fuchsia")
+    ))]
+    pub fn set_priority(&self, priority: u32) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::SOL_SOCKET,
+                sys::SO_PRIORITY,
+                priority as c_int,
             )
         }
     }
@@ -1020,7 +1072,7 @@ impl Socket {
 
     /// Set value for the `SO_REUSEADDR` option on this socket.
     ///
-    /// This indicates that futher calls to `bind` may allow reuse of local
+    /// This indicates that further calls to `bind` may allow reuse of local
     /// addresses. For IPv4 sockets this means that a socket may bind even when
     /// there's a socket already listening on this port.
     pub fn set_reuse_address(&self, reuse: bool) -> io::Result<()> {
@@ -1099,7 +1151,7 @@ const fn into_linger(duration: Option<Duration>) -> sys::linger {
     }
 }
 
-/// Socket options for IPv4 sockets, get/set using `IPPROTO_IP`.
+/// Socket options for IPv4 sockets, get/set using `IPPROTO_IP` or `SOL_IP`.
 ///
 /// Additional documentation can be found in documentation of the OS.
 /// * Linux: <https://man7.org/linux/man-pages/man7/ip.7.html>
@@ -1107,15 +1159,11 @@ const fn into_linger(duration: Option<Duration>) -> sys::linger {
 impl Socket {
     /// Get the value of the `IP_HDRINCL` option on this socket.
     ///
-    /// For more information about this option, see [`set_header_included`].
+    /// For more information about this option, see [`set_header_included_v4`].
     ///
-    /// [`set_header_included`]: Socket::set_header_included
+    /// [`set_header_included_v4`]: Socket::set_header_included_v4
     #[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf")))))
-    )]
-    pub fn header_included(&self) -> io::Result<bool> {
+    pub fn header_included_v4(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_HDRINCL)
                 .map(|included| included != 0)
@@ -1131,18 +1179,14 @@ impl Socket {
     ///
     /// [`SOCK_RAW`]: Type::RAW
     /// [raw(7)]: https://man7.org/linux/man-pages/man7/raw.7.html
-    /// [`IP_TTL`]: Socket::set_ttl
-    /// [`IP_TOS`]: Socket::set_tos
+    /// [`IP_TTL`]: Socket::set_ttl_v4
+    /// [`IP_TOS`]: Socket::set_tos_v4
     #[cfg_attr(
         any(target_os = "fuchsia", target_os = "illumos", target_os = "solaris"),
         allow(rustdoc::broken_intra_doc_links)
     )]
     #[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf")))))
-    )]
-    pub fn set_header_included(&self, included: bool) -> io::Result<()> {
+    pub fn set_header_included_v4(&self, included: bool) -> io::Result<()> {
         unsafe {
             setsockopt(
                 self.as_raw(),
@@ -1155,12 +1199,11 @@ impl Socket {
 
     /// Get the value of the `IP_TRANSPARENT` option on this socket.
     ///
-    /// For more information about this option, see [`set_ip_transparent`].
+    /// For more information about this option, see [`set_ip_transparent_v4`].
     ///
-    /// [`set_ip_transparent`]: Socket::set_ip_transparent
+    /// [`set_ip_transparent_v4`]: Socket::set_ip_transparent_v4
     #[cfg(all(feature = "all", target_os = "linux"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", target_os = "linux"))))]
-    pub fn ip_transparent(&self) -> io::Result<bool> {
+    pub fn ip_transparent_v4(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, libc::IP_TRANSPARENT)
                 .map(|transparent| transparent != 0)
@@ -1183,8 +1226,7 @@ impl Socket {
     /// TProxy redirection with the iptables TPROXY target also
     /// requires that this option be set on the redirected socket.
     #[cfg(all(feature = "all", target_os = "linux"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", target_os = "linux"))))]
-    pub fn set_ip_transparent(&self, transparent: bool) -> io::Result<()> {
+    pub fn set_ip_transparent_v4(&self, transparent: bool) -> io::Result<()> {
         unsafe {
             setsockopt(
                 self.as_raw(),
@@ -1247,6 +1289,7 @@ impl Socket {
         target_os = "nto",
         target_os = "espidf",
         target_os = "vita",
+        target_os = "cygwin",
     )))]
     pub fn join_multicast_v4_n(
         &self,
@@ -1280,6 +1323,7 @@ impl Socket {
         target_os = "nto",
         target_os = "espidf",
         target_os = "vita",
+        target_os = "cygwin",
     )))]
     pub fn leave_multicast_v4_n(
         &self,
@@ -1307,6 +1351,7 @@ impl Socket {
     #[cfg(not(any(
         target_os = "dragonfly",
         target_os = "haiku",
+        target_os = "hurd",
         target_os = "netbsd",
         target_os = "openbsd",
         target_os = "redox",
@@ -1344,6 +1389,7 @@ impl Socket {
     #[cfg(not(any(
         target_os = "dragonfly",
         target_os = "haiku",
+        target_os = "hurd",
         target_os = "netbsd",
         target_os = "openbsd",
         target_os = "redox",
@@ -1369,6 +1415,41 @@ impl Socket {
                 sys::IPPROTO_IP,
                 sys::IP_DROP_SOURCE_MEMBERSHIP,
                 mreqs,
+            )
+        }
+    }
+
+    /// Get the value of the `IP_MULTICAST_ALL` option for this socket.
+    ///
+    /// For more information about this option, see [`set_multicast_all_v4`].
+    ///
+    /// [`set_multicast_all_v4`]: Socket::set_multicast_all_v4
+    #[cfg(all(feature = "all", target_os = "linux"))]
+    pub fn multicast_all_v4(&self) -> io::Result<bool> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, libc::IP_MULTICAST_ALL)
+                .map(|all| all != 0)
+        }
+    }
+
+    /// Set the value of the `IP_MULTICAST_ALL` option for this socket.
+    ///
+    /// This option can be used to modify the delivery policy of
+    /// multicast messages.  The argument is a boolean
+    /// (defaults to true).  If set to true, the socket will receive
+    /// messages from all the groups that have been joined
+    /// globally on the whole system.  Otherwise, it will deliver
+    /// messages only from the groups that have been explicitly
+    /// joined (for example via the `IP_ADD_MEMBERSHIP` option) on
+    /// this particular socket.
+    #[cfg(all(feature = "all", target_os = "linux"))]
+    pub fn set_multicast_all_v4(&self, all: bool) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::IPPROTO_IP,
+                libc::IP_MULTICAST_ALL,
+                all as c_int,
             )
         }
     }
@@ -1458,10 +1539,10 @@ impl Socket {
 
     /// Get the value of the `IP_TTL` option for this socket.
     ///
-    /// For more information about this option, see [`set_ttl`].
+    /// For more information about this option, see [`set_ttl_v4`].
     ///
-    /// [`set_ttl`]: Socket::set_ttl
-    pub fn ttl(&self) -> io::Result<u32> {
+    /// [`set_ttl_v4`]: Socket::set_ttl_v4
+    pub fn ttl_v4(&self) -> io::Result<u32> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_TTL).map(|ttl| ttl as u32)
         }
@@ -1471,7 +1552,7 @@ impl Socket {
     ///
     /// This value sets the time-to-live field that is used in every packet sent
     /// from this socket.
-    pub fn set_ttl(&self, ttl: u32) -> io::Result<()> {
+    pub fn set_ttl_v4(&self, ttl: u32) -> io::Result<()> {
         unsafe { setsockopt(self.as_raw(), sys::IPPROTO_IP, sys::IP_TTL, ttl as c_int) }
     }
 
@@ -1487,26 +1568,28 @@ impl Socket {
         target_os = "redox",
         target_os = "solaris",
         target_os = "illumos",
+        target_os = "haiku",
     )))]
-    pub fn set_tos(&self, tos: u32) -> io::Result<()> {
+    pub fn set_tos_v4(&self, tos: u32) -> io::Result<()> {
         unsafe { setsockopt(self.as_raw(), sys::IPPROTO_IP, sys::IP_TOS, tos as c_int) }
     }
 
     /// Get the value of the `IP_TOS` option for this socket.
     ///
-    /// For more information about this option, see [`set_tos`].
+    /// For more information about this option, see [`set_tos_v4`].
     ///
     /// NOTE: <https://docs.microsoft.com/en-us/windows/win32/winsock/ipproto-ip-socket-options>
     /// documents that not all versions of windows support `IP_TOS`.
     ///
-    /// [`set_tos`]: Socket::set_tos
+    /// [`set_tos_v4`]: Socket::set_tos_v4
     #[cfg(not(any(
         target_os = "fuchsia",
         target_os = "redox",
         target_os = "solaris",
         target_os = "illumos",
+        target_os = "haiku",
     )))]
-    pub fn tos(&self) -> io::Result<u32> {
+    pub fn tos_v4(&self) -> io::Result<u32> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_TOS).map(|tos| tos as u32)
         }
@@ -1521,6 +1604,7 @@ impl Socket {
         target_os = "aix",
         target_os = "dragonfly",
         target_os = "fuchsia",
+        target_os = "hurd",
         target_os = "illumos",
         target_os = "netbsd",
         target_os = "openbsd",
@@ -1530,8 +1614,9 @@ impl Socket {
         target_os = "nto",
         target_os = "espidf",
         target_os = "vita",
+        target_os = "cygwin",
     )))]
-    pub fn set_recv_tos(&self, recv_tos: bool) -> io::Result<()> {
+    pub fn set_recv_tos_v4(&self, recv_tos: bool) -> io::Result<()> {
         unsafe {
             setsockopt(
                 self.as_raw(),
@@ -1544,13 +1629,14 @@ impl Socket {
 
     /// Get the value of the `IP_RECVTOS` option for this socket.
     ///
-    /// For more information about this option, see [`set_recv_tos`].
+    /// For more information about this option, see [`set_recv_tos_v4`].
     ///
-    /// [`set_recv_tos`]: Socket::set_recv_tos
+    /// [`set_recv_tos_v4`]: Socket::set_recv_tos_v4
     #[cfg(not(any(
         target_os = "aix",
         target_os = "dragonfly",
         target_os = "fuchsia",
+        target_os = "hurd",
         target_os = "illumos",
         target_os = "netbsd",
         target_os = "openbsd",
@@ -1560,21 +1646,96 @@ impl Socket {
         target_os = "nto",
         target_os = "espidf",
         target_os = "vita",
+        target_os = "cygwin",
     )))]
-    pub fn recv_tos(&self) -> io::Result<bool> {
+    pub fn recv_tos_v4(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_RECVTOS)
                 .map(|recv_tos| recv_tos > 0)
         }
     }
+
+    /// Get the value for the `SO_ORIGINAL_DST` option on this socket.
+    #[cfg(all(
+        feature = "all",
+        any(
+            target_os = "android",
+            target_os = "fuchsia",
+            target_os = "linux",
+            target_os = "windows",
+        )
+    ))]
+    pub fn original_dst_v4(&self) -> io::Result<SockAddr> {
+        sys::original_dst_v4(self.as_raw())
+    }
 }
 
-/// Socket options for IPv6 sockets, get/set using `IPPROTO_IPV6`.
+/// Socket options for IPv6 sockets, get/set using `IPPROTO_IPV6` or `SOL_IPV6`.
 ///
 /// Additional documentation can be found in documentation of the OS.
 /// * Linux: <https://man7.org/linux/man-pages/man7/ipv6.7.html>
 /// * Windows: <https://docs.microsoft.com/en-us/windows/win32/winsock/ipproto-ipv6-socket-options>
 impl Socket {
+    /// Get the value of the `IP_HDRINCL` option on this socket.
+    ///
+    /// For more information about this option, see [`set_header_included_v6`].
+    ///
+    /// [`set_header_included_v6`]: Socket::set_header_included_v6
+    #[cfg(all(
+        feature = "all",
+        not(any(
+            target_os = "redox",
+            target_os = "espidf",
+            target_os = "openbsd",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "netbsd"
+        ))
+    ))]
+    pub fn header_included_v6(&self) -> io::Result<bool> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IPV6, sys::IP_HDRINCL)
+                .map(|included| included != 0)
+        }
+    }
+
+    /// Set the value of the `IP_HDRINCL` option on this socket.
+    ///
+    /// If enabled, the user supplies an IP header in front of the user data.
+    /// Valid only for [`SOCK_RAW`] sockets; see [raw(7)] for more information.
+    /// When this flag is enabled, the values set by `IP_OPTIONS` are ignored.
+    ///
+    /// [`SOCK_RAW`]: Type::RAW
+    /// [raw(7)]: https://man7.org/linux/man-pages/man7/raw.7.html
+    #[cfg_attr(
+        any(target_os = "fuchsia", target_os = "illumos", target_os = "solaris"),
+        allow(rustdoc::broken_intra_doc_links)
+    )]
+    #[cfg(all(
+        feature = "all",
+        not(any(
+            target_os = "redox",
+            target_os = "espidf",
+            target_os = "openbsd",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "netbsd"
+        ))
+    ))]
+    pub fn set_header_included_v6(&self, included: bool) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::IPPROTO_IPV6,
+                #[cfg(target_os = "linux")]
+                sys::IPV6_HDRINCL,
+                #[cfg(not(target_os = "linux"))]
+                sys::IP_HDRINCL,
+                included as c_int,
+            )
+        }
+    }
+
     /// Join a multicast group using `IPV6_ADD_MEMBERSHIP` option on this socket.
     ///
     /// Some OSs use `IPV6_JOIN_GROUP` for this option.
@@ -1647,6 +1808,41 @@ impl Socket {
                 sys::IPPROTO_IPV6,
                 sys::IPV6_MULTICAST_HOPS,
                 hops as c_int,
+            )
+        }
+    }
+
+    /// Get the value of the `IPV6_MULTICAST_ALL` option for this socket.
+    ///
+    /// For more information about this option, see [`set_multicast_all_v6`].
+    ///
+    /// [`set_multicast_all_v6`]: Socket::set_multicast_all_v6
+    #[cfg(all(feature = "all", target_os = "linux"))]
+    pub fn multicast_all_v6(&self) -> io::Result<bool> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IPV6, libc::IPV6_MULTICAST_ALL)
+                .map(|all| all != 0)
+        }
+    }
+
+    /// Set the value of the `IPV6_MULTICAST_ALL` option for this socket.
+    ///
+    /// This option can be used to modify the delivery policy of
+    /// multicast messages.  The argument is a boolean
+    /// (defaults to true).  If set to true, the socket will receive
+    /// messages from all the groups that have been joined
+    /// globally on the whole system.  Otherwise, it will deliver
+    /// messages only from the groups that have been explicitly
+    /// joined (for example via the `IPV6_ADD_MEMBERSHIP` option) on
+    /// this particular socket.
+    #[cfg(all(feature = "all", target_os = "linux"))]
+    pub fn set_multicast_all_v6(&self, all: bool) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::IPPROTO_IPV6,
+                libc::IPV6_MULTICAST_ALL,
+                all as c_int,
             )
         }
     }
@@ -1775,6 +1971,7 @@ impl Socket {
         target_os = "redox",
         target_os = "solaris",
         target_os = "haiku",
+        target_os = "hurd",
         target_os = "espidf",
         target_os = "vita",
     )))]
@@ -1799,6 +1996,7 @@ impl Socket {
         target_os = "redox",
         target_os = "solaris",
         target_os = "haiku",
+        target_os = "hurd",
         target_os = "espidf",
         target_os = "vita",
     )))]
@@ -1811,6 +2009,78 @@ impl Socket {
                 recv_tclass as c_int,
             )
         }
+    }
+
+    /// Get the value of the `IPV6_RECVHOPLIMIT` option for this socket.
+    ///
+    /// For more information about this option, see [`set_recv_hoplimit_v6`].
+    ///
+    /// [`set_recv_hoplimit_v6`]: Socket::set_recv_hoplimit_v6
+    #[cfg(all(
+        feature = "all",
+        not(any(
+            windows,
+            target_os = "dragonfly",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "redox",
+            target_os = "solaris",
+            target_os = "haiku",
+            target_os = "hurd",
+            target_os = "espidf",
+            target_os = "vita",
+            target_os = "cygwin",
+        ))
+    ))]
+    pub fn recv_hoplimit_v6(&self) -> io::Result<bool> {
+        unsafe {
+            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IPV6, sys::IPV6_RECVHOPLIMIT)
+                .map(|recv_hoplimit| recv_hoplimit > 0)
+        }
+    }
+    /// Set the value of the `IPV6_RECVHOPLIMIT` option for this socket.
+    ///
+    /// The received hop limit is returned as ancillary data by recvmsg()
+    /// only if the application has enabled the IPV6_RECVHOPLIMIT socket
+    /// option:
+    #[cfg(all(
+        feature = "all",
+        not(any(
+            windows,
+            target_os = "dragonfly",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "redox",
+            target_os = "solaris",
+            target_os = "haiku",
+            target_os = "hurd",
+            target_os = "espidf",
+            target_os = "vita",
+            target_os = "cygwin",
+        ))
+    ))]
+    pub fn set_recv_hoplimit_v6(&self, recv_hoplimit: bool) -> io::Result<()> {
+        unsafe {
+            setsockopt(
+                self.as_raw(),
+                sys::IPPROTO_IPV6,
+                sys::IPV6_RECVHOPLIMIT,
+                recv_hoplimit as c_int,
+            )
+        }
+    }
+
+    /// Get the value for the `IP6T_SO_ORIGINAL_DST` option on this socket.
+    #[cfg(all(
+        feature = "all",
+        any(target_os = "android", target_os = "linux", target_os = "windows")
+    ))]
+    pub fn original_dst_v6(&self) -> io::Result<SockAddr> {
+        sys::original_dst_v6(self.as_raw())
     }
 }
 
@@ -1833,20 +2103,8 @@ impl Socket {
             target_os = "vita"
         ))
     ))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(
-            feature = "all",
-            not(any(
-                windows,
-                target_os = "haiku",
-                target_os = "openbsd",
-                target_os = "vita"
-            ))
-        )))
-    )]
-    pub fn keepalive_time(&self) -> io::Result<Duration> {
-        sys::keepalive_time(self.as_raw())
+    pub fn tcp_keepalive_time(&self) -> io::Result<Duration> {
+        sys::tcp_keepalive_time(self.as_raw())
     }
 
     /// Get the value of the `TCP_KEEPINTVL` option on this socket.
@@ -1863,33 +2121,16 @@ impl Socket {
             target_os = "fuchsia",
             target_os = "illumos",
             target_os = "ios",
+            target_os = "visionos",
             target_os = "linux",
             target_os = "macos",
             target_os = "netbsd",
             target_os = "tvos",
             target_os = "watchos",
+            target_os = "cygwin",
         )
     ))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(
-            feature = "all",
-            any(
-                target_os = "android",
-                target_os = "dragonfly",
-                target_os = "freebsd",
-                target_os = "fuchsia",
-                target_os = "illumos",
-                target_os = "ios",
-                target_os = "linux",
-                target_os = "macos",
-                target_os = "netbsd",
-                target_os = "tvos",
-                target_os = "watchos",
-            )
-        )))
-    )]
-    pub fn keepalive_interval(&self) -> io::Result<Duration> {
+    pub fn tcp_keepalive_interval(&self) -> io::Result<Duration> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_TCP, sys::TCP_KEEPINTVL)
                 .map(|secs| Duration::from_secs(secs as u64))
@@ -1910,33 +2151,17 @@ impl Socket {
             target_os = "fuchsia",
             target_os = "illumos",
             target_os = "ios",
+            target_os = "visionos",
             target_os = "linux",
             target_os = "macos",
             target_os = "netbsd",
             target_os = "tvos",
             target_os = "watchos",
+            target_os = "cygwin",
+            target_os = "windows",
         )
     ))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(
-            feature = "all",
-            any(
-                target_os = "android",
-                target_os = "dragonfly",
-                target_os = "freebsd",
-                target_os = "fuchsia",
-                target_os = "illumos",
-                target_os = "ios",
-                target_os = "linux",
-                target_os = "macos",
-                target_os = "netbsd",
-                target_os = "tvos",
-                target_os = "watchos",
-            )
-        )))
-    )]
-    pub fn keepalive_retries(&self) -> io::Result<u32> {
+    pub fn tcp_keepalive_retries(&self) -> io::Result<u32> {
         unsafe {
             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_TCP, sys::TCP_KEEPCNT)
                 .map(|retries| retries as u32)
@@ -1988,13 +2213,13 @@ impl Socket {
 
     /// Get the value of the `TCP_NODELAY` option on this socket.
     ///
-    /// For more information about this option, see [`set_nodelay`].
+    /// For more information about this option, see [`set_tcp_nodelay`].
     ///
-    /// [`set_nodelay`]: Socket::set_nodelay
-    pub fn nodelay(&self) -> io::Result<bool> {
+    /// [`set_tcp_nodelay`]: Socket::set_tcp_nodelay
+    pub fn tcp_nodelay(&self) -> io::Result<bool> {
         unsafe {
             getsockopt::<Bool>(self.as_raw(), sys::IPPROTO_TCP, sys::TCP_NODELAY)
-                .map(|nodelay| nodelay != 0)
+                .map(|nodelay| nodelay != false as Bool)
         }
     }
 
@@ -2005,7 +2230,7 @@ impl Socket {
     /// small amount of data. When not set, data is buffered until there is a
     /// sufficient amount to send out, thereby avoiding the frequent sending of
     /// small packets.
-    pub fn set_nodelay(&self, nodelay: bool) -> io::Result<()> {
+    pub fn set_tcp_nodelay(&self, nodelay: bool) -> io::Result<()> {
         unsafe {
             setsockopt(
                 self.as_raw(),
@@ -2028,7 +2253,7 @@ impl Read for Socket {
     #[cfg(not(target_os = "redox"))]
     fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
         // Safety: both `IoSliceMut` and `MaybeUninitSlice` promise to have the
-        // same layout, that of `iovec`/`WSABUF`. Furthermore `recv_vectored`
+        // same layout, that of `iovec`/`WSABUF`. Furthermore, `recv_vectored`
         // promises to not write unitialised bytes to the `bufs` and pass it
         // directly to the `recvmsg` system call, so this is safe.
         let bufs = unsafe { &mut *(bufs as *mut [IoSliceMut<'_>] as *mut [MaybeUninitSlice<'_>]) };

@@ -3,16 +3,18 @@ use std::fmt;
 use std::time::Duration;
 
 use http::{request::Parts, Request as HttpRequest, Version};
+#[cfg(any(feature = "query", feature = "form", feature = "json"))]
 use serde::Serialize;
 #[cfg(feature = "json")]
 use serde_json;
-use serde_urlencoded;
 
 use super::body::{self, Body};
 #[cfg(feature = "multipart")]
 use super::multipart;
 use super::Client;
-use crate::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
+#[cfg(any(feature = "multipart", feature = "form", feature = "json"))]
+use crate::header::CONTENT_TYPE;
+use crate::header::{HeaderMap, HeaderName, HeaderValue};
 use crate::{async_impl, Method, Url};
 
 /// A request which can be executed with `Client::execute()`.
@@ -128,6 +130,7 @@ impl Request {
             None
         };
         let mut req = Request::new(self.method().clone(), self.url().clone());
+        *req.timeout_mut() = self.timeout().copied();
         *req.headers_mut() = self.headers().clone();
         *req.version_mut() = self.version().clone();
         req.body = body;
@@ -167,12 +170,20 @@ impl RequestBuilder {
         }
     }
 
+    /// Assemble a builder starting from an existing `Client` and a `Request`.
+    pub fn from_parts(client: Client, request: Request) -> RequestBuilder {
+        RequestBuilder {
+            client,
+            request: crate::Result::Ok(request),
+        }
+    }
+
     /// Add a `Header` to this Request.
     ///
     /// ```rust
     /// use reqwest::header::USER_AGENT;
     ///
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let res = client.get("https://www.rust-lang.org")
     ///     .header(USER_AGENT, "foo")
@@ -203,7 +214,12 @@ impl RequestBuilder {
             match <HeaderName as TryFrom<K>>::try_from(key) {
                 Ok(key) => match <HeaderValue as TryFrom<V>>::try_from(value) {
                     Ok(mut value) => {
-                        value.set_sensitive(sensitive);
+                        // We want to potentially make an unsensitive header
+                        // to be sensitive, not the reverse. So, don't turn off
+                        // a previously sensitive header.
+                        if sensitive {
+                            value.set_sensitive(true);
+                        }
                         req.headers_mut().append(key, value);
                     }
                     Err(e) => error = Some(crate::error::builder(e.into())),
@@ -232,7 +248,7 @@ impl RequestBuilder {
     ///     headers
     /// }
     ///
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let file = fs::File::open("much_beauty.png")?;
     /// let client = reqwest::blocking::Client::new();
     /// let res = client.post("http://httpbin.org/post")
@@ -252,7 +268,7 @@ impl RequestBuilder {
     /// Enable HTTP basic authentication.
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let resp = client.delete("http://httpbin.org/delete")
     ///     .basic_auth("admin", Some("good password"))
@@ -272,7 +288,7 @@ impl RequestBuilder {
     /// Enable HTTP bearer authentication.
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let resp = client.delete("http://httpbin.org/delete")
     ///     .bearer_auth("token")
@@ -284,7 +300,7 @@ impl RequestBuilder {
     where
         T: fmt::Display,
     {
-        let header_value = format!("Bearer {}", token);
+        let header_value = format!("Bearer {token}");
         self.header_sensitive(crate::header::AUTHORIZATION, &*header_value, true)
     }
 
@@ -295,7 +311,7 @@ impl RequestBuilder {
     /// Using a string:
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let res = client.post("http://httpbin.org/post")
     ///     .body("from a &str!")
@@ -307,7 +323,7 @@ impl RequestBuilder {
     /// Using a `File`:
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let file = std::fs::File::open("from_a_file.txt")?;
     /// let client = reqwest::blocking::Client::new();
     /// let res = client.post("http://httpbin.org/post")
@@ -321,7 +337,7 @@ impl RequestBuilder {
     ///
     /// ```rust
     /// # use std::fs;
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// // from bytes!
     /// let bytes: Vec<u8> = vec![1, 10, 100];
     /// let client = reqwest::blocking::Client::new();
@@ -377,9 +393,15 @@ impl RequestBuilder {
     /// as `.query(&[("key", "val")])`. It's also possible to serialize structs
     /// and maps into a key-value pair.
     ///
+    /// # Optional
+    ///
+    /// This requires the optional `query` feature to be enabled.
+    ///
     /// # Errors
     /// This method will fail if the object you provide cannot be serialized
     /// into a query string.
+    #[cfg(feature = "query")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "query")))]
     pub fn query<T: Serialize + ?Sized>(mut self, query: &T) -> RequestBuilder {
         let mut error = None;
         if let Ok(ref mut req) = self.request {
@@ -432,19 +454,26 @@ impl RequestBuilder {
     /// # }
     /// ```
     ///
+    /// # Optional
+    ///
+    /// This requires the optional `form` feature to be enabled.
+    ///
     /// # Errors
     ///
     /// This method fails if the passed value cannot be serialized into
     /// url encoded format
+    #[cfg(feature = "form")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
     pub fn form<T: Serialize + ?Sized>(mut self, form: &T) -> RequestBuilder {
         let mut error = None;
         if let Ok(ref mut req) = self.request {
             match serde_urlencoded::to_string(form) {
                 Ok(body) => {
-                    req.headers_mut().insert(
-                        CONTENT_TYPE,
-                        HeaderValue::from_static("application/x-www-form-urlencoded"),
-                    );
+                    req.headers_mut()
+                        .entry(CONTENT_TYPE)
+                        .or_insert(HeaderValue::from_static(
+                            "application/x-www-form-urlencoded",
+                        ));
                     *req.body_mut() = Some(body.into());
                 }
                 Err(err) => error = Some(crate::error::builder(err)),
@@ -514,7 +543,7 @@ impl RequestBuilder {
     /// ```
     /// # use reqwest::Error;
     ///
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let form = reqwest::blocking::multipart::Form::new()
     ///     .text("key3", "value3")
@@ -550,6 +579,15 @@ impl RequestBuilder {
         self.request
     }
 
+    /// Build a `Request`, which can be inspected, modified and executed with
+    /// `Client::execute()`.
+    ///
+    /// This is similar to [`RequestBuilder::build()`], but also returns the
+    /// embedded `Client`.
+    pub fn build_split(self) -> (Client, crate::Result<Request>) {
+        (self.client, self.request)
+    }
+
     /// Constructs the Request and sends it the target URL, returning a Response.
     ///
     /// # Errors
@@ -570,7 +608,7 @@ impl RequestBuilder {
     /// With a static body
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let builder = client.post("http://httpbin.org/post")
     ///     .body("from a &str!");
@@ -583,7 +621,7 @@ impl RequestBuilder {
     /// Without a body
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let builder = client.get("http://httpbin.org/get");
     /// let clone = builder.try_clone();
@@ -592,10 +630,10 @@ impl RequestBuilder {
     /// # }
     /// ```
     ///
-    /// With a non-clonable body
+    /// With a non-cloneable body
     ///
     /// ```rust
-    /// # fn run() -> Result<(), Box<std::error::Error>> {
+    /// # fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = reqwest::blocking::Client::new();
     /// let builder = client.get("http://httpbin.org/get")
     ///     .body(reqwest::blocking::Body::new(std::io::empty()));
@@ -657,16 +695,12 @@ fn fmt_request_fields<'a, 'b>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{body, Client};
-    use super::{HttpRequest, Request, Version};
-    use crate::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE, HOST};
-    use crate::Method;
-    use serde::Serialize;
-    #[cfg(feature = "json")]
-    use serde_json;
-    use serde_urlencoded;
-    use std::collections::{BTreeMap, HashMap};
-    use std::convert::TryFrom;
+    use super::*;
+    use crate::header::{ACCEPT, HOST};
+    #[cfg(feature = "query")]
+    use std::collections::BTreeMap;
+    #[cfg(feature = "form")]
+    use std::collections::HashMap;
 
     #[test]
     fn basic_get_request() {
@@ -801,6 +835,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "query")]
     fn add_query_append() {
         let client = Client::new();
         let some_url = "https://google.com/";
@@ -814,6 +849,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "query")]
     fn add_query_append_same() {
         let client = Client::new();
         let some_url = "https://google.com/";
@@ -826,6 +862,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "query")]
     fn add_query_struct() {
         #[derive(Serialize)]
         struct Params {
@@ -849,6 +886,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "query")]
     fn add_query_map() {
         let mut params = BTreeMap::new();
         params.insert("foo", "bar");
@@ -865,6 +903,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "form")]
     fn add_form() {
         let client = Client::new();
         let some_url = "https://google.com/";
@@ -959,6 +998,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "query")]
     fn normalize_empty_query() {
         let client = Client::new();
         let some_url = "https://google.com/";
@@ -1059,5 +1099,17 @@ mod tests {
         assert_eq!(req.url().as_str(), "https://localhost/");
         assert_eq!(req.headers()["authorization"], "Bearer Hold my bear");
         assert_eq!(req.headers()["authorization"].is_sensitive(), true);
+    }
+
+    #[test]
+    fn test_request_cloning() {
+        let mut request = Request::new(Method::GET, "https://example.com".try_into().unwrap());
+        *request.timeout_mut() = Some(Duration::from_secs(42));
+        *request.version_mut() = Version::HTTP_11;
+
+        let clone = request.try_clone().unwrap();
+        assert_eq!(request.version(), clone.version());
+        assert_eq!(request.headers(), clone.headers());
+        assert_eq!(request.timeout(), clone.timeout());
     }
 }

@@ -14,7 +14,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub type UsbDevice;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = usbVersionMajor)]
@@ -25,7 +25,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn usb_version_major(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = usbVersionMinor)]
@@ -36,7 +36,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn usb_version_minor(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = usbVersionSubminor)]
@@ -47,7 +47,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn usb_version_subminor(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceClass)]
@@ -58,7 +58,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_class(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceSubclass)]
@@ -69,7 +69,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_subclass(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceProtocol)]
@@ -80,7 +80,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_protocol(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = vendorId)]
@@ -91,7 +91,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn vendor_id(this: &UsbDevice) -> u16;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = productId)]
@@ -102,7 +102,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn product_id(this: &UsbDevice) -> u16;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceVersionMajor)]
@@ -113,7 +113,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_version_major(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceVersionMinor)]
@@ -124,7 +124,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_version_minor(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = deviceVersionSubminor)]
@@ -135,7 +135,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn device_version_subminor(this: &UsbDevice) -> u8;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = manufacturerName)]
@@ -146,8 +146,8 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn manufacturer_name(this: &UsbDevice) -> Option<String>;
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn manufacturer_name(this: &UsbDevice) -> Option<::alloc::string::String>;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = productName)]
     #[doc = "Getter for the `productName` field of this object."]
@@ -157,8 +157,8 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn product_name(this: &UsbDevice) -> Option<String>;
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn product_name(this: &UsbDevice) -> Option<::alloc::string::String>;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = serialNumber)]
     #[doc = "Getter for the `serialNumber` field of this object."]
@@ -168,8 +168,8 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn serial_number(this: &UsbDevice) -> Option<String>;
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn serial_number(this: &UsbDevice) -> Option<::alloc::string::String>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "UsbConfiguration")]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = configuration)]
@@ -180,7 +180,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbConfiguration`, `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn configuration(this: &UsbDevice) -> Option<UsbConfiguration>;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = configurations)]
@@ -191,7 +191,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn configurations(this: &UsbDevice) -> ::js_sys::Array;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "USBDevice" , js_name = opened)]
@@ -202,7 +202,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn opened(this: &UsbDevice) -> bool;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = claimInterface)]
@@ -213,7 +213,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn claim_interface(this: &UsbDevice, interface_number: u8) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "UsbDirection")]
@@ -225,7 +225,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`, `UsbDirection`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn clear_halt(
         this: &UsbDevice,
         direction: UsbDirection,
@@ -240,7 +240,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn close(this: &UsbDevice) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "UsbControlTransferParameters")]
@@ -252,7 +252,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbControlTransferParameters`, `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn control_transfer_in(
         this: &UsbDevice,
         setup: &UsbControlTransferParameters,
@@ -268,14 +268,14 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbControlTransferParameters`, `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn control_transfer_out(
         this: &UsbDevice,
         setup: &UsbControlTransferParameters,
     ) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "UsbControlTransferParameters")]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = controlTransferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = controlTransferOut)]
     #[doc = "The `controlTransferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/controlTransferOut)"]
@@ -283,15 +283,15 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbControlTransferParameters`, `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn control_transfer_out_with_buffer_source(
         this: &UsbDevice,
         setup: &UsbControlTransferParameters,
         data: &::js_sys::Object,
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "UsbControlTransferParameters")]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = controlTransferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = controlTransferOut)]
     #[doc = "The `controlTransferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/controlTransferOut)"]
@@ -299,12 +299,39 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbControlTransferParameters`, `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn control_transfer_out_with_u8_array(
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn control_transfer_out_with_u8_slice(
         this: &UsbDevice,
         setup: &UsbControlTransferParameters,
         data: &mut [u8],
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    #[cfg(feature = "UsbControlTransferParameters")]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = controlTransferOut)]
+    #[doc = "The `controlTransferOut()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/controlTransferOut)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `UsbControlTransferParameters`, `UsbDevice`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn control_transfer_out_with_u8_array(
+        this: &UsbDevice,
+        setup: &UsbControlTransferParameters,
+        data: &::js_sys::Uint8Array,
+    ) -> Result<::js_sys::Promise, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = forget)]
+    #[doc = "The `forget()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/forget)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn forget(this: &UsbDevice) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = isochronousTransferIn)]
     #[doc = "The `isochronousTransferIn()` method."]
@@ -314,14 +341,14 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn isochronous_transfer_in(
         this: &UsbDevice,
         endpoint_number: u8,
         packet_lengths: &::wasm_bindgen::JsValue,
     ) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = isochronousTransferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = isochronousTransferOut)]
     #[doc = "The `isochronousTransferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/isochronousTransferOut)"]
@@ -329,15 +356,15 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn isochronous_transfer_out_with_buffer_source(
         this: &UsbDevice,
         endpoint_number: u8,
         data: &::js_sys::Object,
         packet_lengths: &::wasm_bindgen::JsValue,
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = isochronousTransferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = isochronousTransferOut)]
     #[doc = "The `isochronousTransferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/isochronousTransferOut)"]
@@ -345,13 +372,29 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn isochronous_transfer_out_with_u8_array(
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn isochronous_transfer_out_with_u8_slice(
         this: &UsbDevice,
         endpoint_number: u8,
         data: &mut [u8],
         packet_lengths: &::wasm_bindgen::JsValue,
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = isochronousTransferOut)]
+    #[doc = "The `isochronousTransferOut()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/isochronousTransferOut)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn isochronous_transfer_out_with_u8_array(
+        this: &UsbDevice,
+        endpoint_number: u8,
+        data: &::js_sys::Uint8Array,
+        packet_lengths: &::wasm_bindgen::JsValue,
+    ) -> Result<::js_sys::Promise, JsValue>;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = open)]
     #[doc = "The `open()` method."]
@@ -361,7 +404,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn open(this: &UsbDevice) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = releaseInterface)]
@@ -372,7 +415,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn release_interface(this: &UsbDevice, interface_number: u8) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = reset)]
@@ -383,7 +426,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn reset(this: &UsbDevice) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = selectAlternateInterface)]
@@ -394,7 +437,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn select_alternate_interface(
         this: &UsbDevice,
         interface_number: u8,
@@ -409,7 +452,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn select_configuration(this: &UsbDevice, configuration_value: u8) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = transferIn)]
@@ -420,10 +463,10 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn transfer_in(this: &UsbDevice, endpoint_number: u8, length: u32) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = transferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = transferOut)]
     #[doc = "The `transferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/transferOut)"]
@@ -431,14 +474,14 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn transfer_out_with_buffer_source(
         this: &UsbDevice,
         endpoint_number: u8,
         data: &::js_sys::Object,
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "USBDevice" , js_name = transferOut)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = transferOut)]
     #[doc = "The `transferOut()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/transferOut)"]
@@ -446,10 +489,25 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn transfer_out_with_u8_array(
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn transfer_out_with_u8_slice(
         this: &UsbDevice,
         endpoint_number: u8,
         data: &mut [u8],
-    ) -> ::js_sys::Promise;
+    ) -> Result<::js_sys::Promise, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (catch , method , structural , js_class = "USBDevice" , js_name = transferOut)]
+    #[doc = "The `transferOut()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/USBDevice/transferOut)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `UsbDevice`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn transfer_out_with_u8_array(
+        this: &UsbDevice,
+        endpoint_number: u8,
+        data: &::js_sys::Uint8Array,
+    ) -> Result<::js_sys::Promise, JsValue>;
 }

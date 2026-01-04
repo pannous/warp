@@ -10,16 +10,23 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
-edition = "2018"
+edition = "2021"
+rust-version = "1.63"
 name = "hyper"
-version = "0.14.28"
+version = "1.8.1"
 authors = ["Sean McArthur <sean@seanmonstar.com>"]
+build = false
 include = [
     "Cargo.toml",
     "LICENSE",
     "src/**/*",
 ]
-description = "A fast and correct HTTP library."
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+description = "A protective and efficient HTTP library for all."
 homepage = "https://hyper.rs"
 documentation = "https://docs.rs/hyper"
 readme = "README.md"
@@ -40,221 +47,168 @@ repository = "https://github.com/hyperium/hyper"
 features = [
     "ffi",
     "full",
+    "tracing",
 ]
 rustdoc-args = [
     "--cfg",
-    "docsrs",
-    "--cfg",
     "hyper_unstable_ffi",
+    "--cfg",
+    "hyper_unstable_tracing",
 ]
 
 [package.metadata.playground]
 features = ["full"]
 
-[profile.bench]
-codegen-units = 1
-incremental = false
+[package.metadata.capi.header]
+generation = false
+subdirectory = false
 
-[profile.release]
-codegen-units = 1
-incremental = false
+[[package.metadata.capi.install.include.asset]]
+from = "capi/include/hyper.h"
 
-[[example]]
-name = "client"
-path = "examples/client.rs"
-required-features = ["full"]
-
-[[example]]
-name = "client_json"
-path = "examples/client_json.rs"
-required-features = ["full"]
-
-[[example]]
-name = "echo"
-path = "examples/echo.rs"
-required-features = ["full"]
-
-[[example]]
-name = "gateway"
-path = "examples/gateway.rs"
-required-features = ["full"]
-
-[[example]]
-name = "hello"
-path = "examples/hello.rs"
-required-features = ["full"]
-
-[[example]]
-name = "http_proxy"
-path = "examples/http_proxy.rs"
-required-features = ["full"]
-
-[[example]]
-name = "multi_server"
-path = "examples/multi_server.rs"
-required-features = ["full"]
-
-[[example]]
-name = "params"
-path = "examples/params.rs"
-required-features = ["full"]
-
-[[example]]
-name = "send_file"
-path = "examples/send_file.rs"
-required-features = ["full"]
-
-[[example]]
-name = "service_struct_impl"
-path = "examples/service_struct_impl.rs"
-required-features = ["full"]
-
-[[example]]
-name = "single_threaded"
-path = "examples/single_threaded.rs"
-required-features = ["full"]
-
-[[example]]
-name = "state"
-path = "examples/state.rs"
-required-features = ["full"]
-
-[[example]]
-name = "tower_client"
-path = "examples/tower_client.rs"
-required-features = [
-    "full",
-    "backports",
+[features]
+capi = []
+client = [
+    "dep:want",
+    "dep:pin-project-lite",
+    "dep:smallvec",
 ]
+default = []
+ffi = [
+    "dep:http-body-util",
+    "dep:futures-util",
+]
+full = [
+    "client",
+    "http1",
+    "http2",
+    "server",
+]
+http1 = [
+    "dep:atomic-waker",
+    "dep:futures-channel",
+    "dep:futures-core",
+    "dep:httparse",
+    "dep:itoa",
+    "dep:pin-utils",
+]
+http2 = [
+    "dep:futures-channel",
+    "dep:futures-core",
+    "dep:h2",
+]
+nightly = []
+server = [
+    "dep:httpdate",
+    "dep:pin-project-lite",
+    "dep:smallvec",
+]
+tracing = ["dep:tracing"]
 
-[[example]]
-name = "tower_server"
-path = "examples/tower_server.rs"
-required-features = ["full"]
+[lib]
+name = "hyper"
+path = "src/lib.rs"
 
-[[example]]
-name = "upgrades"
-path = "examples/upgrades.rs"
-required-features = ["full"]
-
-[[example]]
-name = "web_api"
-path = "examples/web_api.rs"
-required-features = ["full"]
-
-[[test]]
-name = "client"
-path = "tests/client.rs"
-required-features = ["full"]
-
-[[test]]
-name = "integration"
-path = "tests/integration.rs"
-required-features = ["full"]
-
-[[test]]
-name = "server"
-path = "tests/server.rs"
-required-features = ["full"]
-
-[[bench]]
-name = "body"
-path = "benches/body.rs"
-required-features = ["full"]
-
-[[bench]]
-name = "connect"
-path = "benches/connect.rs"
-required-features = ["full"]
-
-[[bench]]
-name = "end_to_end"
-path = "benches/end_to_end.rs"
-required-features = ["full"]
-
-[[bench]]
-name = "pipeline"
-path = "benches/pipeline.rs"
-required-features = ["full"]
-
-[[bench]]
-name = "server"
-path = "benches/server.rs"
-required-features = ["full"]
+[dependencies.atomic-waker]
+version = "1.1.2"
+optional = true
 
 [dependencies.bytes]
-version = "1"
+version = "1.2"
 
 [dependencies.futures-channel]
 version = "0.3"
+optional = true
 
 [dependencies.futures-core]
-version = "0.3"
-default-features = false
+version = "0.3.31"
+optional = true
 
 [dependencies.futures-util]
 version = "0.3"
+features = ["alloc"]
+optional = true
 default-features = false
 
 [dependencies.h2]
-version = "0.3.17"
+version = "0.4.2"
 optional = true
 
 [dependencies.http]
-version = "0.2"
+version = "1"
 
 [dependencies.http-body]
-version = "0.4"
+version = "1"
+
+[dependencies.http-body-util]
+version = "0.1"
+optional = true
 
 [dependencies.httparse]
-version = "1.8"
+version = "1.9"
+optional = true
 
 [dependencies.httpdate]
 version = "1.0"
+optional = true
 
 [dependencies.itoa]
 version = "1"
-
-[dependencies.libc]
-version = "0.2"
 optional = true
 
 [dependencies.pin-project-lite]
 version = "0.2.4"
+optional = true
 
-[dependencies.socket2]
-version = ">=0.4.7, <0.6.0"
-features = ["all"]
+[dependencies.pin-utils]
+version = "0.1"
+optional = true
+
+[dependencies.smallvec]
+version = "1.12"
+features = [
+    "const_generics",
+    "const_new",
+]
 optional = true
 
 [dependencies.tokio]
 version = "1"
 features = ["sync"]
 
-[dependencies.tower-service]
-version = "0.3"
-
 [dependencies.tracing]
 version = "0.1"
 features = ["std"]
+optional = true
 default-features = false
 
 [dependencies.want]
 version = "0.3"
+optional = true
+
+[dev-dependencies.form_urlencoded]
+version = "1"
+
+[dev-dependencies.futures-channel]
+version = "0.3"
+features = ["sink"]
 
 [dev-dependencies.futures-util]
 version = "0.3"
-features = ["alloc"]
+features = [
+    "alloc",
+    "sink",
+]
 default-features = false
 
-[dev-dependencies.matches]
+[dev-dependencies.http-body-util]
 version = "0.1"
 
-[dev-dependencies.num_cpus]
-version = "1.0"
+[dev-dependencies.pin-project-lite]
+version = "0.2.4"
 
 [dev-dependencies.pretty_env_logger]
-version = "0.4"
+version = "0.5"
 
 [dev-dependencies.serde]
 version = "1.0"
@@ -271,6 +225,7 @@ version = "1"
 features = [
     "fs",
     "macros",
+    "net",
     "io-std",
     "io-util",
     "rt",
@@ -284,51 +239,20 @@ features = [
 version = "0.4"
 
 [dev-dependencies.tokio-util]
-version = "0.7"
-features = ["codec"]
+version = "0.7.10"
 
-[dev-dependencies.tower]
-version = "0.4"
-features = [
-    "make",
-    "util",
-]
-default-features = false
-
-[dev-dependencies.url]
-version = "2.2"
-
-[features]
-__internal_happy_eyeballs_tests = []
-backports = []
-client = []
-default = []
-deprecated = []
-ffi = ["libc"]
-full = [
-    "client",
-    "http1",
-    "http2",
-    "server",
-    "stream",
-    "runtime",
-]
-http1 = []
-http2 = ["h2"]
-nightly = []
-runtime = [
-    "tcp",
-    "tokio/rt",
-    "tokio/time",
-]
-server = []
-stream = []
-tcp = [
-    "socket2",
-    "tokio/net",
-    "tokio/rt",
-    "tokio/time",
+[lints.rust.unexpected_cfgs]
+level = "warn"
+priority = 0
+check-cfg = [
+    "cfg(hyper_unstable_tracing)",
+    "cfg(hyper_unstable_ffi)",
 ]
 
-[target."cfg(any(target_os = \"linux\", target_os = \"macos\"))".dev-dependencies.pnet_datalink]
-version = "0.27.2"
+[profile.bench]
+codegen-units = 1
+incremental = false
+
+[profile.release]
+codegen-units = 1
+incremental = false

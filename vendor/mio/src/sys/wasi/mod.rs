@@ -124,7 +124,7 @@ impl Selector {
         })
     }
 
-    #[cfg(feature = "net")]
+    cfg_io_source! {
     pub(crate) fn register(
         &self,
         fd: wasi::Fd,
@@ -166,7 +166,6 @@ impl Selector {
         Ok(())
     }
 
-    #[cfg(feature = "net")]
     pub(crate) fn reregister(
         &self,
         fd: wasi::Fd,
@@ -177,7 +176,6 @@ impl Selector {
             .and_then(|()| self.register(fd, token, interests))
     }
 
-    #[cfg(feature = "net")]
     pub(crate) fn deregister(&self, fd: wasi::Fd) -> io::Result<()> {
         let mut subscriptions = self.subscriptions.lock().unwrap();
 
@@ -204,10 +202,11 @@ impl Selector {
 
         ret
     }
+    }
 }
 
 /// Token used to a add a timeout subscription, also used in removing it again.
-const TIMEOUT_TOKEN: wasi::Userdata = wasi::Userdata::max_value();
+const TIMEOUT_TOKEN: wasi::Userdata = wasi::Userdata::MAX;
 
 /// Returns a `wasi::Subscription` for `timeout`.
 fn timeout_subscription(timeout: Duration) -> wasi::Subscription {
@@ -334,7 +333,7 @@ pub(crate) mod event {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.debug_struct("EventFdReadwrite")
                     .field("nbytes", &self.0.nbytes)
-                    .field("flags", &self.0.flags)
+                    .field("flags", &EventrwflagsDetails(self.0.flags))
                     .finish()
             }
         }

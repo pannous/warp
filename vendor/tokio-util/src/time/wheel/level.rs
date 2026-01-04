@@ -39,86 +39,10 @@ const LEVEL_MULT: usize = 64;
 
 impl<T: Stack> Level<T> {
     pub(crate) fn new(level: usize) -> Level<T> {
-        // Rust's derived implementations for arrays require that the value
-        // contained by the array be `Copy`. So, here we have to manually
-        // initialize every single slot.
-        macro_rules! s {
-            () => {
-                T::default()
-            };
-        }
-
         Level {
             level,
             occupied: 0,
-            slot: [
-                // It does not look like the necessary traits are
-                // derived for [T; 64].
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-                s!(),
-            ],
+            slot: std::array::from_fn(|_| T::default()),
         }
     }
 
@@ -127,10 +51,7 @@ impl<T: Stack> Level<T> {
     pub(crate) fn next_expiration(&self, now: u64) -> Option<Expiration> {
         // Use the `occupied` bit field to get the index of the next slot that
         // needs to be processed.
-        let slot = match self.next_occupied_slot(now) {
-            Some(slot) => slot,
-            None => return None,
-        };
+        let slot = self.next_occupied_slot(now)?;
 
         // From the slot index, calculate the `Instant` at which it needs to be
         // processed. This value *must* be in the future with respect to `now`.
@@ -270,7 +191,7 @@ mod test {
         for level in 1..5 {
             for pos in level..64 {
                 let a = pos * 64_usize.pow(level as u32);
-                assert_eq!(pos as usize, slot_for(a as u64, level));
+                assert_eq!(pos, slot_for(a as u64, level));
             }
         }
     }

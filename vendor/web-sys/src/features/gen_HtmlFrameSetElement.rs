@@ -18,7 +18,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/cols)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
-    pub fn cols(this: &HtmlFrameSetElement) -> String;
+    pub fn cols(this: &HtmlFrameSetElement) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , setter , js_class = "HTMLFrameSetElement" , js_name = cols)]
     #[doc = "Setter for the `cols` field of this object."]
     #[doc = ""]
@@ -32,7 +32,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/rows)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
-    pub fn rows(this: &HtmlFrameSetElement) -> String;
+    pub fn rows(this: &HtmlFrameSetElement) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , setter , js_class = "HTMLFrameSetElement" , js_name = rows)]
     #[doc = "Setter for the `rows` field of this object."]
     #[doc = ""]
@@ -236,4 +236,51 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
     pub fn set_onunload(this: &HtmlFrameSetElement, value: Option<&::js_sys::Function>);
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , getter , js_class = "HTMLFrameSetElement" , js_name = ongamepadconnected)]
+    #[doc = "Getter for the `ongamepadconnected` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/ongamepadconnected)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn ongamepadconnected(this: &HtmlFrameSetElement) -> Option<::js_sys::Function>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , setter , js_class = "HTMLFrameSetElement" , js_name = ongamepadconnected)]
+    #[doc = "Setter for the `ongamepadconnected` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/ongamepadconnected)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn set_ongamepadconnected(this: &HtmlFrameSetElement, value: Option<&::js_sys::Function>);
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , getter , js_class = "HTMLFrameSetElement" , js_name = ongamepaddisconnected)]
+    #[doc = "Getter for the `ongamepaddisconnected` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/ongamepaddisconnected)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn ongamepaddisconnected(this: &HtmlFrameSetElement) -> Option<::js_sys::Function>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , setter , js_class = "HTMLFrameSetElement" , js_name = ongamepaddisconnected)]
+    #[doc = "Setter for the `ongamepaddisconnected` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLFrameSetElement/ongamepaddisconnected)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `HtmlFrameSetElement`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn set_ongamepaddisconnected(
+        this: &HtmlFrameSetElement,
+        value: Option<&::js_sys::Function>,
+    );
 }

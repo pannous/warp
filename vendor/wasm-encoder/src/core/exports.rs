@@ -1,10 +1,11 @@
 use super::{
     CORE_FUNCTION_SORT, CORE_GLOBAL_SORT, CORE_MEMORY_SORT, CORE_TABLE_SORT, CORE_TAG_SORT,
 };
-use crate::{encode_section, Encode, Section, SectionId};
+use crate::{Encode, Section, SectionId, encode_section};
+use alloc::vec::Vec;
 
 /// Represents the kind of an export from a WebAssembly module.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum ExportKind {
     /// The export is a function.
@@ -22,19 +23,6 @@ pub enum ExportKind {
 impl Encode for ExportKind {
     fn encode(&self, sink: &mut Vec<u8>) {
         sink.push(*self as u8);
-    }
-}
-
-#[cfg(feature = "wasmparser")]
-impl From<wasmparser::ExternalKind> for ExportKind {
-    fn from(external_kind: wasmparser::ExternalKind) -> Self {
-        match external_kind {
-            wasmparser::ExternalKind::Func => ExportKind::Func,
-            wasmparser::ExternalKind::Table => ExportKind::Table,
-            wasmparser::ExternalKind::Memory => ExportKind::Memory,
-            wasmparser::ExternalKind::Global => ExportKind::Global,
-            wasmparser::ExternalKind::Tag => ExportKind::Tag,
-        }
     }
 }
 

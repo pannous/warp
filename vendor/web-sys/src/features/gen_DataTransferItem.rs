@@ -18,14 +18,14 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem/kind)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `DataTransferItem`*"]
-    pub fn kind(this: &DataTransferItem) -> String;
+    pub fn kind(this: &DataTransferItem) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "DataTransferItem" , js_name = type)]
     #[doc = "Getter for the `type` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem/type)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `DataTransferItem`*"]
-    pub fn type_(this: &DataTransferItem) -> String;
+    pub fn type_(this: &DataTransferItem) -> ::alloc::string::String;
     #[cfg(feature = "File")]
     # [wasm_bindgen (catch , method , structural , js_class = "DataTransferItem" , js_name = getAsFile)]
     #[doc = "The `getAsFile()` method."]
@@ -34,6 +34,17 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `DataTransferItem`, `File`*"]
     pub fn get_as_file(this: &DataTransferItem) -> Result<Option<File>, JsValue>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (method , structural , js_class = "DataTransferItem" , js_name = getAsFileSystemHandle)]
+    #[doc = "The `getAsFileSystemHandle()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/DataTransferItem/getAsFileSystemHandle)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `DataTransferItem`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn get_as_file_system_handle(this: &DataTransferItem) -> ::js_sys::Promise;
     # [wasm_bindgen (catch , method , structural , js_class = "DataTransferItem" , js_name = getAsString)]
     #[doc = "The `getAsString()` method."]
     #[doc = ""]
