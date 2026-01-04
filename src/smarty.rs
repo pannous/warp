@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::String;
-use crate::node::Node;
+use crate::node::{int, float, text, Node};
 use crate::node::Node::{Empty, Error, True, False};
 use crate::wasp_parser::parse;
 //
@@ -82,7 +82,7 @@ pub unsafe fn str32(ptr: u32, len: u32) -> &'static str {
 }
 
 pub unsafe fn string56(pointer: u64) -> Node {
-	Node::Text(str56(pointer).to_string())
+	text(str56(pointer))
 }
 
 pub fn char24(data32: u32) -> Node {
@@ -122,7 +122,7 @@ pub fn float28(data28: u32) -> Node {
 	let left = data28 << 1 & 0xFF00000;
 	let right = data28 & 0x00FFFFF;
 	let f = f32::from_bits(left | right);
-	Node::Number(Number::Float(f as f64))
+	float(f as f64)
 }
 
 pub fn float_data28(f: f32) -> u32 {
@@ -150,10 +150,10 @@ pub fn smarty32(smart: u32) -> Node {
 	let data28 = smart & 0x0FFFFFFF;
 	if smart == 0 { return Empty; } // null pointer or 0 we neither know nor care?
 	match header4 {
-		0x0 => Node::Number(Number::Int(data28 as i64)), // positive int, just reinterpret!
-		0xF => Node::Number(Number::Int(smart as i32 as i64)), // negative int juat all bits
+		0x0 => int(data28 as i64), // positive int, just reinterpret!
+		0xF => int(smart as i32 as i64), // negative int juat all bits
 		0x2 => float28(data28),
-		0x3 => Node::Number(Number::Float(f32::from_bits(smart) as f64)), // which ones??
+		0x3 => float(f32::from_bits(smart) as f64), // which ones??
 		0x1 => unsafe { string56(data24 as u64) },
 		0xC => char24(data24),
 		0xD => unsafe { parse(str32(data24, 3)) },
@@ -173,9 +173,9 @@ pub fn smarty(smart: u64) -> Node {
 	let data32 = (smart & 0x00000000FFFFFFFF) as u32;
 	let data56 = smart & 0x00FFFFFFFFFFFFFF; // small header + 56 bits data
 	match header8 {
-		0x00 => Node::Number(Number::Int(data56 as i64)), // positive int, just reinterpret!
-		0xFF => Node::Number(Number::Int(smart as i64)),  // negative int juat all bits
-		0x7F => Node::Number(Number::Float(f64::from_bits(smart))), // double just all bits!
+		0x00 => int(data56 as i64), // positive int, just reinterpret!
+		0xFF => int(smart as i64),  // negative int juat all bits
+		0x7F => float(f64::from_bits(smart)), // double just all bits!
 		0x01 => unsafe { string56(data56) },
 		0x10 => unsafe { string56(data56) },
 		0xC0 => char24(data32),

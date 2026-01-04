@@ -1,8 +1,4 @@
-use wasp::extensions::numbers::Number;
-use wasp::Node;
-use wasp::Node::Symbol;
-use wasp::Op;
-use wasp::{Bracket, Separator};
+use wasp::{float, int, symbol, text, Bracket, Node, Op, Separator};
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::{eq, write_wasm};
 use wasp::Node::Empty;
@@ -17,7 +13,7 @@ fn test_ergonomic_node_reading() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Number(Number::Int(42));
+	let node = int(42);
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
@@ -52,7 +48,7 @@ fn test_read_text_node() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Text("hello".to_string());
+	let node = text("hello");
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
@@ -64,9 +60,9 @@ fn test_read_text_node() {
 	eq!(kind, 2); // NodeKind::Text
 
 	// Read text from linear memory
-	let text = root.text().expect("Failed to read text");
-	println!("  Text: '{}'", text);
-	eq!(text, "hello");
+	let txt = root.text().expect("Failed to read text");
+	println!("  Text: '{}'", txt);
+	eq!(txt, "hello");
 
 	println!("\n✓ Text reading from linear memory works!");
 }
@@ -79,7 +75,7 @@ fn test_read_symbol_node() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Symbol("my_var".to_string());
+	let node = symbol("my_var");
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
@@ -88,9 +84,9 @@ fn test_read_symbol_node() {
 	let kind = root.kind().expect("Failed to get kind");
 	eq!(kind, 4); // NodeKind::Symbol
 
-	let text = root.text().expect("Failed to read symbol");
-	println!("  Symbol: '{}'", text);
-	eq!(text, "my_var");
+	let txt = root.text().expect("Failed to read symbol");
+	println!("  Symbol: '{}'", txt);
+	eq!(txt, "my_var");
 
 	println!("\n✓ Symbol reading works!");
 }
@@ -105,7 +101,7 @@ fn test_ergonomic_pattern() {
 	emitter.emit();
 
 	let node = Node::Key(
-		Box::new(Symbol("html".to_string())),
+		Box::new(symbol("html")),
 		Op::Colon,
 		Box::new(Node::List(
 			vec![
@@ -152,7 +148,7 @@ fn test_field_existence() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Number(Number::Int(123));
+	let node = int(123);
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
@@ -222,7 +218,7 @@ fn test_float_node() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Number(Number::Float(1.23));
+	let node = float(1.23);
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
