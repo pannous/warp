@@ -9,9 +9,9 @@ fn test_simple_xml_tag() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", Text("Hello"))
-	if let Node::Key(name, value) = node.unwrap_meta() {
+	if let Node::Key(name, value) = node.drop_meta() {
 		eq!(name, "div");
-		eq!(**value, Node::Text("Hello".to_string()));
+		eq!(**value, Node::Text("Hello".to_string())); // **unbox de&reference &Box<Node>
 	} else {
 		panic!("Expected Key node");
 	}
@@ -24,7 +24,7 @@ fn test_xml_with_attributes() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", List([Key(".class", "container"), Key(".id", "main"), Text("Content")]))
-	if let Node::Key(name, value) = node.unwrap_meta() {
+	if let Node::Key(name, value) = node.drop_meta() {
 		eq!(name, "div");
 		if let Node::List(items, _, _) = value.as_ref() {
 			eq!(items.len(), 3);
@@ -48,7 +48,7 @@ fn test_self_closing_tag() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("br", Empty)
-	if let Node::Key(name, value) = node.unwrap_meta() {
+	if let Node::Key(name, value) = node.drop_meta() {
 		eq!(name, "br");
 		eq!(**value, Node::Empty);
 	} else {
@@ -63,16 +63,16 @@ fn test_nested_xml() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", List([Key("p", ...), Key("span", ...)]))
-	if let Node::Key(name, value) = node.unwrap_meta() {
+	if let Node::Key(name, value) = node.drop_meta() {
 		eq!(name, "div");
 		if let Node::List(items, _, _) = value.as_ref() {
 			eq!(items.len(), 2);
 			// Check first child
-			if let Node::Key(child_name, _) = items[0].unwrap_meta() {
+			if let Node::Key(child_name, _) = items[0].drop_meta() {
 				eq!(child_name, "p");
 			}
 			// Check second child
-			if let Node::Key(child_name, _) = items[1].unwrap_meta() {
+			if let Node::Key(child_name, _) = items[1].drop_meta() {
 				eq!(child_name, "span");
 			}
 		} else {
@@ -127,7 +127,7 @@ fn test_boolean_attribute() {
 	println!("Parsed: {:?}", node);
 
 	// Should have .checked: true
-	if let Node::Key(name, value) = node.unwrap_meta() {
+	if let Node::Key(name, value) = node.drop_meta() {
 		eq!(name, "input");
 		if let Node::List(items, _, _) = value.as_ref() {
 			// Find the checked attribute
@@ -168,7 +168,7 @@ fn test_complex_xml_document() {
 	println!("Complex XML parsed successfully");
 
 	// Verify basic structure
-	if let Node::Key(name, _) = node.unwrap_meta() {
+	if let Node::Key(name, _) = node.drop_meta() {
 		eq!(name, "html");
 	} else {
 		panic!("Expected html root");
