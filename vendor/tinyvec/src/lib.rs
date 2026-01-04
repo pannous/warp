@@ -4,10 +4,20 @@
   feature = "nightly_slice_partition_dedup",
   feature(slice_partition_dedup)
 )]
-#![cfg_attr(docs_rs, feature(doc_cfg))]
+#![cfg_attr(
+  feature = "debugger_visualizer",
+  feature(debugger_visualizer),
+  debugger_visualizer(natvis_file = "../debug_metadata/tinyvec.natvis")
+)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(clippy::missing_inline_in_public_items)]
 #![warn(clippy::must_use_candidate)]
 #![warn(missing_docs)]
+#![allow(clippy::borrow_deref_ref)]
+#![allow(unused_imports)]
+#![allow(unused_mut)]
+#![allow(clippy::write_with_newline)]
+#![allow(clippy::needless_return)]
 
 //! `tinyvec` provides 100% safe vec-like data structures.
 //!
@@ -36,11 +46,12 @@
 //! ## Other Features
 //! * `grab_spare_slice` lets you get access to the "inactive" portions of an
 //!   ArrayVec.
-//! * `rustc_1_40` makes the crate assume a minimum rust version of `1.40.0`,
-//!   which allows some better internal optimizations.
 //! * `serde` provides a `Serialize` and `Deserialize` implementation for
 //!   [`TinyVec`] and [`ArrayVec`] types, provided the inner item also has an
 //!   implementation.
+//! * `borsh` provides a `BorshSerialize` and `BorshDeserialize` implementation
+//!   for [`TinyVec`] and [`ArrayVec`] types, provided the inner item also has
+//!   an implementation.
 //!
 //! ## API
 //! The general goal of the crate is that, as much as possible, the vecs here
@@ -52,15 +63,6 @@
 //! The vecs here also have a few additional methods that aren't on the `Vec`
 //! type. In this case, the names tend to be fairly long so that they are
 //! unlikely to clash with any future methods added to `Vec`.
-//!
-//! ## Stability
-//! * The `1.0` series of the crate works with Rustc `1.34.0` or later, though
-//!   you still need to have Rustc `1.36.0` to use the `alloc` feature.
-//! * The `2.0` version of the crate is planned for some time after the
-//!   `min_const_generics` stuff becomes stable. This would greatly raise the
-//!   minimum rust version and also allow us to totally eliminate the need for
-//!   the `Array` trait. The actual usage of the crate is not expected to break
-//!   significantly in this transition.
 
 #[allow(unused_imports)]
 use core::{
@@ -99,9 +101,3 @@ pub use slicevec::*;
 mod tinyvec;
 #[cfg(feature = "alloc")]
 pub use crate::tinyvec::*;
-
-// TODO MSRV(1.40.0): Just call the normal `core::mem::take`
-#[inline(always)]
-fn take<T: Default>(from: &mut T) -> T {
-  replace(from, T::default())
-}

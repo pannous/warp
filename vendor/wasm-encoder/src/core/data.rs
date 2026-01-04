@@ -1,4 +1,5 @@
-use crate::{encode_section, encoding_size, ConstExpr, Encode, Section, SectionId};
+use crate::{ConstExpr, Encode, Section, SectionId, encode_section, encoding_size};
+use alloc::vec::Vec;
 
 /// An encoder for the data section.
 ///
@@ -18,6 +19,7 @@ use crate::{encode_section, encoding_size, ConstExpr, Encode, Section, SectionId
 ///     maximum: None,
 ///     memory64: false,
 ///     shared: false,
+///     page_size_log2: None,
 /// });
 ///
 /// let mut data = DataSection::new();

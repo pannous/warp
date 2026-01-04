@@ -1,6 +1,7 @@
-use std::borrow::Cow;
-
-use crate::{encoding_size, CustomSection, Encode, Section, SectionId};
+use crate::{CustomSection, Encode, Section, SectionId, encoding_size};
+use alloc::borrow::Cow;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// An encoder for the custom `name` section.
 ///
@@ -154,6 +155,14 @@ impl NameSection {
         names.encode(&mut self.bytes);
     }
 
+    /// Appends a subsection for the names of all tags in this wasm module.
+    ///
+    /// This section should come after the data name subsection (if present).
+    pub fn tag(&mut self, names: &NameMap) {
+        self.subsection_header(Subsection::Tag, names.size());
+        names.encode(&mut self.bytes);
+    }
+
     /// Appends a subsection for the names of fields within types in this
     /// wasm module.
     ///
@@ -170,6 +179,12 @@ impl NameSection {
     pub fn tags(&mut self, names: &NameMap) {
         self.subsection_header(Subsection::Tag, names.size());
         names.encode(&mut self.bytes);
+    }
+
+    /// Appends a raw subsection with the given id and data.
+    pub fn raw(&mut self, id: u8, data: &[u8]) {
+        self.bytes.push(id);
+        data.encode(&mut self.bytes);
     }
 
     fn subsection_header(&mut self, id: Subsection, len: usize) {

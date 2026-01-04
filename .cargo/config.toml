@@ -1,18 +1,5 @@
-[net]
-offline = true
+[source.crates-io]
+replace-with = "vendored-sources"
 
-[build]
-# Maximum incremental compilation
-incremental = true
-# Parallel jobs (default uses all cores, 8 is explicit)
-jobs = 8
-# Let CARGO_TARGET_DIR env var control target dir (default: /opt/cargo for shared cache)
-# Timeout protection for tests - prevents infinite loops from hanging CI/development
-# Uses gtimeout on macOS (brew install coreutils) or timeout on Linux
-
-#[target.aarch64-apple-darwin]
-# Smart timeout: 0.1s enable with FAST_TIMEOUT (or use default / disable with NO_TIMEOUT=1 or DEBUG=1)
-#runner = [".cargo/timeout-runner.sh"]
-
-# Note: Use 'cargo test --no-fail-fast' to run all tests
-#test = ["test", "--no-fail-fast"] forbidden?
+[source.vendored-sources]
+directory = "vendor"

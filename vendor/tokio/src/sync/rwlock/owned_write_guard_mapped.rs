@@ -68,7 +68,7 @@ impl<T: ?Sized, U: ?Sized> OwnedRwLockMappedWriteGuard<T, U> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -119,7 +119,7 @@ impl<T: ?Sized, U: ?Sized> OwnedRwLockMappedWriteGuard<T, U> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -154,6 +154,31 @@ impl<T: ?Sized, U: ?Sized> OwnedRwLockMappedWriteGuard<T, U> {
             #[cfg(all(tokio_unstable, feature = "tracing"))]
             resource_span: this.resource_span,
         })
+    }
+
+    /// Returns a reference to the original `Arc<RwLock>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use tokio::sync::{
+    ///     RwLock,
+    ///     OwnedRwLockWriteGuard,
+    ///     OwnedRwLockMappedWriteGuard,
+    /// };
+    ///
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    /// let lock = Arc::new(RwLock::new(1));
+    ///
+    /// let guard = lock.clone().write_owned().await;
+    /// let guard = OwnedRwLockWriteGuard::map(guard, |x| x);
+    /// assert!(Arc::ptr_eq(&lock, OwnedRwLockMappedWriteGuard::rwlock(&guard)));
+    /// # }
+    /// ```
+    pub fn rwlock(this: &Self) -> &Arc<RwLock<T>> {
+        &this.lock
     }
 }
 

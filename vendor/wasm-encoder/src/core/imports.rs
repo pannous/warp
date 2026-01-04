@@ -1,7 +1,9 @@
 use crate::{
-    encode_section, Encode, GlobalType, MemoryType, Section, SectionId, TableType, TagType,
-    CORE_FUNCTION_SORT, CORE_GLOBAL_SORT, CORE_MEMORY_SORT, CORE_TABLE_SORT, CORE_TAG_SORT,
+    CORE_FUNCTION_EXACT_SORT, CORE_FUNCTION_SORT, CORE_GLOBAL_SORT, CORE_MEMORY_SORT,
+    CORE_TABLE_SORT, CORE_TAG_SORT, Encode, GlobalType, MemoryType, Section, SectionId, TableType,
+    TagType, encode_section,
 };
+use alloc::vec::Vec;
 
 /// The type of an entity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,14 +22,22 @@ pub enum EntityType {
     ///
     /// This variant is used with the exception handling proposal.
     Tag(TagType),
+    /// A function exact type.
+    ///
+    /// The value is an index into the types section.
+    FunctionExact(u32),
 }
 
 impl Encode for EntityType {
     fn encode(&self, sink: &mut Vec<u8>) {
         match self {
-            Self::Function(i) => {
+            Self::Function(f) => {
                 sink.push(CORE_FUNCTION_SORT);
-                i.encode(sink);
+                f.encode(sink);
+            }
+            Self::FunctionExact(f) => {
+                sink.push(CORE_FUNCTION_EXACT_SORT);
+                f.encode(sink);
             }
             Self::Table(t) => {
                 sink.push(CORE_TABLE_SORT);
@@ -73,20 +83,6 @@ impl From<TagType> for EntityType {
     }
 }
 
-#[cfg(feature = "wasmparser")]
-impl TryFrom<wasmparser::TypeRef> for EntityType {
-    type Error = ();
-    fn try_from(type_ref: wasmparser::TypeRef) -> Result<Self, Self::Error> {
-        Ok(match type_ref {
-            wasmparser::TypeRef::Func(i) => EntityType::Function(i),
-            wasmparser::TypeRef::Table(t) => EntityType::Table(t.try_into()?),
-            wasmparser::TypeRef::Memory(m) => EntityType::Memory(m.into()),
-            wasmparser::TypeRef::Global(g) => EntityType::Global(g.try_into()?),
-            wasmparser::TypeRef::Tag(t) => EntityType::Tag(t.into()),
-        })
-    }
-}
-
 /// An encoder for the import section of WebAssembly modules.
 ///
 /// # Example
@@ -103,6 +99,7 @@ impl TryFrom<wasmparser::TypeRef> for EntityType {
 ///         maximum: None,
 ///         memory64: false,
 ///         shared: false,
+///         page_size_log2: None,
 ///     }
 /// );
 ///

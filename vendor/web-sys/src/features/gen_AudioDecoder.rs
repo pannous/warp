@@ -14,7 +14,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub type AudioDecoder;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "CodecState")]
@@ -26,7 +26,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`, `CodecState`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn state(this: &AudioDecoder) -> CodecState;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (structural , method , getter , js_class = "AudioDecoder" , js_name = decodeQueueSize)]
@@ -37,7 +37,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn decode_queue_size(this: &AudioDecoder) -> u32;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "AudioDecoderInit")]
@@ -49,10 +49,10 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`, `AudioDecoderInit`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new(init: &AudioDecoderInit) -> Result<AudioDecoder, JsValue>;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "AudioDecoder" , js_name = close)]
+    # [wasm_bindgen (catch , method , structural , js_class = "AudioDecoder" , js_name = close)]
     #[doc = "The `close()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/close)"]
@@ -60,11 +60,11 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn close(this: &AudioDecoder);
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn close(this: &AudioDecoder) -> Result<(), JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "AudioDecoderConfig")]
-    # [wasm_bindgen (method , structural , js_class = "AudioDecoder" , js_name = configure)]
+    # [wasm_bindgen (catch , method , structural , js_class = "AudioDecoder" , js_name = configure)]
     #[doc = "The `configure()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/configure)"]
@@ -72,11 +72,11 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`, `AudioDecoderConfig`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn configure(this: &AudioDecoder, config: &AudioDecoderConfig);
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn configure(this: &AudioDecoder, config: &AudioDecoderConfig) -> Result<(), JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "EncodedAudioChunk")]
-    # [wasm_bindgen (method , structural , js_class = "AudioDecoder" , js_name = decode)]
+    # [wasm_bindgen (catch , method , structural , js_class = "AudioDecoder" , js_name = decode)]
     #[doc = "The `decode()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/decode)"]
@@ -84,8 +84,8 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`, `EncodedAudioChunk`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn decode(this: &AudioDecoder, chunk: &EncodedAudioChunk);
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn decode(this: &AudioDecoder, chunk: &EncodedAudioChunk) -> Result<(), JsValue>;
     #[cfg(web_sys_unstable_apis)]
     # [wasm_bindgen (method , structural , js_class = "AudioDecoder" , js_name = flush)]
     #[doc = "The `flush()` method."]
@@ -95,22 +95,22 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn flush(this: &AudioDecoder) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "AudioDecoderConfig")]
     # [wasm_bindgen (static_method_of = AudioDecoder , js_class = "AudioDecoder" , js_name = isConfigSupported)]
     #[doc = "The `isConfigSupported()` method."]
     #[doc = ""]
-    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/isConfigSupported)"]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/isConfigSupported_static)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`, `AudioDecoderConfig`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn is_config_supported(config: &AudioDecoderConfig) -> ::js_sys::Promise;
     #[cfg(web_sys_unstable_apis)]
-    # [wasm_bindgen (method , structural , js_class = "AudioDecoder" , js_name = reset)]
+    # [wasm_bindgen (catch , method , structural , js_class = "AudioDecoder" , js_name = reset)]
     #[doc = "The `reset()` method."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder/reset)"]
@@ -118,6 +118,6 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `AudioDecoder`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn reset(this: &AudioDecoder);
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn reset(this: &AudioDecoder) -> Result<(), JsValue>;
 }

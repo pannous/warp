@@ -17,13 +17,15 @@
         core_intrinsics,
         dropck_eyepatch,
         min_specialization,
+        trivial_clone,
         extend_one,
         allocator_api,
         slice_ptr_get,
         maybe_uninit_array_assume_init,
-        strict_provenance
+        strict_provenance_lints
     )
 )]
+#![cfg_attr(feature = "rustc-dep-of-std", feature(rustc_attrs))]
 #![allow(
     clippy::doc_markdown,
     clippy::module_name_repetitions,
@@ -37,51 +39,52 @@
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 #![cfg_attr(feature = "nightly", warn(fuzzy_provenance_casts))]
+#![cfg_attr(
+    feature = "nightly",
+    allow(clippy::incompatible_msrv, internal_features)
+)]
+#![cfg_attr(
+    all(feature = "nightly", target_arch = "loongarch64"),
+    feature(stdarch_loongarch)
+)]
+#![cfg_attr(
+    all(feature = "nightly", feature = "default-hasher"),
+    feature(hasher_prefixfree_extras)
+)]
 
 #[cfg(test)]
 #[macro_use]
 extern crate std;
 
 #[cfg_attr(test, macro_use)]
+#[cfg_attr(feature = "rustc-dep-of-std", allow(unused_extern_crates))]
 extern crate alloc;
 
-#[cfg(feature = "nightly")]
+#[doc = include_str!("../README.md")]
 #[cfg(doctest)]
-doc_comment::doctest!("../README.md");
+pub struct ReadmeDoctests;
 
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "raw")]
-/// Experimental and unsafe `RawTable` API. This module is only available if the
-/// `raw` feature is enabled.
-pub mod raw {
-    // The RawTable API is still experimental and is not properly documented yet.
-    #[allow(missing_docs)]
-    #[path = "mod.rs"]
-    mod inner;
-    pub use inner::*;
-
-    #[cfg(feature = "rayon")]
-    /// [rayon]-based parallel iterator types for hash maps.
-    /// You will rarely need to interact with it directly unless you have need
-    /// to name one of the iterator types.
-    ///
-    /// [rayon]: https://docs.rs/rayon/1.0/rayon
-    pub mod rayon {
-        pub use crate::external_trait_impls::rayon::raw::*;
-    }
-}
-#[cfg(not(feature = "raw"))]
+mod control;
+mod hasher;
 mod raw;
+mod util;
 
 mod external_trait_impls;
 mod map;
+#[cfg(feature = "raw-entry")]
+mod raw_entry;
 #[cfg(feature = "rustc-internal-api")]
 mod rustc_entry;
 mod scopeguard;
 mod set;
 mod table;
+
+pub use crate::hasher::DefaultHashBuilder;
+#[cfg(feature = "default-hasher")]
+pub use crate::hasher::DefaultHasher;
 
 pub mod hash_map {
     //! A hash map implemented with quadratic probing and SIMD lookup.

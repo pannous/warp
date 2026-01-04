@@ -23,9 +23,10 @@ use crate::loom::sync::Mutex;
 use crate::runtime::driver::{self, IoHandle, IoStack};
 use crate::time::error::Error;
 use crate::time::{Clock, Duration};
+use crate::util::WakeList;
 
 use std::fmt;
-use std::{num::NonZeroU64, ptr::NonNull, task::Waker};
+use std::{num::NonZeroU64, ptr::NonNull};
 
 /// Time implementation that drives [`Sleep`][sleep], [`Interval`][interval], and [`Timeout`][timeout].
 ///
@@ -91,10 +92,10 @@ pub(crate) struct Driver {
 /// Timer state shared between `Driver`, `Handle`, and `Registration`.
 struct Inner {
     // The state is split like this so `Handle` can access `is_shutdown` without locking the mutex
-    pub(super) state: Mutex<InnerState>,
+    state: Mutex<InnerState>,
 
     /// True if the driver is being shutdown.
-    pub(super) is_shutdown: AtomicBool,
+    is_shutdown: AtomicBool,
 
     // When `true`, a call to `park_timeout` should immediately return and time
     // should not advance. One reason for this to be `true` is if the task
@@ -170,7 +171,7 @@ impl Driver {
 
     fn park_internal(&mut self, rt_handle: &driver::Handle, limit: Option<Duration>) {
         let handle = rt_handle.time();
-        let mut lock = handle.inner.state.lock();
+        let mut lock = handle.inner.lock();
 
         assert!(!handle.is_shutdown());
 
@@ -245,7 +246,6 @@ impl Driver {
 }
 
 impl Handle {
-    /// Runs timer related logic, and returns the next wakeup time
     pub(self) fn process(&self, clock: &Clock) {
         let now = self.time_source().now(clock);
 
@@ -253,8 +253,7 @@ impl Handle {
     }
 
     pub(self) fn process_at_time(&self, mut now: u64) {
-        let mut waker_list: [Option<Waker>; 32] = Default::default();
-        let mut waker_idx = 0;
+        let mut waker_list = WakeList::new();
 
         let mut lock = self.inner.lock();
 
@@ -273,19 +272,13 @@ impl Handle {
 
             // SAFETY: We hold the driver lock, and just removed the entry from any linked lists.
             if let Some(waker) = unsafe { entry.fire(Ok(())) } {
-                waker_list[waker_idx] = Some(waker);
+                waker_list.push(waker);
 
-                waker_idx += 1;
-
-                if waker_idx == waker_list.len() {
+                if !waker_list.can_push() {
                     // Wake a batch of wakers. To avoid deadlock, we must do this with the lock temporarily dropped.
                     drop(lock);
 
-                    for waker in waker_list.iter_mut() {
-                        waker.take().unwrap().wake();
-                    }
-
-                    waker_idx = 0;
+                    waker_list.wake_all();
 
                     lock = self.inner.lock();
                 }
@@ -299,9 +292,7 @@ impl Handle {
 
         drop(lock);
 
-        for waker in &mut waker_list[0..waker_idx] {
-            waker.take().unwrap().wake();
-        }
+        waker_list.wake_all();
     }
 
     /// Removes a registered timer from the driver.

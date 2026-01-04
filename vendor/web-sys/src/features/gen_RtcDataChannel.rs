@@ -18,7 +18,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/label)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `RtcDataChannel`*"]
-    pub fn label(this: &RtcDataChannel) -> String;
+    pub fn label(this: &RtcDataChannel) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "RTCDataChannel" , js_name = id)]
     #[doc = "Getter for the `id` field of this object."]
     #[doc = ""]
@@ -211,4 +211,14 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `RtcDataChannel`*"]
     pub fn send_with_u8_array(this: &RtcDataChannel, data: &[u8]) -> Result<(), JsValue>;
+    # [wasm_bindgen (catch , method , structural , js_class = "RTCDataChannel" , js_name = send)]
+    #[doc = "The `send()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/send)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `RtcDataChannel`*"]
+    pub fn send_with_js_u8_array(
+        this: &RtcDataChannel,
+        data: &::js_sys::Uint8Array,
+    ) -> Result<(), JsValue>;
 }

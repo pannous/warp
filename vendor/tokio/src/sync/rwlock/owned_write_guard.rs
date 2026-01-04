@@ -69,7 +69,7 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -121,7 +121,7 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -193,7 +193,7 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -255,7 +255,7 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     /// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// struct Foo(u32);
     ///
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(Foo(1)));
     ///
@@ -337,7 +337,7 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     /// # use tokio::sync::RwLock;
     /// # use std::sync::Arc;
     /// #
-    /// # #[tokio::main]
+    /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// let lock = Arc::new(RwLock::new(1));
     ///
@@ -389,6 +389,26 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
         });
 
         guard
+    }
+
+    /// Returns a reference to the original `Arc<RwLock>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use tokio::sync::{RwLock, OwnedRwLockWriteGuard};
+    ///
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    /// let lock = Arc::new(RwLock::new(1));
+    ///
+    /// let guard = lock.clone().write_owned().await;
+    /// assert!(Arc::ptr_eq(&lock, OwnedRwLockWriteGuard::rwlock(&guard)));
+    /// # }
+    /// ```
+    pub fn rwlock(this: &Self) -> &Arc<RwLock<T>> {
+        &this.lock
     }
 }
 

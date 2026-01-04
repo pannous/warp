@@ -1,5 +1,4 @@
-use super::core::IndexMapCore;
-use super::{Bucket, Entries, IndexMap, Slice};
+use super::{Bucket, ExtractCore, IndexMap, IndexMapCore, Slice};
 
 use alloc::vec::{self, Vec};
 use core::fmt;
@@ -156,10 +155,72 @@ impl<K, V> Default for IterMut<'_, K, V> {
     }
 }
 
+/// A mutable iterator over the entries of an [`IndexMap`].
+///
+/// This `struct` is created by the [`MutableKeys::iter_mut2`][super::MutableKeys::iter_mut2] method.
+/// See its documentation for more.
+pub struct IterMut2<'a, K, V> {
+    iter: slice::IterMut<'a, Bucket<K, V>>,
+}
+
+impl<'a, K, V> IterMut2<'a, K, V> {
+    pub(super) fn new(entries: &'a mut [Bucket<K, V>]) -> Self {
+        Self {
+            iter: entries.iter_mut(),
+        }
+    }
+
+    /// Returns a slice of the remaining entries in the iterator.
+    pub fn as_slice(&self) -> &Slice<K, V> {
+        Slice::from_slice(self.iter.as_slice())
+    }
+
+    /// Returns a mutable slice of the remaining entries in the iterator.
+    ///
+    /// To avoid creating `&mut` references that alias, this is forced to consume the iterator.
+    pub fn into_slice(self) -> &'a mut Slice<K, V> {
+        Slice::from_mut_slice(self.iter.into_slice())
+    }
+}
+
+impl<'a, K, V> Iterator for IterMut2<'a, K, V> {
+    type Item = (&'a mut K, &'a mut V);
+
+    iterator_methods!(Bucket::muts);
+}
+
+impl<K, V> DoubleEndedIterator for IterMut2<'_, K, V> {
+    double_ended_iterator_methods!(Bucket::muts);
+}
+
+impl<K, V> ExactSizeIterator for IterMut2<'_, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<K, V> FusedIterator for IterMut2<'_, K, V> {}
+
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for IterMut2<'_, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let iter = self.iter.as_slice().iter().map(Bucket::refs);
+        f.debug_list().entries(iter).finish()
+    }
+}
+
+impl<K, V> Default for IterMut2<'_, K, V> {
+    fn default() -> Self {
+        Self {
+            iter: [].iter_mut(),
+        }
+    }
+}
+
 /// An owning iterator over the entries of an [`IndexMap`].
 ///
 /// This `struct` is created by the [`IndexMap::into_iter`] method
 /// (provided by the [`IntoIterator`] trait). See its documentation for more.
+#[derive(Clone)]
 pub struct IntoIter<K, V> {
     iter: vec::IntoIter<Bucket<K, V>>,
 }
@@ -323,8 +384,8 @@ impl<K, V> Default for Keys<'_, K, V> {
 /// [values]: IndexMap#impl-Index<usize>-for-IndexMap<K,+V,+S>
 ///
 /// Since `Keys` is also an iterator, consuming items from the iterator will
-/// offset the effective indexes. Similarly, if `Keys` is obtained from
-/// [`Slice::keys`], indexes will be interpreted relative to the position of
+/// offset the effective indices. Similarly, if `Keys` is obtained from
+/// [`Slice::keys`], indices will be interpreted relative to the position of
 /// that slice.
 ///
 /// # Examples
@@ -370,7 +431,7 @@ impl<K, V> Default for Keys<'_, K, V> {
 /// map.insert("foo", 1);
 /// println!("{:?}", map.keys()[10]); // panics!
 /// ```
-impl<'a, K, V> Index<usize> for Keys<'a, K, V> {
+impl<K, V> Index<usize> for Keys<'_, K, V> {
     type Output = K;
 
     /// Returns a reference to the key at the supplied `index`.
@@ -605,6 +666,7 @@ where
     K: Hash + Eq,
     S: BuildHasher,
 {
+    #[track_caller]
     pub(super) fn new<R>(map: &'a mut IndexMap<K, V, S>, range: R, replace_with: I) -> Self
     where
         R: RangeBounds<usize>,
@@ -696,7 +758,7 @@ where
 {
 }
 
-impl<'a, I, K, V, S> fmt::Debug for Splice<'a, I, K, V, S>
+impl<I, K, V, S> fmt::Debug for Splice<'_, I, K, V, S>
 where
     I: fmt::Debug + Iterator<Item = (K, V)>,
     K: fmt::Debug + Hash + Eq,
@@ -709,5 +771,60 @@ where
             .field("drain", &self.drain)
             .field("replace_with", &self.replace_with)
             .finish()
+    }
+}
+
+/// An extracting iterator for `IndexMap`.
+///
+/// This `struct` is created by [`IndexMap::extract_if()`].
+/// See its documentation for more.
+pub struct ExtractIf<'a, K, V, F> {
+    inner: ExtractCore<'a, K, V>,
+    pred: F,
+}
+
+impl<K, V, F> ExtractIf<'_, K, V, F> {
+    #[track_caller]
+    pub(super) fn new<R>(core: &mut IndexMapCore<K, V>, range: R, pred: F) -> ExtractIf<'_, K, V, F>
+    where
+        R: RangeBounds<usize>,
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        ExtractIf {
+            inner: core.extract(range),
+            pred,
+        }
+    }
+}
+
+impl<K, V, F> Iterator for ExtractIf<'_, K, V, F>
+where
+    F: FnMut(&K, &mut V) -> bool,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner
+            .extract_if(|bucket| {
+                let (key, value) = bucket.ref_mut();
+                (self.pred)(key, value)
+            })
+            .map(Bucket::key_value)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.inner.remaining()))
+    }
+}
+
+impl<K, V, F> FusedIterator for ExtractIf<'_, K, V, F> where F: FnMut(&K, &mut V) -> bool {}
+
+impl<K, V, F> fmt::Debug for ExtractIf<'_, K, V, F>
+where
+    K: fmt::Debug,
+    V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExtractIf").finish_non_exhaustive()
     }
 }

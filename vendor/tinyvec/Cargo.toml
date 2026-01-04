@@ -12,8 +12,20 @@
 [package]
 edition = "2018"
 name = "tinyvec"
-version = "1.6.0"
+version = "1.10.0"
 authors = ["Lokathor <zefria@gmail.com>"]
+build = false
+exclude = [
+    "/.github",
+    "/*.py",
+    "/*.sh",
+    "/src-backup",
+]
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
 description = "`tinyvec` provides 100% safe vec-like data structures."
 readme = "README.md"
 keywords = [
@@ -33,9 +45,9 @@ features = [
     "alloc",
     "std",
     "grab_spare_slice",
-    "rustc_1_40",
-    "rustc_1_55",
+    "latest_stable_rust",
     "serde",
+    "borsh",
 ]
 rustdoc-args = [
     "--cfg",
@@ -47,19 +59,43 @@ features = [
     "alloc",
     "std",
     "grab_spare_slice",
-    "rustc_1_40",
-    "rustc_1_55",
+    "latest_stable_rust",
     "serde",
+    "borsh",
 ]
 
-[profile.bench]
-debug = 2
+[features]
+alloc = ["tinyvec_macros"]
+debugger_visualizer = []
+default = []
+experimental_write_impl = []
+grab_spare_slice = []
+latest_stable_rust = ["rustc_1_61"]
+nightly_slice_partition_dedup = []
+real_blackbox = ["criterion/real_blackbox"]
+rustc_1_40 = []
+rustc_1_55 = []
+rustc_1_57 = []
+rustc_1_61 = ["rustc_1_57"]
+std = ["alloc"]
 
-[profile.test]
-opt-level = 3
+[lib]
+name = "tinyvec"
+path = "src/lib.rs"
+
+[[test]]
+name = "arrayvec"
+path = "tests/arrayvec.rs"
+
+[[test]]
+name = "debugger_visualizer"
+path = "tests/debugger_visualizer.rs"
+test = false
+required-features = ["debugger_visualizer"]
 
 [[test]]
 name = "tinyvec"
+path = "tests/tinyvec.rs"
 required-features = [
     "alloc",
     "std",
@@ -67,11 +103,13 @@ required-features = [
 
 [[bench]]
 name = "macros"
+path = "benches/macros.rs"
 harness = false
 required-features = ["alloc"]
 
 [[bench]]
 name = "smallvec"
+path = "benches/smallvec.rs"
 harness = false
 required-features = [
     "alloc",
@@ -81,6 +119,16 @@ required-features = [
 [dependencies.arbitrary]
 version = "1"
 optional = true
+
+[dependencies.borsh]
+version = "1.2.0"
+optional = true
+default-features = false
+
+[dependencies.generic-array]
+version = "1.1.1"
+optional = true
+default-features = false
 
 [dependencies.serde]
 version = "1.0"
@@ -94,20 +142,17 @@ optional = true
 [dev-dependencies.criterion]
 version = "0.3.0"
 
+[dev-dependencies.debugger_test]
+version = "0.1"
+
+[dev-dependencies.debugger_test_parser]
+version = "0.1"
+
 [dev-dependencies.serde_test]
 version = "1.0"
 
 [dev-dependencies.smallvec]
 version = "1"
 
-[features]
-alloc = ["tinyvec_macros"]
-default = []
-experimental_write_impl = []
-grab_spare_slice = []
-nightly_slice_partition_dedup = []
-real_blackbox = ["criterion/real_blackbox"]
-rustc_1_40 = []
-rustc_1_55 = ["rustc_1_40"]
-rustc_1_57 = ["rustc_1_55"]
-std = ["alloc"]
+[profile.bench]
+debug = 2

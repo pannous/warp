@@ -9,18 +9,18 @@
 //! `hash_raw_entry` feature (or some replacement), matching *inherent* methods will be added to
 //! `IndexMap` without such an opt-in trait.
 
-use super::raw::RawTableEntry;
-use super::{get_hash, IndexMapCore};
+use super::{IndexMapCore, OccupiedEntry};
 use crate::{Equivalent, HashValue, IndexMap};
 use core::fmt;
-use core::hash::{BuildHasher, Hash, Hasher};
+use core::hash::{BuildHasher, Hash};
 use core::marker::PhantomData;
 use core::mem;
 
 /// Opt-in access to the experimental raw entry API.
 ///
 /// See the [`raw_entry_v1`][self] module documentation for more information.
-pub trait RawEntryApiV1<K, V, S>: private::Sealed {
+#[expect(private_bounds)]
+pub trait RawEntryApiV1<K, V, S>: Sealed {
     /// Creates a raw immutable entry builder for the [`IndexMap`].
     ///
     /// Raw entries provide the lowest level of control for searching and
@@ -41,21 +41,14 @@ pub trait RawEntryApiV1<K, V, S>: private::Sealed {
     /// # Examples
     ///
     /// ```
-    /// use core::hash::{BuildHasher, Hash};
+    /// use core::hash::BuildHasher;
     /// use indexmap::map::{IndexMap, RawEntryApiV1};
     ///
     /// let mut map = IndexMap::new();
     /// map.extend([("a", 100), ("b", 200), ("c", 300)]);
     ///
-    /// fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
-    ///     use core::hash::Hasher;
-    ///     let mut state = hash_builder.build_hasher();
-    ///     key.hash(&mut state);
-    ///     state.finish()
-    /// }
-    ///
     /// for k in ["a", "b", "c", "d", "e", "f"] {
-    ///     let hash = compute_hash(map.hasher(), k);
+    ///     let hash = map.hasher().hash_one(k);
     ///     let i = map.get_index_of(k);
     ///     let v = map.get(k);
     ///     let kv = map.get_key_value(k);
@@ -102,19 +95,12 @@ pub trait RawEntryApiV1<K, V, S>: private::Sealed {
     /// # Examples
     ///
     /// ```
-    /// use core::hash::{BuildHasher, Hash};
+    /// use core::hash::BuildHasher;
     /// use indexmap::map::{IndexMap, RawEntryApiV1};
     /// use indexmap::map::raw_entry_v1::RawEntryMut;
     ///
     /// let mut map = IndexMap::new();
     /// map.extend([("a", 100), ("b", 200), ("c", 300)]);
-    ///
-    /// fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
-    ///     use core::hash::Hasher;
-    ///     let mut state = hash_builder.build_hasher();
-    ///     key.hash(&mut state);
-    ///     state.finish()
-    /// }
     ///
     /// // Existing key (insert and update)
     /// match map.raw_entry_mut_v1().from_key("a") {
@@ -133,7 +119,7 @@ pub trait RawEntryApiV1<K, V, S>: private::Sealed {
     /// assert_eq!(map.len(), 3);
     ///
     /// // Existing key (take)
-    /// let hash = compute_hash(map.hasher(), "c");
+    /// let hash = map.hasher().hash_one("c");
     /// match map.raw_entry_mut_v1().from_key_hashed_nocheck(hash, "c") {
     ///     RawEntryMut::Vacant(_) => unreachable!(),
     ///     RawEntryMut::Occupied(view) => {
@@ -146,7 +132,7 @@ pub trait RawEntryApiV1<K, V, S>: private::Sealed {
     ///
     /// // Nonexistent key (insert and update)
     /// let key = "d";
-    /// let hash = compute_hash(map.hasher(), key);
+    /// let hash = map.hasher().hash_one(key);
     /// match map.raw_entry_mut_v1().from_hash(hash, |q| *q == key) {
     ///     RawEntryMut::Occupied(_) => unreachable!(),
     ///     RawEntryMut::Vacant(view) => {
@@ -198,18 +184,18 @@ impl<K, V, S> fmt::Debug for RawEntryBuilder<'_, K, V, S> {
 
 impl<'a, K, V, S> RawEntryBuilder<'a, K, V, S> {
     /// Access an entry by key.
-    pub fn from_key<Q: ?Sized>(self, key: &Q) -> Option<(&'a K, &'a V)>
+    pub fn from_key<Q>(self, key: &Q) -> Option<(&'a K, &'a V)>
     where
         S: BuildHasher,
-        Q: Hash + Equivalent<K>,
+        Q: ?Sized + Hash + Equivalent<K>,
     {
         self.map.get_key_value(key)
     }
 
     /// Access an entry by a key and its hash.
-    pub fn from_key_hashed_nocheck<Q: ?Sized>(self, hash: u64, key: &Q) -> Option<(&'a K, &'a V)>
+    pub fn from_key_hashed_nocheck<Q>(self, hash: u64, key: &Q) -> Option<(&'a K, &'a V)>
     where
-        Q: Equivalent<K>,
+        Q: ?Sized + Equivalent<K>,
     {
         let hash = HashValue(hash as usize);
         let i = self.map.core.get_index_of(hash, key)?;
@@ -245,7 +231,7 @@ impl<'a, K, V, S> RawEntryBuilder<'a, K, V, S> {
         let hash = HashValue(hash as usize);
         let entries = &*self.map.core.entries;
         let eq = move |&i: &usize| is_match(&entries[i].key);
-        self.map.core.indices.get(hash.get(), eq).copied()
+        self.map.core.indices.find(hash.get(), eq).copied()
     }
 }
 
@@ -265,19 +251,19 @@ impl<K, V, S> fmt::Debug for RawEntryBuilderMut<'_, K, V, S> {
 
 impl<'a, K, V, S> RawEntryBuilderMut<'a, K, V, S> {
     /// Access an entry by key.
-    pub fn from_key<Q: ?Sized>(self, key: &Q) -> RawEntryMut<'a, K, V, S>
+    pub fn from_key<Q>(self, key: &Q) -> RawEntryMut<'a, K, V, S>
     where
         S: BuildHasher,
-        Q: Hash + Equivalent<K>,
+        Q: ?Sized + Hash + Equivalent<K>,
     {
         let hash = self.map.hash(key);
         self.from_key_hashed_nocheck(hash.get(), key)
     }
 
     /// Access an entry by a key and its hash.
-    pub fn from_key_hashed_nocheck<Q: ?Sized>(self, hash: u64, key: &Q) -> RawEntryMut<'a, K, V, S>
+    pub fn from_key_hashed_nocheck<Q>(self, hash: u64, key: &Q) -> RawEntryMut<'a, K, V, S>
     where
-        Q: Equivalent<K>,
+        Q: ?Sized + Equivalent<K>,
     {
         self.from_hash(hash, |k| Q::equivalent(key, k))
     }
@@ -287,10 +273,9 @@ impl<'a, K, V, S> RawEntryBuilderMut<'a, K, V, S> {
     where
         F: FnMut(&K) -> bool,
     {
-        let hash = HashValue(hash as usize);
-        match self.map.core.raw_entry(hash, is_match) {
-            Ok(raw) => RawEntryMut::Occupied(RawOccupiedEntryMut {
-                raw,
+        match OccupiedEntry::from_hash(&mut self.map.core, hash, is_match) {
+            Ok(inner) => RawEntryMut::Occupied(RawOccupiedEntryMut {
+                inner,
                 hash_builder: PhantomData,
             }),
             Err(map) => RawEntryMut::Vacant(RawVacantEntryMut {
@@ -377,7 +362,7 @@ impl<'a, K, V, S> RawEntryMut<'a, K, V, S> {
 /// A raw view into an occupied entry in an [`IndexMap`].
 /// It is part of the [`RawEntryMut`] enum.
 pub struct RawOccupiedEntryMut<'a, K, V, S> {
-    raw: RawTableEntry<'a, K, V>,
+    inner: OccupiedEntry<'a, K, V>,
     hash_builder: PhantomData<&'a S>,
 }
 
@@ -394,7 +379,7 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
     /// Return the index of the key-value pair
     #[inline]
     pub fn index(&self) -> usize {
-        self.raw.index()
+        self.inner.index()
     }
 
     /// Gets a reference to the entry's key in the map.
@@ -403,7 +388,7 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
     /// difference if the key type has any distinguishing features outside of `Hash` and `Eq`, like
     /// extra fields or the memory address of an allocation.
     pub fn key(&self) -> &K {
-        &self.raw.bucket().key
+        self.inner.key()
     }
 
     /// Gets a mutable reference to the entry's key in the map.
@@ -412,7 +397,7 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
     /// difference if the key type has any distinguishing features outside of `Hash` and `Eq`, like
     /// extra fields or the memory address of an allocation.
     pub fn key_mut(&mut self) -> &mut K {
-        &mut self.raw.bucket_mut().key
+        &mut self.inner.get_bucket_mut().key
     }
 
     /// Converts into a mutable reference to the entry's key in the map,
@@ -422,12 +407,12 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
     /// difference if the key type has any distinguishing features outside of `Hash` and `Eq`, like
     /// extra fields or the memory address of an allocation.
     pub fn into_key(self) -> &'a mut K {
-        &mut self.raw.into_bucket().key
+        &mut self.inner.into_bucket().key
     }
 
     /// Gets a reference to the entry's value in the map.
     pub fn get(&self) -> &V {
-        &self.raw.bucket().value
+        self.inner.get()
     }
 
     /// Gets a mutable reference to the entry's value in the map.
@@ -435,34 +420,34 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
     /// If you need a reference which may outlive the destruction of the
     /// [`RawEntryMut`] value, see [`into_mut`][Self::into_mut].
     pub fn get_mut(&mut self) -> &mut V {
-        &mut self.raw.bucket_mut().value
+        self.inner.get_mut()
     }
 
     /// Converts into a mutable reference to the entry's value in the map,
     /// with a lifetime bound to the map itself.
     pub fn into_mut(self) -> &'a mut V {
-        &mut self.raw.into_bucket().value
+        self.inner.into_mut()
     }
 
     /// Gets a reference to the entry's key and value in the map.
     pub fn get_key_value(&self) -> (&K, &V) {
-        self.raw.bucket().refs()
+        self.inner.get_bucket().refs()
     }
 
     /// Gets a reference to the entry's key and value in the map.
     pub fn get_key_value_mut(&mut self) -> (&mut K, &mut V) {
-        self.raw.bucket_mut().muts()
+        self.inner.get_bucket_mut().muts()
     }
 
     /// Converts into a mutable reference to the entry's key and value in the map,
     /// with a lifetime bound to the map itself.
     pub fn into_key_value_mut(self) -> (&'a mut K, &'a mut V) {
-        self.raw.into_bucket().muts()
+        self.inner.into_bucket().muts()
     }
 
     /// Sets the value of the entry, and returns the entry's old value.
     pub fn insert(&mut self, value: V) -> V {
-        mem::replace(self.get_mut(), value)
+        self.inner.insert(value)
     }
 
     /// Sets the key of the entry, and returns the entry's old key.
@@ -484,24 +469,24 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
     pub fn swap_remove(self) -> V {
-        self.swap_remove_entry().1
+        self.inner.swap_remove()
     }
 
     /// Remove the key, value pair stored in the map for this entry, and return the value.
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///
     /// Computes in **O(n)** time (average).
     pub fn shift_remove(self) -> V {
-        self.shift_remove_entry().1
+        self.inner.shift_remove()
     }
 
     /// Remove and return the key, value pair stored in the map for this entry
@@ -518,26 +503,54 @@ impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::swap_remove`][crate::Vec::swap_remove], the pair is removed by swapping it with
-    /// the last element of the map and popping it off.
+    /// Like [`Vec::swap_remove`][alloc::vec::Vec::swap_remove], the pair is removed by swapping it
+    /// with the last element of the map and popping it off.
     /// **This perturbs the position of what used to be the last element!**
     ///
     /// Computes in **O(1)** time (average).
     pub fn swap_remove_entry(self) -> (K, V) {
-        let (map, index) = self.raw.remove_index();
-        map.swap_remove_finish(index)
+        self.inner.swap_remove_entry()
     }
 
     /// Remove and return the key, value pair stored in the map for this entry
     ///
-    /// Like [`Vec::remove`][crate::Vec::remove], the pair is removed by shifting all of the
+    /// Like [`Vec::remove`][alloc::vec::Vec::remove], the pair is removed by shifting all of the
     /// elements that follow it, preserving their relative order.
     /// **This perturbs the index of all of those elements!**
     ///
     /// Computes in **O(n)** time (average).
     pub fn shift_remove_entry(self) -> (K, V) {
-        let (map, index) = self.raw.remove_index();
-        map.shift_remove_finish(index)
+        self.inner.shift_remove_entry()
+    }
+
+    /// Moves the position of the entry to a new index
+    /// by shifting all other entries in-between.
+    ///
+    /// This is equivalent to [`IndexMap::move_index`]
+    /// coming `from` the current [`.index()`][Self::index].
+    ///
+    /// * If `self.index() < to`, the other pairs will shift down while the targeted pair moves up.
+    /// * If `self.index() > to`, the other pairs will shift up while the targeted pair moves down.
+    ///
+    /// ***Panics*** if `to` is out of bounds.
+    ///
+    /// Computes in **O(n)** time (average).
+    #[track_caller]
+    pub fn move_index(self, to: usize) {
+        self.inner.move_index(to);
+    }
+
+    /// Swaps the position of entry with another.
+    ///
+    /// This is equivalent to [`IndexMap::swap_indices`]
+    /// with the current [`.index()`][Self::index] as one of the two being swapped.
+    ///
+    /// ***Panics*** if the `other` index is out of bounds.
+    ///
+    /// Computes in **O(1)** time (average).
+    #[track_caller]
+    pub fn swap_indices(self, other: usize) {
+        self.inner.swap_indices(other);
     }
 }
 
@@ -557,7 +570,7 @@ impl<K, V, S> fmt::Debug for RawVacantEntryMut<'_, K, V, S> {
 impl<'a, K, V, S> RawVacantEntryMut<'a, K, V, S> {
     /// Return the index where a key-value pair may be inserted.
     pub fn index(&self) -> usize {
-        self.map.indices.len()
+        self.map.len()
     }
 
     /// Inserts the given key and value into the map,
@@ -567,26 +580,53 @@ impl<'a, K, V, S> RawVacantEntryMut<'a, K, V, S> {
         K: Hash,
         S: BuildHasher,
     {
-        let mut h = self.hash_builder.build_hasher();
-        key.hash(&mut h);
-        self.insert_hashed_nocheck(h.finish(), key, value)
+        let h = self.hash_builder.hash_one(&key);
+        self.insert_hashed_nocheck(h, key, value)
     }
 
     /// Inserts the given key and value into the map with the provided hash,
     /// and returns mutable references to them.
     pub fn insert_hashed_nocheck(self, hash: u64, key: K, value: V) -> (&'a mut K, &'a mut V) {
-        let i = self.index();
-        let map = self.map;
         let hash = HashValue(hash as usize);
-        map.indices.insert(hash.get(), i, get_hash(&map.entries));
-        debug_assert_eq!(i, map.entries.len());
-        map.push_entry(hash, key, value);
-        map.entries[i].muts()
+        self.map.insert_unique(hash, key, value).muts()
+    }
+
+    /// Inserts the given key and value into the map at the given index,
+    /// shifting others to the right, and returns mutable references to them.
+    ///
+    /// ***Panics*** if `index` is out of bounds.
+    ///
+    /// Computes in **O(n)** time (average).
+    #[track_caller]
+    pub fn shift_insert(self, index: usize, key: K, value: V) -> (&'a mut K, &'a mut V)
+    where
+        K: Hash,
+        S: BuildHasher,
+    {
+        let h = self.hash_builder.hash_one(&key);
+        self.shift_insert_hashed_nocheck(index, h, key, value)
+    }
+
+    /// Inserts the given key and value into the map with the provided hash
+    /// at the given index, and returns mutable references to them.
+    ///
+    /// ***Panics*** if `index` is out of bounds.
+    ///
+    /// Computes in **O(n)** time (average).
+    #[track_caller]
+    pub fn shift_insert_hashed_nocheck(
+        self,
+        index: usize,
+        hash: u64,
+        key: K,
+        value: V,
+    ) -> (&'a mut K, &'a mut V) {
+        let hash = HashValue(hash as usize);
+        self.map.shift_insert_unique(index, hash, key, value);
+        self.map.entries[index].muts()
     }
 }
 
-mod private {
-    pub trait Sealed {}
+trait Sealed {}
 
-    impl<K, V, S> Sealed for super::IndexMap<K, V, S> {}
-}
+impl<K, V, S> Sealed for IndexMap<K, V, S> {}

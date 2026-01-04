@@ -1,15 +1,12 @@
 //! Code signing services.
 
-use std::{fmt::Debug, mem::MaybeUninit, str::FromStr};
-
-use core_foundation::{
-    base::{TCFType, TCFTypeRef, ToVoid},
-    data::CFDataRef,
-    dictionary::CFMutableDictionary,
-    number::CFNumber,
-    string::{CFString, CFStringRef},
-    url::CFURL,
-};
+use core_foundation::base::{TCFType, TCFTypeRef, ToVoid};
+use core_foundation::data::CFDataRef;
+use core_foundation::dictionary::CFMutableDictionary;
+use core_foundation::number::CFNumber;
+use core_foundation::string::{CFString, CFStringRef};
+use core_foundation::url::CFURL;
+use core_foundation::{declare_TCFType, impl_TCFType};
 use libc::pid_t;
 use security_framework_sys::code_signing::{
     kSecCSBasicValidateOnly, kSecCSCheckAllArchitectures, kSecCSCheckGatekeeperArchitectures,
@@ -24,6 +21,9 @@ use security_framework_sys::code_signing::{
     SecStaticCodeCheckValidity, SecStaticCodeCreateWithPath, SecStaticCodeGetTypeID,
     SecStaticCodeRef,
 };
+use std::fmt::Debug;
+use std::mem::MaybeUninit;
+use std::str::FromStr;
 
 use crate::{cvt, Result};
 
@@ -31,6 +31,7 @@ bitflags::bitflags! {
 
     /// Values that can be used in the flags parameter to most code signing
     /// functions.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Flags: u32 {
         /// Use the default behaviour.
         const NONE = 0;
@@ -223,10 +224,10 @@ impl SecCode {
     /// If `host` is `None` then the code signing root of trust (currently, the
     // system kernel) should be used as the code host.
     pub fn copy_guest_with_attribues(
-        host: Option<&SecCode>,
+        host: Option<&Self>,
         attrs: &GuestAttributes,
         flags: Flags,
-    ) -> Result<SecCode> {
+    ) -> Result<Self> {
         let mut code = MaybeUninit::uninit();
 
         let host = match host {
@@ -242,12 +243,13 @@ impl SecCode {
                 code.as_mut_ptr(),
             ))?;
 
-            Ok(SecCode::wrap_under_create_rule(code.assume_init()))
+            Ok(Self::wrap_under_create_rule(code.assume_init()))
         }
     }
 
     /// Retrieves the location on disk of signed code, given a code or static
     /// code object.
+    // FIXME: Don't expose CFURL in Rust APIs.
     pub fn path(&self, flags: Flags) -> Result<CFURL> {
         let mut url = MaybeUninit::uninit();
 
@@ -283,12 +285,13 @@ impl SecStaticCode {
                 code.as_mut_ptr(),
             ))?;
 
-            Ok(Self::wrap_under_get_rule(code.assume_init()))
+            Ok(Self::wrap_under_create_rule(code.assume_init()))
         }
     }
 
     /// Retrieves the location on disk of signed code, given a code or static
     /// code object.
+    // FIXME: Don't expose CFURL in Rust APIs.
     pub fn path(&self, flags: Flags) -> Result<CFURL> {
         let mut url = MaybeUninit::uninit();
 
@@ -351,9 +354,7 @@ mod test {
         let requirement: SecRequirement = "anchor apple".parse().unwrap();
 
         assert_eq!(
-            code.check_validity(Flags::NONE, &requirement)
-                .unwrap_err()
-                .code(),
+            code.check_validity(Flags::NONE, &requirement).unwrap_err().code(),
             // "code failed to satisfy specified code requirement(s)"
             -67050
         );
@@ -366,9 +367,7 @@ mod test {
         let requirement: SecRequirement = "anchor apple".parse().unwrap();
 
         assert_eq!(
-            code.check_validity(Flags::NONE, &requirement)
-                .unwrap_err()
-                .code(),
+            code.check_validity(Flags::NONE, &requirement).unwrap_err().code(),
             // "code object is not signed at all"
             -67062
         );
@@ -443,7 +442,7 @@ mod test {
             task_info(
                 mach_task_self(),
                 TASK_AUDIT_TOKEN,
-                token.as_mut_ptr() as *mut c_void,
+                token.as_mut_ptr().cast::<c_void>(),
                 &mut token_len,
             )
         };
@@ -475,9 +474,7 @@ mod test {
         attrs.set_audit_token(token_data.as_concrete_TypeRef());
 
         assert_eq!(
-            SecCode::copy_guest_with_attribues(None, &attrs, Flags::NONE)
-                .unwrap_err()
-                .code(),
+            SecCode::copy_guest_with_attribues(None, &attrs, Flags::NONE).unwrap_err().code(),
             // "UNIX[No such process]"
             100003
         );

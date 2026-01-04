@@ -33,7 +33,7 @@ pub enum FuncKind<'a> {
     /// ```text
     /// (func (type 3) (import "foo" "bar"))
     /// ```
-    Import(InlineImport<'a>),
+    Import(InlineImport<'a>, bool),
 
     /// Almost all functions, those defined inline in a wasm module.
     Inline {
@@ -53,7 +53,18 @@ impl<'a> Parse<'a> for Func<'a> {
         let exports = parser.parse()?;
 
         let (ty, kind) = if let Some(import) = parser.parse()? {
-            (parser.parse()?, FuncKind::Import(import))
+            let (ty, exact) = if parser.peek2::<kw::exact>()? {
+                (
+                    parser.parens(|p| {
+                        p.parse::<kw::exact>()?;
+                        p.parse()
+                    })?,
+                    true,
+                )
+            } else {
+                (parser.parse()?, false)
+            };
+            (ty, FuncKind::Import(import, exact))
         } else {
             let ty = parser.parse()?;
             let locals = Local::parse_remainder(parser)?.into();
@@ -71,8 +82,8 @@ impl<'a> Parse<'a> for Func<'a> {
             id,
             name,
             exports,
-            ty,
             kind,
+            ty,
         })
     }
 }
@@ -81,7 +92,7 @@ impl<'a> Parse<'a> for Func<'a> {
 ///
 /// Each local has an optional identifier for name resolution, an optional name
 /// for the custom `name` section, and a value type.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Local<'a> {
     /// An identifier that this local is resolved with (optionally) for name
     /// resolution.

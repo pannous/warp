@@ -26,49 +26,49 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/URL)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn url(this: &Document) -> Result<String, JsValue>;
+    pub fn url(this: &Document) -> Result<::alloc::string::String, JsValue>;
     # [wasm_bindgen (structural , catch , method , getter , js_class = "Document" , js_name = documentURI)]
     #[doc = "Getter for the `documentURI` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/documentURI)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn document_uri(this: &Document) -> Result<String, JsValue>;
+    pub fn document_uri(this: &Document) -> Result<::alloc::string::String, JsValue>;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = compatMode)]
     #[doc = "Getter for the `compatMode` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/compatMode)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn compat_mode(this: &Document) -> String;
+    pub fn compat_mode(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = characterSet)]
     #[doc = "Getter for the `characterSet` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/characterSet)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn character_set(this: &Document) -> String;
+    pub fn character_set(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = charset)]
     #[doc = "Getter for the `charset` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/charset)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn charset(this: &Document) -> String;
+    pub fn charset(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = inputEncoding)]
     #[doc = "Getter for the `inputEncoding` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/inputEncoding)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn input_encoding(this: &Document) -> String;
+    pub fn input_encoding(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = contentType)]
     #[doc = "Getter for the `contentType` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/contentType)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn content_type(this: &Document) -> String;
+    pub fn content_type(this: &Document) -> ::alloc::string::String;
     #[cfg(feature = "DocumentType")]
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = doctype)]
     #[doc = "Getter for the `doctype` field of this object."]
@@ -99,28 +99,28 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/referrer)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn referrer(this: &Document) -> String;
+    pub fn referrer(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = lastModified)]
     #[doc = "Getter for the `lastModified` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/lastModified)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn last_modified(this: &Document) -> String;
+    pub fn last_modified(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = readyState)]
     #[doc = "Getter for the `readyState` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/readyState)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn ready_state(this: &Document) -> String;
+    pub fn ready_state(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = title)]
     #[doc = "Getter for the `title` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/title)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn title(this: &Document) -> String;
+    pub fn title(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = title)]
     #[doc = "Setter for the `title` field of this object."]
     #[doc = ""]
@@ -134,7 +134,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/dir)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn dir(this: &Document) -> String;
+    pub fn dir(this: &Document) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = dir)]
     #[doc = "Setter for the `dir` field of this object."]
     #[doc = ""]
@@ -407,7 +407,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/selectedStyleSheetSet)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn selected_style_sheet_set(this: &Document) -> Option<String>;
+    pub fn selected_style_sheet_set(this: &Document) -> Option<::alloc::string::String>;
     # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = selectedStyleSheetSet)]
     #[doc = "Setter for the `selectedStyleSheetSet` field of this object."]
     #[doc = ""]
@@ -421,14 +421,14 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/lastStyleSheetSet)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn last_style_sheet_set(this: &Document) -> Option<String>;
+    pub fn last_style_sheet_set(this: &Document) -> Option<::alloc::string::String>;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = preferredStyleSheetSet)]
     #[doc = "Getter for the `preferredStyleSheetSet` field of this object."]
     #[doc = ""]
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/preferredStyleSheetSet)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
-    pub fn preferred_style_sheet_set(this: &Document) -> Option<String>;
+    pub fn preferred_style_sheet_set(this: &Document) -> Option<::alloc::string::String>;
     #[cfg(feature = "DomStringList")]
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = styleSheetSets)]
     #[doc = "Getter for the `styleSheetSets` field of this object."]
@@ -461,6 +461,17 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`, `SvgsvgElement`*"]
     pub fn root_element(this: &Document) -> Option<SvgsvgElement>;
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = pictureInPictureEnabled)]
+    #[doc = "Getter for the `pictureInPictureEnabled` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/pictureInPictureEnabled)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn picture_in_picture_enabled(this: &Document) -> bool;
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = oncopy)]
     #[doc = "Getter for the `oncopy` field of this object."]
     #[doc = ""]
@@ -511,14 +522,6 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`, `Element`*"]
     pub fn active_element(this: &Document) -> Option<Element>;
-    #[cfg(feature = "StyleSheetList")]
-    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = styleSheets)]
-    #[doc = "Getter for the `styleSheets` field of this object."]
-    #[doc = ""]
-    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/styleSheets)"]
-    #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `Document`, `StyleSheetList`*"]
-    pub fn style_sheets(this: &Document) -> StyleSheetList;
     #[cfg(feature = "Element")]
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = pointerLockElement)]
     #[doc = "Getter for the `pointerLockElement` field of this object."]
@@ -535,6 +538,40 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`, `Element`*"]
     pub fn fullscreen_element(this: &Document) -> Option<Element>;
+    #[cfg(feature = "StyleSheetList")]
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = styleSheets)]
+    #[doc = "Getter for the `styleSheets` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/styleSheets)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`, `StyleSheetList`*"]
+    pub fn style_sheets(this: &Document) -> StyleSheetList;
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = adoptedStyleSheets)]
+    #[doc = "Getter for the `adoptedStyleSheets` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/adoptedStyleSheets)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn adopted_style_sheets(this: &Document) -> ::js_sys::Array;
+    # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = adoptedStyleSheets)]
+    #[doc = "Setter for the `adoptedStyleSheets` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/adoptedStyleSheets)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn set_adopted_style_sheets(this: &Document, value: &::wasm_bindgen::JsValue);
+    #[cfg(web_sys_unstable_apis)]
+    #[cfg(feature = "Element")]
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = pictureInPictureElement)]
+    #[doc = "Getter for the `pictureInPictureElement` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/pictureInPictureElement)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`, `Element`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn picture_in_picture_element(this: &Document) -> Option<Element>;
     #[cfg(feature = "FontFaceSet")]
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = fonts)]
     #[doc = "Getter for the `fonts` field of this object."]
@@ -599,6 +636,20 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
     pub fn set_onauxclick(this: &Document, value: Option<&::js_sys::Function>);
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = onbeforetoggle)]
+    #[doc = "Getter for the `onbeforetoggle` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/onbeforetoggle)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn onbeforetoggle(this: &Document) -> Option<::js_sys::Function>;
+    # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = onbeforetoggle)]
+    #[doc = "Setter for the `onbeforetoggle` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/onbeforetoggle)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn set_onbeforetoggle(this: &Document, value: Option<&::js_sys::Function>);
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = oncanplay)]
     #[doc = "Getter for the `oncanplay` field of this object."]
     #[doc = ""]
@@ -865,6 +916,20 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
     pub fn set_oninput(this: &Document, value: Option<&::js_sys::Function>);
+    # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = onbeforeinput)]
+    #[doc = "Getter for the `onbeforeinput` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/onbeforeinput)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn onbeforeinput(this: &Document) -> Option<::js_sys::Function>;
+    # [wasm_bindgen (structural , method , setter , js_class = "Document" , js_name = onbeforeinput)]
+    #[doc = "Setter for the `onbeforeinput` field of this object."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/onbeforeinput)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    pub fn set_onbeforeinput(this: &Document, value: Option<&::js_sys::Function>);
     # [wasm_bindgen (structural , method , getter , js_class = "Document" , js_name = oninvalid)]
     #[doc = "Getter for the `oninvalid` field of this object."]
     #[doc = ""]
@@ -2044,6 +2109,17 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Document`*"]
     pub fn exit_fullscreen(this: &Document);
+    #[cfg(web_sys_unstable_apis)]
+    # [wasm_bindgen (method , structural , js_class = "Document" , js_name = exitPictureInPicture)]
+    #[doc = "The `exitPictureInPicture()` method."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Document/exitPictureInPicture)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Document`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    pub fn exit_picture_in_picture(this: &Document) -> ::js_sys::Promise;
     # [wasm_bindgen (method , structural , js_class = "Document" , js_name = exitPointerLock)]
     #[doc = "The `exitPointerLock()` method."]
     #[doc = ""]
@@ -2165,7 +2241,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `Document`, `ViewTransition`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn start_view_transition(this: &Document) -> Result<ViewTransition, JsValue>;
     #[cfg(web_sys_unstable_apis)]
     #[cfg(feature = "ViewTransition")]
@@ -2177,7 +2253,7 @@ extern "C" {
     #[doc = "*This API requires the following crate features to be activated: `Document`, `ViewTransition`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
-    #[doc = "[described in the `wasm-bindgen` guide](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn start_view_transition_with_update_callback(
         this: &Document,
         update_callback: Option<&::js_sys::Function>,

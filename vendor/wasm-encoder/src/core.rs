@@ -1,3 +1,4 @@
+mod branch_hints;
 mod code;
 mod custom;
 mod data;
@@ -7,6 +8,7 @@ mod exports;
 mod functions;
 mod globals;
 mod imports;
+mod instructions;
 mod linking;
 mod memories;
 mod names;
@@ -16,6 +18,7 @@ mod tables;
 mod tags;
 mod types;
 
+pub use branch_hints::*;
 pub use code::*;
 pub use custom::*;
 pub use data::*;
@@ -25,6 +28,7 @@ pub use exports::*;
 pub use functions::*;
 pub use globals::*;
 pub use imports::*;
+pub use instructions::*;
 pub use linking::*;
 pub use memories::*;
 pub use names::*;
@@ -35,12 +39,14 @@ pub use tags::*;
 pub use types::*;
 
 use crate::Encode;
+use alloc::vec::Vec;
 
 pub(crate) const CORE_FUNCTION_SORT: u8 = 0x00;
 pub(crate) const CORE_TABLE_SORT: u8 = 0x01;
 pub(crate) const CORE_MEMORY_SORT: u8 = 0x02;
 pub(crate) const CORE_GLOBAL_SORT: u8 = 0x03;
 pub(crate) const CORE_TAG_SORT: u8 = 0x04;
+pub(crate) const CORE_FUNCTION_EXACT_SORT: u8 = 0x20;
 
 /// A WebAssembly module section.
 ///
@@ -152,6 +158,11 @@ impl Module {
     /// Get the encoded Wasm module as a slice.
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes
+    }
+
+    /// Give the current size of the module in bytes.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
     }
 
     /// Finish writing this Wasm module and extract ownership of the encoded

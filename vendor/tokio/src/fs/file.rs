@@ -3,10 +3,11 @@
 //! [`File`]: File
 
 use crate::fs::{asyncify, OpenOptions};
-use crate::io::blocking::Buf;
+use crate::io::blocking::{Buf, DEFAULT_MAX_BUF_SIZE};
 use crate::io::{AsyncRead, AsyncSeek, AsyncWrite, ReadBuf};
 use crate::sync::Mutex;
 
+use std::cmp;
 use std::fmt;
 use std::fs::{Metadata, Permissions};
 use std::future::Future;
@@ -14,8 +15,7 @@ use std::io::{self, Seek, SeekFrom};
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
+use std::task::{ready, Context, Poll};
 
 #[cfg(test)]
 use super::mocks::JoinHandle;
@@ -90,6 +90,7 @@ use std::fs::File as StdFile;
 pub struct File {
     std: Arc<StdFile>,
     inner: Mutex<Inner>,
+    max_buf_size: usize,
 }
 
 struct Inner {
@@ -149,10 +150,7 @@ impl File {
     /// [`read_to_end`]: fn@crate::io::AsyncReadExt::read_to_end
     /// [`AsyncReadExt`]: trait@crate::io::AsyncReadExt
     pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
-        let path = path.as_ref().to_owned();
-        let std = asyncify(|| StdFile::open(path)).await?;
-
-        Ok(File::from_std(std))
+        Self::options().read(true).open(path).await
     }
 
     /// Opens a file in write-only mode.
@@ -187,9 +185,52 @@ impl File {
     /// [`write_all`]: fn@crate::io::AsyncWriteExt::write_all
     /// [`AsyncWriteExt`]: trait@crate::io::AsyncWriteExt
     pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
-        let path = path.as_ref().to_owned();
-        let std_file = asyncify(move || StdFile::create(path)).await?;
-        Ok(File::from_std(std_file))
+        Self::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .await
+    }
+
+    /// Opens a file in read-write mode.
+    ///
+    /// This function will create a file if it does not exist, or return an error
+    /// if it does. This way, if the call succeeds, the file returned is guaranteed
+    /// to be new.
+    ///
+    /// This option is useful because it is atomic. Otherwise between checking
+    /// whether a file exists and creating a new one, the file may have been
+    /// created by another process (a TOCTOU race condition / attack).
+    ///
+    /// This can also be written using `File::options().read(true).write(true).create_new(true).open(...)`.
+    ///
+    /// See [`OpenOptions`] for more details.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use tokio::fs::File;
+    /// use tokio::io::AsyncWriteExt;
+    ///
+    /// # async fn dox() -> std::io::Result<()> {
+    /// let mut file = File::create_new("foo.txt").await?;
+    /// file.write_all(b"hello, world!").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// The [`write_all`] method is defined on the [`AsyncWriteExt`] trait.
+    ///
+    /// [`write_all`]: fn@crate::io::AsyncWriteExt::write_all
+    /// [`AsyncWriteExt`]: trait@crate::io::AsyncWriteExt
+    pub async fn create_new<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
+        Self::options()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .await
     }
 
     /// Returns a new [`OpenOptions`] object.
@@ -241,6 +282,7 @@ impl File {
                 last_write_err: None,
                 pos: 0,
             }),
+            max_buf_size: DEFAULT_MAX_BUF_SIZE,
         }
     }
 
@@ -423,7 +465,9 @@ impl File {
         self.inner.lock().await.complete_inflight().await;
         let std = self.std.clone();
         let std_file = asyncify(move || std.try_clone()).await?;
-        Ok(File::from_std(std_file))
+        let mut file = File::from_std(std_file);
+        file.set_max_buf_size(self.max_buf_size);
+        Ok(file)
     }
 
     /// Destructures `File` into a [`std::fs::File`]. This function is
@@ -465,6 +509,7 @@ impl File {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::result_large_err)]
     pub fn try_into_std(mut self) -> Result<StdFile, Self> {
         match Arc::try_unwrap(self.std) {
             Ok(file) => Ok(file),
@@ -508,6 +553,39 @@ impl File {
         let std = self.std.clone();
         asyncify(move || std.set_permissions(perm)).await
     }
+
+    /// Set the maximum buffer size for the underlying [`AsyncRead`] / [`AsyncWrite`] operation.
+    ///
+    /// Although Tokio uses a sensible default value for this buffer size, this function would be
+    /// useful for changing that default depending on the situation.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use tokio::fs::File;
+    /// use tokio::io::AsyncWriteExt;
+    ///
+    /// # async fn dox() -> std::io::Result<()> {
+    /// let mut file = File::open("foo.txt").await?;
+    ///
+    /// // Set maximum buffer size to 8 MiB
+    /// file.set_max_buf_size(8 * 1024 * 1024);
+    ///
+    /// let mut buf = vec![1; 1024 * 1024 * 1024];
+    ///
+    /// // Write the 1 GiB buffer in chunks up to 8 MiB each.
+    /// file.write_all(&mut buf).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_max_buf_size(&mut self, max_buf_size: usize) {
+        self.max_buf_size = max_buf_size;
+    }
+
+    /// Get the maximum buffer size for the underlying [`AsyncRead`] / [`AsyncWrite`] operation.
+    pub fn max_buf_size(&self) -> usize {
+        self.max_buf_size
+    }
 }
 
 impl AsyncRead for File {
@@ -517,6 +595,7 @@ impl AsyncRead for File {
         dst: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         ready!(crate::trace::trace_leaf(cx));
+
         let me = self.get_mut();
         let inner = me.inner.get_mut();
 
@@ -525,17 +604,20 @@ impl AsyncRead for File {
                 State::Idle(ref mut buf_cell) => {
                     let mut buf = buf_cell.take().unwrap();
 
-                    if !buf.is_empty() {
+                    if !buf.is_empty() || dst.remaining() == 0 {
                         buf.copy_to(dst);
                         *buf_cell = Some(buf);
                         return Poll::Ready(Ok(()));
                     }
 
-                    buf.ensure_capacity_for(dst);
                     let std = me.std.clone();
 
+                    let max_buf_size = cmp::min(dst.remaining(), me.max_buf_size);
                     inner.state = State::Busy(spawn_blocking(move || {
-                        let res = buf.read_from(&mut &*std);
+                        // SAFETY: the `Read` implementation of `std` does not
+                        // read from the buffer it is borrowing and correctly
+                        // reports the length of the data written into the buffer.
+                        let res = unsafe { buf.read_from(&mut &*std, max_buf_size) };
                         (Operation::Read(res), buf)
                     }));
                 }
@@ -668,7 +750,7 @@ impl AsyncWrite for File {
                         None
                     };
 
-                    let n = buf.copy_from(src);
+                    let n = buf.copy_from(src, me.max_buf_size);
                     let std = me.std.clone();
 
                     let blocking_task_join_handle = spawn_mandatory_blocking(move || {
@@ -739,7 +821,7 @@ impl AsyncWrite for File {
                         None
                     };
 
-                    let n = buf.copy_from_bufs(bufs);
+                    let n = buf.copy_from_bufs(bufs, me.max_buf_size);
                     let std = me.std.clone();
 
                     let blocking_task_join_handle = spawn_mandatory_blocking(move || {
@@ -867,7 +949,7 @@ cfg_windows! {
 
 impl Inner {
     async fn complete_inflight(&mut self) {
-        use crate::future::poll_fn;
+        use std::future::poll_fn;
 
         poll_fn(|cx| self.poll_complete_inflight(cx)).await;
     }

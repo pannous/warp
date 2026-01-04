@@ -1,3 +1,4 @@
+use crate::core::binary::EncodeOptions;
 use crate::core::*;
 use crate::parser::{Parse, Parser, Result};
 use crate::token::{Id, Index, NameAnnotation, Span};
@@ -85,37 +86,13 @@ impl<'a> Module<'a> {
     /// This function can return an error for name resolution errors and other
     /// expansion-related errors.
     pub fn encode(&mut self) -> std::result::Result<Vec<u8>, crate::Error> {
-        self.resolve()?;
-        Ok(match &self.kind {
-            ModuleKind::Text(fields) => crate::core::binary::encode(&self.id, &self.name, fields),
-            ModuleKind::Binary(blobs) => blobs.iter().flat_map(|b| b.iter().cloned()).collect(),
-        })
+        EncodeOptions::default().encode_module(self)
     }
 
-    pub(crate) fn validate(&self, parser: Parser<'_>) -> Result<()> {
-        let mut starts = 0;
-        if let ModuleKind::Text(fields) = &self.kind {
-            for item in fields.iter() {
-                if let ModuleField::Start(_) = item {
-                    starts += 1;
-                }
-            }
-        }
-        if starts > 1 {
-            return Err(parser.error("multiple start sections found"));
-        }
-        Ok(())
-    }
-}
-
-impl<'a> Parse<'a> for Module<'a> {
-    fn parse(parser: Parser<'a>) -> Result<Self> {
-        let _r = parser.register_annotation("custom");
-        let _r = parser.register_annotation("producers");
-        let _r = parser.register_annotation("name");
-        let _r = parser.register_annotation("dylink.0");
-
-        let span = parser.parse::<kw::module>()?.0;
+    pub(crate) fn parse_without_module_keyword(
+        module_keyword_span: Span,
+        parser: Parser<'a>,
+    ) -> Result<Self> {
         let id = parser.parse()?;
         let name = parser.parse()?;
 
@@ -130,10 +107,19 @@ impl<'a> Parse<'a> for Module<'a> {
             ModuleKind::Text(ModuleField::parse_remaining(parser)?)
         };
         Ok(Module {
-            span,
+            span: module_keyword_span,
             id,
             name,
             kind,
+        })
+    }
+}
+
+impl<'a> Parse<'a> for Module<'a> {
+    fn parse(parser: Parser<'a>) -> Result<Self> {
+        parser.with_standard_annotations_registered(|parser| {
+            let span = parser.parse::<kw::module>()?.0;
+            Self::parse_without_module_keyword(span, parser)
         })
     }
 }
@@ -158,7 +144,7 @@ pub enum ModuleField<'a> {
 }
 
 impl<'a> ModuleField<'a> {
-    pub(crate) fn parse_remaining(parser: Parser<'a>) -> Result<Vec<ModuleField>> {
+    pub(crate) fn parse_remaining(parser: Parser<'a>) -> Result<Vec<ModuleField<'a>>> {
         let mut fields = Vec::new();
         while !parser.is_empty() {
             fields.push(parser.parens(ModuleField::parse)?);

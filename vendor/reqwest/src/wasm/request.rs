@@ -1,16 +1,20 @@
 use std::convert::TryFrom;
 use std::fmt;
+use std::time::Duration;
 
 use bytes::Bytes;
 use http::{request::Parts, Method, Request as HttpRequest};
+#[cfg(any(feature = "query", feature = "form", feature = "json"))]
 use serde::Serialize;
 #[cfg(feature = "json")]
 use serde_json;
 use url::Url;
-use web_sys::RequestCredentials;
+use web_sys::{RequestCache, RequestCredentials};
 
 use super::{Body, Client, Response};
-use crate::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
+#[cfg(any(feature = "form", feature = "json"))]
+use crate::header::CONTENT_TYPE;
+use crate::header::{HeaderMap, HeaderName, HeaderValue};
 
 /// A request which can be executed with `Client::execute()`.
 pub struct Request {
@@ -18,8 +22,10 @@ pub struct Request {
     url: Url,
     headers: HeaderMap,
     body: Option<Body>,
+    timeout: Option<Duration>,
     pub(super) cors: bool,
     pub(super) credentials: Option<RequestCredentials>,
+    pub(super) cache: Option<RequestCache>,
 }
 
 /// A builder to construct the properties of a `Request`.
@@ -37,8 +43,10 @@ impl Request {
             url,
             headers: HeaderMap::new(),
             body: None,
+            timeout: None,
             cors: true,
             credentials: None,
+            cache: None,
         }
     }
 
@@ -90,6 +98,18 @@ impl Request {
         &mut self.body
     }
 
+    /// Get the timeout.
+    #[inline]
+    pub fn timeout(&self) -> Option<&Duration> {
+        self.timeout.as_ref()
+    }
+
+    /// Get a mutable reference to the timeout.
+    #[inline]
+    pub fn timeout_mut(&mut self) -> &mut Option<Duration> {
+        &mut self.timeout
+    }
+
     /// Attempts to clone the `Request`.
     ///
     /// None is returned if a body is which can not be cloned.
@@ -104,8 +124,10 @@ impl Request {
             url: self.url.clone(),
             headers: self.headers.clone(),
             body,
+            timeout: self.timeout,
             cors: self.cors,
             credentials: self.credentials,
+            cache: self.cache,
         })
     }
 }
@@ -113,6 +135,14 @@ impl Request {
 impl RequestBuilder {
     pub(super) fn new(client: Client, request: crate::Result<Request>) -> RequestBuilder {
         RequestBuilder { client, request }
+    }
+
+    /// Assemble a builder starting from an existing `Client` and a `Request`.
+    pub fn from_parts(client: crate::Client, request: crate::Request) -> crate::RequestBuilder {
+        crate::RequestBuilder {
+            client,
+            request: crate::Result::Ok(request),
+        }
     }
 
     /// Modify the query string of the URL.
@@ -130,9 +160,15 @@ impl RequestBuilder {
     /// as `.query(&[("key", "val")])`. It's also possible to serialize structs
     /// and maps into a key-value pair.
     ///
+    /// # Optional
+    ///
+    /// This requires the optional `query` feature to be enabled.
+    ///
     /// # Errors
     /// This method will fail if the object you provide cannot be serialized
     /// into a query string.
+    #[cfg(feature = "query")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "query")))]
     pub fn query<T: Serialize + ?Sized>(mut self, query: &T) -> RequestBuilder {
         let mut error = None;
         if let Ok(ref mut req) = self.request {
@@ -161,10 +197,16 @@ impl RequestBuilder {
     /// and also sets the `Content-Type: application/x-www-form-urlencoded`
     /// header.
     ///
+    /// # Optional
+    ///
+    /// This requires the optional `form` feature to be enabled.
+    ///
     /// # Errors
     ///
     /// This method fails if the passed value cannot be serialized into
     /// url encoded format
+    #[cfg(feature = "form")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
     pub fn form<T: Serialize + ?Sized>(mut self, form: &T) -> RequestBuilder {
         let mut error = None;
         if let Ok(ref mut req) = self.request {
@@ -221,7 +263,7 @@ impl RequestBuilder {
     where
         T: fmt::Display,
     {
-        let header_value = format!("Bearer {}", token);
+        let header_value = format!("Bearer {token}");
         self.header(crate::header::AUTHORIZATION, header_value)
     }
 
@@ -229,6 +271,14 @@ impl RequestBuilder {
     pub fn body<T: Into<Body>>(mut self, body: T) -> RequestBuilder {
         if let Ok(ref mut req) = self.request {
             req.body = Some(body.into());
+        }
+        self
+    }
+
+    /// Enables a request timeout.
+    pub fn timeout(mut self, timeout: Duration) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            *req.timeout_mut() = Some(timeout);
         }
         self
     }
@@ -343,10 +393,115 @@ impl RequestBuilder {
         self
     }
 
+    /// Set fetch cache mode to 'default'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'default'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_default(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::Default);
+        }
+        self
+    }
+
+    /// Set fetch cache mode to 'no-store'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'no-store'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_no_store(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::NoStore);
+        }
+        self
+    }
+
+    /// Set fetch cache mode to 'reload'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'reload'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_reload(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::Reload);
+        }
+        self
+    }
+
+    /// Set fetch cache mode to 'no-cache'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'no-cache'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_no_cache(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::NoCache);
+        }
+        self
+    }
+
+    /// Set fetch cache mode to 'force-cache'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'force-cache'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_force_cache(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::ForceCache);
+        }
+        self
+    }
+
+    /// Set fetch cache mode to 'only-if-cached'.
+    ///
+    /// # WASM
+    ///
+    /// This option is only effective with WebAssembly target.
+    ///
+    /// The [request cache][mdn] will be set to 'only-if-cached'.
+    ///
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    pub fn fetch_cache_only_if_cached(mut self) -> RequestBuilder {
+        if let Ok(ref mut req) = self.request {
+            req.cache = Some(RequestCache::OnlyIfCached);
+        }
+        self
+    }
+
     /// Build a `Request`, which can be inspected, modified and executed with
     /// `Client::execute()`.
     pub fn build(self) -> crate::Result<Request> {
         self.request
+    }
+
+    /// Build a `Request`, which can be inspected, modified and executed with
+    /// `Client::execute()`.
+    ///
+    /// This is similar to [`RequestBuilder::build()`], but also returns the
+    /// embedded `Client`.
+    pub fn build_split(self) -> (Client, crate::Result<Request>) {
+        (self.client, self.request)
     }
 
     /// Constructs the Request and sends it to the target URL, returning a
@@ -449,8 +604,10 @@ where
             url,
             headers,
             body: Some(body.into()),
+            timeout: None,
             cors: true,
             credentials: None,
+            cache: None,
         })
     }
 }

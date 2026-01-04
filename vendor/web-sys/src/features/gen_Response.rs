@@ -26,7 +26,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/url)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
-    pub fn url(this: &Response) -> String;
+    pub fn url(this: &Response) -> ::alloc::string::String;
     # [wasm_bindgen (structural , method , getter , js_class = "Response" , js_name = redirected)]
     #[doc = "Getter for the `redirected` field of this object."]
     #[doc = ""]
@@ -54,7 +54,7 @@ extern "C" {
     #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/statusText)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
-    pub fn status_text(this: &Response) -> String;
+    pub fn status_text(this: &Response) -> ::alloc::string::String;
     #[cfg(feature = "Headers")]
     # [wasm_bindgen (structural , method , getter , js_class = "Response" , js_name = headers)]
     #[doc = "Getter for the `headers` field of this object."]
@@ -108,6 +108,15 @@ extern "C" {
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
     pub fn new_with_opt_u8_array(body: Option<&mut [u8]>) -> Result<Response, JsValue>;
+    #[wasm_bindgen(catch, constructor, js_class = "Response")]
+    #[doc = "The `new Response(..)` constructor, creating a new instance of `Response`."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/Response)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Response`*"]
+    pub fn new_with_opt_js_u8_array(
+        body: Option<&::js_sys::Uint8Array>,
+    ) -> Result<Response, JsValue>;
     #[cfg(feature = "FormData")]
     #[wasm_bindgen(catch, constructor, js_class = "Response")]
     #[doc = "The `new Response(..)` constructor, creating a new instance of `Response`."]
@@ -175,6 +184,17 @@ extern "C" {
         body: Option<&mut [u8]>,
         init: &ResponseInit,
     ) -> Result<Response, JsValue>;
+    #[cfg(feature = "ResponseInit")]
+    #[wasm_bindgen(catch, constructor, js_class = "Response")]
+    #[doc = "The `new Response(..)` constructor, creating a new instance of `Response`."]
+    #[doc = ""]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/Response)"]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `Response`, `ResponseInit`*"]
+    pub fn new_with_opt_js_u8_array_and_init(
+        body: Option<&::js_sys::Uint8Array>,
+        init: &ResponseInit,
+    ) -> Result<Response, JsValue>;
     #[cfg(all(feature = "FormData", feature = "ResponseInit",))]
     #[wasm_bindgen(catch, constructor, js_class = "Response")]
     #[doc = "The `new Response(..)` constructor, creating a new instance of `Response`."]
@@ -229,21 +249,21 @@ extern "C" {
     # [wasm_bindgen (static_method_of = Response , js_class = "Response" , js_name = error)]
     #[doc = "The `error()` method."]
     #[doc = ""]
-    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/error)"]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/error_static)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
     pub fn error() -> Response;
     # [wasm_bindgen (catch , static_method_of = Response , js_class = "Response" , js_name = redirect)]
     #[doc = "The `redirect()` method."]
     #[doc = ""]
-    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/redirect)"]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/redirect_static)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
     pub fn redirect(url: &str) -> Result<Response, JsValue>;
     # [wasm_bindgen (catch , static_method_of = Response , js_class = "Response" , js_name = redirect)]
     #[doc = "The `redirect()` method."]
     #[doc = ""]
-    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/redirect)"]
+    #[doc = "[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Response/redirect_static)"]
     #[doc = ""]
     #[doc = "*This API requires the following crate features to be activated: `Response`*"]
     pub fn redirect_with_status(url: &str, status: u16) -> Result<Response, JsValue>;

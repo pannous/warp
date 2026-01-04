@@ -1,11 +1,9 @@
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use bytes::{Buf, BufMut};
-use futures_core::ready;
 use std::io::{self, IoSlice};
-use std::mem::MaybeUninit;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{ready, Context, Poll};
 
 /// Try to read data from an `AsyncRead` into an implementer of the [`BufMut`] trait.
 ///
@@ -18,9 +16,9 @@ use std::task::{Context, Poll};
 /// use tokio_stream as stream;
 /// use tokio::io::Result;
 /// use tokio_util::io::{StreamReader, poll_read_buf};
-/// use futures::future::poll_fn;
+/// use std::future::poll_fn;
 /// use std::pin::Pin;
-/// # #[tokio::main]
+/// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() -> std::io::Result<()> {
 ///
 /// // Create a reader from an iterator. This particular reader will always be
@@ -46,7 +44,7 @@ use std::task::{Context, Poll};
 /// # }
 /// ```
 #[cfg_attr(not(feature = "io"), allow(unreachable_pub))]
-pub fn poll_read_buf<T: AsyncRead, B: BufMut>(
+pub fn poll_read_buf<T: AsyncRead + ?Sized, B: BufMut>(
     io: Pin<&mut T>,
     cx: &mut Context<'_>,
     buf: &mut B,
@@ -60,7 +58,7 @@ pub fn poll_read_buf<T: AsyncRead, B: BufMut>(
 
         // Safety: `chunk_mut()` returns a `&mut UninitSlice`, and `UninitSlice` is a
         // transparent wrapper around `[MaybeUninit<u8>]`.
-        let dst = unsafe { &mut *(dst as *mut _ as *mut [MaybeUninit<u8>]) };
+        let dst = unsafe { dst.as_uninit_slice_mut() };
         let mut buf = ReadBuf::uninit(dst);
         let ptr = buf.filled().as_ptr();
         ready!(io.poll_read(cx, &mut buf)?);
@@ -96,9 +94,9 @@ pub fn poll_read_buf<T: AsyncRead, B: BufMut>(
 /// use tokio::fs::File;
 ///
 /// use bytes::Buf;
+/// use std::future::poll_fn;
 /// use std::io::Cursor;
 /// use std::pin::Pin;
-/// use futures::future::poll_fn;
 ///
 /// #[tokio::main]
 /// async fn main() -> io::Result<()> {
@@ -120,7 +118,7 @@ pub fn poll_read_buf<T: AsyncRead, B: BufMut>(
 /// [`File`]: tokio::fs::File
 /// [vectored writes]: tokio::io::AsyncWrite::poll_write_vectored
 #[cfg_attr(not(feature = "io"), allow(unreachable_pub))]
-pub fn poll_write_buf<T: AsyncWrite, B: Buf>(
+pub fn poll_write_buf<T: AsyncWrite + ?Sized, B: Buf>(
     io: Pin<&mut T>,
     cx: &mut Context<'_>,
     buf: &mut B,

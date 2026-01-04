@@ -1,6 +1,7 @@
 use crate::loom::sync::Arc;
 use crate::runtime::context;
 use crate::runtime::scheduler::{self, current_thread, Inject};
+use crate::task::Id;
 
 use backtrace::BacktraceFrame;
 use std::cell::Cell;
@@ -23,7 +24,7 @@ use super::{Notified, OwnedTasks, Schedule};
 type Backtrace = Vec<BacktraceFrame>;
 type SymbolTrace = Vec<Symbol>;
 
-/// The ambiant backtracing context.
+/// The ambient backtracing context.
 pub(crate) struct Context {
     /// The address of [`Trace::root`] establishes an upper unwinding bound on
     /// the backtraces in `Trace`.
@@ -55,7 +56,8 @@ pub(crate) struct Trace {
 pin_project_lite::pin_project! {
     #[derive(Debug, Clone)]
     #[must_use = "futures do nothing unless you `.await` or poll them"]
-    pub(crate) struct Root<T> {
+    /// A future wrapper that roots traces (captured with [`Trace::capture`]).
+    pub struct Root<T> {
         #[pin]
         future: T,
     }
@@ -137,6 +139,10 @@ impl Trace {
     pub(crate) fn root<F>(future: F) -> Root<F> {
         Root { future }
     }
+
+    pub(crate) fn backtraces(&self) -> &[Backtrace] {
+        &self.backtraces
+    }
 }
 
 /// If this is a sub-invocation of [`Trace::capture`], capture a backtrace.
@@ -194,14 +200,8 @@ pub(crate) fn trace_leaf(cx: &mut task::Context<'_>) -> Poll<()> {
             if let Some(scheduler) = scheduler {
                 match scheduler {
                     scheduler::Context::CurrentThread(s) => s.defer.defer(cx.waker()),
-                    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
+                    #[cfg(feature = "rt-multi-thread")]
                     scheduler::Context::MultiThread(s) => s.defer.defer(cx.waker()),
-                    #[cfg(all(
-                        tokio_unstable,
-                        feature = "rt-multi-thread",
-                        not(target_os = "wasi")
-                    ))]
-                    scheduler::Context::MultiThreadAlt(_) => unimplemented!(),
                 }
             }
         });
@@ -270,7 +270,7 @@ pub(in crate::runtime) fn trace_current_thread(
     owned: &OwnedTasks<Arc<current_thread::Handle>>,
     local: &mut VecDeque<Notified<Arc<current_thread::Handle>>>,
     injection: &Inject<Arc<current_thread::Handle>>,
-) -> Vec<Trace> {
+) -> Vec<(Id, Trace)> {
     // clear the local and injection queues
 
     let mut dequeued = Vec::new();
@@ -303,7 +303,7 @@ cfg_rt_multi_thread! {
         local: &mut multi_thread::queue::Local<Arc<multi_thread::Handle>>,
         synced: &Mutex<Synced>,
         injection: &Shared<Arc<multi_thread::Handle>>,
-    ) -> Vec<Trace> {
+    ) -> Vec<(Id, Trace)> {
         let mut dequeued = Vec::new();
 
         // clear the local queue
@@ -331,7 +331,7 @@ cfg_rt_multi_thread! {
 ///
 /// This helper presumes exclusive access to each task. The tasks must not exist
 /// in any other queue.
-fn trace_owned<S: Schedule>(owned: &OwnedTasks<S>, dequeued: Vec<Notified<S>>) -> Vec<Trace> {
+fn trace_owned<S: Schedule>(owned: &OwnedTasks<S>, dequeued: Vec<Notified<S>>) -> Vec<(Id, Trace)> {
     let mut tasks = dequeued;
     // Notify and trace all un-notified tasks. The dequeued tasks are already
     // notified and so do not need to be re-notified.
@@ -351,8 +351,9 @@ fn trace_owned<S: Schedule>(owned: &OwnedTasks<S>, dequeued: Vec<Notified<S>>) -
         .into_iter()
         .map(|task| {
             let local_notified = owned.assert_owner(task);
+            let id = local_notified.task.id();
             let ((), trace) = Trace::capture(|| local_notified.run());
-            trace
+            (id, trace)
         })
         .collect()
 }

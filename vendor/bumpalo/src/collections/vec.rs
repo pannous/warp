@@ -7,7 +7,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
 //! A contiguous growable array type with heap-allocated contents, written
 //! [`Vec<'bump, T>`].
 //!
@@ -1296,12 +1295,36 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// let b = Bump::new();
     ///
     /// let mut vec = bumpalo::vec![in &b; 1, 2, 3, 4];
-    /// vec.retain(|&x| x % 2 == 0);
+    /// vec.retain(|x: &i32| *x % 2 == 0);
     /// assert_eq!(vec, [2, 4]);
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&T) -> bool,
+    {
+        self.drain_filter(|x| !f(x));
+    }
+
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// In other words, remove all elements `e` such that `f(&mut e)` returns `false`.
+    /// This method operates in place and preserves the order of the retained
+    /// elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bumpalo::{Bump, collections::Vec};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let mut vec = bumpalo::vec![in &b; 1, 2, 3, 4];
+    /// vec.retain_mut(|x: &mut i32| *x % 2 == 0);
+    /// assert_eq!(vec, [2, 4]);
+    /// ```
+    pub fn retain_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut T) -> bool,
     {
         self.drain_filter(|x| !f(x));
     }
@@ -1404,6 +1427,33 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
         self.truncate(len);
     }
 
+    // Proven specification with verus, converted to comments.
+    /// # Preconditions
+    ///
+    /// - old(self).len() < old(self).capacity(),
+    ///
+    /// # Postconditions
+    ///
+    /// - self.get_unchecked(old(self).len()) == value,
+    /// - self.len()      == old(self).len() + 1,
+    /// - self.capacity() == old(self).capacity(),
+    /// - forall|i: usize| implies(
+    ///       i < old(self).len(),
+    ///       self.get_unchecked(i) == old(self).get_unchecked(i)
+    ///   )
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    unsafe fn push_unchecked(&mut self, value: T) {
+        debug_assert!(self.len() < self.capacity());
+
+        // Divergence from verified impl:
+        //   Verified implementation has special handling for ZSTs
+        //   as ZSTs do not play nicely with separation logic.
+        ptr::write(self.buf.ptr().add(self.len), value);
+
+        self.len = self.len + 1;
+    }
+
     /// Appends an element to the back of a vector.
     ///
     /// # Panics
@@ -1429,9 +1479,7 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
             self.reserve(1);
         }
         unsafe {
-            let end = self.buf.ptr().add(self.len);
-            ptr::write(end, value);
-            self.len += 1;
+            self.push_unchecked(value);
         }
     }
 
@@ -1493,7 +1541,7 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// Appends elements to `Self` from other buffer.
     #[inline]
     unsafe fn append_elements(&mut self, other: *const [T]) {
-        let count = (*other).len();
+        let count = (&(*other)).len();
         self.reserve(count);
         let len = self.len();
         ptr::copy_nonoverlapping(other as *const T, self.as_mut_ptr().add(len), count);
@@ -1533,7 +1581,7 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// v.drain(..);
     /// assert_eq!(v, &[]);
     /// ```
-    pub fn drain<R>(&mut self, range: R) -> Drain<T>
+    pub fn drain<'a, R>(&'a mut self, range: R) -> Drain<'a, 'bump, T>
     where
         R: RangeBounds<usize>,
     {
@@ -1749,6 +1797,108 @@ impl<'bump, T: 'bump + Clone> Vec<'bump, T> {
         }
     }
 
+    // Proven specification with verus, converted to comments.
+    /// # Preconditions
+    ///
+    /// - old(self).len() + slice.len() <= old(self).capacity(),
+    ///
+    /// # Postconditions
+    ///
+    /// - forall|i: usize| implies(
+    ///       i < old(self).len(),
+    ///       self.get_unchecked(i) == old(self).get_unchecked(i)
+    ///   ),
+    /// - forall|i: usize| implies(
+    ///       i < slice.len(),
+    ///       self.get_unchecked((old(self).len() + i) as usize)
+    ///           == clone(slice.get_unchecked(i))
+    ///   ),
+    /// - self.len()      == old(self).len() + slice.len(),
+    /// - self.capacity() == old(self).capacity(),
+    #[inline]
+    unsafe fn extend_from_slice_unchecked(&mut self, slice: &[T]) {
+        // Guaranteed never to overflow for non ZSTs
+        //   size_of::<T>() <= isize::MAX - (isize::MAX % align_of::<T>()))
+        //   isize::MAX + isize::MAX < usize::MAX
+        debug_assert!(
+            core::mem::size_of::<T>() == 0 || self.capacity() >= self.len() + slice.len()
+        );
+        debug_assert!(
+            // is_zst::<T>() ==> capacity >= slen + slice.len()
+            core::mem::size_of::<T>() != 0
+            // Capacity is usize::MAX for ZSTs
+            || self.len() <= usize::MAX - slice.len()
+        );
+
+        let mut pos = 0usize;
+
+        loop
+        /*
+        invariants
+            pos <= slice.len(),
+            self.len() + (slice.len() - pos) <= old(self).capacity(),
+            old(self).capacity() == self.capacity(),
+
+            self.len() == old(self).len() + pos,
+
+            forall|i: usize| implies(
+                i < old(self).len(),
+                self.get_unchecked(i) == old(self).get_unchecked(i)
+            ),
+            forall|i: usize| implies(
+                i < pos,
+                self.get_unchecked((old(self).len() + i) as usize)
+                    == clone(slice.get_unchecked(i))
+            )
+        */
+        {
+            if pos == slice.len() {
+                /*
+                pos = slice.len(),
+                self.len() = old(self).len() + slice.len(),
+
+                forall|i: usize| i < slice.len() implies {
+                    self.get_unchecked((old(self).len() + i) as usize)
+                        == clone(slice.get_unchecked(i))
+                }
+                by {
+                    i < pos
+                }
+                */
+                return;
+            }
+
+            /*
+            pos < slice.len(),
+            self.len() < self.capacity()
+            */
+
+            let elem = slice.get_unchecked(pos);
+            self.push_unchecked(elem.clone());
+
+            /*
+            ghost prev_pos = pos
+            */
+
+            pos = pos + 1;
+
+            /*
+            forall|i: usize| i < pos implies {
+                self.get_unchecked((old(self).len() + i) as usize)
+                    == clone(slice.get_unchecked(i))
+            }
+            by {
+                if i < pos - 1 {
+                    // By invariant
+                }
+                else {
+                    i == prev_pos
+                }
+            }
+            */
+        }
+    }
+
     /// Clones and appends all elements in a slice to the `Vec`.
     ///
     /// Iterates over the slice `other`, clones each element, and then appends
@@ -1773,7 +1923,167 @@ impl<'bump, T: 'bump + Clone> Vec<'bump, T> {
     ///
     /// [`extend`]: #method.extend
     pub fn extend_from_slice(&mut self, other: &[T]) {
-        self.extend(other.iter().cloned())
+        let capacity = self.capacity();
+
+        /*
+        Cannot underflow via invariant of the Vec (capacity >= length).
+
+        This also holds for ZSTs, as capacity is usize::MAX
+        */
+        let remaining_cap = capacity - self.len;
+
+        /*
+            self.len() + other.len() <= self.capacity(),
+                <==>
+            other.len() <= self.capacity() - self.len()
+        */
+
+        if other.len() > remaining_cap {
+            /*
+            Divergence from verified impl:
+              Verified implementation's reserve is not the same
+              as bumpalo's. Verified implementation reserves with
+              respect to capacity, not length. Thus this is equivalent
+              to the verified implementation's:
+
+                self.buf.reserve(other.len() - remaining_cap)
+
+            */
+            self.reserve(other.len());
+        }
+
+        /*
+        self.capacity() >= self.len() + other.len()
+        */
+
+        unsafe {
+            self.extend_from_slice_unchecked(other);
+        }
+    }
+}
+
+impl<'bump, T: 'bump + Copy> Vec<'bump, T> {
+    /// Helper method to copy all of the items in `other` and append them to the end of `self`.
+    ///
+    /// SAFETY:
+    ///   * The caller is responsible for:
+    ///       * calling [`reserve`](Self::reserve) beforehand to guarantee that there is enough
+    ///         capacity to store `other.len()` more items.
+    ///       * guaranteeing that `self` and `other` do not overlap.
+    unsafe fn extend_from_slice_copy_unchecked(&mut self, other: &[T]) {
+        let old_len = self.len();
+        debug_assert!(old_len + other.len() <= self.capacity());
+
+        // SAFETY:
+        // * `src` is valid for reads of `other.len()` values by virtue of being a `&[T]`.
+        // * `dst` is valid for writes of `other.len()` bytes because the caller of this
+        //   method is required to `reserve` capacity to store at least `other.len()` items
+        //   beforehand.
+        // * Because `src` is a `&[T]` and dst is a `&[T]` within the `Vec<T>`,
+        //   `copy_nonoverlapping`'s alignment requirements are met.
+        // * Caller is required to guarantee that the source and destination ranges cannot overlap
+        unsafe {
+            let src = other.as_ptr();
+            let dst = self.as_mut_ptr().add(old_len);
+            ptr::copy_nonoverlapping(src, dst, other.len());
+            self.set_len(old_len + other.len());
+        }
+    }
+
+    /// Copies all elements in the slice `other` and appends them to the `Vec`.
+    ///
+    /// Note that this function is same as [`extend_from_slice`] except that it is optimized for
+    /// slices of types that implement the `Copy` trait. If and when Rust gets specialization
+    /// this function will likely be deprecated (but still available).
+    ///
+    /// To copy and append the data from multiple source slices at once, see
+    /// [`extend_from_slices_copy`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bumpalo::{Bump, collections::Vec};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let mut vec = bumpalo::vec![in &b; 1];
+    /// vec.extend_from_slice_copy(&[2, 3, 4]);
+    /// assert_eq!(vec, [1, 2, 3, 4]);
+    /// ```
+    ///
+    /// ```
+    /// use bumpalo::{Bump, collections::Vec};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let mut vec = bumpalo::vec![in &b; 'H' as u8];
+    /// vec.extend_from_slice_copy("ello, world!".as_bytes());
+    /// assert_eq!(vec, "Hello, world!".as_bytes());
+    /// ```
+    ///
+    /// [`extend_from_slice`]: #method.extend_from_slice
+    /// [`extend_from_slices`]: #method.extend_from_slices
+    pub fn extend_from_slice_copy(&mut self, other: &[T]) {
+        // Reserve space in the Vec for the values to be added
+        self.reserve(other.len());
+
+        // Copy values into the space that was just reserved
+        // SAFETY:
+        // * `self` has enough capacity to store `other.len()` more items as `self.reserve(other.len())`
+        //   above guarantees that.
+        // * Source and destination data ranges cannot overlap as we just reserved the destination
+        //   range from the bump.
+        unsafe {
+            self.extend_from_slice_copy_unchecked(other);
+        }
+    }
+
+    /// For each slice in `slices`, copies all elements in the slice and appends them to the `Vec`.
+    ///
+    /// This method is equivalent to calling [`extend_from_slice_copy`] in a loop, but is able
+    /// to precompute the total amount of space to reserve in advance. This reduces the potential
+    /// maximum number of reallocations needed from one-per-slice to just one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bumpalo::{Bump, collections::Vec};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let mut vec = bumpalo::vec![in &b; 1];
+    /// vec.extend_from_slices_copy(&[&[2, 3], &[], &[4]]);
+    /// assert_eq!(vec, [1, 2, 3, 4]);
+    /// ```
+    ///
+    /// ```
+    /// use bumpalo::{Bump, collections::Vec};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let mut vec = bumpalo::vec![in &b; 'H' as u8];
+    /// vec.extend_from_slices_copy(&["ello,".as_bytes(), &[], " world!".as_bytes()]);
+    /// assert_eq!(vec, "Hello, world!".as_bytes());
+    /// ```
+    ///
+    /// [`extend_from_slice_copy`]: #method.extend_from_slice_copy
+    pub fn extend_from_slices_copy(&mut self, slices: &[&[T]]) {
+        // Reserve the total amount of capacity we'll need to safely append the aggregated contents
+        // of each slice in `slices`.
+        let capacity_to_reserve: usize = slices.iter().map(|slice| slice.len()).sum();
+        self.reserve(capacity_to_reserve);
+
+        // SAFETY:
+        // * `dst` is valid for writes of `capacity_to_reserve` items as
+        //   `self.reserve(capacity_to_reserve)` above guarantees that.
+        // * Source and destination ranges cannot overlap as we just reserved the destination
+        //   range from the bump.
+        unsafe {
+            // Copy the contents of each slice onto the end of `self`
+            slices.iter().for_each(|slice| {
+                self.extend_from_slice_copy_unchecked(slice);
+            });
+        }
     }
 }
 
@@ -2073,7 +2383,11 @@ impl<'bump, T: 'bump> Vec<'bump, T> {
     /// assert_eq!(u, &[1, 2]);
     /// ```
     #[inline]
-    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<I::IntoIter>
+    pub fn splice<'a, R, I>(
+        &'a mut self,
+        range: R,
+        replace_with: I,
+    ) -> Splice<'a, 'bump, I::IntoIter>
     where
         R: RangeBounds<usize>,
         I: IntoIterator<Item = T>,
@@ -2451,7 +2765,11 @@ impl<'a, 'bump, T> FusedIterator for Drain<'a, 'bump, T> {}
 /// This struct is created by the [`Vec::splice`] method. See its
 /// documentation for more information.
 #[derive(Debug)]
-pub struct Splice<'a, 'bump, I: Iterator + 'a + 'bump> {
+pub struct Splice<'a, 'bump, I>
+where
+    I: Iterator,
+    I::Item: 'a + 'bump,
+{
     drain: Drain<'a, 'bump, I::Item>,
     replace_with: I,
 }
@@ -2619,18 +2937,41 @@ where
 impl<'bump> io::Write for Vec<'bump, u8> {
     #[inline]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.extend_from_slice(buf);
+        self.extend_from_slice_copy(buf);
         Ok(buf.len())
     }
 
     #[inline]
     fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        self.extend_from_slice(buf);
+        self.extend_from_slice_copy(buf);
         Ok(())
     }
 
     #[inline]
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(feature = "serde")]
+mod serialize {
+    use super::*;
+
+    use serde::{ser::SerializeSeq, Serialize, Serializer};
+
+    impl<'a, T> Serialize for Vec<'a, T>
+    where
+        T: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut seq = serializer.serialize_seq(Some(self.len))?;
+            for e in self.iter() {
+                seq.serialize_element(e)?;
+            }
+            seq.end()
+        }
     }
 }
