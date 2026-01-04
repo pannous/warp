@@ -682,6 +682,23 @@ impl Node {
 		}
 	}
 
+	/// Get key as owned String, returns empty string if not available
+	pub fn key_string(&self) -> String {
+		self.get_key().to_string()
+	}
+
+	/// Get key as Option<&str>, returns None if not a Symbol/Text key
+	pub fn key_opt(&self) -> Option<&str> {
+		match self {
+			Key(k, _) => match k.as_ref() {
+				Symbol(s) | Text(s) => Some(s.as_str()),
+				_ => None,
+			},
+			Meta { node, .. } => node.key_opt(),
+			_ => None,
+		}
+	}
+
 	pub fn get_value(&self) -> Node {
 		match self {
 			Key(_, v) => v.as_ref().clone(),
@@ -1392,6 +1409,19 @@ impl PartialEq<char> for &Node {
 
 // Note: &str comparison works via blanket impl: impl<A,B> PartialEq<&B> for &A where A: PartialEq<B>
 // Since Node implements PartialEq<str>, &Node automatically gets PartialEq<&str>
+
+// Allow Box<Node> comparisons with str (for Key nodes with Symbol/Text keys)
+impl PartialEq<str> for Box<Node> {
+	fn eq(&self, other: &str) -> bool {
+		self.as_ref().eq(other)
+	}
+}
+
+impl PartialEq<&str> for Box<Node> {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_ref().eq(*other)
+	}
+}
 
 impl PartialOrd<i32> for Node {
 	fn partial_cmp(&self, other: &i32) -> Option<std::cmp::Ordering> {
