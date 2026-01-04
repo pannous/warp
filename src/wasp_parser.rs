@@ -252,6 +252,102 @@ impl WaspParser {
 		text.trim().to_string()
 	}
 
+	/// Skip XML processing instruction: <?xml ... ?> or <?target ... ?>
+	/// Returns Empty since we don't preserve processing instructions
+	fn skip_processing_instruction(&mut self) -> Node {
+		self.advance(); // skip '?'
+
+		// Skip everything until '?>'
+		while !self.end_of_input() {
+			if self.current_char() == '?' && self.peek_char(1) == '>' {
+				self.advance(); // skip '?'
+				self.advance(); // skip '>'
+				return Empty; // Processing instructions are skipped
+			}
+			self.advance();
+		}
+
+		Empty
+	}
+
+	/// Skip XML comment: <!--...-->
+	/// Returns Empty since comments are handled elsewhere
+	fn skip_xml_comment(&mut self) -> Node {
+		self.advance(); // skip first '-'
+		self.advance(); // skip second '-'
+
+		// Skip everything until '-->'
+		while !self.end_of_input() {
+			if self.current_char() == '-' && self.peek_char(1) == '-' && self.peek_char(2) == '>' {
+				self.advance(); // skip first '-'
+				self.advance(); // skip second '-'
+				self.advance(); // skip '>'
+				return Empty; // Comments are skipped in XML mode
+			}
+			self.advance();
+		}
+
+		Empty
+	}
+
+	/// Skip DOCTYPE declaration: <!DOCTYPE ...>
+	/// Handles both simple and complex DOCTYPE with internal subset
+	fn skip_doctype(&mut self) -> Node {
+		// Skip until '>', handling nested brackets in internal subset
+		let mut bracket_depth = 0;
+
+		while !self.end_of_input() {
+			let ch = self.current_char();
+
+			if ch == '[' {
+				bracket_depth += 1;
+			} else if ch == ']' {
+				bracket_depth -= 1;
+			} else if ch == '>' && bracket_depth == 0 {
+				self.advance(); // skip '>'
+				return Empty; // DOCTYPE declarations are skipped
+			}
+
+			self.advance();
+		}
+
+		Empty
+	}
+
+	/// Parse CDATA section: <![CDATA[...]]>
+	/// Returns the content as a Text node
+	fn parse_cdata(&mut self) -> Node {
+		// Expect: [CDATA[
+		if self.current_char() != '[' {
+			return Empty;
+		}
+		self.advance(); // skip '['
+
+		// Check for "CDATA["
+		let expected = "CDATA[";
+		for expected_char in expected.chars() {
+			if self.current_char() != expected_char {
+				return Empty;
+			}
+			self.advance();
+		}
+
+		// Collect content until ]]>
+		let mut content = String::new();
+		while !self.end_of_input() {
+			if self.current_char() == ']' && self.peek_char(1) == ']' && self.peek_char(2) == '>' {
+				self.advance(); // skip first ']'
+				self.advance(); // skip second ']'
+				self.advance(); // skip '>'
+				return Node::Text(content);
+			}
+			content.push(self.current_char());
+			self.advance();
+		}
+
+		Node::Text(content) // Return what we have even if unterminated
+	}
+
 	fn is_at_line_end(&self) -> bool {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
@@ -509,6 +605,30 @@ impl WaspParser {
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
 	fn parse_xml_tag(&mut self) -> Node {
 		self.advance(); // skip '<'
+
+		// Handle XML directives and special constructs
+		if self.current_char() == '?' {
+			// Processing instruction: <?xml ... ?> or <?xml-stylesheet ... ?>
+			return self.skip_processing_instruction();
+		}
+
+		if self.current_char() == '!' {
+			// Could be: <!--comment-->, <!DOCTYPE...>, or <![CDATA[...]]>
+			self.advance(); // skip '!'
+
+			if self.current_char() == '-' && self.peek_char(1) == '-' {
+				// Comment: <!--...-->
+				return self.skip_xml_comment();
+			}
+
+			if self.current_char() == '[' {
+				// CDATA: <![CDATA[...]]>
+				return self.parse_cdata();
+			}
+
+			// DOCTYPE or other declaration: <!DOCTYPE...>
+			return self.skip_doctype();
+		}
 
 		// Check for closing tag </tag>
 		if self.current_char() == '/' {
