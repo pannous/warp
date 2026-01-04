@@ -15,7 +15,6 @@ pub mod analyzer;
 pub mod compiler;
 pub mod emitter;
 pub mod node;
-pub use node::Node;
 pub mod run;
 pub mod type_kinds;
 pub mod wasm_gc_emitter;
@@ -25,3 +24,18 @@ pub mod wasp_parser;
 pub mod ast;
 pub mod meta;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
+
+// ==================== Core Re-exports ====================
+// Node AST - the heart of wasp
+pub use node::{Bracket, Node, Separator};
+// Node variants (except Number/List which conflict with extension types)
+pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
+// Parser
+pub use wasp_parser::{parse, parse_file, parse_xml, WaspParser};
+// Type system
+pub use type_kinds::{AstKind, NodeKind};
+// Metadata
+pub use meta::{Dada, LineInfo};
+// WASM
+pub use wasm_gc_emitter::WasmGcEmitter;
+pub use wasm_gc_reader::GcObject;
