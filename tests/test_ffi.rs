@@ -206,8 +206,8 @@ fn test_ffi_fabs() {
 	// Test: int32 . int32 (abs from libc);
 	// Test: double . double (fabs from libc);
 	// Test: float32 . float32 (fabsf from libc);
-	is!("import fabs from 'm'\nfabs(3.14)", 3.14);
-	is!("import fabs from 'm'\nfabs(-3.14)", 3.14);
+	is!("import fabs from 'm'\nfabs(3.11)", 3.11);
+	is!("import fabs from 'm'\nfabs(-3.11)", 3.11);
 	// is!("import fabs from 'm'\nfabs(0.0)", 0.0);
 }
 
