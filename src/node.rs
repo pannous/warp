@@ -72,6 +72,7 @@ pub enum Node {
 	// Keyword(String), Call, Declaration … AST or here? AST!
 	Pair(Box<Node>, Box<Node>),
 	Key(String, Box<Node>), // todo ? via Pair or losing specificity?
+	// tagged pair a:b  or a:{b,c} or a([b:c]){d:e} etc
 	Tag {
 		title: String,
 		params: Box<Node>,

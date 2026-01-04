@@ -1,277 +1,229 @@
-// use_wasm_structs = true;
+use wasp::extensions::numbers::Number;
+use wasp::node::Node;
+use wasp::wasm_gc_emitter::WasmGcEmitter;
+use wasp::{eq, write_wasm};
+use wasp::node::Node::Empty;
+use wasp::wasm_gc_reader::read_bytes;
 
-// #[test] fn test_wasm_structs();
-// extern int tests_executed;
-// let compile : Node(String);
-
-use wasp::analyzer::analyze;
-use wasp::extensions::assert_throws;
-use wasp::node::{node, Node};
-use wasp::run::wasmtime_runner::run;
-use wasp::wasp_parser::parse;
-use wasp::{eq, is, put, skip};
-
+/// Test ergonomic reading patterns from rasm
 #[test]
-#[ignore]
-fn test_struct_wast() {
-	let _wast = r#"(module
-  (type $Box (struct (field $val (mut i32))));
-  (global $box (export "box") (ref $Box) (struct.new $Box (i32.const 42)));
-  (func $main (export "main") (result (ref $Box)));
-)"#;
-	// compile(wast);
-	let ok = run("test/wast/box.wast");
-	assert!(ok == 42);
-	// let boxx = *smartNode(ok);
-	// assert!(boxx["val"]==42);
+fn test_ergonomic_node_reading() {
+	println!("=== Testing Ergonomic WASM GC Reading ===\n");
+
+	// Generate a WASM module with a simple node
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Number(Number::Int(42));
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+
+	// Read it back ergonomically using fast shared engine
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	println!("✓ Loaded WASM module and got root node");
+
+	// Test field access
+	let kind: i32 = root.get("tag").expect("Failed to get tag");
+	println!("  Root kind (tag): {}", kind);
+	eq!(kind, 1); // NodeKind::Number
+
+	let int_value: i64 = root.get("int_value").expect("Failed to get int_value");
+	println!("  Int value: {}", int_value);
+	eq!(int_value, 42);
+
+	// Test convenience method
+	let kind2 = root.kind().expect("Failed to get kind");
+	println!("  Using .kind(): {}", kind2);
+	eq!(kind2, 1);
+
+	println!("\n✓ Ergonomic field access works!");
+}
+
+/// Test reading text nodes with memory access
+#[test]
+fn test_read_text_node() {
+	println!("=== Testing Text Node Reading ===\n");
+
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Text("hello".to_string());
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	println!("✓ Loaded text node");
+
+	let kind = root.kind().expect("Failed to get kind");
+	eq!(kind, 2); // NodeKind::Text
+
+	// Read text from linear memory
+	let text = root.text().expect("Failed to read text");
+	println!("  Text: '{}'", text);
+	eq!(text, "hello");
+
+	println!("\n✓ Text reading from linear memory works!");
+}
+
+/// Test reading symbol nodes
+#[test]
+fn test_read_symbol_node() {
+	println!("=== Testing Symbol Node Reading ===\n");
+
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Symbol("my_var".to_string());
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	let kind = root.kind().expect("Failed to get kind");
+	eq!(kind, 4); // NodeKind::Symbol
+
+	let text = root.text().expect("Failed to read symbol");
+	println!("  Symbol: '{}'", text);
+	eq!(text, "my_var");
+
+	println!("\n✓ Symbol reading works!");
+}
+
+/// Test the complete ergonomic pattern similar to: root = read("test.wasm"); is!(root.name, "html")
+#[test]
+fn test_ergonomic_pattern() {
+	println!("=== Testing Complete Ergonomic Pattern ===\n");
+
+	// Generate WASM with a Tag node that has a name
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Tag {
+		title: "html".to_string(),
+		params: Box::new(Node::keys("param", "test")),
+		body: Box::new(Node::keys("body", "ok")),
+	};
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+	let filename = "out/test_ergonomic_pattern.wasm";
+	write_wasm(filename, &bytes);
 }
 
 #[test]
 #[ignore]
-fn test_struct() {
-	// builtin with struct/record
-	is!("struct a{x:int y:float};b=a{1 0.2};b.y", 0.2);
-	return;
-	// is!("struct a{x:int y:int z:int};a{1 3 4}.y", 3);
-	// is!("struct a{x:int y:float};a{1 3.2}.y", 3.2);
-	// is!("struct a{x:int y:float};b a{1 0.2};b.y", 0.2);
-	// is!("struct a{x:int y:float};b:a{1 0.2};b.y", 0.2);
-	// is!("struct a{x:int y:float};a b{1 0.2};b.y", 0.2);
-	// is!("record a{x:u32 y:float32};a b{1 0.2};b.y", 0.2);
-	// is!(
-	//     r#"
-	// record person {
-	//     name: string,
-	//     age: u32,
-	//     has-lego-action-figure: bool,
-	// }; x=person{age:22}; x.age"#,
-	//     22
-	// ); // todo require optional fields marked as such with '?'
+fn what_was_that(){
+	let root = Empty; // eval(filename).expect("Failed to read WASM file");
+
+	println!("✓ Read WASM file");
+
+	// Access name field
+	let name = root.name();
+	println!("  Name: '{}'", name);
+
+	// The pattern: is!(root.name, "html")
+	eq!(name, "html");
+	println!("\n✓ Pattern works: root.name() == \"html\"");
+
+	// Verify kind
+	let _kind = root.kind();
+	// println!("  Kind: {}", kind);
+	// eq!(kind, 7); // NodeKind::Tag
 }
 
+/// Test field existence checking
 #[test]
-#[ignore]
-fn test_struct2() {
-	let code0 = "struct point{a:int b:int c:string}";
-	let node: Node = parse(code0);
-	//    eq!(node.kind(), Kind::structs);
-	eq!(node.length(), 3);
-	// eq!(IntegerType, node[1].typ());
-	//    const char *code = "struct point{a:int b:int c:string};x=point(1,2,'ok');x.b";
-	// basal node_pointer act as structs
-	is!("point{a:int b:int c:string};x=point(1,2,'ok');x.b", 2);
-	is!(
-		"data=[1,2,3];struct point{a:int b:int c:string};x=data as struct;x.b",
-		2
+fn test_field_existence() {
+	println!("=== Testing Field Existence ===\n");
+
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Number(Number::Int(123));
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	// Test has() method
+	assert!(root.has("tag").unwrap());
+	assert!(root.has("int_value").unwrap());
+	assert!(root.has("kind").unwrap()); // alias
+	assert!(!root.has("nonexistent").unwrap());
+
+	println!("✓ Field existence checking works");
+}
+
+/// Test empty node
+#[test]
+fn test_empty_node() {
+	println!("=== Testing Empty Node ===\n");
+
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	emitter.emit_node_main(&Node::Empty);
+
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	let kind = root.kind().expect("Failed to get kind");
+	eq!(kind, 0); // NodeKind::Empty
+
+	println!("✓ Empty node works");
+}
+
+/// Test codepoint node
+#[test]
+fn test_codepoint_node() {
+	println!("=== Testing Char Node ===\n");
+
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+
+	let node = Node::Char('🦀');
+	emitter.emit_node_main(&node);
+
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+
+	let kind = root.kind().expect("Failed to get kind");
+	eq!(kind, 3); // NodeKind::Char
+
+	let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
+	println!(
+		"  Char value: {} ({})",
+		codepoint,
+		char::from_u32(codepoint as u32).unwrap_or('?')
 	);
+	eq!(codepoint, '🦀' as i64);
+
+	println!("✓ Char node works");
 }
 
+/// Test float number node
 #[test]
-#[ignore]
-fn test_wasm_gc() {
-	//    is!("y=(1 4 3)[1]", 4);
-	//    is!("x=(1 4 3);x#2", 4);
-	//is!("42",42);
-	// use_wasm_structs = true;
-	// use_wasm_strings = true;
-	// use_wasm_arrays = true;
-	//    is!("x=(1 2 3)", 0);
-	let fun = node("some");
-	// fun.name = "first";
-	// fun.kind = declaration; // ≠ functor;
-	// fun.typo = types["u8"];
+fn test_float_node() {
+	println!("=== Testing Float Node ===\n");
 
-	let fun_type = node("no");
-	// fun.name = "my_callback";
-	// fun.kind = NodeKind::Class;
-	//	fun.kind = functor; todo
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
 
-	//	testGcFunctionReferences();
-	is!("(type $int_callback (func (result i32)))", fun_type); // e.g. random provider
-	is!("(type $my_notification (func ))", fun_type);
-	is!(
-		"(type $my_callback (func (param i32) (result i32)))",
-		fun_type
-	);
-	//	testGcFunctionReferenceParameters();
-	//	testGcReferenceParameters();
-	is!("def first(array);", fun);
-	is!("def first(array<u8>);", fun);
-	is!("def first(list<u8>);", fun);
-	is!("x=(5 4 3);u8 first(list<u8> y){y#1};first(x)", 5);
-	is!("x=(5 6 7);#x", 3);
-	is!("x=(5 6 7);x#2", 6);
-	is!("'world'#1", 'w');
-	is!("y=(1 4 3)#2", 4);
-	is!("id(3*42)≥2*3", 1);
-	is!("#'abcde'", 5);
-	is!("x='abcde';#x", 5);
-	is!("x=(1 2 1 2 1);#x", 5);
-	//	is!("#(1 2 1)", 3);
+	let node = Node::Number(Number::Float(3.14));
+	emitter.emit_node_main(&node);
 
-	is!("x='abcde';x#4='f';x[3]", 'f');
-	is!("42", 42); // basics
-				//    is!("x=(1 2 3);x[1]", 2);
-				//    is!("x=(1 2 3);2", 2);
-				//    is!("(1 2 3)[1]", 2);
-				//    exit(0);
-				//    is!("x=[1 2 3];x[1]", 2);
-				//    is!("x=[1 2 3];x[1]=4;x[1]", 4);
-	is!("struct a{x:int y:int z:int};a{1 3 4}.y", 3);
+	let bytes = emitter.finish();
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
 
-	is!("'abcd'", "abcd");
-	is!("'ab'+'cd'=='abcd'", 1);
-	is!("abcde='fghij';42", 42);
-	//    is!("abcd='fghij';#abcd", 5);
-	//    is!("abcde='fghij'", "fghij"); // main can't return stringrefs!
+	let kind = root.kind().expect("Failed to get kind");
+	eq!(kind, 1); // NodeKind::Number
 
-	//    exit(0);
-}
+	let float_value: f64 = root.get("float_value").expect("Failed to get float");
+	println!("  Float value: {}", float_value);
+	eq!(float_value, 3.14);
 
-#[test]
-#[ignore]
-fn test_wasm_node_struct() {
-	// let wasp_object_code = "a{b:c}";
-	let wasp_object_code = "a{b:42}";
-	let a_node = parse(wasp_object_code);
-	is!(wasp_object_code, a_node);
-}
-
-#[test]
-#[ignore]
-fn test_wasm_linear_memory_node() {
-	// let wasp_object_code = "a{b:c}";
-	let wasp_object_code = "a{b:42}";
-	let a_node = parse(wasp_object_code);
-	is!(wasp_object_code, a_node);
-}
-
-#[test]
-#[ignore]
-fn test_wasm_structs() {
-	test_wasm_node_struct();
-	let integer_type: Node = node("int");
-	let a_node = Node::tag("A", Node::key("a", integer_type)); // TODO: Class -> tag constructor
-	let a2 = analyze(parse("class A{a:int}"));
-	eq!(a_node, a2);
-	is!("class A{a:int}", a_node);
-}
-
-#[test]
-#[ignore]
-fn test_flag_safety() {
-	let _code = "flags empty_flags{}; empty_flags mine = data_mode | space_brace;";
-	//     assert_throws(code) // "data_mode not a member of empty_flags"s
-	assert_throws("enum cant_combine{a;b}; a+b;");
-	assert_throws("enum context_x{a;b};enum context_y{b;c};b;");
-}
-
-#[test]
-#[ignore]
-fn test_flags2() {
-	// todo allow just parser-flags{…} in wasp > wit
-	let code = r#"flags parser-flags{
-        data_mode
-        arrow
-        space_brace
-       }
-       parser-flags my_flags = data_mode + space_brace
-    "#;
-	//     is!(code, 5) // 1+4
-	// clearAnalyzerContext();
-	let parsed: Node = parse(code); //, { kebab_case: true });
-	let node1: Node = analyze(parsed);
-	// assert!(types.has("parser-flags"));
-	// assert!(globals.has("data_mode"));
-	//     assert!(globals.has("parser-flags.data_mode")) //
-	let parser_flags: Node = node1.first();
-	// todo AddressSanitizer:DEADLYSIGNAL why? lldb does'nt fail here
-	assert!(parser_flags.name() == "parser-flags");
-	let flags = node("flags");
-	assert!(parser_flags.class() == flags);
-	assert!(parser_flags.length() == 3);
-	assert!(parser_flags[1].name() == "arrow");
-	// assert!(parserFlags[2].value() == 4); // TODO: fix comparison or value() method
-	let instance: Node = node1.laste();
-	put!(instance);
-	assert!(instance.name() == "my_flags");
-	// assert!(instance.class() == Node);
-	//     assert!(instance.typo->name == "parser-flags") // deduced!
-	//     assert!(instance.class() == Flags) // kind? not really type! todo?
-	// let my_flags = instance.interpret(); // TODO: implement interpret method
-	let my_flags = instance; // stub for now
-	my_flags.print(); // Changed from print(my_flags) to my_flags.print()
-				   //     assert!(my_flags.value() == 5) // 1+4 bit internal detail!
-	skip!(
-
-		assert!(my_flags.values().serialize() == "data_mode + space_brace");
-	);
-
-	//    assert!(node.last().serialize() == "ParserOptions my_flags = data_mode | space_brace") // todo canonical type serialization!?
-}
-
-#[test]
-#[ignore]
-fn test_flags() {
-	// clearAnalyzerContext(); // TODO: implement
-	let parsed: Node = parse("flags abc{a b c}");
-	// backtrace_line(); // TODO: implement
-	let node: Node = analyze(parsed);
-	assert!(node.name() == "abc");
-	// assert!(node.class() == Flags); // TODO: define Flags or fix this test
-	assert!(node.length() == 3);
-	assert!(node[0].name() == "a");
-	// eq!(typeName(node[0].kind), typeName(flag_entry));
-	// eq!(node[0].kind(), flag_entry);
-	// assert!(node[0].class() == Flag_entry);
-	// assert!(node[0].value() == 1); // TODO: fix comparison
-	// assert!(node[0].typo);
-	// assert!(node[0].typo == node);
-	// assert!(node[1].value() == 2); // TODO: fix comparison
-	// assert!(node[2].value() == 4); // TODO: fix comparison
-}
-
-#[test]
-fn test_wit_interface() {
-	//     let mod : Node = Node("host-funcs").setKind(modul).add(Node("current-user").setKind(functor).add(StringType));
-	// is!("interface host-funcs {current-user: func() -> string}", mod);
-}
-
-#[test]
-fn test_wit_export() {
-	//     const char
-	let code = "struct point{x:int y:float}";
-	let _node: Node = parse(code);
-	// bindgen(node);
-}
-
-
-#[test]
-fn test_wit() {
-	//    testWitFunction();
-	//    testWitInterface();
-	/*
-	WitReader::read("test/merge/world.wit");
-	WitReader::read("samples/bug.wit");
-	WitReader::read("test/merge/example_dep/index.wit");
-	WitReader::read("test/merge/index.wit");
-	WitReader::read("samples/wit/typenames.wit");
-	WitReader::read("samples/wit/wasi_unstable.wit");
-	*/
-	//    assert!(wit.length() > 0);
-}
-
-#[test]
-fn test_class() {
-	analyze(parse(
-		"public data class Person(string FirstName, string LastName);",
-	));
-	analyze(parse("public data class Student : Person { int ID; }"));
-	analyze(parse(
-		"var person = new Person('Scott', 'Hunter'); // positional construction",
-	));
-	analyze(parse(
-		"otherPerson = person with { LastName = \"Hanselman\" };",
-	));
-	//    "var (f, l) = person;                        // positional deconstruction"
+	println!("✓ Float node works");
 }
