@@ -279,3 +279,153 @@ fn test_to_xml_boolean_attribute() {
 	let reparsed = parse_xml(&output);
 	eq!(node, reparsed);
 }
+#[test]
+#[ignore] // Run with: cargo test -- --ignored
+fn test_parse_all_xml_files() {
+	use std::fs;
+	use std::path::Path;
+
+	println!("\n=== Parsing all XML files in filesystem ===\n");
+
+	let search_paths = vec![
+		"/usr/share",
+		"/System/Library",
+		"/Library",
+		"/Applications",
+		"/Users/me",
+	];
+
+	let mut total_files = 0;
+	let mut successful = 0;
+	let mut failed = 0;
+	let mut errors = Vec::new();
+
+	for search_path in &search_paths {
+		if !Path::new(search_path).exists() {
+			continue;
+		}
+
+		println!("Searching in {}...", search_path);
+
+		// Find XML files (limit depth to avoid taking too long)
+		if let Ok(entries) = find_xml_files(search_path, 3) {
+			for file_path in entries {
+				total_files += 1;
+
+				// Read and parse
+				if let Ok(content) = fs::read_to_string(&file_path) {
+					// Skip very large files (> 1MB)
+					if content.len() > 1_000_000 {
+						continue;
+					}
+
+					let node = parse_xml(&content);
+
+					// Check if parsing succeeded (no Error nodes in result)
+					if contains_error(&node) {
+						failed += 1;
+						if errors.len() < 10 {
+							// Only keep first 10 errors
+							errors.push((file_path.clone(), node.serialize()));
+						}
+					} else {
+						successful += 1;
+
+						// Test roundtrip on successful parses
+						let xml_out = node.to_xml();
+						let reparsed = parse_xml(&xml_out);
+						if node != reparsed {
+							println!("  ⚠️  Roundtrip mismatch: {}", file_path);
+						}
+					}
+				}
+
+				// Print progress every 100 files
+				if total_files % 100 == 0 {
+					println!("  Processed {} files...", total_files);
+				}
+			}
+		}
+	}
+
+	println!("\n=== Results ===");
+	println!("Total files:  {}", total_files);
+	println!("Successful:   {} ({:.1}%)", successful, (successful as f64 / total_files as f64) * 100.0);
+	println!("Failed:       {} ({:.1}%)", failed, (failed as f64 / total_files as f64) * 100.0);
+
+	if !errors.is_empty() {
+		println!("\n=== First {} Errors ===", errors.len());
+		for (path, error) in errors {
+			println!("File: {}", path);
+			println!("Error: {}", error);
+			println!();
+		}
+	}
+
+	// Test passes if we successfully parsed at least some files
+	assert!(successful > 0, "Should successfully parse at least some XML files");
+}
+
+fn find_xml_files(path: &str, max_depth: usize) -> std::io::Result<Vec<String>> {
+	use std::path::Path;
+
+	let mut xml_files = Vec::new();
+	find_xml_files_recursive(Path::new(path), max_depth, 0, &mut xml_files)?;
+	Ok(xml_files)
+}
+
+fn find_xml_files_recursive(
+	path: &std::path::Path,
+	max_depth: usize,
+	current_depth: usize,
+	results: &mut Vec<String>,
+) -> std::io::Result<()> {
+	if current_depth >= max_depth {
+		return Ok(());
+	}
+
+	if let Ok(entries) = std::fs::read_dir(path) {
+		for entry in entries.flatten() {
+			let path = entry.path();
+
+			// Skip hidden files and system directories
+			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+				if name.starts_with('.') {
+					continue;
+				}
+			}
+
+			if path.is_file() {
+				if let Some(ext) = path.extension() {
+					if ext == "xml" {
+						if let Some(path_str) = path.to_str() {
+							results.push(path_str.to_string());
+
+							// Limit to first 1000 files to avoid taking forever
+							if results.len() >= 1000 {
+								return Ok(());
+							}
+						}
+					}
+				}
+			} else if path.is_dir() {
+				// Recurse into subdirectory
+				let _ = find_xml_files_recursive(&path, max_depth, current_depth + 1, results);
+			}
+		}
+	}
+
+	Ok(())
+}
+
+fn contains_error(node: &wasp::node::Node) -> bool {
+	use wasp::node::Node::*;
+
+	match node {
+		Error(_) => true,
+		List(items, _, _) => items.iter().any(contains_error),
+		Key(_, v) => contains_error(v),
+		Meta { node, .. } => contains_error(node),
+		_ => false,
+	}
+}
