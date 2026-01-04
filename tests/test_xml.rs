@@ -1,15 +1,23 @@
 use wasp::eq;
 use wasp::node::Node;
 use wasp::wasp_parser::parse_xml;
+use Node::*;
 
 #[test]
 fn test_simple_xml_tag() {
 	let xml = "<div>Hello</div>";
 	let node = parse_xml(xml);
 	println!("Parsed: {:?}", node);
+	eq!(node.name(), "div");
+	// eq!(node.key(), "div");
+	eq!(node.get_key(), "div");
+	// eq!(node.first(), "div"); ambiguous: is it key or value? Hello? even "H"?
+	// eq!(node.get_key().name(), "div"); // get_key returns &str, not Node
+	eq!(node.value(), "Hello");
+	eq!(node["div"], "Hello");
 
 	// Should be Key("div", Text("Hello"))
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Key(name, value) = node.drop_meta() {
 		eq!(name, "div");
 		eq!(**value, Node::Text("Hello".to_string())); // **unbox de&reference &Box<Node>
 	} else {
