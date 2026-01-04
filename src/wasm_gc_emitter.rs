@@ -3,7 +3,7 @@ use crate::node::{Bracket, DataType, Node};
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
@@ -29,6 +29,7 @@ pub struct WasmGcEmitter {
 	next_type_idx: u32,
 	next_func_idx: u32,
 	function_indices: HashMap<&'static str, u32>, //  (Constructor and later others)
+	used_functions: HashSet<&'static str>,        // Functions actually called during emission
 	// String storage for linear memory
 	string_table: HashMap<String, u32>, // Maps string -> memory offset
 	next_data_offset: u32,
@@ -74,6 +75,7 @@ impl WasmGcEmitter {
 			next_type_idx: 0,
 			next_func_idx: 0,
 			function_indices: HashMap::new(),
+			used_functions: HashSet::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8, // Start at offset 8 to avoid confusion with null (0)
 			data_segment_names: Vec::new(),
@@ -676,6 +678,26 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Emit a call instruction and track the function as used
+	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
+		self.used_functions.insert(name);
+		func.instruction(&Instruction::Call(self.function_indices[name]));
+	}
+
+	/// Get list of functions that were defined but never called
+	pub fn get_unused_functions(&self) -> Vec<&'static str> {
+		self.function_indices
+			.keys()
+			.filter(|name| !self.used_functions.contains(*name))
+			.copied()
+			.collect()
+	}
+
+	/// Get list of functions that were actually called
+	pub fn get_used_functions(&self) -> Vec<&'static str> {
+		self.used_functions.iter().copied().collect()
+	}
+
 	fn emit_node_null(&self, func: &mut Function) {
 		func.instruction(&Instruction::RefNull(HeapType::Concrete(
 			self.node_base_type,
@@ -683,7 +705,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit WASM instructions to construct a Node in the unified struct format
-	fn emit_node_instructions(&self, func: &mut Function, node: &Node) {
+	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
 		// Unwrap metadata if present
 		let node = node.drop_meta();
 
@@ -692,21 +714,21 @@ impl WasmGcEmitter {
 				// self.emit_node_null(func);
 				// expected (ref $type), found (ref null $type) currently not nullable
 				// self.emit_empty_node(func, NodeKind::Empty);
-				func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
+				self.emit_call(func, "new_empty");
 			}
 			Node::Number(num) => {
 				match num {
 					Number::Int(i) => {
 						func.instruction(&Instruction::I64Const(*i));
-						func.instruction(&Instruction::Call(self.function_indices["new_int"]));
+						self.emit_call(func, "new_int");
 					}
 					Number::Float(f) => {
 						func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
-						func.instruction(&Instruction::Call(self.function_indices["new_float"]));
+						self.emit_call(func, "new_float");
 					}
 					_ => {
 						// Quotient, Complex not yet supported - emit empty node
-						func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
+						self.emit_call(func, "new_empty");
 					}
 				}
 			}
@@ -718,11 +740,11 @@ impl WasmGcEmitter {
 					.unwrap_or((0, s.len() as u32));
 				func.instruction(&I32Const(ptr as i32));
 				func.instruction(&I32Const(len as i32));
-				func.instruction(&Instruction::Call(self.function_indices["new_text"]));
+				self.emit_call(func, "new_text");
 			}
 			Node::Char(c) => {
 				func.instruction(&I32Const(*c as i32));
-				func.instruction(&Instruction::Call(self.function_indices["new_codepoint"]));
+				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
 				let (ptr, len) = self
@@ -732,7 +754,7 @@ impl WasmGcEmitter {
 					.unwrap_or((0, s.len() as u32));
 				func.instruction(&I32Const(ptr as i32));
 				func.instruction(&I32Const(len as i32));
-				func.instruction(&Instruction::Call(self.function_indices["new_symbol"]));
+				self.emit_call(func, "new_symbol");
 			}
 			Node::Key(key, value) => {
 				let (ptr, len) = self
@@ -743,12 +765,12 @@ impl WasmGcEmitter {
 				func.instruction(&I32Const(ptr as i32));
 				func.instruction(&I32Const(len as i32));
 				self.emit_node_instructions(func, value);
-				func.instruction(&Instruction::Call(self.function_indices["new_keyvalue"]));
+				self.emit_call(func, "new_keyvalue");
 			}
 			Node::Pair(_left, _right) => {
 				self.emit_node_instructions(func, _left);
 				self.emit_node_instructions(func, _right);
-				func.instruction(&Instruction::Call(self.function_indices["new_pair"]));
+				self.emit_call(func, "new_pair");
 			}
 			Node::List(items, bracket, _separator) => {
 				// Special case: single-item lists emit the item directly
@@ -758,7 +780,7 @@ impl WasmGcEmitter {
 				}
 				// Empty list
 				if items.is_empty() {
-					func.instruction(&Instruction::Call(self.function_indices["new_empty"]));
+					self.emit_call(func, "new_empty");
 					return;
 				}
 				// name_ptr, name_len
