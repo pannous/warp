@@ -1,151 +1,62 @@
-use wasp::node::Node::{Empty, False, True};
-use wasp::node::{Bracket, Node, Separator};
-use wasp::*;
-
-// use wasp::node::Node::*;
-
-#[test]
-fn test_node() {
-	// let n:Node = Node::new();
-	// eval("key=value");
-	let n: Node = Node::keys("key", "value");
-	eq!(n.get_key(), "key");
-	eq!(n.get_value(), &Node::text("value"));
-	// let n:Node = Key("key".s(), Box::new(Text("value".s())));
-	println!("{:?}", n);
-}
-
-#[test]
-fn test_node_list() {
-	let n: Node = Node::ints(vec![1, 2, 3]);
-	println!("{:?}", n);
-	eq!(n[0], 1);
-}
-
-#[test]
-fn test_node_index_str() {
-	// Test indexing let str : with on Block containing Key nodes
-	let mut block = Node::List(
-		vec![
-			Node::key("name", Node::text("Alice")),
-			Node::key("age", Node::int(30)),
-		],
-		Bracket::Curly, Separator::None,
-	);
-	eq!(block["name"], Node::text("Alice"));
-	eq!(block["age"], 30);
-	eq!(block["nonexistent"], Node::Empty);
-
-	// Test mutable indexing with automatic conversion
-	block["name"] = "Bob".into();
-	eq!(block["name"], "Bob");
-
-	block["age"] = 25.into();
-	eq!(block["age"], 25);
-}
-
-#[test]
-fn test_node_not_operator() {
-	// Boolean nodes
-	eq!(!True, False);
-	eq!(!False, True);
-
-	// Empty/null
-	eq!(!Empty, True);
-
-	// Numbers
-	eq!(!Node::int(0), True);
-	eq!(!Node::int(1), False);
-	eq!(!Node::int(42), False);
-	eq!(!Node::float(0.0), True);
-	eq!(!Node::float(3.14), False);
-
-	// Strings
-	eq!(!Node::text(""), True);
-	eq!(!Node::text("hello"), False);
-	eq!(!Node::symbol(""), True);
-	eq!(!Node::symbol("x"), False);
-
-	// Collections
-	eq!(!Node::List(vec![], Bracket::Square, Separator::None), True);
-	eq!(!Node::ints(vec![1, 2, 3]), False);
-}
-
-#[test]
-fn test_node_equality() {
-	let n0: Node = Node::int(0);
-	let n1: Node = Node::int(1);
-	let n2: Node = Node::int(2);
-	let n3: Node = Node::float(2.0);
-	eq!(n1, 1);
-	eq!(n2, 2);
-	eq!(n3, 2);
-	eq!(n3, 2.0);
-	eq!(n1, true);
-	eq!(n0, false);
-	assert_ne!(n1, n2);
-	assert_ne!(n1, 2);
-
-	// Test string comparisons in both directions
-	let text_node = Node::text("hello");
-	let symbol_node = Node::symbol("world");
-	assert!(text_node == "hello");
-	assert!("hello" == text_node);  // Reverse comparison
-	assert!(symbol_node == "world");
-	assert!("world" == symbol_node);  // Reverse comparison
-}
-
-#[test]
-fn test_node_data_eq() {
-	let n = Node::data(vec![1, 2, 3]);
-	let n2 = n.clone();
-	eq!(n, n2)
-}
-
-// #[test]
-// fn test_node_box() {
-//     let n: Node = Node::Data("data".into());
-//     println!("{:?}", n);
-//     eq!(n, Node::Data("data".into()));
-// }
+use wasp::eq;
+use wasp::node::Node;
+use wasp::wasp_parser::parse;
 
 #[test]
 #[ignore]
-fn test_roots() {
-	assert!(Empty == 0);
-	/* is!((char *) "'hello'", "hello"); */
-	is!("True", True);
-	is!("False", False);
-	is!("true", True);
-	is!("false", False);
-	is!("yes", True);
-	is!("no", False);
-	//	is!("right", True);
-	//	is!("wrong", False);
-	is!("null", Empty);
-	is!("", Empty);
-	assert!(Empty == 0);
-	is!("0", Empty);
-	is!("1", 1);
-	is!("123", 123);
-	is!("()", Empty);
-	is!("{}", Empty); // NOP
-	is!("hello", "hello"); // todo reference==string really?
+fn test_remove() {
+	let result = parse("a b c d");
+	// result.remove(1, 2); // TODO: implement remove method
+	let replaced = parse("a d");
+	assert!(result == replaced);
 }
-
 
 #[test]
 #[ignore]
-fn test_did_you_mean_alias() {
-	// let ok1 = parse("printf!('hi')");
-	// eq!(ok1[".warnings"], "DYM print"); // THIS CAN NEVER HAVED WORKED! BUG IN TEST PIPELINE!
+fn test_remove2() {
+	let result = parse("a b c d");
+	result.remove(2, 10);
+	let replaced = parse("a b");
+	assert!(result == replaced);
 }
 
 #[test]
-fn test_node_name() {
-	let a = Node::Symbol("xor".to_string()); // NOT type string by default!
-	let ok1 = a == "xor";
-	eq!(a, "xor");
-	eq!(a.name(), "xor");
-	assert!(ok1);
+#[ignore]
+fn test_replace() {
+	let result = parse("a b c d");
+	// result.replace(1, 2, Node("x"));
+	let replaced = parse("a x d");
+	assert!(result == replaced);
+}
+
+#[test]
+#[ignore]
+fn test_mark_as_map() {
+	let mut compare = Node::new();
+	//	compare["d"] = Node();
+	compare["b"] = 3.into();
+	compare["a"] = "HIO".into();
+	let dangling: Node = compare["c"].clone();
+	assert!(dangling.is_nil());
+	//     assert!(Nil();
+	assert!(dangling == Node::Empty);
+	assert!(&dangling != &Node::Empty); // not same pointer!
+	let dangling = Node::from(3);
+	//	dangling = 3;
+	assert!(dangling == 3);
+	assert!(compare["c"] == 3);
+	eq!(compare["c"], Node::from(3));
+	let node: Node = compare["a"].clone();
+	assert!(node == "HIO");
+	//     chars
+	let source = "{b:3 a:'HIO' c:3}"; // d:{}
+	let marked = parse(source);
+	let node1: Node = marked["a"].clone();
+	assert!(node1 == "HIO");
+	assert!(compare["a"] == "HIO");
+	assert!(marked["a"] == "HIO");
+	assert!(node1 == compare["a"]);
+	assert!(marked["a"] == compare["a"]);
+	assert!(marked["b"] == compare["b"]);
+	assert!(compare == marked);
 }
