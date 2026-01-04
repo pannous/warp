@@ -352,6 +352,143 @@ impl WaspParser {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
 
+	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
+	/// Checks longer operators first (greedy matching)
+	fn peek_operator(&self) -> Option<(Op, usize)> {
+		let c1 = self.current_char();
+		let c2 = self.peek_char(1);
+
+		// Check 2-char operators first
+		match (c1, c2) {
+			(':', '=') => return Some((Op::Define, 2)),
+			(':', ':') => return Some((Op::Scope, 2)),
+			('-', '>') => return Some((Op::Arrow, 2)),
+			('=', '>') => return Some((Op::FatArrow, 2)),
+			_ => {}
+		}
+
+		// Check 1-char operators
+		match c1 {
+			':' => Some((Op::Colon, 1)),
+			'=' => Some((Op::Assign, 1)),
+			'.' => Some((Op::Dot, 1)),
+			_ => None,
+		}
+	}
+
+	/// Parse an atomic expression (no infix operators)
+	/// Handles: numbers, strings, brackets, symbols with named blocks
+	fn parse_atom(&mut self) -> Node {
+		let (_, _, comment) = self.skip_whitespace_and_comments();
+		let (line_nr, column) = self.get_position();
+
+		if self.is_at_line_end() {
+			return Empty;
+		}
+
+		let node = match self.current_char() {
+			'"' | '\'' | '«' => self.parse_string(),
+			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
+			'<' if self.options.xml_mode => self.parse_xml_tag(),
+			'<' => self.parse_bracketed('<'),
+			';' | '>' => Empty,
+			ch if ch.is_numeric() || (ch == '-' && self.peek_char(1).is_numeric()) => self.parse_number(),
+			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
+			ch => {
+				warn!("Unexpected character '{}' at line {}, column {}", ch, line_nr, column);
+				self.advance();
+				Error(format!("Unexpected character '{}'", ch))
+			}
+		};
+
+		if node == Empty {
+			return node;
+		}
+
+		// Attach metadata
+		let node = node.with_meta_data(LineInfo { line_nr, column, line: self.current_line.clone() });
+		if let Some(c) = comment {
+			node.with_comment(c)
+		} else {
+			node
+		}
+	}
+
+	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
+	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
+	fn parse_symbol_with_suffix(&mut self) -> Node {
+		let symbol = match self.parse_symbol() {
+			Ok(s) => s,
+			Err(e) => return Error(e),
+		};
+		self.skip_spaces();
+
+		// Check for suffix blocks (these bind tighter than any infix operator)
+		match self.current_char() {
+			'{' => {
+				let block = self.parse_bracketed('{');
+				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
+			}
+			'<' if !self.options.xml_mode => {
+				let generic = self.parse_bracketed('<');
+				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
+			}
+			'(' => {
+				let params = match self.parse_parenthesized() {
+					Ok(p) => p,
+					Err(e) => return Error(e),
+				};
+				self.skip_whitespace();
+
+				if self.current_char() == '{' {
+					let body = self.parse_bracketed('{');
+					let signature = Node::text(&format!("{}{}", symbol, params));
+					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+				} else {
+					// Just a call: name(params) - operators handled by parse_expr
+					Node::text(&format!("{}{}", symbol, params))
+				}
+			}
+			_ => Node::symbol(&symbol),
+		}
+	}
+
+	/// Pratt parser: parse expression with given minimum binding power
+	fn parse_expr(&mut self, min_bp: u8) -> Node {
+		let mut lhs = self.parse_atom();
+
+		loop {
+			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
+
+			// Check for infix operator
+			let (op, chars) = match self.peek_operator() {
+				Some(pair) => pair,
+				None => break,
+			};
+
+			let (l_bp, r_bp) = op.binding_power();
+
+			// Stop if operator binds less tightly than our minimum
+			if l_bp < min_bp {
+				break;
+			}
+
+			// Consume the operator
+			for _ in 0..chars {
+				self.advance();
+			}
+			self.skip_whitespace();
+
+			// Parse right-hand side with appropriate binding power
+			let rhs = self.parse_expr(r_bp);
+
+			// Build the Key node
+			lhs = Node::Key(Box::new(lhs), op, Box::new(rhs));
+		}
+
+		lhs
+	}
+
 	fn parse_value(&mut self) -> Node {
 		let (_, _, comment) = self.skip_whitespace_and_comments();
 
@@ -376,7 +513,7 @@ impl WaspParser {
 						Node::Symbol("->".to_string())
 					}
 					_ if ch.is_numeric() || ch == '-' => self.parse_number(), // '三'.is_numeric()!
-					_ if ch.is_alphabetic() || ch == '_' => self.parse_symbol_or_named_block(),
+					_ if ch.is_alphabetic() || ch == '_' => self.parse_expr(0),
 					// _ if ch.is_ascii_graphic() // is_ascii minus  is_control
 					// _ if ch.is_control() => self.
 					_ => {
@@ -515,107 +652,6 @@ impl WaspParser {
 		if symbol.is_empty() { Err("Empty symbol".to_string()) } else { Ok(symbol) }
 	}
 
-	fn parse_symbol_or_named_block(&mut self) -> Node {
-		let symbol = match self.parse_symbol() {
-			Ok(s) => s,
-			Err(e) => return Error(e),
-		};
-		self.skip_spaces(); // Only spaces, not newlines
-
-		// Check for named block: name{...} or name(...) or name<...>
-		match self.current_char() {
-			'{' => {
-				let block = self.parse_bracketed('{');
-				// Create Key for named blocks: html{...} -> Key(Symbol("html"), body)
-				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
-			}
-			'<' => {
-				// Generic type: option<string> -> Key(Symbol("option"), <string>)
-				let generic = self.parse_bracketed('<');
-				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
-			}
-			'(' => {
-				// Function-like: def name(params){body} or name(params):value
-				let params = match self.parse_parenthesized() {
-					Ok(p) => p,
-					Err(e) => return Error(e),
-				};
-				let _ = self.skip_whitespace();
-
-				if self.current_char() == '{' {
-					let body = self.parse_bracketed('{');
-					// Use List for function syntax: name(params) : body
-					let signature = Node::text(&format!("{}{}", symbol, params));
-					Node::List(vec![signature, body], Bracket::Round, Separator::None)
-				} else if self.current_char() == ':' || self.current_char() == '=' {
-					// name(params):value or name(params)=value
-					self.advance();
-					let _ = self.skip_whitespace();
-					let value = self.parse_value();
-					let key = format!("{}{}", symbol, params);
-					Node::key(&key, value)
-				} else {
-					// Just a call: name(params)
-					Node::text(&format!("{}{}", symbol, params))
-				}
-			}
-			':' => {
-				// Type annotation (high precedence): a:int
-				self.advance();
-				let _ = self.skip_whitespace();
-				let type_node = self.parse_type_annotation();
-				let annotated = Node::key(&symbol, type_node); // Uses Op::Colon
-
-				// Check for assignment after type annotation: (a:int)=7
-				self.skip_whitespace();
-				if self.current_char() == '=' {
-					self.advance();
-					let _ = self.skip_whitespace();
-					let value = self.parse_value();
-					Node::Key(Box::new(annotated), Op::Assign, Box::new(value))
-				} else {
-					annotated
-				}
-			}
-			'=' => {
-				// Assignment (low precedence): a=7
-				self.advance();
-				let _ = self.skip_whitespace();
-				let value = self.parse_value();
-				Node::key(&symbol, value)
-			}
-			_ => Node::symbol(&symbol),
-		}
-	}
-
-	/// Parse type annotation (after ':')
-	/// Just parse a simple value - symbols, numbers, brackets
-	/// Stops at '=' to preserve precedence: (a:int)=7
-	fn parse_type_annotation(&mut self) -> Node {
-		// For now, parse a symbol and handle ':' for nested types like option:int
-		// Numbers, parens, etc. just use parse_value since they can't have '=' ambiguity
-		let ch = self.current_char();
-		if ch.is_alphabetic() || ch == '_' {
-			let symbol = match self.parse_symbol() {
-				Ok(s) => s,
-				Err(e) => return Error(e),
-			};
-			self.skip_spaces();
-
-			// Handle nested type annotations like 'list:int' but NOT '='
-			if self.current_char() == ':' {
-				self.advance();
-				self.skip_whitespace();
-				let inner = self.parse_type_annotation();
-				Node::key(&symbol, inner)
-			} else {
-				Node::symbol(&symbol)
-			}
-		} else {
-			// Numbers, strings, brackets can't be followed by '=' in type position
-			self.parse_value()
-		}
-	}
 
 	fn parse_parenthesized(&mut self) -> Result<String, String> {
 		let mut result = String::new();

@@ -1,7 +1,6 @@
 use wasp::wasp_parser::WaspParser;
 use wasp::*;
 use wasp::Node::Number;
-use wasp::Number::Int;
 
 #[test]
 fn test_precedence() {
