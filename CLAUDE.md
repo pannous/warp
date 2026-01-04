@@ -232,3 +232,5 @@ When fixing a problem do not modify the test itself without consulting!
 git status before and after each task should show
 Your branch is up to date with 'origin/main'.
 nothing to commit
+
+use `cargo fix` after each commit and commit again
