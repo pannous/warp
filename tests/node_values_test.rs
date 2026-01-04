@@ -1,4 +1,4 @@
-use wasp::node::Node;
+use wasp::Node;
 
 #[test]
 fn test_values_key() {

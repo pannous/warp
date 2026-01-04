@@ -1,4 +1,4 @@
-use wasp::node::Node;
+use wasp::Node;
 use wasp::*;
 use wasp::analyzer::analyze;
 use wasp::type_kinds::NodeKind;

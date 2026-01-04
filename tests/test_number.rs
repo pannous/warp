@@ -1,6 +1,6 @@
 use wasp::Number::{Float, Int};
 use wasp::{eq, is, put, Number};
-// use wasp::node::Node::Number as Number;
+// use wasp::Node::Number as Number;
 // use wasp::Number::{Float, Int};
 
 #[test]

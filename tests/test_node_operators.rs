@@ -1,5 +1,5 @@
-use wasp::node::Node::*;
-use wasp::node::{Bracket, Node, Separator};
+use wasp::Node::*;
+use wasp::{Bracket, Node, Separator};
 use wasp::*; // TODO: Meta is not exported
 
 #[test]

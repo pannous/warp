@@ -1,6 +1,6 @@
 use wasp::eq;
-use wasp::node::Node;
-use wasp::node::Node::Empty;
+use wasp::Node;
+use wasp::Node::Empty;
 use wasp::wasp_parser::parse;
 
 #[test]

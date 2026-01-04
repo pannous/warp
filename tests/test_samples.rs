@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use wasp::node::Node;
+use wasp::Node;
 use wasp::wasp_parser::WaspParser;
 
 /// Test that all sample .wasp files can be parsed without errors
