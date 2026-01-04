@@ -17,7 +17,7 @@ fn test_simple_xml_tag() {
 	eq!(node["div"], "Hello");
 
 	// Should be Key("div", Text("Hello"))
-	if let Key(name, value) = node.drop_meta() {
+	if let Key(name, _, value) = node.drop_meta() {
 		eq!(name, "div");
 		eq!(**value, Node::Text("Hello".to_string())); // **unbox de&reference &Box<Node>
 	} else {
@@ -32,12 +32,12 @@ fn test_xml_with_attributes() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", List([Key(".class", "container"), Key(".id", "main"), Text("Content")]))
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Node::Key(name, _, value) = node.drop_meta() {
 		eq!(name, "div");
 		if let Node::List(items, _, _) = value.as_ref() {
 			eq!(items.len(), 3);
 			// Check first attribute
-			if let Node::Key(attr_name, attr_val) = &items[0] {
+			if let Node::Key(attr_name, _, attr_val) = &items[0] {
 				eq!(attr_name, ".class");
 				eq!(**attr_val, Node::Text("container".to_string()));
 			}
@@ -56,7 +56,7 @@ fn test_self_closing_tag() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("br", Empty)
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Node::Key(name, _, value) = node.drop_meta() {
 		eq!(name, "br");
 		eq!(**value, Node::Empty);
 	} else {
@@ -71,16 +71,16 @@ fn test_nested_xml() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", List([Key("p", ...), Key("span", ...)]))
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Node::Key(name, _, value) = node.drop_meta() {
 		eq!(name, "div");
 		if let Node::List(items, _, _) = value.as_ref() {
 			eq!(items.len(), 2);
 			// Check first child
-			if let Node::Key(child_name, _) = items[0].drop_meta() {
+			if let Node::Key(child_name, _, _) = items[0].drop_meta() {
 				eq!(child_name, "p");
 			}
 			// Check second child
-			if let Node::Key(child_name, _) = items[1].drop_meta() {
+			if let Node::Key(child_name, _, _) = items[1].drop_meta() {
 				eq!(child_name, "span");
 			}
 		} else {
@@ -135,12 +135,12 @@ fn test_boolean_attribute() {
 	println!("Parsed: {:?}", node);
 
 	// Should have .checked: true
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Node::Key(name, _, value) = node.drop_meta() {
 		eq!(name, "input");
 		if let Node::List(items, _, _) = value.as_ref() {
 			// Find the checked attribute
 			let has_checked = items.iter().any(|item| {
-				if let Node::Key(attr_name, attr_val) = item {
+				if let Node::Key(attr_name, _, attr_val) = item {
 					attr_name == ".checked" && **attr_val == Node::True
 				} else {
 					false
@@ -176,7 +176,7 @@ fn test_complex_xml_document() {
 	println!("Complex XML parsed successfully");
 
 	// Verify basic structure
-	if let Node::Key(name, _) = node.drop_meta() {
+	if let Node::Key(name, _, _) = node.drop_meta() {
 		eq!(name, "html");
 	} else {
 		panic!("Expected html root");
@@ -432,7 +432,7 @@ fn contains_error(node: &wasp::Node) -> bool {
 	match node {
 		Error(_) => true,
 		List(items, _, _) => items.iter().any(contains_error),
-		Key(_, v) => contains_error(v),
+		Key(_, _, v) => contains_error(v),
 		Meta { node, .. } => contains_error(node),
 		_ => false,
 	}
@@ -446,7 +446,7 @@ fn test_xml_declaration() {
 	println!("Parsed: {:?}", node);
 
 	// XML declaration should be skipped, only root tag parsed
-	if let Node::Key(name, _) = node.drop_meta() {
+	if let Node::Key(name, _, _) = node.drop_meta() {
 		eq!(name, "root");
 	} else {
 		panic!("Expected root Key node");
@@ -461,7 +461,7 @@ fn test_doctype() {
 	println!("Parsed: {:?}", node);
 
 	// DOCTYPE should be skipped
-	if let Node::Key(name, _) = node.drop_meta() {
+	if let Node::Key(name, _, _) = node.drop_meta() {
 		eq!(name, "html");
 	} else {
 		panic!("Expected html Key node");
@@ -477,7 +477,7 @@ fn test_xml_comments() {
 	println!("Parsed: {:?}", node);
 
 	// Comments should be skipped
-	if let Node::Key(name, _) = node.drop_meta() {
+	if let Node::Key(name, _, _) = node.drop_meta() {
 		eq!(name, "div");
 	} else {
 		panic!("Expected div Key node");
@@ -497,7 +497,7 @@ function test() {
 	println!("Parsed: {:?}", node);
 
 	// CDATA content should be preserved as text
-	if let Node::Key(name, value) = node.drop_meta() {
+	if let Node::Key(name, _, value) = node.drop_meta() {
 		eq!(name, "script");
 		// Content should include the JavaScript
 		let text = value.serialize();
@@ -524,7 +524,7 @@ fn test_real_world_xml() {
 	println!("Parsed: {:?}", node);
 
 	// Should successfully parse despite XML declaration and DOCTYPE
-	if let Node::Key(name, _) = node.drop_meta() {
+	if let Node::Key(name, _, _) = node.drop_meta() {
 		eq!(name, "plist");
 	} else {
 		panic!("Expected plist Key node");

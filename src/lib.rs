@@ -27,7 +27,7 @@ pub mod meta;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
-pub use node::{Bracket, Node, Separator};
+pub use node::{Bracket, DataType, Node, Op, Separator};
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
