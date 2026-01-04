@@ -1,6 +1,6 @@
 use wasp::node::Node;
 use wasp::node::Node::Empty;
-use wasp::smarty::smarty32;
+use wasp::smarty::{float_data28, smarty32};
 use wasp::{is, skip, Number};
 
 #[test]
@@ -422,7 +422,8 @@ fn test_smart_types() {
 	assert_eq!(smarty32(0xC001221A), "𒈚");
 	//	assert!(Node(0xD808DE1A)=='𒈚'); // utf-8-bytes
 
-	let node = smarty32(0.1f32.to_bits());
+	// let node = smarty32(0.1f32.to_bits()); accident!
+	let node = smarty32(float_data28(0.1f32)); // safe!
 	if let Node::Number(n) = node {
 		if let Number::Float(f) = n {
 			assert!(f - 0.1 < 0.00001);
