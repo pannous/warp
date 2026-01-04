@@ -117,9 +117,6 @@ impl Node {
 			},
 		}
 	}
-	pub fn to_string(&self) -> String {
-		self.serialize()
-	}
 	pub fn remove(&self, from: i32, to: i32) {
 		todo!("remove from {} to {}", from, to)
 	}
