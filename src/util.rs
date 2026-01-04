@@ -8,9 +8,6 @@ pub fn fetch(p0: &str) -> String {
 		.read_to_string()
 		.unwrap()
 }
-pub fn load_module(_p0: &str) {
-	todo!()
-}
 
 
 pub fn show_type_name<T>(_: &T) {
