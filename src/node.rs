@@ -682,11 +682,6 @@ impl Node {
 		}
 	}
 
-	/// Get key as owned String, returns empty string if not available
-	pub fn key_string(&self) -> String {
-		self.get_key().to_string()
-	}
-
 	/// Get key as Option<&str>, returns None if not a Symbol/Text key
 	pub fn key_opt(&self) -> Option<&str> {
 		match self {
