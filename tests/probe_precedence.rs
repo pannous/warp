@@ -6,18 +6,30 @@ fn test_precedence() {
     // Issue 1: Precedence - should parse as (a:int)=7 not a:(int=7)
     let node = WaspParser::parse("a:int=7");
     println!("\na:int=7 serializes as: {}", node.serialize());
-    println!("Structure: {:?}", node);
+    println!("Node kind: {:?}", node.kind());
+
+    // Unwrap Meta if needed
+    let actual_node = node.drop_meta();
+    println!("After drop_meta kind: {:?}", actual_node.kind());
+    println!("Structure: {:?}", actual_node);
 
     // Check if it's Key at top level (correct: (a:int)=7)
     // vs nested Key inside (wrong: a:(int=7))
-    match &node {
+    match actual_node {
         Node::Key(k, v) => {
             println!("✓ Top level is Key");
             println!("  Key part: {}", k.serialize());
             println!("  Value part: {}", v.serialize());
+
+            // Check if key is also a Key (nested)
+            if matches!(k.as_ref(), Node::Key(_, _)) {
+                println!("  ✓ Key is nested Key - CORRECT PRECEDENCE!");
+            }
         }
-        _ => println!("✗ Not a Key at top level"),
+        _ => println!("✗ Not a Key at top level - WRONG!"),
     }
+
+    println!("Full debug: {:?}", node);
 }
 
 #[test]

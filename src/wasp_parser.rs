@@ -561,14 +561,61 @@ impl WaspParser {
 					Node::text(&format!("{}{}", symbol, params))
 				}
 			}
-			':' | '=' => {
-				// Key-value pair (both a:b and a=b are supported)
+			':' => {
+				// Type annotation (high precedence): a:int
+				self.advance();
+				let _ = self.skip_whitespace();
+				let type_node = self.parse_type_annotation();
+				let annotated = Node::key(&symbol, type_node);
+
+				// Check for assignment after type annotation: (a:int)=7
+				self.skip_whitespace();
+				if self.current_char() == '=' {
+					self.advance();
+					let _ = self.skip_whitespace();
+					let value = self.parse_value();
+					Node::Key(Box::new(annotated), Box::new(value))
+				} else {
+					annotated
+				}
+			}
+			'=' => {
+				// Assignment (low precedence): a=7
 				self.advance();
 				let _ = self.skip_whitespace();
 				let value = self.parse_value();
 				Node::key(&symbol, value)
 			}
 			_ => Node::symbol(&symbol),
+		}
+	}
+
+	/// Parse type annotation (after ':')
+	/// Just parse a simple value - symbols, numbers, brackets
+	/// Stops at '=' to preserve precedence: (a:int)=7
+	fn parse_type_annotation(&mut self) -> Node {
+		// For now, parse a symbol and handle ':' for nested types like option:int
+		// Numbers, parens, etc. just use parse_value since they can't have '=' ambiguity
+		let ch = self.current_char();
+		if ch.is_alphabetic() || ch == '_' {
+			let symbol = match self.parse_symbol() {
+				Ok(s) => s,
+				Err(e) => return Error(e),
+			};
+			self.skip_spaces();
+
+			// Handle nested type annotations like 'list:int' but NOT '='
+			if self.current_char() == ':' {
+				self.advance();
+				self.skip_whitespace();
+				let inner = self.parse_type_annotation();
+				Node::key(&symbol, inner)
+			} else {
+				Node::symbol(&symbol)
+			}
+		} else {
+			// Numbers, strings, brackets can't be followed by '=' in type position
+			self.parse_value()
 		}
 	}
 
