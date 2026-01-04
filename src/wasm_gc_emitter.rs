@@ -1042,8 +1042,10 @@ impl WasmGcEmitter {
 		let mut type_names = NameMap::new();
 		type_names.append(0, "node");
 		type_names.append(1, "node_array");
-		// Add type names for emitted functions
-		for (name, &idx) in &self.function_indices {
+		// Add type names for emitted functions (sorted for deterministic output)
+		let mut sorted_funcs: Vec<_> = self.function_indices.iter().collect();
+		sorted_funcs.sort_by_key(|(_, &idx)| idx);
+		for (name, &idx) in &sorted_funcs {
 			type_names.append(idx + 2, &format!("func_{}", name));
 		}
 		self.names.types(&type_names);
@@ -1065,9 +1067,9 @@ impl WasmGcEmitter {
 		type_field_names.append(self.node_base_type, &field_names);
 		self.names.fields(&type_field_names);
 
-		// Function names - only for emitted functions
+		// Function names - only for emitted functions (sorted for deterministic output)
 		let mut func_names = NameMap::new();
-		for (name, &idx) in &self.function_indices {
+		for (name, &idx) in &sorted_funcs {
 			func_names.append(idx, name);
 		}
 		// Add main function (always emitted after constructors)
