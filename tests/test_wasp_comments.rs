@@ -1,5 +1,5 @@
 // use wasp::wasp_parser::WaspParser::parse;
-use wasp::node::Node;
+use wasp::Node;
 use wasp::wasp_parser::{parse, WaspParser};
 use wasp::{eq, is, put};
 

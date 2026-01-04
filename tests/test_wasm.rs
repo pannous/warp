@@ -3,8 +3,8 @@
 use std::process::exit;
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
-use wasp::node::Node;
-use wasp::node::Node::{Empty, False, True};
+use wasp::Node;
+use wasp::Node::{Empty, False, True};
 use wasp::type_kinds::NodeKind;
 use wasp::wasm_gc_emitter::eval;
 use wasp::wasp_parser::parse;

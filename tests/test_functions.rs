@@ -2,7 +2,7 @@
 // Migrated from tests_*.rs files
 
 use wasp::analyzer::analyze;
-use wasp::node::Node;
+use wasp::Node;
 use wasp::wasp_parser::parse;
 use wasp::{eq, is, skip};
 

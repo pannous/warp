@@ -1,5 +1,5 @@
 use wasp::eq;
-use wasp::node::Node;
+use wasp::Node;
 
 #[derive(Clone, Debug, PartialEq)]
 struct CustomDataExample {
@@ -118,7 +118,7 @@ fn test_node_data_type_mismatch() {
 
 #[test]
 fn test_node_data_metadata() {
-	use wasp::node::DataType;
+	use wasp::DataType;
 
 	// Vec metadata
 	let v = Node::data(vec![1, 2, 3]);

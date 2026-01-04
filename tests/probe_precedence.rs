@@ -1,5 +1,5 @@
 use wasp::wasp_parser::WaspParser;
-use wasp::node::Node;
+use wasp::Node;
 
 #[test]
 fn test_precedence() {

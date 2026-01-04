@@ -1,9 +1,9 @@
 use serde_json::json;
 use wasp::eq;
-use wasp::node::Bracket;
-use wasp::node::Node;
-use wasp::node::Node::Symbol;
-use wasp::node::Separator;
+use wasp::Bracket;
+use wasp::Node;
+use wasp::Node::Symbol;
+use wasp::Separator;
 use wasp::util::show_type_name;
 
 #[test]

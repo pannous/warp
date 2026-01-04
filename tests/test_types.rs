@@ -3,8 +3,8 @@
 
 use wasp::analyzer::analyze;
 use wasp::extensions::assert_throws;
-use wasp::node::Node;
-use wasp::node::Node::False;
+use wasp::Node;
+use wasp::Node::False;
 use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
 use wasp::{is, skip, Number};
