@@ -253,6 +253,7 @@ impl Node {
 		}
 	}
 
+	// Meta.kind() unwraps : Returns the kind of the inner node instead of NodeKind::Meta
 	pub fn kind(&self) -> NodeKind {
 		match self {
 			Empty => NodeKind::Empty,
@@ -557,13 +558,18 @@ impl IndexMut<&String> for Node {
 	fn index_mut(&mut self, i: &String) -> &mut Self::Output {
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.iter_mut().find(|node| match node {
+				if let Some(found) = nodes.iter_mut().find(|node| match node.drop_meta() {
 					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return mutable reference to its value
+					// Need to unwrap Meta first if present
 					match found {
+						Meta { node, .. } => match node.as_mut() {
+							Key(_, _, v) => v.as_mut(),
+							other => other,
+						},
 						Key(_, _, v) => v.as_mut(),
 						other => other,
 					}
@@ -571,6 +577,7 @@ impl IndexMut<&String> for Node {
 					panic!("Key '{}' not found", i)
 				}
 			}
+			Key(_, _, v) => &mut v[i], // Pass through to value
 			Meta { node, .. } => &mut node[i],
 			_ => panic!("Cannot mutably index this node type"),
 		}
@@ -2017,4 +2024,9 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 
 		other => f(other),
 	}
+}
+
+
+pub fn int(p0: i64) -> Node {
+	Number(Number::Int(p0))
 }
