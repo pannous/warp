@@ -2027,6 +2027,81 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 }
 
 
-pub fn int(p0: i64) -> Node {
-	Number(Number::Int(p0))
+// ============ Free Convenience Constructors ============
+// Short, ergonomic functions for creating Node values
+
+pub fn int(n: i64) -> Node {
+	Number(Number::Int(n))
+}
+
+pub fn float(n: f64) -> Node {
+	Number(Number::Float(n))
+}
+
+pub fn text(s: &str) -> Node {
+	Text(s.to_string())
+}
+
+pub fn symbol(s: &str) -> Node {
+	Symbol(s.to_string())
+}
+
+pub fn error(s: &str) -> Node {
+	Error(s.to_string())
+}
+
+pub fn codepoint(c: char) -> Node {
+	Char(c)
+}
+
+pub fn key(k: &str, v: Node) -> Node {
+	Key(Box::new(Symbol(k.to_string())), Op::Colon, Box::new(v))
+}
+
+pub fn key_op(k: Node, op: Op, v: Node) -> Node {
+	Key(Box::new(k), op, Box::new(v))
+}
+
+pub fn list(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Square, Separator::None)
+}
+
+pub fn block(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Curly, Separator::None)
+}
+
+pub fn parens(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Round, Separator::None)
+}
+
+pub fn ints(xs: Vec<i32>) -> Node {
+	List(
+		xs.into_iter().map(|x| int(x as i64)).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn floats(xs: Vec<f64>) -> Node {
+	List(
+		xs.into_iter().map(float).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn texts(xs: Vec<&str>) -> Node {
+	List(
+		xs.into_iter().map(text).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn symbols(xs: Vec<&str>) -> Node {
+	List(
+		xs.into_iter().map(symbol).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
 }
