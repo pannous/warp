@@ -55,7 +55,7 @@ pub enum DataType {
 /// Operator for Key nodes - distinguishes different binding operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Op {
-	Colon,    // :   type annotation (tightest)
+	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42} (tightest)
 	Dot,      // .   member access
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
@@ -263,7 +263,7 @@ impl Node {
 			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
 			List(_, _, _) => NodeKind::List,
 			Data(_) => NodeKind::Data,
-			Meta { .. } => NodeKind::Meta,
+			Meta { node, .. } => node.kind(), // Return kind of inner node
 			Error(_) => NodeKind::Error,
 			False => NodeKind::Number, // map to 0 !
 			True => NodeKind::Number,  // map to 1
@@ -450,6 +450,7 @@ impl Index<usize> for Node {
 	fn index(&self, i: usize) -> &Self::Output {
 		match self {
 			List(elements, _, _) => elements.get(i).unwrap_or(&Empty),
+			Key(_, _, v) => &v[i], // Pass through to value: person:{x y}[0] => x
 			Meta { node, .. } => &node[i],
 			_ => &Empty,
 		}
@@ -462,19 +463,23 @@ impl Index<&String> for Node {
 	fn index(&self, i: &String) -> &Self::Output {
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.find2(&|node| match node {
+				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
 					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => *t == *i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
-					match found {
+					match found.drop_meta() {
 						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
 				} else {
 					&Empty
 				}
+			}
+			Key(k, _, v) => match k.drop_meta() {
+				Symbol(key) | Text(key) if key == i => v.as_ref(),
+				_ => &v[i], // Pass through to value
 			}
 			Meta { node, data } => {
 				if node[i] != Empty {
@@ -502,13 +507,13 @@ impl Index<&str> for Node {
 	fn index(&self, i: &str) -> &Self::Output {
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.find2(&|node| match node {
+				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
 					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
-					match found {
+					match found.drop_meta() {
 						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
@@ -518,7 +523,7 @@ impl Index<&str> for Node {
 			}
 			Key(k, _, v) => match k.drop_meta() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
-				_ => &Empty,
+				_ => &v[i], // Pass through to value: person:{name:"Joe"}["name"] => "Joe"
 			}
 			Meta { node, data } => {
 				if node[i] != Empty {
@@ -1283,6 +1288,7 @@ impl PartialEq<i64> for Node {
 		match self {
 			Node::Number(Number::Int(n)) => n == other,
 			Node::Number(Number::Float(f)) => *f == *other as f64,
+			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
