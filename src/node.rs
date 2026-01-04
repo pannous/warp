@@ -770,6 +770,85 @@ impl Node {
 		serde_json::to_string(&value)
 	}
 
+	/// Convert Node to XML string representation
+	/// Key nodes become XML tags, dotted keys (.attr) become attributes
+	pub fn to_xml(&self) -> String {
+		match self.unwrap_meta() {
+			Key(tag_name, body) => {
+				let mut attributes = Vec::new();
+				let mut content_parts = Vec::new();
+
+				// Separate attributes (dotted keys) from content
+				match body.as_ref() {
+					List(items, _, _) => {
+						for item in items {
+							match item.unwrap_meta() {
+								Key(k, v) if k.starts_with('.') => {
+									// This is an attribute
+									let attr_name = &k[1..]; // Remove leading dot
+									match v.as_ref() {
+										True => {
+											// Boolean attribute (no value)
+											attributes.push(attr_name.to_string());
+										}
+										Text(s) | Symbol(s) => {
+											attributes.push(format!("{}=\"{}\"", attr_name, s));
+										}
+										Number(n) => {
+											attributes.push(format!("{}=\"{}\"", attr_name, n));
+										}
+										_ => {
+											let val = Node::serialize(v);
+											attributes.push(format!("{}=\"{}\"", attr_name, val));
+										}
+									}
+								}
+								_ => {
+									// This is content
+									content_parts.push(item.to_xml());
+								}
+							}
+						}
+					}
+					Empty => {
+						// Empty body
+					}
+					other => {
+						// Single content item
+						content_parts.push(other.to_xml());
+					}
+				}
+
+				// Build XML tag
+				let attrs_str = if attributes.is_empty() {
+					String::new()
+				} else {
+					format!(" {}", attributes.join(" "))
+				};
+
+				if content_parts.is_empty() {
+					// Self-closing tag
+					format!("<{}{} />", tag_name, attrs_str)
+				} else {
+					// Tag with content
+					let content = content_parts.join("");
+					format!("<{}{}>{}</{}>", tag_name, attrs_str, content, tag_name)
+				}
+			}
+			Text(s) => s.clone(),
+			Symbol(s) => s.clone(),
+			List(items, _, _) => {
+				// Multiple items - convert each to XML
+				items.iter().map(|item| item.to_xml()).collect::<Vec<_>>().join("")
+			}
+			Empty => String::new(),
+			_ => {
+				// For other node types, fall back to serialize
+				self.serialize()
+			}
+		}
+	}
+
 	fn to_json_value(&self) -> serde_json::Value {
 		use serde_json::{Map, Value};
 
