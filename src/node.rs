@@ -52,6 +52,56 @@ pub enum DataType {
 	None,   // <- only interesting cases
 }
 
+/// Operator for Key nodes - distinguishes different binding operations
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Op {
+	Colon,    // :   type annotation (tightest)
+	Dot,      // .   member access
+	Scope,    // ::  scope resolution
+	Define,   // :=  definition
+	Assign,   // =   assignment
+	Arrow,    // ->  arrow/return type
+	FatArrow, // =>  fat arrow/lambda
+	None,     // implicit/unknown
+}
+
+impl Op {
+	/// Binding power: (left_bp, right_bp)
+	/// Higher = tighter binding. Right > left means right-associative.
+	pub fn binding_power(&self) -> (u8, u8) {
+		match self {
+			Op::Dot => (100, 101),      // tightest, left-assoc: a.b.c → (a.b).c
+			Op::Scope => (90, 91),      // left-assoc: a::b::c → (a::b)::c
+			Op::Colon => (80, 81),      // right-assoc: a:b:c → a:(b:c)
+			Op::Arrow => (30, 29),      // right-assoc: a->b->c → a->(b->c)
+			Op::FatArrow => (30, 29),   // right-assoc
+			Op::Define => (20, 19),     // right-assoc: a:=b:=c → a:=(b:=c)
+			Op::Assign => (20, 19),     // right-assoc: a=b=c → a=(b=c)
+			Op::None => (0, 0),
+		}
+	}
+
+	/// The string representation of this operator
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Op::Colon => ":",
+			Op::Dot => ".",
+			Op::Scope => "::",
+			Op::Define => ":=",
+			Op::Assign => "=",
+			Op::Arrow => "->",
+			Op::FatArrow => "=>",
+			Op::None => "",
+		}
+	}
+}
+
+impl std::fmt::Display for Op {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.as_str())
+	}
+}
+
 // use wasp::Node;
 // use wasp::*; !
 #[derive(Clone, Serialize, Deserialize)]
@@ -70,8 +120,9 @@ pub enum Node {
 	Symbol(String),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
 
-	// emit as .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
-	Key(Box<Node>, Box<Node>), // key can be any node (Symbol, Number, Text, etc.)
+	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
+	// key can be any node (Symbol, Number, Text, etc.)
+	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
 	Data(Dada), // most generic container for any kind of data not captured by other node types
@@ -134,7 +185,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(k, _v) => k.as_ref().clone(), // first part of key-value pair is the key
+			Key(k, _, _v) => k.as_ref().clone(), // first part of key-value pair is the key
 			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
@@ -150,7 +201,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(_k, v) => v.as_ref().clone(), // last part of key-value pair is the value
+			Key(_k, _, v) => v.as_ref().clone(), // last part of key-value pair is the value
 			Meta { node, .. } => node.laste(),
 			_ => Empty,
 		}
@@ -195,7 +246,7 @@ impl Node {
 
 	pub fn values(&self) -> &Node {
 		match self {
-			Key(_, v) => v.as_ref(),
+			Key(_, _, v) => v.as_ref(),
 			Meta { node, .. } => node.values(),
 			List(_, _, _) => self,
 			_ => &Empty,
@@ -208,7 +259,7 @@ impl Node {
 			Text(_) => NodeKind::Text,
 			Char(_) => NodeKind::Codepoint,
 			Symbol(_) => NodeKind::Symbol,
-			Key(_, _) => NodeKind::Key,
+			Key(_, _, _) => NodeKind::Key,
 			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
 			List(_, _, _) => NodeKind::List,
 			Data(_) => NodeKind::Data,
@@ -224,7 +275,7 @@ impl Node {
 	pub fn length(&self) -> i32 {
 		match self {
 			List(items, _, _) => items.len() as i32,
-			Key(_, v) => v.length(),
+			Key(_, _, v) => v.length(),
 			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
@@ -237,7 +288,7 @@ impl Node {
 	//         Node::Codepoint(c) => Dada::new(*c),
 	//         Node::Data(dada) => dada.clone(),
 	//         Node::Meta(node, _) => node.value(),
-	//         Node::Key(_, v) => v.value(),
+	//         Node::Key(_, _, v) => v.value(),
 	//         _ => Dada::new(()), // empty Dada
 	//     }
 	// }
@@ -248,7 +299,7 @@ impl Node {
 				self //.clone()
 			}
 			Meta { node, .. } => node.value(),
-			Key(_, v) => v.value(),
+			Key(_, _, v) => v.value(),
 			_ => &Empty,
 		}
 	}
@@ -256,7 +307,7 @@ impl Node {
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) => name.clone(),
-			Key(k, _) => match k.as_ref() {
+			Key(k, _, _) => match k.as_ref() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
 				_ => String::new(),
@@ -338,7 +389,7 @@ impl Node {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
 				};
-				Key(key, value)
+				Key(key, Op::None, value) // TODO: decode operator from wasm
 			}
 
 			t if t == NodeKind::Block as i32 => {
@@ -412,13 +463,13 @@ impl Index<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => *t == *i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
 					match found {
-						Key(_, v) => v.as_ref(),
+						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
 				} else {
@@ -452,20 +503,20 @@ impl Index<&str> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
 					match found {
-						Key(_, v) => v.as_ref(),
+						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
 				} else {
 					&Empty
 				}
 			}
-			Key(k, v) => match k.as_ref() {
+			Key(k, _, v) => match k.as_ref() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
 				_ => &Empty,
 			}
@@ -502,13 +553,13 @@ impl IndexMut<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node {
-					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return mutable reference to its value
 					match found {
-						Key(_, v) => v.as_mut(),
+						Key(_, _, v) => v.as_mut(),
 						other => other,
 					}
 				} else {
@@ -533,10 +584,13 @@ impl Node {
 		Empty
 	}
 	pub fn key(s: &str, v: Node) -> Self {
-		Key(Box::new(Symbol(s.to_string())), Box::new(v))
+		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
+	}
+	pub fn key_with_op(k: Node, op: Op, v: Node) -> Self {
+		Key(Box::new(k), op, Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(Box::new(Symbol(s.to_string())), Box::new(Text(v.to_string())))
+		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(Text(v.to_string())))
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
