@@ -71,7 +71,7 @@ pub enum Node {
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
 
 	// emit as .name for special semantics .meta:{} .pair=[a,b] .data={type=T, b64=[] id} .type=T …
-	Key(String, Box<Node>), // todo ? via Pair or losing specificity?
+	Key(Box<Node>, Box<Node>), // key can be any node (Symbol, Number, Text, etc.)
 	// pair in json via .pair=[a,b] or just list [a,b] in special context map:{[k,v],…}
 	Pair(Box<Node>, Box<Node>), // via list with Separator a:b a=b a->b ?
 	List(Vec<Node>, Bracket, Separator),
@@ -262,7 +262,11 @@ impl Node {
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) => name.clone(),
-			Key(k, _) => k.clone(),
+			Key(k, _) => match k.as_ref() {
+				Symbol(s) | Text(s) => s.clone(),
+				Number(n) => n.to_string(),
+				_ => String::new(),
+			},
 			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
 				// todo only for specific cases like expressions
@@ -325,7 +329,16 @@ impl Node {
 			},
 
 			t if t == NodeKind::Key as i32 => {
-				let key = obj.name().unwrap_or_else(|_| String::new());
+				// Read key from left field, fallback to Symbol from name field
+				let key = match obj.get::<GcObject>("left") {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => {
+						// Fallback: reconstruct Symbol from name field for backward compatibility
+						let s = obj.name().unwrap_or_default();
+						Box::new(if s.is_empty() { Empty } else { Symbol(s) })
+					}
+				};
+
 				// Recursively read the value node from right field
 				let value = match obj.get::<GcObject>("right") {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
@@ -418,7 +431,7 @@ impl Index<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _) => *k == *i,
+					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => *t == *i,
 					_ => false,
 				}) {
@@ -458,7 +471,7 @@ impl Index<&str> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _) => k == i,
+					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
@@ -478,12 +491,9 @@ impl Index<&str> for Node {
 					&Empty
 				}
 			}
-			Key(k, v) => {
-				if k == i {
-					v.as_ref()
-				} else {
-					&Empty
-				}
+			Key(k, v) => match k.as_ref() {
+				Symbol(key) | Text(key) if key == i => v.as_ref(),
+				_ => &Empty,
 			}
 			Meta { node, data } => {
 				if node[i] != Empty {
@@ -518,7 +528,7 @@ impl IndexMut<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node {
-					Key(k, _) => k == i,
+					Key(k, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
@@ -552,10 +562,10 @@ impl Node {
 		Pair(Box::new(a), Box::new(b))
 	}
 	pub fn key(s: &str, v: Node) -> Self {
-		Key(s.to_string(), Box::new(v))
+		Key(Box::new(Symbol(s.to_string())), Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(s.to_string(), Box::new(Text(v.to_string())))
+		Key(Box::new(Symbol(s.to_string())), Box::new(Text(v.to_string())))
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
@@ -663,7 +673,10 @@ impl Node {
 
 	pub fn get_key(&self) -> &str {
 		match self {
-			Key(k, _) => k,
+			Key(k, _) => match k.as_ref() {
+				Symbol(s) | Text(s) => s.as_str(),
+				_ => "",
+			},
 			Meta { node, .. } => node.get_key(),
 			_ => "",
 		}
@@ -793,24 +806,34 @@ impl Node {
 					List(items, _, _) => {
 						for item in items {
 							match item.drop_meta() {
-								Key(k, v) if k.starts_with('.') => {
-									// This is an attribute
-									let attr_name = &k[1..]; // Remove leading dot
-									match v.as_ref() {
-										True => {
-											// Boolean attribute (no value)
-											attributes.push(attr_name.to_string());
+								Key(k, v) => {
+									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+										if key_str.starts_with('.') {
+											// This is an attribute
+											let attr_name = &key_str[1..]; // Remove leading dot
+											match v.as_ref() {
+												True => {
+													// Boolean attribute (no value)
+													attributes.push(attr_name.to_string());
+												}
+												Text(s) | Symbol(s) => {
+													attributes.push(format!("{}=\"{}\"", attr_name, s));
+												}
+												Number(n) => {
+													attributes.push(format!("{}=\"{}\"", attr_name, n));
+												}
+												_ => {
+													let val = Node::serialize(v);
+													attributes.push(format!("{}=\"{}\"", attr_name, val));
+												}
+											}
+										} else {
+											// Non-attribute key - treat as content
+											content_parts.push(item.to_xml());
 										}
-										Text(s) | Symbol(s) => {
-											attributes.push(format!("{}=\"{}\"", attr_name, s));
-										}
-										Number(n) => {
-											attributes.push(format!("{}=\"{}\"", attr_name, n));
-										}
-										_ => {
-											let val = Node::serialize(v);
-											attributes.push(format!("{}=\"{}\"", attr_name, val));
-										}
+									} else {
+										// Non-string key - treat as content
+										content_parts.push(item.to_xml());
 									}
 								}
 								_ => {
@@ -885,13 +908,17 @@ impl Node {
 						for item in items {
 							match item {
 								Key(k, v) => {
-									map.insert(k.clone(), v.to_json_value());
+									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+										map.insert(key_str.clone(), v.to_json_value());
+									}
 								}
 								List(nested, Bracket::Curly, _) => {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
 										if let Key(k, v) = nested_item {
-											map.insert(k.clone(), v.to_json_value());
+											if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+												map.insert(key_str.clone(), v.to_json_value());
+											}
 										}
 									}
 								}
@@ -909,7 +936,9 @@ impl Node {
 			}
 			Key(k, v) => {
 				let mut map = Map::new();
-				map.insert(k.clone(), v.to_json_value());
+				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+					map.insert(key_str.clone(), v.to_json_value());
+				}
 				Value::Object(map)
 			}
 			Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
@@ -1449,9 +1478,13 @@ impl PartialEq<serde_json::Value> for Node {
 					}
 					items.iter().all(|item| {
 						if let Key(k, v) = item {
-							json_obj
-								.get(k)
-								.map_or(false, |json_val| v.as_ref() == json_val)
+							if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+								json_obj
+									.get(key_str.as_str())
+									.map_or(false, |json_val| v.as_ref() == json_val)
+							} else {
+								false
+							}
 						} else {
 							false
 						}
@@ -1463,10 +1496,14 @@ impl PartialEq<serde_json::Value> for Node {
 
 			// Key comparison (single-key objects)
 			(Key(k, v), Value::Object(json_obj)) => {
-				json_obj.len() == 1
-					&& json_obj
-						.get(k)
-						.map_or(false, |json_val| v.as_ref() == json_val)
+				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+					json_obj.len() == 1
+						&& json_obj
+							.get(key_str.as_str())
+							.map_or(false, |json_val| v.as_ref() == json_val)
+				} else {
+					false
+				}
 			}
 
 			// All other combinations are not equal

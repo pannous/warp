@@ -51,12 +51,12 @@ fn test_wasm_roundtrip() {
 #[test]
 fn test_wasm_roundtrip_via_is() {
 	// Parser treats html{test=1} as Key("html", {test=1})
-	let x = Key("test".s(), Box::new(Number(Int(1))));
+	let x = Key(Box::new(Symbol("test".s())), Box::new(Number(Int(1))));
 	let _ok: Node = eval("html{test=1}");
 	// After single-item block unwrapping, body becomes just the Key
 	is!(
 		"html{test=1}",
-		Key("html".s(), Box::new(x))
+		Key(Box::new(Symbol("html".s())), Box::new(x))
 	);
 }
 
