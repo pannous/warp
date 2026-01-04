@@ -18,13 +18,13 @@ fn test_precedence() {
 	// Check if it's Key at top level (correct: (a:int)=7)
 	// vs nested Key inside (wrong: a:(int=7))
 	match actual_node {
-		Node::Key(k, v) => {
+		Node::Key(k, _op, v) => {
 			println!("✓ Top level is Key");
 			println!("  Key part: {}", k.serialize());
 			println!("  Value part: {}", v.serialize());
 
 			// Check if key is also a Key (nested)
-			if matches!(k.as_ref(), Node::Key(_, _)) {
+			if matches!(k.as_ref(), Node::Key(..)) {
 				println!("  ✓ Key is nested Key - CORRECT PRECEDENCE!");
 			}
 		}
@@ -63,23 +63,40 @@ fn test_key_equality() {
 
 #[test]
 fn test_type_annotation_with_block() {
-	// a:{body} should parse as Key("a", Block({body}))
-	eq!(    parse("a:{body}"),
-        Key(
-            Box::new(Symbol("a".s())),
-            Box::new(Node::List(vec![Symbol("body".s())], Bracket::Curly, Separator::None))
-        )
-    );
+	// a:{body} should parse as Key("a", Colon, Block({body}))
+	let node = parse("a:{body}");
+	let actual = node.drop_meta();
+	match &actual {
+		Node::Key(k, op, v) => {
+			assert!(matches!(k.as_ref().drop_meta(), Symbol(_)), "Key should be Symbol");
+			assert_eq!(*op, Op::Colon, "Op should be Colon");
+			assert!(matches!(v.as_ref().drop_meta(), Node::List(..)), "Value should be List/Block");
+		}
+		_ => panic!("Expected Key, got {:?}", actual),
+	}
 }
 
 #[test]
 fn test_type_annotation_block_with_assignment() {
+	// a:{x}=7 should parse as Key(Key("a", Colon, Block), Assign, 7)
 	let node = WaspParser::parse("a:{x}=7");
-	eq!(node, Key(
-        Box::new(Symbol("a".s())),
-        Box::new(Key(
-            Box::new(Node::List(vec![Symbol("x".s())], Bracket::Curly, Separator::None)),
-            Box::new(Number(Int(7)))
-        ))
-    ));
+	let actual = node.drop_meta();
+	match &actual {
+		Node::Key(k, op, v) => {
+			// Outer Key should have Assign op
+			assert_eq!(*op, Op::Assign, "Outer op should be Assign");
+			assert!(matches!(v.as_ref().drop_meta(), Number(_)), "Value should be Number 7");
+
+			// Inner key should be Key with Colon op
+			match k.as_ref().drop_meta() {
+				Node::Key(inner_k, inner_op, inner_v) => {
+					assert_eq!(*inner_op, Op::Colon, "Inner op should be Colon");
+					assert!(matches!(inner_k.as_ref().drop_meta(), Symbol(_)));
+					assert!(matches!(inner_v.as_ref().drop_meta(), Node::List(..)));
+				}
+				other => panic!("Expected nested Key, got {:?}", other),
+			}
+		}
+		_ => panic!("Expected Key, got {:?}", actual),
+	}
 }

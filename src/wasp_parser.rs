@@ -2,7 +2,7 @@ use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Error, Symbol};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Op, Separator};
 use log::warn;
 use std::fs;
 
@@ -527,12 +527,12 @@ impl WaspParser {
 			'{' => {
 				let block = self.parse_bracketed('{');
 				// Create Key for named blocks: html{...} -> Key(Symbol("html"), body)
-				Node::Key(Box::new(Symbol(symbol)), Box::new(block))
+				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
 			}
 			'<' => {
 				// Generic type: option<string> -> Key(Symbol("option"), <string>)
 				let generic = self.parse_bracketed('<');
-				Node::Key(Box::new(Symbol(symbol)), Box::new(generic))
+				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}
 			'(' => {
 				// Function-like: def name(params){body} or name(params):value
@@ -564,7 +564,7 @@ impl WaspParser {
 				self.advance();
 				let _ = self.skip_whitespace();
 				let type_node = self.parse_type_annotation();
-				let annotated = Node::key(&symbol, type_node);
+				let annotated = Node::key(&symbol, type_node); // Uses Op::Colon
 
 				// Check for assignment after type annotation: (a:int)=7
 				self.skip_whitespace();
@@ -572,7 +572,7 @@ impl WaspParser {
 					self.advance();
 					let _ = self.skip_whitespace();
 					let value = self.parse_value();
-					Node::Key(Box::new(annotated), Box::new(value))
+					Node::Key(Box::new(annotated), Op::Assign, Box::new(value))
 				} else {
 					annotated
 				}
@@ -728,11 +728,12 @@ impl WaspParser {
 				};
 
 				// Store attribute as dotted key
-				attributes.push(Node::Key(Box::new(Symbol(format!(".{}", attr_name))), Box::new(attr_value)));
+				attributes.push(Node::Key(Box::new(Symbol(format!(".{}", attr_name))), Op::Assign, Box::new(attr_value)));
 			} else {
 				// Boolean attribute (no value)
 				attributes.push(Node::Key(
 					Box::new(Symbol(format!(".{}", attr_name))),
+					Op::Assign,
 					Box::new(Node::True),
 				));
 			}
@@ -749,10 +750,11 @@ impl WaspParser {
 			}
 			// Return self-closing tag with only attributes
 			return if attributes.is_empty() {
-				Node::Key(Box::new(Symbol(tag_name)), Box::new(Node::Empty))
+				Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(Node::Empty))
 			} else {
 				Node::Key(
 					Box::new(Symbol(tag_name)),
+					Op::Colon,
 					Box::new(Node::List(attributes, Bracket::Curly, Separator::None)),
 				)
 			};
@@ -805,12 +807,13 @@ impl WaspParser {
 		body_items.extend(content_items);
 
 		if body_items.is_empty() {
-			Node::Key(Box::new(Symbol(tag_name.clone())), Box::new(Node::Empty))
+			Node::Key(Box::new(Symbol(tag_name.clone())), Op::Colon, Box::new(Node::Empty))
 		} else if body_items.len() == 1 {
-			Node::Key(Box::new(Symbol(tag_name)), Box::new(body_items.into_iter().next().unwrap()))
+			Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(body_items.into_iter().next().unwrap()))
 		} else {
 			Node::Key(
 				Box::new(Symbol(tag_name)),
+				Op::Colon,
 				Box::new(Node::List(body_items, Bracket::Curly, Separator::None)),
 			)
 		}
@@ -861,7 +864,7 @@ impl WaspParser {
 				let body = self.parse_list_with_separators(None, Bracket::None);
 				self.base_indent = old_indent;
 				// Combine item with indented body as Key
-				Node::Key(Box::new(Symbol(item.name())), Box::new(body))
+				Node::Key(Box::new(Symbol(item.name())), Op::Colon, Box::new(body))
 			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
