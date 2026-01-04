@@ -17,7 +17,6 @@ use crate::wasp_parser::parse;
 // #define ref_header_32    0x60000000 // index of externref == js object ! in table (export "externref_table") 1 externref
 // //#define smart_mask_32    0x70000000 ??
 // #define node_header_32   0x80000000 // more complex than array!
-// #define negative_mask_32 0x80000000 // todo ^^ ?
 // #define kind_header_32   0xDD000000
 // // 64 bit headers occur 1. if no multi value available
 
