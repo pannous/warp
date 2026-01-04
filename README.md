@@ -30,4 +30,8 @@ to square(number){
 ```
 or simpler `square:=it²` showing optional return types, it keyword, type and parameter inference.
 
+## Develop
+`git checkout --single-branch --branch main https://github.com/pannous/warp`
 
+## Build & Test
+`cargo test --all`
