@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::String;
 use crate::node::Node;
@@ -148,9 +149,7 @@ pub fn smarty32(smart: u32) -> Node {
 	let data16 = smart & 0x0000FFFF;
 	let data24 = smart & 0x00FFFFFF; // small header + 24 bits data
 	let data28 = smart & 0x0FFFFFFF;
-	if (smart == 0) {
-		return Empty;
-	} // null pointer or 0 we neither know nor care?
+	if smart == 0 { return Empty; } // null pointer or 0 we neither know nor care?
 	match header4 {
 		0x0 => Node::Number(Number::Int(data28 as i64)), // positive int, just reinterpret!
 		0xF => Node::Number(Number::Int(smart as i32 as i64)), // negative int juat all bits

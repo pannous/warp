@@ -92,7 +92,7 @@ fn test_comment_with_metadata_accessor() {
 	println!("{}", node);
 	println!("{}", node.serialize());
 	println!("{}", node["comment"]);
-	eq!(node.unwrap_meta(), &Node::int(42));
+	eq!(node.drop_meta(), &Node::int(42));
 	// Use &node["comment"] to explicitly use Not for &Node
 	if !&node["comment"] {
 		panic!("Expected metadata");
