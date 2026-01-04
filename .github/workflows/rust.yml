@@ -1,0 +1,31 @@
+# .github/workflows/rust.yml
+name: Rust CI
+
+on:
+  push:
+    branches: [ main, master, "claude/*" ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - run: cargo build --verbose
+    - run: cargo test --verbose --no-fail-fast
+    - run: cargo clippy -- -D warnings
+      continue-on-error: true
