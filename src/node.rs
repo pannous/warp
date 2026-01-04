@@ -57,7 +57,7 @@ pub enum DataType {
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
-	Empty,   // Null, Nill, None, Ø, ø null nill none nil
+	Empty, // Null, Nill, None, Ø, ø null nill none nil
 	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
 	True,
 	Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
@@ -75,7 +75,6 @@ pub enum Node {
 	List(Vec<Node>, Bracket, Separator),
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
-
 	// Type(Box<Node>, Box<Node>), // Special Class Ast(Node, AstKind) !)
 	// Ast(Node, AstKind), // wrap AST nodes if needed
 	// Class(String, Box<Node>), // name, body // class A{a:int}
@@ -607,8 +606,25 @@ impl Node {
 		}
 	}
 
-	pub fn get_meta(&self) -> Option<&Node> {
+	pub fn drop_meta(&self) -> &Node {
 		match self {
+			Meta { node, .. } => node.drop_meta(),
+			_ => self,
+		}
+	}
+
+	// get_meta data directly or Empty
+	pub fn get_meta(&self) -> &Node {
+		match self {
+			// Meta { node: _ , data} =>
+			Meta { data, .. } => data.as_ref(),
+			_ => &Empty,
+		}
+	}
+
+	pub fn get_meta_data(&self) -> Option<&Node> {
+		match self {
+			// Meta { node: _ , data} => Some(data.as_ref()),
 			Meta { data, .. } => Some(data.as_ref()),
 			_ => None,
 		}
@@ -627,17 +643,6 @@ impl Node {
 		}
 	}
 
-	pub fn unwrap_meta(&self) -> &Node {
-		match self {
-			Meta { node, .. } => node.unwrap_meta(),
-			_ => self,
-		}
-	}
-	//  }
-
-	// pub fn liste<T>(xs:Vec<T>) -> Self {
-	//     match T {}
-	// }
 	// member functions taking self
 	pub fn size(&self) -> usize {
 		match self {
@@ -716,7 +721,11 @@ impl Node {
 				}
 			}
 			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
-			Pair(a, b) => format!("{}:{}", a.serialize_recurse(meta), b.serialize_recurse(meta)),
+			Pair(a, b) => format!(
+				"{}:{}",
+				a.serialize_recurse(meta),
+				b.serialize_recurse(meta)
+			),
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
@@ -773,7 +782,7 @@ impl Node {
 	/// Convert Node to XML string representation
 	/// Key nodes become XML tags, dotted keys (.attr) become attributes
 	pub fn to_xml(&self) -> String {
-		match self.unwrap_meta() {
+		match self.drop_meta() {
 			Key(tag_name, body) => {
 				let mut attributes = Vec::new();
 				let mut content_parts = Vec::new();
@@ -782,7 +791,7 @@ impl Node {
 				match body.as_ref() {
 					List(items, _, _) => {
 						for item in items {
-							match item.unwrap_meta() {
+							match item.drop_meta() {
 								Key(k, v) if k.starts_with('.') => {
 									// This is an attribute
 									let attr_name = &k[1..]; // Remove leading dot
@@ -839,7 +848,11 @@ impl Node {
 			Symbol(s) => s.clone(),
 			List(items, _, _) => {
 				// Multiple items - convert each to XML
-				items.iter().map(|item| item.to_xml()).collect::<Vec<_>>().join("")
+				items
+					.iter()
+					.map(|item| item.to_xml())
+					.collect::<Vec<_>>()
+					.join("")
 			}
 			Empty => String::new(),
 			_ => {
@@ -1021,7 +1034,7 @@ impl Bracket {
 			Bracket::Square => '[',
 			Bracket::Round => '(',
 			Bracket::Less => '<',
-			Bracket::Other(open, _) => *open
+			Bracket::Other(open, _) => *open,
 		}
 	}
 	pub fn closing(&self) -> char {
@@ -1031,7 +1044,7 @@ impl Bracket {
 			Bracket::Square => ']',
 			Bracket::Round => ')',
 			Bracket::Less => '>',
-			Bracket::Other(_, close) => *close
+			Bracket::Other(_, close) => *close,
 		}
 	}
 }
@@ -1041,7 +1054,6 @@ impl fmt::Display for Bracket {
 		write!(f, "{}", self.opening())
 	}
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
@@ -1174,7 +1186,9 @@ impl PartialEq for Node {
 			Meta { node, .. } => {
 				// Ignore metadata when comparing equality - unwrap both sides
 				let other_unwrapped = match other {
-					Meta { node: other_node, .. } => other_node.as_ref(),
+					Meta {
+						node: other_node, ..
+					} => other_node.as_ref(),
 					_ => other,
 				};
 				node.as_ref().eq(other_unwrapped)
@@ -1404,12 +1418,8 @@ impl PartialEq<serde_json::Value> for Node {
 			(False, Value::Bool(false)) => true,
 
 			// Number comparisons
-			(Node::Number(Number::Int(n)), Value::Number(json_n)) => {
-				json_n.as_i64() == Some(*n)
-			}
-			(Node::Number(Number::Float(f)), Value::Number(json_n)) => {
-				json_n.as_f64() == Some(*f)
-			}
+			(Node::Number(Number::Int(n)), Value::Number(json_n)) => json_n.as_i64() == Some(*n),
+			(Node::Number(Number::Float(f)), Value::Number(json_n)) => json_n.as_f64() == Some(*f),
 
 			// String comparisons (Text, Symbol, Char all map to JSON strings)
 			(Text(s), Value::String(json_s)) => s == json_s,
@@ -1423,7 +1433,10 @@ impl PartialEq<serde_json::Value> for Node {
 					if items.len() != json_arr.len() {
 						return false;
 					}
-					items.iter().zip(json_arr.iter()).all(|(node, json_val)| node == json_val)
+					items
+						.iter()
+						.zip(json_arr.iter())
+						.all(|(node, json_val)| node == json_val)
 				} else {
 					false
 				}
@@ -1437,7 +1450,9 @@ impl PartialEq<serde_json::Value> for Node {
 					}
 					items.iter().all(|item| {
 						if let Key(k, v) = item {
-							json_obj.get(k).map_or(false, |json_val| v.as_ref() == json_val)
+							json_obj
+								.get(k)
+								.map_or(false, |json_val| v.as_ref() == json_val)
 						} else {
 							false
 						}
@@ -1449,7 +1464,10 @@ impl PartialEq<serde_json::Value> for Node {
 
 			// Key comparison (single-key objects)
 			(Key(k, v), Value::Object(json_obj)) => {
-				json_obj.len() == 1 && json_obj.get(k).map_or(false, |json_val| v.as_ref() == json_val)
+				json_obj.len() == 1
+					&& json_obj
+						.get(k)
+						.map_or(false, |json_val| v.as_ref() == json_val)
 			}
 
 			// All other combinations are not equal
