@@ -380,13 +380,13 @@ impl WaspParser {
 		match self.current_char() {
 			'{' => {
 				let block = self.parse_bracketed('{', '}', Bracket::Curly);
-				// Create Tag for named blocks: html{...} -> Tag("html", None, body)
-				Node::tag(&symbol, block)
+				// Create Key for named blocks: html{...} -> Key("html", body)
+				Node::Key(symbol, Box::new(block))
 			}
 			'<' => {
-				// Generic type: option<string> -> Tag("option", <string>)
+				// Generic type: option<string> -> Key("option", <string>)
 				let generic = self.parse_bracketed('<', '>', Bracket::Round);
-				Node::tag(&symbol, generic)
+				Node::Key(symbol, Box::new(generic))
 			}
 			'(' => {
 				// Function-like: def name(params){body} or name(params):value
@@ -498,12 +498,8 @@ impl WaspParser {
 				self.base_indent = line_indent;
 				let body = self.parse_list_with_separators(None, Bracket::None);
 				self.base_indent = old_indent;
-				// Combine item with indented body as Tag
-				Node::Tag {
-					title: item.name(),
-					params: Box::new(Empty),
-					body: Box::new(body),
-				}
+				// Combine item with indented body as Key
+				Node::Key(item.name(), Box::new(body))
 			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));

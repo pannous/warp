@@ -72,13 +72,6 @@ pub enum Node {
 	// Keyword(String), Call, Declaration … AST or here? AST!
 	Pair(Box<Node>, Box<Node>),
 	Key(String, Box<Node>), // todo ? via Pair or losing specificity?
-	// tagged pair a:b  or a:{b,c} or a([b:c]){d:e} etc
-	Tag {
-		title: String,
-		params: Box<Node>,
-		body: Box<Node>,
-	}, // name, attributes, body - for html/xml: <tag attr="val">body or tag{body}
-	// (use Empty for no attrs)
 	List(Vec<Node>, Bracket, Separator),
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
@@ -165,7 +158,6 @@ impl Node {
 			}
 			Key(_k, _v) => Error("ambiguous laste() on Key node a:b.last=b / a:{b,c}.last=c ?".s()),
 			Meta { node, .. } => node.laste(),
-			Tag { .. } => Empty,
 			_ => Empty,
 		}
 	}
@@ -225,7 +217,6 @@ impl Node {
 			Symbol(_) => NodeKind::Symbol,
 			Key(_, _) => NodeKind::Key,
 			Pair(_, _) => NodeKind::Pair,
-			Tag { .. } => NodeKind::Tag,
 			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
 			List(_, _, _) => NodeKind::List,
 			Data(_) => NodeKind::Data,
@@ -239,7 +230,6 @@ impl Node {
 	pub fn length(&self) -> i32 {
 		match self {
 			List(items, _, _) => items.len() as i32,
-			Tag { body, .. } => body.length(),
 			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
@@ -271,7 +261,6 @@ impl Node {
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) => name.clone(),
-			Tag { title, .. } => title.clone(),
 			Key(k, _) => k.clone(),
 			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
@@ -355,24 +344,6 @@ impl Node {
 					Err(_) => Box::new(Empty),
 				};
 				Pair(left, right)
-			}
-
-			t if t == NodeKind::Tag as i32 => {
-				let title = obj.name().unwrap_or_else(|_| String::new());
-				// Recursively read params (left field) and body (right field)
-				let params = match obj.get::<GcObject>("left") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				let body = match obj.get::<GcObject>("right") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				Tag {
-					title,
-					params,
-					body,
-				}
 			}
 
 			t if t == NodeKind::Block as i32 => {
@@ -582,20 +553,6 @@ impl Node {
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(s.to_string(), Box::new(v))
 	}
-	pub fn tag(name: &str, body: Node) -> Self {
-		Tag {
-			title: name.to_string(),
-			params: Box::new(Empty),
-			body: Box::new(body),
-		}
-	}
-	pub fn tag_with_attrs(name: &str, attrs: Node, body: Node) -> Self {
-		Tag {
-			title: name.to_string(),
-			params: Box::new(attrs),
-			body: Box::new(body),
-		}
-	}
 	pub fn keys(s: &str, v: &str) -> Self {
 		Key(s.to_string(), Box::new(Text(v.to_string())))
 	}
@@ -759,22 +716,6 @@ impl Node {
 			}
 			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
 			Pair(a, b) => format!("{}:{}", a.serialize_recurse(meta), b.serialize_recurse(meta)),
-			Tag {
-				title,
-				params,
-				body,
-			} => {
-				if **params == Empty {
-					format!("{}{}", title, body.serialize_recurse(meta))
-				} else {
-					format!(
-						"{}<{}>{}",
-						title,
-						params.serialize_recurse(meta),
-						body.serialize_recurse(meta)
-					)
-				}
-			}
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
@@ -852,22 +793,6 @@ impl Node {
 								Key(k, v) => {
 									map.insert(k.clone(), v.to_json_value());
 								}
-								Tag {
-									title,
-									params,
-									body,
-								} => {
-									// Tags become named keys
-									if **params != Empty {
-										let mut tag_map = Map::new();
-										tag_map
-											.insert("_attrs".to_string(), params.to_json_value());
-										tag_map.insert(title.clone(), body.to_json_value());
-										map.extend(tag_map);
-									} else {
-										map.insert(title.clone(), body.to_json_value());
-									}
-								}
 								List(nested, Bracket::Curly, _) => {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
@@ -894,27 +819,44 @@ impl Node {
 				Value::Object(map)
 			}
 			Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
-			Tag {
-				title,
-				params,
-				body,
-			} => {
-				let mut map = Map::new();
-				if **params != Empty {
-					// Include attributes if present
-					map.insert("_attrs".to_string(), params.to_json_value());
-				}
-				map.insert(title.clone(), body.to_json_value());
-				Value::Object(map)
-			}
 			Data(d) => {
 				let mut map = Map::new();
 				map.insert("_type".to_string(), Value::String(d.type_name.clone()));
 				Value::Object(map)
 			}
-			Meta { node, data: _ } => {
-				// fucking json has no comments
-				node.to_json_value()
+			Meta { node, data } => {
+				// Encode metadata as dotted keys or .meta array
+				if let List(items, ..) = data.as_ref() {
+					let has_keys = items.iter().any(|n| matches!(n, Key(..)));
+
+					if has_keys {
+						// Extract dotted keys from metadata
+						let mut map = Map::new();
+						for item in items {
+							if let Key(k, v) = item {
+								map.insert(format!(".{}", k), v.to_json_value());
+							}
+						}
+						// Add the wrapped value
+						map.insert("_value".to_string(), node.to_json_value());
+						return Value::Object(map);
+					} else {
+						// Non-Key metadata: use .meta array
+						let mut map = Map::new();
+						map.insert(".meta".to_string(), data.to_json_value());
+						map.insert("_value".to_string(), node.to_json_value());
+						return Value::Object(map);
+					}
+				} else if **data != Empty {
+					// Single non-Key metadata
+					let mut map = Map::new();
+					map.insert(".meta".to_string(), data.to_json_value());
+					map.insert("_value".to_string(), node.to_json_value());
+					return Value::Object(map);
+				} else {
+					// No metadata, just unwrap
+					node.to_json_value()
+				}
 			}
 			Error(e) => {
 				let mut map = Map::new();
@@ -1163,18 +1105,6 @@ impl PartialEq for Node {
 			},
 			Pair(a1, b1) => match other {
 				Pair(a2, b2) => a1 == a2 && b1 == b2,
-				_ => false,
-			},
-			Tag {
-				title: t1,
-				params: p1,
-				body: b1,
-			} => match other {
-				Tag {
-					title: t2,
-					params: p2,
-					body: b2,
-				} => t1 == t2 && p1 == p2 && b1 == b2,
 				_ => false,
 			},
 			List(items1, _, _) => match other {
