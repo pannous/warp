@@ -1,5 +1,5 @@
 use wasp::node::Node::*;
-use wasp::node::{Bracket, Node};
+use wasp::node::{Bracket, Node, Separator};
 use wasp::run::wasmtime_runner::run;
 use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
 use wasp::StringExtensions;
@@ -8,15 +8,6 @@ use wasp::{eq, is, write_wasm};
 fn normalize_blocks(node: &Node) -> Node {
 	let node = node.unwrap_meta();
 	match node {
-		Tag {
-			title,
-			params,
-			body,
-		} => Tag {
-			title: title.clone(),
-			params: Box::new(normalize_blocks(params)),
-			body: Box::new(normalize_blocks(body)),
-		},
 		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
@@ -59,17 +50,13 @@ fn test_wasm_roundtrip() {
 
 #[test]
 fn test_wasm_roundtrip_via_is() {
-	// Parser treats {test=1} as body containing Key, not params
+	// Parser treats html{test=1} as Key("html", {test=1})
 	let x = Key("test".s(), Box::new(Number(Int(1))));
 	let _ok: Node = eval("html{test=1}");
 	// After single-item block unwrapping, body becomes just the Key
 	is!(
 		"html{test=1}",
-		Tag {
-			title: "html".s(),
-			params: Box::new(Empty),
-			body: Box::new(x),
-		}
+		Key("html".s(), Box::new(x))
 	);
 }
 
@@ -105,7 +92,7 @@ fn test_node_kind_enum_abi() {
 	eq!(NodeKind::Symbol as u32, 4);
 	eq!(NodeKind::Key as u32, 5);
 	eq!(NodeKind::Pair as u32, 6);
-	eq!(NodeKind::Tag as u32, 7);
+	// NodeKind::Tag = 7 removed, use Key instead
 	eq!(NodeKind::Block as u32, 8);
 	eq!(NodeKind::List as u32, 9);
 	eq!(NodeKind::Data as u32, 10);
