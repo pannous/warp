@@ -343,23 +343,6 @@ impl WasmGcEmitter {
 					Null,
 				],
 			},
-			// new_tag(name_ptr: i32, name_len: i32, params: ref node, body: ref node) -> (ref node)
-			NodeConstructor {
-				export_name: "new_tag",
-				params: vec![ValType::I32, ValType::I32, node_ref_type, node_ref_type],
-				fields: [
-					LocalI32(0),
-					LocalI32(1),
-					KindField(NodeKind::Tag),
-					I64Zero,
-					FloatZero,
-					Zero,
-					Zero,
-					LocalRef(2),
-					LocalRef(3),
-					Null,
-				],
-			},
 			// new_pair(left: ref node, right: ref node) -> (ref node)
 			NodeConstructor {
 				export_name: "new_pair",

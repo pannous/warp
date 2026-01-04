@@ -1,5 +1,6 @@
 use wasp::extensions::numbers::Number;
 use wasp::node::Node;
+use wasp::node::{Bracket, Separator};
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::{eq, write_wasm};
 use wasp::node::Node::Empty;
@@ -97,15 +98,21 @@ fn test_read_symbol_node() {
 fn test_ergonomic_pattern() {
 	println!("=== Testing Complete Ergonomic Pattern ===\n");
 
-	// Generate WASM with a Tag node that has a name
+	// Generate WASM with a Key node that has a name
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Tag {
-		title: "html".to_string(),
-		params: Box::new(Node::keys("param", "test")),
-		body: Box::new(Node::keys("body", "ok")),
-	};
+	let node = Node::Key(
+		"html".to_string(),
+		Box::new(Node::List(
+			vec![
+				Node::keys(".param", "test"),
+				Node::keys("body", "ok"),
+			],
+			Bracket::Curly,
+			Separator::None,
+		)),
+	);
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();

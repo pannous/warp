@@ -230,6 +230,7 @@ impl Node {
 	pub fn length(&self) -> i32 {
 		match self {
 			List(items, _, _) => items.len() as i32,
+			Key(_, v) => v.length(),
 			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
