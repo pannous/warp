@@ -1,7 +1,9 @@
 use wasp::eq;
 use wasp::Node;
 use wasp::Node::Empty;
+use wasp::node::int;
 use wasp::NodeKind::Key;
+use wasp::Number::Int;
 use wasp::wasp_parser::parse;
 
 #[test]
@@ -44,12 +46,19 @@ fn test_colon_object() {
 	// eq!(person["name"].kind(), Key); or does it select the key give it's value automatically? wrapped in Meta??
 	eq!(person["name"], "Joe");
 	eq!(person["age"], 42); // either age:42 == 42 or index gives deep value directly
-	// person["age"]=41; other test
-	// eq!(person["age"], 41);
 	eq!(person[0].kind(), Key);
 	eq!(person[0].name(), "name");
 	eq!(person[1], 42);
 }
+
+
+#[test]
+fn test_key_object_set() {
+	let mut person = parse(r#"person:{name:"Joe" age:42}"#);
+	person["age"]=int(41);
+	eq!(person["age"], 41);
+}
+
 
 #[test]
 fn test_colon_lists() {
