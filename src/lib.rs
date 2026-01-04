@@ -19,6 +19,7 @@ pub mod run;
 pub mod type_kinds;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
+pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod ast;
 pub mod meta;
