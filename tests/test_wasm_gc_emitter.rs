@@ -97,3 +97,31 @@ fn test_node_kind_enum_abi() {
 	eq!(NodeKind::List as u32, 9);
 	eq!(NodeKind::Data as u32, 10);
 }
+
+#[test]
+fn test_function_usage_tracking() {
+	use wasp::wasp_parser::WaspParser;
+
+	// Parse a simple char - should only use new_codepoint
+	let node = WaspParser::parse("'🦀'");
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+	emitter.emit_node_main(&node);
+
+	let used = emitter.get_used_functions();
+	let unused = emitter.get_unused_functions();
+
+	println!("Used functions: {:?}", used);
+	println!("Unused functions: {:?}", unused);
+
+	// new_codepoint should be used
+	assert!(used.contains(&"new_codepoint"), "new_codepoint should be used for char");
+
+	// Many functions should be unused for a simple char
+	assert!(unused.contains(&"new_text"), "new_text should be unused for char");
+	assert!(unused.contains(&"new_symbol"), "new_symbol should be unused for char");
+	assert!(unused.contains(&"new_pair"), "new_pair should be unused for char");
+
+	// Verify unused count is significant (for tree-shaking validation)
+	assert!(unused.len() >= 5, "Should have at least 5 unused functions, got {}", unused.len());
+}
