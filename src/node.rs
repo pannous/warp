@@ -1374,6 +1374,87 @@ impl PartialOrd<f64> for Node {
 	}
 }
 
+// PartialEq with serde_json::Value for primitive types
+impl PartialEq<serde_json::Value> for Node {
+	fn eq(&self, other: &serde_json::Value) -> bool {
+		use serde_json::Value;
+
+		// Fully unwrap all nested Meta nodes (consistent with Node::eq behavior)
+		let mut self_unwrapped = self;
+		while let Meta { node, .. } = self_unwrapped {
+			self_unwrapped = node.as_ref();
+		}
+
+		match (self_unwrapped, other) {
+			// Null comparison
+			(Empty, Value::Null) => true,
+
+			// Boolean comparisons
+			(True, Value::Bool(true)) => true,
+			(False, Value::Bool(false)) => true,
+
+			// Number comparisons
+			(Node::Number(Number::Int(n)), Value::Number(json_n)) => {
+				json_n.as_i64() == Some(*n)
+			}
+			(Node::Number(Number::Float(f)), Value::Number(json_n)) => {
+				json_n.as_f64() == Some(*f)
+			}
+
+			// String comparisons (Text, Symbol, Char all map to JSON strings)
+			(Text(s), Value::String(json_s)) => s == json_s,
+			(Symbol(s), Value::String(json_s)) => s == json_s,
+			(Char(c), Value::String(json_s)) => &c.to_string() == json_s,
+
+			// List comparison (arrays and objects)
+			(List(items, bracket, _), Value::Array(json_arr)) => {
+				// Non-curly lists map to arrays
+				if !matches!(bracket, Bracket::Curly) {
+					if items.len() != json_arr.len() {
+						return false;
+					}
+					items.iter().zip(json_arr.iter()).all(|(node, json_val)| node == json_val)
+				} else {
+					false
+				}
+			}
+			(List(items, bracket, _), Value::Object(json_obj)) => {
+				// Curly lists map to objects
+				if matches!(bracket, Bracket::Curly) {
+					// Compare as object: each item should be a Key node
+					if items.len() != json_obj.len() {
+						return false;
+					}
+					items.iter().all(|item| {
+						if let Key(k, v) = item {
+							json_obj.get(k).map_or(false, |json_val| v.as_ref() == json_val)
+						} else {
+							false
+						}
+					})
+				} else {
+					false
+				}
+			}
+
+			// Key comparison (single-key objects)
+			(Key(k, v), Value::Object(json_obj)) => {
+				json_obj.len() == 1 && json_obj.get(k).map_or(false, |json_val| v.as_ref() == json_val)
+			}
+
+			// All other combinations are not equal
+			_ => false,
+		}
+	}
+}
+
+// Reverse comparison: serde_json::Value == Node
+impl PartialEq<Node> for serde_json::Value {
+	fn eq(&self, other: &Node) -> bool {
+		other == self
+	}
+}
+
 // Implement Not for owned Node - returns Node for compatibility with existing tests
 impl Not for Node {
 	type Output = Node;
