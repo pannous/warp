@@ -209,7 +209,9 @@ TODO verify it via wasmtime run --wasm-features=gc (execution with actual GC int
 eq! is just a shortcut for assert_eq! but
 is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again :
 
+the is! macro triggers the following roundtrip: 
 is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
+via wasp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
 
 ### soon
 
