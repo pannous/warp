@@ -39,16 +39,7 @@ fn test_kitchensink_all_node_types() {
 		Node::Key(Box::new(Symbol("key".to_string())), Box::new(Node::Number(Number::Int(123)))),
 	);
 
-	// Test 8: Pair node
-	test_node(
-		"Pair",
-		Node::Pair(
-			Box::new(Node::Symbol("first".to_string())),
-			Box::new(Node::Symbol("second".to_string())),
-		),
-	);
-
-	// Test 9: Block node
+	// Test 8: Block node
 	test_node(
 		"Block",
 		Node::List(
@@ -153,11 +144,6 @@ fn test_kitchensink_complex_tree() {
 			Node::Char('🚀'),
 			// Key
 			Node::Key(Box::new(Symbol("key".to_string())), Box::new(Node::Number(Number::Int(100)))),
-			// Nested Pair
-			Node::Pair(
-				Box::new(Node::Symbol("left".to_string())),
-				Box::new(Node::Symbol("right".to_string())),
-			),
 			// Nested Block (Curly brackets)
 			Node::List(
 				vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],

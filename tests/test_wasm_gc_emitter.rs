@@ -11,10 +11,6 @@ fn normalize_blocks(node: &Node) -> Node {
 		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		Key(k, v) => Key(k.clone(), Box::new(normalize_blocks(v))),
-		Pair(left, right) => Pair(
-			Box::new(normalize_blocks(left)),
-			Box::new(normalize_blocks(right)),
-		),
 		_ => node.clone(),
 	}
 }
@@ -91,7 +87,7 @@ fn test_node_kind_enum_abi() {
 	eq!(NodeKind::Codepoint as u32, 3);
 	eq!(NodeKind::Symbol as u32, 4);
 	eq!(NodeKind::Key as u32, 5);
-	eq!(NodeKind::Pair as u32, 6);
+	// NodeKind::Pair = 6 removed, use List or Key instead
 	// NodeKind::Tag = 7 removed, use Key instead
 	eq!(NodeKind::Block as u32, 8);
 	eq!(NodeKind::List as u32, 9);
@@ -120,7 +116,7 @@ fn test_function_usage_tracking() {
 	// Many functions should be unused for a simple char
 	assert!(unused.contains(&"new_text"), "new_text should be unused for char");
 	assert!(unused.contains(&"new_symbol"), "new_symbol should be unused for char");
-	assert!(unused.contains(&"new_pair"), "new_pair should be unused for char");
+	// new_pair was removed (Pair variant removed from Node)
 
 	// Verify unused count is significant (for tree-shaking validation)
 	assert!(unused.len() >= 5, "Should have at least 5 unused functions, got {}", unused.len());
