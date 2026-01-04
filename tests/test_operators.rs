@@ -1,4 +1,7 @@
+use wasp::extensions::todow;
 use wasp::node::Node;
+use wasp::skip;
+use wasp::wasp_parser::parse;
 
 #[test]
 fn test_add_list_item() {
@@ -72,3 +75,24 @@ fn test_add_meta_on_right() {
 	let result = num1.add(num2);
 	assert_eq!(result, 12);
 }
+
+#[test]
+fn test_while_true_forever() {
+	todow("test_while_true_forever");
+
+	skip!(
+		is!("def stop():{0};while !stop() : {}", 0); // should hang forever
+		is!("def goo():{1};while goo() : {}", 0); // should hang forever
+		is!("while True : 2", 0); // should hang forever
+	);
+}
+
+#[test]
+fn test_key() {
+	let node = parse("x:40;x+1");
+	assert!(node.length() == 2);
+	assert!(node[0]["x"] == 40);
+}
+
+#[test]
+fn test_for_each() {}
