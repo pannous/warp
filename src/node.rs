@@ -136,9 +136,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(_k, _v) => {
-				Error("ambiguous first() on Key node a:b.first=a / a:{b,c}.first=b ?".s())
-			}
+			Key(k, _v) => k.as_ref().clone(), // first part of key-value pair is the key
 			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
@@ -155,7 +153,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(_k, _v) => Error("ambiguous laste() on Key node a:b.last=b / a:{b,c}.last=c ?".s()),
+			Key(_k, v) => v.as_ref().clone(), // last part of key-value pair is the value
 			Meta { node, .. } => node.laste(),
 			_ => Empty,
 		}
