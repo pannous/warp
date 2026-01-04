@@ -398,7 +398,10 @@ fn test_switch() {
 
 #[test]
 fn testSmartTypes() {
-	// smarty32 is pretty useless but serves as nice demonstration of smart64
+	// smarty32  is pretty useless but serves as nice demonstration of smart64,
+	// which   is pretty useless but serves as nice demonstration of multi return
+	// which  is pretty useless but serves as nice demonstration of node as wit/gc type
+	// which is pretty useless but serves as nice demonstration of emitted structs 
 	assert_eq!(smarty32(0xC000221a), '√');
 	assert_eq!(smarty32(0xC000221a), "√");
 	assert_eq!(smarty32(0xC0000020), ' ');
