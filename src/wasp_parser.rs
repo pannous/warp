@@ -546,9 +546,9 @@ impl WaspParser {
 
 				if self.current_char() == '{' {
 					let body = self.parse_bracketed('{', '}', Bracket::Curly);
-					// Use Pair for function syntax: name(params) : body
+					// Use List for function syntax: name(params) : body
 					let signature = Node::text(&format!("{}{}", symbol, params));
-					Node::pair(signature, body)
+					Node::List(vec![signature, body], Bracket::Round, Separator::None)
 				} else if self.current_char() == ':' || self.current_char() == '=' {
 					// name(params):value or name(params)=value
 					self.advance();

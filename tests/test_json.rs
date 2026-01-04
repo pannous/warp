@@ -141,19 +141,6 @@ fn test_block_node_json() {
 }
 
 #[test]
-fn test_pair_node_json() {
-	let n = Node::pair(Node::int(1), Node::text("one"));
-
-	let json = n.to_json().unwrap();
-	println!("Pair JSON:\n{}", json);
-
-	// Pair becomes array
-	assert!(json.contains("["));
-	assert!(json.contains("1"));
-	assert!(json.contains(r#""one""#));
-}
-
-#[test]
 fn test_data_node_json() {
 	let n = Node::data(vec![1, 2, 3]);
 

@@ -125,11 +125,6 @@ impl WasmGcEmitter {
 				self.required_functions.insert("new_keyvalue");
 				self.analyze_required_functions(value);
 			}
-			Node::Pair(left, right) => {
-				self.required_functions.insert("new_pair");
-				self.analyze_required_functions(left);
-				self.analyze_required_functions(right);
-			}
 			Node::List(items, _, _) => {
 				if items.is_empty() {
 					self.required_functions.insert("new_empty");
@@ -430,23 +425,6 @@ impl WasmGcEmitter {
 					LocalI32(1),
 					Null,
 					Null,
-					Null,
-				],
-			},
-			// new_pair(left: ref node, right: ref node) -> (ref node)
-			NodeConstructor {
-				export_name: "new_pair",
-				params: vec![node_ref_type, node_ref_type],
-				fields: [
-					Zero,
-					Zero,
-					KindField(NodeKind::Pair),
-					I64Zero,
-					FloatZero,
-					Zero,
-					Zero,
-					LocalRef(0),
-					LocalRef(1),
 					Null,
 				],
 			},
@@ -765,10 +743,6 @@ impl WasmGcEmitter {
 				self.collect_and_allocate_strings(key);
 				self.collect_and_allocate_strings(value);
 			}
-			Node::Pair(left, right) => {
-				self.collect_and_allocate_strings(left);
-				self.collect_and_allocate_strings(right);
-			}
 			Node::List(items, _, _) => {
 				for item in items {
 					self.collect_and_allocate_strings(item);
@@ -876,11 +850,6 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, key);        // field 7: left (key node)
 				self.emit_node_instructions(func, value);      // field 8: right (value node)
 				self.emit_call(func, "new_keyvalue");
-			}
-			Node::Pair(_left, _right) => {
-				self.emit_node_instructions(func, _left);
-				self.emit_node_instructions(func, _right);
-				self.emit_call(func, "new_pair");
 			}
 			Node::List(items, bracket, _separator) => {
 				// Special case: single-item lists emit the item directly
