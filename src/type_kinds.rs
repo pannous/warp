@@ -16,7 +16,7 @@ pub enum NodeKind {
 	Symbol = 4,
 	Key = 5,
 	Pair = 6,
-	Tag = 7,
+	// Tag = 7 - REMOVED, use Key instead
 	Block = 8,
 	List = 9,
 	Data = 10,

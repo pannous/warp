@@ -18,7 +18,8 @@ fn test_node_to_json_compact() {
 	// println!("Compact JSON:\n{}", json);
 	// eq!(json, r#"{"name": "Alice"}"#);
 	show_type_name(&json!({"name": "Alice"}));
-	eq!(json, json!({"name": "Alice"}));
+	// Compare the Node directly with the JSON value (using PartialEq<Value> for Node)
+	eq!(n, json!({"name": "Alice"}));
 	// eq!(json, json!({"name": "Alice", "alice": "Bob"}));
 	// eq!(json, warp!({name: "Alice", age: "Bob"})); // todo create warp! macro if possible, else
 	// eq!(json, warp!({"name": "Alice", "alice": "Bob"})); // todo warp! constructs Node, not JSON
