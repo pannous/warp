@@ -185,7 +185,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(k, _, _v) => k.as_ref().clone(), // first part of key-value pair is the key
+			Key(k, _, _v) => k.drop_meta().clone(), // first part of key-value pair is the key
 			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
@@ -307,7 +307,7 @@ impl Node {
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) => name.clone(),
-			Key(k, _, _) => match k.as_ref() {
+			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
 				_ => String::new(),
@@ -463,7 +463,7 @@ impl Index<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => *t == *i,
 					_ => false,
 				}) {
@@ -503,7 +503,7 @@ impl Index<&str> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
@@ -516,7 +516,7 @@ impl Index<&str> for Node {
 					&Empty
 				}
 			}
-			Key(k, _, v) => match k.as_ref() {
+			Key(k, _, v) => match k.drop_meta() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
 				_ => &Empty,
 			}
@@ -553,7 +553,7 @@ impl IndexMut<&String> for Node {
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
@@ -698,7 +698,7 @@ impl Node {
 
 	pub fn get_key(&self) -> &str {
 		match self {
-			Key(k, _, _) => match k.as_ref() {
+			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.as_str(),
 				_ => "",
 			},
@@ -835,7 +835,7 @@ impl Node {
 						for item in items {
 							match item.drop_meta() {
 								Key(k, _, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 										if key_str.starts_with('.') {
 											// This is an attribute
 											let attr_name = &key_str[1..]; // Remove leading dot
@@ -936,7 +936,7 @@ impl Node {
 						for item in items {
 							match item {
 								Key(k, _, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 										map.insert(key_str.clone(), v.to_json_value());
 									}
 								}
@@ -944,7 +944,7 @@ impl Node {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
 										if let Key(k, _, v) = nested_item {
-											if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+											if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 												map.insert(key_str.clone(), v.to_json_value());
 											}
 										}
@@ -964,7 +964,7 @@ impl Node {
 			}
 			Key(k, _, v) => {
 				let mut map = Map::new();
-				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 					map.insert(key_str.clone(), v.to_json_value());
 				}
 				Value::Object(map)
@@ -1513,7 +1513,7 @@ impl PartialEq<serde_json::Value> for Node {
 					}
 					items.iter().all(|item| {
 						if let Key(k, _, v) = item {
-							if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+							if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 								json_obj
 									.get(key_str.as_str())
 									.map_or(false, |json_val| v.as_ref() == json_val)
@@ -1531,7 +1531,7 @@ impl PartialEq<serde_json::Value> for Node {
 
 			// Key comparison (single-key objects)
 			(Key(k, _, v), Value::Object(json_obj)) => {
-				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 					json_obj.len() == 1
 						&& json_obj
 							.get(key_str.as_str())
