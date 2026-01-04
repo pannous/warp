@@ -204,3 +204,18 @@ fn test_fibonacci() {
 		// home.md MUST WORK
 	   );
 }
+
+// From test_new.rs
+#[test]
+#[ignore]
+fn test_function_definitions() {
+	is!("def add(a,b): a+b; add(2,3)", 5);
+	is!("def square(x): x*x; square(4)", 16);
+}
+
+#[test]
+#[ignore]
+fn test_variables() {
+	is!("x=42; x", 42);
+	is!("y=3; y", 3);
+}
