@@ -708,7 +708,7 @@ impl WaspParser {
 				Separator::None
 			} else if ch == ',' {
 				self.advance();
-				Separator::Comma
+				Separator::Colon
 			} else if ch == ';' {
 				self.advance();
 				Separator::Semicolon

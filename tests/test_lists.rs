@@ -3,7 +3,6 @@ use wasp::*;
 use wasp::analyzer::analyze;
 use wasp::type_kinds::NodeKind;
 use wasp::wasp_parser::parse;
-use wasp::*;
 
 // Array size tests
 #[test]

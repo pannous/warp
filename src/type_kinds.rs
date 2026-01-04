@@ -10,7 +10,7 @@ enum Type {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeKind {
 	Empty = 0,
-	Number = 1,
+	Number = 1, // no bool in wasm ok
 	Text = 2,
 	Codepoint = 3, // seems a bit out of whack here <<
 	Symbol = 4,
