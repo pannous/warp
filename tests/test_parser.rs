@@ -1,6 +1,7 @@
 use wasp::eq;
 use wasp::Node;
 use wasp::Node::Empty;
+use wasp::NodeKind::Key;
 use wasp::wasp_parser::parse;
 
 #[test]
@@ -31,6 +32,23 @@ fn test_use() {
 fn test_group_cascade0() {
 	let result = parse("x='abcde';x#4='y';x#4");
 	eq!(result.length(), 3);
+}
+
+
+#[test]
+fn test_colon_object() {
+	let person = parse(r#"person:{name:"Joe" age:42}"#);
+	eq!(person.kind(), Key);
+	eq!(person.length(), 2);
+	eq!(person.name(), "person");
+	// eq!(person["name"].kind(), Key); or does it select the key give it's value automatically? wrapped in Meta??
+	eq!(person["name"], "Joe");
+	eq!(person["age"], 42); // either age:42 == 42 or index gives deep value directly
+	// person["age"]=41; other test
+	// eq!(person["age"], 41);
+	eq!(person[0].kind(), Key);
+	eq!(person[0].name(), "name");
+	eq!(person[1], 42);
 }
 
 #[test]
