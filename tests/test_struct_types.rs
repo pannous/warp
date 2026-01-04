@@ -219,7 +219,7 @@ fn test_float_node() {
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 
-	let node = Node::Number(Number::Float(3.14));
+	let node = Node::Number(Number::Float(1.23));
 	emitter.emit_node_main(&node);
 
 	let bytes = emitter.finish();
@@ -230,7 +230,7 @@ fn test_float_node() {
 
 	let float_value: f64 = root.get("float_value").expect("Failed to get float");
 	println!("  Float value: {}", float_value);
-	eq!(float_value, 3.14);
+	eq!(float_value, 1.23);
 
 	println!("✓ Float node works");
 }

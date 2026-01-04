@@ -16,7 +16,7 @@ fn test_kitchensink_all_node_types() {
 
 	// Test 2: Number nodes (Int and Float)
 	test_node("Number::Int", Node::Number(Number::Int(42)));
-	test_node("Number::Float", Node::Number(Number::Float(3.14)));
+	test_node("Number::Float", Node::Number(Number::Float(1.23)));
 
 	// Test 3: Text node
 	test_node("Text", Node::Text("hello world".to_string()));

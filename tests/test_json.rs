@@ -184,8 +184,8 @@ fn test_node_eq_json_primitives() {
 	assert_eq!(Node::int(-100), json!(-100));
 
 	// Numbers - floats
-	assert_eq!(Node::from(3.14), json!(3.14));
-	assert_eq!(json!(3.14), Node::from(3.14));
+	assert_eq!(Node::from(1.23), json!(1.23));
+	assert_eq!(json!(1.23), Node::from(1.23));
 	assert_eq!(Node::float(0.0), json!(0.0));
 
 	// Strings - Text
