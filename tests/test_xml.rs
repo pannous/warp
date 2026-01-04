@@ -429,3 +429,101 @@ fn contains_error(node: &wasp::node::Node) -> bool {
 		_ => false,
 	}
 }
+
+#[test]
+fn test_xml_declaration() {
+	let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<root>Content</root>"#;
+	let node = parse_xml(xml);
+	println!("Parsed: {:?}", node);
+
+	// XML declaration should be skipped, only root tag parsed
+	if let Node::Key(name, _) = node.drop_meta() {
+		eq!(name, "root");
+	} else {
+		panic!("Expected root Key node");
+	}
+}
+
+#[test]
+fn test_doctype() {
+	let xml = r#"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html><body>Test</body></html>"#;
+	let node = parse_xml(xml);
+	println!("Parsed: {:?}", node);
+
+	// DOCTYPE should be skipped
+	if let Node::Key(name, _) = node.drop_meta() {
+		eq!(name, "html");
+	} else {
+		panic!("Expected html Key node");
+	}
+}
+
+#[test]
+fn test_xml_comments() {
+	let xml = r#"<!-- This is a comment -->
+<div>Content</div>
+<!-- Another comment -->"#;
+	let node = parse_xml(xml);
+	println!("Parsed: {:?}", node);
+
+	// Comments should be skipped
+	if let Node::Key(name, _) = node.drop_meta() {
+		eq!(name, "div");
+	} else {
+		panic!("Expected div Key node");
+	}
+}
+
+#[test]
+fn test_cdata() {
+	let xml = r#"<script><![CDATA[
+function test() {
+    if (x < 5 && y > 3) {
+        return true;
+    }
+}
+]]></script>"#;
+	let node = parse_xml(xml);
+	println!("Parsed: {:?}", node);
+
+	// CDATA content should be preserved as text
+	if let Node::Key(name, value) = node.drop_meta() {
+		eq!(name, "script");
+		// Content should include the JavaScript
+		let text = value.serialize();
+		assert!(text.contains("function test"));
+		assert!(text.contains("x < 5"));
+	} else {
+		panic!("Expected script Key node");
+	}
+}
+
+#[test]
+fn test_real_world_xml() {
+	// Example from macOS system files
+	let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Name</key>
+	<string>Test</string>
+</dict>
+</plist>"#;
+
+	let node = parse_xml(xml);
+	println!("Parsed: {:?}", node);
+
+	// Should successfully parse despite XML declaration and DOCTYPE
+	if let Node::Key(name, _) = node.drop_meta() {
+		eq!(name, "plist");
+	} else {
+		panic!("Expected plist Key node");
+	}
+
+	// Test roundtrip
+	let xml_out = node.to_xml();
+	let reparsed = parse_xml(&xml_out);
+	eq!(node, reparsed);
+}
