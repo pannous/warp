@@ -364,12 +364,10 @@ impl WaspParser {
 			ch => {
 				match ch {
 					'"' | '\'' | '«' => self.parse_string(),
-					'(' => self.parse_bracketed('(', ')', Bracket::Round),
-					'[' => self.parse_bracketed('[', ']', Bracket::Square),
-					'{' => self.parse_bracketed('{', '}', Bracket::Curly),
+					'(' | '[' | '{' => self.parse_bracketed(ch),
 					'<' if self.options.xml_mode => self.parse_xml_tag(),
-					'<' => self.parse_bracketed('<', '>', Bracket::Round), // C++ generics as groups
-					';' => Empty,                                          // Semicolons handled by main parse loop
+					'<' => self.parse_bracketed(ch), // C++ generics as groups
+					';' => Empty,                    // Semicolons handled by main parse loop
 					'>' => Empty, // Closing angle bracket, handled by parse_bracketed
 					'-' if self.peek_char(1) == '>' => {
 						// Arrow operator: ->
@@ -527,13 +525,13 @@ impl WaspParser {
 		// Check for named block: name{...} or name(...) or name<...>
 		match self.current_char() {
 			'{' => {
-				let block = self.parse_bracketed('{', '}', Bracket::Curly);
+				let block = self.parse_bracketed('{');
 				// Create Key for named blocks: html{...} -> Key(Symbol("html"), body)
 				Node::Key(Box::new(Symbol(symbol)), Box::new(block))
 			}
 			'<' => {
 				// Generic type: option<string> -> Key(Symbol("option"), <string>)
-				let generic = self.parse_bracketed('<', '>', Bracket::Round);
+				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Box::new(generic))
 			}
 			'(' => {
@@ -545,7 +543,7 @@ impl WaspParser {
 				let _ = self.skip_whitespace();
 
 				if self.current_char() == '{' {
-					let body = self.parse_bracketed('{', '}', Bracket::Curly);
+					let body = self.parse_bracketed('{');
 					// Use List for function syntax: name(params) : body
 					let signature = Node::text(&format!("{}{}", symbol, params));
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
@@ -644,9 +642,16 @@ impl WaspParser {
 		Err("Unterminated parentheses".to_string())
 	}
 
-	fn parse_bracketed(&mut self, _open: char, close: char, bracket: Bracket) -> Node {
+	fn parse_bracketed(&mut self, open: char) -> Node {
+		let (close, bracket_type) = match open {
+			'(' => (')', Bracket::Round),
+			'[' => (']', Bracket::Square),
+			'{' => ('}', Bracket::Curly),
+			'<' => ('>', Bracket::Round),
+			_ => panic!("Invalid bracket: {}", open),
+		};
 		self.advance(); // skip opening bracket
-		self.parse_list_with_separators(Some(close), bracket)
+		self.parse_list_with_separators(Some(close), bracket_type)
 	}
 
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
