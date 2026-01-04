@@ -52,8 +52,8 @@ pub enum DataType {
 	None,   // <- only interesting cases
 }
 
-// use wasp::node::Node;
-// use wasp::node::Node::*; !
+// use wasp::Node;
+// use wasp::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here

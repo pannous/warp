@@ -1,10 +1,10 @@
 use wasp::extensions::numbers::Number;
-use wasp::node::Node;
-use wasp::node::Node::Symbol;
-use wasp::node::{Bracket, Separator};
+use wasp::Node;
+use wasp::Node::Symbol;
+use wasp::{Bracket, Separator};
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::{eq, write_wasm};
-use wasp::node::Node::Empty;
+use wasp::Node::Empty;
 use wasp::wasm_gc_reader::read_bytes;
 
 /// Test ergonomic reading patterns from rasm

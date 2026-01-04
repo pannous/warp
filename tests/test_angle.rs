@@ -1,5 +1,5 @@
-use wasp::node::Node;
-use wasp::node::Node::Empty;
+use wasp::Node;
+use wasp::Node::Empty;
 use wasp::smarty::{float_data28, smarty32};
 use wasp::{is, skip, Number};
 

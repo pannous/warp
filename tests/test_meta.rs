@@ -1,7 +1,7 @@
 // Metadata tests
 // Migrated from tests_*.rs files
 
-use wasp::node::Node;
+use wasp::Node;
 use wasp::wasp_parser::parse;
 use wasp::{eq, exists, skip};
 

@@ -1,5 +1,5 @@
-use wasp::node::Node::*;
-use wasp::node::{Bracket, Node};
+use wasp::Node::*;
+use wasp::{Bracket, Node};
 use wasp::run::wasmtime_runner::run;
 use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
 use wasp::StringExtensions;

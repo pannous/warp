@@ -1,5 +1,5 @@
 use wasp::extensions::todow;
-use wasp::node::Node;
+use wasp::Node;
 use wasp::skip;
 use wasp::wasp_parser::parse;
 
