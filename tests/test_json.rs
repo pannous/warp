@@ -2,6 +2,7 @@ use serde_json::json;
 use wasp::eq;
 use wasp::node::Bracket;
 use wasp::node::Node;
+use wasp::node::Node::Symbol;
 use wasp::node::Separator;
 use wasp::util::show_type_name;
 
@@ -36,7 +37,7 @@ fn test_implicit_html_structure() {
 				Separator::None,
 			),
 			Node::Key(
-				"colors".to_string(),
+				Box::new(Symbol("colors".to_string())),
 				Box::new(Node::list(vec![
 					Node::symbol("red"),
 					Node::symbol("green"),

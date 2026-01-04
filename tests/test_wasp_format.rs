@@ -97,7 +97,11 @@ fn test_wasp_roundtrip() {
 
 	// Verify structure - user{...} becomes Tag
 	if let Node::Key(title, ..) = node.drop_meta() {
-		eq!(title, "user");
+		if let Node::Symbol(s) | Node::Text(s) = title.as_ref() {
+			eq!(s, "user");
+		} else {
+			panic!("Expected Symbol or Text key");
+		}
 	} else {
 		panic!("Expected Tag node");
 	}

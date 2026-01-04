@@ -450,21 +450,21 @@ impl WasmGcEmitter {
 					Null,
 				],
 			},
-			// new_keyvalue(key_ptr: i32, key_len: i32, value: ref node) -> (ref node)
+			// new_keyvalue(name_ptr: i32, name_len: i32, key: ref node, value: ref node) -> (ref node)
 			NodeConstructor {
 				export_name: "new_keyvalue",
-				params: vec![ValType::I32, ValType::I32, node_ref_type],
+				params: vec![ValType::I32, ValType::I32, node_ref_type, node_ref_type],
 				fields: [
-					LocalI32(0),
-					LocalI32(1),
-					KindField(NodeKind::Key),
-					I64Zero,
-					FloatZero,
-					Zero,
-					Zero,
-					Null,
-					LocalRef(2),
-					Null,
+					LocalI32(0),                // field 0: name_ptr
+					LocalI32(1),                // field 1: name_len
+					KindField(NodeKind::Key),   // field 2: tag
+					I64Zero,                    // field 3: int_value
+					FloatZero,                  // field 4: float_value
+					Zero,                       // field 5: text_ptr
+					Zero,                       // field 6: text_len
+					LocalRef(2),                // field 7: left (key node)
+					LocalRef(3),                // field 8: right (value node)
+					Null,                       // field 9: meta
 				],
 			},
 		]
@@ -757,7 +757,7 @@ impl WasmGcEmitter {
 				self.allocate_string(s);
 			}
 			Node::Key(key, value) => {
-				self.allocate_string(key);
+				self.collect_and_allocate_strings(key);
 				self.collect_and_allocate_strings(value);
 			}
 			Node::Pair(left, right) => {
@@ -855,14 +855,21 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 			}
 			Node::Key(key, value) => {
-				let (ptr, len) = self
-					.string_table
-					.get(key.as_str())
-					.map(|&offset| (offset, key.len() as u32))
-					.unwrap_or((0, key.len() as u32));
-				func.instruction(&I32Const(ptr as i32));
-				func.instruction(&I32Const(len as i32));
-				self.emit_node_instructions(func, value);
+				// String optimization: store name for Symbol/Text keys
+				let (name_ptr, name_len) = match key.as_ref() {
+					Node::Symbol(s) | Node::Text(s) => {
+						self.string_table
+							.get(s.as_str())
+							.map(|&offset| (offset, s.len() as u32))
+							.unwrap_or((0, 0))
+					}
+					_ => (0, 0),
+				};
+
+				func.instruction(&I32Const(name_ptr as i32));  // field 0: name_ptr
+				func.instruction(&I32Const(name_len as i32));  // field 1: name_len
+				self.emit_node_instructions(func, key);        // field 7: left (key node)
+				self.emit_node_instructions(func, value);      // field 8: right (value node)
 				self.emit_call(func, "new_keyvalue");
 			}
 			Node::Pair(_left, _right) => {
