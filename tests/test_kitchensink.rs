@@ -2,6 +2,7 @@ use wasp::extensions::numbers::Number;
 use wasp::Bracket;
 use wasp::Node;
 use wasp::Node::Symbol;
+use wasp::Op;
 use wasp::Separator;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasp_parser::WaspParser;
@@ -36,7 +37,7 @@ fn test_kitchensink_all_node_types() {
 	// Test 7: Key node
 	test_node(
 		"Key",
-		Node::Key(Box::new(Symbol("key".to_string())), Box::new(Node::Number(Number::Int(123)))),
+		Node::Key(Box::new(Symbol("key".to_string())), Op::Colon, Box::new(Node::Number(Number::Int(123)))),
 	);
 
 	// Test 8: Block node
@@ -143,7 +144,7 @@ fn test_kitchensink_complex_tree() {
 			Node::Symbol("world".to_string()),
 			Node::Char('🚀'),
 			// Key
-			Node::Key(Box::new(Symbol("key".to_string())), Box::new(Node::Number(Number::Int(100)))),
+			Node::Key(Box::new(Symbol("key".to_string())), Op::Colon, Box::new(Node::Number(Number::Int(100)))),
 			// Nested Block (Curly brackets)
 			Node::List(
 				vec![Node::Number(Number::Int(1)), Node::Number(Number::Int(2))],
@@ -222,7 +223,7 @@ fn test_kitchensink_wasmtime_execution() {
 	println!("\n=== Kitchensink: Wasmtime Execution Test ===\n");
 
 	// Create a simple node
-	let node = Node::Key(Box::new(Symbol("html".to_string())), Box::new(Node::Text("content".to_string())));
+	let node = Node::Key(Box::new(Symbol("html".to_string())), Op::Colon, Box::new(Node::Text("content".to_string())));
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();

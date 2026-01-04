@@ -121,7 +121,7 @@ impl WasmGcEmitter {
 			Node::Symbol(_) => {
 				self.required_functions.insert("new_symbol");
 			}
-			Node::Key(_, value) => {
+			Node::Key(_, _, value) => {
 				self.required_functions.insert("new_keyvalue");
 				self.analyze_required_functions(value);
 			}
@@ -739,7 +739,7 @@ impl WasmGcEmitter {
 			Node::Text(s) | Node::Symbol(s) => {
 				self.allocate_string(s);
 			}
-			Node::Key(key, value) => {
+			Node::Key(key, _, value) => {
 				self.collect_and_allocate_strings(key);
 				self.collect_and_allocate_strings(value);
 			}
@@ -833,7 +833,7 @@ impl WasmGcEmitter {
 				func.instruction(&I32Const(len as i32));
 				self.emit_call(func, "new_symbol");
 			}
-			Node::Key(key, value) => {
+			Node::Key(key, _op, value) => {
 				// String optimization: store name for Symbol/Text keys
 				let (name_ptr, name_len) = match key.as_ref() {
 					Node::Symbol(s) | Node::Text(s) => {
@@ -847,6 +847,7 @@ impl WasmGcEmitter {
 
 				func.instruction(&I32Const(name_ptr as i32));  // field 0: name_ptr
 				func.instruction(&I32Const(name_len as i32));  // field 1: name_len
+				// TODO: emit op field
 				self.emit_node_instructions(func, key);        // field 7: left (key node)
 				self.emit_node_instructions(func, value);      // field 8: right (value node)
 				self.emit_call(func, "new_keyvalue");

@@ -3,6 +3,7 @@ use wasp::eq;
 use wasp::Bracket;
 use wasp::Node;
 use wasp::Node::Symbol;
+use wasp::Op;
 use wasp::Separator;
 use wasp::util::show_type_name;
 
@@ -38,6 +39,7 @@ fn test_implicit_html_structure() {
 			),
 			Node::Key(
 				Box::new(Symbol("colors".to_string())),
+				Op::Colon,
 				Box::new(Node::list(vec![
 					Node::symbol("red"),
 					Node::symbol("green"),

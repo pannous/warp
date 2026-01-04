@@ -698,7 +698,7 @@ impl Node {
 
 	pub fn get_key(&self) -> &str {
 		match self {
-			Key(k, _) => match k.as_ref() {
+			Key(k, _, _) => match k.as_ref() {
 				Symbol(s) | Text(s) => s.as_str(),
 				_ => "",
 			},
@@ -707,9 +707,17 @@ impl Node {
 		}
 	}
 
+	pub fn get_op(&self) -> Op {
+		match self {
+			Key(_, op, _) => *op,
+			Meta { node, .. } => node.get_op(),
+			_ => Op::None,
+		}
+	}
+
 	pub fn get_value(&self) -> Node {
 		match self {
-			Key(_, v) => v.as_ref().clone(),
+			Key(_, _, v) => v.as_ref().clone(),
 			Meta { node, .. } => node.get_value(),
 			_ => Empty,
 		}
@@ -759,7 +767,7 @@ impl Node {
 					)
 				}
 			}
-			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
+			Key(k, op, v) => format!("{}{}{}", k, op, v.serialize_recurse(meta)),
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
@@ -817,7 +825,7 @@ impl Node {
 	/// Key nodes become XML tags, dotted keys (.attr) become attributes
 	pub fn to_xml(&self) -> String {
 		match self.drop_meta() {
-			Key(tag_name, body) => {
+			Key(tag_name, _, body) => {
 				let mut attributes = Vec::new();
 				let mut content_parts = Vec::new();
 
@@ -826,7 +834,7 @@ impl Node {
 					List(items, _, _) => {
 						for item in items {
 							match item.drop_meta() {
-								Key(k, v) => {
+								Key(k, _, v) => {
 									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 										if key_str.starts_with('.') {
 											// This is an attribute
@@ -927,7 +935,7 @@ impl Node {
 						let mut map = Map::new();
 						for item in items {
 							match item {
-								Key(k, v) => {
+								Key(k, _, v) => {
 									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 										map.insert(key_str.clone(), v.to_json_value());
 									}
@@ -935,7 +943,7 @@ impl Node {
 								List(nested, Bracket::Curly, _) => {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
-										if let Key(k, v) = nested_item {
+										if let Key(k, _, v) = nested_item {
 											if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 												map.insert(key_str.clone(), v.to_json_value());
 											}
@@ -954,7 +962,7 @@ impl Node {
 					_ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
 				}
 			}
-			Key(k, v) => {
+			Key(k, _, v) => {
 				let mut map = Map::new();
 				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 					map.insert(key_str.clone(), v.to_json_value());
@@ -975,7 +983,7 @@ impl Node {
 						// Extract dotted keys from metadata
 						let mut map = Map::new();
 						for item in items {
-							if let Key(k, v) = item {
+							if let Key(k, _, v) = item {
 								map.insert(format!(".{}", k), v.to_json_value());
 							}
 						}
@@ -1242,8 +1250,8 @@ impl PartialEq for Node {
 				};
 				node.as_ref().eq(other_unwrapped)
 			}
-			Key(k1, v1) => match other {
-				Key(k2, v2) => k1 == k2 && v1 == v2,
+			Key(k1, op1, v1) => match other {
+				Key(k2, op2, v2) => k1 == k2 && op1 == op2 && v1 == v2,
 				_ => false,
 			},
 			List(items1, _, _) => match other {
@@ -1292,7 +1300,7 @@ impl PartialEq<bool> for Node {
 			Symbol(s) => s.is_empty() == !*other,
 			Text(s) => s.is_empty() == !*other,
 			List(l, _, _) => l.is_empty() == !*other,
-			Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
+			Key(..) => *other,  // todo NEVER false OR check value k=v ?
 			_ => false,
 		}
 	}
@@ -1504,7 +1512,7 @@ impl PartialEq<serde_json::Value> for Node {
 						return false;
 					}
 					items.iter().all(|item| {
-						if let Key(k, v) = item {
+						if let Key(k, _, v) = item {
 							if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 								json_obj
 									.get(key_str.as_str())
@@ -1522,7 +1530,7 @@ impl PartialEq<serde_json::Value> for Node {
 			}
 
 			// Key comparison (single-key objects)
-			(Key(k, v), Value::Object(json_obj)) => {
+			(Key(k, _, v), Value::Object(json_obj)) => {
 				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
 					json_obj.len() == 1
 						&& json_obj

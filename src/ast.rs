@@ -69,7 +69,7 @@ ast_type!(ForExpression, "for");
 fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 	f(n);
 	match n {
-		Node::Key(k, v) => {
+		Node::Key(k, _, v) => {
 			walk(k, f);
 			walk(v, f);
 		}
