@@ -682,18 +682,6 @@ impl Node {
 		}
 	}
 
-	/// Get key as Option<&str>, returns None if not a Symbol/Text key
-	pub fn key_opt(&self) -> Option<&str> {
-		match self {
-			Key(k, _) => match k.as_ref() {
-				Symbol(s) | Text(s) => Some(s.as_str()),
-				_ => None,
-			},
-			Meta { node, .. } => node.key_opt(),
-			_ => None,
-		}
-	}
-
 	pub fn get_value(&self) -> Node {
 		match self {
 			Key(_, v) => v.as_ref().clone(),
