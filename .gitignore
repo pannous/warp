@@ -1,3 +1,5 @@
 vendor
 target
-*.wasmwiki/
+*.wasm
+wiki/
+out
