@@ -159,3 +159,17 @@ fn test_string_concatenation() {
 	// eq!("a%db" % 123, "a123b");
 	// eq!("a%s%db" % "hi" % 123, "ahi123b");
 }
+
+// From test_strings.rs
+#[test]
+fn test_string_basics() {
+	is!("'hello'", "hello");
+}
+
+#[test]
+#[ignore]
+fn test_string_operations() {
+	is!("'say ' + 0.", "say 0.");
+	is!("'hello'", "hello");
+	is!("`${1+1}`", 2);
+}

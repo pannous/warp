@@ -1006,3 +1006,17 @@ fn test_roundtrip() {
 	println!("result: {:?}, reparse: {:?}", result, reparse);
 	eq!(result, reparse);
 }
+
+// From test_separator_debug.rs
+#[test]
+fn test_simple_separators() {
+	let r1 = parse("a b, c d");
+	println!("a b, c d => {}", r1);
+	assert!(r1.length() > 0);
+}
+
+#[test]
+fn test_expected_structure() {
+	let r = parse("a b c");
+	println!("a b c => {} (len={})", r, r.length());
+}
