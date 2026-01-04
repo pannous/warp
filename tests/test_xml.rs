@@ -85,23 +85,26 @@ fn test_nested_xml() {
 
 #[test]
 fn test_xml_roundtrip() {
-	// Test that we can parse XML and re-parse the same XML
+	// Test that we can parse XML, convert to XML, and re-parse
 	let xml = r#"<html><head><title>My Page</title></head><body><h1>Hello</h1><p class="intro">Welcome</p></body></html>"#;
 	let node1 = parse_xml(xml);
 	println!("Parsed 1: {:?}", node1);
 
-	// Parse again from same source
-	let node2 = parse_xml(xml);
+	// Convert back to XML
+	let xml_output = node1.to_xml();
+	println!("to_xml(): {}", xml_output);
+
+	// Parse the XML output
+	let node2 = parse_xml(&xml_output);
 	println!("Parsed 2: {:?}", node2);
 
 	// Compare structure (should be identical)
 	eq!(node1, node2);
 
-	// Note: Serialization uses Wasp notation (.attr for attributes), not XML
-	// For XML output, we'd need a separate to_xml() method
-	let serialized = node1.serialize();
-	println!("Serialized (Wasp notation): {}", serialized);
-	assert!(serialized.contains(".class")); // Attributes use dotted notation
+	// Verify it's valid XML
+	assert!(xml_output.contains("<html>"));
+	assert!(xml_output.contains("</html>"));
+	assert!(xml_output.contains("class=\"intro\""));
 }
 
 #[test]
@@ -175,9 +178,104 @@ fn test_complex_xml_document() {
 	let node2 = parse_xml(xml);
 	eq!(node, node2);
 
-	// Test serialization preserves structure (though not in XML format)
+	// Test XML serialization roundtrip
+	let xml_output = node.to_xml();
+	println!("XML output: {}", xml_output);
+	let node3 = parse_xml(&xml_output);
+	eq!(node, node3);
+
+	// Also test Wasp notation serialization
 	let serialized = node.serialize();
 	println!("Serialized (Wasp notation): {}", serialized);
 	assert!(serialized.contains("html"));
 	assert!(serialized.contains(".class")); // Attributes use dotted notation
+}
+
+#[test]
+fn test_to_xml_simple() {
+	let xml = "<div>Hello World</div>";
+	let node = parse_xml(xml);
+	let output = node.to_xml();
+	println!("Input:  {}", xml);
+	println!("Output: {}", output);
+
+	assert!(output.contains("<div>"));
+	assert!(output.contains("Hello World"));
+	assert!(output.contains("</div>"));
+
+	// Roundtrip test
+	let reparsed = parse_xml(&output);
+	eq!(node, reparsed);
+}
+
+#[test]
+fn test_to_xml_with_attributes() {
+	let xml = r#"<div class="container" id="main">Content</div>"#;
+	let node = parse_xml(xml);
+	let output = node.to_xml();
+	println!("Input:  {}", xml);
+	println!("Output: {}", output);
+
+	assert!(output.contains("<div"));
+	assert!(output.contains("class=\"container\""));
+	assert!(output.contains("id=\"main\""));
+	assert!(output.contains("Content"));
+	assert!(output.contains("</div>"));
+
+	// Roundtrip test
+	let reparsed = parse_xml(&output);
+	eq!(node, reparsed);
+}
+
+#[test]
+fn test_to_xml_self_closing() {
+	let xml = r#"<img src="photo.jpg" />"#;
+	let node = parse_xml(xml);
+	let output = node.to_xml();
+	println!("Input:  {}", xml);
+	println!("Output: {}", output);
+
+	assert!(output.contains("<img"));
+	assert!(output.contains("src=\"photo.jpg\""));
+	assert!(output.contains("/>"));
+
+	// Roundtrip test
+	let reparsed = parse_xml(&output);
+	eq!(node, reparsed);
+}
+
+#[test]
+fn test_to_xml_nested() {
+	let xml = "<div><p>First</p><p>Second</p></div>";
+	let node = parse_xml(xml);
+	let output = node.to_xml();
+	println!("Input:  {}", xml);
+	println!("Output: {}", output);
+
+	assert!(output.contains("<div>"));
+	assert!(output.contains("<p>First</p>"));
+	assert!(output.contains("<p>Second</p>"));
+	assert!(output.contains("</div>"));
+
+	// Roundtrip test
+	let reparsed = parse_xml(&output);
+	eq!(node, reparsed);
+}
+
+#[test]
+fn test_to_xml_boolean_attribute() {
+	let xml = r#"<input type="checkbox" checked />"#;
+	let node = parse_xml(xml);
+	let output = node.to_xml();
+	println!("Input:  {}", xml);
+	println!("Output: {}", output);
+
+	assert!(output.contains("<input"));
+	assert!(output.contains("type=\"checkbox\""));
+	assert!(output.contains("checked"));
+	assert!(output.contains("/>"));
+
+	// Roundtrip test
+	let reparsed = parse_xml(&output);
+	eq!(node, reparsed);
 }
