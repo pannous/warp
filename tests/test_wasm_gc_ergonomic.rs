@@ -113,6 +113,7 @@ fn test_ergonomic_pattern() {
 	write_wasm(filename, &bytes);
 }
 
+#[test]
 #[ignore]
 fn what_was_that(){
 	let root = Empty; // eval(filename).expect("Failed to read WASM file");

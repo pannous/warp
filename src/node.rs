@@ -1252,6 +1252,7 @@ impl PartialEq<&str> for Node {
 	fn eq(&self, other: &&str) -> bool {
 		match self {
 			Text(s) => s == *other,
+			Char(c) => *c == other.chars().next().unwrap_or('\0'),
 			Symbol(s) => s == *other,
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
