@@ -1,6 +1,7 @@
 use wasp::extensions::numbers::Number;
 use wasp::Node;
 use wasp::Node::Symbol;
+use wasp::Op;
 use wasp::{Bracket, Separator};
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::{eq, write_wasm};
@@ -105,6 +106,7 @@ fn test_ergonomic_pattern() {
 
 	let node = Node::Key(
 		Box::new(Symbol("html".to_string())),
+		Op::Colon,
 		Box::new(Node::List(
 			vec![
 				Node::keys(".param", "test"),
