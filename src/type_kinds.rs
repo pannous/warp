@@ -15,7 +15,7 @@ pub enum NodeKind {
 	Codepoint = 3, // seems a bit out of whack here <<
 	Symbol = 4,
 	Key = 5,
-	Pair = 6,
+	// Pair = 6 - REMOVED, use List or Key instead
 	// Tag = 7 - REMOVED, use Key instead
 	Block = 8,
 	List = 9,

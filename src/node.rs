@@ -70,10 +70,8 @@ pub enum Node {
 	Symbol(String),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
 
-	// emit as .name for special semantics .meta:{} .pair=[a,b] .data={type=T, b64=[] id} .type=T …
+	// emit as .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
 	Key(Box<Node>, Box<Node>), // key can be any node (Symbol, Number, Text, etc.)
-	// pair in json via .pair=[a,b] or just list [a,b] in special context map:{[k,v],…}
-	Pair(Box<Node>, Box<Node>), // via list with Separator a:b a=b a->b ?
 	List(Vec<Node>, Bracket, Separator),
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
 	Data(Dada), // most generic container for any kind of data not captured by other node types
@@ -145,7 +143,6 @@ impl Node {
 		// last() belongs to iterator trade!!
 		match self {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
-			Pair(_a, b) => b.as_ref().clone(),
 			List(xs, _, _) => {
 				if let Some(last) = xs.last() {
 					last.clone()
@@ -212,7 +209,6 @@ impl Node {
 			Char(_) => NodeKind::Codepoint,
 			Symbol(_) => NodeKind::Symbol,
 			Key(_, _) => NodeKind::Key,
-			Pair(_, _) => NodeKind::Pair,
 			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
 			List(_, _, _) => NodeKind::List,
 			Data(_) => NodeKind::Data,
@@ -345,19 +341,6 @@ impl Node {
 				Key(key, value)
 			}
 
-			t if t == NodeKind::Pair as i32 => {
-				// Recursively read left and right nodes
-				let left = match obj.get::<GcObject>("left") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				let right = match obj.get::<GcObject>("right") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => Box::new(Empty),
-				};
-				Pair(left, right)
-			}
-
 			t if t == NodeKind::Block as i32 => {
 				// TODO: decode bracket info from int_value and read items
 				List(vec![], Bracket::Curly, Separator::None)
@@ -482,13 +465,6 @@ impl Index<&str> for Node {
 					&Empty
 				}
 			}
-			Pair(k, v) => {
-				if **k == *i {
-					v.as_ref()
-				} else {
-					&Empty
-				}
-			}
 			Key(k, v) => match k.as_ref() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
 				_ => &Empty,
@@ -555,9 +531,6 @@ impl Node {
 	// associated 'static' functions
 	pub fn new() -> Node {
 		Empty
-	}
-	pub fn pair(a: Node, b: Node) -> Self {
-		Pair(Box::new(a), Box::new(b))
 	}
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Box::new(v))
@@ -733,11 +706,6 @@ impl Node {
 				}
 			}
 			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
-			Pair(a, b) => format!(
-				"{}:{}",
-				a.serialize_recurse(meta),
-				b.serialize_recurse(meta)
-			),
 			Error(e) => format!("Error({})", e),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
@@ -939,7 +907,6 @@ impl Node {
 				}
 				Value::Object(map)
 			}
-			Pair(a, b) => Value::Array(vec![a.to_json_value(), b.to_json_value()]),
 			Data(d) => {
 				let mut map = Map::new();
 				map.insert("_type".to_string(), Value::String(d.type_name.clone()));
@@ -1225,10 +1192,6 @@ impl PartialEq for Node {
 				Key(k2, v2) => k1 == k2 && v1 == v2,
 				_ => false,
 			},
-			Pair(a1, b1) => match other {
-				Pair(a2, b2) => a1 == a2 && b1 == b2,
-				_ => false,
-			},
 			List(items1, _, _) => match other {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
@@ -1276,7 +1239,6 @@ impl PartialEq<bool> for Node {
 			Text(s) => s.is_empty() == !*other,
 			List(l, _, _) => l.is_empty() == !*other,
 			Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
-			Pair(_, _) => *other, // // todo NEVER false OR check value k:v ?
 			_ => false,
 		}
 	}
@@ -1983,8 +1945,6 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 			data,
 		},
 		// Now no pass can accidentally drop meta!
-		Pair(a, b) => Pair(Box::new(map_node(*a, f)), Box::new(map_node(*b, f))),
-
 		List(xs, br, sep) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br, sep),
 
 		other => f(other),

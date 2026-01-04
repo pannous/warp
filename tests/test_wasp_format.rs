@@ -27,12 +27,6 @@ fn test_function_syntax() {
 
 	println!("WASP: {}", wasp);
 	println!("JSON: {}", json);
-
-	// Function is represented as Pair
-	if let Node::Pair(sig, body) = &node {
-		println!("Signature: {:?}", sig);
-		println!("Body: {:?}", body);
-	}
 }
 
 #[test]
