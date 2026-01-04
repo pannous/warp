@@ -9,7 +9,7 @@ fn test_simple_xml_tag() {
 	println!("Parsed: {:?}", node);
 
 	// Should be Key("div", Text("Hello"))
-	if let Node::Key(name, value) = node.drop_meta() {
+	let key =node.get_key();
 		eq!(name, "div");
 		eq!(**value, Node::Text("Hello".to_string())); // **unbox de&reference &Box<Node>
 	} else {
