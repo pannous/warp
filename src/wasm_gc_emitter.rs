@@ -860,7 +860,6 @@ impl WasmGcEmitter {
 			&Node::True => {
 				func.instruction(&I32Const(1));
 			}
-			_ => todo!(),
 		}
 	}
 
