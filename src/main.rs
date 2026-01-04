@@ -14,6 +14,7 @@ pub mod type_kinds;
 
 pub mod ast;
 pub mod meta;
+mod smarty;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // use bla::test_bla_lib;

@@ -132,3 +132,20 @@ fn test_roots() {
 	is!("{}", Empty); // NOP
 	is!("hello", "hello"); // todo reference==string really?
 }
+
+
+#[test]
+#[ignore]
+fn test_did_you_mean_alias() {
+	// let ok1 = parse("printf!('hi')");
+	// eq!(ok1[".warnings"], "DYM print"); // THIS CAN NEVER HAVED WORKED! BUG IN TEST PIPELINE!
+}
+
+#[test]
+fn test_node_name() {
+	let a = Node::Symbol("xor".to_string()); // NOT type string by default!
+	let ok1 = a == "xor";
+	eq!(a, "xor");
+	eq!(a.name(), "xor");
+	assert!(ok1);
+}
