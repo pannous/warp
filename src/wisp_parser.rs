@@ -1,17 +1,20 @@
 //! Wisp Parser - S-expression format mapping directly to WASM GC Node layout
 //!
+//! why? b
+//!
 //! Format: (kind data value) where:
 //! - kind: node type (text, symbol, number, list, key, pair, tag, meta, ...)
-//! - data: primary payload
-//! - value: secondary payload or ø (null)
+//! - data: primary payload of arbitrary data type depending on kind (also node)
+//! - value: secondary payload of type node, can be ø (empty, null)
+//!  final ø is optional in notation but not in wasm / node structure
 //!
 //! Shorthands:
-//! - "ok"       → (text "ok" ø)
-//! - 42         → (int 42 ø)
-//! - 3.14       → (float 3.14 ø)
-//! - 'a'        → (char 'a' ø)
-//! - True/False → (bool 1/0 ø)
-//! - [a b c]    → (list [a b c] ø)
+//! - "ok"       → (text "ok") → (text "ok" ø)
+//! - 42         → (int 42) → (int 42 ø)
+//! - 3.14       → (float 3.14)
+//! - 'a'        → (char 'a')
+//! - True/False → (bool 1/0)
+//! - [a b c]    → (list [a b c])
 //! - a=b        → (pair a b)
 //! - "a":b      → (key "a" b)
 //! - (a . b)    → (cons a b)
@@ -97,7 +100,7 @@ impl WispParser {
 			let second = self.parse_expr();
 			self.skip_whitespace();
 			self.expect(')');
-			return Node::Key(Box::new(first), Op::Dot, Box::new(second));
+			return Key(Box::new(first), Op::Dot, Box::new(second));
 		}
 
 		// handle True/False/Empty at start of sexpr - just consume remaining and return
@@ -165,15 +168,21 @@ impl WispParser {
 		self.expect(')');
 		// call is: name:args or key with call semantics
 		let args_node = List(args, Bracket::Round, Separator::Space);
-		Node::Key(Box::new(name), Op::None, Box::new(args_node))
+		Key(Box::new(name), Op::None, Box::new(args_node))
 	}
 
 	fn parse_text_node(&mut self) -> Node {
 		self.skip_whitespace();
-		let text = self.parse_string();
+		let node = self.parse_expr();
 		self.skip_optional_value();
 		self.expect(')');
-		text
+		// convert to Text if needed
+		match node {
+			Text(s) => Text(s),
+			Char(c) => Text(c.to_string()),
+			Symbol(s) => Text(s),
+			_ => node,
+		}
 	}
 
 	fn parse_symbol_node(&mut self) -> Node {
@@ -276,7 +285,7 @@ impl WispParser {
 		self.skip_whitespace();
 		let val = self.parse_expr();
 		self.expect(')');
-		Node::Key(Box::new(key), Op::Colon, Box::new(val))
+		Key(Box::new(key), Op::Colon, Box::new(val))
 	}
 
 	fn parse_pair_node(&mut self) -> Node {
@@ -285,7 +294,7 @@ impl WispParser {
 		self.skip_whitespace();
 		let right = self.parse_expr();
 		self.expect(')');
-		Node::Key(Box::new(left), Op::Assign, Box::new(right))
+		Key(Box::new(left), Op::Assign, Box::new(right))
 	}
 
 	fn parse_cons_node(&mut self) -> Node {
@@ -294,7 +303,7 @@ impl WispParser {
 		self.skip_whitespace();
 		let cdr = self.parse_expr();
 		self.expect(')');
-		Node::Key(Box::new(car), Op::Dot, Box::new(cdr))
+		Key(Box::new(car), Op::Dot, Box::new(cdr))
 	}
 
 	fn parse_tag_node(&mut self) -> Node {
@@ -303,7 +312,7 @@ impl WispParser {
 		self.skip_whitespace();
 		let body = self.parse_expr();
 		self.expect(')');
-		Node::Key(Box::new(name), Op::Colon, Box::new(body))
+		Key(Box::new(name), Op::Colon, Box::new(body))
 	}
 
 	fn parse_meta_node(&mut self) -> Node {
@@ -325,7 +334,7 @@ impl WispParser {
 		let body = self.parse_expr();
 		self.expect(')');
 		// defn name body → name:=body
-		Node::Key(Box::new(name), Op::Define, Box::new(body))
+		Key(Box::new(name), Op::Define, Box::new(body))
 	}
 
 	fn parse_call_node(&mut self) -> Node {
@@ -334,7 +343,7 @@ impl WispParser {
 		self.skip_whitespace();
 		let args = self.parse_expr();
 		self.expect(')');
-		Node::Key(Box::new(name), Op::None, Box::new(args))
+		Key(Box::new(name), Op::None, Box::new(args))
 	}
 
 	fn parse_error_node(&mut self) -> Node {
@@ -421,8 +430,8 @@ impl WispParser {
 		if chars.len() == 1 {
 			Char(chars[0])
 		} else {
-			// multi-char becomes symbol (quoted symbol)
-			Symbol(chars.into_iter().collect())
+			// multi-char becomes text
+			Text(chars.into_iter().collect())
 		}
 	}
 
@@ -483,26 +492,26 @@ impl WispParser {
 				self.advance();
 				self.skip_whitespace();
 				let val = self.parse_expr();
-				Node::Key(Box::new(sym), Op::Define, Box::new(val))
+				Key(Box::new(sym), Op::Define, Box::new(val))
 			}
 			':' if self.peek(1) == ':' => {
 				self.advance();
 				self.advance();
 				self.skip_whitespace();
 				let val = self.parse_expr();
-				Node::Key(Box::new(sym), Op::Scope, Box::new(val))
+				Key(Box::new(sym), Op::Scope, Box::new(val))
 			}
 			':' => {
 				self.advance();
 				self.skip_whitespace();
 				let val = self.parse_expr();
-				Node::Key(Box::new(sym), Op::Colon, Box::new(val))
+				Key(Box::new(sym), Op::Colon, Box::new(val))
 			}
 			'=' if self.peek(1) != '=' => {
 				self.advance();
 				self.skip_whitespace();
 				let val = self.parse_expr();
-				Node::Key(Box::new(sym), Op::Assign, Box::new(val))
+				Key(Box::new(sym), Op::Assign, Box::new(val))
 			}
 			_ => sym,
 		}
@@ -535,8 +544,8 @@ mod tests {
 	fn test_basic_types() {
 		assert_eq!(parse_wisp("42"), Number(Number::Int(42)));
 		assert_eq!(parse_wisp("-7"), Number(Number::Int(-7)));
-		assert_eq!(parse_wisp("3.14"), Number(Number::Float(3.14)));
-		assert_eq!(parse_wisp("\"hello\""), Text("hello".to_string()));
+		assert_eq!(parse_wisp("3.11"), Number(Number::Float(3.11)));
+		assert_eq!(parse_wisp("'hello'"), Text("hello".to_string()));
 		assert_eq!(parse_wisp("'a'"), Char('a'));
 		assert_eq!(parse_wisp("true"), True);
 		assert_eq!(parse_wisp("false"), False);
@@ -544,15 +553,27 @@ mod tests {
 		assert_eq!(parse_wisp("ø"), Empty);
 	}
 
+
 	#[test]
-	fn test_sexpr_types() {
-		assert_eq!(parse_wisp("(text \"ok\" ø)"), Text("ok".to_string()));
+	fn test_sexpr_types_superfluous_empty_node() {
+		assert_eq!(parse_wisp("(text 'ok' ø)"), Text("ok".to_string()));
 		assert_eq!(parse_wisp("(int 42 ø)"), Number(Number::Int(42)));
-		assert_eq!(parse_wisp("(float 3.14 ø)"), Number(Number::Float(3.14)));
+		assert_eq!(parse_wisp("(float 3.11 ø)"), Number(Number::Float(3.11)));
 		assert_eq!(parse_wisp("(char 'x' ø)"), Char('x'));
 		assert_eq!(parse_wisp("(bool 1 ø)"), True);
 		assert_eq!(parse_wisp("(bool 0 ø)"), False);
 		assert_eq!(parse_wisp("(true 1 True)"), True);
+		assert_eq!(parse_wisp("(nil)"), Empty);
+	}
+
+	#[test]
+	fn test_sexpr_types() {
+		assert_eq!(parse_wisp("(text 'ok')"), Text("ok".to_string()));
+		assert_eq!(parse_wisp("(int 42)"), Number(Number::Int(42)));
+		assert_eq!(parse_wisp("(float 3.11)"), Number(Number::Float(3.11)));
+		assert_eq!(parse_wisp("(char 'x')"), Char('x'));
+		assert_eq!(parse_wisp("(bool 1)"), True);
+		assert_eq!(parse_wisp("(bool 0)"), False);
 		assert_eq!(parse_wisp("(nil)"), Empty);
 	}
 
@@ -572,7 +593,7 @@ mod tests {
 	fn test_cons_dotted_pair() {
 		let result = parse_wisp("(a . b)");
 		match result {
-			Node::Key(l, Op::Dot, r) => {
+			Key(l, Op::Dot, r) => {
 				assert_eq!(*l, Symbol("a".to_string()));
 				assert_eq!(*r, Symbol("b".to_string()));
 			}
@@ -582,9 +603,9 @@ mod tests {
 
 	#[test]
 	fn test_key_pair() {
-		let result = parse_wisp("(key \"name\" value)");
+		let result = parse_wisp("(key 'name' value)");
 		match result {
-			Node::Key(l, Op::Colon, r) => {
+			Key(l, Op::Colon, r) => {
 				assert_eq!(*l, Text("name".to_string()));
 				assert_eq!(*r, Symbol("value".to_string()));
 			}
@@ -593,7 +614,7 @@ mod tests {
 
 		let result2 = parse_wisp("(pair x 42)");
 		match result2 {
-			Node::Key(l, Op::Assign, r) => {
+			Key(l, Op::Assign, r) => {
 				assert_eq!(*l, Symbol("x".to_string()));
 				assert_eq!(*r, Number(Number::Int(42)));
 			}
@@ -603,9 +624,9 @@ mod tests {
 
 	#[test]
 	fn test_tag() {
-		let result = parse_wisp("(tag 'html' [body])");
+		let result = parse_wisp("(tag html [body])");
 		match result {
-			Node::Key(l, Op::Colon, r) => {
+			Key(l, Op::Colon, r) => {
 				assert_eq!(*l, Symbol("html".to_string()));
 				match *r {
 					List(items, Bracket::Square, _) => {
@@ -620,7 +641,7 @@ mod tests {
 
 	#[test]
 	fn test_meta() {
-		let result = parse_wisp("(meta value (comment \"test\"))");
+		let result = parse_wisp("(meta value (comment 'test'))");
 		match result {
 			Meta { node, data } => {
 				assert_eq!(*node, Symbol("value".to_string()));
@@ -631,9 +652,9 @@ mod tests {
 
 	#[test]
 	fn test_defn() {
-		let result = parse_wisp("(defn 'square' (mul it it))");
+		let result = parse_wisp("(defn square (mul it it))"); // todo: param list vs body!!
 		match result {
-			Node::Key(name, Op::Define, body) => {
+			Key(name, Op::Define, body) => {
 				assert_eq!(*name, Symbol("square".to_string()));
 			}
 			_ => panic!("expected defn"),
@@ -644,7 +665,7 @@ mod tests {
 	fn test_shorthand_operators() {
 		let result = parse_wisp("x:42");
 		match result {
-			Node::Key(l, Op::Colon, r) => {
+			Key(l, Op::Colon, r) => {
 				assert_eq!(*l, Symbol("x".to_string()));
 				assert_eq!(*r, Number(Number::Int(42)));
 			}
@@ -653,7 +674,7 @@ mod tests {
 
 		let result2 = parse_wisp("x=42");
 		match result2 {
-			Node::Key(l, Op::Assign, r) => {
+			Key(l, Op::Assign, r) => {
 				assert_eq!(*l, Symbol("x".to_string()));
 				assert_eq!(*r, Number(Number::Int(42)));
 			}
@@ -662,7 +683,7 @@ mod tests {
 
 		let result3 = parse_wisp("x:=42");
 		match result3 {
-			Node::Key(l, Op::Define, r) => {
+			Key(l, Op::Define, r) => {
 				assert_eq!(*l, Symbol("x".to_string()));
 				assert_eq!(*r, Number(Number::Int(42)));
 			}
@@ -672,9 +693,9 @@ mod tests {
 
 	#[test]
 	fn test_nested() {
-		let result = parse_wisp("(tag 'div' [(meta (text \"hello\") (class \"item\")) (tag 'span' [])])");
+		let result = parse_wisp("(tag div [(meta (text 'hello') (class 'item')) (tag span ø)])");
 		match result {
-			Node::Key(name, Op::Colon, body) => {
+			Key(name, Op::Colon, body) => {
 				assert_eq!(*name, Symbol("div".to_string()));
 			}
 			_ => panic!("expected nested structure"),
@@ -683,9 +704,9 @@ mod tests {
 
 	#[test]
 	fn test_call() {
-		let result = parse_wisp("(call 'print' [\"hello\" \"world\"])");
+		let result = parse_wisp("(call print ['hello' 'world'])");
 		match result {
-			Node::Key(name, Op::None, args) => {
+			Key(name, Op::None, args) => {
 				assert_eq!(*name, Symbol("print".to_string()));
 			}
 			_ => panic!("expected call"),
