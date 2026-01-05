@@ -2,12 +2,14 @@ use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
+use crate::node::Node;
+use crate::type_kinds::NodeTag;
+
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
 	inner: Val,
 	store: Rc<RefCell<Store<()>>>,
 	instance: Instance,
-	field_map: Rc<FieldMap>,
 }
 
 impl std::fmt::Debug for GcObject {
@@ -16,189 +18,169 @@ impl std::fmt::Debug for GcObject {
 	}
 }
 
-/// Maps field names to indices for the unified Node struct
-pub struct FieldMap {
-	// Unified Node struct field indices
-	// Based on wasm_gc_emitter.rs structure
-}
-
-impl FieldMap {
-	fn new() -> Self {
-		FieldMap {}
-	}
-
-	fn field_index(&self, name: &str) -> Result<usize> {
-		// Field layout from wasm_gc_emitter.rs:
-		// 0: name_ptr (i32)
-		// 1: name_len (i32)
-		// 2: tag (i32)
-		// 3: int_value (i64)
-		// 4: float_value (f64)
-		// 5: text_ptr (i32)
-		// 6: text_len (i32)
-		// 7: left (ref null node)
-		// 8: right (ref null node)
-		// 9: meta (ref null node)
-		match name {
-			// todo these don't need to be hardcoded, see rasm
-			"name_ptr" => Ok(0),
-			"name_len" => Ok(1),
-			"tag" => Ok(2),
-			"int_value" => Ok(3),
-			"float_value" => Ok(4),
-			"text_ptr" => Ok(5),
-			"text_len" => Ok(6),
-			"left" => Ok(7),
-			"right" => Ok(8),
-			"meta" => Ok(9),
-			// Convenience aliases
-			"kind" => Ok(2), // tag
-			_ => Err(anyhow!("Unknown field: {}", name)),
-		}
-	}
-}
+/// Compact 3-field Node layout:
+/// - Field 0: kind (i64) - type tag, possibly with flags in upper bits
+/// - Field 1: data (ref null any) - payload (i31ref, boxed number, node ref, etc.)
+/// - Field 2: value (ref null $Node) - child/value node
+pub const FIELD_KIND: usize = 0;
+pub const FIELD_DATA: usize = 1;
+pub const FIELD_VALUE: usize = 2;
 
 impl GcObject {
 	pub fn new(val: Val, store: Rc<RefCell<Store<()>>>, instance: Instance) -> Self {
-		GcObject {
-			inner: val,
-			store,
-			instance,
-			field_map: Rc::new(FieldMap::new()),
-		}
-	}
-
-	/// Get field by name with type inference
-	pub fn get<T: FromVal>(&self, field_name: &str) -> Result<T> {
-		let field_idx = self.field_map.field_index(field_name)?;
-
-		// Use wasmtime introspection to read the field
-		let mut store = self.store.borrow_mut();
-
-		if let Some(anyref) = self.inner.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				let field_val = structref.field(&mut *store, field_idx)?;
-				return T::from_val(field_val, &mut *store, &self.instance, &self.store);
-			}
-		}
-
-		Err(anyhow!("Cannot read field {}", field_name))
+		GcObject { inner: val, store, instance }
 	}
 
 	/// Get field by index
 	pub fn get_field(&self, idx: usize) -> Result<Val> {
 		let mut store = self.store.borrow_mut();
-
 		if let Some(anyref) = self.inner.unwrap_anyref() {
 			if let Ok(structref) = anyref.unwrap_struct(&*store) {
 				return structref.field(&mut *store, idx);
 			}
 		}
-
 		Err(anyhow!("Cannot read field at index {}", idx))
 	}
 
-	/// Check if field exists and is non-null
-	pub fn has(&self, field_name: &str) -> Result<bool> {
-		match self.field_map.field_index(field_name) {
-			Ok(_) => Ok(true),
-			Err(_) => Ok(false),
+	/// Get the kind field (i64)
+	pub fn kind(&self) -> Result<i64> {
+		let val = self.get_field(FIELD_KIND)?;
+		Ok(val.unwrap_i64())
+	}
+
+	/// Get the base tag (lower 8 bits of kind)
+	pub fn tag(&self) -> Result<u8> {
+		Ok((self.kind()? & 0xFF) as u8)
+	}
+
+	/// Get the data field as a Val
+	pub fn data(&self) -> Result<Val> {
+		self.get_field(FIELD_DATA)
+	}
+
+	/// Get the value field as a GcObject (child node)
+	pub fn value(&self) -> Result<GcObject> {
+		let val = self.get_field(FIELD_VALUE)?;
+		Ok(GcObject::new(val, self.store.clone(), self.instance.clone()))
+	}
+
+	/// Check if value field is null
+	pub fn value_is_null(&self) -> bool {
+		match self.get_field(FIELD_VALUE) {
+			Ok(val) => val.unwrap_anyref().is_none(),
+			Err(_) => true,
 		}
 	}
 
-	/// Read string from linear memory (for text/name fields)
+	/// Read i64 from boxed i64 in data field (for Int nodes)
+	pub fn read_boxed_i64(&self) -> Result<i64> {
+		let data_val = self.data()?;
+		let mut store = self.store.borrow_mut();
+		if let Some(anyref) = data_val.unwrap_anyref() {
+			if let Ok(structref) = anyref.unwrap_struct(&*store) {
+				let field_val = structref.field(&mut *store, 0)?;
+				return Ok(field_val.unwrap_i64());
+			}
+		}
+		Err(anyhow!("Cannot read boxed i64"))
+	}
+
+	/// Read f64 from boxed f64 in data field (for Float nodes)
+	pub fn read_boxed_f64(&self) -> Result<f64> {
+		let data_val = self.data()?;
+		let mut store = self.store.borrow_mut();
+		if let Some(anyref) = data_val.unwrap_anyref() {
+			if let Ok(structref) = anyref.unwrap_struct(&*store) {
+				let field_val = structref.field(&mut *store, 0)?;
+				return Ok(field_val.unwrap_f64());
+			}
+		}
+		Err(anyhow!("Cannot read boxed f64"))
+	}
+
+	/// Read i31ref value from data field (for Codepoint)
+	pub fn read_i31(&self) -> Result<i32> {
+		let data_val = self.data()?;
+		let store = self.store.borrow();
+		if let Some(anyref) = data_val.unwrap_anyref() {
+			if let Ok(i31) = anyref.unwrap_i31(&*store) {
+				return Ok(i31.get_i32());
+			}
+		}
+		Err(anyhow!("Cannot read i31ref"))
+	}
+
+	/// Read string ptr+len from $String struct in data field
+	pub fn read_string_ptr_len(&self) -> Result<(i32, i32)> {
+		let data_val = self.data()?;
+		let mut store = self.store.borrow_mut();
+		if let Some(anyref) = data_val.unwrap_anyref() {
+			if let Ok(structref) = anyref.unwrap_struct(&*store) {
+				let ptr_val = structref.field(&mut *store, 0)?; // field 0: ptr
+				let len_val = structref.field(&mut *store, 1)?; // field 1: len
+				return Ok((ptr_val.unwrap_i32(), len_val.unwrap_i32()));
+			}
+		}
+		Err(anyhow!("Cannot read $String struct"))
+	}
+
+	/// Read string from linear memory
 	pub fn read_string(&self, ptr: i32, len: i32) -> Result<String> {
 		if ptr == 0 || len == 0 {
 			return Ok(String::new());
 		}
-
 		let mut store = self.store.borrow_mut();
-		let memory = self
-			.instance
+		let memory = self.instance
 			.get_memory(&mut *store, "memory")
 			.ok_or_else(|| anyhow!("No memory export"))?;
-
 		let mut buf = vec![0u8; len as usize];
 		memory.read(&*store, ptr as usize, &mut buf)?;
-
 		String::from_utf8(buf).map_err(|e| anyhow!("Invalid UTF-8: {}", e))
 	}
 
-	/// Get the "name" field as a string (reads from linear memory)
-	pub fn name(&self) -> Result<String> {
-		let ptr: i32 = self.get("name_ptr")?;
-		let len: i32 = self.get("name_len")?;
-		self.read_string(ptr, len)
-	}
-
-	/// Get the "text" field as a string (reads from linear memory)
+	/// Get text content for Text/Symbol nodes
 	pub fn text(&self) -> Result<String> {
-		let ptr: i32 = self.get("text_ptr")?;
-		let len: i32 = self.get("text_len")?;
+		let (ptr, len) = self.read_string_ptr_len()?;
 		self.read_string(ptr, len)
 	}
 
-	/// Get node kind/tag
-	pub fn kind(&self) -> Result<i32> {
-		self.get("tag")
+	/// Get the data field as a child GcObject (for Key nodes where data is a node ref)
+	pub fn data_as_node(&self) -> Result<GcObject> {
+		let val = self.data()?;
+		Ok(GcObject::new(val, self.store.clone(), self.instance.clone()))
 	}
 }
 
 /// Trait for converting Val to Rust types
 pub trait FromVal: Sized {
-	fn from_val(
-		val: Val,
-		store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self>;
+	fn from_val(val: Val, store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self>;
 }
 
 impl FromVal for i32 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
+	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
 		Ok(val.unwrap_i32())
 	}
 }
 
 impl FromVal for i64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
+	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
 		Ok(val.unwrap_i64())
 	}
 }
 
 impl FromVal for f64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
+	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
 		Ok(val.unwrap_f64())
 	}
 }
 
 impl FromVal for GcObject {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
+	fn from_val(val: Val, _store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
 		Ok(GcObject::new(val, store_rc.clone(), instance.clone()))
 	}
 }
 
-/// Load a WASM module with GC support and return root object
+/// Load a WASM module with GC support and return root GcObject
 pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 	let mut config = Config::new();
 	config.wasm_gc(true);
@@ -217,12 +199,9 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 		linker.instantiate(&mut *s, &module)?
 	};
 
-	// Call main() to get the root node
 	let main = {
 		let mut s = store_rc.borrow_mut();
-		instance
-			.get_func(&mut *s, "main")
-			.ok_or_else(|| anyhow!("No main function"))?
+		instance.get_func(&mut *s, "main").ok_or_else(|| anyhow!("No main function"))?
 	};
 
 	let mut results = vec![Val::I32(0)];
@@ -234,8 +213,14 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 	Ok(GcObject::new(results[0].clone(), store_rc, instance))
 }
 
-/// Load WASM bytes directly
-pub fn read_bytes(bytes: &[u8]) -> Result<GcObject> {
+/// Load WASM bytes and return Node (calls from_gc_object)
+pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
+	let obj = read_bytes_gc(bytes)?;
+	Ok(Node::from_gc_object(&obj))
+}
+
+/// Load WASM bytes and return GcObject
+pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 	let mut config = Config::new();
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
@@ -252,12 +237,9 @@ pub fn read_bytes(bytes: &[u8]) -> Result<GcObject> {
 		linker.instantiate(&mut *s, &module)?
 	};
 
-	// Call main() to get the root node
 	let main = {
 		let mut s = store_rc.borrow_mut();
-		instance
-			.get_func(&mut *s, "main")
-			.ok_or_else(|| anyhow!("No main function"))?
+		instance.get_func(&mut *s, "main").ok_or_else(|| anyhow!("No main function"))?
 	};
 
 	let mut results = vec![Val::I32(0)];
@@ -278,9 +260,7 @@ pub fn call_constructor(
 ) -> Result<GcObject> {
 	let func = {
 		let mut s = store.borrow_mut();
-		instance
-			.get_func(&mut *s, func_name)
-			.ok_or_else(|| anyhow!("Function {} not found", func_name))?
+		instance.get_func(&mut *s, func_name).ok_or_else(|| anyhow!("Function {} not found", func_name))?
 	};
 
 	let mut results = vec![Val::I32(0)];

@@ -3,41 +3,50 @@ use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::{eq, write_wasm};
 use wasp::Node::Empty;
 use wasp::wasm_gc_reader::read_bytes;
+use wasp::extensions::numbers::Number;
 
-/// Test ergonomic reading patterns from rasm
+/// Test reading integer nodes via compact 3-field layout
 #[test]
-fn test_ergonomic_node_reading() {
-	println!("=== Testing Ergonomic WASM GC Reading ===\n");
+fn test_read_int_node() {
+	println!("=== Testing Int Node Reading ===\n");
 
-	// Generate a WASM module with a simple node
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-
-	let node = int(42);
-	emitter.emit_node_main(&node);
-
+	emitter.emit_node_main(&int(42));
 	let bytes = emitter.finish();
 
-	// Read it back ergonomically using fast shared engine
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
 
-	println!("✓ Loaded WASM module and got root node");
+	match root {
+		Node::Number(Number::Int(val)) => {
+			eq!(val, 42);
+			println!("✓ Int value is 42");
+		}
+		other => panic!("Expected Number(Int(42)), got {:?}", other),
+	}
+}
 
-	// Test field access
-	let kind: i32 = root.get("tag").expect("Failed to get tag");
-	println!("  Root kind (tag): {}", kind);
-	eq!(kind, 1); // NodeKind::Number
+/// Test reading float nodes
+#[test]
+fn test_read_float_node() {
+	println!("=== Testing Float Node Reading ===\n");
 
-	let int_value: i64 = root.get("int_value").expect("Failed to get int_value");
-	println!("  Int value: {}", int_value);
-	eq!(int_value, 42);
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit();
+	emitter.emit_node_main(&float(3.14));
+	let bytes = emitter.finish();
 
-	// Test convenience method
-	let kind2 = root.kind().expect("Failed to get kind");
-	println!("  Using .kind(): {}", kind2);
-	eq!(kind2, 1);
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
 
-	println!("\n✓ Ergonomic field access works!");
+	match root {
+		Node::Number(Number::Float(val)) => {
+			assert!((val - 3.14).abs() < 0.001);
+			println!("✓ Float value is 3.14");
+		}
+		other => panic!("Expected Number(Float(3.14)), got {:?}", other),
+	}
 }
 
 /// Test reading text nodes with memory access
@@ -47,24 +56,19 @@ fn test_read_text_node() {
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-
-	let node = text("hello");
-	emitter.emit_node_main(&node);
-
+	emitter.emit_node_main(&text("Hello, WASM!"));
 	let bytes = emitter.finish();
+
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
 
-	println!("✓ Loaded text node");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 2); // NodeKind::Text
-
-	// Read text from linear memory
-	let txt = root.text().expect("Failed to read text");
-	println!("  Text: '{}'", txt);
-	eq!(txt, "hello");
-
-	println!("\n✓ Text reading from linear memory works!");
+	match root {
+		Node::Text(s) => {
+			eq!(s, "Hello, WASM!".to_string());
+			println!("✓ Text value is 'Hello, WASM!'");
+		}
+		other => panic!("Expected Text, got {:?}", other),
+	}
 }
 
 /// Test reading symbol nodes
@@ -74,162 +78,90 @@ fn test_read_symbol_node() {
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-
-	let node = symbol("my_var");
-	emitter.emit_node_main(&node);
-
+	emitter.emit_node_main(&symbol("my_symbol"));
 	let bytes = emitter.finish();
+
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
 
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 4); // NodeKind::Symbol
-
-	let txt = root.text().expect("Failed to read symbol");
-	println!("  Symbol: '{}'", txt);
-	eq!(txt, "my_var");
-
-	println!("\n✓ Symbol reading works!");
+	match root {
+		Node::Symbol(s) => {
+			eq!(s, "my_symbol".to_string());
+			println!("✓ Symbol value is 'my_symbol'");
+		}
+		other => panic!("Expected Symbol, got {:?}", other),
+	}
 }
 
-/// Test the complete ergonomic pattern similar to: root = read("test.wasm"); is!(root.name, "html")
+/// Test reading codepoint nodes
 #[test]
-fn test_ergonomic_pattern() {
-	println!("=== Testing Complete Ergonomic Pattern ===\n");
+fn test_read_codepoint_node() {
+	println!("=== Testing Codepoint Node Reading ===\n");
 
-	// Generate WASM with a Key node that has a name
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
+	emitter.emit_node_main(&Node::Char('🚀'));
+	let bytes = emitter.finish();
 
-	let node = Node::Key(
-		Box::new(symbol("html")),
-		Op::Colon,
-		Box::new(Node::List(
-			vec![
-				Node::keys(".param", "test"),
-				Node::keys("body", "ok"),
-			],
-			Bracket::Curly,
-			Separator::None,
-		)),
+	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
+
+	match root {
+		Node::Char(c) => {
+			eq!(c, '🚀');
+			println!("✓ Codepoint is 🚀");
+		}
+		other => panic!("Expected Char, got {:?}", other),
+	}
+}
+
+/// Test reading key nodes (compact: key in data, value in value field)
+#[test]
+fn test_read_key_node() {
+	println!("=== Testing Key Node Reading ===\n");
+
+	let key_node = Node::Key(
+		Box::new(symbol("name")),
+		Op::None,
+		Box::new(text("value"))
 	);
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let filename = "out/test_ergonomic_pattern.wasm";
-	write_wasm(filename, &bytes);
-}
-
-#[test]
-#[ignore]
-fn what_was_that(){
-	let root = Empty; // eval(filename).expect("Failed to read WASM file");
-
-	println!("✓ Read WASM file");
-
-	// Access name field
-	let name = root.name();
-	println!("  Name: '{}'", name);
-
-	// The pattern: is!(root.name, "html")
-	eq!(name, "html");
-	println!("\n✓ Pattern works: root.name() == \"html\"");
-
-	// Verify kind
-	let _kind = root.kind();
-	// println!("  Kind: {}", kind);
-	// eq!(kind, 7); // NodeKind::Tag
-}
-
-/// Test field existence checking
-#[test]
-fn test_field_existence() {
-	println!("=== Testing Field Existence ===\n");
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-
-	let node = int(123);
-	emitter.emit_node_main(&node);
-
+	emitter.emit_node_main(&key_node);
 	let bytes = emitter.finish();
+
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	println!("  Got node: {:?}", root);
 
-	// Test has() method
-	assert!(root.has("tag").unwrap());
-	assert!(root.has("int_value").unwrap());
-	assert!(root.has("kind").unwrap()); // alias
-	assert!(!root.has("nonexistent").unwrap());
-
-	println!("✓ Field existence checking works");
+	match root {
+		Node::Key(key, _, value) => {
+			match *key {
+				Node::Symbol(s) => eq!(s, "name".to_string()),
+				other => panic!("Expected Symbol key, got {:?}", other),
+			}
+			match *value {
+				Node::Text(s) => eq!(s, "value".to_string()),
+				other => panic!("Expected Text value, got {:?}", other),
+			}
+			println!("✓ Key node correctly decoded");
+		}
+		other => panic!("Expected Key, got {:?}", other),
+	}
 }
 
 /// Test empty node
 #[test]
-fn test_empty_node() {
-	println!("=== Testing Empty Node ===\n");
+fn test_read_empty_node() {
+	println!("=== Testing Empty Node Reading ===\n");
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-
-	emitter.emit_node_main(&Node::Empty);
-
+	emitter.emit_node_main(&Empty);
 	let bytes = emitter.finish();
+
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 0); // NodeKind::Empty
-
-	println!("✓ Empty node works");
-}
-
-/// Test codepoint node
-#[test]
-fn test_codepoint_node() {
-	println!("=== Testing Char Node ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Char('🦀');
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 3); // NodeKind::Char
-
-	let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
-	println!(
-		"  Char value: {} ({})",
-		codepoint,
-		char::from_u32(codepoint as u32).unwrap_or('?')
-	);
-	eq!(codepoint, '🦀' as i64);
-
-	println!("✓ Char node works");
-}
-
-/// Test float number node
-#[test]
-fn test_float_node() {
-	println!("=== Testing Float Node ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = float(1.23);
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 1); // NodeKind::Number
-
-	let float_value: f64 = root.get("float_value").expect("Failed to get float");
-	println!("  Float value: {}", float_value);
-	eq!(float_value, 1.23);
-
-	println!("✓ Float node works");
+	println!("  Got node: {:?}", root);
+	eq!(root, Empty);
+	println!("✓ Empty node correctly decoded");
 }
