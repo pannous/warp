@@ -13,8 +13,8 @@ pub mod strings; // ⚠️ reexport still needs explicit import:
 pub mod utils;
 // use extensions::Numbers::*;
 
-#[allow(dead_code)]
-mod extensions {}
+// #[allow(dead_code)]
+// mod extensions {}
 
 // fucking s!("to_string")
 // better use "wtf".s() from extensions::strings

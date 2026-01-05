@@ -20,8 +20,8 @@
 //! - (a . b)    → (cons a b)
 
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, Node, Op, Separator};
 use crate::node::Node::*;
+use crate::node::*;
 
 pub struct WispParser {
 	chars: Vec<char>,
@@ -440,7 +440,9 @@ impl WispParser {
 		if self.current() == '-' {
 			s.push(self.advance());
 		}
-		while !self.end() && (self.current().is_ascii_digit() || self.current() == '.' || self.current() == '_') {
+		while !self.end()
+			&& (self.current().is_ascii_digit() || self.current() == '.' || self.current() == '_')
+		{
 			if self.current() == '.' && self.peek(1) == '.' {
 				break; // range operator
 			}
@@ -448,7 +450,10 @@ impl WispParser {
 		}
 		// hex
 		if s.starts_with("0x") || s.starts_with("0X") || s.starts_with("-0x") {
-			let hex_str = s.trim_start_matches('-').trim_start_matches("0x").trim_start_matches("0X");
+			let hex_str = s
+				.trim_start_matches('-')
+				.trim_start_matches("0x")
+				.trim_start_matches("0X");
 			if let Ok(n) = i64::from_str_radix(hex_str, 16) {
 				return Number(Number::Int(if s.starts_with('-') { -n } else { n }));
 			}
@@ -464,7 +469,11 @@ impl WispParser {
 		let mut s = String::new();
 		while !self.end() {
 			let c = self.current();
-			if c.is_whitespace() || c == '(' || c == ')' || c == '[' || c == ']' || c == '"' || c == '\'' {
+			if c.is_whitespace()
+				|| c == '(' || c == ')'
+				|| c == '[' || c == ']'
+				|| c == '"' || c == '\''
+			{
 				break;
 			}
 			// check for key operator
@@ -539,9 +548,10 @@ pub fn parse_wisp(input: &str) -> Node {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{put, NodeKind};
 
 	#[test]
-	fn test_basic_types() {
+	fn test_wisp_basic_atom_types() {
 		assert_eq!(parse_wisp("42"), Number(Number::Int(42)));
 		assert_eq!(parse_wisp("-7"), Number(Number::Int(-7)));
 		assert_eq!(parse_wisp("3.11"), Number(Number::Float(3.11)));
@@ -553,9 +563,8 @@ mod tests {
 		assert_eq!(parse_wisp("ø"), Empty);
 	}
 
-
 	#[test]
-	fn test_sexpr_types_superfluous_empty_node() {
+	fn test_wisp_sexpr_types_superfluous_empty_node() {
 		assert_eq!(parse_wisp("(text 'ok' ø)"), Text("ok".to_string()));
 		assert_eq!(parse_wisp("(int 42 ø)"), Number(Number::Int(42)));
 		assert_eq!(parse_wisp("(float 3.11 ø)"), Number(Number::Float(3.11)));
@@ -567,7 +576,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_sexpr_types() {
+	fn test_wisp_sexpr_types() {
 		assert_eq!(parse_wisp("(text 'ok')"), Text("ok".to_string()));
 		assert_eq!(parse_wisp("(int 42)"), Number(Number::Int(42)));
 		assert_eq!(parse_wisp("(float 3.11)"), Number(Number::Float(3.11)));
@@ -578,7 +587,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_list() {
+	fn test_wisp_list() {
 		let result = parse_wisp("[a b c]");
 		match result {
 			List(items, Bracket::Square, _) => {
@@ -590,7 +599,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_cons_dotted_pair() {
+	fn test_wisp_cons_dotted_pair() {
 		let result = parse_wisp("(a . b)");
 		match result {
 			Key(l, Op::Dot, r) => {
@@ -602,7 +611,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_key_pair() {
+	fn test_wisp_key_pair() {
 		let result = parse_wisp("(key 'name' value)");
 		match result {
 			Key(l, Op::Colon, r) => {
@@ -623,7 +632,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_tag() {
+	fn test_wisp_tag() {
 		let result = parse_wisp("(tag html [body])");
 		match result {
 			Key(l, Op::Colon, r) => {
@@ -640,29 +649,38 @@ mod tests {
 	}
 
 	#[test]
-	fn test_meta() {
+	fn test_wisp_meta() {
 		let result = parse_wisp("(meta value (comment 'test'))");
 		match result {
 			Meta { node, data } => {
 				assert_eq!(*node, Symbol("value".to_string()));
+				assert_eq!(data.value(), "test") // wait, comment is no legal node type!?
 			}
 			_ => panic!("expected meta"),
 		}
 	}
 
 	#[test]
-	fn test_defn() {
-		let result = parse_wisp("(defn square (mul it it))"); // todo: param list vs body!!
+	// #[todo]
+	#[ignore]
+	fn test_wisp_defn() {
+		// todo: param list vs body!!
+		let _result = parse_wisp("(def square (mul it it))"); // how is that already legal?
+		let _result = parse_wisp("(def square (op mul [it it]))");
+		let _result = parse_wisp("(def square ((meta params (x int)) (mul it it)))");
+		let result = parse_wisp("(def square (typed x int) (mul it it)))");
 		match result {
 			Key(name, Op::Define, body) => {
 				assert_eq!(*name, Symbol("square".to_string()));
+				put!(body);
+				assert_eq!(body.len(), 3); // (mul it it)
 			}
 			_ => panic!("expected defn"),
 		}
 	}
 
 	#[test]
-	fn test_shorthand_operators() {
+	fn test_wisp_shorthand_operators() {
 		let result = parse_wisp("x:42");
 		match result {
 			Key(l, Op::Colon, r) => {
@@ -692,22 +710,24 @@ mod tests {
 	}
 
 	#[test]
-	fn test_nested() {
+	fn test_wisp_nested() {
 		let result = parse_wisp("(tag div [(meta (text 'hello') (class 'item')) (tag span ø)])");
 		match result {
 			Key(name, Op::Colon, body) => {
 				assert_eq!(*name, Symbol("div".to_string()));
+				assert_eq!(body.kind(), NodeKind::List)
 			}
 			_ => panic!("expected nested structure"),
 		}
 	}
 
 	#[test]
-	fn test_call() {
+	fn test_wisp_call() {
 		let result = parse_wisp("(call print ['hello' 'world'])");
 		match result {
 			Key(name, Op::None, args) => {
 				assert_eq!(*name, Symbol("print".to_string()));
+				assert_eq!(args.first(), Text("hello".to_string()));
 			}
 			_ => panic!("expected call"),
 		}
