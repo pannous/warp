@@ -115,9 +115,8 @@ pub enum Node {
 	Number(Number),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
-	Error(Box<Node>),
-	// String(String),
 	Symbol(String),
+	Error(Box<Node>),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
 
 	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
@@ -326,86 +325,101 @@ impl Node {
 		}
 	}
 
-	// fixme todo completely rework this function and move it to another file!
+	/// Convert compact 3-field WASM GC object to Node
+	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
-		// Read the tag field to determine node type
-		// If this fails, the ref is likely null
-		let tag = match obj.kind() {
-			Ok(t) => t,
+		use crate::type_kinds::NodeTag;
+
+		// Read the kind field (i64), lower 8 bits are the tag
+		let kind = match obj.kind() {
+			Ok(k) => k,
 			Err(_) => return Empty, // Null ref becomes Empty
 		};
+		let tag = (kind & 0xFF) as u8;
 
 		match tag {
-			t if t == NodeKind::Empty as i32 => Empty,
+			t if t == NodeTag::Empty as u8 => Empty,
 
-			t if t == NodeKind::Number as i32 => {
-				// Try int first, then float
-				if let Ok(int_val) = obj.get::<i64>("int_value") {
-					if int_val != 0 {
-						return Node::Number(Number::Int(int_val));
-					}
+			t if t == NodeTag::Int as u8 => {
+				// data field contains boxed i64
+				match obj.read_boxed_i64() {
+					Ok(val) => Node::Number(Number::Int(val)),
+					Err(_) => Node::Number(Number::Int(0)),
 				}
-				if let Ok(float_val) = obj.get::<f64>("float_value") {
-					if float_val != 0.0 {
-						return Node::Number(Number::Float(float_val));
-					}
-				}
-				Node::Number(Number::Int(0))
 			}
 
-			t if t == NodeKind::Text as i32 => match obj.text() {
-				Ok(s) => Text(s),
-				Err(e) => Text(format!("Error reading text: {}", e)),
-			},
-
-			t if t == NodeKind::Codepoint as i32 => match obj.get::<i64>("int_value") {
-				Ok(code) => {
-					if let Some(c) = char::from_u32(code as u32) {
-						Char(c)
-					} else {
-						Char('\0')
-					}
+			t if t == NodeTag::Float as u8 => {
+				// data field contains boxed f64
+				match obj.read_boxed_f64() {
+					Ok(val) => Node::Number(Number::Float(val)),
+					Err(_) => Node::Number(Number::Float(0.0)),
 				}
-				Err(_) => Char('\0'),
-			},
+			}
 
-			t if t == NodeKind::Symbol as i32 => match obj.text() {
-				Ok(s) => Symbol(s),
-				Err(e) => Symbol(format!("Error reading symbol: {}", e)),
-			},
+			t if t == NodeTag::Text as u8 => {
+				// data field contains $String struct
+				match obj.text() {
+					Ok(s) => Text(s),
+					Err(e) => Text(format!("Error reading text: {}", e)),
+				}
+			}
 
-			t if t == NodeKind::Key as i32 => {
-				// Read key from left field, fallback to Symbol from name field
-				let key = match obj.get::<GcObject>("left") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => {
-						// Fallback: reconstruct Symbol from name field for backward compatibility
-						let s = obj.name().unwrap_or_default();
-						Box::new(if s.is_empty() { Empty } else { Symbol(s) })
+			t if t == NodeTag::Codepoint as u8 => {
+				// data field contains i31ref with codepoint
+				match obj.read_i31() {
+					Ok(code) => {
+						if let Some(c) = char::from_u32(code as u32) {
+							Char(c)
+						} else {
+							Char('\0')
+						}
 					}
-				};
+					Err(_) => Char('\0'),
+				}
+			}
 
-				// Recursively read the value node from right field
-				let value = match obj.get::<GcObject>("right") {
+			t if t == NodeTag::Symbol as u8 => {
+				// data field contains $String struct
+				match obj.text() {
+					Ok(s) => Symbol(s),
+					Err(e) => Symbol(format!("Error reading symbol: {}", e)),
+				}
+			}
+
+			t if t == NodeTag::Key as u8 => {
+				// data field contains key node, value field contains value node
+				let key = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
 				};
-				Key(key, Op::None, value) // TODO: decode operator from wasm
+				let value = match obj.value() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				Key(key, Op::None, value)
 			}
 
-			t if t == NodeKind::Block as i32 => {
-				// TODO: decode bracket info from int_value and read items
-				List(vec![], Bracket::Curly, Separator::None)
+			t if t == NodeTag::Block as u8 => {
+				// data=first item, value=rest, bracket info in upper bits of kind
+				Self::read_list_from_gc(obj, Bracket::Curly, kind)
 			}
 
-			t if t == NodeKind::List as i32 => {
-				// TODO: read items from linked list structure
-				List(vec![], Bracket::Square, Separator::None)
+			t if t == NodeTag::List as u8 => {
+				// data=first item, value=rest, bracket info in upper bits of kind
+				let bracket_info = (kind >> 8) & 0xFF;
+				let bracket = match bracket_info {
+					0 => Bracket::Curly,
+					1 => Bracket::Square,
+					2 => Bracket::Round,
+					3 => Bracket::Less,
+					_ => Bracket::None,
+				};
+				Self::read_list_from_gc(obj, bracket, kind)
 			}
 
-			t if t == NodeKind::Data as i32 => {
-				let type_name = obj.name().unwrap_or_else(|_| String::new());
-				// Create placeholder Dada with the type name
+			t if t == NodeTag::Data as u8 => {
+				// For now, read type_name from text
+				let type_name = obj.text().unwrap_or_default();
 				Data(Dada {
 					data: Box::new(format!("<wasm data: {}>", type_name)),
 					type_name,
@@ -413,8 +427,35 @@ impl Node {
 				})
 			}
 
-			_ => Text(format!("Unknown NodeKind: {}", tag)),
+			_ => Text(format!("Unknown NodeTag: {}", tag)),
 		}
+	}
+
+	/// Read a list from compact GC representation
+	fn read_list_from_gc(obj: &GcObject, bracket: Bracket, _kind: i64) -> Node {
+		let mut items = Vec::new();
+
+		// data = first item
+		if let Ok(first_obj) = obj.data_as_node() {
+			let first = Self::from_gc_object(&first_obj);
+			if first != Empty {
+				items.push(first);
+			}
+		}
+
+		// value = rest (either single item or nested list)
+		if !obj.value_is_null() {
+			if let Ok(rest_obj) = obj.value() {
+				let rest = Self::from_gc_object(&rest_obj);
+				match rest {
+					List(rest_items, _, _) => items.extend(rest_items),
+					Empty => {}
+					other => items.push(other),
+				}
+			}
+		}
+
+		List(items, bracket, Separator::None)
 	}
 
 	pub fn todo(p0: String) -> Node {
