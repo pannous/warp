@@ -1050,7 +1050,7 @@ impl Node {
 						map.insert("_value".to_string(), node.to_json_value());
 						Value::Object(map)
 					}
-				} else if let Some(info) = data.get_lineinfo() {
+				} else if let Some(_info) = data.get_lineinfo() {
 					node.to_json_value() // ignore lineinfo
 				} else if **data != Empty {
 					let inner = node.to_json_value();
