@@ -595,7 +595,7 @@ impl Index<&str> for Node {
 				}
 			}
 			Key(k, _, v) => match k.drop_meta() {
-				Symbol(key) | Text(key)  if key == i => v.as_ref(),
+				Symbol(key) | Text(key) if key == i => v.as_ref(),
 				_ => &v[i], // Pass through to value: person:{name:"Joe"}["name"] => "Joe"
 			},
 			Meta { node, data } => {
@@ -609,7 +609,6 @@ impl Index<&str> for Node {
 		}
 	}
 }
-
 
 impl Index<char> for Node {
 	type Output = Node;
@@ -1420,7 +1419,7 @@ impl PartialEq<bool> for Node {
 			Symbol(s) => s.is_empty() == !*other,
 			Text(s) => s.is_empty() == !*other,
 			List(l, _, _) => l.is_empty() == !*other,
-			Key(k,_,v) => v.is_nil() == !*other, // Key is true if its value is non-empty
+			Key(_, _, v) => v.is_nil() == !*other, // Key is true if its value is non-empty
 			_ => false,
 		}
 	}
