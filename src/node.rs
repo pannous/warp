@@ -69,13 +69,13 @@ impl Op {
 	/// Higher = tighter binding. Right > left means right-associative.
 	pub fn binding_power(&self) -> (u8, u8) {
 		match self {
-			Op::Dot => (100, 101),      // tightest, left-assoc: a.b.c → (a.b).c
-			Op::Scope => (90, 91),      // left-assoc: a::b::c → (a::b)::c
-			Op::Colon => (80, 81),      // right-assoc: a:b:c → a:(b:c)
-			Op::Arrow => (30, 29),      // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (30, 29),   // right-assoc  a => b
-			Op::Define => (20, 19),     // right-assoc: a:=b:=c → a:=(b:=c)
-			Op::Assign => (20, 19),     // right-assoc: a=b=c → a=(b=c)
+			Op::Dot => (100, 101),    // tightest, left-assoc: a.b.c → (a.b).c
+			Op::Scope => (90, 91),    // left-assoc: a::b::c → (a::b)::c
+			Op::Colon => (80, 81),    // right-assoc: a:b:c → a:(b:c)
+			Op::Arrow => (30, 29),    // right-assoc: a->b->c → a->(b->c)
+			Op::FatArrow => (30, 29), // right-assoc  a => b
+			Op::Define => (20, 19),   // right-assoc: a:=b:=c → a:=(b:=c)
+			Op::Assign => (20, 19),   // right-assoc: a=b=c → a=(b=c)
 			Op::None => (0, 0),
 		}
 	}
@@ -95,8 +95,8 @@ impl Op {
 	}
 }
 
-impl std::fmt::Display for Op {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Op {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.as_str())
 	}
 }
@@ -138,9 +138,6 @@ impl Node {
 			data: Box::new(meta),
 		}
 	}
-}
-
-impl Node {
 	pub fn class(&self) -> Node {
 		todo!("class via kind and/or metadata?")
 	}
@@ -297,7 +294,20 @@ impl Node {
 			Node::Number(_) | Text(_) | Char(_) | Data(_) => {
 				self //.clone()
 			}
-			Meta { node, .. } => node.value(),
+			List(items, _, _) => {
+				if items.len() == 1 {
+					items.first().unwrap()
+				} else {
+					&Empty // or self
+				}
+			}
+			Meta { node, data } => {
+				if node.is_nil() {
+					data.value()
+				} else {
+					node.value()
+				}
+			}
 			Key(_, _, v) => v.value(),
 			_ => &Empty,
 		}
@@ -484,6 +494,28 @@ impl Node {
 		}
 	}
 }
+//
+// impl Index<Node> for Node {
+// 	type Output = Node;
+//
+// 	fn index(&self, n: Node) -> &Self::Output {
+// 		match self {
+// 			List(elements, _, _) => match n {
+// 				Number(Number::Int(i)) => elements.get(i).unwrap_or(&Empty),
+// 				_ => &Empty,
+// 			},
+// 			Key(k, _, v) => {
+// 				if **k == n {
+// 					&v /* (a:b)[a]==b */
+// 				} else {
+// 					&v[n]  // Pass through to value: person:{x y}[0] => x
+// 				}
+// 			}
+// 			Meta { node, .. } => &node[n],
+// 			_ => &Empty,
+// 		}
+// 	}
+// }
 
 impl Index<usize> for Node {
 	type Output = Node;
@@ -521,7 +553,7 @@ impl Index<&String> for Node {
 			Key(k, _, v) => match k.drop_meta() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
 				_ => &v[i], // Pass through to value
-			}
+			},
 			Meta { node, data } => {
 				if node[i] != Empty {
 					&node[i]
@@ -563,9 +595,9 @@ impl Index<&str> for Node {
 				}
 			}
 			Key(k, _, v) => match k.drop_meta() {
-				Symbol(key) | Text(key) if key == i => v.as_ref(),
+				Symbol(key) | Text(key)  if key == i => v.as_ref(),
 				_ => &v[i], // Pass through to value: person:{name:"Joe"}["name"] => "Joe"
-			}
+			},
 			Meta { node, data } => {
 				if node[i] != Empty {
 					&node[i]
@@ -575,6 +607,15 @@ impl Index<&str> for Node {
 			}
 			_ => &Empty,
 		}
+	}
+}
+
+
+impl Index<char> for Node {
+	type Output = Node;
+
+	fn index(&self, i: char) -> &Self::Output {
+		self.index(i.to_string().as_str())
 	}
 }
 
@@ -630,11 +671,19 @@ impl IndexMut<&str> for Node {
 	}
 }
 
-impl Node {
-	// associated 'static' functions
-	pub fn new() -> Node {
-		Empty
+impl IndexMut<char> for Node {
+	fn index_mut(&mut self, i: char) -> &mut Self::Output {
+		&mut self[&i.to_string()]
 	}
+}
+
+impl Node {
+	// fn new() -> Self {
+	// 	// can be extended via .add a[b]=c !?! test_mark_as_map wished ;)
+	// 	Empty
+	// }
+
+	// associated 'static' functions
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
@@ -642,7 +691,11 @@ impl Node {
 		Key(Box::new(k), op, Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(Text(v.to_string())))
+		Key(
+			Box::new(Symbol(s.to_string())),
+			Op::Colon,
+			Box::new(Text(v.to_string())),
+		)
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
@@ -897,14 +950,17 @@ impl Node {
 													attributes.push(attr_name.to_string());
 												}
 												Text(s) | Symbol(s) => {
-													attributes.push(format!("{}=\"{}\"", attr_name, s));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, s));
 												}
 												Number(n) => {
-													attributes.push(format!("{}=\"{}\"", attr_name, n));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, n));
 												}
 												_ => {
 													let val = Node::serialize(v);
-													attributes.push(format!("{}=\"{}\"", attr_name, val));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, val));
 												}
 											}
 										} else {
@@ -1364,7 +1420,7 @@ impl PartialEq<bool> for Node {
 			Symbol(s) => s.is_empty() == !*other,
 			Text(s) => s.is_empty() == !*other,
 			List(l, _, _) => l.is_empty() == !*other,
-			Key(..) => *other,  // todo NEVER false OR check value k=v ?
+			Key(k,_,v) => v.is_nil() == !*other, // Key is true if its value is non-empty
 			_ => false,
 		}
 	}
@@ -2077,7 +2133,6 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 	}
 }
 
-
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
@@ -2121,7 +2176,6 @@ pub fn key_op(k: Node, op: Op, v: Node) -> Node {
 pub fn key_ops(k: String, op: Op, v: Node) -> Node {
 	Key(Box::new(Symbol(format!(".{}", k))), op, Box::new(v))
 }
-
 
 pub fn list(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Square, Separator::None)

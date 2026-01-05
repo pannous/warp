@@ -30,7 +30,7 @@ impl ParserOptions {
 
 /// Read and parse a WASP file
 pub fn parse_file(path: &str) -> Node {
-	match fs::read_to_string(path) {
+	match read_to_string(path) {
 		Ok(content) => WaspParser::parse(&content),
 		_ => error(&format!("Failed to read {}", path)),
 	}
@@ -547,7 +547,7 @@ impl WaspParser {
 						// Arrow operator: ->
 						self.advance(); // skip -
 						self.advance(); // skip >
-						Node::Symbol("->".to_string())
+						Symbol("->".to_string())
 					}
 					_ if ch.is_numeric() || ch == '-' => self.parse_number(), // '三'.is_numeric()!
 					_ if ch.is_alphabetic() || ch == '_' => self.parse_expr(0),
