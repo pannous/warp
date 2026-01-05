@@ -1,8 +1,8 @@
 #![allow(unused)]
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::String;
-use crate::node::{int, float, text, Node};
-use crate::node::Node::{Empty, Error, True, False};
+use crate::node::{error, int, float, text, Node};
+use crate::node::Node::{Empty, True, False};
 use crate::wasp_parser::parse;
 //
 // // todo move these to ABI.h once it is used:
@@ -157,7 +157,7 @@ pub fn smarty32(smart: u32) -> Node {
 		0x1 => unsafe { string56(data24 as u64) },
 		0xC => char24(data24),
 		0xD => unsafe { parse(str32(data24, 3)) },
-		0xE => unsafe { Error(format!("{}", str32(data24, 3))) }, // error with string message
+		0xE => unsafe { error(&format!("{}", str32(data24, 3))) }, // error with string message
 		_ => unreachable!(),
 	}
 }
@@ -180,13 +180,13 @@ pub fn smarty(smart: u64) -> Node {
 		0x10 => unsafe { string56(data56) },
 		0xC0 => char24(data32),
 		0xD0 => unsafe { parse(str56(data56)) }, // wasp data string!
-		0xE1 => unsafe { Error(format!("{}", str56(data56))) }, // error with string message
+		0xE1 => unsafe { error(&format!("{}", str56(data56))) }, // error with string message
 		// _ => unreachable!(),
 		_ => {
 			if header16 == 0xB001 {  // BOOL wasteful header
 				if data32 == 0 { False } else { True }
 			} else {
-				Error(format!("smart: {} unknown", smart))
+				error(&format!("smart: {} unknown", smart))
 			}
 		}
 	}

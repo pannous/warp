@@ -1,8 +1,8 @@
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
-use crate::node::Node::{Empty, Error, Symbol};
-use crate::node::{key_ops, Bracket, Node, Op, Separator};
+use crate::node::Node::{Empty, Symbol};
+use crate::node::{error, key_ops, Bracket, Node, Op, Separator};
 use log::warn;
 use std::fs;
 
@@ -30,7 +30,7 @@ impl ParserOptions {
 pub fn parse_file(path: &str) -> Node {
 	match fs::read_to_string(path) {
 		Ok(content) => WaspParser::parse(&content),
-		_ => Error(format!("Failed to read {}", path)),
+		_ => error(&format!("Failed to read {}", path)),
 	}
 }
 
@@ -397,7 +397,7 @@ impl WaspParser {
 			ch => {
 				warn!("Unexpected character '{}' at line {}, column {}", ch, line_nr, column);
 				self.advance();
-				Error(format!("Unexpected character '{}'", ch))
+				error(&format!("Unexpected character '{}'", ch))
 			}
 		};
 
@@ -419,7 +419,7 @@ impl WaspParser {
 	fn parse_symbol_with_suffix(&mut self) -> Node {
 		let symbol = match self.parse_symbol() {
 			Ok(s) => s,
-			Err(e) => return Error(e),
+			Err(e) => return error(&e),
 		};
 		self.skip_spaces();
 
@@ -436,7 +436,7 @@ impl WaspParser {
 			'(' => {
 				let params = match self.parse_parenthesized() {
 					Ok(p) => p,
-					Err(e) => return Error(e),
+					Err(e) => return error(&e),
 				};
 				self.skip_whitespace();
 
@@ -524,7 +524,7 @@ impl WaspParser {
 						);
 						warn!("Current line: {}", self.current_line); // todo ---^ 'here' via offset
 						self.advance();
-						Error(format!("Unexpected character '{}'", ch))
+						error(&format!("Unexpected character '{}'", ch))
 					}
 				}
 			}
@@ -552,7 +552,7 @@ impl WaspParser {
 		let mut s = String::new();
 		loop {
 			let ch = self.current_char();
-			if ch == '\0' { return Error("Unterminated string".to_string()); }
+			if ch == '\0' { return error("Unterminated string"); }
 			if ch == quote {
 				self.advance(); // skip closing quote
 				// quotes with exactly one character become Codepoint
@@ -606,7 +606,7 @@ impl WaspParser {
 				}
 				return i64::from_str_radix(&hex_str, 16)
 					.map(Node::int)
-					.unwrap_or_else(|_| Error(format!("Invalid hex: 0x{}", hex_str)));
+					.unwrap_or_else(|_| error(&format!("Invalid hex: 0x{}", hex_str)));
 			}
 		}
 
@@ -629,12 +629,12 @@ impl WaspParser {
 			num_str
 				.parse::<f64>()
 				.map(Node::float)
-				.unwrap_or_else(|_| Error(format!("Invalid float: {}", num_str)))
+				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str)))
 		} else {
 			num_str
 				.parse::<i64>()
 				.map(Node::int)
-				.unwrap_or_else(|_| Error(format!("Invalid int: {}", num_str)))
+				.unwrap_or_else(|_| error(&format!("Invalid int: {}", num_str)))
 		}
 	}
 
@@ -726,13 +726,13 @@ impl WaspParser {
 			let tag_name = self.parse_symbol().unwrap_or_default();
 			self.skip_until('>');
 			self.advance(); // skip '>'
-			return Error(format!("Unmatched closing tag </{}>", tag_name));
+			return error(&format!("Unmatched closing tag </{}>", tag_name));
 		}
 
 		// Parse tag name
 		let tag_name = match self.parse_symbol() {
 			Ok(name) => name,
-			Err(e) => return Error(e),
+			Err(e) => return error(&e),
 		};
 
 		// Parse attributes
@@ -815,7 +815,7 @@ impl WaspParser {
 				self.advance(); // skip '>'
 
 				if closing_name != tag_name {
-					return Error(format!(
+					return error(&format!(
 						"Mismatched tags: <{}> closed with </{}>",
 						tag_name, closing_name
 					));
