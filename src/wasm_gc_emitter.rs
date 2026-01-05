@@ -1058,7 +1058,7 @@ impl WasmGcEmitter {
 pub fn eval(code: &str) -> Node {
 	let node = WaspParser::parse(code);
 	if let Node::Error(e) = &node {
-		panic!("Parse error: {}", e);
+		panic!("Parse error: {:?}", e);
 	}
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
