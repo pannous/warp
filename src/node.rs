@@ -1003,8 +1003,8 @@ impl Node {
 									}
 								}
 								other => {
-									// Non-Key items: try to infer a key
-									let key = format!("item_{}", map.len());
+									// let key = format!("item_{}", map.len());
+									let key = format!("{}", map.len()); // just the number
 									map.insert(key, other.to_json_value());
 								}
 							}
