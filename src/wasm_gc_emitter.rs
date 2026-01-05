@@ -613,6 +613,14 @@ impl WasmGcEmitter {
 		// Field names for struct types
 		let mut type_field_names = IndirectNameMap::new();
 
+		// $Node fields
+		let mut node_fields = NameMap::new();
+		node_fields.append(0, "kind");
+		node_fields.append(1, "data");
+		node_fields.append(2, "value");
+		type_field_names.append(self.node_type, &node_fields);
+
+
 		// $String fields
 		let mut string_fields = NameMap::new();
 		string_fields.append(0, "ptr");
@@ -628,13 +636,6 @@ impl WasmGcEmitter {
 		let mut f64box_fields = NameMap::new();
 		f64box_fields.append(0, "value");
 		type_field_names.append(self.f64_box_type, &f64box_fields);
-
-		// $Node fields
-		let mut node_fields = NameMap::new();
-		node_fields.append(0, "kind");
-		node_fields.append(1, "data");
-		node_fields.append(2, "value");
-		type_field_names.append(self.node_type, &node_fields);
 
 		self.names.fields(&type_field_names);
 
