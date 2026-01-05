@@ -36,7 +36,7 @@ fn test_parse_all_samples() {
 			Ok(content) => {
 				let node = WaspParser::parse(&content);
 				if let Node::Error(e) = &node {
-					println!("✗ Parse error: {}", e);
+					println!("✗ Parse error: {:?}", e);
 					failed_files.push(filename.to_string());
 				} else {
 					println!("✓");
