@@ -25,6 +25,14 @@ macro_rules! s {
 	};
 }
 
+#[macro_export]
+macro_rules! strings {
+	($($lit:literal),* $(,)?) => {
+		vec![$(String::from($lit)),*]
+	};
+}
+
+
 // Modules can reside in a file with the same name as the module,
 // or in a file named mod.rs inside a directory with the same name as the module.
 // so we can ON DEMAND put extensions in a dir called extensions AND keep extensions.rs for some
@@ -45,6 +53,16 @@ macro_rules! eq {
 macro_rules! exists {
 	($a:expr) => {{
 		assert!(($a) != false);
+	}};
+}
+
+
+#[macro_export]
+macro_rules! peq { // parser eq!
+	// Evaluate string expressions like "3+3" and roundtrip through WASM
+	($a:expr, $b:expr) => {{
+		let result = parse($a);
+		assert_eq!(result, $b);
 	}};
 }
 

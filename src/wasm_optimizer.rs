@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+use crate::{s, strings};
 
 /// Optimization mode for WASM output
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,8 +30,9 @@ pub enum ExportMode {
 }
 
 impl Default for ExportMode {
+	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
-		ExportMode::Library
+		ExportMode::Executable { entry_points: strings!["main", "wasp_main","_start"] }
 	}
 }
 
@@ -149,7 +151,7 @@ impl WasmOptimizer {
 	}
 
 	/// Build the roots graph JSON for wasm-metadce
-	fn build_roots_graph(&self, entry_points: &[String]) -> String {
+	pub fn build_roots_graph(&self, entry_points: &[String]) -> String {
 		let mut graph = String::from("[\n  {\n    \"name\": \"root\",\n    \"reaches\": [");
 
 		let reaches: Vec<String> = entry_points
@@ -227,31 +229,5 @@ impl WasmOptimizer {
 			.output()
 			.map(|o| o.status.success())
 			.unwrap_or(false)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_tools_available() {
-		assert!(WasmOptimizer::tools_available(), "wasm-opt not found");
-		assert!(WasmOptimizer::tree_shaking_available(), "wasm-metadce not found");
-	}
-
-	#[test]
-	fn test_roots_graph_generation() {
-		let optimizer = WasmOptimizer::executable(
-			OptimizationMode::Standard,
-			vec!["main".to_string(), "init".to_string()],
-		);
-
-		if let ExportMode::Executable { ref entry_points } = optimizer.export_mode {
-			let graph = optimizer.build_roots_graph(entry_points);
-			assert!(graph.contains("\"export\": \"main\""));
-			assert!(graph.contains("\"export\": \"init\""));
-			assert!(graph.contains("\"root\": true"));
-		}
 	}
 }
