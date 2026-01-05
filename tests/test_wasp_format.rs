@@ -116,10 +116,11 @@ fn test_list_operations() {
 
 #[test]
 fn test_empty_structures() {
-	let wasp = "empty{}";
+	// peq!("leer{}", Node::Empty);
+	let wasp = "leer{}";
 	let node = WaspParser::parse(wasp);
 	let json = node.to_json().unwrap();
 
 	println!("Empty block: {}", json);
-	assert!(json.contains("empty"));
+	assert!(json.contains("leer"));
 }

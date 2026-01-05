@@ -2,9 +2,11 @@ use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
-use crate::node::{error, key_ops, Bracket, Node, Op, Separator};
+use crate::node::{error, float, key_ops, Bracket, Node, Op, Separator};
+use crate::*;
 use log::warn;
 use std::fs;
+use std::fs::read_to_string;
 
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -138,7 +140,9 @@ impl WaspParser {
 		let mut line_indent = 0;
 		loop {
 			let ch = self.current_char();
-			if !ch.is_whitespace() { break; }
+			if !ch.is_whitespace() {
+				break;
+			}
 			if ch == '\n' {
 				had_newline = true;
 				line_indent = 0; // reset for new line
@@ -160,8 +164,13 @@ impl WaspParser {
 		let mut line_comment = String::new();
 		loop {
 			let ch = self.current_char();
-			if ch == '\0' { break; }
-			if ch == '\n' { self.advance(); break; }
+			if ch == '\0' {
+				break;
+			}
+			if ch == '\n' {
+				self.advance();
+				break;
+			}
 			line_comment.push(ch);
 			self.advance();
 		}
@@ -175,7 +184,9 @@ impl WaspParser {
 		loop {
 			let (newline, indent) = self.skip_whitespace();
 			had_newline = newline || had_newline;
-			if newline { line_indent = indent; }
+			if newline {
+				line_indent = indent;
+			}
 			// Check for # line comment (shell-style, shebang)
 			// Only treat # as comment if at line start (to allow list#index later)
 			if self.current_char() == '#' && self.is_at_line_start() {
@@ -201,7 +212,11 @@ impl WaspParser {
 			}
 
 			if self.pos >= self.input.len() {
-				let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
+				let comment = if comments.is_empty() {
+					None
+				} else {
+					Some(comments.join("\n"))
+				};
 				return (had_newline, line_indent, comment);
 			}
 
@@ -212,13 +227,17 @@ impl WaspParser {
 				let mut block_comment = String::new();
 				loop {
 					let ch = self.current_char();
-					if ch == '\0' { break; } // unterminated comment
+					if ch == '\0' {
+						break;
+					} // unterminated comment
 					if ch == '*' && self.peek_char(1) == '/' {
 						self.advance(); // skip *
 						self.advance(); // skip /
 						break;
 					}
-					if ch == '\n' { had_newline = true; }
+					if ch == '\n' {
+						had_newline = true;
+					}
 					block_comment.push(ch);
 					self.advance();
 				}
@@ -231,7 +250,11 @@ impl WaspParser {
 
 			break;
 		}
-		let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
+		let comment = if comments.is_empty() {
+			None
+		} else {
+			Some(comments.join("\n"))
+		};
 		(had_newline, line_indent, comment)
 	}
 
@@ -392,10 +415,16 @@ impl WaspParser {
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' => Empty,
-			ch if ch.is_numeric() || (ch == '-' && self.peek_char(1).is_numeric()) => self.parse_number(),
+			'ø' => return Empty,
+			ch if ch.is_numeric() || (ch == '-' && self.peek_char(1).is_numeric()) => {
+				self.parse_number()
+			}
 			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
 			ch => {
-				warn!("Unexpected character '{}' at line {}, column {}", ch, line_nr, column);
+				warn!(
+					"Unexpected character '{}' at line {}, column {}",
+					ch, line_nr, column
+				);
 				self.advance();
 				error(&format!("Unexpected character '{}'", ch))
 			}
@@ -406,7 +435,11 @@ impl WaspParser {
 		}
 
 		// Attach metadata
-		let node = node.with_meta_data(LineInfo { line_nr, column, line: self.current_line.clone() });
+		let node = node.with_meta_data(LineInfo {
+			line_nr,
+			column,
+			line: self.current_line.clone(),
+		});
 		if let Some(c) = comment {
 			node.with_comment(c)
 		} else {
@@ -422,6 +455,10 @@ impl WaspParser {
 			Err(e) => return error(&e),
 		};
 		self.skip_spaces();
+
+		if let Some(constant) = check_constants(&symbol) {
+			return constant; // if true {} fall through :?
+		}
 
 		// Check for suffix blocks (these bind tighter than any infix operator)
 		match self.current_char() {
@@ -505,7 +542,7 @@ impl WaspParser {
 					'<' if self.options.xml_mode => self.parse_xml_tag(),
 					'<' => self.parse_bracketed(ch), // C++ generics as groups
 					';' => Empty,                    // Semicolons handled by main parse loop
-					'>' => Empty, // Closing angle bracket, handled by parse_bracketed
+					'>' => Empty,                    // Closing angle bracket, handled by parse_bracketed
 					'-' if self.peek_char(1) == '>' => {
 						// Arrow operator: ->
 						self.advance(); // skip -
@@ -552,10 +589,12 @@ impl WaspParser {
 		let mut s = String::new();
 		loop {
 			let ch = self.current_char();
-			if ch == '\0' { return error("Unterminated string"); }
+			if ch == '\0' {
+				return error("Unterminated string");
+			}
 			if ch == quote {
 				self.advance(); // skip closing quote
-				// quotes with exactly one character become Codepoint
+					// quotes with exactly one character become Codepoint
 				let mut chars = s.chars();
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
@@ -600,7 +639,9 @@ impl WaspParser {
 				let mut hex_str = String::new();
 				loop {
 					let ch = self.current_char();
-					if !ch.is_ascii_hexdigit() { break; }
+					if !ch.is_ascii_hexdigit() {
+						break;
+					}
 					hex_str.push(ch);
 					self.advance();
 				}
@@ -649,9 +690,12 @@ impl WaspParser {
 				break;
 			}
 		}
-		if symbol.is_empty() { Err("Empty symbol".to_string()) } else { Ok(symbol) }
+		if symbol.is_empty() {
+			Err("Empty symbol".to_string())
+		} else {
+			Ok(symbol)
+		}
 	}
-
 
 	fn parse_parenthesized(&mut self) -> Result<String, String> {
 		let mut result = String::new();
@@ -787,7 +831,7 @@ impl WaspParser {
 			}
 			// Return self-closing tag with only attributes
 			return if attributes.is_empty() {
-				Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(Node::Empty))
+				Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(Empty))
 			} else {
 				Node::Key(
 					Box::new(Symbol(tag_name)),
@@ -844,9 +888,17 @@ impl WaspParser {
 		body_items.extend(content_items);
 
 		if body_items.is_empty() {
-			Node::Key(Box::new(Symbol(tag_name.clone())), Op::Colon, Box::new(Node::Empty))
+			Node::Key(
+				Box::new(Symbol(tag_name.clone())),
+				Op::Colon,
+				Box::new(Empty),
+			)
 		} else if body_items.len() == 1 {
-			Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(body_items.into_iter().next().unwrap()))
+			Node::Key(
+				Box::new(Symbol(tag_name)),
+				Op::Colon,
+				Box::new(body_items.into_iter().next().unwrap()),
+			)
 		} else {
 			Node::Key(
 				Box::new(Symbol(tag_name)),
@@ -894,7 +946,8 @@ impl WaspParser {
 			let (had_newline, line_indent, _) = self.skip_whitespace_and_comments();
 
 			// Handle indentation-based blocks
-			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None {
+			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None
+			{
 				// Indented block follows - parse it as body of current item
 				let old_indent = self.base_indent;
 				self.base_indent = line_indent;
@@ -1037,4 +1090,19 @@ impl WaspParser {
 	}
 }
 
+fn check_constants(p0: &String) -> Option<Node> {
+	match p0.to_lowercase().as_str() {
+		//  ⚠️⚡️ 🚨  ambivalence 𐄂 ≈ ❎ can mean 'no' or 'check=>yes'
+		// wtf unicode, so many check marks √
+		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
+		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False), // vs "ƒ" fun!
+		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing"  => Some(Empty),
+		"empty" | "void" => Some(Empty),
+		"π" | "pi" => Some(float(std::f64::consts::PI)),
+		"τ" | "tau" => Some(float(std::f64::consts::TAU)), // overwrite symbol? NAH! IT's TAU
+		"euler" | "ℯ" => Some(float(std::f64::consts::E)), // LOG2_E via logarithm
+		"⚠️" | "⚡" | "⚡️" => Some(error(p0)),             // todo read to rest of line and throw
+		_ => None,
+	}
+}
 // Tests moved to tests/test_parser.rs

@@ -14,12 +14,12 @@ city: "NYC""#;
 	if let Node::List(items, _, _) = node {
 		// First item should be at line 1
 		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_lineinfo() {
+			if let Some(info) = first.get_lineinfo() {
 				println!(
 					"First item position: line {:?}, column {:?}",
-					meta.line_nr, meta.column
+					info.line_nr, info.column
 				);
-				eq!(meta.line_nr, 1);
+				eq!(info.line_nr, 1);
 			}
 		}
 
