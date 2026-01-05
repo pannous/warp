@@ -6,6 +6,7 @@ enum Type {
 }
 
 /// Node variant tags (for runtime type checking)
+/// Old combined Number type - kept for compatibility
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeKind {
@@ -23,6 +24,25 @@ pub enum NodeKind {
 	Meta = 11,
 	Error = 12,
 	Externref,
+}
+
+/// Compact 3-field Node tags - separate Int/Float for cleaner dispatch
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeTag {
+	Empty = 0,
+	Int = 1,       // i64 value (boxed in $i64box)
+	Float = 2,     // f64 value (boxed in $f64box) - separate from Int!
+	Text = 3,      // string (via $String struct)
+	Codepoint = 4, // char as i31ref
+	Symbol = 5,    // string (via $String struct)
+	Key = 6,       // data=key node, value=value node
+	Pair = 7,      // data=left, value=right
+	Block = 8,     // curly braces {}
+	List = 9,      // square brackets []
+	Data = 10,     // arbitrary data container
+	Meta = 11,     // metadata wrapper
+	Error = 12,    // error node
 }
 
 pub enum AstKind {

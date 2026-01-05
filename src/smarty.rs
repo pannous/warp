@@ -92,7 +92,25 @@ pub fn char24(data32: u32) -> Node {
 // supperfluous since we have multi-value returns now!! (type32 + data64 )
 // or even full node (type32 + node64 + payload64 ) ( P S O ) ( predicate subject object )
 // or even full node (type32 + value64 + node64 ) ( P O S ) ( type/predicate object subject )
-// ( P O S ) ≈ (T V N) (type value node) perfect for:
+// ( P O S ) ≈ (T K N) (type key node) perfect for:
+// (type $Node (struct
+// 	  (field $kind i64)
+// 	  (field $payload (ref null any))
+// 	  (field $key (ref null $Node))
+// 	  (field $value (ref null $Node))
+// 	) )
+
+// if we merge the key with the payload in wasm we get a very compact representation:
+// (type $String (struct
+// 	  (field $ptr i64)
+// 	  (field $len i32)
+// 	) )
+// (type $Node (struct
+// 	  (field $kind i64)
+// 	  (field $data (ref null any)) // key + payload merged!
+// 	  (field $value (ref null $Node)) // object node or meta data
+// 	) )
+// Why? so we can directly match our representation to compact code like:
 // (tag 'html' [(meta 'attribute' (class "item")) /* mixed with body : */ (text "hello")  ))
 // (defn 'myfunc' [(meta 'params' [a b]) (body ( ... ) ) ) // params are STRONG meta, not comments!
 // (call 'myfunc' [arg1 arg2])  shorthand: my
@@ -113,6 +131,7 @@ pub fn char24(data32: u32) -> Node {
 // (true 1 True)  shorthand: True
 // (true 1 ø)  shorthand: True
 // (bool 0 ø)  shorthand: False  == ALWAYS over method vs === like in js
+
 // or even full node (node64 type32 payload64) ( S P O ) ( subject predictable object )
 // or even full node (node64 type32 payload64) ( S P O ) ( subject predictable object )
 
