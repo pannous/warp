@@ -66,14 +66,11 @@ ast_type!(IfExpression, "if");
 ast_type!(WhileExpression, "while");
 ast_type!(ForExpression, "for");
 
-fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+fn walk(n: &Node, f: &mut impl FnMut(&Node)) {
 	f(n);
-	match n {
-		Node::Key(k, _, v) => {
-			walk(k, f);
-			walk(v, f);
-		}
-		_ => {}
+	if let Node::Key(k, _, v) = n {
+		walk(k, f);
+		walk(v, f);
 	}
 }
 

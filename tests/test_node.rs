@@ -1,5 +1,3 @@
-use wasp::eq;
-use wasp::Node;
 use wasp::wasp_parser::parse;
 
 #[test]
@@ -29,6 +27,14 @@ fn test_replace() {
 	assert!(result == replaced);
 }
 
+#[test]
+fn test_mark_as_map() {
+	let mut mappy = parse("{a:1 b:2 c:3}");
+	mappy['a'] = 10.into();
+	assert_eq!(mappy['a'], 10);
+}
+
+/*
 #[test]
 #[ignore]
 fn test_mark_as_map() {
@@ -60,3 +66,4 @@ fn test_mark_as_map() {
 	assert!(marked["b"] == compare["b"]);
 	assert!(compare == marked);
 }
+*/
