@@ -1050,12 +1050,23 @@ impl Node {
 						map.insert("_value".to_string(), node.to_json_value());
 						Value::Object(map)
 					}
+				} else if let Some(info) = data.get_lineinfo() {
+					node.to_json_value() // ignore lineinfo
 				} else if **data != Empty {
-					// Single non-Key metadata
-					let mut map = Map::new();
-					map.insert(".meta".to_string(), data.to_json_value());
-					map.insert("_value".to_string(), node.to_json_value());
-					return Value::Object(map);
+					let inner = node.to_json_value();
+					let meta_val = data.to_json_value();
+					match inner {
+						Value::Object(mut map) => {
+							map.insert(".meta".to_string(), meta_val);
+							Value::Object(map)
+						}
+						_ => {
+							let mut map = Map::new();
+							map.insert("_value".to_string(), inner);
+							map.insert(".meta".to_string(), meta_val);
+							Value::Object(map)
+						}
+					}
 				} else {
 					// No metadata, just unwrap
 					node.to_json_value()
