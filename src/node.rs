@@ -29,8 +29,8 @@ use crate::wasp_parser::parse;
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
 	  (field $kind i64)
-	  (field $key (ref null $Node))   param?  bra ket ;)
-	  (field $value (ref null $Node)) body?
+	  (field $key (ref null $Node))
+	  (field $value (ref null $Node))
 	  (field $payload (ref null any))
 	) )
 **/
@@ -74,7 +74,7 @@ impl Op {
 			Op::Scope => (90, 91),      // left-assoc: a::b::c → (a::b)::c
 			Op::Colon => (80, 81),      // right-assoc: a:b:c → a:(b:c)
 			Op::Arrow => (30, 29),      // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (30, 29),   // right-assoc
+			Op::FatArrow => (30, 29),   // right-assoc  a => b
 			Op::Define => (20, 19),     // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (20, 19),     // right-assoc: a=b=c → a=(b=c)
 			Op::None => (0, 0),
@@ -115,7 +115,7 @@ pub enum Node {
 	Number(Number),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
-	Error(String),
+	Error(Box<Node>),
 	// String(String),
 	Symbol(String),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
@@ -780,7 +780,7 @@ impl Node {
 				}
 			}
 			Key(k, op, v) => format!("{}{}{}", k, op, v.serialize_recurse(meta)),
-			Error(e) => format!("Error({})", e),
+			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
 			False => "false".to_string(),
@@ -1022,7 +1022,7 @@ impl Node {
 			}
 			Error(e) => {
 				let mut map = Map::new();
-				map.insert("_error".to_string(), Value::String(e.clone()));
+				map.insert("_error".to_string(), e.to_json_value());
 				Value::Object(map)
 			}
 		}
@@ -2047,7 +2047,11 @@ pub fn symbol(s: &str) -> Node {
 }
 
 pub fn error(s: &str) -> Node {
-	Error(s.to_string())
+	Error(Box::new(Text(s.to_string())))
+}
+
+pub fn error_node(n: Node) -> Node {
+	Error(Box::new(n))
 }
 
 pub fn codepoint(c: char) -> Node {
