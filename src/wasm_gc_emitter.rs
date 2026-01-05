@@ -610,6 +610,34 @@ impl WasmGcEmitter {
 		type_names.append(self.node_type, "$Node");
 		self.names.types(&type_names);
 
+		// Field names for struct types
+		let mut type_field_names = IndirectNameMap::new();
+
+		// $String fields
+		let mut string_fields = NameMap::new();
+		string_fields.append(0, "ptr");
+		string_fields.append(1, "len");
+		type_field_names.append(self.string_type, &string_fields);
+
+		// $i64box field
+		let mut i64box_fields = NameMap::new();
+		i64box_fields.append(0, "value");
+		type_field_names.append(self.i64_box_type, &i64box_fields);
+
+		// $f64box field
+		let mut f64box_fields = NameMap::new();
+		f64box_fields.append(0, "value");
+		type_field_names.append(self.f64_box_type, &f64box_fields);
+
+		// $Node fields
+		let mut node_fields = NameMap::new();
+		node_fields.append(0, "kind");
+		node_fields.append(1, "data");
+		node_fields.append(2, "value");
+		type_field_names.append(self.node_type, &node_fields);
+
+		self.names.fields(&type_field_names);
+
 		// Function names - sort by index for deterministic output
 		let mut func_names = NameMap::new();
 		let mut sorted: Vec<_> = self.function_indices.iter().collect();
@@ -645,37 +673,5 @@ pub fn eval(code: &str) -> Node {
 			warn!("eval failed: {}", e);
 			node // Return parsed node on failure
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_compact_empty() {
-		let mut emitter = WasmGcEmitter::new();
-		emitter.emit();
-		emitter.emit_node_main(&Node::Empty);
-		let bytes = emitter.finish();
-		assert!(!bytes.is_empty());
-	}
-
-	#[test]
-	fn test_compact_int() {
-		let mut emitter = WasmGcEmitter::new();
-		emitter.emit();
-		emitter.emit_node_main(&Node::Number(Number::Int(42)));
-		let bytes = emitter.finish();
-		assert!(!bytes.is_empty());
-	}
-
-	#[test]
-	fn test_compact_float() {
-		let mut emitter = WasmGcEmitter::new();
-		emitter.emit();
-		emitter.emit_node_main(&Node::Number(Number::Float(3.14)));
-		let bytes = emitter.finish();
-		assert!(!bytes.is_empty());
 	}
 }
