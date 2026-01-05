@@ -2062,6 +2062,12 @@ pub fn key_op(k: Node, op: Op, v: Node) -> Node {
 	Key(Box::new(k), op, Box::new(v))
 }
 
+// pub fn key_ops(k: &str, op: Op, v: Node) -> Node {
+pub fn key_ops(k: String, op: Op, v: Node) -> Node {
+	Key(Box::new(Symbol(format!(".{}", k))), op, Box::new(v))
+}
+
+
 pub fn list(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Square, Separator::None)
 }

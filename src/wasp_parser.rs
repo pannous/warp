@@ -2,7 +2,7 @@ use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Error, Symbol};
-use crate::node::{Bracket, Node, Op, Separator};
+use crate::node::{key_ops, Bracket, Node, Op, Separator};
 use log::warn;
 use std::fs;
 
@@ -759,12 +759,13 @@ impl WaspParser {
 					// Try to parse unquoted value
 					match self.parse_symbol() {
 						Ok(val) => Node::Text(val),
-						Err(_) => Node::Empty,
+						Err(_) => Empty,
 					}
 				};
 
 				// Store attribute as dotted key
-				attributes.push(Node::Key(Box::new(Symbol(format!(".{}", attr_name))), Op::Assign, Box::new(attr_value)));
+				attributes.push(key_ops(attr_name, Op::Assign, attr_value));
+				// attributes.push(Node::Key(Box::new(Symbol(format!(".{}", attr_name))), Op::Assign, Box::new(attr_value)));
 			} else {
 				// Boolean attribute (no value)
 				attributes.push(Node::Key(
