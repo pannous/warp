@@ -28,11 +28,10 @@ use crate::wasp_parser::parse;
 
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
-	  (field $kind i64)
-	  (field $key (ref null $Node))
-	  (field $value (ref null $Node))
-	  (field $payload (ref null any))
-	) )
+	(field $kind i64)
+	(field $data anyref)
+	(field $value (ref null $$Node))
+))
 **/
 // flag enum and variant are wit / component-model types ONLY
 // ref.i31 i31ref

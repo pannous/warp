@@ -604,10 +604,10 @@ impl WasmGcEmitter {
 
 		// Type names
 		let mut type_names = NameMap::new();
-		type_names.append(self.string_type, "$String");
-		type_names.append(self.i64_box_type, "$i64box");
-		type_names.append(self.f64_box_type, "$f64box");
-		type_names.append(self.node_type, "$Node");
+		type_names.append(self.string_type, "String");
+		type_names.append(self.i64_box_type, "i64box");
+		type_names.append(self.f64_box_type, "f64box");
+		type_names.append(self.node_type, "Node");
 		self.names.types(&type_names);
 
 		// Field names for struct types

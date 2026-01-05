@@ -1,9 +1,8 @@
-use wasp::{float, int, symbol, text, Bracket, Node, Op, Separator};
-use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::{eq, write_wasm};
-use wasp::Node::Empty;
-use wasp::wasm_gc_reader::read_bytes;
 use wasp::extensions::numbers::Number;
+use wasp::wasm_gc_emitter::WasmGcEmitter;
+use wasp::wasm_gc_reader::read_bytes;
+use wasp::Node::Empty;
+use wasp::*;
 
 /// Test reading integer nodes via compact 3-field layout
 #[test]
@@ -34,7 +33,7 @@ fn test_read_float_node() {
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-	emitter.emit_node_main(&float(3.14));
+	emitter.emit_node_main(&float(3.11));
 	let bytes = emitter.finish();
 
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
@@ -42,7 +41,7 @@ fn test_read_float_node() {
 
 	match root {
 		Node::Number(Number::Float(val)) => {
-			assert!((val - 3.14).abs() < 0.001);
+			assert!((val - 3.11).abs() < 0.001);
 			println!("✓ Float value is 3.14");
 		}
 		other => panic!("Expected Number(Float(3.14)), got {:?}", other),
@@ -63,7 +62,7 @@ fn test_read_text_node() {
 	println!("  Got node: {:?}", root);
 
 	match root {
-		Node::Text(s) => {
+		Text(s) => {
 			eq!(s, "Hello, WASM!".to_string());
 			println!("✓ Text value is 'Hello, WASM!'");
 		}
@@ -85,7 +84,7 @@ fn test_read_symbol_node() {
 	println!("  Got node: {:?}", root);
 
 	match root {
-		Node::Symbol(s) => {
+		Symbol(s) => {
 			eq!(s, "my_symbol".to_string());
 			println!("✓ Symbol value is 'my_symbol'");
 		}
@@ -100,14 +99,14 @@ fn test_read_codepoint_node() {
 
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
-	emitter.emit_node_main(&Node::Char('🚀'));
+	emitter.emit_node_main(&Char('🚀'));
 	let bytes = emitter.finish();
 
 	let root = read_bytes(&bytes).expect("Failed to read WASM");
 	println!("  Got node: {:?}", root);
 
 	match root {
-		Node::Char(c) => {
+		Char(c) => {
 			eq!(c, '🚀');
 			println!("✓ Codepoint is 🚀");
 		}
@@ -120,7 +119,7 @@ fn test_read_codepoint_node() {
 fn test_read_key_node() {
 	println!("=== Testing Key Node Reading ===\n");
 
-	let key_node = Node::Key(
+	let key_node = Key(
 		Box::new(symbol("name")),
 		Op::None,
 		Box::new(text("value"))
@@ -135,13 +134,13 @@ fn test_read_key_node() {
 	println!("  Got node: {:?}", root);
 
 	match root {
-		Node::Key(key, _, value) => {
+		Key(key, _, value) => {
 			match *key {
-				Node::Symbol(s) => eq!(s, "name".to_string()),
+				Symbol(s) => eq!(s, "name".to_string()),
 				other => panic!("Expected Symbol key, got {:?}", other),
 			}
 			match *value {
-				Node::Text(s) => eq!(s, "value".to_string()),
+				Text(s) => eq!(s, "value".to_string()),
 				other => panic!("Expected Text value, got {:?}", other),
 			}
 			println!("✓ Key node correctly decoded");
