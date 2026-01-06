@@ -415,7 +415,7 @@ fn test_function_argument_cast() {
 #[test]
 fn test_type_node() {
 	use wasp::node::{Bracket, Separator, Op};
-	use wasp::type_kinds::NodeTag;
+	use wasp::type_kinds::Kind;
 
 	// Create a Type node directly
 	let name = Box::new(Node::Symbol("Person".to_string()));
@@ -438,7 +438,7 @@ fn test_type_node() {
 	let type_node = Node::Type { name, body: fields };
 
 	// Verify kind returns Type
-	assert_eq!(type_node.kind(), NodeTag::Type);
+	assert_eq!(type_node.kind(), Kind::Type);
 
 	// Verify serialization
 	let serialized = type_node.serialize();
@@ -449,7 +449,7 @@ fn test_type_node() {
 
 #[test]
 fn test_type_registry() {
-	use wasp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, NodeTag};
+	use wasp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, Kind};
 
 	let mut registry = TypeRegistry::new();
 
@@ -487,7 +487,7 @@ fn test_type_registry() {
 	assert_eq!(tag3, tag);
 
 	// Built-in tags are not user types
-	assert!(!TypeRegistry::is_user_type(NodeTag::Type as u32));
+	assert!(!TypeRegistry::is_user_type(Kind::Type as u32));
 }
 
 #[test]

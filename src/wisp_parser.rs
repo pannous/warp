@@ -23,7 +23,7 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node::*;
 use crate::node::*;
-use crate::type_kinds::NodeTag;
+use crate::type_kinds::Kind;
 
 
 pub struct WispParser {
@@ -848,7 +848,7 @@ mod tests {
 		match result {
 			Key(name, Op::Colon, body) => {
 				assert_eq!(*name, Symbol("div".to_string()));
-				assert_eq!(body.kind(), NodeTag::List)
+				assert_eq!(body.kind(), Kind::List)
 			}
 			_ => panic!("expected nested structure"),
 		}

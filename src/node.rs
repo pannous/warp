@@ -16,7 +16,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use syn::Signature;
 // use wasp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, NodeTag};
+use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -391,25 +391,25 @@ impl Node {
 		}
 	}
 
-	/// Returns the NodeTag for this node (Meta unwraps to inner node's tag)
-	pub fn kind(&self) -> NodeTag {
+	/// Returns the Kind for this node (Meta unwraps to inner node's tag)
+	pub fn kind(&self) -> Kind {
 		match self {
-			Empty => NodeTag::Empty,
-			Text(_) => NodeTag::Text,
-			Char(_) => NodeTag::Codepoint,
-			Symbol(_) => NodeTag::Symbol,
-			Key(_, _, _) => NodeTag::Key,
-			List(_, Bracket::Curly, _) => NodeTag::Block,
-			List(_, _, _) => NodeTag::List,
-			Data(_) => NodeTag::Data,
+			Empty => Kind::Empty,
+			Text(_) => Kind::Text,
+			Char(_) => Kind::Codepoint,
+			Symbol(_) => Kind::Symbol,
+			Key(_, _, _) => Kind::Key,
+			List(_, Bracket::Curly, _) => Kind::Block,
+			List(_, _, _) => Kind::List,
+			Data(_) => Kind::Data,
 			Meta { node, .. } => node.kind(),
-			Type { .. } => NodeTag::Type,
-			Error(_) => NodeTag::Error,
-			False | True => NodeTag::Int,
+			Type { .. } => Kind::Type,
+			Error(_) => Kind::Error,
+			False | True => Kind::Int,
 			Node::Number(num) => match num {
-				Number::Int(_) => NodeTag::Int,
-				Number::Float(_) => NodeTag::Float,
-				_ => NodeTag::Float, // Quotient, Complex, Nan, Inf → Float
+				Number::Int(_) => Kind::Int,
+				Number::Float(_) => Kind::Float,
+				_ => Kind::Float, // Quotient, Complex, Nan, Inf → Float
 			},
 		}
 	}
@@ -490,9 +490,9 @@ impl Node {
 		let tag = (kind & 0xFF) as u8;
 
 		match tag {
-			t if t == NodeTag::Empty as u8 => Empty,
+			t if t == Kind::Empty as u8 => Empty,
 
-			t if t == NodeTag::Int as u8 => {
+			t if t == Kind::Int as u8 => {
 				// data field contains boxed i64
 				match obj.read_boxed_i64() {
 					Ok(val) => Node::Number(Number::Int(val)),
@@ -500,7 +500,7 @@ impl Node {
 				}
 			}
 
-			t if t == NodeTag::Float as u8 => {
+			t if t == Kind::Float as u8 => {
 				// data field contains boxed f64
 				match obj.read_boxed_f64() {
 					Ok(val) => Node::Number(Number::Float(val)),
@@ -508,7 +508,7 @@ impl Node {
 				}
 			}
 
-			t if t == NodeTag::Text as u8 => {
+			t if t == Kind::Text as u8 => {
 				// data field contains $String struct
 				match obj.text() {
 					Ok(s) => Text(s),
@@ -516,7 +516,7 @@ impl Node {
 				}
 			}
 
-			t if t == NodeTag::Codepoint as u8 => {
+			t if t == Kind::Codepoint as u8 => {
 				// data field contains i31ref with codepoint
 				match obj.read_i31() {
 					Ok(code) => {
@@ -530,7 +530,7 @@ impl Node {
 				}
 			}
 
-			t if t == NodeTag::Symbol as u8 => {
+			t if t == Kind::Symbol as u8 => {
 				// data field contains $String struct
 				match obj.text() {
 					Ok(s) => Symbol(s),
@@ -538,7 +538,7 @@ impl Node {
 				}
 			}
 
-			t if t == NodeTag::Key as u8 => {
+			t if t == Kind::Key as u8 => {
 				// data field contains key node, value field contains value node
 				let key = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
@@ -551,12 +551,12 @@ impl Node {
 				Key(key, Op::None, value)
 			}
 
-			t if t == NodeTag::Block as u8 => {
+			t if t == Kind::Block as u8 => {
 				// data=first item, value=rest, bracket info in upper bits of kind
 				Self::read_list_from_gc(obj, Bracket::Curly, kind)
 			}
 
-			t if t == NodeTag::List as u8 => {
+			t if t == Kind::List as u8 => {
 				// data=first item, value=rest, bracket info in upper bits of kind
 				let bracket_info = (kind >> 8) & 0xFF;
 				let bracket = match bracket_info {
@@ -569,7 +569,7 @@ impl Node {
 				Self::read_list_from_gc(obj, bracket, kind)
 			}
 
-			t if t == NodeTag::Data as u8 => {
+			t if t == Kind::Data as u8 => {
 				// For now, read type_name from text
 				let type_name = obj.text().unwrap_or_default();
 				Data(Dada {
@@ -579,7 +579,7 @@ impl Node {
 				})
 			}
 
-			t if t == NodeTag::Type as u8 => {
+			t if t == Kind::Type as u8 => {
 				// data = name node, value = body node
 				let name = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
@@ -592,7 +592,7 @@ impl Node {
 				Type { name, body }
 			}
 
-			_ => Text(format!("Unknown NodeTag: {}", tag)),
+			_ => Text(format!("Unknown Kind: {}", tag)),
 		}
 	}
 

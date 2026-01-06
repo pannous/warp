@@ -20,17 +20,17 @@ fn test_wasm_gc_node_reading_concept() {
 	// This demonstrates step 1 from rasm
 	let wat = r#"
     (module
-        ;; Simple functions returning node tags (like NodeTag enum)
+        ;; Simple functions returning node tags (like Kind enum)
         (func (export "make_empty") (result i32)
-            i32.const 0  ;; NodeTag::Empty
+            i32.const 0  ;; Kind::Empty
         )
 
         (func (export "make_number") (param $value i64) (result i32)
-            i32.const 1  ;; NodeTag::Number
+            i32.const 1  ;; Kind::Number
         )
 
         (func (export "make_text") (result i32)
-            i32.const 2  ;; NodeTag::Text
+            i32.const 2  ;; Kind::Text
         )
     )
     "#;
@@ -56,7 +56,7 @@ fn test_wasm_gc_node_reading_concept() {
 
 	println!("✓ Step 2: Called WASM function");
 	println!("  make_number(42) returned tag: {}", tag);
-	eq!(tag, 1); // NodeTag::Number
+	eq!(tag, 1); // Kind::Number
 
 	println!();
 	println!("Next steps (requiring wasmtime 28.0+ features):");
@@ -97,7 +97,7 @@ fn test_node_serialization_workflow_design() {
 	println!();
 	println!("1. Define Node GC struct type in WAT:");
 	println!("   (type $node (struct");
-	println!("     (field $tag i32)              ;; NodeTag discriminant");
+	println!("     (field $tag i32)              ;; Kind discriminant");
 	println!("     (field $int_value i64)        ;; For Number nodes");
 	println!("     (field $float_value f64)      ;; For Number nodes");
 	println!("     (field $text (ref $string))   ;; For Text/Symbol nodes");
@@ -119,7 +119,7 @@ fn test_node_serialization_workflow_design() {
 	println!();
 	println!("3. Convert wasp::Node to WASM:");
 	println!("   let wasm_node = WaspNode::create(&template, obj! {{");
-	println!("       tag: NodeTag::Number as i32,");
+	println!("       tag: Kind::Number as i32,");
 	println!("       int_value: 42,");
 	println!("   }})?;");
 	println!();
