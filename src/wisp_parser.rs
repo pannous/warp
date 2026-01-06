@@ -1,6 +1,8 @@
-//! Wisp Parser - S-expression format mapping directly to WASM GC Node layout
+//! Wisp Parser - Wasm Lisp (almost) S-expression format mapping directly to WASM GC Node layout
 //!
-//! why? so far only to demonstrate the wasp layout
+//! why? so far only to demonstrate the simple wasm node layout
+//! let result = parse("[a b c]#2");
+//! assert!(result.first().length() == 3); // (# [a b c] 2)
 //!
 //! Format: (kind data value) where:
 //! - kind: node type (text, symbol, number, list, key, pair, tag, meta, ...)
