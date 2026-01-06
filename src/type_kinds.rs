@@ -16,6 +16,7 @@ pub enum NodeTag {
 	Data = 10,     // arbitrary data container
 	Meta = 11,     // metadata wrapper
 	Error = 12,    // error node
+	Type = 13,     // type definition: name + body (fields)
 }
 
 /// Alias for backward compatibility

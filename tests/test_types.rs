@@ -411,3 +411,38 @@ fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};addi(2.2,2.2)", 4.4);
 	is!("fun addier(float a,float b){b+a};addier(42,1)+1", 44);
 }
+
+#[test]
+fn test_type_node() {
+	use wasp::node::{Bracket, Separator, Op};
+	use wasp::type_kinds::NodeTag;
+
+	// Create a Type node directly
+	let name = Box::new(Node::Symbol("Person".to_string()));
+	let fields = Box::new(Node::List(
+		vec![
+			Node::Key(
+				Box::new(Node::Symbol("name".to_string())),
+				Op::Colon,
+				Box::new(Node::Symbol("Text".to_string())),
+			),
+			Node::Key(
+				Box::new(Node::Symbol("age".to_string())),
+				Op::Colon,
+				Box::new(Node::Symbol("Int".to_string())),
+			),
+		],
+		Bracket::Curly,
+		Separator::Colon, // Colon is comma separator
+	));
+	let type_node = Node::Type { name, body: fields };
+
+	// Verify kind returns Type
+	assert_eq!(type_node.kind(), NodeTag::Type);
+
+	// Verify serialization
+	let serialized = type_node.serialize();
+	assert!(serialized.contains("Person"));
+	assert!(serialized.contains("name"));
+	assert!(serialized.contains("age"));
+}
