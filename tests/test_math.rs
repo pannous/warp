@@ -266,6 +266,20 @@ fn test_while_loop() {
 }
 
 #[test]
+fn test_compound_assignment() {
+	// Basic compound assignments
+	is!("x:=10; x += 5; x", 15);
+	is!("x:=10; x -= 3; x", 7);
+	is!("x:=10; x *= 2; x", 20);
+	is!("x:=10; x /= 2; x", 5);
+	is!("x:=10; x %= 3; x", 1);
+	// In expressions
+	is!("x:=5; x += 3", 8);  // returns the new value
+	// Chained with while
+	is!("x:=0; i:=3; while i>0 { x += i; i -= 1 }; x", 6); // 3+2+1=6
+}
+
+#[test]
 #[ignore = "soon"]
 fn test_absolute_value_arithmetic() {
 	is!("‖3‖-1", 2);
