@@ -151,6 +151,11 @@ impl WasmGcEmitter {
 			Node::Meta { node, .. } => {
 				self.analyze_required_functions(node);
 			}
+			Node::Type { name, body } => {
+				self.required_functions.insert("new_type");
+				self.analyze_required_functions(name);
+				self.analyze_required_functions(body);
+			}
 			_ => {}
 		}
 	}
@@ -193,6 +198,7 @@ impl WasmGcEmitter {
 			("kind_data", NodeTag::Data),
 			("kind_meta", NodeTag::Meta),
 			("kind_error", NodeTag::Error),
+			("kind_type", NodeTag::Type),
 		];
 
 		for (name, tag) in tags {
@@ -468,6 +474,28 @@ impl WasmGcEmitter {
 			self.next_func_idx += 1;
 		}
 
+		// new_type(name: ref $Node, body: ref $Node) -> (ref $Node)
+		// data = name node (cast to any), value = body node (fields)
+		if self.should_emit_function("new_type") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref_nullable), Ref(node_ref_nullable)],
+				vec![Ref(node_ref)],
+			);
+			self.functions.function(func_type);
+			let mut func = Function::new(vec![]);
+			self.emit_kind(&mut func, NodeTag::Type);
+			func.instruction(&Instruction::LocalGet(0)); // name node as data (auto-cast to any)
+			func.instruction(&Instruction::LocalGet(1)); // body node (fields)
+			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			self.exports
+				.export("new_type", ExportKind::Func, self.next_func_idx);
+			self.function_indices.insert("new_type", self.next_func_idx);
+			self.next_func_idx += 1;
+		}
+
 		// new_list(first: ref $Node, rest: ref $Node, bracket_info: i64) -> (ref $Node)
 		// kind = List + bracket encoding, data = first, value = rest
 		if self.should_emit_function("new_list") {
@@ -723,6 +751,12 @@ impl WasmGcEmitter {
 				// Emit the inner node, but mark as error in kind
 				// For now, just emit the inner
 				self.emit_node_instructions(func, inner);
+			}
+			Node::Type { name, body } => {
+				// Emit type as a tagged block with name and fields
+				self.emit_node_instructions(func, name);
+				self.emit_node_instructions(func, body);
+				self.emit_call(func, "new_type");
 			}
 			&Node::False => {
 				func.instruction(&Instruction::I64Const(0));
