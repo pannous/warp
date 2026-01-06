@@ -84,12 +84,19 @@ fn test_modulo() {
 }
 
 #[test]
-#[ignore] // needs variable support
+fn test_simple_variables() {
+	is!("x:=42; x", 42);
+	is!("x:=10; y:=3; x+y", 13);
+	is!("x:=5; x*x", 25);
+}
+
+#[test]
+#[ignore] // needs variable support with mixed types
 fn test_modulo_with_variables() {
 	is!("10007%10000.0", 7);
-	is!("i=10007;x=i%10000", 7);
-	is!("i=10007.0;x=i%10000.0", 7);
-	is!("i=10007.1;x=i%10000.1", 7);
+	is!("i:=10007;i%10000", 7);
+	is!("i:=10007.0;i%10000.0", 7);
+	is!("i:=10007.1;i%10000.1", 7);
 }
 
 // One of the few tests which can be removed because who will ever change the sin routine?
