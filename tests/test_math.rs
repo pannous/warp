@@ -190,3 +190,48 @@ fn test_units() {
 fn test_eval() {
 	is!("√4", 2);
 }
+
+#[test]
+#[ignore] // needs runtime == operator
+fn test_runtime_equality() {
+	// Previously commented in test_wasm.rs:483-484
+	is!("3*452==452*3", 1);
+	is!("3*13==14*3", 0);
+}
+
+#[test]
+#[ignore] // needs ternary operator
+fn test_ternary_with_comparison() {
+	// Previously commented in test_wasm.rs:205
+	is!("(1<2)?10:255", 10);
+	is!("(1>2)?10:255", 255);
+}
+
+#[test]
+#[ignore] // needs absolute value emit
+fn test_absolute_value_arithmetic() {
+	// Previously commented in test_wasm.rs:354
+	is!("‖3‖-1", 2);
+}
+
+#[test]
+#[ignore] // needs fraction support
+fn test_fraction_multiplication() {
+	// Previously commented in test_wasm.rs:123
+	is!("⅓9", 3);
+}
+
+#[test]
+#[ignore] // needs superscript power
+fn test_superscript_power() {
+	// Previously commented in test_wasm.rs:1359
+	is!("3⁴", 81);
+}
+
+#[test]
+#[ignore] // needs global + pi
+fn test_global_with_pi() {
+	// Previously commented in test_wasm.rs:139
+	use std::f64::consts::PI;
+	is!("global x=1+π", 1.0 + PI);
+}
