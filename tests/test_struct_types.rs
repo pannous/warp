@@ -32,6 +32,20 @@ fn test_class_instance() {
 	);
 }
 
+// Aspirational API - requires gc_struct! macro from rasm
+// gc_struct! {
+//     Person {
+//         name: 0 => mut String,
+//         age: 1 => mut i32,
+//     }
+// }
+// #[test]
+// fn test_class_instance_raw() {
+// 	let alice = Person { name: "Alice", age: 30 };
+// 	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
+// }
+
+
 
 #[test]
 fn test_text() {
