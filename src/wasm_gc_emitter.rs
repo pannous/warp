@@ -131,7 +131,7 @@ impl WasmGcEmitter {
 				self.required_functions.insert("new_symbol");
 			}
 			Node::Key(key, op, value) => {
-				if op.is_arithmetic() {
+				if op.is_arithmetic() || op.is_comparison() {
 					self.required_functions.insert("new_int");
 				} else {
 					self.required_functions.insert("new_key");
