@@ -1,8 +1,16 @@
 /// Experimental: Return raw GC structs instead of Node encoding
 /// This allows direct struct field access without Node wrapper overhead
+///
+/// Two approaches demonstrated:
+/// 1. Manual field access (legacy) - reads ptr/len strings from linear memory
+/// 2. gc_struct! macro (new) - ergonomic typed wrappers with index-based access
 
 use wasmtime::*;
 use anyhow::Result;
+
+// Import gc_struct! macro and gc_traits module for ergonomic access
+use wasp::gc_struct;
+use wasp::gc_traits::GcObject as ErgonomicGcObject;
 
 /// Person struct mirrors the WASM GC $Person type
 #[derive(Debug, Clone, PartialEq)]
@@ -187,6 +195,137 @@ fn test_class_instance_raw() -> Result<()> {
     let result = person_from_gc(&results[0], &mut store, &instance)?;
 
     assert_eq!(result, alice);
+
+    Ok(())
+}
+
+// ============================================================
+// New gc_struct! macro-based approach with ergonomic field access
+// ============================================================
+
+/// Emit a simple Point struct: (x: i64, y: i64)
+fn emit_point_wasm(x: i64, y: i64) -> Vec<u8> {
+    use wasm_encoder::*;
+    use wasm_encoder::StorageType::Val;
+
+    let mut module = Module::new();
+
+    // Type 0: $Point = struct { x: i64, y: i64 }
+    let mut types = TypeSection::new();
+    types.ty().struct_(vec![
+        FieldType { element_type: Val(ValType::I64), mutable: false },
+        FieldType { element_type: Val(ValType::I64), mutable: false },
+    ]);
+
+    // Type 1: main() -> ref $Point
+    let point_ref = RefType { nullable: false, heap_type: HeapType::Concrete(0) };
+    types.ty().func_type(&FuncType::new([], [ValType::Ref(point_ref)]));
+    module.section(&types);
+
+    // Function section
+    let mut functions = FunctionSection::new();
+    functions.function(1);
+    module.section(&functions);
+
+    // Export section
+    let mut exports = ExportSection::new();
+    exports.export("main", ExportKind::Func, 0);
+    module.section(&exports);
+
+    // Code section
+    let mut codes = CodeSection::new();
+    let mut func = Function::new([]);
+    func.instruction(&Instruction::I64Const(x));
+    func.instruction(&Instruction::I64Const(y));
+    func.instruction(&Instruction::StructNew(0));
+    func.instruction(&Instruction::End);
+    codes.function(&func);
+    module.section(&codes);
+
+    module.finish()
+}
+
+// Define a typed Point wrapper using gc_struct! macro
+gc_struct! {
+    Point {
+        x: 0 => i64,
+        y: 1 => i64,
+    }
+}
+
+#[test]
+fn test_gc_struct_macro() -> Result<()> {
+    // Emit WASM that returns a Point(10, 20)
+    let wasm_bytes = emit_point_wasm(10, 20);
+
+    // Load and run
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(&engine, &wasm_bytes)?;
+
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    let main = instance.get_func(&mut store, "main")
+        .ok_or_else(|| anyhow::anyhow!("no main"))?;
+
+    let mut results = vec![Val::I64(0)];
+    main.call(&mut store, &[], &mut results)?;
+
+    // Create typed Point wrapper using gc_struct! generated type
+    // Note: from_val takes ownership of store (moved into GcObject)
+    let point = Point::from_val(results[0].clone(), store, Some(instance))?;
+
+    // Use generated accessors - no store passing needed!
+    let x = point.x()?;
+    let y = point.y()?;
+
+    assert_eq!(x, 10);
+    assert_eq!(y, 20);
+
+    println!("gc_struct! macro works: Point({}, {})", x, y);
+
+    Ok(())
+}
+
+#[test]
+fn test_gc_object_index_access() -> Result<()> {
+    // Test GcObject with index-based field access
+    let wasm_bytes = emit_point_wasm(42, 99);
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(&engine, &wasm_bytes)?;
+
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    let main = instance.get_func(&mut store, "main")
+        .ok_or_else(|| anyhow::anyhow!("no main"))?;
+
+    let mut results = vec![Val::I64(0)];
+    main.call(&mut store, &[], &mut results)?;
+
+    // Use ErgonomicGcObject directly with index access
+    // Note: GcObject::new takes ownership of store (moved into GcObject)
+    let gc_obj = ErgonomicGcObject::new(results[0].clone(), store, Some(instance))?;
+
+    // Get fields by index
+    let x: i64 = gc_obj.get(0)?;
+    let y: i64 = gc_obj.get(1)?;
+
+    assert_eq!(x, 42);
+    assert_eq!(y, 99);
+
+    println!("GcObject index access works: ({}, {})", x, y);
 
     Ok(())
 }

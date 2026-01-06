@@ -16,6 +16,7 @@ pub mod compiler;
 pub mod node;
 pub mod run;
 pub mod type_kinds;
+pub mod gc_traits;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod wasm_optimizer;
@@ -42,4 +43,8 @@ pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, U
 pub use meta::{Dada, LineInfo, DataType};
 // WASM
 pub use wasm_gc_emitter::WasmGcEmitter;
+// Legacy GcObject for backward compatibility (3-field Node layout)
 pub use wasm_gc_reader::GcObject;
+// New gc_traits module with rasm-style ergonomic GC struct access
+// Note: gc_struct! and obj! macros are exported at crate root via #[macro_export]
+pub use gc_traits::{register_gc_types_from_wasm, FromVal, ToVal, FieldIndex, GcStructWrapper};
