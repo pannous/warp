@@ -1,5 +1,5 @@
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, DataType, Node};
+use crate::node::{Bracket, DataType, Node, Op};
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use crate::type_kinds::NodeTag;
@@ -520,10 +520,14 @@ impl WasmGcEmitter {
 				func.instruction(&I32Const(len as i32));
 				self.emit_call(func, "new_symbol");
 			}
-			Node::Key(key, _op, value) => {
-				self.emit_node_instructions(func, key);   // key node
-				self.emit_node_instructions(func, value); // value node
-				self.emit_call(func, "new_key");
+			Node::Key(left, op, right) => {
+				if op.is_arithmetic() {
+					self.emit_arithmetic(func, left, op, right);
+				} else {
+					self.emit_node_instructions(func, left);
+					self.emit_node_instructions(func, right);
+					self.emit_call(func, "new_key");
+				}
 			}
 			Node::List(items, bracket, _separator) => {
 				if items.is_empty() {
@@ -562,6 +566,66 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::I64Const(1));
 				self.emit_call(func, "new_int");
 			}
+		}
+	}
+
+	/// Emit arithmetic operation: evaluate operands and apply operator
+	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		// Emit left operand value onto stack
+		self.emit_numeric_value(func, left);
+		// Emit right operand value onto stack
+		self.emit_numeric_value(func, right);
+
+		// Emit WASM arithmetic instruction
+		match op {
+			Op::Add => func.instruction(&Instruction::I64Add),
+			Op::Sub => func.instruction(&Instruction::I64Sub),
+			Op::Mul => func.instruction(&Instruction::I64Mul),
+			Op::Div => func.instruction(&Instruction::I64DivS),
+			Op::Mod => func.instruction(&Instruction::I64RemS),
+			Op::Pow => {
+				// Power requires a loop or library call, for now just emit i64.mul as placeholder
+				// TODO: implement proper power function
+				warn!("Power operator not fully implemented, using multiplication");
+				func.instruction(&Instruction::I64Mul)
+			}
+			_ => unreachable!("Non-arithmetic operator in emit_arithmetic"),
+		};
+
+		// Wrap result as Int node
+		self.emit_call(func, "new_int");
+	}
+
+	/// Emit the numeric value of a node onto the stack (as i64)
+	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			Node::Number(num) => {
+				match num {
+					Number::Int(n) => func.instruction(&Instruction::I64Const(*n)),
+					Number::Float(f) => func.instruction(&Instruction::I64Const(*f as i64)),
+					Number::Quotient(n, d) => func.instruction(&Instruction::I64Const(n / d)),
+					Number::Complex(r, _i) => func.instruction(&Instruction::I64Const(*r as i64)),
+					Number::Nan | Number::Inf | Number::NegInf => {
+						func.instruction(&Instruction::I64Const(0)) // special values → 0
+					}
+				};
+			}
+			Node::Key(left, op, right) if op.is_arithmetic() => {
+				// Recursive: evaluate nested expression
+				self.emit_numeric_value(func, left);
+				self.emit_numeric_value(func, right);
+				match op {
+					Op::Add => func.instruction(&Instruction::I64Add),
+					Op::Sub => func.instruction(&Instruction::I64Sub),
+					Op::Mul => func.instruction(&Instruction::I64Mul),
+					Op::Div => func.instruction(&Instruction::I64DivS),
+					Op::Mod => func.instruction(&Instruction::I64RemS),
+					Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
+					_ => unreachable!(),
+				};
+			}
+			_ => panic!("Cannot extract numeric value from {:?}", node),
 		}
 	}
 
