@@ -98,6 +98,24 @@ macro_rules! is {
 }
 
 #[macro_export]
+macro_rules! wis {
+	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
+	($input:expr) => {{
+		let node = wasp::wisp_parser::parse_wisp($input);
+		let emitted = wasp::wisp_parser::emit_wisp(&node);
+		let reparsed = wasp::wisp_parser::parse_wisp(&emitted);
+		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", $input, emitted);
+		node
+	}};
+	// Wisp eval: parse wisp -> Node -> compare to expected
+	($input:expr, $expected:expr) => {{
+		let node = wasp::wisp_parser::parse_wisp($input);
+		assert_eq!(node, $expected, "wisp parse mismatch for: {}", $input);
+		node
+	}};
+}
+
+#[macro_export]
 macro_rules! skip {
 	($($t:tt)*) => {};
 }

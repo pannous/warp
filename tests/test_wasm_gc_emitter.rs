@@ -83,17 +83,20 @@ fn test_generate_wasm() {
 
 #[test]
 fn test_node_kind_enum_abi() {
-	// ensure enum values match expected ABI
+	// ensure enum values match expected ABI (NodeTag)
 	eq!(NodeKind::Empty as u32, 0);
-	eq!(NodeKind::Number as u32, 1);
-	eq!(NodeKind::Codepoint as u32, 3);
-	eq!(NodeKind::Symbol as u32, 4);
-	eq!(NodeKind::Key as u32, 5);
-	// NodeKind::Pair = 6 removed, use List or Key instead
-	// NodeKind::Tag = 7 removed, use Key instead
+	eq!(NodeKind::Int as u32, 1);
+	eq!(NodeKind::Float as u32, 2);
+	eq!(NodeKind::Text as u32, 3);
+	eq!(NodeKind::Codepoint as u32, 4);
+	eq!(NodeKind::Symbol as u32, 5);
+	eq!(NodeKind::Key as u32, 6);
+	eq!(NodeKind::Pair as u32, 7);
 	eq!(NodeKind::Block as u32, 8);
 	eq!(NodeKind::List as u32, 9);
 	eq!(NodeKind::Data as u32, 10);
+	eq!(NodeKind::Meta as u32, 11);
+	eq!(NodeKind::Error as u32, 12);
 }
 
 #[test]

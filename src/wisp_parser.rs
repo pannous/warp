@@ -24,6 +24,7 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node::*;
 use crate::node::*;
+use crate::type_kinds::NodeTag;
 
 pub struct WispParser {
 	chars: Vec<char>,
@@ -547,6 +548,108 @@ pub fn parse_wisp(input: &str) -> Node {
 	WispParser::parse(input)
 }
 
+/// Emit Node as wisp s-expression format
+pub fn emit_wisp(node: &Node) -> String {
+	WispEmitter::emit(node)
+}
+
+pub struct WispEmitter;
+
+impl WispEmitter {
+	pub fn emit(node: &Node) -> String {
+		let mut out = String::new();
+		Self::emit_node(node, &mut out);
+		out
+	}
+
+	fn emit_node(node: &Node, out: &mut String) {
+		match node {
+			Empty => out.push('ø'),
+			True => out.push_str("true"),
+			False => out.push_str("false"),
+			Number(n) => match n {
+				Number::Int(i) => out.push_str(&format!("(int {})", i)),
+				Number::Float(f) => out.push_str(&format!("(float {})", f)),
+				_ => out.push_str(&format!("(num {})", n)),
+			},
+			Char(c) => out.push_str(&format!("(char '{}')", c)),
+			Text(s) => {
+				out.push_str("(text '");
+				Self::emit_escaped(s, out);
+				out.push_str("')");
+			}
+			Symbol(s) => out.push_str(s),
+			Error(e) => {
+				out.push_str("(error ");
+				Self::emit_node(e, out);
+				out.push(')');
+			}
+			Key(l, op, r) => {
+				let kind = match op {
+					Op::Colon => "key",
+					Op::Assign => "pair",
+					Op::Define => "def",
+					Op::Dot => "cons",
+					Op::Scope => "scope",
+					Op::Arrow => "arrow",
+					Op::FatArrow => "fatarrow",
+					Op::None => "call",
+					// Arithmetic/comparison/logical ops use op symbol
+					_ => op.as_str(),
+				};
+				out.push('(');
+				out.push_str(kind);
+				out.push(' ');
+				Self::emit_node(l, out);
+				out.push(' ');
+				Self::emit_node(r, out);
+				out.push(')');
+			}
+			List(items, bracket, _sep) => {
+				let (open, close) = match bracket {
+					Bracket::Square => ('[', ']'),
+					Bracket::Curly => ('{', '}'),
+					Bracket::Round => ('(', ')'),
+					Bracket::Less => ('<', '>'),
+					Bracket::None => ('[', ']'),
+					Bracket::Other(o, c) => (*o, *c),
+				};
+				out.push(open);
+				for (i, item) in items.iter().enumerate() {
+					if i > 0 {
+						out.push(' ');
+					}
+					Self::emit_node(item, out);
+				}
+				out.push(close);
+			}
+			Meta { node, data } => {
+				out.push_str("(meta ");
+				Self::emit_node(node, out);
+				out.push(' ');
+				Self::emit_node(data, out);
+				out.push(')');
+			}
+			Data(d) => {
+				out.push_str(&format!("(data {})", d.type_name));
+			}
+		}
+	}
+
+	fn emit_escaped(s: &str, out: &mut String) {
+		for c in s.chars() {
+			match c {
+				'\n' => out.push_str("\\n"),
+				'\t' => out.push_str("\\t"),
+				'\r' => out.push_str("\\r"),
+				'\\' => out.push_str("\\\\"),
+				'\'' => out.push_str("\\'"),
+				_ => out.push(c),
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -717,7 +820,7 @@ mod tests {
 		match result {
 			Key(name, Op::Colon, body) => {
 				assert_eq!(*name, Symbol("div".to_string()));
-				assert_eq!(body.kind(), NodeKind::List)
+				assert_eq!(body.kind(), NodeTag::List)
 			}
 			_ => panic!("expected nested structure"),
 		}
@@ -733,5 +836,74 @@ mod tests {
 			}
 			_ => panic!("expected call"),
 		}
+	}
+
+	// ==================== Emitter Tests ====================
+
+	#[test]
+	fn test_wisp_emit_atoms() {
+		assert_eq!(emit_wisp(&Empty), "ø");
+		assert_eq!(emit_wisp(&True), "true");
+		assert_eq!(emit_wisp(&False), "false");
+		assert_eq!(emit_wisp(&Number(Number::Int(42))), "(int 42)");
+		assert_eq!(emit_wisp(&Number(Number::Float(3.14))), "(float 3.14)");
+		assert_eq!(emit_wisp(&Char('x')), "(char 'x')");
+		assert_eq!(emit_wisp(&Text("hello".into())), "(text 'hello')");
+		assert_eq!(emit_wisp(&Symbol("foo".into())), "foo");
+	}
+
+	#[test]
+	fn test_wisp_emit_compound() {
+		let list = List(vec![Symbol("a".into()), Symbol("b".into())], Bracket::Square, Separator::Space);
+		assert_eq!(emit_wisp(&list), "[a b]");
+
+		let key = Key(Box::new(Symbol("x".into())), Op::Colon, Box::new(Number(Number::Int(1))));
+		assert_eq!(emit_wisp(&key), "(key x (int 1))");
+
+		let pair = Key(Box::new(Symbol("y".into())), Op::Assign, Box::new(Number(Number::Int(2))));
+		assert_eq!(emit_wisp(&pair), "(pair y (int 2))");
+	}
+
+	// ==================== Roundtrip Tests ====================
+
+	fn roundtrip(input: &str) {
+		let node = parse_wisp(input);
+		let emitted = emit_wisp(&node);
+		let reparsed = parse_wisp(&emitted);
+		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", input, emitted);
+	}
+
+	#[test]
+	fn test_wisp_roundtrip_atoms() {
+		roundtrip("42");
+		roundtrip("-7");
+		roundtrip("3.14");
+		roundtrip("true");
+		roundtrip("false");
+		roundtrip("ø");
+	}
+
+	#[test]
+	fn test_wisp_roundtrip_sexpr() {
+		roundtrip("(int 42)");
+		roundtrip("(float 3.14)");
+		roundtrip("(char 'x')");
+		roundtrip("(text 'hello')");
+	}
+
+	#[test]
+	fn test_wisp_roundtrip_compound() {
+		roundtrip("[a b c]");
+		roundtrip("(key x 42)");
+		roundtrip("(pair y 3)");
+		roundtrip("(cons a b)");
+		roundtrip("(meta value info)");
+	}
+
+	#[test]
+	fn test_wisp_roundtrip_nested() {
+		roundtrip("(key x [1 2 3])");
+		roundtrip("(meta (text 'hi') (key class 'item'))");
+		roundtrip("[a [b c] d]");
 	}
 }
