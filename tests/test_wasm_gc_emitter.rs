@@ -10,8 +10,8 @@ fn normalize_blocks(node: &Node) -> Node {
 	match node {
 		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
-		// Normalize Op to None since WASM roundtrip doesn't preserve it yet
-		Key(k, _op, v) => Key(Box::new(normalize_blocks(k)), Op::None, Box::new(normalize_blocks(v))),
+		// Preserve Op since WASM roundtrip now preserves it
+		Key(k, op, v) => Key(Box::new(normalize_blocks(k)), op.clone(), Box::new(normalize_blocks(v))),
 		_ => node.clone(),
 	}
 }
@@ -48,13 +48,13 @@ fn test_wasm_roundtrip() {
 #[test]
 fn test_wasm_roundtrip_via_is() {
 	// Parser treats html{test=1} as Key("html", {test=1})
-	// Note: WASM roundtrip doesn't preserve Op yet, so we use Op::None in expected
-	let x = Key(Box::new(Symbol("test".s())), Op::None, Box::new(Number(Int(1))));
+	// WASM roundtrip now preserves Op: outer uses Colon, inner uses Assign
+	let x = Key(Box::new(Symbol("test".s())), Op::Assign, Box::new(Number(Int(1))));
 	let _ok: Node = eval("html{test=1}");
 	// After single-item block unwrapping, body becomes just the Key
 	is!(
 		"html{test=1}",
-		Key(Box::new(Symbol("html".s())), Op::None, Box::new(x))
+		Key(Box::new(Symbol("html".s())), Op::Colon, Box::new(x))
 	);
 }
 
