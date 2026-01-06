@@ -530,3 +530,53 @@ fn test_type_registry_from_node() {
 	assert_eq!(def.fields[1].name, "year");
 	assert_eq!(def.fields[1].type_name, "Int");
 }
+
+#[test]
+fn test_user_type_wasm_emission() {
+	use wasp::{TypeRegistry, FieldDef, WasmGcEmitter};
+
+	let mut registry = TypeRegistry::new();
+
+	// Register Person type
+	registry.register(
+		"Person".to_string(),
+		vec![
+			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
+		],
+	);
+
+	// Register Point type with raw WASM types (WIT compatible)
+	registry.register(
+		"Point".to_string(),
+		vec![
+			FieldDef { name: "x".to_string(), type_name: "f32".to_string() },
+			FieldDef { name: "y".to_string(), type_name: "f32".to_string() },
+		],
+	);
+
+	// Create emitter and emit with types
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit_with_types(&registry);
+
+	// Verify type indices were assigned
+	let person_idx = emitter.get_user_type_idx("Person");
+	let point_idx = emitter.get_user_type_idx("Point");
+
+	assert!(person_idx.is_some(), "Person type should be emitted");
+	assert!(point_idx.is_some(), "Point type should be emitted");
+
+	// Type indices should be sequential after core types
+	let person = person_idx.unwrap();
+	let point = point_idx.unwrap();
+	assert_eq!(point, person + 1, "Point should follow Person");
+
+	// Build the module and verify it's valid
+	let wasm_bytes = emitter.finish();
+	assert!(!wasm_bytes.is_empty(), "WASM bytes should not be empty");
+
+	// Verify with wasmparser
+	let valid = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
+		.validate_all(&wasm_bytes);
+	assert!(valid.is_ok(), "Generated WASM should be valid: {:?}", valid.err());
+}
