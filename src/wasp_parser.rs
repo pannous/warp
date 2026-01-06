@@ -397,6 +397,11 @@ impl WaspParser {
 		// Check 3-char operators
 		match (c1, c2, c3) {
 			('.', '.', '.') => return Some((Op::To, 3)), // ... ellipsis range
+			// Compound logical assignments
+			('&', '&', '=') => return Some((Op::AndAssign, 3)),
+			('|', '|', '=') => return Some((Op::OrAssign, 3)),
+			('^', '^', '=') => return Some((Op::XorAssign, 3)),
+			('*', '*', '=') => return Some((Op::PowAssign, 3)), // **= for power
 			('a', 'n', 'd') if !self.peek_char(3).is_alphanumeric() => {
 				return Some((Op::And, 3)) // "and"
 			}
@@ -419,6 +424,14 @@ impl WaspParser {
 
 			// Arithmetic
 			('*', '*') => return Some((Op::Pow, 2)),
+
+			// Compound assignment (must check before comparison for >= etc)
+			('+', '=') => return Some((Op::AddAssign, 2)),
+			('-', '=') => return Some((Op::SubAssign, 2)),
+			('*', '=') => return Some((Op::MulAssign, 2)),
+			('/', '=') => return Some((Op::DivAssign, 2)),
+			('%', '=') => return Some((Op::ModAssign, 2)),
+			('^', '=') => return Some((Op::PowAssign, 2)),
 
 			// Comparison
 			('<', '=') => return Some((Op::Le, 2)),
