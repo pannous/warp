@@ -13,6 +13,30 @@ use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
 
+/// Encode Op as i64 for storage in kind field
+fn op_to_code(op: &Op) -> i64 {
+	match op {
+		Op::None => 0,
+		Op::Colon => 1,
+		Op::Assign => 2,
+		Op::Define => 3,
+		Op::Dot => 4,
+		_ => 0, // Default to None for other ops
+	}
+}
+
+/// Decode i64 back to Op
+pub fn code_to_op(code: i64) -> Op {
+	match code {
+		0 => Op::None,
+		1 => Op::Colon,
+		2 => Op::Assign,
+		3 => Op::Define,
+		4 => Op::Dot,
+		_ => Op::None,
+	}
+}
+
 /// Helper to create abstract heap type refs
 fn any_heap_type() -> HeapType {
 	HeapType::Abstract {
@@ -143,6 +167,7 @@ impl WasmGcEmitter {
 				if items.is_empty() {
 					self.required_functions.insert("new_empty");
 				} else {
+					self.required_functions.insert("new_list");
 					for item in items {
 						self.analyze_required_functions(item);
 					}
@@ -201,7 +226,7 @@ impl WasmGcEmitter {
 			("kind_data", Kind::Data),
 			("kind_meta", Kind::Meta),
 			("kind_error", Kind::Error),
-			("kind_type", Kind::Type),
+			("kind_type", Kind::TypeDef),
 		];
 
 		for (name, tag) in tags {
@@ -628,17 +653,23 @@ impl WasmGcEmitter {
 			self.next_func_idx += 1;
 		}
 
-		// new_key(key: ref $Node, value: ref $Node) -> (ref $Node)
+		// new_key(key: ref $Node, value: ref $Node, op_info: i64) -> (ref $Node)
 		// data = key node (cast to any), value = value node
+		// kind = (op_info << 8) | Kind::Key
 		if self.should_emit_function("new_key") {
 			let func_type = self.types.len();
 			self.types.ty().function(
-				vec![Ref(node_ref_nullable), Ref(node_ref_nullable)],
+				vec![Ref(node_ref_nullable), Ref(node_ref_nullable), ValType::I64],
 				vec![Ref(node_ref)],
 			);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
+			// Compute kind: (op_info << 8) | Key
+			func.instruction(&Instruction::LocalGet(2)); // op_info
+			func.instruction(&Instruction::I64Const(8));
+			func.instruction(&Instruction::I64Shl);
 			self.emit_kind(&mut func, Kind::Key);
+			func.instruction(&Instruction::I64Or);
 			func.instruction(&Instruction::LocalGet(0)); // key node as data (auto-cast to any)
 			func.instruction(&Instruction::LocalGet(1)); // value node
 			func.instruction(&Instruction::StructNew(self.node_type));
@@ -660,7 +691,7 @@ impl WasmGcEmitter {
 			);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			self.emit_kind(&mut func, Kind::Type);
+			self.emit_kind(&mut func, Kind::TypeDef);
 			func.instruction(&Instruction::LocalGet(0)); // name node as data (auto-cast to any)
 			func.instruction(&Instruction::LocalGet(1)); // body node (fields)
 			func.instruction(&Instruction::StructNew(self.node_type));
@@ -818,6 +849,10 @@ impl WasmGcEmitter {
 			Node::Data(dada) => {
 				self.allocate_string(&dada.type_name);
 			}
+			Node::Type { name, body } => {
+				self.collect_and_allocate_strings(name);
+				self.collect_and_allocate_strings(body);
+			}
 			_ => {}
 		}
 	}
@@ -885,6 +920,8 @@ impl WasmGcEmitter {
 				} else {
 					self.emit_node_instructions(func, left);
 					self.emit_node_instructions(func, right);
+					let op_code = op_to_code(op);
+					func.instruction(&Instruction::I64Const(op_code));
 					self.emit_call(func, "new_key");
 				}
 			}

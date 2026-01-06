@@ -403,7 +403,7 @@ impl Node {
 			List(_, _, _) => Kind::List,
 			Data(_) => Kind::Data,
 			Meta { node, .. } => node.kind(),
-			Type { .. } => Kind::Type,
+			Type { .. } => Kind::TypeDef,
 			Error(_) => Kind::Error,
 			False | True => Kind::Int,
 			Node::Number(num) => match num {
@@ -540,6 +540,9 @@ impl Node {
 
 			t if t == Kind::Key as u8 => {
 				// data field contains key node, value field contains value node
+				// op_info is encoded in upper bits of kind: (op_info << 8) | Key
+				let op_code = (kind >> 8) & 0xFF;
+				let op = crate::wasm_gc_emitter::code_to_op(op_code);
 				let key = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
@@ -548,7 +551,7 @@ impl Node {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
 				};
-				Key(key, Op::None, value)
+				Key(key, op, value)
 			}
 
 			t if t == Kind::Block as u8 => {
@@ -579,7 +582,7 @@ impl Node {
 				})
 			}
 
-			t if t == Kind::Type as u8 => {
+			t if t == Kind::TypeDef as u8 => {
 				// data = name node, value = body node
 				let name = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
