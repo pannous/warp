@@ -957,7 +957,12 @@ impl WasmGcEmitter {
 					self.emit_ternary(func, left, right);
 				} else if *op == Op::Else {
 					// If-then-else: ((if condition) then then_expr) else else_expr
-					self.emit_if_then_else(func, left, right);
+					self.emit_if_then_else(func, left, Some(right));
+				} else if *op == Op::Then {
+					// If-then (no else): (if condition) then then_expr
+					// Construct the full structure for emit_if_then_else
+					let full_node = Node::Key(left.clone(), Op::Then, right.clone());
+					self.emit_if_then_else(func, &full_node, None);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -1158,13 +1163,19 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
-	/// Emit if-then-else expression: if condition then then_expr else else_expr
+	/// Emit if-then-else expression: if condition then then_expr [else else_expr]
 	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
-	fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: &Node) {
-		// Extract: Key(Key(Empty, If, condition), Then, then_expr)
+	/// Or for if-then without else: Key(Key(Empty, If, condition), Then, then_expr)
+	fn emit_if_then_else(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		else_expr: Option<&Node>,
+	) {
+		// Extract condition and then_expr from structure
+		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let (condition, then_expr) = match left.drop_meta() {
 			Node::Key(if_condition, Op::Then, then_node) => {
-				// Extract condition from: Key(Empty, If, condition)
 				let cond = match if_condition.drop_meta() {
 					Node::Key(_, Op::If, c) => c,
 					other => panic!("Expected if condition, got {:?}", other),
@@ -1175,7 +1186,7 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
-		self.emit_numeric_value(func, &condition);
+		self.emit_block_value(func, &condition);
 		func.instruction(&Instruction::I32WrapI64);
 
 		// Result type: (ref $Node)
@@ -1187,17 +1198,32 @@ impl WasmGcEmitter {
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(node_ref))));
 
-		// Then branch
-		self.emit_numeric_value(func, &then_expr);
+		// Then branch - extract value from block if needed
+		self.emit_block_value(func, &then_expr);
 		self.emit_call(func, "new_int");
 
 		func.instruction(&Instruction::Else);
 
-		// Else branch
-		self.emit_numeric_value(func, &else_expr);
+		// Else branch - use provided else_expr or default to 0
+		if let Some(else_node) = else_expr {
+			self.emit_block_value(func, else_node);
+		} else {
+			func.instruction(&Instruction::I64Const(0));
+		}
 		self.emit_call(func, "new_int");
 
 		func.instruction(&Instruction::End);
+	}
+
+	/// Extract numeric value from a block { expr } or plain expr
+	fn emit_block_value(&mut self, func: &mut Function, node: &Node) {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Curly, _) if items.len() == 1 => {
+				// Block with single item: { expr } -> extract expr
+				self.emit_numeric_value(func, &items[0]);
+			}
+			_ => self.emit_numeric_value(func, node),
+		}
 	}
 
 	/// Emit the numeric value of a node onto the stack (as i64)
