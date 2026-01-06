@@ -446,3 +446,87 @@ fn test_type_node() {
 	assert!(serialized.contains("name"));
 	assert!(serialized.contains("age"));
 }
+
+#[test]
+fn test_type_registry() {
+	use wasp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, NodeTag};
+
+	let mut registry = TypeRegistry::new();
+
+	// Register a type manually
+	let tag = registry.register(
+		"Person".to_string(),
+		vec![
+			FieldDef { name: "name".to_string(), type_name: "Text".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "Int".to_string() },
+		],
+	);
+	assert_eq!(tag, USER_TYPE_TAG_START);
+	assert!(TypeRegistry::is_user_type(tag));
+
+	// Look up by name
+	let def = registry.get_by_name("Person").unwrap();
+	assert_eq!(def.name, "Person");
+	assert_eq!(def.fields.len(), 2);
+	assert_eq!(def.fields[0].name, "name");
+	assert_eq!(def.fields[1].type_name, "Int");
+
+	// Look up by tag
+	let def2 = registry.get_by_tag(tag).unwrap();
+	assert_eq!(def2.name, "Person");
+
+	// Register another type
+	let tag2 = registry.register("Point".to_string(), vec![
+		FieldDef { name: "x".to_string(), type_name: "Float".to_string() },
+		FieldDef { name: "y".to_string(), type_name: "Float".to_string() },
+	]);
+	assert_eq!(tag2, USER_TYPE_TAG_START + 1);
+
+	// Re-registering same name returns same tag
+	let tag3 = registry.register("Person".to_string(), vec![]);
+	assert_eq!(tag3, tag);
+
+	// Built-in tags are not user types
+	assert!(!TypeRegistry::is_user_type(NodeTag::Type as u32));
+}
+
+#[test]
+fn test_type_registry_from_node() {
+	use wasp::{TypeRegistry, USER_TYPE_TAG_START};
+	use wasp::node::{Bracket, Separator, Op};
+
+	let mut registry = TypeRegistry::new();
+
+	// Create a Type node
+	let type_node = Node::Type {
+		name: Box::new(Node::Symbol("Car".to_string())),
+		body: Box::new(Node::List(
+			vec![
+				Node::Key(
+					Box::new(Node::Symbol("model".to_string())),
+					Op::Colon,
+					Box::new(Node::Symbol("Text".to_string())),
+				),
+				Node::Key(
+					Box::new(Node::Symbol("year".to_string())),
+					Op::Colon,
+					Box::new(Node::Symbol("Int".to_string())),
+				),
+			],
+			Bracket::Curly,
+			Separator::Colon,
+		)),
+	};
+
+	// Register from node
+	let tag = registry.register_from_node(&type_node).unwrap();
+	assert_eq!(tag, USER_TYPE_TAG_START);
+
+	// Verify extracted fields
+	let def = registry.get_by_name("Car").unwrap();
+	assert_eq!(def.fields.len(), 2);
+	assert_eq!(def.fields[0].name, "model");
+	assert_eq!(def.fields[0].type_name, "Text");
+	assert_eq!(def.fields[1].name, "year");
+	assert_eq!(def.fields[1].type_name, "Int");
+}
