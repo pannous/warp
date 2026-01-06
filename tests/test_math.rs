@@ -68,12 +68,18 @@ fn test_hyphen_units() {
 	is!("1900 - 2000 cm == 1950 ± 50 cm ", true);
 }
 
+
+#[test]
+#[ignore = "soon"]
+fn test_variable_minus() {
+	is!("a=-1 b=2 b-a", 3);
+}
+
 #[test]
 #[ignore]
 fn test_hypen_versus_minus() {
-	// Needs variable register in parser.
-	is!("a=-1 b=2 b-a", 3);
-	is!("a-b:2 c-d:4 a-b", 2);
+	test_variable_minus();
+	is!("a-b:2 c-d:4 a-b", 2); // kebab
 }
 
 #[test]
@@ -91,7 +97,7 @@ fn test_simple_variables() {
 }
 
 #[test]
-#[ignore] // needs variable support with mixed types
+#[ignore = "soon"] // needs variable support with mixed types or automatic casting
 fn test_modulo_with_variables() {
 	is!("10007%10000.0", 7);
 	is!("i:=10007;i%10000", 7);
@@ -192,46 +198,39 @@ fn test_eval() {
 }
 
 #[test]
-#[ignore] // needs runtime == operator
 fn test_runtime_equality() {
-	// Previously commented in test_wasm.rs:483-484
 	is!("3*452==452*3", 1);
 	is!("3*13==14*3", 0);
 }
 
 #[test]
-#[ignore] // needs ternary operator
+#[ignore = "soon"]
 fn test_ternary_with_comparison() {
-	// Previously commented in test_wasm.rs:205
 	is!("(1<2)?10:255", 10);
 	is!("(1>2)?10:255", 255);
 }
 
 #[test]
-#[ignore] // needs absolute value emit
+#[ignore = "soon"]
 fn test_absolute_value_arithmetic() {
-	// Previously commented in test_wasm.rs:354
 	is!("‖3‖-1", 2);
 }
 
 #[test]
-#[ignore] // needs fraction support
+#[ignore]
 fn test_fraction_multiplication() {
-	// Previously commented in test_wasm.rs:123
 	is!("⅓9", 3);
 }
 
 #[test]
-#[ignore] // needs superscript power
-fn test_superscript_power() {
-	// Previously commented in test_wasm.rs:1359
+#[ignore]
+fn test_superscript_powers() {
 	is!("3⁴", 81);
 }
 
 #[test]
-#[ignore] // needs global + pi
+#[ignore = "next"]
 fn test_global_with_pi() {
-	// Previously commented in test_wasm.rs:139
 	use std::f64::consts::PI;
 	is!("global x=1+π", 1.0 + PI);
 }
