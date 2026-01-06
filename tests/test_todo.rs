@@ -53,7 +53,7 @@ fn test_paint_wasm() {
 fn test_bad_in_wasm() {
 	// break immediately
 	// testStringConcatWasm(); // TODO: implement
-	is!("quare(3.0)", 9.); // todo groupFunctionCallPolymorphic
+	is!("square(3.0)", 9.); // todo groupFunctionCallPolymorphic
 						// is!("global x=1+π", 1 + pi); // int 4 ƒ - TODO: implement pi constant
 						// testWasmMutableGlobal(); // TODO: implement
 	is!(
