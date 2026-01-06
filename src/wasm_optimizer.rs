@@ -80,9 +80,14 @@ impl WasmOptimizer {
 			return Ok(wasm_bytes.to_vec());
 		}
 
-		// Write input to temp file
-		let input_path = std::env::temp_dir().join("wasp_opt_input.wasm");
-		let output_path = std::env::temp_dir().join("wasp_opt_output.wasm");
+		// Write input to temp file (use unique names to avoid race conditions)
+		let id = std::process::id();
+		let ts = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_nanos())
+			.unwrap_or(0);
+		let input_path = std::env::temp_dir().join(format!("wasp_opt_input_{}_{}.wasm", id, ts));
+		let output_path = std::env::temp_dir().join(format!("wasp_opt_output_{}_{}.wasm", id, ts));
 
 		std::fs::write(&input_path, wasm_bytes)
 			.map_err(|e| format!("Failed to write temp input: {}", e))?;
@@ -118,8 +123,13 @@ impl WasmOptimizer {
 
 	/// Run wasm-metadce for tree-shaking, returns path to output
 	fn run_tree_shaking(&self, input: &Path, entry_points: &[String]) -> Result<std::path::PathBuf, String> {
-		let output = std::env::temp_dir().join("wasp_metadce_output.wasm");
-		let graph_path = std::env::temp_dir().join("wasp_roots.json");
+		let id = std::process::id();
+		let ts = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_nanos())
+			.unwrap_or(0);
+		let output = std::env::temp_dir().join(format!("wasp_metadce_output_{}_{}.wasm", id, ts));
+		let graph_path = std::env::temp_dir().join(format!("wasp_roots_{}_{}.json", id, ts));
 
 		// Build graph JSON for wasm-metadce
 		let graph = self.build_roots_graph(entry_points);
