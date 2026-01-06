@@ -2,7 +2,7 @@ use wasp::eq;
 use wasp::Node;
 use wasp::Node::Empty;
 use wasp::int;
-use wasp::NodeTag::Key;
+use wasp::Kind::Key;
 use wasp::wasp_parser::parse;
 
 #[test]

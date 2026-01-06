@@ -89,7 +89,7 @@ fn test_fetch() {
 #[ignore]
 fn test_canvas() {
 	let _result = analyze(parse("$canvas"));
-	// TODO: Externref type not yet implemented in NodeTag
+	// TODO: Externref type not yet implemented in Kind
 	// eq!(result.kind(), NodeKind::Externref);
 	let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
 	put!(nod);

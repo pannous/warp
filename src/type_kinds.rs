@@ -2,7 +2,7 @@
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum NodeTag {
+pub enum Kind {
 	Empty = 0,
 	Int = 1,       // i64 value (boxed in $i64box)
 	Float = 2,     // f64 value (boxed in $f64box)
@@ -20,7 +20,7 @@ pub enum NodeTag {
 }
 
 /// Alias for backward compatibility
-pub type NodeKind = NodeTag;
+pub type NodeKind = Kind;
 
 /// First tag value for user-defined types (built-ins use 0-255)
 pub const USER_TYPE_TAG_START: u32 = 0x10000;
