@@ -958,7 +958,15 @@ impl WasmGcEmitter {
 					self.emit_arithmetic(func, left, op, right);
 				} else {
 					self.emit_node_instructions(func, left);
-					self.emit_node_instructions(func, right);
+					// For struct instances like Person{...}, emit block as list
+					let right_node = right.drop_meta();
+					if let Node::List(items, Bracket::Curly, sep) = right_node {
+						// Convert curly block to square list for struct instances
+						let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
+						self.emit_node_instructions(func, &list_node);
+					} else {
+						self.emit_node_instructions(func, right_node);
+					}
 					let op_code = op_to_code(op);
 					func.instruction(&Instruction::I64Const(op_code));
 					self.emit_call(func, "new_key");
@@ -971,6 +979,24 @@ impl WasmGcEmitter {
 				}
 				if items.len() == 1 {
 					self.emit_node_instructions(func, &items[0]);
+					return;
+				}
+				// Check if this list contains type definitions (class/struct)
+				// If so, treat as statement sequence and return last non-Type item
+				let has_type_def = items.iter().any(|item| {
+					matches!(item.drop_meta(), Node::Type { .. })
+				});
+				if has_type_def {
+					// Find last non-Type item to return
+					let last_expr = items.iter().rev().find(|item| {
+						!matches!(item.drop_meta(), Node::Type { .. })
+					});
+					if let Some(expr) = last_expr {
+						self.emit_node_instructions(func, expr);
+					} else {
+						// All items are Type definitions, return empty
+						self.emit_call(func, "new_empty");
+					}
 					return;
 				}
 				// Check if this is a statement sequence with arithmetic/definitions
