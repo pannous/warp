@@ -87,6 +87,10 @@ pub enum Op {
 	Then, // then
 	Else, // else
 
+	// Loop
+	While, // while
+	Do,    // do (used with while)
+
 	// Index/Range
 	Hash,  // #  (1-based index)
 	Range, // ..
@@ -141,6 +145,10 @@ impl Op {
 			Op::If => (0, 78),    // prefix: if binds condition until then
 			Op::Then => (77, 76), // then binds until else
 			Op::Else => (75, 74), // else binds the rest
+
+			// Loop: while condition do body
+			Op::While => (0, 78), // prefix: while binds condition until do/block
+			Op::Do => (77, 10),   // do binds very loosely to capture whole body including assignments
 
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
@@ -211,6 +219,10 @@ impl Op {
 			Op::If => "if",
 			Op::Then => "then",
 			Op::Else => "else",
+
+			// Loop
+			Op::While => "while",
+			Op::Do => "do",
 
 			Op::None => "",
 		}

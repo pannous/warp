@@ -441,6 +441,9 @@ impl WaspParser {
 			// Conditional
 			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
 
+			// Loop
+			('d', 'o') if !c3.is_alphanumeric() => return Some((Op::Do, 2)),
+
 			_ => {}
 		}
 
@@ -498,6 +501,15 @@ impl WaspParser {
 		let c1 = self.current_char();
 		let c2 = self.peek_char(1);
 		let c3 = self.peek_char(2);
+		let c4 = self.peek_char(3);
+		let c5 = self.peek_char(4);
+
+		// Check 5-char prefix operators
+		if (c1, c2, c3, c4, c5) == ('w', 'h', 'i', 'l', 'e')
+			&& !self.peek_char(5).is_alphanumeric()
+		{
+			return Some((Op::While, 5));
+		}
 
 		// Check word-based prefix operators (3-char)
 		match (c1, c2, c3) {
@@ -707,6 +719,17 @@ impl WaspParser {
 						let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
 						Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block))
 					}
+				} else {
+					Node::Key(Box::new(Empty), op, Box::new(rhs))
+				}
+			} else if op == Op::While {
+				// Special handling for `while condition { block }` or `while condition do body`
+				self.skip_spaces();
+				if self.current_char() == '{' {
+					let body_block = self.parse_atom(); // parse { block }
+					// Structure: (while condition) do body
+					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
+					Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block))
 				} else {
 					Node::Key(Box::new(Empty), op, Box::new(rhs))
 				}
