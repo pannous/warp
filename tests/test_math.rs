@@ -236,7 +236,6 @@ fn test_runtime_equality_autocast() {
 }
 
 #[test]
-#[ignore = "soon"]
 fn test_ternary_with_comparison() {
 	is!("(1<2)?10:255", 10);
 	is!("(1>2)?10:255", 255);

@@ -129,8 +129,8 @@ impl Op {
 			Op::Xor => (95, 96),
 			Op::Or => (90, 91),
 
-			// Ternary
-			Op::Question => (85, 84), // right-assoc
+			// Ternary: ? needs lower right bp so : can bind within
+			Op::Question => (85, 79), // right-assoc, lower than Colon's left bp (80)
 
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
