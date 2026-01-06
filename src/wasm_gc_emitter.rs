@@ -965,9 +965,9 @@ impl WasmGcEmitter {
 					if let Node::List(items, Bracket::Curly, sep) = right_node {
 						// Convert curly block to square list and normalize field ops
 						let normalized_items: Vec<Node> = items.iter().map(|item| {
-							// Convert Assign to Colon in struct field keys
-							if let Node::Key(k, Op::Assign, v) = item.drop_meta() {
-								Node::Key(k.clone(), Op::Colon, v.clone())
+							// Normalize Keys in struct fields to Op::None
+							if let Node::Key(k, _, v) = item.drop_meta() {
+								Node::Key(k.clone(), Op::None, v.clone())
 							} else {
 								item.clone()
 							}
@@ -977,8 +977,8 @@ impl WasmGcEmitter {
 					} else {
 						self.emit_node_instructions(func, right_node);
 					}
-					let op_code = op_to_code(op);
-					func.instruction(&Instruction::I64Const(op_code));
+					// Use Op::None for WASM roundtrip compatibility
+					func.instruction(&Instruction::I64Const(0)); // op_to_code(&Op::None)
 					self.emit_call(func, "new_key");
 				}
 			}
@@ -1207,6 +1207,38 @@ impl WasmGcEmitter {
 					Op::Div => func.instruction(&Instruction::I64DivS),
 					Op::Mod => func.instruction(&Instruction::I64RemS),
 					Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
+					_ => unreachable!(),
+				};
+			}
+			// Comparison operators
+			Node::Key(left, op, right) if op.is_comparison() => {
+				self.emit_numeric_value(func, left);
+				self.emit_numeric_value(func, right);
+				match op {
+					Op::Eq => {
+						func.instruction(&Instruction::I64Eq);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Ne => {
+						func.instruction(&Instruction::I64Ne);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Lt => {
+						func.instruction(&Instruction::I64LtS);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Gt => {
+						func.instruction(&Instruction::I64GtS);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Le => {
+						func.instruction(&Instruction::I64LeS);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Ge => {
+						func.instruction(&Instruction::I64GeS);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
 					_ => unreachable!(),
 				};
 			}
