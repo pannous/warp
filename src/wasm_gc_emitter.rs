@@ -2,7 +2,7 @@ use crate::analyzer::Scope;
 // Note: analyzer module exports Scope
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Op};
-use crate::type_kinds::NodeTag;
+use crate::type_kinds::{FieldDef, NodeTag, TypeDef, TypeRegistry};
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
@@ -59,6 +59,8 @@ pub struct WasmGcEmitter {
 	next_data_offset: u32,
 	// Variable scope
 	scope: Scope,
+	// User-defined type indices
+	user_type_indices: HashMap<String, u32>,
 }
 
 impl WasmGcEmitter {
@@ -89,6 +91,7 @@ impl WasmGcEmitter {
 			string_table: HashMap::new(),
 			next_data_offset: 8,
 			scope: Scope::new(),
+			user_type_indices: HashMap::new(),
 		}
 	}
 
@@ -299,6 +302,179 @@ impl WasmGcEmitter {
 		}]);
 		self.f64_box_type = self.next_type_idx;
 		self.next_type_idx += 1;
+	}
+
+	/// Emit user-defined struct types from TypeRegistry
+	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
+		for type_def in registry.types() {
+			let fields: Vec<FieldType> = type_def
+				.fields
+				.iter()
+				.map(|f| self.field_def_to_wasm_field(f))
+				.collect();
+
+			self.types.ty().struct_(fields);
+			self.user_type_indices
+				.insert(type_def.name.clone(), self.next_type_idx);
+			self.next_type_idx += 1;
+		}
+	}
+
+	/// Convert a FieldDef to a WASM FieldType
+	fn field_def_to_wasm_field(&self, field: &FieldDef) -> FieldType {
+		let element_type = match field.type_name.as_str() {
+			// Node-mode: map wasp types to WASM types
+			"Int" | "i64" | "long" => Val(ValType::I64),
+			"Float" | "f64" | "double" => Val(ValType::F64),
+			"i32" | "int" => Val(ValType::I32),
+			"f32" | "float" => Val(ValType::F32),
+			"Text" | "String" | "string" => Val(Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(self.string_type),
+			})),
+			"Node" => Val(Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(self.node_type),
+			})),
+			// User-defined types
+			other => {
+				if let Some(&type_idx) = self.user_type_indices.get(other) {
+					Val(Ref(RefType {
+						nullable: true,
+						heap_type: HeapType::Concrete(type_idx),
+					}))
+				} else {
+					// Fallback to anyref for unknown types
+					Val(Ref(RefType {
+						nullable: true,
+						heap_type: any_heap_type(),
+					}))
+				}
+			}
+		};
+		FieldType {
+			element_type,
+			mutable: false,
+		}
+	}
+
+	/// Get the WASM type index for a user-defined type
+	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
+		self.user_type_indices.get(name).copied()
+	}
+
+	/// Emit with user-defined types from a TypeRegistry
+	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
+	pub fn emit_with_types(&mut self, registry: &TypeRegistry) {
+		// Memory
+		self.memory.memory(MemoryType {
+			minimum: 1,
+			maximum: None,
+			memory64: false,
+			shared: false,
+			page_size_log2: None,
+		});
+		self.exports.export("memory", ExportKind::Memory, 0);
+
+		// Core GC types (String, Node, i64box, f64box)
+		self.emit_gc_types();
+
+		// User-defined struct types (before any functions!)
+		self.emit_user_types(registry);
+
+		// Kind globals
+		if self.emit_kind_globals {
+			self.emit_kind_globals();
+		}
+
+		// Core Node constructors
+		self.emit_constructors();
+
+		// User type constructors
+		self.emit_user_type_constructors(registry);
+	}
+
+	/// Emit constructor functions for user-defined types
+	fn emit_user_type_constructors(&mut self, registry: &TypeRegistry) {
+		for type_def in registry.types() {
+			self.emit_user_type_constructor(type_def);
+		}
+	}
+
+	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
+	fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
+		let type_idx = match self.user_type_indices.get(&type_def.name) {
+			Some(&idx) => idx,
+			None => return,
+		};
+
+		let type_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(type_idx),
+		};
+
+		// Build parameter types
+		let params: Vec<ValType> = type_def
+			.fields
+			.iter()
+			.map(|f| self.field_def_to_val_type(f))
+			.collect();
+
+		// Function type: (params...) -> (ref $TypeName)
+		let func_type = self.types.len();
+		self.types
+			.ty()
+			.function(params.clone(), vec![Ref(type_ref)]);
+		self.functions.function(func_type);
+
+		// Function body: get all params, struct.new
+		let mut func = Function::new(vec![]);
+		for i in 0..type_def.fields.len() {
+			func.instruction(&Instruction::LocalGet(i as u32));
+		}
+		func.instruction(&Instruction::StructNew(type_idx));
+		func.instruction(&Instruction::End);
+
+		self.code.function(&func);
+
+		// Export as new_TypeName
+		let func_name = format!("new_{}", type_def.name);
+		// Leak the string to get a 'static str for the export
+		let func_name_static: &'static str = Box::leak(func_name.clone().into_boxed_str());
+		self.exports
+			.export(func_name_static, ExportKind::Func, self.next_func_idx);
+		self.next_func_idx += 1;
+	}
+
+	/// Convert FieldDef to ValType for function parameters
+	fn field_def_to_val_type(&self, field: &FieldDef) -> ValType {
+		match field.type_name.as_str() {
+			"Int" | "i64" | "long" => ValType::I64,
+			"Float" | "f64" | "double" => ValType::F64,
+			"i32" | "int" => ValType::I32,
+			"f32" | "float" => ValType::F32,
+			"Text" | "String" | "string" => Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(self.string_type),
+			}),
+			"Node" => Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(self.node_type),
+			}),
+			other => {
+				if let Some(&type_idx) = self.user_type_indices.get(other) {
+					Ref(RefType {
+						nullable: true,
+						heap_type: HeapType::Concrete(type_idx),
+					})
+				} else {
+					Ref(RefType {
+						nullable: true,
+						heap_type: any_heap_type(),
+					})
+				}
+			}
+		}
 	}
 
 	/// Emit constructor functions for the compact Node
