@@ -438,7 +438,7 @@ fn test_type_node() {
 	let type_node = Node::Type { name, body: fields };
 
 	// Verify kind returns Type
-	assert_eq!(type_node.kind(), Kind::Type);
+	assert_eq!(type_node.kind(), Kind::TypeDef);
 
 	// Verify serialization
 	let serialized = type_node.serialize();
@@ -487,7 +487,7 @@ fn test_type_registry() {
 	assert_eq!(tag3, tag);
 
 	// Built-in tags are not user types
-	assert!(!TypeRegistry::is_user_type(Kind::Type as u32));
+	assert!(!TypeRegistry::is_user_type(Kind::TypeDef as u32));
 }
 
 #[test]

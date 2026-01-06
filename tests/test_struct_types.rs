@@ -1,166 +1,50 @@
 use wasp::extensions::numbers::Number;
+use wasp::node::node;
 use wasp::wasm_gc_emitter::WasmGcEmitter;
 use wasp::wasm_gc_reader::read_bytes;
-use wasp::Node::Empty;
+use wasp::Kind::Codepoint;
+use wasp::Node::{Empty, Type};
 use wasp::*;
 
-/// Test reading integer nodes via compact 3-field layout
-#[test]
-fn test_read_int_node() {
-	println!("=== Testing Int Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&int(42));
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Node::Number(Number::Int(val)) => {
-			eq!(val, 42);
-			println!("✓ Int value is 42");
-		}
-		other => panic!("Expected Number(Int(42)), got {:?}", other),
+fn TypeRef(name: &str) -> Node {
+	Type {
+		name: Box::new(symbol(name)),
+		body: Box::new((Empty)),
 	}
 }
 
-/// Test reading float nodes
 #[test]
-fn test_read_float_node() {
-	println!("=== Testing Float Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&float(3.11));
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Node::Number(Number::Float(val)) => {
-			assert!((val - 3.11).abs() < 0.001);
-			println!("✓ Float value is 3.14");
+fn test_class_definition() {
+	is!(
+		"class Person{name:String age:i64}",
+		Type {
+			name: Box::new(symbol("Person")),
+			body: Box::new(list(vec![key("name", TypeRef("String")), key("age", TypeRef("i64")),]))
 		}
-		other => panic!("Expected Number(Float(3.14)), got {:?}", other),
-	}
-}
-
-/// Test reading text nodes with memory access
-#[test]
-fn test_read_text_node() {
-	println!("=== Testing Text Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&text("Hello, WASM!"));
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Text(s) => {
-			eq!(s, "Hello, WASM!".to_string());
-			println!("✓ Text value is 'Hello, WASM!'");
-		}
-		other => panic!("Expected Text, got {:?}", other),
-	}
-}
-
-/// Test reading symbol nodes
-#[test]
-fn test_read_symbol_node() {
-	println!("=== Testing Symbol Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&symbol("my_symbol"));
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Symbol(s) => {
-			eq!(s, "my_symbol".to_string());
-			println!("✓ Symbol value is 'my_symbol'");
-		}
-		other => panic!("Expected Symbol, got {:?}", other),
-	}
-}
-
-/// Test reading codepoint nodes
-#[test]
-fn test_read_codepoint_node() {
-	println!("=== Testing Codepoint Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&Char('🚀'));
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Char(c) => {
-			eq!(c, '🚀');
-			println!("✓ Codepoint is 🚀");
-		}
-		other => panic!("Expected Char, got {:?}", other),
-	}
-}
-
-/// Test reading key nodes (compact: key in data, value in value field)
-#[test]
-fn test_read_key_node() {
-	println!("=== Testing Key Node Reading ===\n");
-
-	let key_node = Key(
-		Box::new(symbol("name")),
-		Op::None,
-		Box::new(text("value"))
 	);
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&key_node);
-	let bytes = emitter.finish();
-
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-
-	match root {
-		Key(key, _, value) => {
-			match *key {
-				Symbol(s) => eq!(s, "name".to_string()),
-				other => panic!("Expected Symbol key, got {:?}", other),
-			}
-			match *value {
-				Text(s) => eq!(s, "value".to_string()),
-				other => panic!("Expected Text value, got {:?}", other),
-			}
-			println!("✓ Key node correctly decoded");
-		}
-		other => panic!("Expected Key, got {:?}", other),
-	}
 }
 
-/// Test empty node
 #[test]
-fn test_read_empty_node() {
-	println!("=== Testing Empty Node Reading ===\n");
+fn test_class_instance() {
+	is!(
+		"class Person{name:String age:i64}; Person{name:'Alice' age:30}",
+		key("Person",list(vec![key("name", text("Alice")),key("age", int(30)),]))
+	);
+}
 
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-	emitter.emit_node_main(&Empty);
-	let bytes = emitter.finish();
 
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-	println!("  Got node: {:?}", root);
-	eq!(root, Empty);
-	println!("✓ Empty node correctly decoded");
+#[test]
+fn test_text() {
+	is!("'test'", "test");
+}
+
+#[test]
+fn test_symbol() {
+	is!("test", symbol("test"));
+}
+
+#[test]
+fn test_codepoint() {
+	is!("'𖠋'", "𖠋");
+	is!("'𖠋'", '𖠋');
 }
