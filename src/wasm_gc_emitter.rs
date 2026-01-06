@@ -749,7 +749,7 @@ impl WasmGcEmitter {
 	fn count_variables(&mut self, node: &Node) {
 		let node = node.drop_meta();
 		match node {
-			Node::Key(left, Op::Define, right) => {
+			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					self.scope.define(name.clone(), None);
 				}
@@ -879,6 +879,9 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
+				} else if *op == Op::Assign && matches!(right.drop_meta(), Node::Number(_)) {
+					// Treat x=42 as assignment only when RHS is numeric
+					self.emit_arithmetic(func, left, op, right);
 				} else {
 					self.emit_node_instructions(func, left);
 					self.emit_node_instructions(func, right);
@@ -898,7 +901,14 @@ impl WasmGcEmitter {
 				// Only trigger when there are actual definitions or arithmetic operations
 				let has_executable = items.iter().any(|item| {
 					let item = item.drop_meta();
-					matches!(item, Node::Key(_, op, _) if op.is_arithmetic() || *op == Op::Define)
+					match item {
+						Node::Key(_, op, _) if op.is_arithmetic() || *op == Op::Define => true,
+						Node::Key(_, Op::Assign, right) => {
+							// Treat = as executable only when RHS is numeric
+							matches!(right.drop_meta(), Node::Number(_))
+						}
+						_ => false,
+					}
 				});
 				if has_executable {
 					// Evaluate as statement sequence
@@ -947,9 +957,9 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// Handle variable definition specially
-		if *op == Op::Define {
-			// x:=42 → emit value, store to local, return value
+		// Handle variable definition/assignment specially
+		if *op == Op::Define || *op == Op::Assign {
+			// x:=42 or x=42 → emit value, store to local, return value
 			self.emit_numeric_value(func, right);
 			if let Node::Symbol(name) = left.drop_meta() {
 				if let Some(local) = self.scope.lookup(name) {
@@ -1025,8 +1035,8 @@ impl WasmGcEmitter {
 					}
 				};
 			}
-			// Variable definition: x:=42 → store and return value
-			Node::Key(left, Op::Define, right) => {
+			// Variable definition/assignment: x:=42 or x=42 → store and return value
+			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					// Emit value
 					self.emit_numeric_value(func, right);
