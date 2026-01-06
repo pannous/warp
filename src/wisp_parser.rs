@@ -19,12 +19,12 @@
 //! - [a b c]    → (list [a b c])
 //! - a=b        → (pair a b)
 //! - "a":b      → (key "a" b)
-//! - (a . b)    → (cons a b)
 
 use crate::extensions::numbers::Number;
 use crate::node::Node::*;
 use crate::node::*;
 use crate::type_kinds::NodeTag;
+
 
 pub struct WispParser {
 	chars: Vec<char>,
@@ -650,10 +650,31 @@ impl WispEmitter {
 	}
 }
 
+
+#[macro_export]
+macro_rules! wis {
+	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
+	($input:expr) => {{
+		let node = parse_wisp($input);
+		let emitted = emit_wisp(&node);
+		let reparsed = parse_wisp(&emitted);
+		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", $input, emitted);
+		node
+	}};
+	// Wisp eval: parse wisp -> Node -> compare to expected
+	($input:expr, $expected:expr) => {{
+		let node = parse_wisp($input);
+		assert_eq!(node, $expected, "wisp parse mismatch for: {}", $input);
+		node
+	}};
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{put, NodeKind};
+	use crate::{expression, is, put, wis, NodeKind, Strings};
+	use crate::DataType::String;
 
 	#[test]
 	fn test_wisp_basic_atom_types() {
@@ -842,26 +863,27 @@ mod tests {
 
 	#[test]
 	fn test_wisp_emit_atoms() {
-		assert_eq!(emit_wisp(&Empty), "ø");
-		assert_eq!(emit_wisp(&True), "true");
-		assert_eq!(emit_wisp(&False), "false");
-		assert_eq!(emit_wisp(&Number(Number::Int(42))), "(int 42)");
-		assert_eq!(emit_wisp(&Number(Number::Float(3.14))), "(float 3.14)");
-		assert_eq!(emit_wisp(&Char('x')), "(char 'x')");
-		assert_eq!(emit_wisp(&Text("hello".into())), "(text 'hello')");
-		assert_eq!(emit_wisp(&Symbol("foo".into())), "foo");
+		wis!("ø",(&Empty));
+		wis!("true",(&True));
+		wis!("false",(&False));
+		wis!("(int 42)",(&Number(Number::Int(42))));
+		wis!("(float 3.14)",(&Number(Number::Float(3.14))));
+		wis!("(char 'x')",(&Char('x')));
+		wis!("(text 'hello')",(&Text("hello".into())));
+		wis!("foo",(&Symbol("foo".into())));
 	}
 
 	#[test]
 	fn test_wisp_emit_compound() {
-		let list = List(vec![Symbol("a".into()), Symbol("b".into())], Bracket::Square, Separator::Space);
-		assert_eq!(emit_wisp(&list), "[a b]");
+		// let list = Strings!["a", "b"];
+		let list = expression!["a", "b"];
+		wis!("[a b]",list);
 
 		let key = Key(Box::new(Symbol("x".into())), Op::Colon, Box::new(Number(Number::Int(1))));
-		assert_eq!(emit_wisp(&key), "(key x (int 1))");
+		wis!("(key x (int 1))",&key);
 
 		let pair = Key(Box::new(Symbol("y".into())), Op::Assign, Box::new(Number(Number::Int(2))));
-		assert_eq!(emit_wisp(&pair), "(pair y (int 2))");
+		wis!("(pair y (int 2))",&pair);
 	}
 
 	// ==================== Roundtrip Tests ====================
@@ -875,7 +897,8 @@ mod tests {
 
 	#[test]
 	fn test_wisp_roundtrip_atoms() {
-		roundtrip("42");
+		roundtrip("42"); // todo how can that be: ?
+		roundtrip("(int 42)");
 		roundtrip("-7");
 		roundtrip("3.14");
 		roundtrip("true");
