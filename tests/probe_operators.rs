@@ -38,8 +38,9 @@ fn test_comparison_eq() {
 
 #[test]
 fn test_prefix_neg() {
-	let result = parse("-5");
-	// Should be Key(Empty, Neg, 5)
+	// -x should be Key(Empty, Neg, x) - prefix negation of symbol
+	// Note: -5 is parsed as negative number literal, not prefix negation
+	let result = parse("-x");
 	assert_eq!(get_op(&result), Some(Op::Neg));
 }
 
