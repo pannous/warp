@@ -54,6 +54,17 @@ pub enum Op {
 	Mod,  // %
 	Pow,  // ^  **
 
+	// Compound assignment operators (x op= y → x = x op y)
+	AddAssign, // +=
+	SubAssign, // -=
+	MulAssign, // *=
+	DivAssign, // /=
+	ModAssign, // %=
+	PowAssign, // ^=  **=
+	AndAssign, // &&=  and=
+	OrAssign,  // ||=  or=
+	XorAssign, // ^=   xor=
+
 	// Comparison operators
 	Lt,  // <
 	Gt,  // >
@@ -157,6 +168,11 @@ impl Op {
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
+			// Compound assignment (same precedence as assignment)
+			Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign |
+			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign |
+			Op::XorAssign => (60, 59),
+
 			// Prefix operators (no left operand, binds to right)
 			Op::Neg | Op::Not | Op::Sqrt | Op::Abs => (0, 190),
 
@@ -183,6 +199,17 @@ impl Op {
 			Op::Div => "/",
 			Op::Mod => "%",
 			Op::Pow => "^",
+
+			// Compound assignment
+			Op::AddAssign => "+=",
+			Op::SubAssign => "-=",
+			Op::MulAssign => "*=",
+			Op::DivAssign => "/=",
+			Op::ModAssign => "%=",
+			Op::PowAssign => "^=",
+			Op::AndAssign => "&&=",
+			Op::OrAssign => "||=",
+			Op::XorAssign => "^^=",
 
 			// Comparison
 			Op::Lt => "<",
@@ -252,6 +279,31 @@ impl Op {
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
 		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+	}
+
+	/// Check if this is a compound assignment operator (+=, -=, etc.)
+	pub fn is_compound_assign(&self) -> bool {
+		matches!(
+			self,
+			Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign |
+			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign | Op::XorAssign
+		)
+	}
+
+	/// Get the base operator for a compound assignment (AddAssign -> Add, etc.)
+	pub fn base_op(&self) -> Op {
+		match self {
+			Op::AddAssign => Op::Add,
+			Op::SubAssign => Op::Sub,
+			Op::MulAssign => Op::Mul,
+			Op::DivAssign => Op::Div,
+			Op::ModAssign => Op::Mod,
+			Op::PowAssign => Op::Pow,
+			Op::AndAssign => Op::And,
+			Op::OrAssign => Op::Or,
+			Op::XorAssign => Op::Xor,
+			_ => self.clone(),
+		}
 	}
 }
 
