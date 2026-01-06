@@ -244,6 +244,18 @@ impl fmt::Display for Op {
 	}
 }
 
+/// Local variable or function parameter (mirrors C++ struct Local)
+/// In WASM, function arguments and locals share the same index space
+#[derive(Clone, Debug, PartialEq)]
+pub struct Local {
+	pub name: String,
+	pub type_node: Option<Box<Node>>,  // Type as Node (Symbol or complex type)
+	pub position: u32,                  // WASM local index
+	pub is_param: bool,                 // Parameter vs local variable
+}
+
+pub type Variable = Local;
+
 // use wasp::Node;
 // use wasp::*; !
 #[derive(Clone, Serialize, Deserialize)]

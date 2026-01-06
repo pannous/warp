@@ -1,3 +1,5 @@
+use crate::analyzer::Scope;
+// Note: analyzer module exports Scope
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, DataType, Node, Op};
 use crate::wasm_gc_reader::read_bytes;
@@ -52,6 +54,8 @@ pub struct WasmGcEmitter {
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
 	next_data_offset: u32,
+	// Variable scope
+	scope: Scope,
 }
 
 impl WasmGcEmitter {
@@ -81,6 +85,7 @@ impl WasmGcEmitter {
 			kind_global_indices: HashMap::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8,
+			scope: Scope::new(),
 		}
 	}
 
@@ -438,16 +443,47 @@ impl WasmGcEmitter {
 		(offset, bytes.len() as u32)
 	}
 
+	/// Count variables defined in node (for WASM local allocation)
+	fn count_variables(&mut self, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			Node::Key(left, Op::Define, right) => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					self.scope.define(name.clone(), None);
+				}
+				self.count_variables(right);
+			}
+			Node::Key(left, _, right) => {
+				self.count_variables(left);
+				self.count_variables(right);
+			}
+			Node::List(items, _, _) => {
+				for item in items { self.count_variables(item); }
+			}
+			_ => {}
+		}
+	}
+
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		self.collect_and_allocate_strings(node);
+
+		// Pre-pass: count variables to allocate locals
+		self.count_variables(node);
+		let local_count = self.scope.local_count();
 
 		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(self.node_type) };
 		let func_type = self.types.len();
 		self.types.ty().function(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
-		let mut func = Function::new(vec![]);
+		// Allocate locals for variables (all i64 for now)
+		let locals: Vec<(u32, ValType)> = if local_count > 0 {
+			vec![(local_count, ValType::I64)]
+		} else {
+			vec![]
+		};
+		let mut func = Function::new(locals);
 		self.emit_node_instructions(&mut func, node);
 		func.instruction(&Instruction::End);
 
@@ -525,7 +561,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 			}
 			Node::Key(left, op, right) => {
-				if op.is_arithmetic() {
+				if op.is_arithmetic() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
 				} else {
 					self.emit_node_instructions(func, left);
@@ -542,8 +578,20 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, &items[0]);
 					return;
 				}
-				// Build linked list: (first, rest, bracket_info)
-				self.emit_list_structure(func, items, bracket);
+				// Check if this is a statement sequence with arithmetic/definitions
+				// Only trigger when there are actual definitions or arithmetic operations
+				let has_executable = items.iter().any(|item| {
+					let item = item.drop_meta();
+					matches!(item, Node::Key(_, op, _) if op.is_arithmetic() || *op == Op::Define)
+				});
+				if has_executable {
+					// Evaluate as statement sequence
+					self.emit_numeric_value(func, node);
+					self.emit_call(func, "new_int");
+				} else {
+					// Build linked list: (first, rest, bracket_info)
+					self.emit_list_structure(func, items, bracket);
+				}
 			}
 			Node::Data(dada) => {
 				// Emit as symbol with type_name for now
@@ -575,26 +623,39 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// Emit left operand value onto stack
-		self.emit_numeric_value(func, left);
-		// Emit right operand value onto stack
-		self.emit_numeric_value(func, right);
-
-		// Emit WASM arithmetic instruction
-		match op {
-			Op::Add => func.instruction(&Instruction::I64Add),
-			Op::Sub => func.instruction(&Instruction::I64Sub),
-			Op::Mul => func.instruction(&Instruction::I64Mul),
-			Op::Div => func.instruction(&Instruction::I64DivS),
-			Op::Mod => func.instruction(&Instruction::I64RemS),
-			Op::Pow => {
-				// Power requires a loop or library call, for now just emit i64.mul as placeholder
-				// TODO: implement proper power function
-				warn!("Power operator not fully implemented, using multiplication");
-				func.instruction(&Instruction::I64Mul)
+		// Handle variable definition specially
+		if *op == Op::Define {
+			// x:=42 → emit value, store to local, return value
+			self.emit_numeric_value(func, right);
+			if let Node::Symbol(name) = left.drop_meta() {
+				if let Some(local) = self.scope.lookup(name) {
+					func.instruction(&Instruction::LocalTee(local.position));
+				} else {
+					panic!("Undefined variable: {}", name);
+				}
+			} else {
+				panic!("Expected symbol in definition, got {:?}", left);
 			}
-			_ => unreachable!("Non-arithmetic operator in emit_arithmetic"),
-		};
+		} else {
+			// Emit left operand value onto stack
+			self.emit_numeric_value(func, left);
+			// Emit right operand value onto stack
+			self.emit_numeric_value(func, right);
+
+			// Emit WASM arithmetic instruction
+			match op {
+				Op::Add => func.instruction(&Instruction::I64Add),
+				Op::Sub => func.instruction(&Instruction::I64Sub),
+				Op::Mul => func.instruction(&Instruction::I64Mul),
+				Op::Div => func.instruction(&Instruction::I64DivS),
+				Op::Mod => func.instruction(&Instruction::I64RemS),
+				Op::Pow => {
+					warn!("Power operator not fully implemented, using multiplication");
+					func.instruction(&Instruction::I64Mul)
+				}
+				_ => unreachable!("Non-arithmetic operator in emit_arithmetic"),
+			};
+		}
 
 		// Wrap result as Int node
 		self.emit_call(func, "new_int");
@@ -615,8 +676,23 @@ impl WasmGcEmitter {
 					}
 				};
 			}
+			// Variable definition: x:=42 → store and return value
+			Node::Key(left, Op::Define, right) => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					// Emit value
+					self.emit_numeric_value(func, right);
+					// Duplicate value on stack (tee = set + get)
+					if let Some(local) = self.scope.lookup(name) {
+						func.instruction(&Instruction::LocalTee(local.position));
+					} else {
+						panic!("Undefined variable: {}", name);
+					}
+				} else {
+					panic!("Expected symbol in definition, got {:?}", left);
+				}
+			}
+			// Arithmetic operators
 			Node::Key(left, op, right) if op.is_arithmetic() => {
-				// Recursive: evaluate nested expression
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
 				match op {
@@ -628,6 +704,24 @@ impl WasmGcEmitter {
 					Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
 					_ => unreachable!(),
 				};
+			}
+			// Variable lookup
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					func.instruction(&Instruction::LocalGet(local.position));
+				} else {
+					panic!("Undefined variable: {}", name);
+				}
+			}
+			// Statement sequence: execute all, return last
+			Node::List(items, _, _) if !items.is_empty() => {
+				for (i, item) in items.iter().enumerate() {
+					self.emit_numeric_value(func, item);
+					// Drop all values except the last
+					if i < items.len() - 1 {
+						func.instruction(&Instruction::Drop);
+					}
+				}
 			}
 			_ => panic!("Cannot extract numeric value from {:?}", node),
 		}
