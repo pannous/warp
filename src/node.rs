@@ -82,6 +82,11 @@ pub enum Op {
 	// Ternary
 	Question, // ? (ternary condition)
 
+	// Conditional
+	If,   // if
+	Then, // then
+	Else, // else
+
 	// Index/Range
 	Hash,  // #  (1-based index)
 	Range, // ..
@@ -131,6 +136,11 @@ impl Op {
 
 			// Ternary: ? needs lower right bp so : can bind within
 			Op::Question => (85, 79), // right-assoc, lower than Colon's left bp (80)
+
+			// Conditional: if-then-else has similar precedence to ternary
+			Op::If => (0, 78),    // prefix: if binds condition until then
+			Op::Then => (77, 76), // then binds until else
+			Op::Else => (75, 74), // else binds the rest
 
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
@@ -196,6 +206,11 @@ impl Op {
 			Op::Hash => "#",
 			Op::Range => "..",
 			Op::To => "to",
+
+			// Conditional
+			Op::If => "if",
+			Op::Then => "then",
+			Op::Else => "else",
 
 			Op::None => "",
 		}
