@@ -4,7 +4,7 @@ extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{CloneAny, Dada, LineInfo};
+use crate::meta::{CloneAny, Dada, DataType, LineInfo};
 use crate::wasm_gc_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
@@ -33,23 +33,6 @@ use crate::wasp_parser::parse;
 	(field $value (ref null $$Node))
 ))
 **/
-// flag enum and variant are wit / component-model types ONLY
-// ref.i31 i31ref
-// (ref.cast (<operand>) (<rtt>))
-// (rtt.canon <type>)
-// (br_on_cast $label (<operand>) (<rtt>)) <<<
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum DataType {
-	Primitive, // map to Node(Number) early! get rid? sometimes need f16 vs f32 vs f64?
-	String,    // map to Node(String) early! get rid?
-	Vec,       // map to Node::List(…) early or keep raw for efficiency!
-	Tuple,     // - '' -
-	Reference,
-	Struct, // map to Node(…) early!! (if possible, else interesting Rust objects!)
-	Other,  // <- only interesting cases
-	None,   // <- only interesting cases
-}
 
 /// Operator for Key nodes - distinguishes different binding operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -267,6 +250,7 @@ pub enum Node {
 	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
 	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
+	// Number(Float|Int),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
 	Symbol(String),
@@ -1386,7 +1370,7 @@ impl fmt::Display for Bracket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
 	Space,     // ' ' - tightest binding
-	Colon,     // ','
+	Colon,     // ',' Comma
 	Semicolon, // ';'
 	Newline,   // '\n'
 	Tab,       // '\t'
