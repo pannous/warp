@@ -28,7 +28,7 @@ pub enum NodeKind {
 
 /// Compact 3-field Node tags - separate Int/Float for cleaner dispatch
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeTag {
 	Empty = 0,
 	Int = 1,       // i64 value (boxed in $i64box)
