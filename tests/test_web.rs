@@ -3,7 +3,6 @@
 
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
-use wasp::type_kinds::NodeKind;
 use wasp::util::fetch;
 use wasp::wasm_gc_emitter::eval;
 use wasp::wasp_parser::parse;
@@ -89,7 +88,7 @@ fn test_fetch() {
 #[test]
 #[ignore]
 fn test_canvas() {
-	let result = analyze(parse("$canvas"));
+	let _result = analyze(parse("$canvas"));
 	// TODO: Externref type not yet implemented in NodeTag
 	// eq!(result.kind(), NodeKind::Externref);
 	let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
