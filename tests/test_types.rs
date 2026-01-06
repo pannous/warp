@@ -117,7 +117,7 @@ fn cast(node: Node, to_type: NodeKind) -> Node {
 	// in real code this would do actual casting
 	match to_type {
 		NodeKind::Text => Node::Text(node.to_string()),
-		NodeKind::Number => match node {
+		NodeKind::Int | NodeKind::Float => match node {
 			Node::Number(_n) => node,
 			Node::Symbol(s) => match s.parse::<i64>() {
 				Ok(v) => Node::Number(Number::Int(v)),
