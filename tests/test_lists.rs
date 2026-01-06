@@ -43,7 +43,7 @@ fn test_array_operations() {
 		Node::ints(vec![1, 2, 3])
 	);
 
-	//        assert_throws("pixel=[1 2 3];pixel + 4;pixel");// unused non-mutating operation
+	//        throws("pixel=[1 2 3];pixel + 4;pixel");// unused non-mutating operation
 	is!("pixels=[1 2 4];pixel#3", 4); // plural!
 	is!("pixel=[1 2 3];pixel + [4]", Node::ints(vec![1, 2, 3, 4]));
 	is!("pixel=[1 2 3];pixel + 4", Node::ints(vec![1, 2, 3, 4]));
@@ -259,11 +259,10 @@ fn test_root_list_strings() {
 #[test]
 fn test_index() {
 	let result = parse("[a b c]#2");
-	result.print();
-	assert!(result.length() == 3);
+	// eqs!(result, "[a  b  c]#2");
+	eq!(result.first().length(), 3); // (# [a b c] 2)
 	skip!(
-
-		is!("(a b c)#2", "b");
+		is!("(a b c)#2", "b"); // or compile time list indexing??
 		is!("{a b c}#2", "b");
 		is!("[a b c]#2", "b");
 	);
@@ -303,4 +302,15 @@ fn test_filter() {
 	for node in xs.filter(|x| x > &2) {
 		print!("{} ", node);
 	}
+}
+
+#[test]
+#[ignore] // TODO: Node iteration needs type coercion
+fn test_iteration(){
+	let xs = ints(vec![1, 2, 3]);
+	let mut count = 0;
+	for _x in xs {
+		count += 1;
+	}
+	eq!(count, 3);
 }
