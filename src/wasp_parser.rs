@@ -679,7 +679,40 @@ impl WaspParser {
 			self.skip_spaces();
 			let (_, r_bp) = op.binding_power();
 			let rhs = self.parse_expr(r_bp);
-			Node::Key(Box::new(Empty), op, Box::new(rhs))
+
+			// Special handling for `if condition { block } [else { block }]`
+			if op == Op::If {
+				self.skip_spaces();
+				if self.current_char() == '{' {
+					let then_block = self.parse_atom(); // parse { block }
+					self.skip_spaces();
+					// Check for else { block }
+					let c1 = self.current_char();
+					let c2 = self.peek_char(1);
+					let c3 = self.peek_char(2);
+					let c4 = self.peek_char(3);
+					if (c1, c2, c3, c4) == ('e', 'l', 's', 'e')
+						&& !self.peek_char(4).is_alphanumeric()
+					{
+						self.advance_by(4); // skip "else"
+						self.skip_spaces();
+						let else_block = self.parse_atom(); // parse { block }
+						// Structure: ((if condition) then then_block) else else_block
+						let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
+						let if_then =
+							Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+						Node::Key(Box::new(if_then), Op::Else, Box::new(else_block))
+					} else {
+						// Just if condition { block } - no else
+						let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
+						Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block))
+					}
+				} else {
+					Node::Key(Box::new(Empty), op, Box::new(rhs))
+				}
+			} else {
+				Node::Key(Box::new(Empty), op, Box::new(rhs))
+			}
 		} else {
 			self.parse_atom()
 		};
