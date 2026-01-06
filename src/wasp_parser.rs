@@ -381,8 +381,20 @@ impl WaspParser {
 		let c1 = self.current_char();
 		let c2 = self.peek_char(1);
 		let c3 = self.peek_char(2);
+		let c4 = self.peek_char(3);
 
-		// Check 3-char operators first
+		// Check 4-char operators first
+		match (c1, c2, c3, c4) {
+			('t', 'h', 'e', 'n') if !self.peek_char(4).is_alphanumeric() => {
+				return Some((Op::Then, 4)) // "then"
+			}
+			('e', 'l', 's', 'e') if !self.peek_char(4).is_alphanumeric() => {
+				return Some((Op::Else, 4)) // "else"
+			}
+			_ => {}
+		}
+
+		// Check 3-char operators
 		match (c1, c2, c3) {
 			('.', '.', '.') => return Some((Op::To, 3)), // ... ellipsis range
 			('a', 'n', 'd') if !self.peek_char(3).is_alphanumeric() => {
@@ -425,6 +437,9 @@ impl WaspParser {
 			('o', 'r') if !c3.is_alphanumeric() => return Some((Op::Or, 2)),
 			('&', '&') => return Some((Op::And, 2)),
 			('|', '|') => return Some((Op::Or, 2)),
+
+			// Conditional
+			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
 
 			_ => {}
 		}
@@ -484,11 +499,17 @@ impl WaspParser {
 		let c2 = self.peek_char(1);
 		let c3 = self.peek_char(2);
 
-		// Check word-based prefix operators
+		// Check word-based prefix operators (3-char)
 		match (c1, c2, c3) {
 			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
 				return Some((Op::Not, 3))
 			}
+			_ => {}
+		}
+
+		// Check 2-char prefix operators
+		match (c1, c2) {
+			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
 			_ => {}
 		}
 

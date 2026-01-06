@@ -955,6 +955,9 @@ impl WasmGcEmitter {
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
 					self.emit_ternary(func, left, right);
+				} else if *op == Op::Else {
+					// If-then-else: ((if condition) then then_expr) else else_expr
+					self.emit_if_then_else(func, left, right);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -1131,6 +1134,48 @@ impl WasmGcEmitter {
 
 		// Evaluate condition and convert to i32 for if instruction
 		self.emit_numeric_value(func, condition);
+		func.instruction(&Instruction::I32WrapI64);
+
+		// Result type: (ref $Node)
+		let node_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(self.node_type),
+		};
+
+		// if (condition) { then_expr } else { else_expr }
+		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(node_ref))));
+
+		// Then branch
+		self.emit_numeric_value(func, &then_expr);
+		self.emit_call(func, "new_int");
+
+		func.instruction(&Instruction::Else);
+
+		// Else branch
+		self.emit_numeric_value(func, &else_expr);
+		self.emit_call(func, "new_int");
+
+		func.instruction(&Instruction::End);
+	}
+
+	/// Emit if-then-else expression: if condition then then_expr else else_expr
+	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
+	fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: &Node) {
+		// Extract: Key(Key(Empty, If, condition), Then, then_expr)
+		let (condition, then_expr) = match left.drop_meta() {
+			Node::Key(if_condition, Op::Then, then_node) => {
+				// Extract condition from: Key(Empty, If, condition)
+				let cond = match if_condition.drop_meta() {
+					Node::Key(_, Op::If, c) => c,
+					other => panic!("Expected if condition, got {:?}", other),
+				};
+				(cond, then_node)
+			}
+			other => panic!("Expected if-then structure, got {:?}", other),
+		};
+
+		// Evaluate condition and convert to i32 for if instruction
+		self.emit_numeric_value(func, &condition);
 		func.instruction(&Instruction::I32WrapI64);
 
 		// Result type: (ref $Node)
