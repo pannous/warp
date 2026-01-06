@@ -250,6 +250,14 @@ fn test_if_then_else() {
 }
 
 #[test]
+fn test_if_block_syntax() {
+	is!("if 1 { 2 } else { 3 }", 2);
+	is!("if 0 { 2 } else { 3 }", 3);
+	is!("if 1<2 { 10 } else { 255 }", 10);
+	is!("if 1>2 { 10 } else { 255 }", 255);
+}
+
+#[test]
 #[ignore = "soon"]
 fn test_absolute_value_arithmetic() {
 	is!("‖3‖-1", 2);
