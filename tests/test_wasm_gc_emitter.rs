@@ -83,7 +83,7 @@ fn test_generate_wasm() {
 
 #[test]
 fn test_node_kind_enum_abi() {
-	// ensure enum values match expected ABI (NodeTag)
+	// ensure enum values match expected ABI (Kind)
 	eq!(NodeKind::Empty as u32, 0);
 	eq!(NodeKind::Int as u32, 1);
 	eq!(NodeKind::Float as u32, 2);

@@ -158,7 +158,7 @@ to be checked via test_wasm_roundtrip
 
    (type $node (struct
    (field $name (ref $string))   ;; For Tag nodes e.g. 'html{test=42}'
-   (field $tag i32)              ;; NodeTag Kind / Type discriminant
+   (field $tag i32)              ;; Kind Kind / Type discriminant
    (field $int_value i64)        ;; For Number nodes
    (field $float_value f64)      ;; For Number nodes
    (field $text (ref $string))   ;; For Text/Symbol nodes
@@ -182,7 +182,7 @@ to be checked via test_wasm_roundtrip
 
 3. Convert wasp::Node to WASM:
    let wasm_node = WaspNode::create(&template, obj! {
-   tag: NodeTag::Number as i32,
+   tag: Kind::Number as i32,
    int_value: 42,
    })?;
 
@@ -234,3 +234,5 @@ Your branch is up to date with 'origin/main'.
 nothing to commit
 
 use `cargo fix` after each commit and commit again
+
+Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
