@@ -48,6 +48,7 @@ pub struct WasmGcEmitter {
 	required_functions: HashSet<&'static str>,
 	emit_all_functions: bool,
 	emit_kind_globals: bool, // Emit NodeTag constants as globals for documentation
+	kind_global_indices: HashMap<NodeTag, u32>, // NodeTag -> global index
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
 	next_data_offset: u32,
@@ -77,6 +78,7 @@ impl WasmGcEmitter {
 			required_functions: HashSet::new(),
 			emit_all_functions: true,
 			emit_kind_globals: true, // Enable by default for debugging
+			kind_global_indices: HashMap::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8,
 		}
@@ -144,32 +146,42 @@ impl WasmGcEmitter {
 		self.emit_constructors();
 	}
 
-	/// Emit NodeTag constants as immutable globals for documentation
-	/// These show up nicely in wasm-tools print output
+	/// Emit NodeTag constants as immutable globals
+	/// JIT compilers constant-fold these, so global.get is equally fast
 	fn emit_kind_globals(&mut self) {
 		let tags = [
-			("kind_empty", NodeTag::Empty as i64),
-			("kind_int", NodeTag::Int as i64),
-			("kind_float", NodeTag::Float as i64),
-			("kind_text", NodeTag::Text as i64),
-			("kind_codepoint", NodeTag::Codepoint as i64),
-			("kind_symbol", NodeTag::Symbol as i64),
-			("kind_key", NodeTag::Key as i64),
-			("kind_pair", NodeTag::Pair as i64),
-			("kind_block", NodeTag::Block as i64),
-			("kind_list", NodeTag::List as i64),
-			("kind_data", NodeTag::Data as i64),
-			("kind_meta", NodeTag::Meta as i64),
-			("kind_error", NodeTag::Error as i64),
+			("kind_empty", NodeTag::Empty),
+			("kind_int", NodeTag::Int),
+			("kind_float", NodeTag::Float),
+			("kind_text", NodeTag::Text),
+			("kind_codepoint", NodeTag::Codepoint),
+			("kind_symbol", NodeTag::Symbol),
+			("kind_key", NodeTag::Key),
+			("kind_pair", NodeTag::Pair),
+			("kind_block", NodeTag::Block),
+			("kind_list", NodeTag::List),
+			("kind_data", NodeTag::Data),
+			("kind_meta", NodeTag::Meta),
+			("kind_error", NodeTag::Error),
 		];
 
-		for (name, value) in tags {
+		for (name, tag) in tags {
 			self.globals.global(
 				GlobalType { val_type: ValType::I64, mutable: false, shared: false },
-				&ConstExpr::i64_const(value),
+				&ConstExpr::i64_const(tag as i64),
 			);
 			self.exports.export(name, ExportKind::Global, self.next_global_idx);
+			self.kind_global_indices.insert(tag, self.next_global_idx);
 			self.next_global_idx += 1;
+		}
+	}
+
+	/// Emit instruction to get a NodeTag kind value
+	fn emit_kind(&self, func: &mut Function, tag: NodeTag) {
+		if let Some(&idx) = self.kind_global_indices.get(&tag) {
+			func.instruction(&Instruction::GlobalGet(idx));
+		} else {
+			func.instruction(&Instruction::I64Const(tag as i64));
 		}
 	}
 
@@ -232,7 +244,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Empty as i64));
+			self.emit_kind(&mut func, NodeTag::Empty);
 			func.instruction(&Instruction::RefNull(any_heap_type()));
 			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
 			func.instruction(&Instruction::StructNew(self.node_type));
@@ -249,7 +261,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Int as i64));
+			self.emit_kind(&mut func, NodeTag::Int);
 			// Box the i64: create $i64box struct
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructNew(self.i64_box_type));
@@ -268,7 +280,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![ValType::F64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Float as i64));
+			self.emit_kind(&mut func, NodeTag::Float);
 			// Box the f64: create $f64box struct
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructNew(self.f64_box_type));
@@ -287,7 +299,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Codepoint as i64));
+			self.emit_kind(&mut func, NodeTag::Codepoint);
 			// Convert i32 to i31ref
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::RefI31);
@@ -307,7 +319,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![ValType::I32, ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Text as i64));
+			self.emit_kind(&mut func, NodeTag::Text);
 			// Create $String struct with ptr and len
 			func.instruction(&Instruction::LocalGet(0)); // ptr
 			func.instruction(&Instruction::LocalGet(1)); // len
@@ -328,7 +340,7 @@ impl WasmGcEmitter {
 			self.types.ty().function(vec![ValType::I32, ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Symbol as i64));
+			self.emit_kind(&mut func, NodeTag::Symbol);
 			// Create $String struct with ptr and len
 			func.instruction(&Instruction::LocalGet(0)); // ptr
 			func.instruction(&Instruction::LocalGet(1)); // len
@@ -352,7 +364,7 @@ impl WasmGcEmitter {
 			);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
-			func.instruction(&Instruction::I64Const(NodeTag::Key as i64));
+			self.emit_kind(&mut func, NodeTag::Key);
 			func.instruction(&Instruction::LocalGet(0)); // key node as data (auto-cast to any)
 			func.instruction(&Instruction::LocalGet(1)); // value node
 			func.instruction(&Instruction::StructNew(self.node_type));
@@ -377,7 +389,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::I64Const(8));
 			func.instruction(&Instruction::I64Shl);
-			func.instruction(&Instruction::I64Const(NodeTag::List as i64));
+			self.emit_kind(&mut func, NodeTag::List);
 			func.instruction(&Instruction::I64Or);
 			func.instruction(&Instruction::LocalGet(0)); // first as data
 			func.instruction(&Instruction::LocalGet(1)); // rest as value
@@ -604,7 +616,7 @@ impl WasmGcEmitter {
 		// Compute kind
 		func.instruction(&Instruction::I64Const(8));
 		func.instruction(&Instruction::I64Shl);
-		func.instruction(&Instruction::I64Const(NodeTag::List as i64));
+		self.emit_kind(func, NodeTag::List);
 		func.instruction(&Instruction::I64Or);
 		// But now we have: first, rest, kind - wrong order!
 		// We need: kind, first, rest
