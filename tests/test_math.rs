@@ -70,9 +70,8 @@ fn test_hyphen_units() {
 
 
 #[test]
-#[ignore = "soon"]
 fn test_variable_minus() {
-	is!("a=-1 b=2 b-a", 3);
+	is!("a=-1; b=2; b - a", 3); // spaces needed, b-a is kebab-case identifier
 }
 
 #[test]
