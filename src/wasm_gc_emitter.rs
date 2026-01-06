@@ -83,6 +83,8 @@ pub struct WasmGcEmitter {
 	next_data_offset: u32,
 	// Variable scope
 	scope: Scope,
+	// Temp local index for while loops etc
+	next_temp_local: u32,
 	// User-defined type indices
 	user_type_indices: HashMap<String, u32>,
 	// Type registry for user-defined types parsed from class/struct definitions
@@ -117,6 +119,7 @@ impl WasmGcEmitter {
 			string_table: HashMap::new(),
 			next_data_offset: 8,
 			scope: Scope::new(),
+			next_temp_local: 0,
 			user_type_indices: HashMap::new(),
 			type_registry: TypeRegistry::new(),
 		}
@@ -815,25 +818,26 @@ impl WasmGcEmitter {
 	}
 
 	/// Count variables defined in node (for WASM local allocation)
-	fn count_variables(&mut self, node: &Node) {
+	fn count_variables(&mut self, node: &Node) -> u32 {
 		let node = node.drop_meta();
 		match node {
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					self.scope.define(name.clone(), None);
 				}
-				self.count_variables(right);
+				self.count_variables(right)
+			}
+			Node::Key(left, Op::Do, right) => {
+				// While loop needs a temp local for result
+				1 + self.count_variables(left) + self.count_variables(right)
 			}
 			Node::Key(left, _, right) => {
-				self.count_variables(left);
-				self.count_variables(right);
+				self.count_variables(left) + self.count_variables(right)
 			}
 			Node::List(items, _, _) => {
-				for item in items {
-					self.count_variables(item);
-				}
+				items.iter().map(|item| self.count_variables(item)).sum()
 			}
-			_ => {}
+			_ => 0,
 		}
 	}
 
@@ -841,9 +845,11 @@ impl WasmGcEmitter {
 	pub fn emit_node_main(&mut self, node: &Node) {
 		self.collect_and_allocate_strings(node);
 
-		// Pre-pass: count variables to allocate locals
-		self.count_variables(node);
-		let local_count = self.scope.local_count();
+		// Pre-pass: count variables and temp locals to allocate
+		let temp_locals = self.count_variables(node);
+		let var_count = self.scope.local_count();
+		let local_count = var_count + temp_locals;
+		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = RefType {
 			nullable: false,
@@ -963,6 +969,9 @@ impl WasmGcEmitter {
 					// Construct the full structure for emit_if_then_else
 					let full_node = Node::Key(left.clone(), Op::Then, right.clone());
 					self.emit_if_then_else(func, &full_node, None);
+				} else if *op == Op::Do {
+					// While loop: (while condition) do body
+					self.emit_while_loop(func, left, right);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -1215,6 +1224,97 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
+	/// Emit while loop: while condition do body
+	/// Structure: Key(Key(Empty, While, condition), Do, body)
+	fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
+		// Extract condition from: Key(Empty, While, condition)
+		let condition = match left.drop_meta() {
+			Node::Key(_, Op::While, cond) => cond,
+			other => panic!("Expected while condition, got {:?}", other),
+		};
+
+		// Allocate temp local for result
+		let result_local = self.next_temp_local;
+		self.next_temp_local += 1;
+
+		// Initialize result variable with 0
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::LocalSet(result_local));
+
+		// WASM loop structure:
+		// (block $exit
+		//   (loop $continue
+		//     condition
+		//     i32.eqz
+		//     br_if $exit
+		//     body (store result)
+		//     br $continue
+		//   )
+		// )
+		func.instruction(&Instruction::Block(BlockType::Empty));
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+
+		// Evaluate condition
+		self.emit_block_value(func, &condition);
+		func.instruction(&Instruction::I32WrapI64);
+		func.instruction(&Instruction::I32Eqz);
+		func.instruction(&Instruction::BrIf(1)); // break out of block if condition is false
+
+		// Execute body and store result
+		self.emit_block_value(func, body);
+		func.instruction(&Instruction::LocalSet(result_local));
+
+		// Continue loop
+		func.instruction(&Instruction::Br(0)); // br $continue
+
+		func.instruction(&Instruction::End); // end loop
+		func.instruction(&Instruction::End); // end block
+
+		// Load result and wrap in Node
+		func.instruction(&Instruction::LocalGet(result_local));
+		self.emit_call(func, "new_int");
+	}
+
+	/// Emit while loop and return numeric (i64) result (not wrapped in Node)
+	fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
+		// Extract condition from: Key(Empty, While, condition)
+		let condition = match left.drop_meta() {
+			Node::Key(_, Op::While, cond) => cond,
+			other => panic!("Expected while condition, got {:?}", other),
+		};
+
+		// Allocate temp local for result
+		let result_local = self.next_temp_local;
+		self.next_temp_local += 1;
+
+		// Initialize result variable with 0
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::LocalSet(result_local));
+
+		// WASM loop structure
+		func.instruction(&Instruction::Block(BlockType::Empty));
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+
+		// Evaluate condition
+		self.emit_block_value(func, &condition);
+		func.instruction(&Instruction::I32WrapI64);
+		func.instruction(&Instruction::I32Eqz);
+		func.instruction(&Instruction::BrIf(1)); // break out if condition is false
+
+		// Execute body and store result
+		self.emit_block_value(func, body);
+		func.instruction(&Instruction::LocalSet(result_local));
+
+		// Continue loop
+		func.instruction(&Instruction::Br(0));
+
+		func.instruction(&Instruction::End); // end loop
+		func.instruction(&Instruction::End); // end block
+
+		// Return result (leave i64 on stack, don't wrap in Node)
+		func.instruction(&Instruction::LocalGet(result_local));
+	}
+
 	/// Extract numeric value from a block { expr } or plain expr
 	fn emit_block_value(&mut self, func: &mut Function, node: &Node) {
 		match node.drop_meta() {
@@ -1319,6 +1419,10 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::Drop);
 					}
 				}
+			}
+			// While loop: emit loop and get numeric result
+			Node::Key(left, Op::Do, right) => {
+				self.emit_while_loop_value(func, left, right);
 			}
 			_ => panic!("Cannot extract numeric value from {:?}", node),
 		}
