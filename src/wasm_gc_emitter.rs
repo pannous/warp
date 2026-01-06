@@ -85,6 +85,8 @@ pub struct WasmGcEmitter {
 	scope: Scope,
 	// User-defined type indices
 	user_type_indices: HashMap<String, u32>,
+	// Type registry for user-defined types parsed from class/struct definitions
+	type_registry: TypeRegistry,
 }
 
 impl WasmGcEmitter {
@@ -116,6 +118,7 @@ impl WasmGcEmitter {
 			next_data_offset: 8,
 			scope: Scope::new(),
 			user_type_indices: HashMap::new(),
+			type_registry: TypeRegistry::new(),
 		}
 	}
 
@@ -181,6 +184,8 @@ impl WasmGcEmitter {
 			}
 			Node::Type { name, body } => {
 				self.required_functions.insert("new_type");
+				// Register the type definition in the registry
+				self.type_registry.register_from_node(node);
 				self.analyze_required_functions(name);
 				self.analyze_required_functions(body);
 			}
@@ -203,10 +208,44 @@ impl WasmGcEmitter {
 		});
 		self.exports.export("memory", ExportKind::Memory, 0);
 		self.emit_gc_types();
+		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
+		self.emit_registered_user_types();
 		if self.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
+		// Emit constructors for registered user types
+		self.emit_registered_user_type_constructors();
+	}
+
+	/// Emit user types from internal type_registry
+	fn emit_registered_user_types(&mut self) {
+		let types: Vec<TypeDef> = self.type_registry.types().to_vec();
+		for type_def in &types {
+			self.emit_single_user_type(type_def);
+		}
+	}
+
+	/// Emit a single user-defined struct type
+	fn emit_single_user_type(&mut self, type_def: &TypeDef) {
+		let fields: Vec<FieldType> = type_def
+			.fields
+			.iter()
+			.map(|f| self.field_def_to_wasm_field(f))
+			.collect();
+
+		self.types.ty().struct_(fields);
+		self.user_type_indices
+			.insert(type_def.name.clone(), self.next_type_idx);
+		self.next_type_idx += 1;
+	}
+
+	/// Emit constructors for registered user types
+	fn emit_registered_user_type_constructors(&mut self) {
+		let types: Vec<TypeDef> = self.type_registry.types().to_vec();
+		for type_def in &types {
+			self.emit_user_type_constructor(&type_def);
+		}
 	}
 
 	/// Emit Kind constants as immutable globals
@@ -1228,6 +1267,10 @@ impl WasmGcEmitter {
 		type_names.append(self.i64_box_type, "i64box");
 		type_names.append(self.f64_box_type, "f64box");
 		type_names.append(self.node_type, "Node");
+		// User-defined type names
+		for (name, &idx) in &self.user_type_indices {
+			type_names.append(idx, name);
+		}
 		self.names.types(&type_names);
 
 		// Field names for struct types
@@ -1255,6 +1298,17 @@ impl WasmGcEmitter {
 		let mut f64box_fields = NameMap::new();
 		f64box_fields.append(0, "value");
 		type_field_names.append(self.f64_box_type, &f64box_fields);
+
+		// User-defined type fields
+		for type_def in self.type_registry.types() {
+			if let Some(&type_idx) = self.user_type_indices.get(&type_def.name) {
+				let mut field_names = NameMap::new();
+				for (i, field) in type_def.fields.iter().enumerate() {
+					field_names.append(i as u32, &field.name);
+				}
+				type_field_names.append(type_idx, &field_names);
+			}
+		}
 
 		self.names.fields(&type_field_names);
 

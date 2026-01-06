@@ -103,11 +103,18 @@ impl TypeRegistry {
 	}
 
 	/// Register a type from a Type node, extracting name and fields
-	/// Returns the assigned tag, or None if the node isn't a valid Type
+	/// Returns the assigned tag, or None if the node isn't a valid Type definition
+	/// Skips type references (Type nodes with empty body - just type names)
 	pub fn register_from_node(&mut self, node: &crate::node::Node) -> Option<u32> {
 		use crate::node::Node;
+		// Handle Meta wrapper - recursively unwrap
+		let node = node.drop_meta();
 		if let Node::Type { name, body } = node {
-			let type_name = match name.as_ref() {
+			// Skip type references (empty body) - only register actual definitions
+			if matches!(body.drop_meta(), Node::Empty) {
+				return None;
+			}
+			let type_name = match name.drop_meta() {
 				Node::Symbol(s) | Node::Text(s) => s.clone(),
 				_ => return None,
 			};
@@ -122,6 +129,8 @@ impl TypeRegistry {
 	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
 		use crate::node::Node;
 		let mut fields = Vec::new();
+		// Unwrap any Meta wrappers
+		let body = body.drop_meta();
 		match body {
 			Node::List(items, _, _) => {
 				for item in items {
@@ -143,19 +152,25 @@ impl TypeRegistry {
 	/// Extract a single FieldDef from a Key node (name:Type)
 	fn extract_field(node: &crate::node::Node) -> Option<FieldDef> {
 		use crate::node::Node;
+		let node = node.drop_meta();
 		match node {
 			Node::Key(name_node, _, type_node) => {
-				let name = match name_node.as_ref() {
+				let name = match name_node.drop_meta() {
 					Node::Symbol(s) | Node::Text(s) => s.clone(),
 					_ => return None,
 				};
-				let type_name = match type_node.as_ref() {
+				let type_name = match type_node.drop_meta() {
 					Node::Symbol(s) | Node::Text(s) => s.clone(),
+					Node::Type { name: type_name_node, .. } => {
+						match type_name_node.drop_meta() {
+							Node::Symbol(s) | Node::Text(s) => s.clone(),
+							_ => "Any".to_string(),
+						}
+					}
 					_ => "Any".to_string(), // default type
 				};
 				Some(FieldDef { name, type_name })
 			}
-			Node::Meta { node, .. } => Self::extract_field(node),
 			_ => None,
 		}
 	}
