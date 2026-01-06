@@ -578,19 +578,21 @@ impl WaspParser {
 			Ok(s) => s,
 			Err(e) => return error(&e),
 		};
-		self.skip_spaces();
 
 		if let Some(constant) = check_constants(&symbol) {
 			return constant; // if true {} fall through :?
 		}
 
-		// Check for suffix blocks (these bind tighter than any infix operator)
-		match self.current_char() {
+		// Check for IMMEDIATE suffix blocks (no space allowed)
+		// This distinguishes List<int> (generic) from x < y (comparison)
+		let ch = self.current_char();
+		match ch {
 			'{' => {
 				let block = self.parse_bracketed('{');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
 			}
 			'<' if !self.options.xml_mode => {
+				// Only treat as generic if immediately after symbol (no space)
 				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}
@@ -791,7 +793,8 @@ impl WaspParser {
 			if ch.is_numeric() {
 				num_str.push(ch);
 				self.advance();
-			} else if ch == '.' && !has_dot {
+			} else if ch == '.' && !has_dot && self.peek_char(1) != '.' {
+				// Only consume . as decimal if NOT followed by another . (range operator)
 				has_dot = true;
 				num_str.push(ch);
 				self.advance();
@@ -817,7 +820,7 @@ impl WaspParser {
 		let mut symbol = String::new();
 		loop {
 			let ch = self.current_char();
-			if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+			if (ch.is_alphanumeric() && ch != '²' && ch != '³') || ch == '_' || ch == '-' {
 				symbol.push(ch);
 				self.advance();
 			} else {
