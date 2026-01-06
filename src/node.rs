@@ -87,6 +87,8 @@ pub enum Op {
 	Range, // ..
 	To,    // to  ...  …
 
+	// User(Node), allow user defined operators, name==symbol
+
 	None, // implicit/unknown
 }
 
@@ -264,10 +266,7 @@ pub enum Node {
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
-	// Type(Box<Node>, Box<Node>), // Special Class Ast(Node, AstKind) !)
-	// Ast(Node, AstKind), // wrap AST nodes if needed
-	// Class(String, Box<Node>), // name, body // class A{a:int}
-	// Type via  Meta(node, Data { Type }) ? NAH Type is essential!!
+	Type { name: Box<Node>, body: Box<Node> }, // type definition: name + fields
 }
 
 impl Node {
@@ -399,6 +398,7 @@ impl Node {
 			List(_, _, _) => NodeTag::List,
 			Data(_) => NodeTag::Data,
 			Meta { node, .. } => node.kind(),
+			Type { .. } => NodeTag::Type,
 			Error(_) => NodeTag::Error,
 			False | True => NodeTag::Int,
 			Node::Number(num) => match num {
@@ -572,6 +572,19 @@ impl Node {
 					type_name,
 					data_type: DataType::Other,
 				})
+			}
+
+			t if t == NodeTag::Type as u8 => {
+				// data = name node, value = body node
+				let name = match obj.data_as_node() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				let body = match obj.value() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				Type { name, body }
 			}
 
 			_ => Text(format!("Unknown NodeTag: {}", tag)),
@@ -1022,6 +1035,7 @@ impl Node {
 					inner
 				}
 			}
+			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
 			Data(d) => format!("Data({})", d.type_name),
 			// _ => format!("{:?}", self),
 		}
@@ -1263,6 +1277,12 @@ impl Node {
 					// No metadata, just unwrap
 					node.to_json_value()
 				}
+			}
+			Type { name, body } => {
+				let mut map = Map::new();
+				map.insert("_type".to_string(), name.to_json_value());
+				map.insert("fields".to_string(), body.to_json_value());
+				Value::Object(map)
 			}
 			Error(e) => {
 				let mut map = Map::new();
@@ -1514,6 +1534,10 @@ impl PartialEq for Node {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
 				Meta { node, .. } => self == node.as_ref(), // unwrap Meta
+				_ => false,
+			},
+			Type { name: n1, body: b1 } => match other {
+				Type { name: n2, body: b2 } => n1 == n2 && b1 == b2,
 				_ => false,
 			},
 			Error(e1) => match other {
