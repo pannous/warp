@@ -16,7 +16,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use syn::Signature;
 // use wasp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, NodeKind};
+use crate::type_kinds::{AstKind, NodeTag};
 use crate::wasp_parser::parse;
 // node[i]
 
@@ -403,24 +403,25 @@ impl Node {
 		}
 	}
 
-	// Meta.kind() unwraps : Returns the kind of the inner node instead of NodeKind::Meta
-	pub fn kind(&self) -> NodeKind {
+	/// Returns the NodeTag for this node (Meta unwraps to inner node's tag)
+	pub fn kind(&self) -> NodeTag {
 		match self {
-			Empty => NodeKind::Empty,
-			Text(_) => NodeKind::Text,
-			Char(_) => NodeKind::Codepoint,
-			Symbol(_) => NodeKind::Symbol,
-			Key(_, _, _) => NodeKind::Key,
-			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
-			List(_, _, _) => NodeKind::List,
-			Data(_) => NodeKind::Data,
-			Meta { node, .. } => node.kind(), // Return kind of inner node
-			Error(_) => NodeKind::Error,
-			False => NodeKind::Number, // map to 0 !
-			True => NodeKind::Number,  // map to 1
-			Node::Number(_) => NodeKind::Number,
-			// List(_, Separator::Colon, _) => NodeKind::Pair, // a:b maps to Pair kind
-			// List(_, Separator::Equals, _) => NodeKind::Pair, // a=b maps to Pair kind
+			Empty => NodeTag::Empty,
+			Text(_) => NodeTag::Text,
+			Char(_) => NodeTag::Codepoint,
+			Symbol(_) => NodeTag::Symbol,
+			Key(_, _, _) => NodeTag::Key,
+			List(_, Bracket::Curly, _) => NodeTag::Block,
+			List(_, _, _) => NodeTag::List,
+			Data(_) => NodeTag::Data,
+			Meta { node, .. } => node.kind(),
+			Error(_) => NodeTag::Error,
+			False | True => NodeTag::Int,
+			Node::Number(num) => match num {
+				Number::Int(_) => NodeTag::Int,
+				Number::Float(_) => NodeTag::Float,
+				_ => NodeTag::Float, // Quotient, Complex, Nan, Inf → Float
+			},
 		}
 	}
 	pub fn length(&self) -> i32 {
@@ -492,8 +493,6 @@ impl Node {
 	/// Convert compact 3-field WASM GC object to Node
 	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
-		use crate::type_kinds::NodeTag;
-
 		// Read the kind field (i64), lower 8 bits are the tag
 		let kind = match obj.kind() {
 			Ok(k) => k,

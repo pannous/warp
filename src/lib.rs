@@ -34,9 +34,9 @@ pub use node::{block, codepoint, error, error_node, float, floats, data, int, in
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
 pub use wasp_parser::{parse, parse_file, parse_xml, WaspParser};
-pub use wisp_parser::{parse_wisp, WispParser};
+pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
-pub use type_kinds::{AstKind, NodeKind};
+pub use type_kinds::{AstKind, NodeKind, NodeTag};
 // Metadata
 pub use meta::{Dada, LineInfo};
 // WASM
