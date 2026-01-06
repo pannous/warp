@@ -77,16 +77,18 @@ fn test_hypen_versus_minus() {
 }
 
 #[test]
-#[ignore]
 fn test_modulo() {
-	//	eq!(mod_d(10007.0, 10000.0), 7);
-	is!("10007%10000", 7); // breaks here!?!
+	is!("10007%10000", 7);
 	is!("10007.0%10000", 7);
 	is!("10007.0%10000.0", 7);
+}
 
-	is!("10007%10000.0", 7); // breaks here!?! load_lib mod_d suspect!!
+#[test]
+#[ignore] // needs variable support
+fn test_modulo_with_variables() {
+	is!("10007%10000.0", 7);
 	is!("i=10007;x=i%10000", 7);
-	is!("i=10007.0;x=i%10000.0", 7); // breaks here!?!
+	is!("i=10007.0;x=i%10000.0", 7);
 	is!("i=10007.1;x=i%10000.1", 7);
 }
 
