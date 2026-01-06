@@ -1,10 +1,42 @@
-use wasp::extensions::todow;
-use wasp::Node;
 use wasp::skip;
+use wasp::extensions::todow;
+use wasp::node::data;
 use wasp::wasp_parser::parse;
+use wasp::*;
 
 #[test]
-fn test_add_list_item() {
+fn test_add_boxed_list_item() {
+	let list = ints![1, 2];
+	let num = int(3);
+	let result = list.add(num);
+	assert_eq!(result, ints![1, 2, 3]);
+	assert_eq!(ints![1, 2, 3], result);
+}
+
+
+#[test]
+#[ignore] // shall this ever work?
+fn test_add_pure_vec_data() {
+	let list = data(vec![1, 2]); // only via Dada!
+	assert_eq!(ints![1, 2], list); // nah, not even this works (for good reason) or to do?
+	assert_eq!(list, ints![1, 2]);
+	let num = int(3);
+	let result = list.add(num); // Still needs to be wrapped and probably doesn't work.
+	assert_eq!(result, ints![1, 2, 3]);
+	assert_eq!(ints![1, 2, 3], result);
+}
+
+// #[test]
+// fn test_add_pure_list_item() {
+// 	let list = list(vec![1, 2]); // only via Dada!
+// 	list.add(3)
+// 	assert_eq!(result, ints![1, 2, 3]);
+// 	assert_eq!(ints![1, 2, 3], result);
+// }
+
+
+#[test]
+fn test_add_list_item_explicit() {
 	let list = Node::list(vec![Node::int(1), Node::int(2)]);
 	let num = Node::int(3);
 
