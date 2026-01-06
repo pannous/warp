@@ -29,7 +29,7 @@ macro_rules! s {
 }
 
 #[macro_export]
-macro_rules! strings {
+macro_rules! strings { // ever used?
 	($($lit:literal),* $(,)?) => {
 		vec![$(String::from($lit)),*]
 	};

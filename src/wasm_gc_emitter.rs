@@ -107,8 +107,12 @@ impl WasmGcEmitter {
 			Node::Text(_) => { self.required_functions.insert("new_text"); }
 			Node::Char(_) => { self.required_functions.insert("new_codepoint"); }
 			Node::Symbol(_) => { self.required_functions.insert("new_symbol"); }
-			Node::Key(key, _, value) => {
-				self.required_functions.insert("new_key");
+			Node::Key(key, op, value) => {
+				if op.is_arithmetic() {
+					self.required_functions.insert("new_int");
+				} else {
+					self.required_functions.insert("new_key");
+				}
 				self.analyze_required_functions(key);
 				self.analyze_required_functions(value);
 			}
