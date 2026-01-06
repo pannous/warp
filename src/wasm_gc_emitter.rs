@@ -259,7 +259,6 @@ impl WasmGcEmitter {
 			("kind_codepoint", Kind::Codepoint),
 			("kind_symbol", Kind::Symbol),
 			("kind_key", Kind::Key),
-			("kind_pair", Kind::Pair),
 			("kind_block", Kind::Block),
 			("kind_list", Kind::List),
 			("kind_data", Kind::Data),
@@ -956,13 +955,24 @@ impl WasmGcEmitter {
 				} else if *op == Op::Assign && matches!(right.drop_meta(), Node::Number(_)) {
 					// Treat x=42 as assignment only when RHS is numeric
 					self.emit_arithmetic(func, left, op, right);
+				} else if *op == Op::Question {
+					// Ternary: condition ? then : else
+					self.emit_ternary(func, left, right);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
 					let right_node = right.drop_meta();
 					if let Node::List(items, Bracket::Curly, sep) = right_node {
-						// Convert curly block to square list for struct instances
-						let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
+						// Convert curly block to square list and normalize field ops
+						let normalized_items: Vec<Node> = items.iter().map(|item| {
+							// Convert Assign to Colon in struct field keys
+							if let Node::Key(k, Op::Assign, v) = item.drop_meta() {
+								Node::Key(k.clone(), Op::Colon, v.clone())
+							} else {
+								item.clone()
+							}
+						}).collect();
+						let list_node = Node::List(normalized_items, Bracket::Square, sep.clone());
 						self.emit_node_instructions(func, &list_node);
 					} else {
 						self.emit_node_instructions(func, right_node);
@@ -1120,6 +1130,40 @@ impl WasmGcEmitter {
 
 		// Wrap result as Int node
 		self.emit_call(func, "new_int");
+	}
+
+	/// Emit ternary expression: condition ? then_expr : else_expr
+	fn emit_ternary(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+		// Structure: condition ? Key(then, Colon, else)
+		let (then_expr, else_expr) = match then_else.drop_meta() {
+			Node::Key(then_node, Op::Colon, else_node) => (then_node, else_node),
+			_ => panic!("Ternary operator expects then:else structure, got {:?}", then_else),
+		};
+
+		// Evaluate condition and convert to i32 for if instruction
+		self.emit_numeric_value(func, condition);
+		func.instruction(&Instruction::I32WrapI64);
+
+		// Result type: (ref $Node)
+		let node_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(self.node_type),
+		};
+
+		// if (condition) { then_expr } else { else_expr }
+		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(node_ref))));
+
+		// Then branch
+		self.emit_numeric_value(func, &then_expr);
+		self.emit_call(func, "new_int");
+
+		func.instruction(&Instruction::Else);
+
+		// Else branch
+		self.emit_numeric_value(func, &else_expr);
+		self.emit_call(func, "new_int");
+
+		func.instruction(&Instruction::End);
 	}
 
 	/// Emit the numeric value of a node onto the stack (as i64)
@@ -1357,7 +1401,6 @@ impl WasmGcEmitter {
 				"kind_codepoint",
 				"kind_symbol",
 				"kind_key",
-				"kind_pair",
 				"kind_block",
 				"kind_list",
 				"kind_data",
