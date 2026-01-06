@@ -9,14 +9,13 @@ pub enum Kind {
 	Text = 3,      // string (via $String struct)
 	Codepoint = 4, // char as i31ref
 	Symbol = 5,    // string (via $String struct)
-	Key = 6,       // data=key node, value=value node
-	Pair = 7,      // data=left, value=right
-	Block = 8,     // curly braces {}
-	List = 9,      // square brackets []
-	Data = 10,     // arbitrary data container
-	Meta = 11,     // metadata wrapper
-	Error = 12,    // error node
-	TypeDef = 13,  // type definition: name + body (fields)
+	Key = 6,      // data=key node, value=value node (also used for pairs)
+	Block = 7,    // curly braces {}
+	List = 8,     // square brackets []
+	Data = 9,     // arbitrary data container
+	Meta = 10,    // metadata wrapper
+	Error = 11,   // error node
+	TypeDef = 12, // type definition: name + body (fields)
 }
 
 /// Alias for backward compatibility
