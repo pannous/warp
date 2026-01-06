@@ -91,12 +91,11 @@ fn test_node_kind_enum_abi() {
 	eq!(NodeKind::Codepoint as u32, 4);
 	eq!(NodeKind::Symbol as u32, 5);
 	eq!(NodeKind::Key as u32, 6);
-	eq!(NodeKind::Pair as u32, 7);
-	eq!(NodeKind::Block as u32, 8);
-	eq!(NodeKind::List as u32, 9);
-	eq!(NodeKind::Data as u32, 10);
-	eq!(NodeKind::Meta as u32, 11);
-	eq!(NodeKind::Error as u32, 12);
+	eq!(NodeKind::Block as u32, 7);
+	eq!(NodeKind::List as u32, 8);
+	eq!(NodeKind::Data as u32, 9);
+	eq!(NodeKind::Meta as u32, 10);
+	eq!(NodeKind::Error as u32, 11);
 }
 
 #[test]
