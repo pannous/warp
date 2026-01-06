@@ -216,9 +216,11 @@ via wasp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
 ### soon
 
 compiletime and runtime evaluation
+```
 is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
-is!("def square:=it*it; square(3)",9);
+is!("def square:=it*it; square(3)",9); 
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
+```
 
 # Important
 Don't cargo clean unless absolutely necessary!
