@@ -584,6 +584,27 @@ impl WaspParser {
 			return constant; // if true {} fall through :?
 		}
 
+		// Handle "class" keyword: class Name { fields }
+		if symbol == "class" || symbol == "struct" || symbol == "type" {
+			self.skip_whitespace();
+			let type_name = match self.parse_symbol() {
+				Ok(s) => s,
+				Err(e) => return error(&e),
+			};
+			self.skip_whitespace();
+			let body = if self.current_char() == '{' {
+				let block = self.parse_bracketed('{');
+				// Transform field values from Symbol to Type nodes
+				Self::transform_fields_to_types(block)
+			} else {
+				Empty
+			};
+			return Node::Type {
+				name: Box::new(Symbol(type_name)),
+				body: Box::new(body),
+			};
+		}
+
 		// Check for IMMEDIATE suffix blocks (no space allowed)
 		// This distinguishes List<int> (generic) from x < y (comparison)
 		let ch = self.current_char();
@@ -1224,6 +1245,39 @@ impl WaspParser {
 			grouped_nodes[0].clone()
 		} else {
 			Node::List(grouped_nodes, bracket, split_sep)
+		}
+	}
+
+	/// Transform field definitions: Key(name, op, Symbol) -> Key(name, op, Type)
+	/// Used for class/struct definitions to convert type names to Type nodes
+	fn transform_fields_to_types(node: Node) -> Node {
+		match node {
+			Node::List(items, bracket, sep) => {
+				let transformed: Vec<Node> = items.into_iter().map(Self::transform_fields_to_types).collect();
+				Node::List(transformed, bracket, sep)
+			}
+			Node::Key(name, op, value) => {
+				let type_node = Self::symbol_to_type(*value);
+				Node::Key(name, op, Box::new(type_node))
+			}
+			Node::Meta { node, data } => {
+				Node::Meta { node: Box::new(Self::transform_fields_to_types(*node)), data }
+			}
+			other => other,
+		}
+	}
+
+	/// Convert a Symbol to a Type node (for type references)
+	fn symbol_to_type(node: Node) -> Node {
+		match node {
+			Node::Symbol(s) => Node::Type {
+				name: Box::new(Node::Symbol(s)),
+				body: Box::new(Empty),
+			},
+			Node::Meta { node, data } => {
+				Node::Meta { node: Box::new(Self::symbol_to_type(*node)), data }
+			}
+			other => other,
 		}
 	}
 }
