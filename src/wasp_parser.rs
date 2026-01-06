@@ -386,13 +386,13 @@ impl WaspParser {
 		match (c1, c2, c3) {
 			('.', '.', '.') => return Some((Op::To, 3)), // ... ellipsis range
 			('a', 'n', 'd') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::And, 3))
+				return Some((Op::And, 3)) // "and"
 			}
 			('x', 'o', 'r') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::Xor, 3))
+				return Some((Op::Xor, 3)) // "xor"
 			}
 			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::Not, 3))
+				return Some((Op::Not, 3)) // "not"
 			}
 			_ => {}
 		}

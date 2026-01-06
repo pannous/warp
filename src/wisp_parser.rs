@@ -630,6 +630,13 @@ impl WispEmitter {
 				Self::emit_node(data, out);
 				out.push(')');
 			}
+			Type { name, body } => {
+				out.push_str("(type ");
+				Self::emit_node(name, out);
+				out.push(' ');
+				Self::emit_node(body, out);
+				out.push(')');
+			}
 			Data(d) => {
 				out.push_str(&format!("(data {})", d.type_name));
 			}
