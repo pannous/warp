@@ -203,21 +203,7 @@ impl WasmGcEmitter {
 		self.string_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
-		// Type 1: $i64box = (struct (field i64)) for boxed integers
-		self.types.ty().struct_(vec![
-			FieldType { element_type: Val(ValType::I64), mutable: false },
-		]);
-		self.i64_box_type = self.next_type_idx;
-		self.next_type_idx += 1;
-
-		// Type 2: $f64box = (struct (field f64)) for boxed floats
-		self.types.ty().struct_(vec![
-			FieldType { element_type: Val(ValType::F64), mutable: false },
-		]);
-		self.f64_box_type = self.next_type_idx;
-		self.next_type_idx += 1;
-
-		// Type 3: $Node = (struct (field $kind i64) (field $data (ref null any)) (field $value (ref null $Node)))
+		// Type 1: $Node = (struct (field $kind i64) (field $data (ref null any)) (field $value (ref null $Node)))
 		let node_type_idx = self.next_type_idx;
 		self.next_type_idx += 1;
 
@@ -230,6 +216,20 @@ impl WasmGcEmitter {
 			FieldType { element_type: Val(Ref(node_ref)), mutable: false },      // value
 		]);
 		self.node_type = node_type_idx;
+
+		// Type 2: $i64box = (struct (field i64)) for boxed integers
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I64), mutable: false },
+		]);
+		self.i64_box_type = self.next_type_idx;
+		self.next_type_idx += 1;
+
+		// Type 3: $f64box = (struct (field f64)) for boxed floats
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::F64), mutable: false },
+		]);
+		self.f64_box_type = self.next_type_idx;
+		self.next_type_idx += 1;
 	}
 
 	/// Emit constructor functions for the compact Node
