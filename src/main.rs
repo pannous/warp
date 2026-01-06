@@ -12,6 +12,7 @@ pub mod wasp_parser;
 
 pub mod type_kinds;
 
+pub mod analyzer;
 pub mod ast;
 pub mod meta;
 mod smarty;
