@@ -2,7 +2,6 @@ use wasp::extensions::print;
 use wasp::is;
 
 #[test]
-#[ignore]
 fn test_arithmetic() {
 	print("Testing basic arithmetic...");
 	is!("2+3", 5);
@@ -12,7 +11,6 @@ fn test_arithmetic() {
 	print("✓ Basic arithmetic tests passed");
 }
 #[test]
-#[ignore]
 fn test_harder_arithmetic() {
 	print("Testing harder arithmetic...");
 	is!("2+3*4", 14); // precedence
