@@ -877,7 +877,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 			}
 			Node::Key(left, op, right) => {
-				if op.is_arithmetic() || *op == Op::Define {
+				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
 				} else {
 					self.emit_node_instructions(func, left);
@@ -966,7 +966,7 @@ impl WasmGcEmitter {
 			// Emit right operand value onto stack
 			self.emit_numeric_value(func, right);
 
-			// Emit WASM arithmetic instruction
+			// Emit WASM arithmetic or comparison instruction
 			match op {
 				Op::Add => func.instruction(&Instruction::I64Add),
 				Op::Sub => func.instruction(&Instruction::I64Sub),
@@ -977,7 +977,32 @@ impl WasmGcEmitter {
 					warn!("Power operator not fully implemented, using multiplication");
 					func.instruction(&Instruction::I64Mul)
 				}
-				_ => unreachable!("Non-arithmetic operator in emit_arithmetic"),
+				// Comparison operators - result is i32 (0 or 1), extend to i64
+				Op::Eq => {
+					func.instruction(&Instruction::I64Eq);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				Op::Ne => {
+					func.instruction(&Instruction::I64Ne);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				Op::Lt => {
+					func.instruction(&Instruction::I64LtS);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				Op::Gt => {
+					func.instruction(&Instruction::I64GtS);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				Op::Le => {
+					func.instruction(&Instruction::I64LeS);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				Op::Ge => {
+					func.instruction(&Instruction::I64GeS);
+					func.instruction(&Instruction::I64ExtendI32U)
+				}
+				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
 			};
 		}
 

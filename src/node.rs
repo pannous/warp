@@ -221,6 +221,11 @@ impl Op {
 	pub fn is_arithmetic(&self) -> bool {
 		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow)
 	}
+
+	/// Check if this is a comparison operator
+	pub fn is_comparison(&self) -> bool {
+		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+	}
 }
 
 impl fmt::Display for Op {
