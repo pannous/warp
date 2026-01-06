@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
 use crate::node::Node;
-use crate::type_kinds::NodeTag;
+use crate::type_kinds::Kind;
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {

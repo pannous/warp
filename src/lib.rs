@@ -37,7 +37,7 @@ pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, T
 pub use wasp_parser::{parse, parse_file, parse_xml, WaspParser};
 pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
-pub use type_kinds::{AstKind, NodeKind, NodeTag, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START};
+pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START};
 // Metadata
 pub use meta::{Dada, LineInfo, DataType};
 // WASM
