@@ -36,12 +36,26 @@ macro_rules! strings { // ever used?
 }
 
 #[macro_export]
-macro_rules! Strings { // Texts // boxed list of Text nodes (why? inefficient without benefit?)
+macro_rules! Strings { // Texts // boxed list of Text nodes
 	($($lit:literal),* $(,)?) => {
-		Node::List(vec![$(Node::Text(String::from($lit))),*],,Bracket::None, Separator::Space)
+		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Colon)
 	};
 }
 
+#[macro_export]
+macro_rules! symbols { // boxed list of Symbol nodes
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Symbol(($lit).to_string())),*],Bracket::None, Separator::Space)
+	};
+}
+
+
+#[macro_export]
+macro_rules! expression { // boxed list of Symbol nodes
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Symbol(($lit).to_string())),*],Bracket::None, Separator::Space)
+	};
+}
 
 // #[macro_export]
 // macro_rules! ints { // just use primitive integer vec!
@@ -50,7 +64,7 @@ macro_rules! Strings { // Texts // boxed list of Text nodes (why? inefficient wi
 #[macro_export]
 macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
 	($($lit:literal),* $(,)?) => {
-		Node::List(vec![$(int($lit)),*],Bracket::None, Separator::Space)
+		Node::List(vec![$(int($lit)),*], Bracket::None, Separator::Space)
 	};
 }
 
@@ -97,23 +111,6 @@ macro_rules! is {
 	}};
 }
 
-#[macro_export]
-macro_rules! wis {
-	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
-	($input:expr) => {{
-		let node = wasp::wisp_parser::parse_wisp($input);
-		let emitted = wasp::wisp_parser::emit_wisp(&node);
-		let reparsed = wasp::wisp_parser::parse_wisp(&emitted);
-		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", $input, emitted);
-		node
-	}};
-	// Wisp eval: parse wisp -> Node -> compare to expected
-	($input:expr, $expected:expr) => {{
-		let node = wasp::wisp_parser::parse_wisp($input);
-		assert_eq!(node, $expected, "wisp parse mismatch for: {}", $input);
-		node
-	}};
-}
 
 #[macro_export]
 macro_rules! skip {

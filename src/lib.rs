@@ -21,13 +21,14 @@ pub mod wasm_gc_reader;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
+pub mod operators;
 pub mod ast;
 pub mod meta;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
-pub use node::{Bracket, DataType, Node, Op, Separator};
+pub use node::{Bracket, Node, Op, Separator};
 // Node convenience constructors
 pub use node::{block, codepoint, error, error_node, float, floats, data, int, ints, key, key_op, key_ops, list, parens, symbol, symbols, text, texts};
 // Node variants (except Number/List which conflict with extension types)
@@ -38,7 +39,7 @@ pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, NodeTag};
 // Metadata
-pub use meta::{Dada, LineInfo};
+pub use meta::{Dada, LineInfo, DataType};
 // WASM
 pub use wasm_gc_emitter::WasmGcEmitter;
 pub use wasm_gc_reader::GcObject;

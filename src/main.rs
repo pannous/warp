@@ -15,7 +15,8 @@ pub mod type_kinds;
 pub mod analyzer;
 pub mod ast;
 pub mod meta;
-mod smarty;
+pub mod smarty;
+pub mod operators;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // use bla::test_bla_lib;
