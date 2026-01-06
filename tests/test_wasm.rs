@@ -3,11 +3,11 @@
 use std::process::exit;
 use wasp::analyzer::analyze;
 use wasp::extensions::print;
-use wasp::Node;
-use wasp::Node::{Empty, False, True};
 use wasp::type_kinds::NodeKind;
 use wasp::wasm_gc_emitter::eval;
 use wasp::wasp_parser::parse;
+use wasp::Node;
+use wasp::Node::{Empty, False, True};
 use wasp::{eq, is, skip};
 
 #[test]
@@ -68,7 +68,7 @@ fn test_merge_runtime() {
 	{
 		let runtime: Module = loadModule("wasp-runtime.wasm");
 		let main: Module = loadModule("test/merge/main_memory.wasm"); // LOST :( time machine?
-		// let main : Module = loadModule("test/merge/main_global.wasm");
+																// let main : Module = loadModule("test/merge/main_global.wasm");
 		main.code.needs_relocate = true;
 		runtime.code.needs_relocate = false;
 		let merged: Code = merge_binaries(runtime.code, main.code);
@@ -828,8 +828,14 @@ fn test_wasm_if() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "todo timeout inf loop why!"]
 fn test_wasm_while() {
+	is!("i=1;while(i<9){i++};i+1", 10);
+}
+
+#[test]
+#[ignore]
+fn test_wasm_while2() {
 	is!("i=1;while i<9:i++;i+1", 10);
 	is!("i=1;while(i<9){i++};i+1", 10);
 	is!("i=1;while(i<9 and i > -10){i+=2;i--};i+1", 10);
@@ -1082,7 +1088,7 @@ fn test_array_indices_wasm() {
 	#[cfg(not(feature = "WEBAPP"))]
 	{
 		assert_throws("surface=(1,2,3);i=1;k#i=4;k#i") // no such k!
-		//	caught in wrong place?
+		                                         //	caught in wrong place?
 	}
 
 	//	testArrayIndices(); //	assert! node based (non-primitive) interpretation first
@@ -1227,7 +1233,7 @@ fn test_recent_random_bugs() {
 #[ignore]
 fn test_square_exp_wasm() {
 	let π = PI; //3.141592653589793;
-	// todo smart pointer return from main for floats!
+			 // todo smart pointer return from main for floats!
 	is!("3²", 9);
 	is!("3.0²", 9);
 	is!("√100²", 100);
@@ -1271,7 +1277,7 @@ fn test_square_exp_wasm() {
 fn test_round_floor_ceiling() {
 	is!("ceil 3.7", 4);
 	is!("floor 3.7", 3); // todo: only if «use math» namespace
-	//	is!("ceiling 3.7", 4);// todo: only if «use math» namespace
+					  //	is!("ceiling 3.7", 4);// todo: only if «use math» namespace
 	is!("round 3.7", 4);
 	//	is!("i=3.7;.3+i", 4);// floor
 	// lol "⌊3.7⌋" is cursed and is transformed into \n\t or something in wasm and IDE!
@@ -1302,7 +1308,7 @@ fn test_wasm_mutable_global() {
 	is!("global k=7", 7); // python style, as always the best
 	is!("global k:=7", 7); //  global or function?
 	is!("global k;k = 7", 7); // python style, as always the best
-	//    is!("global.k=7", 7);//  currently all globals are exported
+						   //    is!("global.k=7", 7);//  currently all globals are exported
 	skip!(testWasmMutableGlobal2());
 	skip!(testWasmTypedGlobals());
 	//    test_wasm_mutable_global_imports();
@@ -1342,8 +1348,8 @@ fn test_wasm_mutable_global_imports() {
 	is!("import k=7", 7); //  import with inferred type
 	is!("import const k=7", 7); //  import with inferred type
 	is!("import mutable k=7", 7); //  import with inferred type
-	// remember that the concepts of functions and properties shall be IDENTICAL to the USER!
-	// this does !impede the above, as global exports are !properties, but something to keep in mind
+	                           // remember that the concepts of functions and properties shall be IDENTICAL to the USER!
+	                           // this does !impede the above, as global exports are !properties, but something to keep in mind
 }
 
 #[test]
@@ -1553,7 +1559,7 @@ fn test_for_loops() {
 		is!("for i in 1 to 5 : {puti i};i", 6); // after loop :(
 		is!("for i in 1 to 5 : puti i", 5);
 		is!("for i in 1 to 5\n  puti i", 5); // unclosed pair  	<control>: SHIFT OUT
-		// is!("for i in 1 to 5\n  puti i\ni", 6);
+									   // is!("for i in 1 to 5\n  puti i\ni", 6);
 		is!("for i in 1…5 : puti i", 5);
 		is!("for i in 1 … 5 : puti i", 5);
 		// is!("for i in 1 .. 5\n  puti i", 4);// exclusive!
@@ -1600,9 +1606,8 @@ fn test_auto_smarty() {
 #[ignore]
 fn test_arguments() {
 	is!("#params", 0); // no args, but create empty List anyway
-	// todo add context to wasp variable $params
+	                // todo add context to wasp variable $params
 }
-
 
 #[test]
 #[ignore]
@@ -1973,7 +1978,7 @@ fn test_dom_property() {
 	// }
 	let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
 	eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-	//	result = eval("width='width';$canvas.width");
+							//	result = eval("width='width';$canvas.width");
 	result = eval("$canvas.width");
 	eq!(result.value(), &300);
 	//	return;
