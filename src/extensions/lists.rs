@@ -258,6 +258,14 @@ impl Adds<&str> for Vec<String> {
 	}
 }
 
+
+impl Adds<i32> for Vec<i32> {
+	fn add(mut self, rhs: i32) -> Self {
+		self.push(rhs);
+		self
+	}
+}
+
 pub fn map<T, U, F>(items: Vec<T>, func: F) -> Vec<U>
 where
 	F: FnMut(T) -> U,
