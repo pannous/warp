@@ -821,11 +821,16 @@ impl WasmGcEmitter {
 	fn count_variables(&mut self, node: &Node) -> u32 {
 		let node = node.drop_meta();
 		match node {
+			// Only Define and Assign create new variables
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					self.scope.define(name.clone(), None);
 				}
 				self.count_variables(right)
+			}
+			// Compound assignments don't create new variables, just modify existing ones
+			Node::Key(left, op, right) if op.is_compound_assign() => {
+				self.count_variables(left) + self.count_variables(right)
 			}
 			Node::Key(left, Op::Do, right) => {
 				// While loop needs a temp local for result
@@ -1354,6 +1359,37 @@ impl WasmGcEmitter {
 					}
 				} else {
 					panic!("Expected symbol in definition, got {:?}", left);
+				}
+			}
+			// Compound assignment: x += y → x = x + y
+			Node::Key(left, op, right) if op.is_compound_assign() => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					// Get local position first to avoid borrow issues
+					let local_pos = self.scope.lookup(name)
+						.map(|l| l.position)
+						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+					let base_op = op.base_op();
+					// Get current value of x
+					func.instruction(&Instruction::LocalGet(local_pos));
+					// Emit y
+					self.emit_numeric_value(func, right);
+					// Apply base operation
+					match base_op {
+						Op::Add => func.instruction(&Instruction::I64Add),
+						Op::Sub => func.instruction(&Instruction::I64Sub),
+						Op::Mul => func.instruction(&Instruction::I64Mul),
+						Op::Div => func.instruction(&Instruction::I64DivS),
+						Op::Mod => func.instruction(&Instruction::I64RemS),
+						Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
+						Op::And => func.instruction(&Instruction::I64And),
+						Op::Or => func.instruction(&Instruction::I64Or),
+						Op::Xor => func.instruction(&Instruction::I64Xor),
+						_ => panic!("Unexpected base op: {:?}", base_op),
+					};
+					// Store result and leave on stack
+					func.instruction(&Instruction::LocalTee(local_pos));
+				} else {
+					panic!("Expected symbol in compound assignment, got {:?}", left);
 				}
 			}
 			// Arithmetic operators
