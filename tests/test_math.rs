@@ -199,8 +199,41 @@ fn test_eval() {
 
 #[test]
 fn test_runtime_equality() {
+	is!("3==2+1", true);
+	is!("3.1==3.1", true); // Obviously, we need to select the correct equality operator per type.
 	is!("3*452==452*3", 1);
 	is!("3*13==14*3", 0);
+	is!("3*13==14*3", 0);
+}
+
+#[test]
+fn test_runtime_equality_autocast() {
+	// A very general autocast mechanism works pretty well in C++. see there for inspiration.
+	is!("3==3.0", true);
+	/* if (node.length == 2) {  // binary operator would be our Key() node
+        Node lhs = node.children[0]; //["lhs"];
+        Node rhs = node.children[1]; //["rhs"];
+        const Code &lhs_code = emitExpression(lhs, context);
+        Type lhs_type = last_type;
+        arg_type = last_type; // needs to be visible to array index [1,2,3]#1 gets FUCKED up in rhs operations!!
+        if (isGeneric(last_type))
+            arg_type = last_type.generics.value_type;
+        const Code &rhs_code = emitExpression(rhs, context);
+        Type rhs_type = last_type;
+        Type common_type = commonType(lhs_type, rhs_type, name); // 3.1 + 3 => 6.1 etc, -1/6 => float
+        bool same_domain = common_type != none; // todo: only some operators * / + - only sometimes autocast!
+        code.push(lhs_code); // might be empty ok
+        if (same_domain)
+            code.add(cast(lhs_type, common_type));
+        code.push(rhs_code); // might be empty ok
+        if (name == "#") // todo unhack!!
+            code.add(cast(rhs_type, int32t)); // index operator, cast to int32
+        else if (same_domain)
+            code.add(cast(rhs_type, common_type));
+        if (common_type != void_block)
+            last_type = common_type;
+        else last_type = rhs_type;
+    */
 }
 
 #[test]
