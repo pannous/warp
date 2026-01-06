@@ -4,6 +4,9 @@
 // use extensions::Numbers::*;
 // use extensions::Strings::*;
 
+use crate::node::Bracket;
+use crate::node::Separator;
+use crate::Number::Int;
 use crate::node::Node;
 use crate::wasp_parser::parse;
 
@@ -29,6 +32,25 @@ macro_rules! s {
 macro_rules! strings {
 	($($lit:literal),* $(,)?) => {
 		vec![$(String::from($lit)),*]
+	};
+}
+
+#[macro_export]
+macro_rules! Strings { // Texts // boxed list of Text nodes (why? inefficient without benefit?)
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Text(String::from($lit))),*],,Bracket::None, Separator::Space)
+	};
+}
+
+
+// #[macro_export]
+// macro_rules! ints { // just use primitive integer vec!
+
+
+#[macro_export]
+macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(int($lit)),*],Bracket::None, Separator::Space)
 	};
 }
 

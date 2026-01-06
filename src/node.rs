@@ -2278,9 +2278,9 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
-pub fn int(n: i64) -> Node {
-	Number(Number::Int(n))
-}
+pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(Dada::new(value)) }
+
+pub fn int(n: i64) -> Node { Number(Number::Int(n)) }
 
 pub fn float(n: f64) -> Node {
 	Number(Number::Float(n))
