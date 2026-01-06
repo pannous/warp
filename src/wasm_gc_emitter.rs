@@ -952,9 +952,6 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
-				} else if *op == Op::Assign && matches!(right.drop_meta(), Node::Number(_)) {
-					// Treat x=42 as assignment only when RHS is numeric
-					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
 					self.emit_ternary(func, left, right);
@@ -963,22 +960,14 @@ impl WasmGcEmitter {
 					// For struct instances like Person{...}, emit block as list
 					let right_node = right.drop_meta();
 					if let Node::List(items, Bracket::Curly, sep) = right_node {
-						// Convert curly block to square list and normalize field ops
-						let normalized_items: Vec<Node> = items.iter().map(|item| {
-							// Normalize Keys in struct fields to Op::None
-							if let Node::Key(k, _, v) = item.drop_meta() {
-								Node::Key(k.clone(), Op::None, v.clone())
-							} else {
-								item.clone()
-							}
-						}).collect();
-						let list_node = Node::List(normalized_items, Bracket::Square, sep.clone());
+						// Convert curly block to square list, preserving inner ops
+						let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
 						self.emit_node_instructions(func, &list_node);
 					} else {
 						self.emit_node_instructions(func, right_node);
 					}
-					// Use Op::None for WASM roundtrip compatibility
-					func.instruction(&Instruction::I64Const(0)); // op_to_code(&Op::None)
+					// Preserve the op for roundtrip
+					func.instruction(&Instruction::I64Const(op_to_code(op)));
 					self.emit_call(func, "new_key");
 				}
 			}
