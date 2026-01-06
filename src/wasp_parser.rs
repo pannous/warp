@@ -494,7 +494,8 @@ impl WaspParser {
 
 		// Single-char prefix operators
 		match c1 {
-			'-' => Some((Op::Neg, 1)),
+			// Only treat '-' as prefix operator if NOT followed by a digit (let parse_number handle negative literals)
+			'-' if !c2.is_ascii_digit() => Some((Op::Neg, 1)),
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
