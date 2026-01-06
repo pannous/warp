@@ -380,21 +380,145 @@ impl WaspParser {
 	fn peek_operator(&self) -> Option<(Op, usize)> {
 		let c1 = self.current_char();
 		let c2 = self.peek_char(1);
+		let c3 = self.peek_char(2);
 
-		// Check 2-char operators first
+		// Check 3-char operators first
+		match (c1, c2, c3) {
+			('.', '.', '.') => return Some((Op::To, 3)), // ... ellipsis range
+			('a', 'n', 'd') if !self.peek_char(3).is_alphanumeric() => {
+				return Some((Op::And, 3))
+			}
+			('x', 'o', 'r') if !self.peek_char(3).is_alphanumeric() => {
+				return Some((Op::Xor, 3))
+			}
+			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
+				return Some((Op::Not, 3))
+			}
+			_ => {}
+		}
+
+		// Check 2-char operators
 		match (c1, c2) {
+			// Structural
 			(':', '=') => return Some((Op::Define, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
+
+			// Arithmetic
+			('*', '*') => return Some((Op::Pow, 2)),
+
+			// Comparison
+			('<', '=') => return Some((Op::Le, 2)),
+			('>', '=') => return Some((Op::Ge, 2)),
+			('=', '=') => return Some((Op::Eq, 2)),
+			('!', '=') => return Some((Op::Ne, 2)),
+
+			// Suffix (only if previous was identifier/number)
+			('+', '+') => return Some((Op::Inc, 2)),
+			('-', '-') => return Some((Op::Dec, 2)),
+
+			// Range
+			('.', '.') => return Some((Op::Range, 2)),
+
+			// Logical (2-char versions)
+			('o', 'r') if !c3.is_alphanumeric() => return Some((Op::Or, 2)),
+			('&', '&') => return Some((Op::And, 2)),
+			('|', '|') => return Some((Op::Or, 2)),
+
 			_ => {}
 		}
 
 		// Check 1-char operators
 		match c1 {
+			// Structural
 			':' => Some((Op::Colon, 1)),
 			'=' => Some((Op::Assign, 1)),
 			'.' => Some((Op::Dot, 1)),
+
+			// Arithmetic
+			'+' => Some((Op::Add, 1)),
+			'-' => Some((Op::Sub, 1)), // Note: could be prefix Neg, context determines
+			'*' => Some((Op::Mul, 1)),
+			'/' => Some((Op::Div, 1)),
+			'%' => Some((Op::Mod, 1)),
+			'^' => Some((Op::Pow, 1)),
+
+			// Unicode arithmetic
+			'×' => Some((Op::Mul, 1)),
+			'÷' => Some((Op::Div, 1)),
+			'⋅' => Some((Op::Mul, 1)),
+
+			// Comparison
+			'<' => Some((Op::Lt, 1)),
+			'>' => Some((Op::Gt, 1)),
+
+			// Unicode comparison
+			'≤' => Some((Op::Le, 1)),
+			'≥' => Some((Op::Ge, 1)),
+			'≠' => Some((Op::Ne, 1)),
+
+			// Logical
+			'!' => Some((Op::Not, 1)),
+			'¬' => Some((Op::Not, 1)),
+			'∧' => Some((Op::And, 1)),
+			'⋁' => Some((Op::Or, 1)),
+			'⊻' => Some((Op::Xor, 1)),
+
+			// Index
+			'#' => Some((Op::Hash, 1)),
+
+			// Ternary
+			'?' => Some((Op::Question, 1)),
+
+			// Range
+			'…' => Some((Op::To, 1)), // single unicode ellipsis
+
+			_ => None,
+		}
+	}
+
+	/// Peek for prefix operators (unary operators that bind to right operand)
+	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
+		let c1 = self.current_char();
+		let c2 = self.peek_char(1);
+		let c3 = self.peek_char(2);
+
+		// Check word-based prefix operators
+		match (c1, c2, c3) {
+			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
+				return Some((Op::Not, 3))
+			}
+			_ => {}
+		}
+
+		// Single-char prefix operators
+		match c1 {
+			'-' => Some((Op::Neg, 1)),
+			'!' => Some((Op::Not, 1)),
+			'¬' => Some((Op::Not, 1)),
+			'√' => Some((Op::Sqrt, 1)),
+			'‖' => Some((Op::Abs, 1)),
+			_ => None,
+		}
+	}
+
+	/// Peek for suffix operators (unary operators that bind to left operand)
+	fn peek_suffix_operator(&self) -> Option<(Op, usize)> {
+		let c1 = self.current_char();
+		let c2 = self.peek_char(1);
+
+		// Check 2-char suffix operators first
+		match (c1, c2) {
+			('+', '+') => return Some((Op::Inc, 2)),
+			('-', '-') => return Some((Op::Dec, 2)),
+			_ => {}
+		}
+
+		// Check 1-char suffix operators
+		match c1 {
+			'²' => Some((Op::Square, 1)),
+			'³' => Some((Op::Cube, 1)),
 			_ => None,
 		}
 	}
@@ -490,14 +614,45 @@ impl WaspParser {
 		}
 	}
 
+	/// Helper to advance by N characters
+	fn advance_by(&mut self, n: usize) {
+		for _ in 0..n {
+			self.advance();
+		}
+	}
+
 	/// Pratt parser: parse expression with given minimum binding power
+	/// Handles prefix, infix, and suffix operators
 	fn parse_expr(&mut self, min_bp: u8) -> Node {
-		let mut lhs = self.parse_atom();
+		self.skip_spaces();
+
+		// Step 1: Handle prefix operators
+		let mut lhs = if let Some((op, chars)) = self.peek_prefix_operator() {
+			// Check if this is really a prefix (not infix like x - y)
+			// Prefix operators should be at start or after another operator
+			self.advance_by(chars);
+			self.skip_spaces();
+			let (_, r_bp) = op.binding_power();
+			let rhs = self.parse_expr(r_bp);
+			Node::Key(Box::new(Empty), op, Box::new(rhs))
+		} else {
+			self.parse_atom()
+		};
 
 		loop {
 			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
 
-			// Check for infix operator
+			// Step 2: Check for suffix operators first (they bind tightest)
+			if let Some((op, chars)) = self.peek_suffix_operator() {
+				let (l_bp, _) = op.binding_power();
+				if l_bp >= min_bp {
+					self.advance_by(chars);
+					lhs = Node::Key(Box::new(lhs), op, Box::new(Empty));
+					continue;
+				}
+			}
+
+			// Step 3: Check for infix operator
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
 				None => break,
@@ -511,9 +666,7 @@ impl WaspParser {
 			}
 
 			// Consume the operator
-			for _ in 0..chars {
-				self.advance();
-			}
+			self.advance_by(chars);
 			self.skip_whitespace();
 
 			// Parse right-hand side with appropriate binding power
@@ -526,6 +679,7 @@ impl WaspParser {
 		lhs
 	}
 
+	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
 	fn parse_value(&mut self) -> Node {
 		let (_, _, comment) = self.skip_whitespace_and_comments();
 
@@ -534,38 +688,18 @@ impl WaspParser {
 		if self.is_at_line_end() {
 			return Empty;
 		};
-		let node = match self.current_char() {
-			ch => {
-				match ch {
-					'"' | '\'' | '«' => self.parse_string(),
-					'(' | '[' | '{' => self.parse_bracketed(ch),
-					'<' if self.options.xml_mode => self.parse_xml_tag(),
-					'<' => self.parse_bracketed(ch), // C++ generics as groups
-					';' => Empty,                    // Semicolons handled by main parse loop
-					'>' => Empty,                    // Closing angle bracket, handled by parse_bracketed
-					'-' if self.peek_char(1) == '>' => {
-						// Arrow operator: ->
-						self.advance(); // skip -
-						self.advance(); // skip >
-						Symbol("->".to_string())
-					}
-					_ if ch.is_numeric() || ch == '-' => self.parse_number(), // '三'.is_numeric()!
-					_ if ch.is_alphabetic() || ch == '_' => self.parse_expr(0),
-					// _ if ch.is_ascii_graphic() // is_ascii minus  is_control
-					// _ if ch.is_control() => self.
-					_ => {
-						// todo implement the rest like operators, etc.
-						warn!(
-							"Unexpected character '{}' at line {}, column {}",
-							ch, line_nr, column
-						);
-						warn!("Current line: {}", self.current_line); // todo ---^ 'here' via offset
-						self.advance();
-						error(&format!("Unexpected character '{}'", ch))
-					}
-				}
-			}
+
+		let ch = self.current_char();
+
+		// Handle special non-expression cases first
+		let node = match ch {
+			';' => return Empty, // Semicolons handled by main parse loop
+			'>' => return Empty, // Closing bracket handled by parse_bracketed
+			'<' if self.options.xml_mode => self.parse_xml_tag(),
+			// Everything else goes through parse_expr for operator chaining
+			_ => self.parse_expr(0),
 		};
+
 		if node == Empty {
 			return node;
 		}
