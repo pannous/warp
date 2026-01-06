@@ -1,6 +1,6 @@
 //! Wisp Parser - S-expression format mapping directly to WASM GC Node layout
 //!
-//! why? b
+//! why? so far only to demonstrate the wasp layout
 //!
 //! Format: (kind data value) where:
 //! - kind: node type (text, symbol, number, list, key, pair, tag, meta, ...)
