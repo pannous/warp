@@ -54,28 +54,109 @@ pub enum DataType {
 /// Operator for Key nodes - distinguishes different binding operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Op {
-	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42} (tightest)
+	// Structural operators (existing)
+	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
 	Dot,      // .   member access
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
 	Assign,   // =   assignment
 	Arrow,    // ->  arrow/return type
 	FatArrow, // =>  fat arrow/lambda
-	None,     // implicit/unknown
+
+	// Arithmetic operators
+	Add,  // +
+	Sub,  // -
+	Mul,  // *  ×  ⋅
+	Div,  // /  ÷
+	Mod,  // %
+	Pow,  // ^  **
+
+	// Comparison operators
+	Lt,  // <
+	Gt,  // >
+	Le,  // <=  ≤
+	Ge,  // >=  ≥
+	Eq,  // ==
+	Ne,  // !=  ≠
+
+	// Logical operators
+	And, // and  &&  ∧
+	Or,  // or   ||  ⋁
+	Xor, // xor  ⊻
+	Not, // not  !  ¬
+
+	// Prefix operators (unary)
+	Neg,  // - (unary minus)
+	Sqrt, // √
+	Abs,  // ‖...‖
+
+	// Suffix operators
+	Inc,    // ++
+	Dec,    // --
+	Square, // ²
+	Cube,   // ³
+
+	// Ternary
+	Question, // ? (ternary condition)
+
+	// Index/Range
+	Hash,  // #  (1-based index)
+	Range, // ..
+	To,    // to  ...  …
+
+	None, // implicit/unknown
 }
 
 impl Op {
 	/// Binding power: (left_bp, right_bp)
 	/// Higher = tighter binding. Right > left means right-associative.
+	/// Suffix operators: (left_bp, 0) - only binds to left
+	/// Prefix operators: (0, right_bp) - only binds to right
 	pub fn binding_power(&self) -> (u8, u8) {
 		match self {
-			Op::Dot => (100, 101),    // tightest, left-assoc: a.b.c → (a.b).c
-			Op::Scope => (90, 91),    // left-assoc: a::b::c → (a::b)::c
-			Op::Colon => (80, 81),    // right-assoc: a:b:c → a:(b:c)
-			Op::Arrow => (30, 29),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (30, 29), // right-assoc  a => b
-			Op::Define => (20, 19),   // right-assoc: a:=b:=c → a:=(b:=c)
-			Op::Assign => (20, 19),   // right-assoc: a=b=c → a=(b=c)
+			// Suffix operators (bind very tight to left, no right operand)
+			Op::Square | Op::Cube => (200, 0),
+			Op::Inc | Op::Dec => (195, 0),
+
+			// Member access (tightest infix)
+			Op::Dot => (180, 181),
+			Op::Scope => (175, 176),
+			Op::Hash => (170, 171), // index operator #
+
+			// Power (right-assoc: 2^3^4 = 2^(3^4))
+			Op::Pow => (160, 159),
+
+			// Multiplicative (left-assoc)
+			Op::Mul | Op::Div | Op::Mod => (150, 151),
+
+			// Additive (left-assoc)
+			Op::Add | Op::Sub => (140, 141),
+
+			// Range
+			Op::Range | Op::To => (130, 131),
+
+			// Comparison (left-assoc, no chaining)
+			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
+			Op::Eq | Op::Ne => (115, 116),
+
+			// Logical (left-assoc with and > or)
+			Op::And => (100, 101),
+			Op::Xor => (95, 96),
+			Op::Or => (90, 91),
+
+			// Ternary
+			Op::Question => (85, 84), // right-assoc
+
+			// Structural/Key operators (existing, adjusted for consistency)
+			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
+			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
+			Op::FatArrow => (70, 69), // right-assoc: a => b
+			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
+			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
+
+			// Prefix operators (no left operand, binds to right)
+			Op::Neg | Op::Not | Op::Sqrt | Op::Abs => (0, 190),
+
 			Op::None => (0, 0),
 		}
 	}
@@ -83,6 +164,7 @@ impl Op {
 	/// The string representation of this operator
 	pub fn as_str(&self) -> &'static str {
 		match self {
+			// Structural
 			Op::Colon => ":",
 			Op::Dot => ".",
 			Op::Scope => "::",
@@ -90,8 +172,64 @@ impl Op {
 			Op::Assign => "=",
 			Op::Arrow => "->",
 			Op::FatArrow => "=>",
+
+			// Arithmetic
+			Op::Add => "+",
+			Op::Sub => "-",
+			Op::Mul => "*",
+			Op::Div => "/",
+			Op::Mod => "%",
+			Op::Pow => "^",
+
+			// Comparison
+			Op::Lt => "<",
+			Op::Gt => ">",
+			Op::Le => "<=",
+			Op::Ge => ">=",
+			Op::Eq => "==",
+			Op::Ne => "!=",
+
+			// Logical
+			Op::And => "and",
+			Op::Or => "or",
+			Op::Xor => "xor",
+			Op::Not => "not",
+
+			// Prefix
+			Op::Neg => "-",
+			Op::Sqrt => "√",
+			Op::Abs => "‖",
+
+			// Suffix
+			Op::Inc => "++",
+			Op::Dec => "--",
+			Op::Square => "²",
+			Op::Cube => "³",
+
+			// Ternary/Index/Range
+			Op::Question => "?",
+			Op::Hash => "#",
+			Op::Range => "..",
+			Op::To => "to",
+
 			Op::None => "",
 		}
+	}
+
+	/// Check if this is a prefix-only operator
+	pub fn is_prefix(&self) -> bool {
+		matches!(self, Op::Neg | Op::Not | Op::Sqrt | Op::Abs)
+	}
+
+	/// Check if this is a suffix-only operator
+	pub fn is_suffix(&self) -> bool {
+		matches!(self, Op::Inc | Op::Dec | Op::Square | Op::Cube)
+	}
+
+	/// Check if this operator is right-associative
+	pub fn is_right_assoc(&self) -> bool {
+		let (l, r) = self.binding_power();
+		l > 0 && r > 0 && r < l
 	}
 }
 
