@@ -34,6 +34,7 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	memory: MemorySection,
 	data: DataSection,
+	globals: GlobalSection,
 	// Type indices
 	string_type: u32,   // (struct (field $ptr i32) (field $len i32))
 	i64_box_type: u32,  // (struct (field i64)) for ints
@@ -41,10 +42,12 @@ pub struct WasmGcEmitter {
 	node_type: u32,     // Main 3-field Node struct
 	next_type_idx: u32,
 	next_func_idx: u32,
+	next_global_idx: u32,
 	function_indices: HashMap<&'static str, u32>,
 	used_functions: HashSet<&'static str>,
 	required_functions: HashSet<&'static str>,
 	emit_all_functions: bool,
+	emit_kind_globals: bool, // Emit NodeTag constants as globals for documentation
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
 	next_data_offset: u32,
@@ -61,19 +64,27 @@ impl WasmGcEmitter {
 			names: NameSection::new(),
 			memory: MemorySection::new(),
 			data: DataSection::new(),
+			globals: GlobalSection::new(),
 			string_type: 0,
 			i64_box_type: 0,
 			f64_box_type: 0,
 			node_type: 0,
 			next_type_idx: 0,
 			next_func_idx: 0,
+			next_global_idx: 0,
 			function_indices: HashMap::new(),
 			used_functions: HashSet::new(),
 			required_functions: HashSet::new(),
 			emit_all_functions: true,
+			emit_kind_globals: true, // Enable by default for debugging
 			string_table: HashMap::new(),
 			next_data_offset: 8,
 		}
+	}
+
+	/// Enable/disable emitting NodeTag globals for documentation
+	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
+		self.emit_kind_globals = enabled;
 	}
 
 	pub fn set_tree_shaking(&mut self, enabled: bool) {
@@ -127,7 +138,39 @@ impl WasmGcEmitter {
 		});
 		self.exports.export("memory", ExportKind::Memory, 0);
 		self.emit_gc_types();
+		if self.emit_kind_globals {
+			self.emit_kind_globals();
+		}
 		self.emit_constructors();
+	}
+
+	/// Emit NodeTag constants as immutable globals for documentation
+	/// These show up nicely in wasm-tools print output
+	fn emit_kind_globals(&mut self) {
+		let tags = [
+			("kind_empty", NodeTag::Empty as i64),
+			("kind_int", NodeTag::Int as i64),
+			("kind_float", NodeTag::Float as i64),
+			("kind_text", NodeTag::Text as i64),
+			("kind_codepoint", NodeTag::Codepoint as i64),
+			("kind_symbol", NodeTag::Symbol as i64),
+			("kind_key", NodeTag::Key as i64),
+			("kind_pair", NodeTag::Pair as i64),
+			("kind_block", NodeTag::Block as i64),
+			("kind_list", NodeTag::List as i64),
+			("kind_data", NodeTag::Data as i64),
+			("kind_meta", NodeTag::Meta as i64),
+			("kind_error", NodeTag::Error as i64),
+		];
+
+		for (name, value) in tags {
+			self.globals.global(
+				GlobalType { val_type: ValType::I64, mutable: false, shared: false },
+				&ConstExpr::i64_const(value),
+			);
+			self.exports.export(name, ExportKind::Global, self.next_global_idx);
+			self.next_global_idx += 1;
+		}
 	}
 
 	pub fn emit_for_node(&mut self, node: &Node) {
@@ -586,6 +629,9 @@ impl WasmGcEmitter {
 		self.module.section(&self.types);
 		self.module.section(&self.functions);
 		self.module.section(&self.memory);
+		if self.next_global_idx > 0 {
+			self.module.section(&self.globals);
+		}
 		self.module.section(&self.exports);
 		self.module.section(&self.code);
 		self.module.section(&self.data);
@@ -647,6 +693,22 @@ impl WasmGcEmitter {
 			func_names.append(idx, name);
 		}
 		self.names.functions(&func_names);
+
+		// Global names for NodeTag constants
+		if self.next_global_idx > 0 {
+			let global_names_list = [
+				"kind_empty", "kind_int", "kind_float", "kind_text",
+				"kind_codepoint", "kind_symbol", "kind_key", "kind_pair",
+				"kind_block", "kind_list", "kind_data", "kind_meta", "kind_error",
+			];
+			let mut global_names = NameMap::new();
+			for (idx, name) in global_names_list.iter().enumerate() {
+				if (idx as u32) < self.next_global_idx {
+					global_names.append(idx as u32, name);
+				}
+			}
+			self.names.globals(&global_names);
+		}
 	}
 
 	pub fn get_unused_functions(&self) -> Vec<&'static str> {
