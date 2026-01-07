@@ -1,15 +1,10 @@
-use wasp::extensions::numbers::Number;
-use wasp::node::node;
-use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasm_gc_reader::read_bytes;
-use wasp::Kind::Codepoint;
 use wasp::Node::{Empty, Type};
 use wasp::*;
 
-fn TypeRef(name: &str) -> Node {
+fn type_ref(name: &str) -> Node {
 	Type {
 		name: Box::new(symbol(name)),
-		body: Box::new((Empty)),
+		body: Box::new(Empty),
 	}
 }
 
@@ -19,22 +14,29 @@ fn test_class_definition() {
 		"class Person{name:String age:i64}",
 		Type {
 			name: Box::new(symbol("Person")),
-			body: Box::new(list(vec![key("name", TypeRef("String")), key("age", TypeRef("i64")),]))
+			body: Box::new(list(vec![key("name", type_ref("String")), key("age", type_ref("i64")),]))
 		}
 	);
 }
 
 #[test]
 fn test_class_instance() {
-	is!(
-		"class Person{name:String age:i64}; Person{name:'Alice' age:30}",
-		key("Person",list(vec![key("name", text("Alice")),key("age", int(30)),]))
-	);
+	// eval() now returns Node::Data(GcObject) for class instances
+	// Verify GcObject fields match expected values
+	use wasp::gc_traits::GcObject;
+	let result = wasp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	if let wasp::Node::Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+		assert_eq!(gc_obj.get_string(0).unwrap(), "Alice");
+		let age: i64 = gc_obj.get(1).unwrap();
+		assert_eq!(age, 30);
+	} else {
+		panic!("expected Node::Data(GcObject), got {:?}", result);
+	}
 }
 
 // End goal API - raw GC struct roundtrip via Person type
 use wasp::gc_struct;
-use wasp::gc_traits::GcObject;
 
 /// Rust Person struct for direct comparison
 #[derive(Debug, Clone, PartialEq)]
@@ -49,7 +51,7 @@ impl RustPerson {
 	}
 }
 
-/// gc_struct! wrapper for reading WASM GC Person struct
+// gc_struct! wrapper for reading WASM GC Person struct
 gc_struct! {
 	WasmPerson {
 		name: 0 => String,
@@ -59,67 +61,24 @@ gc_struct! {
 
 #[test]
 fn test_class_instance_raw() {
-	use wasp::{WasmGcEmitter, TypeDef, extract_instance_values};
-	use wasmtime::*;
+	use wasp::gc_traits::GcObject;
 
-	// The expected result as a Rust struct
 	let alice = RustPerson::new("Alice", 30);
 
-	// Parse full code: class definition + instance
-	let code = "class Person{name:String age:i64}; Person{name:'Alice' age:30}";
-	let parsed = wasp::parse(code);
+	// eval() automatically detects class+instance and returns Node::Data(GcObject)
+	let result = wasp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 
-	// Find class definition and instance in the parsed tree
-	// For "class X; instance" the result is a List containing both
-	let (class_node, instance_node) = match parsed.drop_meta() {
-		wasp::Node::List(items, _, _) if items.len() >= 2 => {
-			(items[0].clone(), items[1].clone())
-		}
-		_ => panic!("expected list with class and instance"),
-	};
+	// Extract GcObject from Node::Data and read field values
+	if let wasp::Node::Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+		let name: String = gc_obj.get_string(0).unwrap();
+		let age: i64 = gc_obj.get(1).unwrap();
 
-	// Extract TypeDef from class definition
-	let person_typedef = TypeDef::from_node(&class_node).expect("valid class definition");
-	assert_eq!(person_typedef.name, "Person");
-	assert_eq!(person_typedef.fields.len(), 2);
-
-	// Extract field values from instance automatically
-	let (type_name, field_values) = extract_instance_values(&instance_node).expect("valid instance");
-	assert_eq!(type_name, "Person");
-	assert_eq!(field_values.len(), 2);
-
-	// Emit raw GC struct WASM
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(&person_typedef, &field_values);
-
-	// Run WASM and get result
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-	let engine = Engine::new(&config).unwrap();
-	let mut store = Store::new(&engine, ());
-	let module = Module::new(&engine, &wasm_bytes).unwrap();
-	let linker = Linker::new(&engine);
-	let instance = linker.instantiate(&mut store, &module).unwrap();
-	let main = instance.get_func(&mut store, "main").unwrap();
-	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results).unwrap();
-
-	// Wrap GcObject in Node::Data - this is how eval() would return it
-	use wasp::gc_traits::GcObject as ErgonomicGcObject;
-	let gc_obj = ErgonomicGcObject::new(results[0].clone(), store, Some(instance)).unwrap();
-	let node_data = wasp::data(gc_obj);
-
-	// Extract from Node::Data and read values
-	if let wasp::Node::Data(dada) = &node_data {
-		let extracted = dada.downcast_ref::<ErgonomicGcObject>().expect("should be GcObject");
-		let name: String = extracted.get_string(0).unwrap();
-		let age: i64 = extracted.get(1).unwrap();
-
-		let result = RustPerson { name, age };
-		assert_eq!(result, alice);
-		println!("Node::Data(GcObject) roundtrip: {:?} == {:?}", result, alice);
+		let person = RustPerson { name, age };
+		assert_eq!(person, alice);
+		println!("eval() returns Node::Data(GcObject): {:?}", person);
 	} else {
-		panic!("expected Node::Data");
+		panic!("expected Node::Data, got {:?}", result);
 	}
 }
 
