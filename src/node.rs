@@ -1123,7 +1123,7 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => format!("Data({})", d.type_name),
+			Data(d) => format!("Data({:?})", d),
 			// _ => format!("{:?}", self),
 		}
 	}
