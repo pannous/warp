@@ -630,6 +630,14 @@ impl WaspParser {
 			return constant; // if true {} fall through :?
 		}
 
+		// Handle "global" keyword: global name = value
+		if symbol == "global" {
+			self.skip_whitespace();
+			// Parse the rest as an expression (should be name=value or name:=value)
+			let decl = self.parse_expr(0);
+			return Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(decl));
+		}
+
 		// Handle "class" keyword: class Name { fields }
 		if symbol == "class" || symbol == "struct" || symbol == "type" {
 			self.skip_whitespace();
