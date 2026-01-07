@@ -78,7 +78,8 @@ fn test_class_definition() {
 }
 
 #[test]
-fn test_class_instance1() -> anyhow::Result<()> {
+fn test_class_instance_explicit() -> anyhow::Result<()> {
+	// if the beautiful test_magic_object_roundtrip fails, debug the result here
 	// eval() now returns Node::Data(GcObject) for class instances
 	// Verify GcObject fields match expected values
 	use wasp::gc_traits::GcObject;

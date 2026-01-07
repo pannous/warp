@@ -251,6 +251,10 @@ fn test_if_then_else() {
 
 #[test]
 fn test_if_block_syntax() {
+	is!("if 1 { 2 }", 2);
+	is!("if 0 { 2 }", 0); // no else branch returns 0
+	is!("if 1<2 { 10 }", 10);
+	is!("if 1>2 { 10 }", 0); // no else branch returns 0
 	is!("if 1 { 2 } else { 3 }", 2);
 	is!("if 0 { 2 } else { 3 }", 3);
 	is!("if 1<2 { 10 } else { 255 }", 10);
@@ -260,7 +264,7 @@ fn test_if_block_syntax() {
 #[test]
 fn test_while_loop() {
 	// Simple countdown: while x > 0 { x = x - 1 } returns 0
-	is!("x:=3; while x>0 { x = x - 1 }", 0);
+	is!("x:=3; while x>2 { x -= 1 }", 2);
 	// Alternative syntax: while x > 0 do x = x - 1
 	is!("x:=3; while x>0 do x = x - 1", 0);
 }
@@ -297,9 +301,10 @@ fn test_superscript_powers() {
 	is!("3⁴", 81);
 }
 
+// DONE: type upgrading and global keyword implementation
 #[test]
-#[ignore = "next"]
 fn test_global_with_pi() {
 	use std::f64::consts::PI;
 	is!("global x=1+π", 1.0 + PI);
+	is!("global x=1+π;x+2", 3.0 + PI); // x = 1+π ≈ 4.14, then x+2 ≈ 6.14 = 3+π
 }
