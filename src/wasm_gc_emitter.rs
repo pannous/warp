@@ -1,6 +1,7 @@
 use crate::analyzer::Scope;
 // Note: analyzer module exports Scope
 use crate::extensions::numbers::Number;
+use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Op};
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
 use crate::wasm_gc_reader::read_bytes;
@@ -1862,9 +1863,70 @@ impl From<String> for RawFieldValue {
 	fn from(v: String) -> Self { RawFieldValue::String(v) }
 }
 
+/// Run raw struct WASM and return GcObject wrapped in Node::Data
+pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
+	use wasmtime::{Config, Engine, Store, Module, Linker, Val};
+
+	let mut config = Config::new();
+	config.wasm_gc(true);
+	config.wasm_function_references(true);
+
+	let engine = Engine::new(&config).map_err(|e: wasmtime::Error| e.to_string())?;
+	let mut store = Store::new(&engine, ());
+	let module = Module::new(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
+
+	let linker = Linker::new(&engine);
+	let instance = linker.instantiate(&mut store, &module).map_err(|e: wasmtime::Error| e.to_string())?;
+
+	let main = instance.get_func(&mut store, "main")
+		.ok_or_else(|| "no main function".to_string())?;
+
+	let mut results = vec![Val::I32(0)];
+	main.call(&mut store, &[], &mut results).map_err(|e: wasmtime::Error| e.to_string())?;
+
+	let gc_obj = ErgonomicGcObject::new(results[0].clone(), store, Some(instance))
+		.map_err(|e: anyhow::Error| e.to_string())?;
+
+	Ok(crate::node::data(gc_obj))
+}
+
+/// Check if parsed node is "class Foo{...}; Foo{...}" pattern
+fn is_class_with_instance(node: &Node) -> Option<(Node, Node)> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() >= 2 => {
+			// First should be Type (class def), second should be Key (instance)
+			let first = items[0].drop_meta();
+			let second = items[1].drop_meta();
+			if matches!(first, Node::Type { .. }) && matches!(second, Node::Key(_, _, _)) {
+				Some((items[0].clone(), items[1].clone()))
+			} else {
+				None
+			}
+		}
+		_ => None,
+	}
+}
+
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
+	use crate::type_kinds::{TypeDef, extract_instance_values};
+
 	let node = WaspParser::parse(code);
+
+	// Check for class definition + instance pattern
+	if let Some((class_node, instance_node)) = is_class_with_instance(&node) {
+		if let Some(type_def) = TypeDef::from_node(&class_node) {
+			if let Some((_type_name, field_values)) = extract_instance_values(&instance_node) {
+				let wasm_bytes = WasmGcEmitter::emit_raw_struct(&type_def, &field_values);
+				match run_raw_struct(&wasm_bytes) {
+					Ok(result) => return result,
+					Err(e) => warn!("raw struct eval failed: {}", e),
+				}
+			}
+		}
+	}
+
+	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit_for_node(&node);
 	let bytes = emitter.finish();
