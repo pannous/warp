@@ -175,10 +175,20 @@ impl FieldIndex for &str {
 /// let age: i32 = person.get(1)?;
 /// person.set_field("age", 30)?;       // Mutation!
 /// ```
+/// WASM GC struct wrapper that owns the store
+/// Can be stored in Node::Data for roundtrip
+#[derive(Clone)]
 pub struct GcObject {
     inner: Rooted<StructRef>,
     store: Rc<RefCell<Store<()>>>,
     instance: Option<Instance>,
+}
+
+impl PartialEq for GcObject {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare by store identity (same underlying store = same object space)
+        Rc::ptr_eq(&self.store, &other.store)
+    }
 }
 
 impl GcObject {
