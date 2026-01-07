@@ -40,6 +40,53 @@ pub struct TypeDef {
 	pub wasm_type_idx: Option<u32>, // WASM GC type index when emitted
 }
 
+impl TypeDef {
+	/// Extract TypeDef from a parsed class definition Node
+	/// Expected structure: Type { name: Symbol("Person"), body: List([Key(name, :, Type), ...]) }
+	pub fn from_node(node: &crate::node::Node) -> Option<Self> {
+		use crate::node::Node;
+		match node.drop_meta() {
+			Node::Type { name, body } => {
+				let type_name = name.drop_meta().to_string();
+				let fields = Self::extract_fields(body);
+				Some(TypeDef {
+					name: type_name,
+					tag: USER_TYPE_TAG_START, // will be assigned by registry
+					fields,
+					wasm_type_idx: None,
+				})
+			}
+			_ => None,
+		}
+	}
+
+	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
+		use crate::node::Node;
+		let mut fields = Vec::new();
+
+		// body is List([Key(field_name, op, Type), ...], bracket, separator)
+		let items = match body.drop_meta() {
+			Node::List(items, _, _) => items,
+			_ => return fields,
+		};
+
+		for item in items.iter() {
+			// Key(key_node, op, value_node) tuple struct
+			if let Node::Key(key, _op, value) = item.drop_meta() {
+				let field_name = key.drop_meta().to_string();
+				// value is Type { name: Symbol("String"), body: Empty }
+				let type_name = match value.drop_meta() {
+					Node::Type { name, .. } => name.drop_meta().to_string(),
+					Node::Symbol(s) => s.to_string(),
+					other => other.to_string(),
+				};
+				fields.push(FieldDef { name: field_name, type_name });
+			}
+		}
+		fields
+	}
+}
+
 /// Registry for user-defined types
 /// Maps type names to TypeDef and provides tag allocation
 #[derive(Debug, Default)]
