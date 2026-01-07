@@ -113,7 +113,7 @@ macro_rules! is {
 	// For wasm_struct! types: use reverse comparison (Person == Node)
 	($a:expr, $b:expr, gc) => {{
 		let result = wasp::wasm_gc_emitter::eval($a);
-		assert!($b == result, "is! assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
 	}};
 }
 

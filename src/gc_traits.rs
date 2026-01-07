@@ -191,6 +191,93 @@ impl PartialEq for GcObject {
     }
 }
 
+impl std::fmt::Debug for GcObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.with_store(|store| {
+            // Get struct type info
+            let struct_type = match self.inner.ty(&*store) {
+                Ok(ty) => ty,
+                Err(_) => return write!(f, "GcObject {{ <error getting type> }}"),
+            };
+
+            // Try to get field names from registered metadata
+            let field_names = wasm_name_resolver::field_names(&struct_type).ok();
+            let field_count = struct_type.fields().len();
+
+            write!(f, "GcObject{{")?;
+
+            for idx in 0..field_count {
+                if idx > 0 {
+                    write!(f, " ")?;
+                }
+
+                // Get field name if available
+                let field_name = field_names
+                    .as_ref()
+                    .and_then(|names| names.get(idx))
+                    .and_then(|n| n.as_ref());
+
+                if let Some(name) = field_name {
+                    write!(f, "{}:", name)?;
+                }
+
+                // Get and format field value
+                match self.inner.field(&mut *store, idx) {
+                    Ok(val) => {
+                        format_gc_val(f, store, &val, self.instance.as_ref())?;
+                    }
+                    Err(_) => write!(f, "<error>")?,
+                }
+            }
+
+            write!(f, "}}")
+        })
+    }
+}
+
+/// Format a Val for debug output
+fn format_gc_val(f: &mut std::fmt::Formatter<'_>, store: &mut Store<()>, val: &Val, instance: Option<&Instance>) -> std::fmt::Result {
+    match val {
+        Val::I32(n) => write!(f, "{}", n),
+        Val::I64(n) => write!(f, "{}", n),
+        Val::F32(n) => write!(f, "{}", f32::from_bits(*n)),
+        Val::F64(n) => write!(f, "{}", f64::from_bits(*n)),
+        Val::AnyRef(Some(anyref)) => {
+            // Try to read as string struct first
+            if let Ok(struct_ref) = anyref.clone().unwrap_struct(&*store) {
+                // Check if it's a String struct (ptr/len pattern)
+                if let Ok(struct_type) = struct_ref.ty(&*store) {
+                    if struct_type.fields().len() == 2 {
+                        // Likely a String struct - try to read it
+                        if let Some(inst) = instance {
+                            if let Ok(ptr_val) = struct_ref.field(&mut *store, 0) {
+                                if let Ok(len_val) = struct_ref.field(&mut *store, 1) {
+                                    if let (Some(ptr), Some(len)) = (ptr_val.i32(), len_val.i32()) {
+                                        if let Some(memory) = inst.get_memory(&mut *store, "memory") {
+                                            let mut buf = vec![0u8; len as usize];
+                                            if memory.read(&*store, ptr as usize, &mut buf).is_ok() {
+                                                if let Ok(s) = String::from_utf8(buf) {
+                                                    return write!(f, "'{}'", s);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Nested struct - show as GcObject
+                write!(f, "<struct>")
+            } else {
+                write!(f, "<anyref>")
+            }
+        }
+        Val::AnyRef(None) => write!(f, "null"),
+        _ => write!(f, "<val>"),
+    }
+}
+
 impl GcObject {
     /// Create a new GcObject that owns the store
     pub fn new(val: Val, store: Store<()>, instance: Option<Instance>) -> Result<Self> {
