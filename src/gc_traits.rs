@@ -547,6 +547,48 @@ impl From<bool> for ObjFieldValue {
     }
 }
 
+/// Trait for reading fields from GcObject with proper type dispatch
+/// (String uses get_string for ptr/len support, others use get)
+pub trait GcReadable: Sized {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self>;
+}
+
+impl GcReadable for String {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get_string(idx)
+    }
+}
+
+impl GcReadable for i32 {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get(idx)
+    }
+}
+
+impl GcReadable for i64 {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get(idx)
+    }
+}
+
+impl GcReadable for f32 {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get(idx)
+    }
+}
+
+impl GcReadable for f64 {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get(idx)
+    }
+}
+
+impl GcReadable for bool {
+    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+        gc_obj.get(idx)
+    }
+}
+
 /// Unified macro for defining structs that work both as Rust types and WASM GC wrappers
 ///
 /// # Usage
@@ -558,14 +600,19 @@ impl From<bool> for ObjFieldValue {
 ///     }
 /// }
 ///
-/// // Creates Rust struct with Debug, Clone, PartialEq and new() constructor
+/// // Create from field values
 /// let alice = Person::new("Alice", 30);
+/// let bob = Person { name: "Bob".into(), age: 25 };
 ///
-/// // Read from GcObject manually (String uses get_string, others use get):
-/// let person = Person {
-///     name: gc_obj.get_string(0)?,  // field index 0
-///     age: gc_obj.get(1)?,          // field index 1
-/// };
+/// // Create from GcObject
+/// let person = Person::from_gc(&gc_obj)?;
+///
+/// // Accessor methods return field values
+/// let name: String = person.name()?;
+/// let age: i64 = person.age()?;
+///
+/// // Compare with Node using is! macro with gc flag
+/// is!("class Person{...}; Person{...}", alice, gc);
 /// ```
 #[macro_export]
 macro_rules! wasm_struct {
@@ -574,20 +621,76 @@ macro_rules! wasm_struct {
             $($field_name:ident : $field_type:ty),* $(,)?
         }
     ) => {
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone)]
         pub struct $name {
             $(pub $field_name: $field_type,)*
         }
 
         impl $name {
-            /// Create a new instance with all fields
+            /// Create a new instance with all fields (Rust values)
             pub fn new($($field_name: impl Into<$field_type>),*) -> Self {
                 Self {
                     $($field_name: $field_name.into(),)*
                 }
             }
+
+            /// Create from GcObject reference by reading all fields
+            #[allow(unused_assignments)]
+            pub fn from_gc(gc_obj: &$crate::gc_traits::GcObject) -> anyhow::Result<Self> {
+                let mut _idx: usize = 0;
+                $(
+                    let $field_name: $field_type = $crate::gc_traits::GcReadable::read_from_gc(gc_obj, _idx)?;
+                    _idx += 1;
+                )*
+                Ok(Self { $($field_name,)* })
+            }
+        }
+
+        // Generate accessor methods that return field clones
+        $crate::wasm_struct!(@accessors $name; $($field_name: $field_type),*);
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                true $(&& self.$field_name == other.$field_name)*
+            }
+        }
+
+        impl PartialEq<$crate::node::Node> for $name {
+            fn eq(&self, other: &$crate::node::Node) -> bool {
+                other.eq_gc(self)
+            }
+        }
+
+        impl $crate::node::GcComparable for $name {
+            fn try_from_gc(gc_obj: &$crate::gc_traits::GcObject) -> Option<Self> {
+                Self::from_gc(gc_obj).ok()
+            }
+
+            fn gc_eq(&self, other: &Self) -> bool {
+                self == other
+            }
         }
     };
+
+    // Generate accessor methods for each field
+    (@accessors $name:ident; $field_name:ident : $field_type:ty, $($rest_name:ident : $rest_type:ty),*) => {
+        impl $name {
+            pub fn $field_name(&self) -> anyhow::Result<$field_type> {
+                Ok(self.$field_name.clone())
+            }
+        }
+        $crate::wasm_struct!(@accessors $name; $($rest_name: $rest_type),*);
+    };
+
+    (@accessors $name:ident; $field_name:ident : $field_type:ty) => {
+        impl $name {
+            pub fn $field_name(&self) -> anyhow::Result<$field_type> {
+                Ok(self.$field_name.clone())
+            }
+        }
+    };
+
+    (@accessors $name:ident;) => {};
 }
 
 /// Object literal macro
