@@ -1825,7 +1825,9 @@ impl WasmGcEmitter {
 
 		module.section(&names);
 
-		module.finish()
+		let bytes = module.finish();
+		std::fs::write("test.wasm", &bytes).expect("Failed to write test.wasm");
+		bytes
 	}
 }
 
