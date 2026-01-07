@@ -104,16 +104,23 @@ fn test_class_instance_raw() {
 	let mut results = vec![Val::I32(0)];
 	main.call(&mut store, &[], &mut results).unwrap();
 
-	// Read back via gc_struct! wrapper
-	let wasm_person = WasmPerson::from_val(results[0].clone(), store, Some(instance)).unwrap();
-	let name: String = wasm_person.name().unwrap();
-	let age: i64 = wasm_person.age().unwrap();
+	// Wrap GcObject in Node::Data - this is how eval() would return it
+	use wasp::gc_traits::GcObject as ErgonomicGcObject;
+	let gc_obj = ErgonomicGcObject::new(results[0].clone(), store, Some(instance)).unwrap();
+	let node_data = wasp::data(gc_obj);
 
-	// Convert to Rust struct for comparison
-	let result = RustPerson { name, age };
+	// Extract from Node::Data and read values
+	if let wasp::Node::Data(dada) = &node_data {
+		let extracted = dada.downcast_ref::<ErgonomicGcObject>().expect("should be GcObject");
+		let name: String = extracted.get_string(0).unwrap();
+		let age: i64 = extracted.get(1).unwrap();
 
-	assert_eq!(result, alice);
-	println!("Raw GC struct roundtrip works: {:?} == {:?}", result, alice);
+		let result = RustPerson { name, age };
+		assert_eq!(result, alice);
+		println!("Node::Data(GcObject) roundtrip: {:?} == {:?}", result, alice);
+	} else {
+		panic!("expected Node::Data");
+	}
 }
 
 
