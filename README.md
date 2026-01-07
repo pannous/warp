@@ -30,6 +30,11 @@ to square(number){
 ```
 or simpler `square:=it²` showing optional return types, it keyword, type and parameter inference.
 
+### WASM interop
+ 🎉  we have FULL wasm roundtrip support for structs:
+	let alice = Person { name: "Alice".into(), age: 30 };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
+
 ## Develop
 `git checkout --single-branch --branch main https://github.com/pannous/warp`
 
