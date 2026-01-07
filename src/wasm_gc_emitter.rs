@@ -90,6 +90,8 @@ pub struct WasmGcEmitter {
 	user_type_indices: HashMap<String, u32>,
 	// Type registry for user-defined types parsed from class/struct definitions
 	type_registry: TypeRegistry,
+	// User-defined global variables: name → (index, is_float)
+	user_globals: HashMap<String, (u32, bool)>,
 }
 
 impl WasmGcEmitter {
@@ -123,6 +125,7 @@ impl WasmGcEmitter {
 			next_temp_local: 0,
 			user_type_indices: HashMap::new(),
 			type_registry: TypeRegistry::new(),
+			user_globals: HashMap::new(),
 		}
 	}
 
@@ -163,7 +166,46 @@ impl WasmGcEmitter {
 		type_field_names.append(type_idx, &names);
 	}
 
-	/// Emit comparison operator (result is i32, extended to i64)
+	/// Check if an expression requires float type (for type upgrading)
+	fn needs_float(&self, node: &Node) -> bool {
+		let node = node.drop_meta();
+		match node {
+			Node::Number(Number::Float(_)) => true,
+			Node::Number(Number::Quotient(_, _)) => true,
+			Node::Number(Number::Complex(_, _)) => true,
+			Node::Key(left, op, right) if op.is_arithmetic() => {
+				self.needs_float(left) || self.needs_float(right)
+			}
+			Node::Key(_left, Op::Define | Op::Assign, right) => {
+				self.needs_float(right)
+			}
+			Node::Key(left, op, right) if op.is_compound_assign() => {
+				self.needs_float(left) || self.needs_float(right)
+			}
+			// Handle global:Key(name, =, value) -> check value
+			Node::Key(left, Op::Colon, right) => {
+				if let Node::Symbol(kw) = left.drop_meta() {
+					if kw == "global" {
+						return self.needs_float(right);
+					}
+				}
+				self.needs_float(left) || self.needs_float(right)
+			}
+			Node::List(items, _, _) => items.iter().any(|item| self.needs_float(item)),
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					local.is_float
+				} else if let Some(&(_, is_float)) = self.user_globals.get(name) {
+					is_float
+				} else {
+					false
+				}
+			}
+			_ => false,
+		}
+	}
+
+	/// Emit comparison operator for i64 (result is i32, extended to i64)
 	fn emit_comparison(&self, func: &mut Function, op: &Op) {
 		let cmp = match op {
 			Op::Eq => Instruction::I64Eq,
@@ -172,6 +214,21 @@ impl WasmGcEmitter {
 			Op::Gt => Instruction::I64GtS,
 			Op::Le => Instruction::I64LeS,
 			Op::Ge => Instruction::I64GeS,
+			_ => unreachable!("Not a comparison op: {:?}", op),
+		};
+		func.instruction(&cmp);
+		func.instruction(&Instruction::I64ExtendI32U);
+	}
+
+	/// Emit comparison operator for f64 (result is i32, extended to i64)
+	fn emit_float_comparison(&self, func: &mut Function, op: &Op) {
+		let cmp = match op {
+			Op::Eq => Instruction::F64Eq,
+			Op::Ne => Instruction::F64Ne,
+			Op::Lt => Instruction::F64Lt,
+			Op::Gt => Instruction::F64Gt,
+			Op::Le => Instruction::F64Le,
+			Op::Ge => Instruction::F64Ge,
 			_ => unreachable!("Not a comparison op: {:?}", op),
 		};
 		func.instruction(&cmp);
@@ -852,10 +909,22 @@ impl WasmGcEmitter {
 	fn count_variables(&mut self, node: &Node) -> u32 {
 		let node = node.drop_meta();
 		match node {
+			// Global declarations: global:Key(name, =, value) - don't create local
+			Node::Key(left, Op::Colon, right) => {
+				if let Node::Symbol(kw) = left.drop_meta() {
+					if kw == "global" {
+						// Don't define local for global variable
+						// But still count any variables in the value expression
+						return self.count_variables_skip_first_assign(right);
+					}
+				}
+				self.count_variables(left) + self.count_variables(right)
+			}
 			// Only Define and Assign create new variables
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
-					self.scope.define(name.clone(), None);
+					let is_float = self.needs_float(right);
+					self.scope.define(name.clone(), None, is_float);
 				}
 				self.count_variables(right)
 			}
@@ -874,6 +943,19 @@ impl WasmGcEmitter {
 				items.iter().map(|item| self.count_variables(item)).sum()
 			}
 			_ => 0,
+		}
+	}
+
+	/// Count variables but skip the first assignment (for global declarations)
+	fn count_variables_skip_first_assign(&mut self, node: &Node) -> u32 {
+		let node = node.drop_meta();
+		match node {
+			// Skip defining variable for the first assign in global
+			Node::Key(_left, Op::Define | Op::Assign, right) => {
+				// Don't define this variable, just count in value expression
+				self.count_variables(right)
+			}
+			_ => self.count_variables(node),
 		}
 	}
 
@@ -975,6 +1057,13 @@ impl WasmGcEmitter {
 				self.emit_string_call(func, s, "new_symbol");
 			}
 			Node::Key(left, op, right) => {
+				// Handle global keyword: global:Key(name, =, value)
+				if let Node::Symbol(kw) = left.drop_meta() {
+					if kw == "global" {
+						self.emit_global_declaration(func, right);
+						return;
+					}
+				}
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
@@ -1049,8 +1138,14 @@ impl WasmGcEmitter {
 				});
 				if has_executable {
 					// Evaluate as statement sequence
-					self.emit_numeric_value(func, node);
-					self.emit_call(func, "new_int");
+					// Check if ANY item needs float (globals haven't been registered yet)
+					if self.needs_float(node) {
+						self.emit_float_value(func, node);
+						self.emit_call(func, "new_float");
+					} else {
+						self.emit_numeric_value(func, node);
+						self.emit_call(func, "new_int");
+					}
 				} else {
 					// Build linked list: (first, rest, bracket_info)
 					self.emit_list_structure(func, items, bracket);
@@ -1086,10 +1181,17 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		// Determine if we need float operations (type upgrading)
+		let use_float = self.needs_float(left) || self.needs_float(right);
+
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
 			// x:=42 or x=42 → emit value, store to local, return value
-			self.emit_numeric_value(func, right);
+			if use_float {
+				self.emit_float_value(func, right);
+			} else {
+				self.emit_numeric_value(func, right);
+			}
 			if let Node::Symbol(name) = left.drop_meta() {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalTee(local.position));
@@ -1099,13 +1201,43 @@ impl WasmGcEmitter {
 			} else {
 				panic!("Expected symbol in definition, got {:?}", left);
 			}
+		} else if use_float {
+			// Float path: emit operands as f64, use F64 instructions
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+
+			match op {
+				Op::Add => { func.instruction(&Instruction::F64Add); }
+				Op::Sub => { func.instruction(&Instruction::F64Sub); }
+				Op::Mul => { func.instruction(&Instruction::F64Mul); }
+				Op::Div => { func.instruction(&Instruction::F64Div); }
+				Op::Mod => {
+					// WASM doesn't have F64Rem. Use integer modulo path instead.
+					// Drop the f64 values and re-emit as i64
+					func.instruction(&Instruction::Drop);
+					func.instruction(&Instruction::Drop);
+					self.emit_numeric_value(func, left);
+					self.emit_numeric_value(func, right);
+					func.instruction(&Instruction::I64RemS);
+					self.emit_call(func, "new_int");
+					return;
+				}
+				Op::Pow => {
+					warn!("Power operator not fully implemented for float");
+					func.instruction(&Instruction::F64Mul);
+				}
+				op if op.is_comparison() => {
+					self.emit_float_comparison(func, op);
+					self.emit_call(func, "new_int");
+					return;
+				}
+				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
+			}
 		} else {
-			// Emit left operand value onto stack
+			// Integer path: emit operands as i64, use I64 instructions
 			self.emit_numeric_value(func, left);
-			// Emit right operand value onto stack
 			self.emit_numeric_value(func, right);
 
-			// Emit WASM arithmetic or comparison instruction
 			match op {
 				Op::Add => { func.instruction(&Instruction::I64Add); }
 				Op::Sub => { func.instruction(&Instruction::I64Sub); }
@@ -1121,8 +1253,115 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Wrap result as Int node
-		self.emit_call(func, "new_int");
+		// Wrap result appropriately
+		if use_float {
+			self.emit_call(func, "new_float");
+		} else {
+			self.emit_call(func, "new_int");
+		}
+	}
+
+	/// Emit global variable declaration: global x = value
+	/// Creates a mutable WASM global and initializes it
+	fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
+		// decl should be Key(name, Define/Assign, value)
+		let (name, value) = match decl.drop_meta() {
+			Node::Key(left, Op::Define | Op::Assign, right) => {
+				if let Node::Symbol(n) = left.drop_meta() {
+					(n.clone(), right.clone())
+				} else {
+					panic!("Expected symbol in global declaration, got {:?}", left);
+				}
+			}
+			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
+		};
+
+		let is_float = self.needs_float(&value);
+		let val_type = if is_float { ValType::F64 } else { ValType::I64 };
+
+		// Create mutable global with default initial value
+		let init_expr = if is_float {
+			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
+		} else {
+			ConstExpr::i64_const(0)
+		};
+
+		self.globals.global(
+			GlobalType {
+				val_type,
+				mutable: true,
+				shared: false,
+			},
+			&init_expr,
+		);
+
+		let global_idx = self.next_global_idx;
+		self.next_global_idx += 1;
+		self.user_globals.insert(name.clone(), (global_idx, is_float));
+
+		// Emit value computation and store to global
+		if is_float {
+			self.emit_float_value(func, &value);
+			func.instruction(&Instruction::GlobalSet(global_idx));
+			// Return value as Node
+			func.instruction(&Instruction::GlobalGet(global_idx));
+			self.emit_call(func, "new_float");
+		} else {
+			self.emit_numeric_value(func, &value);
+			func.instruction(&Instruction::GlobalSet(global_idx));
+			// Return value as Node
+			func.instruction(&Instruction::GlobalGet(global_idx));
+			self.emit_call(func, "new_int");
+		}
+	}
+
+	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
+	fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
+		let (name, value) = match decl.drop_meta() {
+			Node::Key(left, Op::Define | Op::Assign, right) => {
+				if let Node::Symbol(n) = left.drop_meta() {
+					(n.clone(), right.clone())
+				} else {
+					panic!("Expected symbol in global declaration, got {:?}", left);
+				}
+			}
+			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
+		};
+
+		let is_float = self.needs_float(&value);
+		let val_type = if is_float { ValType::F64 } else { ValType::I64 };
+
+		let init_expr = if is_float {
+			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
+		} else {
+			ConstExpr::i64_const(0)
+		};
+
+		self.globals.global(
+			GlobalType {
+				val_type,
+				mutable: true,
+				shared: false,
+			},
+			&init_expr,
+		);
+
+		let global_idx = self.next_global_idx;
+		self.next_global_idx += 1;
+		self.user_globals.insert(name.clone(), (global_idx, is_float));
+
+		// Emit value, store to global, and return value on stack
+		if is_float {
+			self.emit_float_value(func, &value);
+			func.instruction(&Instruction::GlobalSet(global_idx));
+			func.instruction(&Instruction::GlobalGet(global_idx));
+			// Convert to i64 for emit_numeric_value context
+			func.instruction(&Instruction::I64TruncF64S);
+		} else {
+			self.emit_numeric_value(func, &value);
+			func.instruction(&Instruction::GlobalSet(global_idx));
+			func.instruction(&Instruction::GlobalGet(global_idx));
+		}
 	}
 
 	/// Emit ternary expression: condition ? then_expr : else_expr
@@ -1256,6 +1495,16 @@ impl WasmGcEmitter {
 	/// Emit the numeric value of a node onto the stack (as i64)
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
 		let node = node.drop_meta();
+		// Handle global declaration: global:Key(name, =, value)
+		if let Node::Key(left, Op::Colon, right) = node {
+			if let Node::Symbol(kw) = left.drop_meta() {
+				if kw == "global" {
+					// Emit global and return value on stack
+					self.emit_global_numeric(func, right);
+					return;
+				}
+			}
+		}
 		match node {
 			Node::Number(num) => {
 				match num {
@@ -1334,10 +1583,16 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, right);
 				self.emit_comparison(func, op);
 			}
-			// Variable lookup
+			// Variable lookup (local or global)
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
+				} else if let Some(&(idx, is_float)) = self.user_globals.get(name) {
+					func.instruction(&Instruction::GlobalGet(idx));
+					if is_float {
+						// Convert f64 global to i64 for integer operations
+						func.instruction(&Instruction::I64TruncF64S);
+					}
 				} else {
 					panic!("Undefined variable: {}", name);
 				}
@@ -1357,6 +1612,107 @@ impl WasmGcEmitter {
 				self.emit_while_loop_value(func, left, right);
 			}
 			_ => panic!("Cannot extract numeric value from {:?}", node),
+		}
+	}
+
+	/// Emit the float value of a node onto the stack (as f64)
+	/// Integers are converted to f64 for type upgrading
+	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			Node::Number(num) => {
+				match num {
+					Number::Int(n) => {
+						// Convert integer to float
+						func.instruction(&Instruction::F64Const(Ieee64::new((*n as f64).to_bits())));
+					}
+					Number::Float(f) => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
+					}
+					Number::Quotient(n, d) => {
+						func.instruction(&Instruction::F64Const(Ieee64::new((*n as f64 / *d as f64).to_bits())));
+					}
+					Number::Complex(r, _i) => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(r.to_bits())));
+					}
+					Number::Nan => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(f64::NAN.to_bits())));
+					}
+					Number::Inf => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(f64::INFINITY.to_bits())));
+					}
+					Number::NegInf => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(f64::NEG_INFINITY.to_bits())));
+					}
+				};
+			}
+			// Variable definition/assignment: x:=42 or x=42
+			Node::Key(left, Op::Define | Op::Assign, right) => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					self.emit_float_value(func, right);
+					if let Some(local) = self.scope.lookup(name) {
+						func.instruction(&Instruction::LocalTee(local.position));
+					} else {
+						panic!("Undefined variable: {}", name);
+					}
+				} else {
+					panic!("Expected symbol in definition, got {:?}", left);
+				}
+			}
+			// Arithmetic operators with float
+			Node::Key(left, op, right) if op.is_arithmetic() => {
+				self.emit_float_value(func, left);
+				self.emit_float_value(func, right);
+				match op {
+					Op::Add => { func.instruction(&Instruction::F64Add); }
+					Op::Sub => { func.instruction(&Instruction::F64Sub); }
+					Op::Mul => { func.instruction(&Instruction::F64Mul); }
+					Op::Div => { func.instruction(&Instruction::F64Div); }
+					Op::Mod => {
+						// WASM doesn't have F64Rem. Drop f64 values and use i64 path.
+						func.instruction(&Instruction::Drop);
+						func.instruction(&Instruction::Drop);
+						self.emit_numeric_value(func, left);
+						self.emit_numeric_value(func, right);
+						func.instruction(&Instruction::I64RemS);
+						func.instruction(&Instruction::F64ConvertI64S);
+					}
+					Op::Pow => { func.instruction(&Instruction::F64Mul); } // placeholder
+					_ => unreachable!(),
+				}
+			}
+			// Variable lookup (local or global) - convert i64 to f64 if needed
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					func.instruction(&Instruction::LocalGet(local.position));
+					if !local.is_float {
+						// Convert i64 local to f64
+						func.instruction(&Instruction::F64ConvertI64S);
+					}
+				} else if let Some(&(idx, is_float)) = self.user_globals.get(name) {
+					func.instruction(&Instruction::GlobalGet(idx));
+					if !is_float {
+						// Convert i64 global to f64
+						func.instruction(&Instruction::F64ConvertI64S);
+					}
+				} else {
+					panic!("Undefined variable: {}", name);
+				}
+			}
+			// Statement sequence: execute all, return last as float
+			Node::List(items, _, _) if !items.is_empty() => {
+				for (i, item) in items.iter().enumerate() {
+					if i < items.len() - 1 {
+						// For non-last items, use regular emit and drop
+						self.emit_numeric_value(func, item);
+						func.instruction(&Instruction::Drop);
+					} else {
+						// Last item as float
+						self.emit_float_value(func, item);
+					}
+				}
+			}
+			_ => panic!("Cannot extract float value from {:?}", node),
 		}
 	}
 
