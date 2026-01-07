@@ -42,7 +42,7 @@ pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, U
 // Metadata
 pub use meta::{Dada, LineInfo, DataType};
 // WASM
-pub use wasm_gc_emitter::WasmGcEmitter;
+pub use wasm_gc_emitter::{WasmGcEmitter, RawFieldValue};
 // Legacy GcObject for backward compatibility (3-field Node layout)
 pub use wasm_gc_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access

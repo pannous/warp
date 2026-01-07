@@ -33,6 +33,7 @@ fn test_class_instance() {
 }
 
 // Aspirational API - requires gc_struct! macro from rasm
+// see test_gc_struct.rs for WIP intermediate implementation test
 // gc_struct! {
 //     Person {
 //         name: 0 => mut String,

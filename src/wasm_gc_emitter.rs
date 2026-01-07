@@ -1660,6 +1660,206 @@ impl WasmGcEmitter {
 	pub fn get_used_functions(&self) -> Vec<&'static str> {
 		self.used_functions.iter().copied().collect()
 	}
+
+	/// Emit a standalone WASM module that returns a raw GC struct instance.
+	/// This is the standard path for returning user-defined GC objects.
+	///
+	/// # Arguments
+	/// * `type_def` - The type definition for the struct
+	/// * `field_values` - Field values as (name, RawFieldValue) pairs
+	///
+	/// # Returns
+	/// WASM bytes that can be loaded and executed to get the GC struct
+	pub fn emit_raw_struct(type_def: &TypeDef, field_values: &[RawFieldValue]) -> Vec<u8> {
+		use wasm_encoder::*;
+		use wasm_encoder::StorageType::Val;
+
+		let mut module = Module::new();
+
+		// Collect string data and compute offsets
+		let mut string_data = Vec::new();
+		let mut string_offsets: Vec<(usize, usize)> = Vec::new(); // (offset, len) for each string field
+		let mut current_offset = 0usize;
+
+		for value in field_values {
+			if let RawFieldValue::String(s) = value {
+				string_offsets.push((current_offset, s.len()));
+				string_data.extend_from_slice(s.as_bytes());
+				current_offset += s.len();
+			} else {
+				string_offsets.push((0, 0)); // placeholder for non-strings
+			}
+		}
+
+		// Build types section
+		let mut types = TypeSection::new();
+
+		// Type 0: $String = struct { ptr: i32, len: i32 }
+		types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: false },
+			FieldType { element_type: Val(ValType::I32), mutable: false },
+		]);
+		let string_type_idx = 0u32;
+
+		// Type 1: User struct type
+		let string_ref = RefType { nullable: false, heap_type: HeapType::Concrete(string_type_idx) };
+		let struct_fields: Vec<FieldType> = type_def.fields.iter().map(|f| {
+			let element_type = match f.type_name.as_str() {
+				"i64" | "Int" | "long" => Val(ValType::I64),
+				"i32" | "int" => Val(ValType::I32),
+				"f64" | "Float" | "double" => Val(ValType::F64),
+				"f32" | "float" => Val(ValType::F32),
+				"String" | "Text" | "string" => Val(ValType::Ref(string_ref)),
+				_ => Val(ValType::I64), // default
+			};
+			FieldType { element_type, mutable: false }
+		}).collect();
+		types.ty().struct_(struct_fields);
+		let struct_type_idx = 1u32;
+
+		// Type 2: main() -> ref $StructType
+		let struct_ref = RefType { nullable: false, heap_type: HeapType::Concrete(struct_type_idx) };
+		types.ty().func_type(&FuncType::new([], [ValType::Ref(struct_ref)]));
+
+		module.section(&types);
+
+		// Function section
+		let mut functions = FunctionSection::new();
+		functions.function(2); // main uses type 2
+		module.section(&functions);
+
+		// Memory section (only if we have strings)
+		let has_strings = !string_data.is_empty();
+		if has_strings {
+			let mut memories = MemorySection::new();
+			memories.memory(MemoryType {
+				minimum: 1,
+				maximum: None,
+				memory64: false,
+				shared: false,
+				page_size_log2: None,
+			});
+			module.section(&memories);
+		}
+
+		// Export section
+		let mut exports = ExportSection::new();
+		if has_strings {
+			exports.export("memory", ExportKind::Memory, 0);
+		}
+		exports.export("main", ExportKind::Func, 0);
+		module.section(&exports);
+
+		// Code section
+		let mut codes = CodeSection::new();
+		let mut func = Function::new([]);
+
+		// Emit field values in order
+		let mut string_idx = 0usize;
+		for value in field_values.iter() {
+			match value {
+				RawFieldValue::I64(v) => {
+					func.instruction(&Instruction::I64Const(*v));
+				}
+				RawFieldValue::I32(v) => {
+					func.instruction(&Instruction::I32Const(*v));
+				}
+				RawFieldValue::F64(v) => {
+					func.instruction(&Instruction::F64Const(Ieee64::new(v.to_bits())));
+				}
+				RawFieldValue::F32(v) => {
+					func.instruction(&Instruction::F32Const(Ieee32::new(v.to_bits())));
+				}
+				RawFieldValue::String(_) => {
+					let (ptr, len) = string_offsets[string_idx];
+					func.instruction(&Instruction::I32Const(ptr as i32));
+					func.instruction(&Instruction::I32Const(len as i32));
+					func.instruction(&Instruction::StructNew(string_type_idx));
+					string_idx += 1;
+				}
+			}
+		}
+		func.instruction(&Instruction::StructNew(struct_type_idx));
+		func.instruction(&Instruction::End);
+		codes.function(&func);
+		module.section(&codes);
+
+		// Data section for strings
+		if has_strings {
+			let mut data = DataSection::new();
+			data.active(0, &ConstExpr::i32_const(0), string_data.iter().copied());
+			module.section(&data);
+		}
+
+		// Name section for field name resolution
+		let mut names = NameSection::new();
+
+		// Type names
+		let mut type_names = NameMap::new();
+		type_names.append(string_type_idx, "String");
+		type_names.append(struct_type_idx, &type_def.name);
+		names.types(&type_names);
+
+		// Field names for structs
+		let mut type_field_names = IndirectNameMap::new();
+
+		// String struct fields
+		let mut string_fields = NameMap::new();
+		string_fields.append(0, "ptr");
+		string_fields.append(1, "len");
+		type_field_names.append(string_type_idx, &string_fields);
+
+		// User struct fields
+		let mut struct_fields_names = NameMap::new();
+		for (i, field) in type_def.fields.iter().enumerate() {
+			struct_fields_names.append(i as u32, &field.name);
+		}
+		type_field_names.append(struct_type_idx, &struct_fields_names);
+		names.fields(&type_field_names);
+
+		// Function names
+		let mut func_names = NameMap::new();
+		func_names.append(0, "main");
+		names.functions(&func_names);
+
+		module.section(&names);
+
+		module.finish()
+	}
+}
+
+/// Raw field values for emit_raw_struct
+#[derive(Debug, Clone)]
+pub enum RawFieldValue {
+	I64(i64),
+	I32(i32),
+	F64(f64),
+	F32(f32),
+	String(String),
+}
+
+impl From<i64> for RawFieldValue {
+	fn from(v: i64) -> Self { RawFieldValue::I64(v) }
+}
+
+impl From<i32> for RawFieldValue {
+	fn from(v: i32) -> Self { RawFieldValue::I32(v) }
+}
+
+impl From<f64> for RawFieldValue {
+	fn from(v: f64) -> Self { RawFieldValue::F64(v) }
+}
+
+impl From<f32> for RawFieldValue {
+	fn from(v: f32) -> Self { RawFieldValue::F32(v) }
+}
+
+impl From<&str> for RawFieldValue {
+	fn from(v: &str) -> Self { RawFieldValue::String(v.to_string()) }
+}
+
+impl From<String> for RawFieldValue {
+	fn from(v: String) -> Self { RawFieldValue::String(v) }
 }
 
 // Re-export eval function for tests
