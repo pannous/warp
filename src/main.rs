@@ -11,6 +11,7 @@ pub mod wasm_gc_reader;
 pub mod wasp_parser;
 
 pub mod type_kinds;
+pub mod gc_traits;
 
 pub mod analyzer;
 pub mod ast;
