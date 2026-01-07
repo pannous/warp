@@ -200,11 +200,16 @@ impl std::fmt::Debug for GcObject {
                 Err(_) => return write!(f, "GcObject {{ <error getting type> }}"),
             };
 
-            // Try to get field names from registered metadata
+            // Try to get type name and field names from registered metadata
+            let type_name = wasm_name_resolver::type_name(&struct_type).ok().flatten();
             let field_names = wasm_name_resolver::field_names(&struct_type).ok();
             let field_count = struct_type.fields().len();
 
+            // Format: GcObject{TypeName{field:value ...}} or GcObject{field:value ...}
             write!(f, "GcObject{{")?;
+            if let Some(ref name) = type_name {
+                write!(f, "{}{{", name)?;
+            }
 
             for idx in 0..field_count {
                 if idx > 0 {
@@ -230,6 +235,9 @@ impl std::fmt::Debug for GcObject {
                 }
             }
 
+            if type_name.is_some() {
+                write!(f, "}}")?;
+            }
             write!(f, "}}")
         })
     }
@@ -1021,6 +1029,11 @@ pub mod wasm_name_resolver {
         registry.field_names(struct_type)
     }
 
+    pub fn type_name(struct_type: &StructType) -> Result<Option<String>> {
+        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        registry.type_name(struct_type)
+    }
+
     #[derive(Default)]
     struct FieldNameRegistry {
         modules: Vec<Arc<ParsedModule>>,
@@ -1048,6 +1061,11 @@ pub mod wasm_name_resolver {
         fn field_names(&mut self, struct_type: &StructType) -> Result<Vec<Option<String>>> {
             let mapping = self.ensure_mapping(struct_type)?;
             Ok(mapping.names.clone())
+        }
+
+        fn type_name(&mut self, struct_type: &StructType) -> Result<Option<String>> {
+            let mapping = self.ensure_mapping(struct_type)?;
+            Ok(mapping.type_name.clone())
         }
 
         fn ensure_mapping(&mut self, struct_type: &StructType) -> Result<Arc<StructFieldMapping>> {
@@ -1116,6 +1134,7 @@ pub mod wasm_name_resolver {
 
     #[derive(Clone)]
     struct StructFieldMapping {
+        type_name: Option<String>,
         names: Vec<Option<String>>,
         lookup: HashMap<String, usize>,
     }
@@ -1129,6 +1148,7 @@ pub mod wasm_name_resolver {
                 }
             }
             Self {
+                type_name: parsed.type_name.clone(),
                 names: parsed.field_names.clone(),
                 lookup,
             }
@@ -1153,6 +1173,7 @@ pub mod wasm_name_resolver {
             let mut types = Vec::new();
             let mut next_index: u32 = 0;
             let mut field_names: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
+            let mut type_names: HashMap<u32, String> = HashMap::new();
 
             for payload in wp::Parser::new(0).parse_all(bytes) {
                 match payload? {
@@ -1161,7 +1182,7 @@ pub mod wasm_name_resolver {
                     }
                     wp::Payload::CustomSection(section) => {
                         if let wp::KnownCustom::Name(name_reader) = section.as_known() {
-                            Self::read_name_section(name_reader, &mut field_names)?;
+                            Self::read_name_section(name_reader, &mut field_names, &mut type_names)?;
                         }
                     }
                     _ => {}
@@ -1169,7 +1190,7 @@ pub mod wasm_name_resolver {
             }
 
             let mut module = Self { hash, types };
-            module.apply_field_names(field_names);
+            module.apply_names(field_names, type_names);
             Ok(module)
         }
 
@@ -1194,10 +1215,17 @@ pub mod wasm_name_resolver {
 
         fn read_name_section(
             mut reader: wp::NameSectionReader<'_>,
-            out: &mut HashMap<u32, Vec<(u32, String)>>,
+            field_names: &mut HashMap<u32, Vec<(u32, String)>>,
+            type_names: &mut HashMap<u32, String>,
         ) -> Result<()> {
             while let Some(entry) = reader.next() {
                 match entry? {
+                    wp::Name::Type(map) => {
+                        for naming in map {
+                            let naming = naming?;
+                            type_names.insert(naming.index, naming.name.to_string());
+                        }
+                    }
                     wp::Name::Field(map) => {
                         for naming in map {
                             let naming = naming?;
@@ -1208,7 +1236,7 @@ pub mod wasm_name_resolver {
                                 names.push((field.index, field.name.to_string()));
                             }
                             if !names.is_empty() {
-                                out.entry(type_index).or_default().extend(names.into_iter());
+                                field_names.entry(type_index).or_default().extend(names.into_iter());
                             }
                         }
                     }
@@ -1218,8 +1246,15 @@ pub mod wasm_name_resolver {
             Ok(())
         }
 
-        fn apply_field_names(&mut self, names: HashMap<u32, Vec<(u32, String)>>) {
-            for (type_index, entries) in names {
+        fn apply_names(&mut self, field_names: HashMap<u32, Vec<(u32, String)>>, type_names: HashMap<u32, String>) {
+            // Apply type names
+            for (type_index, name) in type_names {
+                if let Some(ParsedTypeInfo::Struct(struct_ty)) = self.types.get_mut(type_index as usize) {
+                    struct_ty.type_name = Some(name);
+                }
+            }
+            // Apply field names
+            for (type_index, entries) in field_names {
                 if let Some(ParsedTypeInfo::Struct(struct_ty)) =
                     self.types.get_mut(type_index as usize)
                 {
@@ -1288,6 +1323,7 @@ pub mod wasm_name_resolver {
     struct ParsedStructType {
         #[allow(dead_code)]
         type_index: u32,
+        type_name: Option<String>,
         fields: Vec<ParsedField>,
         field_names: Vec<Option<String>>,
     }
@@ -1301,6 +1337,7 @@ pub mod wasm_name_resolver {
             let field_names = vec![None; fields.len()];
             Ok(Self {
                 type_index,
+                type_name: None,
                 fields,
                 field_names,
             })

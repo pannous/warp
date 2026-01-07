@@ -28,10 +28,24 @@ fn test_magic_object_roundtrip() {
 
 
 #[test]
+fn test_debug_format() {
+	// Verify the Debug output format shows type name, field names and values
+	// Expected: Data(GcObject{Person{name:'Bob' age:42}})
+	let result = eval("class Person{name:String age:i64}; Person{name:'Bob' age:42}");
+	let debug_str = format!("{:?}", result);
+	println!("Debug output: {}", debug_str);
+	assert!(debug_str.contains("Person{"), "Should contain type name 'Person{{");
+	assert!(debug_str.contains("name:"), "Should contain field name 'name:'");
+	assert!(debug_str.contains("age:"), "Should contain field name 'age:'");
+	assert!(debug_str.contains("'Bob'"), "Should contain value 'Bob'");
+	assert!(debug_str.contains("42"), "Should contain value 42");
+}
+
+#[test]
 #[should_panic(expected = "'Bob'")] // Now shows actual values in assertion!
 fn test_magic_object_mismatch() {
-	let alice = wasm_object! { Person3 { name: String = "Alice", age: i64 = 30 } };
-	is!("class Person3{name:String age:i64}; Person3{name:'Bob' age:42}", alice);
+	let alice = wasm_object! { Person4 { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person4{name:String age:i64}; Person4{name:'Bob' age:42}", alice);
 }
 
 /*

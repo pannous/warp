@@ -1867,6 +1867,9 @@ impl From<String> for RawFieldValue {
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	use wasmtime::{Config, Engine, Store, Module, Linker, Val};
 
+	// Register WASM metadata for field name lookup in Debug output
+	let _ = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes);
+
 	let mut config = Config::new();
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
