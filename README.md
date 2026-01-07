@@ -103,3 +103,5 @@ Most other are atoms. Type name as node to allow meta info.
 
 ## Build & Test
 `cargo test --all`
+
+289 passed, 0 failed, 289 total tested
