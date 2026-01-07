@@ -1,7 +1,29 @@
 use wasp::Node::{Empty, Type};
 use wasp::*;
 use wasp::wasm_gc_emitter::eval;
-// End goal API - unified struct for both Rust and WASM GC
+
+// End goal API achieved - unified struct for both Rust and WASM GC
+// Single definition creates both Rust struct and WASM GC reader
+wasm_struct! {
+	Person {
+		name: String,
+		age: i64,
+	}
+}
+
+#[test]
+fn test_class_instance_magic_roundtrip() {
+	let alice = Person { name: "Alice".into(), age: 30 };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice); // IT WORKS!! 🎉
+}
+
+
+#[test]
+fn test_object_magic_roundtrip_2() {
+	// wasm_object! creates wasm_struct! class definition AND instance in one go!!
+	let alice = wasm_object! { Person2 { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person2{name:String age:i64}; Person2{name:'Alice' age:30}", alice);
+}
 
 fn field(name: &str, type_name: &str) -> Node {
 	let typ=Type {
@@ -40,14 +62,6 @@ fn test_class_instance1() -> anyhow::Result<()> {
 }
 
 
-
-// Single definition creates both Rust struct and WASM GC reader
-wasm_struct! {
-	Person {
-		name: String,
-		age: i64,
-	}
-}
 
 
 #[test]
@@ -96,11 +110,6 @@ fn test_class_instance_raw() {
 }
 
 
-#[test]
-fn test_class_instance_magic_roundtrip() {
-	let alice = Person { name: "Alice".into(), age: 30 };
-	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
-}
 
 
 

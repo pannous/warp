@@ -705,6 +705,32 @@ macro_rules! obj {
     }};
 }
 
+/// Magic macro that creates struct definition AND instance in one declaration
+///
+/// # Usage
+/// ```ignore
+/// // Creates both the struct type and an instance
+/// let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } };
+///
+/// // Equivalent to:
+/// // wasm_struct! { Person { name: String, age: i64 } }
+/// // let alice = Person::new("Alice", 30);
+/// ```
+///
+/// This is significantly more concise than defining the struct separately!
+#[macro_export]
+macro_rules! wasm_object {
+    // Explicit type annotation syntax: field: Type = value
+    ($name:ident { $($field:ident : $type:ty = $value:expr),* $(,)? }) => {{
+        $crate::wasm_struct! {
+            $name {
+                $($field: $type),*
+            }
+        }
+        $name::new($($value),*)
+    }};
+}
+
 /// Macro for defining type-safe struct wrappers with ergonomic field access
 #[macro_export]
 macro_rules! gc_struct {
