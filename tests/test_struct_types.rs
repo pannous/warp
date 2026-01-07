@@ -19,11 +19,30 @@ fn test_class_instance_magic_roundtrip() {
 
 
 #[test]
-fn test_object_magic_roundtrip_2() {
+fn test_magic_object_roundtrip() {
 	// wasm_object! creates wasm_struct! class definition AND instance in one go!!
-	let alice = wasm_object! { Person2 { name: String = "Alice", age: i64 = 30 } };
-	is!("class Person2{name:String age:i64}; Person2{name:'Alice' age:30}", alice);
+	// 🎉 Most ergonomic way to create classes and instances, beautiful syntax!
+	let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 }
+
+
+#[test]
+#[should_panic(expected = "'Bob'")] // Now shows actual values in assertion!
+fn test_magic_object_mismatch() {
+	let alice = wasm_object! { Person3 { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person3{name:String age:i64}; Person3{name:'Bob' age:42}", alice);
+}
+
+/*
+let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }; is PERFECTLY FINE
+
+  Why full type inference like Person { name= "Alice", age= 30 } isn't possible:
+  Rust's declarative macros (macro_rules!) are purely syntactic -
+  they can't inspect the type of a literal like 30 at compile time. That requires:
+  - Procedural macros (separate crate)
+  - Or const generics with unstable features
+ */
 
 fn field(name: &str, type_name: &str) -> Node {
 	let typ=Type {
@@ -108,9 +127,6 @@ fn test_class_instance_raw() {
 		panic!("expected Node::Data, got {:?}", result);
 	}
 }
-
-
-
 
 
 #[test]
