@@ -33,13 +33,14 @@ impl Scope {
 	}
 
 	/// Define a new variable in current scope
-	pub fn define(&mut self, name: String, type_node: Option<Box<Node>>) -> Local {
+	pub fn define(&mut self, name: String, type_node: Option<Box<Node>>, is_float: bool) -> Local {
 		let position = self.locals.len() as u32;
 		let local = Local {
 			name: name.clone(),
 			type_node,
 			position,
 			is_param: false,
+			is_float,
 		};
 		self.locals.insert(name, local.clone());
 		local
@@ -53,6 +54,7 @@ impl Scope {
 			type_node,
 			position,
 			is_param: true,
+			is_float: false,
 		};
 		self.locals.insert(name, local.clone());
 		local
