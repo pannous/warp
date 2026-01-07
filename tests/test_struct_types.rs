@@ -35,27 +35,14 @@ fn test_class_instance() {
 	}
 }
 
-// End goal API - raw GC struct roundtrip via Person type
-use wasp::gc_struct;
+// End goal API - unified struct for both Rust and WASM GC
+use wasp::wasm_struct;
 
-/// Rust Person struct for direct comparison
-#[derive(Debug, Clone, PartialEq)]
-struct RustPerson {
-	name: String,
-	age: i64,
-}
-
-impl RustPerson {
-	fn new(name: &str, age: i64) -> Self {
-		Self { name: name.to_string(), age }
-	}
-}
-
-// gc_struct! wrapper for reading WASM GC Person struct
-gc_struct! {
-	WasmPerson {
-		name: 0 => String,
-		age: 1 => i64,
+// Single definition creates both Rust struct and WASM GC reader
+wasm_struct! {
+	Person {
+		name: String,
+		age: i64,
 	}
 }
 
@@ -63,18 +50,20 @@ gc_struct! {
 fn test_class_instance_raw() {
 	use wasp::gc_traits::GcObject;
 
-	let alice = RustPerson::new("Alice", 30);
+	let alice = Person::new("Alice", 30);
 
 	// eval() automatically detects class+instance and returns Node::Data(GcObject)
 	let result = wasp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 
-	// Extract GcObject from Node::Data and read field values
+	// Extract GcObject and convert to Person struct
 	if let wasp::Node::Data(dada) = &result {
 		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+
+		// Read fields directly (this approach works)
 		let name: String = gc_obj.get_string(0).unwrap();
 		let age: i64 = gc_obj.get(1).unwrap();
+		let person = Person { name, age };
 
-		let person = RustPerson { name, age };
 		assert_eq!(person, alice);
 		println!("eval() returns Node::Data(GcObject): {:?}", person);
 	} else {

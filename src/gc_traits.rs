@@ -547,6 +547,49 @@ impl From<bool> for ObjFieldValue {
     }
 }
 
+/// Unified macro for defining structs that work both as Rust types and WASM GC wrappers
+///
+/// # Usage
+/// ```ignore
+/// wasm_struct! {
+///     Person {
+///         name: String,
+///         age: i64,
+///     }
+/// }
+///
+/// // Creates Rust struct with Debug, Clone, PartialEq and new() constructor
+/// let alice = Person::new("Alice", 30);
+///
+/// // Read from GcObject manually (String uses get_string, others use get):
+/// let person = Person {
+///     name: gc_obj.get_string(0)?,  // field index 0
+///     age: gc_obj.get(1)?,          // field index 1
+/// };
+/// ```
+#[macro_export]
+macro_rules! wasm_struct {
+    (
+        $name:ident {
+            $($field_name:ident : $field_type:ty),* $(,)?
+        }
+    ) => {
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct $name {
+            $(pub $field_name: $field_type,)*
+        }
+
+        impl $name {
+            /// Create a new instance with all fields
+            pub fn new($($field_name: impl Into<$field_type>),*) -> Self {
+                Self {
+                    $($field_name: $field_name.into(),)*
+                }
+            }
+        }
+    };
+}
+
 /// Object literal macro
 #[macro_export]
 macro_rules! obj {
