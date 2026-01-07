@@ -248,7 +248,27 @@ impl GcObject {
     pub fn get_str(&self, idx: usize) -> Result<String> {
         self.with_store(|store| {
             let val = self.inner.field(&mut *store, idx)?;
-            String::from_val(val, store)
+            // Try with instance for ptr/len strings
+            if let Some(instance) = &self.instance {
+                let gc_string = GcString::from_val(store, val)?;
+                gc_string.to_string_with_instance(store, instance)
+            } else {
+                String::from_val(val, store)
+            }
+        })
+    }
+
+    /// Get a string field with instance access for ptr/len strings
+    pub fn get_string<I: FieldIndex>(&self, field: I) -> Result<String> {
+        self.with_store(|store| {
+            let idx = field.to_field_index(&self.inner, &*store)?;
+            let val = self.inner.field(&mut *store, idx)?;
+            if let Some(instance) = &self.instance {
+                let gc_string = GcString::from_val(store, val)?;
+                gc_string.to_string_with_instance(store, instance)
+            } else {
+                String::from_val(val, store)
+            }
         })
     }
 
@@ -409,6 +429,40 @@ impl GcString {
                 ))
             }
             GcStringInner::Array(arrayref) => {
+                let len = arrayref.len(&*store)? as usize;
+                let mut bytes = Vec::with_capacity(len);
+
+                for i in 0..len {
+                    let elem = arrayref.get(&mut *store, i as u32)?;
+                    bytes.push(elem.unwrap_i32() as u8);
+                }
+
+                Ok(String::from_utf8(bytes)?)
+            }
+        }
+    }
+
+    /// Convert to Rust String with instance access for ptr/len strings
+    pub fn to_string_with_instance(&self, store: &mut Store<()>, instance: &Instance) -> Result<String> {
+        match &self.inner {
+            GcStringInner::PtrLen(structref) => {
+                // Read ptr and len from the $String struct
+                let ptr = structref.field(&mut *store, 0)?.unwrap_i32();
+                let len = structref.field(&mut *store, 1)?.unwrap_i32();
+
+                if len == 0 {
+                    return Ok(String::new());
+                }
+
+                // Read from linear memory
+                let memory = instance.get_memory(&mut *store, "memory")
+                    .ok_or_else(|| anyhow!("no memory export"))?;
+                let mut buf = vec![0u8; len as usize];
+                memory.read(&*store, ptr as usize, &mut buf)?;
+                Ok(String::from_utf8(buf)?)
+            }
+            GcStringInner::Array(arrayref) => {
+                // Array strings don't need instance
                 let len = arrayref.len(&*store)? as usize;
                 let mut bytes = Vec::with_capacity(len);
 
@@ -597,6 +651,16 @@ macro_rules! gc_struct {
         $crate::gc_struct!(@impl_mut_field $name, $field_name, $field_idx, $field_type);
     };
 
+    // Parse immutable String field (special case for ptr/len strings)
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => String, $($rest:tt)*) => {
+        $crate::gc_struct!(@impl_string_field $name, $field_name, $field_idx);
+        $crate::gc_struct!(@parse_fields $name; $($rest)*);
+    };
+
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => String) => {
+        $crate::gc_struct!(@impl_string_field $name, $field_name, $field_idx);
+    };
+
     // Parse immutable field
     (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => $field_type:ty, $($rest:tt)*) => {
         $crate::gc_struct!(@impl_field $name, $field_name, $field_idx, $field_type);
@@ -610,12 +674,12 @@ macro_rules! gc_struct {
     // Base case
     (@parse_fields $name:ident;) => {};
 
-    // Implement getter + setter for mutable String field
+    // Implement getter + setter for mutable String field (uses get_string for instance access)
     (@impl_mut_string_field $name:ident, $field_name:ident, $field_idx:literal) => {
         paste::paste! {
             impl $name {
                 pub fn $field_name(&self) -> anyhow::Result<String> {
-                    self.inner.get($field_idx)
+                    self.inner.get_string($field_idx)
                 }
 
                 pub fn [<set_ $field_name>](&self, value: &str) -> anyhow::Result<()> {
@@ -636,6 +700,15 @@ macro_rules! gc_struct {
                 pub fn [<set_ $field_name>](&self, value: $field_type) -> anyhow::Result<()> {
                     self.inner.set_field($field_idx, value)
                 }
+            }
+        }
+    };
+
+    // Implement getter only for immutable String field (uses get_string for instance access)
+    (@impl_string_field $name:ident, $field_name:ident, $field_idx:literal) => {
+        impl $name {
+            pub fn $field_name(&self) -> anyhow::Result<String> {
+                self.inner.get_string($field_idx)
             }
         }
     };

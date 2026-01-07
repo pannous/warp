@@ -32,19 +32,80 @@ fn test_class_instance() {
 	);
 }
 
-// Aspirational API - requires gc_struct! macro from rasm
-// see test_gc_struct.rs for WIP intermediate implementation test
-// gc_struct! {
-//     Person {
-//         name: 0 => mut String,
-//         age: 1 => mut i32,
-//     }
-// }
-// #[test]
-// fn test_class_instance_raw() {
-// 	let alice = Person { name: "Alice", age: 30 };
-// 	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
-// }
+// End goal API - raw GC struct roundtrip via Person type
+use wasp::gc_struct;
+use wasp::gc_traits::GcObject;
+
+/// Rust Person struct for direct comparison
+#[derive(Debug, Clone, PartialEq)]
+struct RustPerson {
+	name: String,
+	age: i64,
+}
+
+impl RustPerson {
+	fn new(name: &str, age: i64) -> Self {
+		Self { name: name.to_string(), age }
+	}
+}
+
+/// gc_struct! wrapper for reading WASM GC Person struct
+gc_struct! {
+	WasmPerson {
+		name: 0 => String,
+		age: 1 => i64,
+	}
+}
+
+#[test]
+fn test_class_instance_raw() {
+	use wasp::{WasmGcEmitter, RawFieldValue, TypeDef, FieldDef};
+	use wasmtime::*;
+
+	// The expected result as a Rust struct
+	let alice = RustPerson::new("Alice", 30);
+
+	// Create TypeDef for Person (matches class Person{name:String age:i64})
+	let person_typedef = TypeDef {
+		name: "Person".to_string(),
+		tag: 100,
+		fields: vec![
+			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
+		],
+		wasm_type_idx: None,
+	};
+
+	// Emit raw GC struct WASM with Alice's values
+	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
+		&person_typedef,
+		&[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)],
+	);
+
+	// Run WASM and get result
+	let mut config = Config::new();
+	config.wasm_gc(true);
+	config.wasm_function_references(true);
+	let engine = Engine::new(&config).unwrap();
+	let mut store = Store::new(&engine, ());
+	let module = Module::new(&engine, &wasm_bytes).unwrap();
+	let linker = Linker::new(&engine);
+	let instance = linker.instantiate(&mut store, &module).unwrap();
+	let main = instance.get_func(&mut store, "main").unwrap();
+	let mut results = vec![Val::I32(0)];
+	main.call(&mut store, &[], &mut results).unwrap();
+
+	// Read back via gc_struct! wrapper
+	let wasm_person = WasmPerson::from_val(results[0].clone(), store, Some(instance)).unwrap();
+	let name: String = wasm_person.name().unwrap();
+	let age: i64 = wasm_person.age().unwrap();
+
+	// Convert to Rust struct for comparison
+	let result = RustPerson { name, age };
+
+	assert_eq!(result, alice);
+	println!("Raw GC struct roundtrip works: {:?} == {:?}", result, alice);
+}
 
 
 
