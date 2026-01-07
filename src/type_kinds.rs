@@ -87,6 +87,56 @@ impl TypeDef {
 	}
 }
 
+/// Extract field values from a class instance Node
+/// Instance structure: Key("Person", Colon, List([Key("name", Colon, Text), Key("age", Colon, Number)]))
+/// Returns (type_name, field_values) for use with emit_raw_struct
+pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<crate::wasm_gc_emitter::RawFieldValue>)> {
+	use crate::node::Node;
+	use crate::wasm_gc_emitter::RawFieldValue;
+	use crate::extensions::numbers::Number;
+
+	// Instance is Key(TypeName, :, List([Key(field, :, value), ...]))
+	match node.drop_meta() {
+		Node::Key(type_name, _, body) => {
+			let name = type_name.drop_meta().to_string();
+			let values = extract_field_values(body);
+			Some((name, values))
+		}
+		_ => None,
+	}
+}
+
+fn extract_field_values(body: &crate::node::Node) -> Vec<crate::wasm_gc_emitter::RawFieldValue> {
+	use crate::node::Node;
+	use crate::wasm_gc_emitter::RawFieldValue;
+	use crate::extensions::numbers::Number;
+
+	let mut values = Vec::new();
+
+	// body is List([Key(field_name, :, value), ...])
+	let items = match body.drop_meta() {
+		Node::List(items, _, _) => items,
+		_ => return values,
+	};
+
+	for item in items.iter() {
+		if let Node::Key(_field_name, _op, value) = item.drop_meta() {
+			let raw_value = match value.drop_meta() {
+				Node::Text(s) => RawFieldValue::String(s.to_string()),
+				Node::Symbol(s) => RawFieldValue::String(s.to_string()),
+				Node::Number(Number::Int(i)) => RawFieldValue::I64(*i),
+				Node::Number(Number::Float(f)) => RawFieldValue::F64(*f),
+				Node::Char(c) => RawFieldValue::I32(*c as i32),
+				Node::True => RawFieldValue::I32(1),
+				Node::False => RawFieldValue::I32(0),
+				_ => continue, // Skip unsupported types
+			};
+			values.push(raw_value);
+		}
+	}
+	values
+}
+
 /// Registry for user-defined types
 /// Maps type names to TypeDef and provides tag allocation
 #[derive(Debug, Default)]
