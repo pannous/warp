@@ -1922,6 +1922,37 @@ impl PartialEq<Node> for serde_json::Value {
 	}
 }
 
+/// Trait for types that can be compared with Node::Data(GcObject)
+/// Used by wasm_struct! macro to enable `is!("code", struct_value)` comparisons
+pub trait GcComparable {
+	/// Try to create Self from a GcObject
+	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self> where Self: Sized;
+	/// Compare self with another instance
+	fn gc_eq(&self, other: &Self) -> bool;
+}
+
+impl Node {
+	/// Compare with a GcComparable type by extracting from Data variant
+	pub fn eq_gc<T: GcComparable + std::fmt::Debug>(&self, other: &T) -> bool {
+		if let Data(dada) = self {
+			if let Some(gc_obj) = dada.downcast_ref::<crate::gc_traits::GcObject>() {
+				if let Some(extracted) = T::try_from_gc(gc_obj) {
+					return other.gc_eq(&extracted);
+				}
+			}
+		}
+		false
+	}
+}
+
+/// Blanket impl: Node can be compared with any GcComparable type
+/// This enables `assert_eq!(result, alice)` where alice is a wasm_struct! type
+impl<T: GcComparable + std::fmt::Debug> PartialEq<T> for Node {
+	fn eq(&self, other: &T) -> bool {
+		self.eq_gc(other)
+	}
+}
+
 // Implement Not for owned Node - returns Node for compatibility with existing tests
 impl Not for Node {
 	type Output = Node;
