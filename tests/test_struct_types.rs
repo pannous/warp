@@ -1,11 +1,14 @@
 use wasp::Node::{Empty, Type};
 use wasp::*;
+use wasp::wasm_gc_emitter::eval;
+// End goal API - unified struct for both Rust and WASM GC
 
-fn type_ref(name: &str) -> Node {
-	Type {
-		name: Box::new(symbol(name)),
+fn field(name: &str, type_name: &str) -> Node {
+	let typ=Type {
+		name: Box::new(symbol(type_name)),
 		body: Box::new(Empty),
-	}
+	};
+	key(name, typ)
 }
 
 #[test]
@@ -14,29 +17,29 @@ fn test_class_definition() {
 		"class Person{name:String age:i64}",
 		Type {
 			name: Box::new(symbol("Person")),
-			body: Box::new(list(vec![key("name", type_ref("String")), key("age", type_ref("i64")),]))
+			body: Box::new(list(vec![field("name","String"), field("age", "i64")]))
 		}
 	);
 }
 
 #[test]
-fn test_class_instance() {
+fn test_class_instance1() -> anyhow::Result<()> {
 	// eval() now returns Node::Data(GcObject) for class instances
 	// Verify GcObject fields match expected values
 	use wasp::gc_traits::GcObject;
-	let result = wasp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
-	if let wasp::Node::Data(dada) = &result {
+	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	if let Data(dada) = &result {
 		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
-		assert_eq!(gc_obj.get_string(0).unwrap(), "Alice");
-		let age: i64 = gc_obj.get(1).unwrap();
-		assert_eq!(age, 30);
-	} else {
-		panic!("expected Node::Data(GcObject), got {:?}", result);
+		// Field access by index (name access requires register_gc_types_from_wasm)
+		let name: String = gc_obj.get_string(0)?;
+		let age: i64 = gc_obj.get(1)?;
+		eq!(name, "Alice");
+		eq!(age, 30);
 	}
+	Ok(())
 }
 
-// End goal API - unified struct for both Rust and WASM GC
-use wasp::wasm_struct;
+
 
 // Single definition creates both Rust struct and WASM GC reader
 wasm_struct! {
@@ -44,6 +47,27 @@ wasm_struct! {
 		name: String,
 		age: i64,
 	}
+}
+
+
+#[test]
+fn test_class_instance2() -> anyhow::Result<()> {
+	// eval() now returns Node::Data(GcObject) for class instances
+	// Use from_gc() to create Person from GcObject
+	use wasp::gc_traits::GcObject;
+	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	if let Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+		let person = Person::from_gc(gc_obj)?;
+		// Generated accessor methods - IDE autocomplete works!
+		let name: String = person.name()?;
+		let age: i64 = person.age()?;
+		eq!(name, "Alice");
+		eq!(age, 30);
+	} else {
+		panic!("expected Node::Data(GcObject), got {:?}", result);
+	}
+	Ok(())
 }
 
 #[test]
@@ -69,6 +93,13 @@ fn test_class_instance_raw() {
 	} else {
 		panic!("expected Node::Data, got {:?}", result);
 	}
+}
+
+
+#[test]
+fn test_class_instance_magic_roundtrip() {
+	let alice = Person { name: "Alice".into(), age: 30 };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 }
 
 
