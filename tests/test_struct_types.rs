@@ -59,23 +59,37 @@ gc_struct! {
 
 #[test]
 fn test_class_instance_raw() {
-	use wasp::{WasmGcEmitter, RawFieldValue, TypeDef};
+	use wasp::{WasmGcEmitter, TypeDef, extract_instance_values};
 	use wasmtime::*;
 
 	// The expected result as a Rust struct
 	let alice = RustPerson::new("Alice", 30);
 
-	// Parse class definition and extract TypeDef automatically
-	let class_def = wasp::parse("class Person{name:String age:i64}");
-	let person_typedef = TypeDef::from_node(&class_def).expect("valid class definition");
+	// Parse full code: class definition + instance
+	let code = "class Person{name:String age:i64}; Person{name:'Alice' age:30}";
+	let parsed = wasp::parse(code);
+
+	// Find class definition and instance in the parsed tree
+	// For "class X; instance" the result is a List containing both
+	let (class_node, instance_node) = match parsed.drop_meta() {
+		wasp::Node::List(items, _, _) if items.len() >= 2 => {
+			(items[0].clone(), items[1].clone())
+		}
+		_ => panic!("expected list with class and instance"),
+	};
+
+	// Extract TypeDef from class definition
+	let person_typedef = TypeDef::from_node(&class_node).expect("valid class definition");
 	assert_eq!(person_typedef.name, "Person");
 	assert_eq!(person_typedef.fields.len(), 2);
 
-	// Emit raw GC struct WASM with Alice's values
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
-		&person_typedef,
-		&[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)],
-	);
+	// Extract field values from instance automatically
+	let (type_name, field_values) = extract_instance_values(&instance_node).expect("valid instance");
+	assert_eq!(type_name, "Person");
+	assert_eq!(field_values.len(), 2);
+
+	// Emit raw GC struct WASM
+	let wasm_bytes = WasmGcEmitter::emit_raw_struct(&person_typedef, &field_values);
 
 	// Run WASM and get result
 	let mut config = Config::new();
