@@ -59,22 +59,17 @@ gc_struct! {
 
 #[test]
 fn test_class_instance_raw() {
-	use wasp::{WasmGcEmitter, RawFieldValue, TypeDef, FieldDef};
+	use wasp::{WasmGcEmitter, RawFieldValue, TypeDef};
 	use wasmtime::*;
 
 	// The expected result as a Rust struct
 	let alice = RustPerson::new("Alice", 30);
 
-	// Create TypeDef for Person (matches class Person{name:String age:i64})
-	let person_typedef = TypeDef {
-		name: "Person".to_string(),
-		tag: 100,
-		fields: vec![
-			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
-		],
-		wasm_type_idx: None,
-	};
+	// Parse class definition and extract TypeDef automatically
+	let class_def = wasp::parse("class Person{name:String age:i64}");
+	let person_typedef = TypeDef::from_node(&class_def).expect("valid class definition");
+	assert_eq!(person_typedef.name, "Person");
+	assert_eq!(person_typedef.fields.len(), 2);
 
 	// Emit raw GC struct WASM with Alice's values
 	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
