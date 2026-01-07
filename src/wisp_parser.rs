@@ -874,7 +874,7 @@ mod tests {
 		wis!("true",(&True));
 		wis!("false",(&False));
 		wis!("(int 42)",(&Number(Number::Int(42))));
-		wis!("(float 3.14)",(&Number(Number::Float(3.14))));
+		wis!("(float 3.11)",(&Number(Number::Float(3.11))));
 		wis!("(char 'x')",(&Char('x')));
 		wis!("(text 'hello')",(&Text("hello".into())));
 		wis!("foo",(&Symbol("foo".into())));
