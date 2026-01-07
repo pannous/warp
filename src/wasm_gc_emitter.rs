@@ -135,6 +135,49 @@ impl WasmGcEmitter {
 		self.emit_all_functions = !enabled;
 	}
 
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Helper methods for clean, DRY code
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	/// Create a RefType for node references
+	fn node_ref(&self, nullable: bool) -> RefType {
+		RefType { nullable, heap_type: HeapType::Concrete(self.node_type) }
+	}
+
+	/// Emit string lookup from table and call constructor
+	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
+		let (ptr, len) = self.string_table
+			.get(s)
+			.map(|&offset| (offset, s.len() as u32))
+			.unwrap_or((0, s.len() as u32));
+		func.instruction(&I32Const(ptr as i32));
+		func.instruction(&I32Const(len as i32));
+		self.emit_call(func, constructor);
+	}
+
+	/// Append String struct field names (ptr, len) to an IndirectNameMap
+	fn append_string_field_names(type_field_names: &mut IndirectNameMap, type_idx: u32) {
+		let mut names = NameMap::new();
+		names.append(0, "ptr");
+		names.append(1, "len");
+		type_field_names.append(type_idx, &names);
+	}
+
+	/// Emit comparison operator (result is i32, extended to i64)
+	fn emit_comparison(&self, func: &mut Function, op: &Op) {
+		let cmp = match op {
+			Op::Eq => Instruction::I64Eq,
+			Op::Ne => Instruction::I64Ne,
+			Op::Lt => Instruction::I64LtS,
+			Op::Gt => Instruction::I64GtS,
+			Op::Le => Instruction::I64LeS,
+			Op::Ge => Instruction::I64GeS,
+			_ => unreachable!("Not a comparison op: {:?}", op),
+		};
+		func.instruction(&cmp);
+		func.instruction(&Instruction::I64ExtendI32U);
+	}
+
 	pub fn analyze_required_functions(&mut self, node: &Node) {
 		let node = node.drop_meta();
 		match node {
@@ -546,18 +589,8 @@ impl WasmGcEmitter {
 
 	/// Emit constructor functions for the compact Node
 	fn emit_constructors(&mut self) {
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
-		let node_ref_nullable = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
-		let _any_ref = RefType {
-			nullable: true,
-			heap_type: any_heap_type(),
-		};
+		let node_ref = self.node_ref(false);
+		let node_ref_nullable = self.node_ref(true);
 
 		// new_empty() -> (ref $Node)
 		if self.should_emit_function("new_empty") {
@@ -777,10 +810,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_getters(&mut self) {
-		let node_ref = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
+		let node_ref = self.node_ref(true);
 
 		// get_kind(node: ref $Node) -> i64
 		let func_type = self.types.len();
@@ -857,10 +887,7 @@ impl WasmGcEmitter {
 		let local_count = var_count + temp_locals;
 		self.next_temp_local = var_count; // Temp locals start after variables
 
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
+		let node_ref = self.node_ref(false);
 		let func_type = self.types.len();
 		self.types.ty().function(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
@@ -938,28 +965,14 @@ impl WasmGcEmitter {
 				}
 			},
 			Node::Text(s) => {
-				let (ptr, len) = self
-					.string_table
-					.get(s.as_str())
-					.map(|&offset| (offset, s.len() as u32))
-					.unwrap_or((0, s.len() as u32));
-				func.instruction(&I32Const(ptr as i32));
-				func.instruction(&I32Const(len as i32));
-				self.emit_call(func, "new_text");
+				self.emit_string_call(func, s, "new_text");
 			}
 			Node::Char(c) => {
 				func.instruction(&I32Const(*c as i32));
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				let (ptr, len) = self
-					.string_table
-					.get(s.as_str())
-					.map(|&offset| (offset, s.len() as u32))
-					.unwrap_or((0, s.len() as u32));
-				func.instruction(&I32Const(ptr as i32));
-				func.instruction(&I32Const(len as i32));
-				self.emit_call(func, "new_symbol");
+				self.emit_string_call(func, s, "new_symbol");
 			}
 			Node::Key(left, op, right) => {
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
@@ -1044,15 +1057,7 @@ impl WasmGcEmitter {
 				}
 			}
 			Node::Data(dada) => {
-				// Emit as symbol with type_name for now
-				let (ptr, len) = self
-					.string_table
-					.get(dada.type_name.as_str())
-					.map(|&offset| (offset, dada.type_name.len() as u32))
-					.unwrap_or((0, dada.type_name.len() as u32));
-				func.instruction(&I32Const(ptr as i32));
-				func.instruction(&I32Const(len as i32));
-				self.emit_call(func, "new_symbol");
+				self.emit_string_call(func, &dada.type_name, "new_symbol");
 			}
 			Node::Meta { .. } => {
 				self.emit_call(func, "new_empty");
@@ -1102,42 +1107,18 @@ impl WasmGcEmitter {
 
 			// Emit WASM arithmetic or comparison instruction
 			match op {
-				Op::Add => func.instruction(&Instruction::I64Add),
-				Op::Sub => func.instruction(&Instruction::I64Sub),
-				Op::Mul => func.instruction(&Instruction::I64Mul),
-				Op::Div => func.instruction(&Instruction::I64DivS),
-				Op::Mod => func.instruction(&Instruction::I64RemS),
+				Op::Add => { func.instruction(&Instruction::I64Add); }
+				Op::Sub => { func.instruction(&Instruction::I64Sub); }
+				Op::Mul => { func.instruction(&Instruction::I64Mul); }
+				Op::Div => { func.instruction(&Instruction::I64DivS); }
+				Op::Mod => { func.instruction(&Instruction::I64RemS); }
 				Op::Pow => {
 					warn!("Power operator not fully implemented, using multiplication");
-					func.instruction(&Instruction::I64Mul)
+					func.instruction(&Instruction::I64Mul);
 				}
-				// Comparison operators - result is i32 (0 or 1), extend to i64
-				Op::Eq => {
-					func.instruction(&Instruction::I64Eq);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
-				Op::Ne => {
-					func.instruction(&Instruction::I64Ne);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
-				Op::Lt => {
-					func.instruction(&Instruction::I64LtS);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
-				Op::Gt => {
-					func.instruction(&Instruction::I64GtS);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
-				Op::Le => {
-					func.instruction(&Instruction::I64LeS);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
-				Op::Ge => {
-					func.instruction(&Instruction::I64GeS);
-					func.instruction(&Instruction::I64ExtendI32U)
-				}
+				op if op.is_comparison() => self.emit_comparison(func, op),
 				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
-			};
+			}
 		}
 
 		// Wrap result as Int node
@@ -1156,14 +1137,8 @@ impl WasmGcEmitter {
 		self.emit_numeric_value(func, condition);
 		func.instruction(&Instruction::I32WrapI64);
 
-		// Result type: (ref $Node)
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
-
 		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(node_ref))));
+		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
 
 		// Then branch
 		self.emit_numeric_value(func, &then_expr);
@@ -1204,14 +1179,8 @@ impl WasmGcEmitter {
 		self.emit_block_value(func, &condition);
 		func.instruction(&Instruction::I32WrapI64);
 
-		// Result type: (ref $Node)
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.node_type),
-		};
-
 		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(node_ref))));
+		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
 
 		// Then branch - extract value from block if needed
 		self.emit_block_value(func, &then_expr);
@@ -1230,95 +1199,47 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
-	/// Emit while loop: while condition do body
-	/// Structure: Key(Key(Empty, While, condition), Do, body)
-	fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
-		// Extract condition from: Key(Empty, While, condition)
+	/// Emit while loop: (while condition) do body
+	/// If wrap_result is true, wraps result in Node; otherwise returns raw i64
+	fn emit_while_loop_impl(&mut self, func: &mut Function, left: &Node, body: &Node, wrap_result: bool) {
 		let condition = match left.drop_meta() {
 			Node::Key(_, Op::While, cond) => cond,
 			other => panic!("Expected while condition, got {:?}", other),
 		};
 
-		// Allocate temp local for result
 		let result_local = self.next_temp_local;
 		self.next_temp_local += 1;
 
-		// Initialize result variable with 0
 		func.instruction(&Instruction::I64Const(0));
 		func.instruction(&Instruction::LocalSet(result_local));
 
-		// WASM loop structure:
-		// (block $exit
-		//   (loop $continue
-		//     condition
-		//     i32.eqz
-		//     br_if $exit
-		//     body (store result)
-		//     br $continue
-		//   )
-		// )
 		func.instruction(&Instruction::Block(BlockType::Empty));
 		func.instruction(&Instruction::Loop(BlockType::Empty));
 
-		// Evaluate condition
 		self.emit_block_value(func, &condition);
 		func.instruction(&Instruction::I32WrapI64);
 		func.instruction(&Instruction::I32Eqz);
-		func.instruction(&Instruction::BrIf(1)); // break out of block if condition is false
+		func.instruction(&Instruction::BrIf(1));
 
-		// Execute body and store result
 		self.emit_block_value(func, body);
 		func.instruction(&Instruction::LocalSet(result_local));
-
-		// Continue loop
-		func.instruction(&Instruction::Br(0)); // br $continue
-
-		func.instruction(&Instruction::End); // end loop
-		func.instruction(&Instruction::End); // end block
-
-		// Load result and wrap in Node
-		func.instruction(&Instruction::LocalGet(result_local));
-		self.emit_call(func, "new_int");
-	}
-
-	/// Emit while loop and return numeric (i64) result (not wrapped in Node)
-	fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
-		// Extract condition from: Key(Empty, While, condition)
-		let condition = match left.drop_meta() {
-			Node::Key(_, Op::While, cond) => cond,
-			other => panic!("Expected while condition, got {:?}", other),
-		};
-
-		// Allocate temp local for result
-		let result_local = self.next_temp_local;
-		self.next_temp_local += 1;
-
-		// Initialize result variable with 0
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::LocalSet(result_local));
-
-		// WASM loop structure
-		func.instruction(&Instruction::Block(BlockType::Empty));
-		func.instruction(&Instruction::Loop(BlockType::Empty));
-
-		// Evaluate condition
-		self.emit_block_value(func, &condition);
-		func.instruction(&Instruction::I32WrapI64);
-		func.instruction(&Instruction::I32Eqz);
-		func.instruction(&Instruction::BrIf(1)); // break out if condition is false
-
-		// Execute body and store result
-		self.emit_block_value(func, body);
-		func.instruction(&Instruction::LocalSet(result_local));
-
-		// Continue loop
 		func.instruction(&Instruction::Br(0));
 
-		func.instruction(&Instruction::End); // end loop
-		func.instruction(&Instruction::End); // end block
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
 
-		// Return result (leave i64 on stack, don't wrap in Node)
 		func.instruction(&Instruction::LocalGet(result_local));
+		if wrap_result {
+			self.emit_call(func, "new_int");
+		}
+	}
+
+	fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
+		self.emit_while_loop_impl(func, left, body, true);
+	}
+
+	fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
+		self.emit_while_loop_impl(func, left, body, false);
 	}
 
 	/// Extract numeric value from a block { expr } or plain expr
@@ -1411,33 +1332,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_comparison() => {
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
-				match op {
-					Op::Eq => {
-						func.instruction(&Instruction::I64Eq);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					Op::Ne => {
-						func.instruction(&Instruction::I64Ne);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					Op::Lt => {
-						func.instruction(&Instruction::I64LtS);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					Op::Gt => {
-						func.instruction(&Instruction::I64GtS);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					Op::Le => {
-						func.instruction(&Instruction::I64LeS);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					Op::Ge => {
-						func.instruction(&Instruction::I64GeS);
-						func.instruction(&Instruction::I64ExtendI32U);
-					}
-					_ => unreachable!(),
-				};
+				self.emit_comparison(func, op);
 			}
 			// Variable lookup
 			Node::Symbol(name) => {
@@ -1587,10 +1482,7 @@ impl WasmGcEmitter {
 		type_field_names.append(self.node_type, &node_fields);
 
 		// $String fields
-		let mut string_fields = NameMap::new();
-		string_fields.append(0, "ptr");
-		string_fields.append(1, "len");
-		type_field_names.append(self.string_type, &string_fields);
+		Self::append_string_field_names(&mut type_field_names, self.string_type);
 
 		// $i64box field
 		let mut i64box_fields = NameMap::new();
@@ -1805,10 +1697,7 @@ impl WasmGcEmitter {
 		let mut type_field_names = IndirectNameMap::new();
 
 		// String struct fields
-		let mut string_fields = NameMap::new();
-		string_fields.append(0, "ptr");
-		string_fields.append(1, "len");
-		type_field_names.append(string_type_idx, &string_fields);
+		Self::append_string_field_names(&mut type_field_names, string_type_idx);
 
 		// User struct fields
 		let mut struct_fields_names = NameMap::new();
