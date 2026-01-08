@@ -1,5 +1,5 @@
-use wasp::{eq, is, skip};
-use wasp::wasp_parser::parse;
+use warp::{eq, is, skip};
+use warp::wasp_parser::parse;
 
 #[test]
 fn test_indent_as_block() {

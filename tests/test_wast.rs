@@ -1,5 +1,5 @@
-use wasp::eq;
-use wasp::wasp_parser::parse;
+use warp::eq;
+use warp::wasp_parser::parse;
 
 #[test]
 #[ignore]

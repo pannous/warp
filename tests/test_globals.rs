@@ -1,4 +1,4 @@
-use wasp::is;
+use warp::is;
 
 // DONE: global keyword implementation
 
