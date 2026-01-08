@@ -1,7 +1,7 @@
-use wasp::{block, float, int, key, list, parens, symbol, text, Node};
-use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::wasp_parser::WaspParser;
-use wasp::write_wasm;
+use warp::{block, float, int, key, list, parens, symbol, text, Node};
+use warp::wasm_gc_emitter::WasmGcEmitter;
+use warp::wasp_parser::WaspParser;
+use warp::write_wasm;
 
 /// Comprehensive test covering all Node types and their WASM encoding
 #[test]

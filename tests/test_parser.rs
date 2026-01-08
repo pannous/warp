@@ -1,9 +1,9 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::Node::Empty;
-use wasp::int;
-use wasp::Kind::Key;
-use wasp::wasp_parser::parse;
+use warp::eq;
+use warp::Node;
+use warp::Node::Empty;
+use warp::int;
+use warp::Kind::Key;
+use warp::wasp_parser::parse;
 
 #[test]
 pub fn test_parser_serialize() {

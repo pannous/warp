@@ -1,6 +1,6 @@
-use wasp::Node::{Empty, Type};
-use wasp::*;
-use wasp::wasm_gc_emitter::eval;
+use warp::Node::{Empty, Type};
+use warp::*;
+use warp::wasm_gc_emitter::eval;
 
 // End goal API achieved - unified struct for both Rust and WASM GC
 // Single definition creates both Rust struct and WASM GC reader
@@ -82,7 +82,7 @@ fn test_class_instance_explicit() -> anyhow::Result<()> {
 	// if the beautiful test_magic_object_roundtrip fails, debug the result here
 	// eval() now returns Node::Data(GcObject) for class instances
 	// Verify GcObject fields match expected values
-	use wasp::gc_traits::GcObject;
+	use warp::gc_traits::GcObject;
 	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 	if let Data(dada) = &result {
 		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
@@ -102,7 +102,7 @@ fn test_class_instance_explicit() -> anyhow::Result<()> {
 fn test_class_instance2() -> anyhow::Result<()> {
 	// eval() now returns Node::Data(GcObject) for class instances
 	// Use from_gc() to create Person from GcObject
-	use wasp::gc_traits::GcObject;
+	use warp::gc_traits::GcObject;
 	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 	if let Data(dada) = &result {
 		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
@@ -120,15 +120,15 @@ fn test_class_instance2() -> anyhow::Result<()> {
 
 #[test]
 fn test_class_instance_raw() {
-	use wasp::gc_traits::GcObject;
+	use warp::gc_traits::GcObject;
 
 	let alice = Person::new("Alice", 30);
 
 	// eval() automatically detects class+instance and returns Node::Data(GcObject)
-	let result = wasp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	let result = warp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 
 	// Extract GcObject and convert to Person struct
-	if let wasp::Node::Data(dada) = &result {
+	if let warp::Node::Data(dada) = &result {
 		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
 
 		// Read fields directly (this approach works)

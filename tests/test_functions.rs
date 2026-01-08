@@ -1,10 +1,10 @@
 // Function tests
 // Migrated from tests_*.rs files
 
-use wasp::analyzer::analyze;
-use wasp::Node;
-use wasp::wasp_parser::parse;
-use wasp::{eq, is, skip};
+use warp::analyzer::analyze;
+use warp::Node;
+use warp::wasp_parser::parse;
+use warp::{eq, is, skip};
 
 #[test]
 #[ignore]

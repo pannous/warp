@@ -1,14 +1,14 @@
 #![allow(mixed_script_confusables)]
 
 use std::process::exit;
-use wasp::analyzer::analyze;
-use wasp::extensions::print;
-use wasp::type_kinds::NodeKind;
-use wasp::wasm_gc_emitter::eval;
-use wasp::wasp_parser::parse;
-use wasp::Node;
-use wasp::Node::{Empty, False, True};
-use wasp::{eq, is, skip};
+use warp::analyzer::analyze;
+use warp::extensions::print;
+use warp::type_kinds::NodeKind;
+use warp::wasm_gc_emitter::eval;
+use warp::wasp_parser::parse;
+use warp::Node;
+use warp::Node::{Empty, False, True};
+use warp::{eq, is, skip};
 
 #[test]
 #[ignore]

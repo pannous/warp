@@ -4,9 +4,6 @@ use std::io::Write;
 use std::path::Path;
 //noinspection ALL
 use crate::extensions::strings::StringExtensions;
-#[cfg(not(feature = "wasm"))]
-#[cfg(not(test))]
-use reqwest::blocking::{get, Client, Response};
 
 // #[cfg(any(feature = "wasm",test))]
 #[cfg(feature = "wasm")]
@@ -23,19 +20,11 @@ fn download(url: &str) -> String {
 #[cfg(not(feature = "wasm"))]
 #[cfg(not(test))]
 pub fn download(url: &str) -> String {
-	let empty: String = String::from("");
-
-	let response = match get(url) {
-		Ok(res) => res,
-		Err(_) => return empty,
-	};
-	match response.bytes() {
-		Ok(bytes) => {
-			let s = String::from_utf8(bytes.to_vec());
-			s.unwrap_or_else(|_| empty)
-		}
-		Err(_) => empty,
-	}
+	ureq::get(url)
+		.call()
+		.ok()
+		.and_then(|mut r| r.body_mut().read_to_string().ok())
+		.unwrap_or_default()
 }
 
 pub trait FileExtensions {

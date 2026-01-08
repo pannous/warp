@@ -2,7 +2,7 @@
 // shared code with wasp tests etc
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 // only lib.rs allows reexporting as:
-// use wasp::extensions::*; etc
+// use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
 pub mod extensions;
 pub use extensions::lists::*;

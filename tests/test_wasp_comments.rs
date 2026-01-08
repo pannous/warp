@@ -1,7 +1,7 @@
-// use wasp::wasp_parser::WaspParser::parse;
-use wasp::Node;
-use wasp::wasp_parser::{parse, WaspParser};
-use wasp::{eq, is, put};
+// use warp::wasp_parser::WaspParser::parse;
+use warp::Node;
+use warp::wasp_parser::{parse, WaspParser};
+use warp::{eq, is, put};
 
 #[test]
 fn test_line_comments() {

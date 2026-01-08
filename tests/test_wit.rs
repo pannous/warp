@@ -1,6 +1,6 @@
-use wasp::eq;
-use wasp::Node::*;
-use wasp::wasp_parser::parse_file;
+use warp::eq;
+use warp::Node::*;
+use warp::wasp_parser::parse_file;
 
 #[test]
 fn test_timeout_protection() {

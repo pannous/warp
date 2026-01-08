@@ -1,6 +1,6 @@
-use wasp::wasp_parser::WaspParser;
-use wasp::*;
-use wasp::Node::Number;
+use warp::wasp_parser::WaspParser;
+use warp::*;
+use warp::Node::Number;
 
 #[test]
 fn test_precedence() {

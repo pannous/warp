@@ -1,7 +1,7 @@
-use wasp::is;
-use wasp::wasm_gc_emitter::eval;
-use wasp::node::Node;
-use wasp::Number;
+use warp::is;
+use warp::wasm_gc_emitter::eval;
+use warp::node::Node;
+use warp::Number;
 
 // DONE: Fix global variable shadowing - globals were being added to local scope
 

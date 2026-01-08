@@ -1,5 +1,5 @@
 use wasmtime::{Engine, Linker, Module, Store};
-use wasp::eq;
+use warp::eq;
 
 /// Demonstration of WASM GC reading patterns inspired by ~/dev/script/rust/rasm
 /// NOTE: This test requires wasmtime 28.0+ for full GC introspection support
@@ -117,7 +117,7 @@ fn test_node_serialization_workflow_design() {
 	println!("       }}");
 	println!("   }}");
 	println!();
-	println!("3. Convert wasp::Node to WASM:");
+	println!("3. Convert warp::Node to WASM:");
 	println!("   let wasm_node = WaspNode::create(&template, obj! {{");
 	println!("       tag: Kind::Number as i32,");
 	println!("       int_value: 42,");

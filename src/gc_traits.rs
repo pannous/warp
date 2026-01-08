@@ -4,8 +4,8 @@
 //!
 //! # Usage
 //! ```ignore
-//! use wasp::gc_traits::GcObject;
-//! use wasp::gc_struct;
+//! use warp::gc_traits::GcObject;
+//! use warp::gc_struct;
 //!
 //! gc_struct! {
 //!     Person {

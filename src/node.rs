@@ -13,8 +13,7 @@ use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
-use syn::Signature;
-// use wasp::type_kinds::{AstKind, NodeKind};
+// use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
 use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
@@ -326,8 +325,8 @@ pub struct Local {
 
 pub type Variable = Local;
 
-// use wasp::Node;
-// use wasp::*; !
+// use warp::Node;
+// use warp::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
