@@ -1,9 +1,9 @@
-use wasp::Node::*;
-use wasp::{Bracket, Node, Op};
-use wasp::run::wasmtime_runner::run;
-use wasp::wasm_gc_emitter::{eval, WasmGcEmitter};
-use wasp::StringExtensions;
-use wasp::{eq, is, write_wasm};
+use warp::Node::*;
+use warp::{Bracket, Node, Op};
+use warp::run::wasmtime_runner::run;
+use warp::wasm_gc_emitter::{eval, WasmGcEmitter};
+use warp::StringExtensions;
+use warp::{eq, is, write_wasm};
 
 fn normalize_blocks(node: &Node) -> Node {
 	let node = node.drop_meta();
@@ -15,13 +15,13 @@ fn normalize_blocks(node: &Node) -> Node {
 		_ => node.clone(),
 	}
 }
-use wasp::type_kinds::NodeKind;
-use wasp::Number::Int;
+use warp::type_kinds::NodeKind;
+use warp::Number::Int;
 
 #[test]
 fn test_wasm_roundtrip() {
 	// same as eval() but shows explicit parsing
-	use wasp::wasp_parser::WaspParser;
+	use warp::wasp_parser::WaspParser;
 
 	// Parse WASP input
 	let input = "html{test=1}";
@@ -100,7 +100,7 @@ fn test_node_kind_enum_abi() {
 
 #[test]
 fn test_function_usage_tracking() {
-	use wasp::wasp_parser::WaspParser;
+	use warp::wasp_parser::WaspParser;
 
 	// Parse a simple char - should only use new_codepoint
 	let node = WaspParser::parse("'🦀'");
@@ -128,7 +128,7 @@ fn test_function_usage_tracking() {
 
 #[test]
 fn test_emit_for_node_tree_shaking() {
-	use wasp::wasp_parser::WaspParser;
+	use warp::wasp_parser::WaspParser;
 
 	// Without tree-shaking
 	let node = WaspParser::parse("'🦀'");

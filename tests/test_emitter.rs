@@ -1,5 +1,5 @@
-use wasp::*;
-use wasp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
+use warp::*;
+use warp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
 
 
 #[test]

@@ -19,8 +19,8 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use wasp::wasp_parser::parse;
-use wasp::{eq, is, skip};
+use warp::wasp_parser::parse;
+use warp::{eq, is, skip};
 
 #[test]
 #[ignore]

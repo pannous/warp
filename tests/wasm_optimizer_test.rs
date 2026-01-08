@@ -1,4 +1,4 @@
-use wasp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
+use warp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
 use std::path::Path;
 
 #[test]

@@ -9,11 +9,11 @@ use wasmtime::*;
 use anyhow::Result;
 
 // Import emitter and type system
-use wasp::{WasmGcEmitter, RawFieldValue, TypeDef, FieldDef};
+use warp::{WasmGcEmitter, RawFieldValue, TypeDef, FieldDef};
 
 // Import gc_struct! macro and gc_traits module for ergonomic access
-use wasp::gc_struct;
-use wasp::gc_traits::GcObject as ErgonomicGcObject;
+use warp::gc_struct;
+use warp::gc_traits::GcObject as ErgonomicGcObject;
 
 /// Person struct mirrors the WASM GC $Person type
 #[derive(Debug, Clone, PartialEq)]

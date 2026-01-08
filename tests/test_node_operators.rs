@@ -1,6 +1,6 @@
-use wasp::Node::*;
-use wasp::{Bracket, Node, Separator};
-use wasp::*; // TODO: Meta is not exported
+use warp::Node::*;
+use warp::{Bracket, Node, Separator};
+use warp::*; // TODO: Meta is not exported
 
 #[test]
 fn test_node_add_basic() {

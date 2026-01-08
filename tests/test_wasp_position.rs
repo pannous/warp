@@ -1,6 +1,6 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::wasp_parser::WaspParser;
+use warp::eq;
+use warp::Node;
+use warp::wasp_parser::WaspParser;
 
 #[test]
 fn test_position_tracking() {

@@ -1,5 +1,5 @@
-use wasp::wasp_parser::parse;
-use wasp::node::Node;
+use warp::wasp_parser::parse;
+use warp::node::Node;
 
 fn check_node(node: &Node, depth: usize) {
     let indent = "  ".repeat(depth);

@@ -1,7 +1,7 @@
-use wasp::Number::{Float, Int};
-use wasp::{eq, is, put, Number};
-// use wasp::Node::Number as Number;
-// use wasp::Number::{Float, Int};
+use warp::Number::{Float, Int};
+use warp::{eq, is, put, Number};
+// use warp::Node::Number as Number;
+// use warp::Number::{Float, Int};
 
 #[test]
 fn test_number() {

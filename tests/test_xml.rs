@@ -1,6 +1,6 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::wasp_parser::parse_xml;
+use warp::eq;
+use warp::Node;
+use warp::wasp_parser::parse_xml;
 use Node::*;
 
 #[test]
@@ -426,8 +426,8 @@ fn find_xml_files_recursive(
 	Ok(())
 }
 
-fn contains_error(node: &wasp::Node) -> bool {
-	use wasp::Node::*;
+fn contains_error(node: &warp::Node) -> bool {
+	use warp::Node::*;
 
 	match node {
 		Error(_) => true,

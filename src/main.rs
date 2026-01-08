@@ -23,7 +23,7 @@ use node::Node;
 use wasm_gc_emitter::eval;
 use extensions::numbers::Number;
 
-const WASP_VERSION: &str = "0.1.0";
+const WARP_VERSION: &str = "0.1.1";
 
 fn node_to_i32(node: &Node) -> i32 {
     match node {
@@ -59,7 +59,7 @@ fn main() {
             }
         }
 
-        println!("Wasp 🐝 {}", WASP_VERSION);
+        println!("Warp 🐝 {}", WARP_VERSION);
         usage();
         console();
         return;
@@ -78,6 +78,7 @@ fn main() {
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".angle") {
         let wasp_code = load_file(&arg_string);
         let result = eval(&wasp_code);
+        println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wasm") {
         if args.len() >= 3 {
@@ -93,6 +94,7 @@ fn main() {
         } else {
             let result = run::wasmtime_runner::run(&arg_string);
             println!("{}", result.serialize());
+            std::process::exit(node_to_i32(&result));
         }
     } else if arg_string == "test" || arg_string == "tests" {
         #[cfg(not(feature = "release"))]
@@ -157,7 +159,7 @@ fn main() {
     } else if arg_string.contains("help") {
         println!("detailed documentation can be found at https://github.com/pannous/wasp/wiki");
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
-        println!("Wasp 🐝 {}", WASP_VERSION);
+        println!("Wasp 🐝 {}", WARP_VERSION);
     } else if arg_string.contains("compile") || arg_string.contains("build") || arg_string.contains("link") {
         let code = extract_after(&arg_string, " ");
         let _result = eval(&code);
@@ -182,25 +184,52 @@ fn usage() {
 }
 
 fn console() {
-    println!("Interactive console (Ctrl+C to exit)");
-    loop {
-        print!("🐝 ");
-        use std::io::Write;
-        let _ = io::stdout().flush();
+    use rustyline::error::ReadlineError;
+    use rustyline::DefaultEditor;
 
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(0) => break, // EOF
-            Ok(_) => {
-                let input = input.trim();
+    println!("Interactive console (Ctrl+D to exit)");
+
+    let mut rl = match DefaultEditor::new() {
+        Ok(editor) => editor,
+        Err(e) => {
+            eprintln!("Failed to initialize readline: {}", e);
+            return;
+        }
+    };
+
+    // Load history if exists
+    let history_path = dirs_home().join(".wasp_history");
+    let _ = rl.load_history(&history_path);
+
+    loop {
+        match rl.readline("🐝 ") {
+            Ok(line) => {
+                let input = line.trim();
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
+                let _ = rl.add_history_entry(input);
                 let result = eval(input);
                 println!("» {}", result.serialize());
             }
-            Err(_) => break,
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                continue;
+            }
+            Err(ReadlineError::Eof) => break,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                break;
+            }
         }
     }
+
+    // Save history
+    let _ = rl.save_history(&history_path);
+}
+
+fn dirs_home() -> std::path::PathBuf {
+    env::var("HOME").map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
 }
 
 fn load_file(path: &str) -> String {
