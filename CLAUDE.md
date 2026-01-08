@@ -137,7 +137,7 @@ The `src/extensions/` directory provides Rust standard library extensions:
 - `utils.rs` - General utilities (download, file I/O)
 - more on demand
 
-These are reexported in `lib.rs` for test access via `use wasp::*`.
+These are reexported in `lib.rs` for test access via `use warp::*`.
 
 ## Development Workflow
 
@@ -180,7 +180,7 @@ to be checked via test_wasm_roundtrip
    }
    }
 
-3. Convert wasp::Node to WASM:
+3. Convert warp::Node to WASM:
    let wasm_node = WaspNode::create(&template, obj! {
    tag: Kind::Number as i32,
    int_value: 42,
@@ -211,7 +211,7 @@ is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run
 
 the is! macro triggers the following roundtrip: 
 is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
-via wasp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
+via warp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
 
 ### soon
 

@@ -1,6 +1,7 @@
 use warp::Node::{Empty, Type};
 use warp::*;
 use warp::wasm_gc_emitter::eval;
+use warp::{eq, is, key, symbol, wasm_object, wasm_struct, Node};
 
 // End goal API achieved - unified struct for both Rust and WASM GC
 // Single definition creates both Rust struct and WASM GC reader
