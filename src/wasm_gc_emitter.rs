@@ -1142,7 +1142,7 @@ impl WasmGcEmitter {
 					if self.needs_float(node) {
 						self.emit_float_value(func, node);
 						self.emit_call(func, "new_float");
-					} else {
+					} else { // todo what is this? Why does it only want to emit float and int? 
 						self.emit_numeric_value(func, node);
 						self.emit_call(func, "new_int");
 					}
