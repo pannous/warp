@@ -1,9 +1,9 @@
+use crate::node::Node;
+use crate::type_kinds::Kind;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
-use crate::node::Node;
-use crate::type_kinds::Kind;
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
@@ -28,7 +28,11 @@ pub const FIELD_VALUE: usize = 2;
 
 impl GcObject {
 	pub fn new(val: Val, store: Rc<RefCell<Store<()>>>, instance: Instance) -> Self {
-		GcObject { inner: val, store, instance }
+		GcObject {
+			inner: val,
+			store,
+			instance,
+		}
 	}
 
 	/// Get field by index
@@ -61,7 +65,11 @@ impl GcObject {
 	/// Get the value field as a GcObject (child node)
 	pub fn value(&self) -> Result<GcObject> {
 		let val = self.get_field(FIELD_VALUE)?;
-		Ok(GcObject::new(val, self.store.clone(), self.instance.clone()))
+		Ok(GcObject::new(
+			val,
+			self.store.clone(),
+			self.instance.clone(),
+		))
 	}
 
 	/// Check if value field is null
@@ -130,7 +138,8 @@ impl GcObject {
 			return Ok(String::new());
 		}
 		let mut store = self.store.borrow_mut();
-		let memory = self.instance
+		let memory = self
+			.instance
 			.get_memory(&mut *store, "memory")
 			.ok_or_else(|| anyhow!("No memory export"))?;
 		let mut buf = vec![0u8; len as usize];
@@ -147,35 +156,64 @@ impl GcObject {
 	/// Get the data field as a child GcObject (for Key nodes where data is a node ref)
 	pub fn data_as_node(&self) -> Result<GcObject> {
 		let val = self.data()?;
-		Ok(GcObject::new(val, self.store.clone(), self.instance.clone()))
+		Ok(GcObject::new(
+			val,
+			self.store.clone(),
+			self.instance.clone(),
+		))
 	}
 }
 
 /// Trait for converting Val to Rust types
 pub trait FromVal: Sized {
-	fn from_val(val: Val, store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self>;
+	fn from_val(
+		val: Val,
+		store: &mut Store<()>,
+		instance: &Instance,
+		store_rc: &Rc<RefCell<Store<()>>>,
+	) -> Result<Self>;
 }
 
 impl FromVal for i32 {
-	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+	fn from_val(
+		val: Val,
+		_store: &mut Store<()>,
+		_instance: &Instance,
+		_store_rc: &Rc<RefCell<Store<()>>>,
+	) -> Result<Self> {
 		Ok(val.unwrap_i32())
 	}
 }
 
 impl FromVal for i64 {
-	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+	fn from_val(
+		val: Val,
+		_store: &mut Store<()>,
+		_instance: &Instance,
+		_store_rc: &Rc<RefCell<Store<()>>>,
+	) -> Result<Self> {
 		Ok(val.unwrap_i64())
 	}
 }
 
 impl FromVal for f64 {
-	fn from_val(val: Val, _store: &mut Store<()>, _instance: &Instance, _store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+	fn from_val(
+		val: Val,
+		_store: &mut Store<()>,
+		_instance: &Instance,
+		_store_rc: &Rc<RefCell<Store<()>>>,
+	) -> Result<Self> {
 		Ok(val.unwrap_f64())
 	}
 }
 
 impl FromVal for GcObject {
-	fn from_val(val: Val, _store: &mut Store<()>, instance: &Instance, store_rc: &Rc<RefCell<Store<()>>>) -> Result<Self> {
+	fn from_val(
+		val: Val,
+		_store: &mut Store<()>,
+		instance: &Instance,
+		store_rc: &Rc<RefCell<Store<()>>>,
+	) -> Result<Self> {
 		Ok(GcObject::new(val, store_rc.clone(), instance.clone()))
 	}
 }
@@ -199,14 +237,15 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 		linker.instantiate(&mut *s, &module)?
 	};
 
-	let main = {
-		let mut s = store_rc.borrow_mut();
-		instance.get_func(&mut *s, "main").ok_or_else(|| anyhow!("No main function"))?
-	};
-
 	let mut results = vec![Val::I32(0)];
 	{
 		let mut s = store_rc.borrow_mut();
+		let names = ["main", "wasp_main", "warp_main", "_start"];
+		let main = names
+			.iter()
+			.find_map(|&n| instance.get_func(&mut *s, n))
+			.ok_or_else(|| anyhow!("No entry point: {:?}", names))?;
+
 		main.call(&mut *s, &[], &mut results)?;
 	}
 
@@ -239,7 +278,9 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 
 	let main = {
 		let mut s = store_rc.borrow_mut();
-		instance.get_func(&mut *s, "main").ok_or_else(|| anyhow!("No main function"))?
+		instance
+			.get_func(&mut *s, "main")
+			.ok_or_else(|| anyhow!("No main function"))?
 	};
 
 	let mut results = vec![Val::I32(0)];
@@ -260,7 +301,9 @@ pub fn call_constructor(
 ) -> Result<GcObject> {
 	let func = {
 		let mut s = store.borrow_mut();
-		instance.get_func(&mut *s, func_name).ok_or_else(|| anyhow!("Function {} not found", func_name))?
+		instance
+			.get_func(&mut *s, func_name)
+			.ok_or_else(|| anyhow!("Function {} not found", func_name))?
 	};
 
 	let mut results = vec![Val::I32(0)];
