@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test 2>&1 | tail -50)",
+      "Bash(cargo test --lib 2>&1 | tail -20)",
+      "Bash(cargo test --lib wasp_parser::tests::test_parse_named_block -- --nocapture 2>&1 | tail -30)",
+      "Read(/Users/me/dev/angles/warp/src/wasp_parser.rs)",
+      "Bash(rustup override:*)",
+      "Bash(rustup show:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(find tests -name \"*.rs\" -type f | sort)",
+      "Bash(for f in tests/*.rs; do echo \"=== $f ===\"; wc -l \"$f\"; head -20 \"$f\"; echo; done)",
+      "Bash(for f in tests/todo/*.rs; do echo \"=== $f ($(wc -l < \"$f\" | tr -d ' ') lines) ===\"; cat \"$f\"; echo; done | head -300)",
+      "Bash(for f in tests/todo/*.rs; do lines=$(wc -l < \"$f\" | tr -d ' '); if [ \"$lines\" -lt 30 ]; then echo \"$f ($lines lines)\"; fi; done)",
+      "Bash(wc -l tests/todo/*.rs | sort -n | head -20)",
+      "Read(/Users/me/dev/angles/warp/tests/todo/test_list.rs)",
+      "Bash(grep \"fn test.*List\\|fn test.*Array\" tests/todo/tests_1.rs | head -20)",
+      "Bash(grep -n \"fn testList\\|fn test_list\\|fn testArray\" tests/todo/tests_*.rs tests/todo/tests_original.rs | head -40)",
+      "Bash(chmod:*)",
+      "Bash(/Users/me/dev/angles/warp/failing_tests.sh)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(./test.sh:*)",
+      "Bash(grep:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode|Edit|MultiEdit|Write|NotebookEdit|WebFetch|WebSearch|Bash|BashOutput|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
+            "timeout": 300
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
