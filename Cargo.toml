@@ -70,7 +70,7 @@ rustyline = "15"
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = "40.0.0"
+wasmtime = { version = "40.0.0", default-features = false, features = ["cranelift", "gc", "gc-drc", "runtime", "wat"] }
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime
