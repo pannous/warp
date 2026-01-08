@@ -1,8 +1,8 @@
-use wasp::skip;
-use wasp::extensions::todow;
-use wasp::node::data;
-use wasp::wasp_parser::parse;
-use wasp::*;
+use warp::skip;
+use warp::extensions::todow;
+use warp::node::data;
+use warp::wasp_parser::parse;
+use warp::*;
 
 #[test]
 fn test_add_boxed_list_item() {

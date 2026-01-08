@@ -1,12 +1,12 @@
 // Web/Browser tests
 // Migrated from tests_*.rs files
 
-use wasp::analyzer::analyze;
-use wasp::extensions::print;
-use wasp::util::fetch;
-use wasp::wasm_gc_emitter::eval;
-use wasp::wasp_parser::parse;
-use wasp::{eq, is, put, skip};
+use warp::analyzer::analyze;
+use warp::extensions::print;
+use warp::util::fetch;
+use warp::wasm_gc_emitter::eval;
+use warp::wasp_parser::parse;
+use warp::{eq, is, put, skip};
 
 #[test]
 fn test_html_wasp() {

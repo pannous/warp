@@ -1,7 +1,7 @@
-use wasp::Node;
-use wasp::Node::Empty;
-use wasp::smarty::{float_data28, smarty32};
-use wasp::{is, skip, Number};
+use warp::Node;
+use warp::Node::Empty;
+use warp::smarty::{float_data28, smarty32};
+use warp::{is, skip, Number};
 
 #[test]
 #[ignore]

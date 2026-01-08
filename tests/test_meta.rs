@@ -1,9 +1,9 @@
 // Metadata tests
 // Migrated from tests_*.rs files
 
-use wasp::Node;
-use wasp::wasp_parser::parse;
-use wasp::{eq, exists, skip};
+use warp::Node;
+use warp::wasp_parser::parse;
+use warp::{eq, exists, skip};
 
 #[test]
 #[ignore]

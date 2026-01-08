@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasp::GcObject;
+use warp::GcObject;
 
 /// Shared WASM engine with GC support (created once, reused across all tests)
 /// This is thread-safe and significantly speeds up tests by avoiding repeated Engine creation

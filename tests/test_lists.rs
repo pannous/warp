@@ -1,8 +1,8 @@
-use wasp::Node;
-use wasp::*;
-use wasp::analyzer::analyze;
-use wasp::type_kinds::NodeKind;
-use wasp::wasp_parser::parse;
+use warp::Node;
+use warp::*;
+use warp::analyzer::analyze;
+use warp::type_kinds::NodeKind;
+use warp::wasp_parser::parse;
 
 // Array size tests
 #[test]

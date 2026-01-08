@@ -1,15 +1,15 @@
 // Type system tests
 // Migrated from tests_*.rs files
 
-use wasp::analyzer::analyze;
-use wasp::extensions::assert_throws;
-use wasp::Node;
-use wasp::Node::False;
-use wasp::type_kinds::NodeKind;
-use wasp::wasp_parser::parse;
-use wasp::{is, skip, Number};
+use warp::analyzer::analyze;
+use warp::extensions::assert_throws;
+use warp::Node;
+use warp::Node::False;
+use warp::type_kinds::NodeKind;
+use warp::wasp_parser::parse;
+use warp::{is, skip, Number};
 
-// const functions : Map<String, Function> = wasp::analyzer::FUNCTIONS;
+// const functions : Map<String, Function> = warp::analyzer::FUNCTIONS;
 
 // TODO: Stub types - these need proper implementation
 #[allow(non_camel_case_types)]
@@ -414,8 +414,8 @@ fn test_function_argument_cast() {
 
 #[test]
 fn test_type_node() {
-	use wasp::node::{Bracket, Separator, Op};
-	use wasp::type_kinds::Kind;
+	use warp::node::{Bracket, Separator, Op};
+	use warp::type_kinds::Kind;
 
 	// Create a Type node directly
 	let name = Box::new(Node::Symbol("Person".to_string()));
@@ -449,7 +449,7 @@ fn test_type_node() {
 
 #[test]
 fn test_type_registry() {
-	use wasp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, Kind};
+	use warp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, Kind};
 
 	let mut registry = TypeRegistry::new();
 
@@ -492,8 +492,8 @@ fn test_type_registry() {
 
 #[test]
 fn test_type_registry_from_node() {
-	use wasp::{TypeRegistry, USER_TYPE_TAG_START};
-	use wasp::node::{Bracket, Separator, Op};
+	use warp::{TypeRegistry, USER_TYPE_TAG_START};
+	use warp::node::{Bracket, Separator, Op};
 
 	let mut registry = TypeRegistry::new();
 
@@ -533,7 +533,7 @@ fn test_type_registry_from_node() {
 
 #[test]
 fn test_user_type_wasm_emission() {
-	use wasp::{TypeRegistry, FieldDef, WasmGcEmitter};
+	use warp::{TypeRegistry, FieldDef, WasmGcEmitter};
 
 	let mut registry = TypeRegistry::new();
 

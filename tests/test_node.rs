@@ -1,4 +1,4 @@
-use wasp::wasp_parser::parse;
+use warp::wasp_parser::parse;
 
 #[test]
 #[ignore]

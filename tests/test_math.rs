@@ -1,5 +1,5 @@
-use wasp::extensions::print;
-use wasp::is;
+use warp::extensions::print;
+use warp::is;
 
 #[test]
 fn test_arithmetic() {
