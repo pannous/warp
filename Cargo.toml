@@ -5,7 +5,7 @@
 
 [package]
 name = "warp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"  # Cargo edition! NOT package edition!
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -114,8 +114,11 @@ inherits = "dev"       # Use dev profile for tests
 
 [profile.release]
 incremental = false    # Release doesn't need incremental
-opt-level = 3
-lto = "thin"           # Thin LTO for faster release builds
+opt-level = "z"        # Optimize for size
+lto = true             # Full LTO for maximum treeshaking
+codegen-units = 1      # Single codegen unit for best optimization
+panic = "abort"        # Smaller binary, no unwinding
+strip = true           # Strip symbols
 
 [lib]
 # to compile to wasm using `wasm-pack build` :
