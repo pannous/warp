@@ -1382,6 +1382,7 @@ fn test_index_wasm() {
 	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
 	is!("i=2;k='hio';k#i", 'i');
 }
+
 #[test]
 #[ignore]
 fn test_import_wasm() {
