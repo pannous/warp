@@ -23,7 +23,7 @@ use node::Node;
 use wasm_gc_emitter::eval;
 use extensions::numbers::Number;
 
-const WARP_VERSION: &str = "0.1.1";
+const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn node_to_i32(node: &Node) -> i32 {
     match node {
@@ -74,10 +74,10 @@ fn main() {
             // open_webview(arg);
         }
         #[cfg(not(feature = "WEBAPP"))]
-        println!("wasp compiled without webview");
-    } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".angle") {
-        let wasp_code = load_file(&arg_string);
-        let result = eval(&wasp_code);
+        println!("warp compiled without webview");
+    } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
+        let warp_code = load_file(&arg_string);
+        let result = eval(&warp_code);
         println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wasm") {
@@ -102,13 +102,13 @@ fn main() {
             println!("Run tests with: cargo test");
         }
         #[cfg(feature = "release")]
-        println!("wasp release compiled without tests");
+        println!("warp release compiled without tests");
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
-        println!("Wasp documentation can be found at https://github.com/pannous/wasp/wiki");
+        println!("Wasp documentation can be found at https://github.com/pannous/warp/wiki");
         #[cfg(not(feature = "wasm"))]
         {
             let _ = std::process::Command::new("open")
-                .arg("https://github.com/pannous/wasp/")
+                .arg("https://github.com/pannous/warp/")
                 .spawn();
         }
     } else if arg_string.starts_with("eval ") {
@@ -123,7 +123,7 @@ fn main() {
             // init_graphics();
         }
         #[cfg(not(feature = "GRAFIX"))]
-        println!("wasp compiled without sdl/webview");
+        println!("warp compiled without sdl/webview");
     } else if matches!(arg_string.as_str(), "app" | "webview" | "browser") {
         #[cfg(feature = "WEBAPP")]
         {
@@ -132,7 +132,7 @@ fn main() {
                 // init_graphics();
             }
             #[cfg(not(feature = "GRAFIX"))]
-            println!("wasp compiled without sdl/webview");
+            println!("warp compiled without sdl/webview");
         }
         #[cfg(not(feature = "WEBAPP"))]
         {
@@ -157,7 +157,7 @@ fn main() {
             println!("LSP not yet implemented");
         }
     } else if arg_string.contains("help") {
-        println!("detailed documentation can be found at https://github.com/pannous/wasp/wiki");
+        println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Wasp 🐝 {}", WARP_VERSION);
     } else if arg_string.contains("compile") || arg_string.contains("build") || arg_string.contains("link") {
@@ -172,15 +172,15 @@ fn main() {
 }
 
 fn usage() {
-    println!("Usage: wasp [options] [file]");
-    println!("  wasp <file.wasp>     Execute a wasp file");
-    println!("  wasp <file.wasm>     Run a wasm file");
-    println!("  wasp eval <code>     Evaluate code");
-    println!("  wasp repl            Start interactive console");
-    println!("  wasp test            Run tests");
-    println!("  wasp docs            Open documentation");
-    println!("  wasp version         Show version");
-    println!("  wasp help            Show this help");
+    // println!("Usage: warp [options] [file]");
+    println!("  warp <file.warp>     Execute a warp file");
+    println!("  warp <file.wasm>     Run a wasm file");
+    println!("  warp eval <code>     Evaluate code");
+    println!("  warp repl            Start interactive console");
+    println!("  warp test            Run tests");
+    println!("  warp docs            Open documentation");
+    println!("  warp version         Show version");
+    println!("  warp help            Show this help");
 }
 
 fn console() {
@@ -198,7 +198,7 @@ fn console() {
     };
 
     // Load history if exists
-    let history_path = dirs_home().join(".wasp_history");
+    let history_path = dirs_home().join(".warp_history");
     let _ = rl.load_history(&history_path);
 
     loop {
