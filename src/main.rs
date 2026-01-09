@@ -16,6 +16,7 @@ pub mod meta;
 pub mod smarty;
 pub mod operators;
 pub mod host;
+pub mod util;
 
 use std::env;
 use std::fs;
