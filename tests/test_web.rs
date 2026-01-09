@@ -67,7 +67,7 @@ fn test_html() {
 }
 
 #[test]
-#[ignore]
+// #[ignore]
 fn test_fetch() {
 	// todo: use host fetch if available
 	let res = fetch("https://pannous.com/files/test");
