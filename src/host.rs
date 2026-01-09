@@ -121,7 +121,11 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 			trace!("host.fetch: fetching {}", url);
 
 			// Fetch the URL content
-			let content = download(&url);
+			let mut content = download(&url);
+			// Add trailing newline if not present (wasp convention)
+			if !content.ends_with('\n') {
+				content.push('\n');
+			}
 
 			// Write result back to WASM memory
 			match write_string_to_caller(&memory, &mut caller, &content) {
