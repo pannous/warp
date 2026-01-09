@@ -11,6 +11,7 @@ pub use extensions::strings::*;
 pub use extensions::utils::*;
 pub mod smarty;
 pub mod util; // reexported for tests
+pub use util::gc_engine;
 pub mod analyzer;
 pub mod compiler;
 pub mod node;

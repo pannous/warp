@@ -3,9 +3,10 @@
 
 use crate::extensions::utils::download;
 use crate::node::Node;
+use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
-use wasmtime::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store, Val};
+use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Store, Val};
 
 /// Memory allocator state for host functions
 pub struct HostState {
@@ -69,11 +70,7 @@ fn write_string_to_caller(
 
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-
-	let engine = Engine::new(&config)?;
+	let engine = gc_engine();
 	let mut store = Store::new(&engine, ());
 	let module = Module::new(&engine, bytes)?;
 	let linker = Linker::new(&engine);
