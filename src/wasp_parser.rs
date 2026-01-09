@@ -125,7 +125,11 @@ impl WaspParser {
 	}
 
 	fn prev_char(&self) -> char {
-		self.chars.get(self.pos - 1).unwrap_or(&'\0').clone()
+		if self.pos == 0 {
+			'\0'
+		} else {
+			self.chars.get(self.pos - 1).unwrap_or(&'\0').clone()
+		}
 	}
 
 	fn is_at_line_start(&self) -> bool {
@@ -199,8 +203,8 @@ impl WaspParser {
 				continue;
 			}
 
-			// Check for // line comment
-			if self.current_char() == '/' && self.peek_char(1) == '/' {
+			// Check for // line comment (but not :// which is URL scheme separator)
+			if self.current_char() == '/' && self.peek_char(1) == '/' && self.prev_char() != ':' {
 				self.advance(); // skip first /
 				self.advance(); // skip second /
 				let text = self.consume_rest_of_line();
