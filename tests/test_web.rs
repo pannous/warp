@@ -67,21 +67,15 @@ fn test_html() {
 }
 
 #[test]
-// #[ignore]
 fn test_fetch() {
-	// todo: use host fetch if available
+	is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
 	let res = fetch("https://pannous.com/files/test");
-	if res.contains("not available") {
-		print("fetch not available. set CURL=1 in CMakelists.txt or use host function");
-		return;
-	}
 	eq!(res, "test 2 5 3 7");
 	is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 	is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 	skip!(
-
-		assert!_emit("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
-		assert!_emit("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+		is!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
+		is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 	);
 }
 
