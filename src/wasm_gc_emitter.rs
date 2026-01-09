@@ -311,6 +311,19 @@ impl WasmGcEmitter {
 				self.required_functions.insert("new_symbol");
 			}
 			Node::Key(key, op, value) => {
+				// Check for x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
+				if *op == Op::Assign || *op == Op::Define {
+					if let Node::List(items, _, _) = value.drop_meta() {
+						if items.len() == 2 {
+							if let Node::Symbol(s) = items[0].drop_meta() {
+								if s == "fetch" {
+									self.required_functions.insert("new_text");
+									return;
+								}
+							}
+						}
+					}
+				}
 				if op.is_arithmetic() || op.is_comparison() {
 					self.required_functions.insert("new_int");
 				} else {
@@ -330,15 +343,6 @@ impl WasmGcEmitter {
 								// fetch returns a string, needs new_text
 								self.required_functions.insert("new_text");
 								return;
-							}
-						}
-						// Check for assignment-fetch pattern: [Key(Assign: var=fetch), url_node]
-						if let Node::Key(_left, Op::Assign, right) = items[0].drop_meta() {
-							if let Node::Symbol(s) = right.drop_meta() {
-								if s == "fetch" {
-									self.required_functions.insert("new_text");
-									return;
-								}
 							}
 						}
 					}
@@ -1139,6 +1143,21 @@ impl WasmGcEmitter {
 						return;
 					}
 				}
+				// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
+				if (*op == Op::Assign || *op == Op::Define) && self.emit_host_imports {
+					if let Node::List(items, _, _) = right.drop_meta() {
+						if items.len() == 2 {
+							if let Node::Symbol(s) = items[0].drop_meta() {
+								if s == "fetch" {
+									// Emit fetch call - result is a Text node
+									self.emit_fetch_call(func, &items[1]);
+									// Assignment ignored for now (variable not stored)
+									return;
+								}
+							}
+						}
+					}
+				}
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
@@ -1186,19 +1205,6 @@ impl WasmGcEmitter {
 						if s == "fetch" {
 							self.emit_fetch_call(func, &items[1]);
 							return;
-						}
-					}
-					// Check for assignment-fetch pattern: [Key(Assign: var=fetch), url_node]
-					// This handles "x=fetch URL" which parses as [x=fetch, url]
-					if let Node::Key(_left, Op::Assign, right) = items[0].drop_meta() {
-						if let Node::Symbol(s) = right.drop_meta() {
-							if s == "fetch" {
-								// Emit the fetch call (result on stack as ref $Node)
-								self.emit_fetch_call(func, &items[1]);
-								// The result is already a Node, just return it
-								// Variable assignment is ignored for now (could store in global)
-								return;
-							}
 						}
 					}
 				}
