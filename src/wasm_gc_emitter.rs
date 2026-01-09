@@ -1,4 +1,4 @@
-use crate::analyzer::Scope;
+use crate::analyzer::{collect_variables, needs_float, Scope};
 use crate::extensions::numbers::Number;
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Op};
@@ -216,42 +216,19 @@ impl WasmGcEmitter {
 	}
 
 	/// Check if an expression requires float type (for type upgrading)
+	/// Wraps analyzer::needs_float and adds user_globals check
 	fn needs_float(&self, node: &Node) -> bool {
-		let node = node.drop_meta();
-		match node {
-			Node::Number(Number::Float(_)) => true,
-			Node::Number(Number::Quotient(_, _)) => true,
-			Node::Number(Number::Complex(_, _)) => true,
-			Node::Key(left, op, right) if op.is_arithmetic() => {
-				self.needs_float(left) || self.needs_float(right)
-			}
-			Node::Key(_left, Op::Define | Op::Assign, right) => {
-				self.needs_float(right)
-			}
-			Node::Key(left, op, right) if op.is_compound_assign() => {
-				self.needs_float(left) || self.needs_float(right)
-			}
-			// Handle global:Key(name, =, value) -> check value
-			Node::Key(left, Op::Colon, right) => {
-				if let Node::Symbol(kw) = left.drop_meta() {
-					if kw == "global" {
-						return self.needs_float(right);
-					}
-				}
-				self.needs_float(left) || self.needs_float(right)
-			}
-			Node::List(items, _, _) => items.iter().any(|item| self.needs_float(item)),
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					local.is_float
-				} else if let Some(&(_, is_float)) = self.user_globals.get(name) {
-					is_float
-				} else {
-					false
-				}
-			}
-			_ => false,
+		// First check analyzer's needs_float (handles scope)
+		if needs_float(node, &self.scope) {
+			return true;
 		}
+		// Also check user_globals for symbols
+		if let Node::Symbol(name) = node.drop_meta() {
+			if let Some(&(_, is_float)) = self.user_globals.get(name) {
+				return is_float;
+			}
+		}
+		false
 	}
 
 	/// Emit comparison operator for i64 (result is i32, extended to i64)
@@ -979,68 +956,13 @@ impl WasmGcEmitter {
 		(offset, bytes.len() as u32)
 	}
 
-	/// Count variables defined in node (for WASM local allocation)
-	fn count_variables(&mut self, node: &Node) -> u32 {
-		let node = node.drop_meta();
-		match node {
-			// Global declarations: global:Key(name, =, value) - don't create local
-			Node::Key(left, Op::Colon, right) => {
-				if let Node::Symbol(kw) = left.drop_meta() {
-					if kw == "global" {
-						// Don't define local for global variable
-						// But still count any variables in the value expression
-						return self.count_variables_skip_first_assign(right);
-					}
-				}
-				self.count_variables(left) + self.count_variables(right)
-			}
-			// Only Define and Assign create new variables
-			Node::Key(left, Op::Define | Op::Assign, right) => {
-				if let Node::Symbol(name) = left.drop_meta() {
-					let is_float = self.needs_float(right);
-					self.scope.define(name.clone(), None, is_float);
-				}
-				self.count_variables(right)
-			}
-			// Compound assignments don't create new variables, just modify existing ones
-			Node::Key(left, op, right) if op.is_compound_assign() => {
-				self.count_variables(left) + self.count_variables(right)
-			}
-			Node::Key(left, Op::Do, right) => {
-				// While loop needs a temp local for result
-				1 + self.count_variables(left) + self.count_variables(right)
-			}
-			Node::Key(left, _, right) => {
-				self.count_variables(left) + self.count_variables(right)
-			}
-			Node::List(items, _, _) => {
-				items.iter().map(|item| self.count_variables(item)).sum()
-			}
-			_ => 0,
-		}
-	}
-
-	/// Count variables but skip the first assignment (for global declarations)
-	fn count_variables_skip_first_assign(&mut self, node: &Node) -> u32 {
-		let node = node.drop_meta();
-		match node {
-			// Skip defining variable for the first assign in global
-			Node::Key(_left, Op::Define | Op::Assign, right) => {
-				// Don't define this variable, just count in value expression
-				self.count_variables(right)
-			}
-			_ => self.count_variables(node),
-		}
-	}
-
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		self.collect_and_allocate_strings(node);
 
-		// Pre-pass: count variables and temp locals to allocate
-		let temp_locals = self.count_variables(node);
+		// Pre-pass: collect variables and count temp locals needed
+		let temp_locals = collect_variables(node, &mut self.scope);
 		let var_count = self.scope.local_count();
-		let local_count = var_count + temp_locals;
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
@@ -1048,12 +970,29 @@ impl WasmGcEmitter {
 		self.types.ty().function(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
-		// Allocate locals for variables (all i64 for now)
-		let locals: Vec<(u32, ValType)> = if local_count > 0 {
-			vec![(local_count, ValType::I64)]
-		} else {
-			vec![]
-		};
+		// Build locals list based on variable types
+		// Each variable gets its own entry, then temp locals (all i64)
+		let mut locals: Vec<(u32, ValType)> = Vec::new();
+
+		// Sort locals by position to ensure correct order
+		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
+		sorted_locals.sort_by_key(|l| l.position);
+
+		for local in sorted_locals {
+			if local.is_ref {
+				locals.push((1, Ref(node_ref)));
+			} else if local.is_float {
+				locals.push((1, ValType::F64));
+			} else {
+				locals.push((1, ValType::I64));
+			}
+		}
+
+		// Add temp locals (i64 for now)
+		if temp_locals > 0 {
+			locals.push((temp_locals, ValType::I64));
+		}
+
 		let mut func = Function::new(locals);
 		self.emit_node_instructions(&mut func, node);
 		func.instruction(&Instruction::End);
@@ -1128,6 +1067,22 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
+				// Check if this is a variable lookup
+				if let Some(local) = self.scope.lookup(s) {
+					if local.is_ref {
+						// Return the stored Node reference
+						func.instruction(&Instruction::LocalGet(local.position));
+						return;
+					}
+					// Numeric variable - return as new_int or new_float Node
+					func.instruction(&Instruction::LocalGet(local.position));
+					if local.is_float {
+						self.emit_call(func, "new_float");
+					} else {
+						self.emit_call(func, "new_int");
+					}
+					return;
+				}
 				self.emit_string_call(func, s, "new_symbol");
 			}
 			Node::Key(left, op, right) => {
@@ -1145,20 +1100,31 @@ impl WasmGcEmitter {
 				}
 				// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
 				if (*op == Op::Assign || *op == Op::Define) && self.emit_host_imports {
-					if let Node::List(items, _, _) = right.drop_meta() {
-						if items.len() == 2 {
-							if let Node::Symbol(s) = items[0].drop_meta() {
-								if s == "fetch" {
-									// Emit fetch call - result is a Text node
-									self.emit_fetch_call(func, &items[1]);
-									// Assignment ignored for now (variable not stored)
-									return;
+					if let Node::Symbol(var_name) = left.drop_meta() {
+						if let Node::List(items, _, _) = right.drop_meta() {
+							if items.len() == 2 {
+								if let Node::Symbol(s) = items[0].drop_meta() {
+									if s == "fetch" {
+										// Emit fetch call - result is a Text node (ref $Node)
+										self.emit_fetch_call(func, &items[1]);
+										// Store in ref-type local variable
+										if let Some(local) = self.scope.lookup(var_name) {
+											func.instruction(&Instruction::LocalTee(local.position));
+										}
+										return;
+									}
 								}
 							}
 						}
 					}
 				}
-				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
+				// Route to emit_arithmetic for:
+				// - Arithmetic/comparison ops
+				// - Define (:=) always creates a numeric local
+				// - Assign (=) only if LHS is a known variable (numeric context)
+				// - Compound assignments (+=, -=, etc.)
+				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_some());
+				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
@@ -1226,32 +1192,43 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				// Check if this is a statement sequence with arithmetic/definitions
-				// Only trigger when there are actual definitions or arithmetic operations
-				let has_executable = items.iter().any(|item| {
+				// Check if this is a statement sequence with assignments/definitions
+				let is_statement_sequence = items.iter().any(|item| {
 					let item = item.drop_meta();
 					match item {
-						Node::Key(_, op, _) if op.is_arithmetic() || *op == Op::Define => true,
-						Node::Key(_, Op::Assign, right) => {
-							// Treat = as executable only when RHS is numeric
-							matches!(right.drop_meta(), Node::Number(_))
-						}
+						Node::Key(_, Op::Assign | Op::Define, _) => true,
+						Node::Key(_, op, _) if op.is_compound_assign() => true,
 						_ => false,
 					}
 				});
-				if has_executable {
-					// Evaluate as statement sequence
-					// Check if ANY item needs float (globals haven't been registered yet)
-					if self.needs_float(node) {
-						self.emit_float_value(func, node);
-						self.emit_call(func, "new_float");
-					} else { // todo what is this? Why does it only want to emit float and int? 
-						self.emit_numeric_value(func, node);
-						self.emit_call(func, "new_int");
+
+				if is_statement_sequence {
+					// Execute statements in order, return last result
+					for (i, item) in items.iter().enumerate() {
+						self.emit_node_instructions(func, item);
+						// Drop intermediate results, keep last
+						if i < items.len() - 1 {
+							func.instruction(&Instruction::Drop);
+						}
 					}
 				} else {
-					// Build linked list: (first, rest, bracket_info)
-					self.emit_list_structure(func, items, bracket);
+					// Check for pure numeric expressions
+					let has_arithmetic = items.iter().any(|item| {
+						let item = item.drop_meta();
+						matches!(item, Node::Key(_, op, _) if op.is_arithmetic())
+					});
+					if has_arithmetic {
+						if self.needs_float(node) {
+							self.emit_float_value(func, node);
+							self.emit_call(func, "new_float");
+						} else {
+							self.emit_numeric_value(func, node);
+							self.emit_call(func, "new_int");
+						}
+					} else {
+						// Build linked list: (first, rest, bracket_info)
+						self.emit_list_structure(func, items, bracket);
+					}
 				}
 			}
 			Node::Data(dada) => {
@@ -1303,6 +1280,48 @@ impl WasmGcEmitter {
 				}
 			} else {
 				panic!("Expected symbol in definition, got {:?}", left);
+			}
+		} else if op.is_compound_assign() {
+			// x += y → x = x + y
+			if let Node::Symbol(name) = left.drop_meta() {
+				let local_pos = self.scope.lookup(name)
+					.map(|l| l.position)
+					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+				let base_op = op.base_op();
+				// Get current value of x
+				func.instruction(&Instruction::LocalGet(local_pos));
+				// Emit y
+				if use_float {
+					self.emit_float_value(func, right);
+				} else {
+					self.emit_numeric_value(func, right);
+				}
+				// Apply base operation
+				if use_float {
+					match base_op {
+						Op::Add => func.instruction(&Instruction::F64Add),
+						Op::Sub => func.instruction(&Instruction::F64Sub),
+						Op::Mul => func.instruction(&Instruction::F64Mul),
+						Op::Div => func.instruction(&Instruction::F64Div),
+						_ => func.instruction(&Instruction::F64Mul), // fallback
+					};
+				} else {
+					match base_op {
+						Op::Add => func.instruction(&Instruction::I64Add),
+						Op::Sub => func.instruction(&Instruction::I64Sub),
+						Op::Mul => func.instruction(&Instruction::I64Mul),
+						Op::Div => func.instruction(&Instruction::I64DivS),
+						Op::Mod => func.instruction(&Instruction::I64RemS),
+						Op::And => func.instruction(&Instruction::I64And),
+						Op::Or => func.instruction(&Instruction::I64Or),
+						Op::Xor => func.instruction(&Instruction::I64Xor),
+						_ => func.instruction(&Instruction::I64Mul), // fallback
+					};
+				}
+				// Store result and leave on stack
+				func.instruction(&Instruction::LocalTee(local_pos));
+			} else {
+				panic!("Expected symbol in compound assignment, got {:?}", left);
 			}
 		} else if use_float {
 			// Float path: emit operands as f64, use F64 instructions
