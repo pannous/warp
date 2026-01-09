@@ -292,6 +292,58 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 	Ok(GcObject::new(results[0].clone(), store_rc, instance))
 }
 
+/// Load WASM bytes with host function support and return Node
+/// Use this for modules that import host.fetch or host.run
+pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
+	use crate::host::{HostState, link_host_functions};
+
+	let mut config = Config::new();
+	config.wasm_gc(true);
+	config.wasm_function_references(true);
+
+	let engine = Engine::new(&config)?;
+	let store: Store<HostState> = Store::new(&engine, HostState::new());
+	let store_rc = Rc::new(RefCell::new(store));
+
+	let module = Module::new(&engine, bytes)?;
+
+	// Create linker with host functions
+	let mut linker = Linker::new(&engine);
+	link_host_functions(&mut linker, &engine)?;
+
+	let instance = {
+		let mut s = store_rc.borrow_mut();
+		linker.instantiate(&mut *s, &module)?
+	};
+
+	let main = {
+		let mut s = store_rc.borrow_mut();
+		instance
+			.get_func(&mut *s, "main")
+			.ok_or_else(|| anyhow!("No main function"))?
+	};
+
+	let mut results = vec![Val::I32(0)];
+	{
+		let mut s = store_rc.borrow_mut();
+		main.call(&mut *s, &[], &mut results)?;
+	}
+
+	// Convert result to Node
+	// For host functions, the result is typically i64 (numeric value)
+	let result = &results[0];
+	match result {
+		Val::I64(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n))),
+		Val::I32(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n as i64))),
+		Val::F64(bits) => Ok(Node::Number(crate::extensions::numbers::Number::Float(f64::from_bits(*bits)))),
+		_ => {
+			// For GC objects, we can't easily convert without the full Node infrastructure
+			// Return empty for now - this path is for simple host function testing
+			Ok(Node::Empty)
+		}
+	}
+}
+
 /// Create a node by calling a constructor function
 pub fn call_constructor(
 	func_name: &str,
