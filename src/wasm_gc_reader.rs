@@ -1,9 +1,10 @@
 use crate::node::Node;
 use crate::type_kinds::Kind;
+use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store, Val};
+use wasmtime::{Instance, Linker, Module, Store, Val};
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
@@ -220,11 +221,7 @@ impl FromVal for GcObject {
 
 /// Load a WASM module with GC support and return root GcObject
 pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-
-	let engine = Engine::new(&config)?;
+	let engine = gc_engine();
 	let store = Store::new(&engine, ());
 	let store_rc = Rc::new(RefCell::new(store));
 
@@ -260,11 +257,7 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
 
 /// Load WASM bytes and return GcObject
 pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-
-	let engine = Engine::new(&config)?;
+	let engine = gc_engine();
 	let store = Store::new(&engine, ());
 	let store_rc = Rc::new(RefCell::new(store));
 
@@ -296,13 +289,8 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	use crate::host::{HostState, link_host_functions};
-	use crate::type_kinds::Kind;
 
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-
-	let engine = Engine::new(&config)?;
+	let engine = gc_engine();
 	let mut store: Store<HostState> = Store::new(&engine, HostState::new());
 
 	let module = Module::new(&engine, bytes)?;

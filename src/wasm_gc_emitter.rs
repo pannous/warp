@@ -1,9 +1,9 @@
 use crate::analyzer::Scope;
-// Note: analyzer module exports Scope
 use crate::extensions::numbers::Number;
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Op};
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
+use crate::util::gc_engine;
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
@@ -2283,16 +2283,12 @@ impl From<String> for RawFieldValue {
 
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
-	use wasmtime::{Config, Engine, Store, Module, Linker, Val};
+	use wasmtime::{Store, Module, Linker, Val};
 
 	// Register WASM metadata for field name lookup in Debug output
 	let _ = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes);
 
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-
-	let engine = Engine::new(&config).map_err(|e: wasmtime::Error| e.to_string())?;
+	let engine = gc_engine();
 	let mut store = Store::new(&engine, ());
 	let module = Module::new(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
