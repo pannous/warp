@@ -12,7 +12,7 @@ extern "C" {
 } // String not FFI-safe
 
 #[cfg(test)]
-fn download(url: &str) -> String {
+pub fn download(url: &str) -> String {
 	String::from("mock".s() + url)
 }
 
