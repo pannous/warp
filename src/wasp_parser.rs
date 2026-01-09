@@ -379,6 +379,19 @@ impl WaspParser {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
 
+	/// Check if current character can start an atom (for implicit application)
+	fn can_start_atom(&self) -> bool {
+		let ch = self.current_char();
+		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
+	}
+
+	/// Check if character terminates a URL
+	fn is_url_terminator(&self, ch: char) -> bool {
+		ch == '\0' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+			|| ch == ';' || ch == ')' || ch == ']' || ch == '}' || ch == '>'
+			|| ch == '"' || ch == '\'' || ch == ',' || ch == '«'
+	}
+
 	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
 	/// Checks longer operators first (greedy matching)
 	fn peek_operator(&self) -> Option<(Op, usize)> {
@@ -630,6 +643,23 @@ impl WaspParser {
 			Err(e) => return error(&e),
 		};
 
+		// Check for URL pattern: scheme://...
+		// Common schemes: http, https, ftp, file, data, ws, wss
+		if matches!(symbol.as_str(), "http" | "https" | "ftp" | "file" | "data" | "ws" | "wss")
+			&& self.current_char() == ':'
+			&& self.peek_char(1) == '/'
+			&& self.peek_char(2) == '/'
+		{
+			// Parse entire URL as a single token
+			let mut url = symbol;
+			// Consume :// and the rest of the URL
+			while !self.is_url_terminator(self.current_char()) {
+				url.push(self.current_char());
+				self.advance();
+			}
+			return Node::Text(url);
+		}
+
 		if let Some(constant) = check_constants(&symbol) {
 			return constant; // if true {} fall through :?
 		}
@@ -781,7 +811,28 @@ impl WaspParser {
 			// Step 3: Check for infix operator
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
-				None => break,
+				None => {
+					// Step 3b: Check for implicit function application (space between atoms)
+					// Only apply when inside assignment RHS (min_bp around 59-60)
+					// This makes `x = f y` parse as `x = (f y)` but NOT `a : T x` as `a : (T x)`
+					// Assignment r_bp is 59, so we only trigger when min_bp <= 60
+					const APPLICATION_BP: u8 = 165;
+					const MAX_BP_FOR_APPLICATION: u8 = 60;
+					if min_bp > 0 && min_bp <= MAX_BP_FOR_APPLICATION && self.can_start_atom() {
+						// Parse argument with high binding power (tighter than application itself)
+						let arg = self.parse_expr(APPLICATION_BP + 1);
+						if arg != Empty {
+							// Create function application as List[func, arg]
+							lhs = Node::List(
+								vec![lhs, arg],
+								Bracket::None,
+								Separator::Space,
+							);
+							continue;
+						}
+					}
+					break;
+				}
 			};
 
 			let (l_bp, r_bp) = op.binding_power();
