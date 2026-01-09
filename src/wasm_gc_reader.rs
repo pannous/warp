@@ -296,14 +296,14 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	use crate::host::{HostState, link_host_functions};
+	use crate::type_kinds::Kind;
 
 	let mut config = Config::new();
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
 
 	let engine = Engine::new(&config)?;
-	let store: Store<HostState> = Store::new(&engine, HostState::new());
-	let store_rc = Rc::new(RefCell::new(store));
+	let mut store: Store<HostState> = Store::new(&engine, HostState::new());
 
 	let module = Module::new(&engine, bytes)?;
 
@@ -311,36 +311,84 @@ pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	let mut linker = Linker::new(&engine);
 	link_host_functions(&mut linker, &engine)?;
 
-	let instance = {
-		let mut s = store_rc.borrow_mut();
-		linker.instantiate(&mut *s, &module)?
-	};
+	let instance = linker.instantiate(&mut store, &module)?;
 
-	let main = {
-		let mut s = store_rc.borrow_mut();
-		instance
-			.get_func(&mut *s, "main")
-			.ok_or_else(|| anyhow!("No main function"))?
-	};
+	let main = instance
+		.get_func(&mut store, "main")
+		.ok_or_else(|| anyhow!("No main function"))?;
 
 	let mut results = vec![Val::I32(0)];
-	{
-		let mut s = store_rc.borrow_mut();
-		main.call(&mut *s, &[], &mut results)?;
-	}
+	main.call(&mut store, &[], &mut results)?;
 
-	// Convert result to Node
-	// For host functions, the result is typically i64 (numeric value)
+	// Convert result to Node - handle both primitives and GC refs
 	let result = &results[0];
 	match result {
 		Val::I64(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n as i64))),
 		Val::F64(bits) => Ok(Node::Number(crate::extensions::numbers::Number::Float(f64::from_bits(*bits)))),
-		_ => {
-			// For GC objects, we can't easily convert without the full Node infrastructure
-			// Return empty for now - this path is for simple host function testing
-			Ok(Node::Empty)
+		Val::AnyRef(anyref_opt) => {
+			// Handle GC struct result
+			if let Some(anyref) = anyref_opt {
+				if let Ok(structref) = anyref.unwrap_struct(&store) {
+					// Read Node struct: (kind: i64, data: anyref, value: ref null $Node)
+					let kind_val = structref.field(&mut store, FIELD_KIND)?;
+					let kind = kind_val.unwrap_i64();
+					let tag = (kind & 0xFF) as u8;
+
+					match tag {
+						t if t == Kind::Empty as u8 => Ok(Node::Empty),
+						t if t == Kind::Int as u8 => {
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							if let Some(data_anyref) = data_val.unwrap_anyref() {
+								if let Ok(box_struct) = data_anyref.unwrap_struct(&store) {
+									let int_val = box_struct.field(&mut store, 0)?;
+									return Ok(Node::Number(crate::extensions::numbers::Number::Int(int_val.unwrap_i64())));
+								}
+							}
+							Ok(Node::Number(crate::extensions::numbers::Number::Int(0)))
+						}
+						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 => {
+							// data field contains $String struct (ptr, len)
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							if let Some(data_anyref) = data_val.unwrap_anyref() {
+								if let Ok(str_struct) = data_anyref.unwrap_struct(&store) {
+									let ptr_val = str_struct.field(&mut store, 0)?;
+									let len_val = str_struct.field(&mut store, 1)?;
+									let ptr = ptr_val.unwrap_i32() as usize;
+									let len = len_val.unwrap_i32() as usize;
+
+									// Read string from memory
+									if let Some(memory) = instance.get_memory(&mut store, "memory") {
+										let data = memory.data(&store);
+										if ptr + len <= data.len() {
+											let string_bytes = &data[ptr..ptr + len];
+											if let Ok(s) = std::str::from_utf8(string_bytes) {
+												if tag == Kind::Text as u8 {
+													return Ok(Node::Text(s.to_string()));
+												} else {
+													return Ok(Node::Symbol(s.to_string()));
+												}
+											}
+										}
+									}
+								}
+							}
+							if tag == Kind::Text as u8 {
+								Ok(Node::Text(String::new()))
+							} else {
+								Ok(Node::Symbol(String::new()))
+							}
+						}
+						_ => Ok(Node::Empty),
+					}
+				} else {
+					Ok(Node::Empty)
+				}
+			} else {
+				Ok(Node::Empty)
+			}
 		}
+		_ => Ok(Node::Empty),
 	}
 }
 

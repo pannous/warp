@@ -323,6 +323,25 @@ impl WasmGcEmitter {
 				if items.is_empty() {
 					self.required_functions.insert("new_empty");
 				} else {
+					// Check for fetch pattern: [Symbol("fetch"), url_node]
+					if items.len() == 2 {
+						if let Node::Symbol(s) = items[0].drop_meta() {
+							if s == "fetch" {
+								// fetch returns a string, needs new_text
+								self.required_functions.insert("new_text");
+								return;
+							}
+						}
+						// Check for assignment-fetch pattern: [Key(Assign: var=fetch), url_node]
+						if let Node::Key(_left, Op::Assign, right) = items[0].drop_meta() {
+							if let Node::Symbol(s) = right.drop_meta() {
+								if s == "fetch" {
+									self.required_functions.insert("new_text");
+									return;
+								}
+							}
+						}
+					}
 					self.required_functions.insert("new_list");
 					for item in items {
 						self.analyze_required_functions(item);
@@ -1114,6 +1133,11 @@ impl WasmGcEmitter {
 						self.emit_global_declaration(func, right);
 						return;
 					}
+					// Handle fetch URL - call host.fetch and return Text node
+					if kw == "fetch" && self.emit_host_imports {
+						self.emit_fetch_call(func, right);
+						return;
+					}
 				}
 				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define {
 					self.emit_arithmetic(func, left, op, right);
@@ -1155,6 +1179,28 @@ impl WasmGcEmitter {
 				if items.len() == 1 {
 					self.emit_node_instructions(func, &items[0]);
 					return;
+				}
+				// Check for fetch call: [Symbol("fetch"), url_node]
+				if items.len() == 2 && self.emit_host_imports {
+					if let Node::Symbol(s) = items[0].drop_meta() {
+						if s == "fetch" {
+							self.emit_fetch_call(func, &items[1]);
+							return;
+						}
+					}
+					// Check for assignment-fetch pattern: [Key(Assign: var=fetch), url_node]
+					// This handles "x=fetch URL" which parses as [x=fetch, url]
+					if let Node::Key(_left, Op::Assign, right) = items[0].drop_meta() {
+						if let Node::Symbol(s) = right.drop_meta() {
+							if s == "fetch" {
+								// Emit the fetch call (result on stack as ref $Node)
+								self.emit_fetch_call(func, &items[1]);
+								// The result is already a Node, just return it
+								// Variable assignment is ignored for now (could store in global)
+								return;
+							}
+						}
+					}
 				}
 				// Check if this list contains type definitions (class/struct)
 				// If so, treat as statement sequence and return last non-Type item
@@ -1310,6 +1356,70 @@ impl WasmGcEmitter {
 		} else {
 			self.emit_call(func, "new_int");
 		}
+	}
+
+	/// Emit a fetch call using host.fetch import
+	/// Takes a URL node, calls host.fetch, returns a Text node with the content
+	fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node) {
+		// Extract URL string from node tree
+		let url = self.extract_url_string(url_node);
+
+		// Store URL in data section
+		let (url_ptr, url_len) = self.allocate_string(&url);
+
+		// Call host.fetch(url_ptr, url_len) -> (result_ptr, result_len)
+		func.instruction(&I32Const(url_ptr as i32));
+		func.instruction(&I32Const(url_len as i32));
+
+		// Get the host_fetch function index
+		if let Some(&fetch_idx) = self.function_indices.get("host_fetch") {
+			func.instruction(&Instruction::Call(fetch_idx));
+		} else {
+			// Fallback: emit empty text if host imports not available
+			func.instruction(&I32Const(0));
+			func.instruction(&I32Const(0));
+		}
+
+		// Stack now has (result_ptr: i32, result_len: i32)
+		// Call new_text to create a Text node from the result
+		self.emit_call(func, "new_text");
+	}
+
+	/// Extract URL string from parsed node tree
+	/// Handles patterns like: https://... which parses as Key(Symbol("https"), Colon, ...)
+	fn extract_url_string(&self, node: &Node) -> String {
+		fn node_to_string(n: &Node) -> String {
+			match n.drop_meta() {
+				Node::Symbol(s) => s.clone(),
+				Node::Text(s) => s.clone(),
+				Node::Key(left, op, right) => {
+					let left_str = node_to_string(left);
+					let op_str = match op {
+						Op::Colon => ":",
+						Op::Div => "/",
+						Op::Dot => ".",
+						_ => "",
+					};
+					let right_str = node_to_string(right);
+					format!("{}{}{}", left_str, op_str, right_str)
+				}
+				Node::List(items, _, _) => {
+					items.iter().map(node_to_string).collect::<Vec<_>>().join("")
+				}
+				Node::Error(inner) => {
+					// Handle parse errors - check if it's an "Unexpected character '/'" error
+					if let Node::Text(msg) = inner.drop_meta() {
+						if msg.contains("Unexpected character '/'") {
+							return "/".to_string();
+						}
+					}
+					// Otherwise recurse into the inner node
+					node_to_string(inner)
+				}
+				_ => format!("{:?}", n),
+			}
+		}
+		node_to_string(node)
 	}
 
 	/// Emit global variable declaration: global x = value
@@ -2212,48 +2322,15 @@ fn is_class_with_instance(node: &Node) -> Option<(Node, Node)> {
 	}
 }
 
-/// Try to evaluate fetch expressions like "fetch https://..." or "x=fetch https://..."
-/// Returns None if not a fetch expression, otherwise returns the fetch result
-fn try_eval_fetch(code: &str) -> Option<Node> {
-	use crate::extensions::utils::download;
-
-	let code = code.trim();
-
-	// Pattern: "fetch URL"
-	if code.starts_with("fetch ") {
-		let url = code.strip_prefix("fetch ")?.trim();
-		let mut content = download(url);
-		// Add trailing newline if not present (expected by tests)
-		if !content.ends_with('\n') {
-			content.push('\n');
-		}
-		return Some(Node::Text(content));
-	}
-
-	// Pattern: "x=fetch URL" or "x = fetch URL"
-	if let Some(eq_pos) = code.find('=') {
-		let after_eq = code[eq_pos + 1..].trim();
-		if after_eq.starts_with("fetch ") {
-			let url = after_eq.strip_prefix("fetch ")?.trim();
-			let mut content = download(url);
-			if !content.ends_with('\n') {
-				content.push('\n');
-			}
-			return Some(Node::Text(content));
-		}
-	}
-
-	None
+/// Check if code uses fetch (needs host imports)
+fn uses_fetch(code: &str) -> bool {
+	code.contains("fetch ")
 }
 
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
 	use crate::type_kinds::{TypeDef, extract_instance_values};
-
-	// Handle fetch specially - URLs with :// don't parse well
-	if let Some(result) = try_eval_fetch(code) {
-		return result;
-	}
+	use crate::wasm_gc_reader::read_bytes_with_host;
 
 	let node = WaspParser::parse(code);
 
@@ -2272,10 +2349,21 @@ pub fn eval(code: &str) -> Node {
 
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
+	let needs_host = uses_fetch(code);
+	if needs_host {
+		emitter.set_host_imports(true);
+	}
 	emitter.emit_for_node(&node);
 	let bytes = emitter.finish();
 
-	match read_bytes(&bytes) {
+	// Use host linker if we need host functions
+	let result = if needs_host {
+		read_bytes_with_host(&bytes)
+	} else {
+		read_bytes(&bytes)
+	};
+
+	match result {
 		Ok(result) => result,
 		Err(e) => {
 			warn!("eval failed: {}", e);
