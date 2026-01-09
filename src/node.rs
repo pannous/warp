@@ -321,6 +321,7 @@ pub struct Local {
 	pub position: u32,                  // WASM local index
 	pub is_param: bool,                 // Parameter vs local variable
 	pub is_float: bool,                 // Float vs integer for type upgrading
+	pub is_ref: bool,                   // Node reference vs primitive value
 }
 
 pub type Variable = Local;
