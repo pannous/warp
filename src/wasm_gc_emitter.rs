@@ -58,6 +58,7 @@ fn any_heap_type() -> HeapType {
 pub struct WasmGcEmitter {
 	module: Module,
 	types: TypeSection,
+	imports: ImportSection,
 	functions: FunctionSection,
 	code: CodeSection,
 	exports: ExportSection,
@@ -73,11 +74,13 @@ pub struct WasmGcEmitter {
 	next_type_idx: u32,
 	next_func_idx: u32,
 	next_global_idx: u32,
+	num_imported_funcs: u32, // Number of imported functions (affects func indices)
 	function_indices: HashMap<&'static str, u32>,
 	used_functions: HashSet<&'static str>,
 	required_functions: HashSet<&'static str>,
 	emit_all_functions: bool,
 	emit_kind_globals: bool, // Emit Kind constants as globals for documentation
+	emit_host_imports: bool, // Emit host function imports (fetch, run)
 	kind_global_indices: HashMap<Kind, u32>, // Kind -> global index
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
@@ -99,6 +102,7 @@ impl WasmGcEmitter {
 		WasmGcEmitter {
 			module: Module::new(),
 			types: TypeSection::new(),
+			imports: ImportSection::new(),
 			functions: FunctionSection::new(),
 			code: CodeSection::new(),
 			exports: ExportSection::new(),
@@ -113,11 +117,13 @@ impl WasmGcEmitter {
 			next_type_idx: 0,
 			next_func_idx: 0,
 			next_global_idx: 0,
+			num_imported_funcs: 0,
 			function_indices: HashMap::new(),
 			used_functions: HashSet::new(),
 			required_functions: HashSet::new(),
 			emit_all_functions: true,
 			emit_kind_globals: true, // Enable by default for debugging
+			emit_host_imports: false, // Disabled by default for simpler modules
 			kind_global_indices: HashMap::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8,
@@ -136,6 +142,49 @@ impl WasmGcEmitter {
 
 	pub fn set_tree_shaking(&mut self, enabled: bool) {
 		self.emit_all_functions = !enabled;
+	}
+
+	/// Enable/disable host function imports (fetch, run)
+	pub fn set_host_imports(&mut self, enabled: bool) {
+		self.emit_host_imports = enabled;
+	}
+
+	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
+	/// Must be called before emit_gc_types() since type indices need to be correct
+	fn emit_host_imports(&mut self) {
+		if !self.emit_host_imports {
+			return;
+		}
+
+		// Type for fetch: (i32, i32) -> (i32, i32)
+		// Takes (url_ptr, url_len), returns (result_ptr, result_len)
+		let fetch_type_idx = self.next_type_idx;
+		self.types.ty().function(
+			vec![ValType::I32, ValType::I32],
+			vec![ValType::I32, ValType::I32],
+		);
+		self.next_type_idx += 1;
+
+		// Type for run: (i32, i32) -> i64
+		// Takes (wasm_ptr, wasm_len), returns result value
+		let run_type_idx = self.next_type_idx;
+		self.types.ty().function(
+			vec![ValType::I32, ValType::I32],
+			vec![ValType::I64],
+		);
+		self.next_type_idx += 1;
+
+		// Import fetch from "host" module
+		self.imports.import("host", "fetch", EntityType::Function(fetch_type_idx));
+		self.function_indices.insert("host_fetch", self.next_func_idx);
+		self.next_func_idx += 1;
+		self.num_imported_funcs += 1;
+
+		// Import run from "host" module
+		self.imports.import("host", "run", EntityType::Function(run_type_idx));
+		self.function_indices.insert("host_run", self.next_func_idx);
+		self.next_func_idx += 1;
+		self.num_imported_funcs += 1;
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -311,6 +360,8 @@ impl WasmGcEmitter {
 			page_size_log2: None,
 		});
 		self.exports.export("memory", ExportKind::Memory, 0);
+		// Host imports must come before GC types (imports section comes before types in WASM)
+		self.emit_host_imports();
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
@@ -1793,7 +1844,11 @@ impl WasmGcEmitter {
 	}
 
 	pub fn finish(mut self) -> Vec<u8> {
+		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
 		self.module.section(&self.types);
+		if self.num_imported_funcs > 0 {
+			self.module.section(&self.imports);
+		}
 		self.module.section(&self.functions);
 		self.module.section(&self.memory);
 		if self.next_global_idx > 0 {
