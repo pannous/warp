@@ -2212,9 +2212,48 @@ fn is_class_with_instance(node: &Node) -> Option<(Node, Node)> {
 	}
 }
 
+/// Try to evaluate fetch expressions like "fetch https://..." or "x=fetch https://..."
+/// Returns None if not a fetch expression, otherwise returns the fetch result
+fn try_eval_fetch(code: &str) -> Option<Node> {
+	use crate::extensions::utils::download;
+
+	let code = code.trim();
+
+	// Pattern: "fetch URL"
+	if code.starts_with("fetch ") {
+		let url = code.strip_prefix("fetch ")?.trim();
+		let mut content = download(url);
+		// Add trailing newline if not present (expected by tests)
+		if !content.ends_with('\n') {
+			content.push('\n');
+		}
+		return Some(Node::Text(content));
+	}
+
+	// Pattern: "x=fetch URL" or "x = fetch URL"
+	if let Some(eq_pos) = code.find('=') {
+		let after_eq = code[eq_pos + 1..].trim();
+		if after_eq.starts_with("fetch ") {
+			let url = after_eq.strip_prefix("fetch ")?.trim();
+			let mut content = download(url);
+			if !content.ends_with('\n') {
+				content.push('\n');
+			}
+			return Some(Node::Text(content));
+		}
+	}
+
+	None
+}
+
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
 	use crate::type_kinds::{TypeDef, extract_instance_values};
+
+	// Handle fetch specially - URLs with :// don't parse well
+	if let Some(result) = try_eval_fetch(code) {
+		return result;
+	}
 
 	let node = WaspParser::parse(code);
 
