@@ -320,8 +320,7 @@ pub struct Local {
 	pub type_node: Option<Box<Node>>,  // Type as Node (Symbol or complex type)
 	pub position: u32,                  // WASM local index
 	pub is_param: bool,                 // Parameter vs local variable
-	pub is_float: bool,                 // Float vs integer for type upgrading
-	pub is_ref: bool,                   // Node reference vs primitive value
+	pub kind: crate::type_kinds::Kind,  // Value kind (Int, Float, Text, etc.)
 }
 
 pub type Variable = Local;
