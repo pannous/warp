@@ -1,5 +1,6 @@
 use crate::analyzer::{collect_variables, infer_type, Scope};
 use crate::extensions::numbers::Number;
+use crate::function::{Function as FuncDef, FunctionRegistry, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Op};
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
@@ -74,8 +75,7 @@ pub struct WasmGcEmitter {
 	next_type_idx: u32,
 	next_func_idx: u32,
 	next_global_idx: u32,
-	num_imported_funcs: u32, // Number of imported functions (affects func indices)
-	function_indices: HashMap<&'static str, u32>,
+	func_registry: FunctionRegistry,
 	used_functions: HashSet<&'static str>,
 	required_functions: HashSet<&'static str>,
 	emit_all_functions: bool,
@@ -117,8 +117,7 @@ impl WasmGcEmitter {
 			next_type_idx: 0,
 			next_func_idx: 0,
 			next_global_idx: 0,
-			num_imported_funcs: 0,
-			function_indices: HashMap::new(),
+			func_registry: FunctionRegistry::new(),
 			used_functions: HashSet::new(),
 			required_functions: HashSet::new(),
 			emit_all_functions: true,
@@ -176,15 +175,34 @@ impl WasmGcEmitter {
 
 		// Import fetch from "host" module
 		self.imports.import("host", "fetch", EntityType::Function(fetch_type_idx));
-		self.function_indices.insert("host_fetch", self.next_func_idx);
-		self.next_func_idx += 1;
-		self.num_imported_funcs += 1;
+		self.register_import("host_fetch");
 
 		// Import run from "host" module
 		self.imports.import("host", "run", EntityType::Function(run_type_idx));
-		self.function_indices.insert("host_run", self.next_func_idx);
-		self.next_func_idx += 1;
-		self.num_imported_funcs += 1;
+		self.register_import("host_run");
+	}
+
+	/// Register an import function
+	fn register_import(&mut self, name: &'static str) -> u32 {
+		let func = FuncDef::host(name);
+		let idx = self.func_registry.register(func);
+		self.next_func_idx = self.func_registry.import_count() + self.func_registry.code_count();
+		idx
+	}
+
+	/// Register a code function
+	fn register_func(&mut self, name: &'static str) -> u32 {
+		let func = FuncDef::builtin(name);
+		let idx = self.func_registry.register(func);
+		self.next_func_idx = self.func_registry.import_count() + self.func_registry.code_count();
+		idx
+	}
+
+	/// Get function call index by name
+	fn func_index(&self, name: &str) -> u32 {
+		self.func_registry.get(name)
+			.map(|f| f.call_index as u32)
+			.unwrap_or_else(|| panic!("Unknown function: {}", name))
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -732,11 +750,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_empty", ExportKind::Func, self.next_func_idx);
-			self.function_indices
-				.insert("new_empty", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_empty");
+			self.exports.export("new_empty", ExportKind::Func, idx);
 		}
 
 		// new_int(i64) -> (ref $Node) - box the i64 in $i64box
@@ -755,10 +770,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_int", ExportKind::Func, self.next_func_idx);
-			self.function_indices.insert("new_int", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_int");
+			self.exports.export("new_int", ExportKind::Func, idx);
 		}
 
 		// new_float(f64) -> (ref $Node) - box the f64 in $f64box
@@ -777,11 +790,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_float", ExportKind::Func, self.next_func_idx);
-			self.function_indices
-				.insert("new_float", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_float");
+			self.exports.export("new_float", ExportKind::Func, idx);
 		}
 
 		// new_codepoint(i32) -> (ref $Node) - use i31ref for codepoint
@@ -800,11 +810,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_codepoint", ExportKind::Func, self.next_func_idx);
-			self.function_indices
-				.insert("new_codepoint", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_codepoint");
+			self.exports.export("new_codepoint", ExportKind::Func, idx);
 		}
 
 		// new_text(ptr: i32, len: i32) -> (ref $Node)
@@ -825,10 +832,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_text", ExportKind::Func, self.next_func_idx);
-			self.function_indices.insert("new_text", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_text");
+			self.exports.export("new_text", ExportKind::Func, idx);
 		}
 
 		// new_symbol(ptr: i32, len: i32) -> (ref $Node)
@@ -849,11 +854,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_symbol", ExportKind::Func, self.next_func_idx);
-			self.function_indices
-				.insert("new_symbol", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_symbol");
+			self.exports.export("new_symbol", ExportKind::Func, idx);
 		}
 
 		// new_key(key: ref $Node, value: ref $Node, op_info: i64) -> (ref $Node)
@@ -878,10 +880,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_key", ExportKind::Func, self.next_func_idx);
-			self.function_indices.insert("new_key", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_key");
+			self.exports.export("new_key", ExportKind::Func, idx);
 		}
 
 		// new_type(name: ref $Node, body: ref $Node) -> (ref $Node)
@@ -900,10 +900,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_type", ExportKind::Func, self.next_func_idx);
-			self.function_indices.insert("new_type", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_type");
+			self.exports.export("new_type", ExportKind::Func, idx);
 		}
 
 		// new_list(first: ref $Node, rest: ref $Node, bracket_info: i64) -> (ref $Node)
@@ -927,10 +925,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::StructNew(self.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
-			self.exports
-				.export("new_list", ExportKind::Func, self.next_func_idx);
-			self.function_indices.insert("new_list", self.next_func_idx);
-			self.next_func_idx += 1;
+			let idx = self.register_func("new_list");
+			self.exports.export("new_list", ExportKind::Func, idx);
 		}
 
 		// Emit helper functions
@@ -1051,7 +1047,7 @@ impl WasmGcEmitter {
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
 		self.used_functions.insert(name);
-		func.instruction(&Instruction::Call(self.function_indices[name]));
+		func.instruction(&Instruction::Call(self.func_index(name)));
 	}
 
 	fn emit_node_null(&self, func: &mut Function) {
@@ -1427,8 +1423,8 @@ impl WasmGcEmitter {
 		func.instruction(&I32Const(url_len as i32));
 
 		// Get the host_fetch function index
-		if let Some(&fetch_idx) = self.function_indices.get("host_fetch") {
-			func.instruction(&Instruction::Call(fetch_idx));
+		if let Some(f) = self.func_registry.get("host_fetch") {
+			func.instruction(&Instruction::Call(f.call_index as u32));
 		} else {
 			// Fallback: emit empty text if host imports not available
 			func.instruction(&I32Const(0));
@@ -1997,7 +1993,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I64Const(bracket_info));
 
 		// Call new_list if available, otherwise inline struct.new
-		if self.function_indices.contains_key("new_list") {
+		if self.func_registry.contains("new_list") {
 			self.emit_call(func, "new_list");
 		} else {
 			// Inline: kind = (bracket_info << 8) | List
@@ -2042,7 +2038,7 @@ impl WasmGcEmitter {
 	pub fn finish(mut self) -> Vec<u8> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
 		self.module.section(&self.types);
-		if self.num_imported_funcs > 0 {
+		if self.func_registry.import_count() > 0 {
 			self.module.section(&self.imports);
 		}
 		self.module.section(&self.functions);
@@ -2116,9 +2112,11 @@ impl WasmGcEmitter {
 
 		// Function names - sort by index for deterministic output
 		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self.function_indices.iter().collect();
-		sorted.sort_by_key(|(_, &idx)| idx);
-		for (name, &idx) in sorted {
+		let mut sorted: Vec<_> = self.func_registry.all().iter()
+			.map(|f| (f.name.as_str(), f.call_index as u32))
+			.collect();
+		sorted.sort_by_key(|(_, idx)| *idx);
+		for (name, idx) in sorted {
 			func_names.append(idx, name);
 		}
 		self.names.functions(&func_names);
@@ -2149,11 +2147,10 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub fn get_unused_functions(&self) -> Vec<&'static str> {
-		self.function_indices
-			.keys()
-			.filter(|name| !self.used_functions.contains(*name))
-			.copied()
+	pub fn get_unused_functions(&self) -> Vec<String> {
+		self.func_registry.all().iter()
+			.map(|f| f.name.clone())
+			.filter(|name: &String| !self.used_functions.contains(name.as_str()))
 			.collect()
 	}
 
