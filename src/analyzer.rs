@@ -1,68 +1,84 @@
 use crate::extensions::numbers::Number;
 use crate::node::{Local, Node, Op};
+use crate::type_kinds::Kind;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use wasm_ast::Function;
 
 pub static FUNCTIONS: Lazy<HashMap<String, Function>> = Lazy::new(|| HashMap::new());
 
-/// Check if a node requires float operations (type upgrading)
-pub fn needs_float(node: &Node, scope: &Scope) -> bool {
+/// Infer the Kind for an expression
+/// Returns Int, Float, Text, etc. based on the expression's result type
+pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
-		Node::Number(Number::Float(_)) => true,
-		Node::Number(Number::Quotient(_, _)) => true,
-		Node::Number(Number::Complex(_, _)) => true,
+		// Float literals and derived types
+		Node::Number(Number::Float(_)) => Kind::Float,
+		Node::Number(Number::Quotient(_, _)) => Kind::Float,
+		Node::Number(Number::Complex(_, _)) => Kind::Float,
+		// Integer literals
+		Node::Number(_) => Kind::Int,
+		// Text and char
+		Node::Text(_) => Kind::Text,
+		Node::Char(_) => Kind::Codepoint,
+		// Symbol (identifier)
+		Node::Symbol(name) => {
+			if let Some(local) = scope.lookup(name) {
+				local.kind
+			} else {
+				Kind::Symbol  // Unknown symbol defaults to Symbol
+			}
+		}
+		// Function calls that return specific types
+		Node::List(items, _, _) if items.len() >= 2 => {
+			if let Node::Symbol(s) = items[0].drop_meta() {
+				if s == "fetch" { return Kind::Text; }  // fetch returns text
+			}
+			// Statement sequence: return type of last item
+			if let Some(last) = items.last() {
+				infer_type(last, scope)
+			} else {
+				Kind::Empty
+			}
+		}
+		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
-			needs_float(left, scope) || needs_float(right, scope)
+			let left_kind = infer_type(left, scope);
+			let right_kind = infer_type(right, scope);
+			if left_kind == Kind::Float || right_kind == Kind::Float {
+				Kind::Float
+			} else {
+				Kind::Int
+			}
 		}
+		// Assignment/definition: type comes from value
 		Node::Key(_left, Op::Define | Op::Assign, right) => {
-			needs_float(right, scope)
+			infer_type(right, scope)
 		}
+		// Compound assignment: upgrade if either side is Float
 		Node::Key(left, op, right) if op.is_compound_assign() => {
-			needs_float(left, scope) || needs_float(right, scope)
+			let left_kind = infer_type(left, scope);
+			let right_kind = infer_type(right, scope);
+			if left_kind == Kind::Float || right_kind == Kind::Float {
+				Kind::Float
+			} else {
+				Kind::Int
+			}
 		}
-		// Handle global:Key(name, =, value) -> check value
+		// global:value -> type comes from value
 		Node::Key(left, Op::Colon, right) => {
 			if let Node::Symbol(kw) = left.drop_meta() {
 				if kw == "global" {
-					return needs_float(right, scope);
+					return infer_type(right, scope);
 				}
 			}
-			needs_float(left, scope) || needs_float(right, scope)
+			// Tag structures like html:body are Key
+			Kind::Key
 		}
-		Node::List(items, _, _) => items.iter().any(|item| needs_float(item, scope)),
-		Node::Symbol(name) => {
-			if let Some(local) = scope.lookup(name) {
-				local.is_float
-			} else {
-				false
-			}
-		}
-		_ => false,
-	}
-}
-
-/// Check if an expression returns a Node reference (not a primitive)
-/// Used to determine if a variable should be ref-typed
-fn returns_node_ref(node: &Node) -> bool {
-	let node = node.drop_meta();
-	match node {
-		// fetch returns a Node (Text)
-		Node::List(items, _, _) if items.len() == 2 => {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				return s == "fetch";
-			}
-			false
-		}
-		// Text and Symbol literals return Node refs
-		Node::Text(_) | Node::Symbol(_) => true,
-		// Numbers return primitives (i64 or f64)
-		Node::Number(_) => false,
-		// Arithmetic returns primitives
-		Node::Key(_, op, _) if op.is_arithmetic() => false,
-		// Other cases default to ref for safety
-		_ => false,
+		// Comparison operators return Int (boolean as 0/1)
+		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
+		// Default to Int for other cases
+		_ => Kind::Int,
 	}
 }
 
@@ -95,9 +111,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Define, right) => {
 			if !skip_first_assign {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let is_float = needs_float(right, scope);
-					let is_ref = returns_node_ref(right);
-					scope.define(name.clone(), None, is_float, is_ref);
+					let kind = infer_type(right, scope);
+					scope.define(name.clone(), None, kind);
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
@@ -106,9 +121,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Assign, right) => {
 			if !skip_first_assign && !in_structure {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let is_float = needs_float(right, scope);
-					let is_ref = returns_node_ref(right);
-					scope.define(name.clone(), None, is_float, is_ref);
+					let kind = infer_type(right, scope);
+					scope.define(name.clone(), None, kind);
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
@@ -159,15 +173,14 @@ impl Scope {
 	}
 
 	/// Define a new variable in current scope
-	pub fn define(&mut self, name: String, type_node: Option<Box<Node>>, is_float: bool, is_ref: bool) -> Local {
+	pub fn define(&mut self, name: String, type_node: Option<Box<Node>>, kind: Kind) -> Local {
 		let position = self.locals.len() as u32;
 		let local = Local {
 			name: name.clone(),
 			type_node,
 			position,
 			is_param: false,
-			is_float,
-			is_ref,
+			kind,
 		};
 		self.locals.insert(name, local.clone());
 		local
@@ -181,8 +194,7 @@ impl Scope {
 			type_node,
 			position,
 			is_param: true,
-			is_float: false,
-			is_ref: false,
+			kind: Kind::Int,  // Default to Int for params
 		};
 		self.locals.insert(name, local.clone());
 		local
