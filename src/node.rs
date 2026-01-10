@@ -280,6 +280,11 @@ impl Op {
 		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
+	/// Check if this is a logical operator (and, or, xor)
+	pub fn is_logical(&self) -> bool {
+		matches!(self, Op::And | Op::Or | Op::Xor)
+	}
+
 	/// Check if this is a compound assignment operator (+=, -=, etc.)
 	pub fn is_compound_assign(&self) -> bool {
 		matches!(

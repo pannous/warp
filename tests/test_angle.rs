@@ -440,7 +440,7 @@ fn test_smart_types() {
 
 //Prescedence type for Precedence
 #[test]
-#[ignore]
+// #[ignore]
 fn test_logic_precedence() {
 	#[cfg(not(feature = "WASM"))]
 	{
