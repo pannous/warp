@@ -828,7 +828,6 @@ fn test_wasm_if() {
 }
 
 #[test]
-#[ignore = "todo timeout inf loop why!"]
 fn test_wasm_while() {
 	is!("i=1;while(i<9){i++};i+1", 10);
 }
