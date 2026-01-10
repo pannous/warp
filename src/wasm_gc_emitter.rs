@@ -300,8 +300,19 @@ impl WasmGcEmitter {
 				self.extract_user_functions_inner(left);
 				self.extract_user_functions_inner(body);
 			}
-			// Recurse into lists
+			// Recurse into lists, but check for def syntax first
 			Node::List(items, _, _) => {
+				// Check for: def name(params): body or def name(params){body}
+				if items.len() >= 2 {
+					if let Node::Symbol(s) = items[0].drop_meta() {
+						if s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function" {
+							if let Some(func_def) = self.extract_def_function(&items[1..]) {
+								self.user_functions.insert(func_def.name.clone(), func_def);
+								return;
+							}
+						}
+					}
+				}
 				for item in items {
 					self.extract_user_functions_inner(item);
 				}
@@ -324,6 +335,112 @@ impl WasmGcEmitter {
 			Node::List(items, _, _) => items.iter().any(Self::uses_it),
 			_ => false,
 		}
+	}
+
+	/// Extract function from def/fun/fn syntax
+	/// Handles: def (name params...): body or def ((name params...) {body})
+	fn extract_def_function(&self, items: &[Node]) -> Option<UserFunctionDef> {
+		if items.is_empty() {
+			return None;
+		}
+
+		let first = items[0].drop_meta();
+
+		// Pattern 1: def (name params...): body
+		// Parses as: Key(List([name, params...]), Colon, body)
+		if let Node::Key(sig, Op::Colon, body) = first {
+			if let Node::List(sig_items, _, _) = sig.drop_meta() {
+				if !sig_items.is_empty() {
+					if let Node::Symbol(name) = sig_items[0].drop_meta() {
+						let params: Vec<String> = sig_items.iter().skip(1)
+							.filter_map(|item| {
+								match item.drop_meta() {
+									Node::Symbol(s) => Some(s.clone()),
+									Node::Key(n, Op::Colon, _) => {
+										if let Node::Symbol(s) = n.drop_meta() {
+											Some(s.clone())
+										} else {
+											None
+										}
+									}
+									_ => None,
+								}
+							})
+							.collect();
+
+						return Some(UserFunctionDef {
+							name: name.clone(),
+							params,
+							body: body.clone(),
+							return_kind: Kind::Int,
+							func_index: None,
+						});
+					}
+				}
+			}
+		}
+
+		// Pattern 2: def ((name params...) {body})
+		// Parses as: List([List([name, List([params...])]), Block({body})])
+		// Note: parameters may be wrapped in a list like (x) instead of just x
+		if let Node::List(inner_items, _, _) = first {
+			if inner_items.len() >= 2 {
+				// First item should be signature: (name (params...))
+				if let Node::List(sig_items, _, _) = inner_items[0].drop_meta() {
+					if !sig_items.is_empty() {
+						if let Node::Symbol(name) = sig_items[0].drop_meta() {
+							// Parameters might be in a nested list or directly
+							let params: Vec<String> = sig_items.iter().skip(1)
+								.flat_map(|item| {
+									match item.drop_meta() {
+										Node::Symbol(s) => vec![s.clone()],
+										// Parameter wrapped in list: (x)
+										Node::List(param_items, _, _) => {
+											param_items.iter()
+												.filter_map(|p| {
+													match p.drop_meta() {
+														Node::Symbol(s) => Some(s.clone()),
+														Node::Key(n, Op::Colon, _) => {
+															if let Node::Symbol(s) = n.drop_meta() {
+																Some(s.clone())
+															} else {
+																None
+															}
+														}
+														_ => None,
+													}
+												})
+												.collect()
+										}
+										Node::Key(n, Op::Colon, _) => {
+											if let Node::Symbol(s) = n.drop_meta() {
+												vec![s.clone()]
+											} else {
+												vec![]
+											}
+										}
+										_ => vec![],
+									}
+								})
+								.collect();
+
+							// Body is the second item (block)
+							let body = inner_items[1].clone();
+
+							return Some(UserFunctionDef {
+								name: name.clone(),
+								params,
+								body: Box::new(body),
+								return_kind: Kind::Int,
+								func_index: None,
+							});
+						}
+					}
+				}
+			}
+		}
+
+		None
 	}
 
 	/// Compile all extracted user functions to WASM
@@ -1457,6 +1574,14 @@ impl WasmGcEmitter {
 						Node::Key(left, Op::Colon, _) => {
 							matches!(left.drop_meta(), Node::Symbol(s) if s == "global")
 						}
+						// def/fun/fn syntax starts a statement sequence
+						Node::List(list_items, _, _) if list_items.len() >= 2 => {
+							if let Node::Symbol(s) = list_items[0].drop_meta() {
+								s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function"
+							} else {
+								false
+							}
+						}
 						_ => false,
 					}
 				});
@@ -1483,6 +1608,16 @@ impl WasmGcEmitter {
 												if self.user_functions.contains_key(name) {
 													return false;
 												}
+											}
+										}
+									}
+								}
+								// Pattern: def/fun/fn name(params...): body or {body}
+								Node::List(list_items, _, _) => {
+									if list_items.len() >= 2 {
+										if let Node::Symbol(s) = list_items[0].drop_meta() {
+											if s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function" {
+												return false;
 											}
 										}
 									}
