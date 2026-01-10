@@ -1,4 +1,4 @@
-use crate::analyzer::{collect_variables, needs_float, Scope};
+use crate::analyzer::{collect_variables, infer_type, Scope};
 use crate::extensions::numbers::Number;
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Op};
@@ -93,8 +93,8 @@ pub struct WasmGcEmitter {
 	user_type_indices: HashMap<String, u32>,
 	// Type registry for user-defined types parsed from class/struct definitions
 	type_registry: TypeRegistry,
-	// User-defined global variables: name → (index, is_float)
-	user_globals: HashMap<String, (u32, bool)>,
+	// User-defined global variables: name → (index, kind)
+	user_globals: HashMap<String, (u32, Kind)>,
 }
 
 impl WasmGcEmitter {
@@ -215,20 +215,40 @@ impl WasmGcEmitter {
 		type_field_names.append(type_idx, &names);
 	}
 
-	/// Check if an expression requires float type (for type upgrading)
-	/// Wraps analyzer::needs_float and adds user_globals check
-	fn needs_float(&self, node: &Node) -> bool {
-		// First check analyzer's needs_float (handles scope)
-		if needs_float(node, &self.scope) {
-			return true;
-		}
-		// Also check user_globals for symbols
-		if let Node::Symbol(name) = node.drop_meta() {
-			if let Some(&(_, is_float)) = self.user_globals.get(name) {
-				return is_float;
+	/// Infer the Kind for an expression
+	/// Extends analyzer::infer_type with user_globals knowledge
+	fn get_type(&self, node: &Node) -> Kind {
+		let node = node.drop_meta();
+		match node {
+			// Check user_globals for symbols
+			Node::Symbol(name) => {
+				if let Some(&(_, kind)) = self.user_globals.get(name) {
+					return kind;
+				}
+				// Fall back to scope lookup
+				if let Some(local) = self.scope.lookup(name) {
+					return local.kind;
+				}
+				Kind::Symbol
 			}
+			// Arithmetic: recursively check operands with our get_type
+			Node::Key(left, op, right) if op.is_arithmetic() => {
+				let left_kind = self.get_type(left);
+				let right_kind = self.get_type(right);
+				if left_kind == Kind::Float || right_kind == Kind::Float {
+					Kind::Float
+				} else {
+					Kind::Int
+				}
+			}
+			// For other nodes, use analyzer's infer_type
+			_ => infer_type(node, &self.scope),
 		}
-		false
+	}
+
+	/// Check if an expression requires float type (convenience method)
+	fn needs_float(&self, node: &Node) -> bool {
+		self.get_type(node).is_float()
 	}
 
 	/// Emit comparison operator for i64 (result is i32, extended to i64)
@@ -979,9 +999,9 @@ impl WasmGcEmitter {
 		sorted_locals.sort_by_key(|l| l.position);
 
 		for local in sorted_locals {
-			if local.is_ref {
+			if local.kind.is_ref() {
 				locals.push((1, Ref(node_ref)));
-			} else if local.is_float {
+			} else if local.kind.is_float() {
 				locals.push((1, ValType::F64));
 			} else {
 				locals.push((1, ValType::I64));
@@ -1069,14 +1089,10 @@ impl WasmGcEmitter {
 			Node::Symbol(s) => {
 				// Check if this is a variable lookup
 				if let Some(local) = self.scope.lookup(s) {
-					if local.is_ref {
-						// Return the stored Node reference
-						func.instruction(&Instruction::LocalGet(local.position));
-						return;
-					}
-					// Numeric variable - return as new_int or new_float Node
 					func.instruction(&Instruction::LocalGet(local.position));
-					if local.is_float {
+					if local.kind.is_ref() {
+						return;  // Already a Node reference
+					} else if local.kind.is_float() {
 						self.emit_call(func, "new_float");
 					} else {
 						self.emit_call(func, "new_int");
@@ -1192,12 +1208,16 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				// Check if this is a statement sequence with assignments/definitions
+				// Check if this is a statement sequence with assignments/definitions/globals
 				let is_statement_sequence = items.iter().any(|item| {
 					let item = item.drop_meta();
 					match item {
 						Node::Key(_, Op::Assign | Op::Define, _) => true,
 						Node::Key(_, op, _) if op.is_compound_assign() => true,
+						// global:... is a statement
+						Node::Key(left, Op::Colon, _) => {
+							matches!(left.drop_meta(), Node::Symbol(s) if s == "global")
+						}
 						_ => false,
 					}
 				});
@@ -1462,11 +1482,11 @@ impl WasmGcEmitter {
 			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
 		};
 
-		let is_float = self.needs_float(&value);
-		let val_type = if is_float { ValType::F64 } else { ValType::I64 };
+		let kind = self.get_type(&value);
+		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
 
 		// Create mutable global with default initial value
-		let init_expr = if is_float {
+		let init_expr = if kind.is_float() {
 			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
 		} else {
 			ConstExpr::i64_const(0)
@@ -1474,7 +1494,7 @@ impl WasmGcEmitter {
 
 		self.globals.global(
 			GlobalType {
-				val_type,
+				val_type: wasm_val_type,
 				mutable: true,
 				shared: false,
 			},
@@ -1483,19 +1503,17 @@ impl WasmGcEmitter {
 
 		let global_idx = self.next_global_idx;
 		self.next_global_idx += 1;
-		self.user_globals.insert(name.clone(), (global_idx, is_float));
+		self.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value computation and store to global
-		if is_float {
+		if kind.is_float() {
 			self.emit_float_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
-			// Return value as Node
 			func.instruction(&Instruction::GlobalGet(global_idx));
 			self.emit_call(func, "new_float");
 		} else {
 			self.emit_numeric_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
-			// Return value as Node
 			func.instruction(&Instruction::GlobalGet(global_idx));
 			self.emit_call(func, "new_int");
 		}
@@ -1514,10 +1532,10 @@ impl WasmGcEmitter {
 			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
 		};
 
-		let is_float = self.needs_float(&value);
-		let val_type = if is_float { ValType::F64 } else { ValType::I64 };
+		let kind = self.get_type(&value);
+		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
 
-		let init_expr = if is_float {
+		let init_expr = if kind.is_float() {
 			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
 		} else {
 			ConstExpr::i64_const(0)
@@ -1525,7 +1543,7 @@ impl WasmGcEmitter {
 
 		self.globals.global(
 			GlobalType {
-				val_type,
+				val_type: wasm_val_type,
 				mutable: true,
 				shared: false,
 			},
@@ -1534,10 +1552,10 @@ impl WasmGcEmitter {
 
 		let global_idx = self.next_global_idx;
 		self.next_global_idx += 1;
-		self.user_globals.insert(name.clone(), (global_idx, is_float));
+		self.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value, store to global, and return value on stack
-		if is_float {
+		if kind.is_float() {
 			self.emit_float_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
 			func.instruction(&Instruction::GlobalGet(global_idx));
@@ -1773,9 +1791,9 @@ impl WasmGcEmitter {
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-				} else if let Some(&(idx, is_float)) = self.user_globals.get(name) {
+				} else if let Some(&(idx, kind)) = self.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
-					if is_float {
+					if kind.is_float() {
 						// Convert f64 global to i64 for integer operations
 						func.instruction(&Instruction::I64TruncF64S);
 					}
@@ -1871,13 +1889,13 @@ impl WasmGcEmitter {
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if !local.is_float {
+					if !local.kind.is_float() {
 						// Convert i64 local to f64
 						func.instruction(&Instruction::F64ConvertI64S);
 					}
-				} else if let Some(&(idx, is_float)) = self.user_globals.get(name) {
+				} else if let Some(&(idx, kind)) = self.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
-					if !is_float {
+					if !kind.is_float() {
 						// Convert i64 global to f64
 						func.instruction(&Instruction::F64ConvertI64S);
 					}
