@@ -1087,12 +1087,22 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				// Check if this is a variable lookup
+				// Check if this is a local variable lookup
 				if let Some(local) = self.scope.lookup(s) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						return;  // Already a Node reference
 					} else if local.kind.is_float() {
+						self.emit_call(func, "new_float");
+					} else {
+						self.emit_call(func, "new_int");
+					}
+					return;
+				}
+				// Check if this is a global variable lookup
+				if let Some(&(idx, kind)) = self.user_globals.get(s) {
+					func.instruction(&Instruction::GlobalGet(idx));
+					if kind.is_float() {
 						self.emit_call(func, "new_float");
 					} else {
 						self.emit_call(func, "new_int");
@@ -1468,7 +1478,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit global variable declaration: global x = value
-	/// Creates a mutable WASM global and initializes it
+	/// Creates a mutable WASM global and initializes it, or reassigns existing global
 	fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
 		// decl should be Key(name, Define/Assign, value)
 		let (name, value) = match decl.drop_meta() {
@@ -1483,6 +1493,23 @@ impl WasmGcEmitter {
 		};
 
 		let kind = self.get_type(&value);
+
+		// Check if global already exists (reassignment)
+		if let Some(&(global_idx, existing_kind)) = self.user_globals.get(&name) {
+			if existing_kind.is_float() {
+				self.emit_float_value(func, &value);
+				func.instruction(&Instruction::GlobalSet(global_idx));
+				func.instruction(&Instruction::GlobalGet(global_idx));
+				self.emit_call(func, "new_float");
+			} else {
+				self.emit_numeric_value(func, &value);
+				func.instruction(&Instruction::GlobalSet(global_idx));
+				func.instruction(&Instruction::GlobalGet(global_idx));
+				self.emit_call(func, "new_int");
+			}
+			return;
+		}
+
 		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
 
 		// Create mutable global with default initial value
@@ -1533,6 +1560,22 @@ impl WasmGcEmitter {
 		};
 
 		let kind = self.get_type(&value);
+
+		// Check if global already exists (reassignment)
+		if let Some(&(global_idx, existing_kind)) = self.user_globals.get(&name) {
+			if existing_kind.is_float() {
+				self.emit_float_value(func, &value);
+				func.instruction(&Instruction::GlobalSet(global_idx));
+				func.instruction(&Instruction::GlobalGet(global_idx));
+				func.instruction(&Instruction::I64TruncF64S);
+			} else {
+				self.emit_numeric_value(func, &value);
+				func.instruction(&Instruction::GlobalSet(global_idx));
+				func.instruction(&Instruction::GlobalGet(global_idx));
+			}
+			return;
+		}
+
 		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
 
 		let init_expr = if kind.is_float() {
