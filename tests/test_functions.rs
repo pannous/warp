@@ -2,16 +2,15 @@
 // Migrated from tests_*.rs files
 
 use warp::analyzer::analyze;
-use warp::Node;
 use warp::wasp_parser::parse;
+use warp::Node;
 use warp::{eq, is, skip};
 
 #[test]
-#[ignore]
 fn test2def() {
-	// parse("def test1(x){x+1};def test2(x){x+1};test2(3)");
 	is!("def test1(x){x+1};def test2(x){x+1};test2(3)", 4);
-	is!("def test1(x){x+3};def test2(x){x+1};test2(3)", 6);
+	// Note: test2(3) = 3+1 = 4, not 6 (test1 is not called)
+	is!("def test1(x){x+3};def test2(x){x+1};test2(3)", 4);
 }
 
 #[test]
@@ -195,33 +194,50 @@ fn test_fibonacci_auto_typed() {
 #[test]
 fn test_fibonacci_auto_param() {
 	// TODO: use newline once parser precedence is fixed for := vs newline
-	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)", 55);
+	is!(
+		"fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",
+		55
+	);
 }
 
 #[test]
 fn test_fibonacci_typed() {
 	// TODO: use newline once parser precedence is fixed for := vs newline
-	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
-	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
+	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
 }
 
 #[test]
 #[ignore]
 fn test_fibonacci_typed2() {
-	is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)",55);
-		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
-		   is!("fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
-		   // todo worked until number was own type
-		   is!("fib number := if number<2 : 1 else fib(number - 1) + fib it - 2;fib(9)", 55);
+	is!(
+		"int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)",
+		55
+	);
+	is!(
+		"fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)",
+		55
+	);
+	is!(
+		"fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)",
+		55
+	);
+	is!(
+		"fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)",
+		55
+	);
+	is!("fib(n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
+	is!("fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
+	is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
+	// todo worked until number was own type
+	is!(
+		"fib number := if number<2 : 1 else fib(number - 1) + fib it - 2;fib(9)",
+		55
+	);
 }
 
 // From test_new.rs
 #[test]
-#[ignore]
 fn test_function_definitions() {
 	is!("def add(a,b): a+b; add(2,3)", 5);
 	is!("def square(x): x*x; square(4)", 16);
