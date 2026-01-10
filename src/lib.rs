@@ -27,6 +27,7 @@ pub mod operators;
 pub mod ast;
 pub mod meta;
 pub mod host;
+pub mod function;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
@@ -47,6 +48,8 @@ pub use meta::{Dada, LineInfo, DataType};
 pub use wasm_gc_emitter::{WasmGcEmitter, RawFieldValue};
 // Host functions
 pub use host::{HostState, link_host_functions, create_host_linker};
+// Functions
+pub use function::{Function, FunctionRegistry, Signature, Arg, Local, Type as FuncType, ValType as FuncValType, ABI};
 // Legacy GcObject for backward compatibility (3-field Node layout)
 pub use wasm_gc_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
