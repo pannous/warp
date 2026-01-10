@@ -1,4 +1,5 @@
 use warp::wasp_parser::WaspParser;
+use warp::wasp_parser::parse;
 use warp::*;
 use warp::Node::Number;
 
@@ -97,5 +98,19 @@ fn test_type_annotation_block_with_assignment() {
 			}
 		}
 		_ => panic!("Expected Key, got {:?}", actual),
+	}
+}
+
+#[test]
+fn probe_fib_parsing() {
+	println!("\n=== fib(it-1) ===");
+	let node = parse("fib(it-1)");
+	println!("kind: {:?}, serialized: {}", node.kind(), node.serialize());
+
+	if let Node::List(items, _, _) = node.drop_meta() {
+		println!("List with {} items:", items.len());
+		for (i, item) in items.iter().enumerate() {
+			println!("  [{}] kind={:?}: {}", i, item.kind(), item.serialize());
+		}
 	}
 }

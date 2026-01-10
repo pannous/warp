@@ -187,22 +187,36 @@ fn test_modifiers() {
 }
 
 #[test]
+fn test_fibonacci_auto_typed() {
+	// TODO: use newline once parser precedence is fixed for := vs newline
+	is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+}
+
+#[test]
+fn test_fibonacci_auto_param() {
+	// TODO: use newline once parser precedence is fixed for := vs newline
+	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)", 55);
+}
+
+#[test]
+fn test_fibonacci_typed() {
+	// TODO: use newline once parser precedence is fixed for := vs newline
+	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+}
+
+#[test]
 #[ignore]
-fn test_fibonacci() {
-	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)",55);
+fn test_fibonacci_typed2() {
 	is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)",55);
-	skip!(
 		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
 		   is!("fib(int n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
 		   is!("fib(number n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
-		   is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
 		   is!("fib(n){n < 2 ? n : fib(n - 1) + fib(n - 2)}\nfib(10)", 55);
 		   is!("fib(n) := n < 2 ? n : fib(n - 1) + fib(n - 2)\nfib(10)", 55);
 		   is!("fib = it < 2 ? 1 : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
 		   // todo worked until number was own type
 		   is!("fib number := if number<2 : 1 else fib(number - 1) + fib it - 2;fib(9)", 55);
-		// home.md MUST WORK
-	   );
 }
 
 // From test_new.rs
