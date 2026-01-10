@@ -701,8 +701,9 @@ impl WaspParser {
 				let block = self.parse_bracketed('{');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
 			}
-			'<' if !self.options.xml_mode => {
+			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() => {
 				// Only treat as generic if immediately after symbol (no space)
+				// and NOT followed by a number (that would be comparison: i<9)
 				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}

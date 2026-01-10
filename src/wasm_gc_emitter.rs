@@ -1705,6 +1705,27 @@ impl WasmGcEmitter {
 			} else {
 				panic!("Expected symbol in definition, got {:?}", left);
 			}
+		} else if *op == Op::Inc || *op == Op::Dec {
+			// i++ → i = i + 1 (returns new value)
+			// i-- → i = i - 1 (returns new value)
+			if let Node::Symbol(name) = left.drop_meta() {
+				let local_pos = self.scope.lookup(name)
+					.map(|l| l.position)
+					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+				// Get current value
+				func.instruction(&Instruction::LocalGet(local_pos));
+				// Add/subtract 1
+				func.instruction(&Instruction::I64Const(1));
+				if *op == Op::Inc {
+					func.instruction(&Instruction::I64Add);
+				} else {
+					func.instruction(&Instruction::I64Sub);
+				}
+				// Store and return new value
+				func.instruction(&Instruction::LocalTee(local_pos));
+			} else {
+				panic!("Expected symbol for increment/decrement, got {:?}", left);
+			}
 		} else if op.is_compound_assign() {
 			// x += y → x = x + y
 			if let Node::Symbol(name) = left.drop_meta() {
@@ -2240,6 +2261,27 @@ impl WasmGcEmitter {
 					}
 				} else {
 					panic!("Expected symbol in definition, got {:?}", left);
+				}
+			}
+			// Increment/decrement: i++ or i--
+			Node::Key(left, op, _right) if *op == Op::Inc || *op == Op::Dec => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					let local_pos = self.scope.lookup(name)
+						.map(|l| l.position)
+						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+					// Get current value
+					func.instruction(&Instruction::LocalGet(local_pos));
+					// Add/subtract 1
+					func.instruction(&Instruction::I64Const(1));
+					if *op == Op::Inc {
+						func.instruction(&Instruction::I64Add);
+					} else {
+						func.instruction(&Instruction::I64Sub);
+					}
+					// Store and return new value
+					func.instruction(&Instruction::LocalTee(local_pos));
+				} else {
+					panic!("Expected symbol for increment/decrement, got {:?}", left);
 				}
 			}
 			// Compound assignment: x += y → x = x + y
