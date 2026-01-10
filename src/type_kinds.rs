@@ -1,8 +1,9 @@
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Kind {
+	#[default]
 	Empty = 0,
 	Int = 1,       // i64 value (boxed in $i64box)
 	Float = 2,     // f64 value (boxed in $f64box)
@@ -17,6 +18,21 @@ pub enum Kind {
 	Error = 11,   // error node
 	TypeDef = 12, // type definition: name + body (fields)
 }
+
+impl Kind {
+	/// Check if this is an integer type (WASM i64 local)
+	pub fn is_int(&self) -> bool { matches!(self, Kind::Int) }
+
+	/// Check if this is a float type (WASM f64 local)
+	pub fn is_float(&self) -> bool { matches!(self, Kind::Float) }
+
+	/// Check if this is a primitive numeric type (stored as WASM primitive)
+	pub fn is_primitive(&self) -> bool { matches!(self, Kind::Int | Kind::Float) }
+
+	/// Check if this is a reference type (stored as WASM ref $Node)
+	pub fn is_ref(&self) -> bool { !self.is_primitive() }
+}
+
 
 /// Alias for backward compatibility
 pub type NodeKind = Kind;
