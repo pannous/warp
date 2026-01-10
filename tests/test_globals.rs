@@ -25,8 +25,7 @@ fn test_global_float_with_pi() {
 }
 
 #[test]
-#[ignore = "next: global reassignment not yet implemented"]
 fn test_global_reassignment() {
-    // Each global declaration creates a new global
+    // DONE global reassignment: second declaration reuses existing global
     is!("global x=5; global x=10; x", 10);
 }
