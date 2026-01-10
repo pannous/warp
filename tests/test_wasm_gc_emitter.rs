@@ -118,8 +118,8 @@ fn test_function_usage_tracking() {
 	assert!(used.contains(&"new_codepoint"), "new_codepoint should be used for char");
 
 	// Many functions should be unused for a simple char
-	assert!(unused.contains(&"new_text"), "new_text should be unused for char");
-	assert!(unused.contains(&"new_symbol"), "new_symbol should be unused for char");
+	assert!(unused.iter().any(|s| s == "new_text"), "new_text should be unused for char");
+	assert!(unused.iter().any(|s| s == "new_symbol"), "new_symbol should be unused for char");
 	// new_pair was removed (Pair variant removed from Node)
 
 	// Verify unused count is significant (for tree-shaking validation)
