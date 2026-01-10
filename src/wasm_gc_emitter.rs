@@ -95,6 +95,18 @@ pub struct WasmGcEmitter {
 	type_registry: TypeRegistry,
 	// User-defined global variables: name → (index, kind)
 	user_globals: HashMap<String, (u32, Kind)>,
+	// User-defined functions: name → (params, body, return_kind)
+	user_functions: HashMap<String, UserFunctionDef>,
+}
+
+/// User-defined function definition
+#[derive(Clone, Debug)]
+pub struct UserFunctionDef {
+	pub name: String,
+	pub params: Vec<String>,     // Parameter names
+	pub body: Box<Node>,         // Function body AST
+	pub return_kind: Kind,       // Return type
+	pub func_index: Option<u32>, // WASM function index when compiled
 }
 
 impl WasmGcEmitter {
@@ -131,6 +143,7 @@ impl WasmGcEmitter {
 			user_type_indices: HashMap::new(),
 			type_registry: TypeRegistry::new(),
 			user_globals: HashMap::new(),
+			user_functions: HashMap::new(),
 		}
 	}
 
@@ -200,9 +213,206 @@ impl WasmGcEmitter {
 
 	/// Get function call index by name
 	fn func_index(&self, name: &str) -> u32 {
+		// First check user functions
+		if let Some(user_fn) = self.user_functions.get(name) {
+			if let Some(idx) = user_fn.func_index {
+				return idx;
+			}
+		}
+		// Then check registry (builtins/imports)
 		self.func_registry.get(name)
 			.map(|f| f.call_index as u32)
 			.unwrap_or_else(|| panic!("Unknown function: {}", name))
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// User-defined function handling
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	/// Extract user-defined function definitions from AST
+	/// Recognizes patterns:
+	/// - `name(param) = body` → Key(List[name, param], Assign, body)
+	/// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
+	fn extract_user_functions(&mut self, node: &Node) {
+		self.extract_user_functions_inner(node);
+	}
+
+	fn extract_user_functions_inner(&mut self, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			// Pattern: name(param1, param2, ...) = body
+			// Parses as Key(List([name, param1, param2, ...]), Assign, body)
+			Node::Key(left, Op::Assign, body) => {
+				if let Node::List(items, _, _) = left.drop_meta() {
+					if items.len() >= 1 {
+						if let Node::Symbol(name) = items[0].drop_meta() {
+							// Extract parameter names
+							let params: Vec<String> = items.iter().skip(1)
+								.filter_map(|item| {
+									match item.drop_meta() {
+										Node::Symbol(s) => Some(s.clone()),
+										// name:Type pattern
+										Node::Key(n, Op::Colon, _) => {
+											if let Node::Symbol(s) = n.drop_meta() {
+												Some(s.clone())
+											} else {
+												None
+											}
+										}
+										_ => None,
+									}
+								})
+								.collect();
+
+							let func_def = UserFunctionDef {
+								name: name.clone(),
+								params,
+								body: body.clone(),
+								return_kind: Kind::Int, // Infer later
+								func_index: None,
+							};
+							self.user_functions.insert(name.clone(), func_def);
+							return;
+						}
+					}
+				}
+				// Not a function definition, recurse
+				self.extract_user_functions_inner(left);
+				self.extract_user_functions_inner(body);
+			}
+			// Pattern: name := body (uses implicit `it` parameter)
+			Node::Key(left, Op::Define, body) => {
+				if let Node::Symbol(name) = left.drop_meta() {
+					// Check if body uses `it` - if so, this is a function
+					if Self::uses_it(body) {
+						let func_def = UserFunctionDef {
+							name: name.clone(),
+							params: vec!["it".to_string()],
+							body: body.clone(),
+							return_kind: Kind::Int,
+							func_index: None,
+						};
+						self.user_functions.insert(name.clone(), func_def);
+						return;
+					}
+				}
+				// Not a function definition, recurse
+				self.extract_user_functions_inner(left);
+				self.extract_user_functions_inner(body);
+			}
+			// Recurse into lists
+			Node::List(items, _, _) => {
+				for item in items {
+					self.extract_user_functions_inner(item);
+				}
+			}
+			// Recurse into other key nodes
+			Node::Key(left, _, right) => {
+				self.extract_user_functions_inner(left);
+				self.extract_user_functions_inner(right);
+			}
+			_ => {}
+		}
+	}
+
+	/// Check if a node uses the implicit `it` parameter
+	fn uses_it(node: &Node) -> bool {
+		let node = node.drop_meta();
+		match node {
+			Node::Symbol(s) if s == "it" => true,
+			Node::Key(left, _, right) => Self::uses_it(left) || Self::uses_it(right),
+			Node::List(items, _, _) => items.iter().any(Self::uses_it),
+			_ => false,
+		}
+	}
+
+	/// Compile all extracted user functions to WASM
+	fn compile_user_functions(&mut self) {
+		// Clone the function names to avoid borrow issues
+		let func_names: Vec<String> = self.user_functions.keys().cloned().collect();
+
+		for name in func_names {
+			self.compile_user_function(&name);
+		}
+	}
+
+	/// Compile a single user function to WASM
+	fn compile_user_function(&mut self, name: &str) {
+		let user_fn = self.user_functions.get(name).unwrap().clone();
+
+		// Create function type: (params...) -> i64
+		// Use types.len() to get correct index (next_type_idx is stale after emit_constructors)
+		let func_type_idx = self.types.len();
+		let param_types: Vec<ValType> = user_fn.params.iter().map(|_| ValType::I64).collect();
+		self.types.ty().function(param_types, vec![ValType::I64]);
+
+		// Register function in function section
+		self.functions.function(func_type_idx);
+		let func_idx = self.next_func_idx;
+		self.next_func_idx += 1;
+
+		// Store the function index
+		if let Some(fn_def) = self.user_functions.get_mut(name) {
+			fn_def.func_index = Some(func_idx);
+		}
+
+		// Create function scope with parameters
+		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
+		for (_i, param_name) in user_fn.params.iter().enumerate() {
+			self.scope.define(param_name.clone(), None, Kind::Int);
+		}
+
+		// Collect any additional variables in the body
+		collect_variables(&user_fn.body, &mut self.scope);
+
+		// Declare locals (parameters are already accounted for)
+		let num_params = user_fn.params.len() as u32;
+		let num_locals = self.scope.local_count();
+		let extra_locals = if num_locals > num_params { num_locals - num_params } else { 0 };
+
+		let mut func = Function::new(vec![(extra_locals, ValType::I64)]);
+
+		// Compile the function body
+		self.emit_numeric_value(&mut func, &user_fn.body);
+		func.instruction(&Instruction::End);
+
+		// Add to code section
+		self.code.function(&func);
+
+		// Restore scope
+		self.scope = saved_scope;
+
+		// Export the function
+		self.exports.export(name, ExportKind::Func, func_idx);
+	}
+
+	/// Emit a call to a user-defined function (returns Node)
+	fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		// Get numeric result
+		self.emit_user_function_call_numeric(func, fn_name, args);
+		// Wrap in new_int for Node return
+		self.emit_call(func, "new_int");
+	}
+
+	/// Emit a call to a user-defined function (returns raw i64)
+	fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let user_fn = match self.user_functions.get(fn_name) {
+			Some(f) => f.clone(),
+			None => panic!("Unknown user function: {}", fn_name),
+		};
+
+		let func_index = match user_fn.func_index {
+			Some(idx) => idx,
+			None => panic!("User function not yet compiled: {}", fn_name),
+		};
+
+		// Emit each argument value
+		for arg in args {
+			self.emit_numeric_value(func, arg);
+		}
+
+		// Call the function
+		func.instruction(&Instruction::Call(func_index));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -487,6 +697,8 @@ impl WasmGcEmitter {
 
 	pub fn emit_for_node(&mut self, node: &Node) {
 		self.emit_all_functions = false;
+		// Extract user-defined functions first
+		self.extract_user_functions(node);
 		self.analyze_required_functions(node);
 		let len = self.required_functions.len();
 		trace!(
@@ -495,6 +707,8 @@ impl WasmGcEmitter {
 			self.required_functions
 		);
 		self.emit();
+		// Compile user functions after builtin infrastructure is set up
+		self.compile_user_functions();
 		self.emit_node_main(node);
 	}
 
@@ -1140,6 +1354,16 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Skip user function definitions - they're already compiled
+				if *op == Op::Define {
+					if let Node::Symbol(name) = left.drop_meta() {
+						if self.user_functions.contains_key(name) {
+							// Function definitions don't produce a value
+							// The caller (statement sequence handler) should skip this
+							return;
+						}
+					}
+				}
 				// Route to emit_arithmetic for:
 				// - Arithmetic/comparison ops
 				// - Define (:=) always creates a numeric local
@@ -1196,6 +1420,15 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
+				if items.len() >= 2 {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if self.user_functions.contains_key(fn_name) {
+							self.emit_user_function_call(func, fn_name, &items[1..]);
+							return;
+						}
+					}
+				}
 				// Check if this list contains type definitions (class/struct)
 				// If so, treat as statement sequence and return last non-Type item
 				let has_type_def = items.iter().any(|item| {
@@ -1230,10 +1463,40 @@ impl WasmGcEmitter {
 
 				if is_statement_sequence {
 					// Execute statements in order, return last result
-					for (i, item) in items.iter().enumerate() {
+					// Filter out user function definitions (they don't produce values)
+					let non_func_items: Vec<_> = items.iter()
+						.filter(|item| {
+							match item.drop_meta() {
+								// Pattern: name := body (uses implicit `it` parameter)
+								Node::Key(left, Op::Define, _) => {
+									if let Node::Symbol(name) = left.drop_meta() {
+										if self.user_functions.contains_key(name) {
+											return false;
+										}
+									}
+								}
+								// Pattern: name(params...) = body
+								Node::Key(left, Op::Assign, _) => {
+									if let Node::List(items, _, _) = left.drop_meta() {
+										if !items.is_empty() {
+											if let Node::Symbol(name) = items[0].drop_meta() {
+												if self.user_functions.contains_key(name) {
+													return false;
+												}
+											}
+										}
+									}
+								}
+								_ => {}
+							}
+							true
+						})
+						.collect();
+
+					for (i, item) in non_func_items.iter().enumerate() {
 						self.emit_node_instructions(func, item);
 						// Drop intermediate results, keep last
-						if i < items.len() - 1 {
+						if i < non_func_items.len() - 1 {
 							func.instruction(&Instruction::Drop);
 						}
 					}
@@ -1635,6 +1898,75 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
+	/// Emit ternary expression returning i64: condition ? then_expr : else_expr
+	fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+		// Structure: condition ? Key(then, Colon, else)
+		let (then_expr, else_expr) = match then_else.drop_meta() {
+			Node::Key(then_node, Op::Colon, else_node) => (then_node, else_node),
+			_ => panic!("Ternary operator expects then:else structure, got {:?}", then_else),
+		};
+
+		// Evaluate condition and convert to i32 for if instruction
+		self.emit_numeric_value(func, condition);
+		func.instruction(&Instruction::I32WrapI64);
+
+		// if (condition) { then_expr } else { else_expr }
+		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+
+		// Then branch
+		self.emit_numeric_value(func, &then_expr);
+
+		func.instruction(&Instruction::Else);
+
+		// Else branch
+		self.emit_numeric_value(func, &else_expr);
+
+		func.instruction(&Instruction::End);
+	}
+
+	/// Emit if-then-else returning i64: if condition then then_expr else else_expr
+	fn emit_if_then_else_numeric(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		else_expr: Option<&Node>,
+	) {
+		// Extract condition and then_expr from structure
+		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
+		let (condition, then_expr) = match left.drop_meta() {
+			Node::Key(if_condition, Op::Then, then_node) => {
+				let cond = match if_condition.drop_meta() {
+					Node::Key(_, Op::If, c) => c,
+					other => panic!("Expected if condition, got {:?}", other),
+				};
+				(cond, then_node)
+			}
+			other => panic!("Expected if-then structure, got {:?}", other),
+		};
+
+		// Evaluate condition
+		self.emit_numeric_value(func, condition);
+		func.instruction(&Instruction::I32WrapI64);
+
+		// if (condition) { then_expr } else { else_expr }
+		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+
+		// Then branch
+		self.emit_numeric_value(func, then_expr);
+
+		func.instruction(&Instruction::Else);
+
+		// Else branch
+		if let Some(else_node) = else_expr {
+			self.emit_numeric_value(func, else_node);
+		} else {
+			// No else branch - return 0
+			func.instruction(&Instruction::I64Const(0));
+		}
+
+		func.instruction(&Instruction::End);
+	}
+
 	/// Emit if-then-else expression: if condition then then_expr [else else_expr]
 	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
 	/// Or for if-then without else: Key(Key(Empty, If, condition), Then, then_expr)
@@ -1826,6 +2158,14 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, right);
 				self.emit_comparison(func, op);
 			}
+			// Ternary operator: condition ? then_expr : else_expr
+			Node::Key(condition, Op::Question, then_else) => {
+				self.emit_ternary_numeric(func, condition, then_else);
+			}
+			// If-then-else: if condition then then_expr else else_expr
+			Node::Key(if_then, Op::Else, else_expr) => {
+				self.emit_if_then_else_numeric(func, if_then, Some(else_expr));
+			}
 			// Variable lookup (local or global)
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
@@ -1840,8 +2180,18 @@ impl WasmGcEmitter {
 					panic!("Undefined variable: {}", name);
 				}
 			}
-			// Statement sequence: execute all, return last
+			// Statement sequence or function call
 			Node::List(items, _, _) if !items.is_empty() => {
+				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
+				if items.len() >= 2 {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if self.user_functions.contains_key(fn_name) {
+							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+							return;
+						}
+					}
+				}
+				// Otherwise treat as statement sequence: execute all, return last
 				for (i, item) in items.iter().enumerate() {
 					self.emit_numeric_value(func, item);
 					// Drop all values except the last
@@ -1854,7 +2204,9 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Do, right) => {
 				self.emit_while_loop_value(func, left, right);
 			}
-			_ => panic!("Cannot extract numeric value from {:?}", node),
+			other => {
+				panic!("Cannot extract numeric value from {:?}", other)
+			}
 		}
 	}
 
@@ -2025,13 +2377,22 @@ impl WasmGcEmitter {
 	}
 
 	fn validate_wasm(bytes: &Vec<u8>) {
+		if let Err(e) = Self::try_validate_wasm(bytes) {
+			panic!("WASM validation failed: {}", e);
+		}
+	}
+
+	fn try_validate_wasm(bytes: &Vec<u8>) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
 		features.set(WasmFeatures::GC, true);
 		let mut validator = Validator::new_with_features(features);
 		match validator.validate_all(&bytes) {
-			Ok(_) => trace!("✓ WASM validation with GC features passed"),
-			Err(e) => panic!("WASM validation failed: {}", e),
+			Ok(_) => {
+				trace!("✓ WASM validation with GC features passed");
+				Ok(())
+			}
+			Err(e) => Err(format!("{}", e)),
 		}
 	}
 

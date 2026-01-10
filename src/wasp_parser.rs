@@ -707,19 +707,28 @@ impl WaspParser {
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}
 			'(' => {
-				let params = match self.parse_parenthesized() {
-					Ok(p) => p,
-					Err(e) => return error(&e),
-				};
+				// Parse arguments as a proper Node
+				let args_node = self.parse_bracketed('(');
 				self.skip_whitespace();
 
 				if self.current_char() == '{' {
+					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
-					let signature = Node::text(&format!("{}{}", symbol, params));
+					let signature = Node::List(
+						vec![Symbol(symbol), args_node],
+						Bracket::Round,
+						Separator::None,
+					);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
 				} else {
-					// Just a call: name(params) - operators handled by parse_expr
-					Node::text(&format!("{}{}", symbol, params))
+					// Function call: name(params) -> List([symbol, args...])
+					let mut items = vec![Symbol(symbol)];
+					match args_node {
+						Node::List(args, _, _) => items.extend(args),
+						Node::Empty => {}
+						other => items.push(other),
+					}
+					Node::List(items, Bracket::Round, Separator::None)
 				}
 			}
 			_ => Node::symbol(&symbol),
@@ -995,7 +1004,10 @@ impl WaspParser {
 		let mut symbol = String::new();
 		loop {
 			let ch = self.current_char();
-			if (ch.is_alphanumeric() && ch != '²' && ch != '³') || ch == '_' || ch == '-' {
+			// Include alphanumeric, underscore, and hyphen (for kebab-case)
+			// BUT: don't include hyphen if followed by a digit (that's subtraction)
+			let is_hyphen_in_symbol = ch == '-' && !self.peek_char(1).is_numeric();
+			if (ch.is_alphanumeric() && ch != '²' && ch != '³') || ch == '_' || is_hyphen_in_symbol {
 				symbol.push(ch);
 				self.advance();
 			} else {
