@@ -652,6 +652,9 @@ impl WasmGcEmitter {
 			Node::Symbol(_) => {
 				self.required_functions.insert("new_symbol");
 			}
+			Node::True | Node::False => {
+				self.required_functions.insert("new_int");
+			}
 			Node::Key(key, op, value) => {
 				// Check for x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
 				if *op == Op::Assign || *op == Op::Define {
@@ -666,7 +669,7 @@ impl WasmGcEmitter {
 						}
 					}
 				}
-				if op.is_arithmetic() || op.is_comparison() {
+				if op.is_arithmetic() || op.is_comparison() || op.is_logical() {
 					self.required_functions.insert("new_int");
 				} else {
 					self.required_functions.insert("new_key");
@@ -1482,12 +1485,12 @@ impl WasmGcEmitter {
 					}
 				}
 				// Route to emit_arithmetic for:
-				// - Arithmetic/comparison ops
+				// - Arithmetic/comparison/logical ops
 				// - Define (:=) always creates a numeric local
 				// - Assign (=) only if LHS is a known variable (numeric context)
 				// - Compound assignments (+=, -=, etc.)
 				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_some());
-				if op.is_arithmetic() || op.is_comparison() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
+				if op.is_arithmetic() || op.is_comparison() || op.is_logical() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
@@ -1815,6 +1818,9 @@ impl WasmGcEmitter {
 					warn!("Power operator not fully implemented, using multiplication");
 					func.instruction(&Instruction::I64Mul);
 				}
+				Op::And => { func.instruction(&Instruction::I64And); }
+				Op::Or => { func.instruction(&Instruction::I64Or); }
+				Op::Xor => { func.instruction(&Instruction::I64Xor); }
 				op if op.is_comparison() => self.emit_comparison(func, op),
 				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
 			}
@@ -2248,6 +2254,12 @@ impl WasmGcEmitter {
 					}
 				};
 			}
+			Node::True => {
+				func.instruction(&Instruction::I64Const(1));
+			}
+			Node::False => {
+				func.instruction(&Instruction::I64Const(0));
+			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
@@ -2326,6 +2338,17 @@ impl WasmGcEmitter {
 					Op::Div => func.instruction(&Instruction::I64DivS),
 					Op::Mod => func.instruction(&Instruction::I64RemS),
 					Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
+					_ => unreachable!(),
+				};
+			}
+			// Logical operators (and, or, xor)
+			Node::Key(left, op, right) if op.is_logical() => {
+				self.emit_numeric_value(func, left);
+				self.emit_numeric_value(func, right);
+				match op {
+					Op::And => func.instruction(&Instruction::I64And),
+					Op::Or => func.instruction(&Instruction::I64Or),
+					Op::Xor => func.instruction(&Instruction::I64Xor),
 					_ => unreachable!(),
 				};
 			}
