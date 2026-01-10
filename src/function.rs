@@ -10,166 +10,47 @@
 use crate::node::Node;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
-
-/// WASM value types for function signatures
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum ValType {
-	#[default]
-	Void = 0x40,
-	I32 = 0x7F,
-	I64 = 0x7E,
-	F32 = 0x7D,
-	F64 = 0x7C,
-	V128 = 0x7B,
-	FuncRef = 0x70,
-	ExternRef = 0x6F,
-	AnyRef = 0x6E,
-	EqRef = 0x6D,
-	I31Ref = 0x6C,
-	StructRef = 0x6B,
-	ArrayRef = 0x6A,
-	NullFuncRef = 0x73,
-	NullExternRef = 0x72,
-	NullRef = 0x71,
-	// Reference to type index (for GC structs)
-	Ref(u32) = 0x64,
-	RefNull(u32) = 0x63,
-}
-
-impl ValType {
-	pub fn is_numeric(&self) -> bool {
-		matches!(self, ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64)
-	}
-
-	pub fn is_ref(&self) -> bool {
-		matches!(
-			self,
-			ValType::FuncRef
-				| ValType::ExternRef
-				| ValType::AnyRef
-				| ValType::EqRef
-				| ValType::I31Ref
-				| ValType::StructRef
-				| ValType::ArrayRef
-				| ValType::Ref(_)
-				| ValType::RefNull(_)
-		)
-	}
-
-	/// Convert Kind to appropriate ValType
-	pub fn from_kind(kind: Kind) -> Self {
-		match kind {
-			Kind::Int => ValType::I64,
-			Kind::Float => ValType::F64,
-			Kind::Codepoint => ValType::I32,
-			_ => ValType::AnyRef, // Reference types use anyref
-		}
-	}
-}
-
-/// Primitive type enum matching wasp Type
-#[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Type {
-	#[default]
-	Unknown = 0,
-	Void = 1,
-	Bool = 2,
-	Int = 3,
-	Int8 = 4,
-	Int16 = 5,
-	Int32 = 6,
-	Int64 = 7,
-	UInt = 8,
-	UInt8 = 9,
-	UInt16 = 10,
-	UInt32 = 11,
-	UInt64 = 12,
-	Float = 13,
-	Float32 = 14,
-	Float64 = 15,
-	Char = 16,
-	String = 17,
-	Symbol = 18,
-	Node = 19,
-	List = 20,
-	Map = 21,
-	Any = 22,
-	Ref = 23,
-	Struct = 24,
-	Array = 25,
-}
-
-impl Type {
-	/// Convert to WASM ValType
-	pub fn to_valtype(&self) -> ValType {
-		match self {
-			Type::Void => ValType::Void,
-			Type::Bool | Type::Int8 | Type::Int16 | Type::Int32 | Type::UInt8 | Type::UInt16 | Type::UInt32 | Type::Char => ValType::I32,
-			Type::Int | Type::Int64 | Type::UInt | Type::UInt64 => ValType::I64,
-			Type::Float | Type::Float32 => ValType::F32,
-			Type::Float64 => ValType::F64,
-			Type::String | Type::Symbol | Type::Node | Type::List | Type::Map | Type::Any | Type::Ref | Type::Struct | Type::Array => ValType::AnyRef,
-			Type::Unknown => ValType::Void,
-		}
-	}
-
-	/// Parse type from string name
-	pub fn from_name(name: &str) -> Self {
-		match name.to_lowercase().as_str() {
-			"void" | "()" | "nil" => Type::Void,
-			"bool" | "boolean" => Type::Bool,
-			"int" | "integer" => Type::Int,
-			"i8" | "int8" | "byte" => Type::Int8,
-			"i16" | "int16" | "short" => Type::Int16,
-			"i32" | "int32" => Type::Int32,
-			"i64" | "int64" | "long" => Type::Int64,
-			"uint" | "unsigned" => Type::UInt,
-			"u8" | "uint8" | "ubyte" => Type::UInt8,
-			"u16" | "uint16" | "ushort" => Type::UInt16,
-			"u32" | "uint32" => Type::UInt32,
-			"u64" | "uint64" | "ulong" => Type::UInt64,
-			"float" | "real" => Type::Float,
-			"f32" | "float32" => Type::Float32,
-			"f64" | "float64" | "double" => Type::Float64,
-			"char" | "codepoint" => Type::Char,
-			"string" | "str" | "text" => Type::String,
-			"symbol" | "sym" => Type::Symbol,
-			"node" => Type::Node,
-			"list" | "array" => Type::List,
-			"map" | "dict" | "object" => Type::Map,
-			"any" | "*" => Type::Any,
-			"ref" | "reference" => Type::Ref,
-			"struct" => Type::Struct,
-			_ => Type::Unknown,
-		}
-	}
-}
+use wasm_encoder::ValType;
 
 /// ABI (Application Binary Interface) for function calling conventions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ABI {
 	#[default]
-	Native,          // Standard WASM calling convention
-	Wasp,            // Multi-value return tuples (value, type)
+	Native,            // Standard WASM calling convention
+	Wasp,              // Multi-value return tuples (value, type)
 	WaspSmartPointers, // Smart pointers for multi-value compatibility
-	Canonical,       // WIT canonical ABI
+	Canonical,         // WIT canonical ABI
+}
+
+/// Convert Kind to WASM ValType
+pub fn kind_to_valtype(kind: Kind) -> ValType {
+	match kind {
+		Kind::Int => ValType::I64,
+		Kind::Float => ValType::F64,
+		Kind::Codepoint => ValType::I32,
+		_ => ValType::Ref(wasm_encoder::RefType {
+			nullable: true,
+			heap_type: wasm_encoder::HeapType::Abstract {
+				shared: false,
+				ty: wasm_encoder::AbstractHeapType::Any,
+			},
+		}),
+	}
 }
 
 /// Function argument/parameter with name and type
 #[derive(Debug, Clone, PartialEq)]
 pub struct Arg {
 	pub name: String,
-	pub type_: Type,
+	pub kind: Kind,
 	pub modifiers: Vec<String>, // const, mut, ref, etc.
 }
 
 impl Arg {
-	pub fn new(name: impl Into<String>, type_: Type) -> Self {
+	pub fn new(name: impl Into<String>, kind: Kind) -> Self {
 		Arg {
 			name: name.into(),
-			type_,
+			kind,
 			modifiers: Vec::new(),
 		}
 	}
@@ -181,18 +62,18 @@ impl Arg {
 
 	/// Get WASM ValType for this argument
 	pub fn valtype(&self) -> ValType {
-		self.type_.to_valtype()
+		kind_to_valtype(self.kind)
 	}
 }
 
 /// Function type signature with parameters and return types
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Signature {
-	pub type_index: i32,           // Index in WASM type section (-1 if not assigned)
+	pub type_index: i32,         // Index in WASM type section (-1 if not assigned)
 	pub abi: ABI,
-	pub parameters: Vec<Arg>,      // Named parameters
-	pub return_types: Vec<Type>,   // Return type(s) - WASM supports multi-value
-	pub is_handled: bool,          // Already emitted to WASM
+	pub parameters: Vec<Arg>,    // Named parameters
+	pub return_types: Vec<Kind>, // Return type(s) - WASM supports multi-value
+	pub is_handled: bool,        // Already emitted to WASM
 }
 
 impl Signature {
@@ -207,29 +88,29 @@ impl Signature {
 	}
 
 	/// Add a parameter with type
-	pub fn param(mut self, name: impl Into<String>, type_: Type) -> Self {
-		self.parameters.push(Arg::new(name, type_));
+	pub fn param(mut self, name: impl Into<String>, kind: Kind) -> Self {
+		self.parameters.push(Arg::new(name, kind));
 		self
 	}
 
 	/// Add a parameter (chainable builder pattern)
-	pub fn add(&mut self, name: impl Into<String>, type_: Type) -> &mut Self {
-		self.parameters.push(Arg::new(name, type_));
+	pub fn add(&mut self, name: impl Into<String>, kind: Kind) -> &mut Self {
+		self.parameters.push(Arg::new(name, kind));
 		self
 	}
 
 	/// Set return type(s)
-	pub fn returns(mut self, type_: Type) -> Self {
-		if type_ != Type::Void {
-			self.return_types.push(type_);
+	pub fn returns(mut self, kind: Kind) -> Self {
+		if kind != Kind::Empty {
+			self.return_types.push(kind);
 		}
 		self
 	}
 
 	/// Add return type (mutable)
-	pub fn add_return(&mut self, type_: Type) -> &mut Self {
-		if type_ != Type::Void {
-			self.return_types.push(type_);
+	pub fn add_return(&mut self, kind: Kind) -> &mut Self {
+		if kind != Kind::Empty {
+			self.return_types.push(kind);
 		}
 		self
 	}
@@ -265,7 +146,7 @@ impl Signature {
 
 	/// Get WASM return types
 	pub fn return_valtypes(&self) -> Vec<ValType> {
-		self.return_types.iter().map(|t| t.to_valtype()).collect()
+		self.return_types.iter().map(|k| kind_to_valtype(*k)).collect()
 	}
 
 	/// Merge another signature into this one (fill empty fields)
@@ -285,11 +166,11 @@ impl Signature {
 	pub fn format(&self) -> String {
 		let params: Vec<String> = self.parameters
 			.iter()
-			.map(|p| format!("{}: {:?}", p.name, p.type_))
+			.map(|p| format!("{}: {:?}", p.name, p.kind))
 			.collect();
 		let returns: Vec<String> = self.return_types
 			.iter()
-			.map(|t| format!("{:?}", t))
+			.map(|k| format!("{:?}", k))
 			.collect();
 		if returns.is_empty() {
 			format!("({})", params.join(", "))
@@ -310,27 +191,27 @@ impl std::fmt::Display for Signature {
 pub struct Local {
 	pub position: u32,     // Index in locals array
 	pub name: String,
-	pub type_: Type,
+	pub kind: Kind,
 	pub is_param: bool,    // Function parameter vs local variable
 	pub data_pointer: u32, // Linear memory offset for reference data
 }
 
 impl Local {
-	pub fn new(position: u32, name: impl Into<String>, type_: Type) -> Self {
+	pub fn new(position: u32, name: impl Into<String>, kind: Kind) -> Self {
 		Local {
 			position,
 			name: name.into(),
-			type_,
+			kind,
 			is_param: false,
 			data_pointer: 0,
 		}
 	}
 
-	pub fn param(position: u32, name: impl Into<String>, type_: Type) -> Self {
+	pub fn param(position: u32, name: impl Into<String>, kind: Kind) -> Self {
 		Local {
 			position,
 			name: name.into(),
-			type_,
+			kind,
 			is_param: true,
 			data_pointer: 0,
 		}
@@ -453,10 +334,10 @@ impl Function {
 	}
 
 	/// Allocate a new local variable, returns its index
-	pub fn allocate_local(&mut self, name: impl Into<String>, type_: Type) -> u32 {
+	pub fn allocate_local(&mut self, name: impl Into<String>, kind: Kind) -> u32 {
 		let n = name.into();
 		let position = self.locals.len() as u32;
-		self.locals.insert(n.clone(), Local::new(position, n, type_));
+		self.locals.insert(n.clone(), Local::new(position, n, kind));
 		position
 	}
 
@@ -471,24 +352,24 @@ impl Function {
 	}
 
 	/// Add parameter and create corresponding local
-	pub fn add_param(&mut self, name: impl Into<String>, type_: Type) {
+	pub fn add_param(&mut self, name: impl Into<String>, kind: Kind) {
 		let n = name.into();
 		let position = self.locals.len() as u32;
-		self.signature.add(&n, type_);
-		self.locals.insert(n.clone(), Local::param(position, n, type_));
+		self.signature.add(&n, kind);
+		self.locals.insert(n.clone(), Local::param(position, n, kind));
 	}
 
 	/// Find best matching variant for given argument types
-	pub fn find_variant(&self, arg_types: &[Type]) -> Option<usize> {
+	pub fn find_variant(&self, arg_kinds: &[Kind]) -> Option<usize> {
 		if self.variants.is_empty() {
 			return None;
 		}
 		for (i, variant) in self.variants.iter().enumerate() {
 			let sig = &variant.signature;
-			if sig.len() == arg_types.len() {
+			if sig.len() == arg_kinds.len() {
 				let matches = sig.parameters.iter()
-					.zip(arg_types.iter())
-					.all(|(p, t)| p.type_ == *t || p.type_ == Type::Any);
+					.zip(arg_kinds.iter())
+					.all(|(p, k)| p.kind == *k || p.kind == Kind::Data); // Data as "Any"
 				if matches {
 					return Some(i);
 				}
@@ -590,18 +471,18 @@ mod tests {
 
 	#[test]
 	fn test_arg() {
-		let arg = Arg::new("x", Type::Int);
+		let arg = Arg::new("x", Kind::Int);
 		assert_eq!(arg.name, "x");
-		assert_eq!(arg.type_, Type::Int);
+		assert_eq!(arg.kind, Kind::Int);
 		assert_eq!(arg.valtype(), ValType::I64);
 	}
 
 	#[test]
 	fn test_signature_builder() {
 		let sig = Signature::new()
-			.param("x", Type::Int)
-			.param("y", Type::Float)
-			.returns(Type::Bool);
+			.param("x", Kind::Int)
+			.param("y", Kind::Float)
+			.returns(Kind::Int);
 
 		assert_eq!(sig.len(), 2);
 		assert!(sig.has("x"));
@@ -613,13 +494,13 @@ mod tests {
 	#[test]
 	fn test_signature_format() {
 		let sig = Signature::new()
-			.param("a", Type::Int)
-			.param("b", Type::String)
-			.returns(Type::Bool);
+			.param("a", Kind::Int)
+			.param("b", Kind::Text)
+			.returns(Kind::Int);
 		let formatted = sig.format();
 		assert!(formatted.contains("a: Int"));
-		assert!(formatted.contains("b: String"));
-		assert!(formatted.contains("Bool"));
+		assert!(formatted.contains("b: Text"));
+		assert!(formatted.contains("Int"));
 	}
 
 	#[test]
@@ -627,9 +508,9 @@ mod tests {
 		let func = Function::new("add")
 			.with_signature(
 				Signature::new()
-					.param("a", Type::Int)
-					.param("b", Type::Int)
-					.returns(Type::Int)
+					.param("a", Kind::Int)
+					.param("b", Kind::Int)
+					.returns(Kind::Int)
 			)
 			.exported("add");
 
@@ -649,8 +530,8 @@ mod tests {
 	#[test]
 	fn test_function_locals() {
 		let mut func = Function::new("test");
-		func.add_param("x", Type::Int);
-		func.allocate_local("temp", Type::Float);
+		func.add_param("x", Kind::Int);
+		func.allocate_local("temp", Kind::Float);
 
 		assert_eq!(func.locals.len(), 2);
 		assert_eq!(func.local_index("x"), Some(0));
@@ -665,16 +546,16 @@ mod tests {
 
 		let fetch = Function::host("fetch")
 			.with_signature(Signature::new()
-				.param("url", Type::String)
-				.returns(Type::String));
+				.param("url", Kind::Text)
+				.returns(Kind::Text));
 		let fetch_idx = reg.register(fetch);
 		assert_eq!(fetch_idx, 0);
 
 		let add = Function::new("add")
 			.with_signature(Signature::new()
-				.param("a", Type::Int)
-				.param("b", Type::Int)
-				.returns(Type::Int));
+				.param("a", Kind::Int)
+				.param("b", Kind::Int)
+				.returns(Kind::Int));
 		let add_idx = reg.register(add);
 		assert_eq!(add_idx, 1); // 1 import + 0 code = 1
 
@@ -685,19 +566,11 @@ mod tests {
 	}
 
 	#[test]
-	fn test_valtype_from_kind() {
-		assert_eq!(ValType::from_kind(Kind::Int), ValType::I64);
-		assert_eq!(ValType::from_kind(Kind::Float), ValType::F64);
-		assert_eq!(ValType::from_kind(Kind::Codepoint), ValType::I32);
-		assert_eq!(ValType::from_kind(Kind::Text), ValType::AnyRef);
-	}
-
-	#[test]
-	fn test_type_from_name() {
-		assert_eq!(Type::from_name("int"), Type::Int);
-		assert_eq!(Type::from_name("i64"), Type::Int64);
-		assert_eq!(Type::from_name("string"), Type::String);
-		assert_eq!(Type::from_name("Float64"), Type::Float64);
-		assert_eq!(Type::from_name("unknown_type"), Type::Unknown);
+	fn test_kind_to_valtype() {
+		assert_eq!(kind_to_valtype(Kind::Int), ValType::I64);
+		assert_eq!(kind_to_valtype(Kind::Float), ValType::F64);
+		assert_eq!(kind_to_valtype(Kind::Codepoint), ValType::I32);
+		// Text returns a ref type
+		matches!(kind_to_valtype(Kind::Text), ValType::Ref(_));
 	}
 }
