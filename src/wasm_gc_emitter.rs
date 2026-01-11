@@ -596,6 +596,12 @@ impl WasmGcEmitter {
 		self.get_type(node).is_float()
 	}
 
+	/// Check if an expression is numeric (int, float, or bool)
+	fn is_numeric(&self, node: &Node) -> bool {
+		let kind = self.get_type(node);
+		matches!(kind, Kind::Int | Kind::Float)
+	}
+
 	/// Emit comparison operator for i64 (result is i32, extended to i64)
 	fn emit_comparison(&self, func: &mut Function, op: &Op) {
 		let cmp = match op {
@@ -1485,19 +1491,29 @@ impl WasmGcEmitter {
 					}
 				}
 				// Route to emit_arithmetic for:
-				// - Arithmetic/comparison/logical ops
+				// - Arithmetic/comparison/logical ops (when both operands are numeric)
 				// - Define (:=) always creates a numeric local
 				// - Assign (=) only if LHS is a known variable (numeric context)
 				// - Compound assignments (+=, -=, etc.)
 				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_some());
-				if op.is_arithmetic() || op.is_comparison() || op.is_logical() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
+				// For logical ops with non-numeric operands, use Node-returning truthy path
+				let both_numeric = self.is_numeric(left) && self.is_numeric(right);
+				if op.is_logical() && !both_numeric {
+					self.emit_truthy_logical(func, left, op, right);
+				} else if op.is_arithmetic() || op.is_comparison() || op.is_logical() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
 					self.emit_ternary(func, left, right);
 				} else if *op == Op::Else {
-					// If-then-else: ((if condition) then then_expr) else else_expr
-					self.emit_if_then_else(func, left, Some(right));
+					// Check if this is a full if-then-else or just a fallback operator
+					if let Node::Key(_, Op::Then, _) = left.drop_meta() {
+						// If-then-else: ((if condition) then then_expr) else else_expr
+						self.emit_if_then_else(func, left, Some(right));
+					} else {
+						// Standalone else acts like truthy or: `false else 3` → 3
+						self.emit_truthy_logical(func, left, &Op::Or, right);
+					}
 				} else if *op == Op::Then {
 					// If-then (no else): (if condition) then then_expr
 					// Construct the full structure for emit_if_then_else
@@ -1833,6 +1849,32 @@ impl WasmGcEmitter {
 			}
 		} else {
 			// Integer path: emit operands as i64, use I64 instructions
+			// Truthy and/or use short-circuit evaluation
+			if *op == Op::And {
+				// Truthy and: if left is 0, return 0; else return right
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+				func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
+				func.instruction(&Instruction::Else);
+				self.emit_numeric_value(func, right); // return right
+				func.instruction(&Instruction::End);
+				self.emit_call(func, "new_int");
+				return;
+			}
+			if *op == Op::Or {
+				// Truthy or: if left is non-0, return left; else return right
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+				self.emit_numeric_value(func, right); // return right (left was falsy)
+				func.instruction(&Instruction::Else);
+				self.emit_numeric_value(func, left); // return left (truthy)
+				func.instruction(&Instruction::End);
+				self.emit_call(func, "new_int");
+				return;
+			}
+
 			self.emit_numeric_value(func, left);
 			self.emit_numeric_value(func, right);
 
@@ -1846,8 +1888,6 @@ impl WasmGcEmitter {
 					warn!("Power operator not fully implemented, using multiplication");
 					func.instruction(&Instruction::I64Mul);
 				}
-				Op::And => { func.instruction(&Instruction::I64And); }
-				Op::Or => { func.instruction(&Instruction::I64Or); }
 				Op::Xor => { func.instruction(&Instruction::I64Xor); }
 				op if op.is_comparison() => self.emit_comparison(func, op),
 				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
@@ -1859,6 +1899,61 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_float");
 		} else {
 			self.emit_call(func, "new_int");
+		}
+	}
+
+	/// Emit truthy logical operations (and/or) when operands may be non-numeric
+	/// Returns a Node reference based on short-circuit evaluation
+	fn emit_truthy_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		let node_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(self.node_type),
+		};
+
+		// For numeric left operand, extract its value for truthiness check
+		let left_is_numeric = self.is_numeric(left);
+
+		if left_is_numeric {
+			// Emit left as numeric and check truthiness
+			if self.needs_float(left) {
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+				if *op == Op::And {
+					// and: if left == 0, return left (falsy); else return right
+					func.instruction(&Instruction::F64Eq);
+				} else {
+					// or: if left != 0, return left (truthy); else return right
+					func.instruction(&Instruction::F64Ne);
+				}
+			} else {
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::I64Eqz);
+				if *op == Op::And {
+					// and: if left == 0 (eqz is true), return left
+					// eqz returns 1 if zero, 0 if non-zero
+				} else {
+					// or: if left != 0 (eqz is false), return left
+					func.instruction(&Instruction::I32Eqz); // flip the condition
+				}
+			}
+
+			// If condition is true, return left; else return right
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			self.emit_node_instructions(func, left);
+			func.instruction(&Instruction::Else);
+			self.emit_node_instructions(func, right);
+			func.instruction(&Instruction::End);
+		} else {
+			// Left is non-numeric - emit as Node and check kind for truthiness
+			// For simplicity, treat non-numeric as truthy (chars, strings, etc.)
+			// TODO: Implement proper truthiness check for non-numeric types
+			if *op == Op::And {
+				// For and with non-numeric left: always return right (left is truthy)
+				self.emit_node_instructions(func, right);
+			} else {
+				// For or with non-numeric left: always return left (left is truthy)
+				self.emit_node_instructions(func, left);
+			}
 		}
 	}
 
@@ -2369,16 +2464,31 @@ impl WasmGcEmitter {
 					_ => unreachable!(),
 				};
 			}
-			// Logical operators (and, or, xor)
-			Node::Key(left, op, right) if op.is_logical() => {
+			// Logical operators (and, or) use truthy semantics, xor uses bitwise
+			Node::Key(left, Op::And, right) => {
+				// Truthy and: if left is 0, return 0; else return right
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+				func.instruction(&Instruction::I64Const(0));
+				func.instruction(&Instruction::Else);
+				self.emit_numeric_value(func, right);
+				func.instruction(&Instruction::End);
+			}
+			Node::Key(left, Op::Or, right) => {
+				// Truthy or: if left is non-0, return left; else return right
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+				self.emit_numeric_value(func, right);
+				func.instruction(&Instruction::Else);
+				self.emit_numeric_value(func, left);
+				func.instruction(&Instruction::End);
+			}
+			Node::Key(left, Op::Xor, right) => {
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
-				match op {
-					Op::And => func.instruction(&Instruction::I64And),
-					Op::Or => func.instruction(&Instruction::I64Or),
-					Op::Xor => func.instruction(&Instruction::I64Xor),
-					_ => unreachable!(),
-				};
+				func.instruction(&Instruction::I64Xor);
 			}
 			// Comparison operators
 			Node::Key(left, op, right) if op.is_comparison() => {

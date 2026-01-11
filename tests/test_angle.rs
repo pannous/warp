@@ -1,6 +1,6 @@
+use warp::smarty::{float_data28, smarty32};
 use warp::Node;
 use warp::Node::Empty;
-use warp::smarty::{float_data28, smarty32};
 use warp::{is, skip, Number};
 
 #[test]
@@ -43,9 +43,11 @@ fn test_call() {
 }
 
 #[test]
-#[ignore]
+// #[ignore]
 fn test_truthy_and() {
 	is!("0.0 and 4.0", 0.0);
+	is!("0.0 && 4.0", 0.0);
+	is!("0.0 & 4.0", 0.0);
 	is!("4.0 and 0.0", 0.0);
 	is!("4.0 and 5.0", 5.0);
 	is!("0.0 and 4", 0.0);
@@ -54,36 +56,36 @@ fn test_truthy_and() {
 	is!("0 and 4.0", 0);
 	is!("4 and 0.0", 0.0);
 	is!("4 and 5.0", 5.0);
-	skip!( // todo
-		is!("4 and 'a'", 'a');
-		is!("4 and '🍏'", '🍏');
-		is!("4 and '🍏🍏🍏'", String("🍏🍏🍏"));
-		is!("0 and 'a'", 0);
-		is!("0 and '🍏'", 0);
-		is!("0 and '🍏🍏🍏'", 0);
-	);
+	// skip!( // todo
+	is!("4 and 'a'", 'a');
+	is!("4 and '🍏'", '🍏');
+	is!("4 and '🍏🍏🍏'", "🍏🍏🍏");
+	is!("0 and 'a'", 0);
+	is!("0 and '🍏'", 0);
+	is!("0 and '🍏🍏🍏'", 0);
+	is!("2 and 3 or 4", 3);
+	is!("false else 3", 3);
+	is!("1 and 0 or 4", 4);
+	is!("false or 3", 3);
+	is!("4 or 3", 4);
+	// );
 }
 
 #[test]
 #[ignore]
 fn test_if() {
-	//    skip!( // todo:
-	//            is!("if '':3", false);
-	//            is!("if ():3", false);
-	//            is!("if ø:3", false);
-	//            is!("if {}:3", false);
-	//            is!("if x:3", false);
-	//    );
+	is!("if '':3", false);
+	is!("if ():3", false);
+	is!("if ø:3", false);
+	is!("if {}:3", false);
+	is!("if x:3", false);
 
 	is!("if(2):{3}", 3);
 	is!("if 2 : 3 else 4", 3);
 
 	// is!("if 0:3", false);
 	is!("if(0):{3}", false);
-
 	is!("if(0):{3} else {4}", 4);
-
-	// todo don't rely on isSetter!
 	is!("if(0):{3} else 4", 4);
 	is!("if 0:3 else {4}", 4);
 	is!("if {0}:3 else 4", 4);
@@ -112,16 +114,9 @@ fn test_if() {
 	is!("if 2 then 3 else 4", 3);
 	is!("if (0) {3} else 4", 4);
 	//	is!("2 then 3 else 4", 3);
-	skip!(
-		is!("2 and 3 or 4", 3);
-		is!("false else 3", 3);
-	);
-	is!("1 and 0 or 4", 4);
+
 	is!("if 1 then 0 else 4", 0);
 	is!("if 0 {3}", false);
-	is!("false or 3", 3);
-	//    is!("4 or 3", 4);
-	is!("4 or 3", 7);
 	//	is!("4 else 3", 4);
 	is!("if (2) {3}", 3);
 	is!("if(2){3}", 3);
@@ -427,10 +422,10 @@ fn test_smart_types() {
 	if let Node::Number(n) = node {
 		if let Number::Float(f) = n {
 			assert!(f - 0.1 < 0.00001);
-		}else {
+		} else {
 			panic!("Expected Float number");
 		}
-	}else {
+	} else {
 		panic!("Expected Number node");
 	}
 }
@@ -467,9 +462,7 @@ fn test_logic_precedence() {
 #[ignore]
 fn test_all_angle() {
 	// emmitting or not
-	test_logic_precedence();
 	//	test_smart_types();
-	test_truthy_and();
 	test_if();
 	// test_call(); in testTodoBrowser();
 	skip!(
