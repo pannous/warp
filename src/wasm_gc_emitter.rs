@@ -702,6 +702,9 @@ impl WasmGcEmitter {
 				}
 				if op.is_arithmetic() || op.is_comparison() || op.is_logical() {
 					self.required_functions.insert("new_int");
+					if *op == Op::Pow {
+						self.required_functions.insert("i64_pow");
+					}
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -1296,6 +1299,7 @@ impl WasmGcEmitter {
 
 		// Emit helper functions
 		self.emit_getters();
+		self.emit_math_helpers();
 	}
 
 	fn emit_getters(&mut self) {
@@ -1315,9 +1319,66 @@ impl WasmGcEmitter {
 		});
 		func.instruction(&Instruction::End);
 		self.code.function(&func);
-		self.exports
-			.export("get_kind", ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
+		let idx = self.register_func("get_kind");
+		self.exports.export("get_kind", ExportKind::Func, idx);
+	}
+
+	/// Emit math helper functions (i64_pow, etc.)
+	fn emit_math_helpers(&mut self) {
+		// i64_pow(base: i64, exp: i64) -> i64
+		// Computes base^exp using a loop
+		if self.should_emit_function("i64_pow") {
+			let func_type = self.types.len();
+			self.types
+				.ty()
+				.function(vec![ValType::I64, ValType::I64], vec![ValType::I64]);
+			self.functions.function(func_type);
+
+			// Locals: 0=base, 1=exp, 2=result
+			let mut func = Function::new(vec![(1, ValType::I64)]);
+
+			// result = 1
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::LocalSet(2));
+
+			// block $done
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			// loop $loop
+			func.instruction(&Instruction::Loop(BlockType::Empty));
+
+			// br_if $done (i64.eqz (local.get $exp))
+			func.instruction(&Instruction::LocalGet(1)); // exp
+			func.instruction(&Instruction::I64Eqz);
+			func.instruction(&Instruction::BrIf(1)); // break to $done
+
+			// result = result * base
+			func.instruction(&Instruction::LocalGet(2)); // result
+			func.instruction(&Instruction::LocalGet(0)); // base
+			func.instruction(&Instruction::I64Mul);
+			func.instruction(&Instruction::LocalSet(2));
+
+			// exp = exp - 1
+			func.instruction(&Instruction::LocalGet(1)); // exp
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64Sub);
+			func.instruction(&Instruction::LocalSet(1));
+
+			// br $loop
+			func.instruction(&Instruction::Br(0));
+
+			// end loop
+			func.instruction(&Instruction::End);
+			// end block
+			func.instruction(&Instruction::End);
+
+			// return result
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::End);
+
+			self.code.function(&func);
+			let idx = self.register_func("i64_pow");
+			self.exports.export("i64_pow", ExportKind::Func, idx);
+		}
 	}
 
 	/// Allocate a string in linear memory
@@ -1876,8 +1937,14 @@ impl WasmGcEmitter {
 					return;
 				}
 				Op::Pow => {
-					warn!("Power operator not fully implemented for float");
-					func.instruction(&Instruction::F64Mul);
+					// Drop the f64 values and re-emit as i64 for power
+					func.instruction(&Instruction::Drop);
+					func.instruction(&Instruction::Drop);
+					self.emit_numeric_value(func, left);
+					self.emit_numeric_value(func, right);
+					self.emit_call(func, "i64_pow");
+					self.emit_call(func, "new_int");
+					return;
 				}
 				op if op.is_comparison() => {
 					self.emit_float_comparison(func, op);
@@ -1924,8 +1991,7 @@ impl WasmGcEmitter {
 				Op::Div => { func.instruction(&Instruction::I64DivS); }
 				Op::Mod => { func.instruction(&Instruction::I64RemS); }
 				Op::Pow => {
-					warn!("Power operator not fully implemented, using multiplication");
-					func.instruction(&Instruction::I64Mul);
+					self.emit_call(func, "i64_pow");
 				}
 				Op::Xor => { func.instruction(&Instruction::I64Xor); }
 				op if op.is_comparison() => self.emit_comparison(func, op),
@@ -2497,17 +2563,17 @@ impl WasmGcEmitter {
 					self.emit_numeric_value(func, right);
 					// Apply base operation
 					match base_op {
-						Op::Add => func.instruction(&Instruction::I64Add),
-						Op::Sub => func.instruction(&Instruction::I64Sub),
-						Op::Mul => func.instruction(&Instruction::I64Mul),
-						Op::Div => func.instruction(&Instruction::I64DivS),
-						Op::Mod => func.instruction(&Instruction::I64RemS),
-						Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
-						Op::And => func.instruction(&Instruction::I64And),
-						Op::Or => func.instruction(&Instruction::I64Or),
-						Op::Xor => func.instruction(&Instruction::I64Xor),
+						Op::Add => { func.instruction(&Instruction::I64Add); }
+						Op::Sub => { func.instruction(&Instruction::I64Sub); }
+						Op::Mul => { func.instruction(&Instruction::I64Mul); }
+						Op::Div => { func.instruction(&Instruction::I64DivS); }
+						Op::Mod => { func.instruction(&Instruction::I64RemS); }
+						Op::Pow => { self.emit_call(func, "i64_pow"); }
+						Op::And => { func.instruction(&Instruction::I64And); }
+						Op::Or => { func.instruction(&Instruction::I64Or); }
+						Op::Xor => { func.instruction(&Instruction::I64Xor); }
 						_ => panic!("Unexpected base op: {:?}", base_op),
-					};
+					}
 					// Store result and leave on stack
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -2519,14 +2585,14 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
 				match op {
-					Op::Add => func.instruction(&Instruction::I64Add),
-					Op::Sub => func.instruction(&Instruction::I64Sub),
-					Op::Mul => func.instruction(&Instruction::I64Mul),
-					Op::Div => func.instruction(&Instruction::I64DivS),
-					Op::Mod => func.instruction(&Instruction::I64RemS),
-					Op::Pow => func.instruction(&Instruction::I64Mul), // placeholder
+					Op::Add => { func.instruction(&Instruction::I64Add); }
+					Op::Sub => { func.instruction(&Instruction::I64Sub); }
+					Op::Mul => { func.instruction(&Instruction::I64Mul); }
+					Op::Div => { func.instruction(&Instruction::I64DivS); }
+					Op::Mod => { func.instruction(&Instruction::I64RemS); }
+					Op::Pow => { self.emit_call(func, "i64_pow"); }
 					_ => unreachable!(),
-				};
+				}
 			}
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
@@ -2688,7 +2754,15 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::I64RemS);
 						func.instruction(&Instruction::F64ConvertI64S);
 					}
-					Op::Pow => { func.instruction(&Instruction::F64Mul); } // placeholder
+					Op::Pow => {
+						// Drop f64 values and use i64_pow
+						func.instruction(&Instruction::Drop);
+						func.instruction(&Instruction::Drop);
+						self.emit_numeric_value(func, left);
+						self.emit_numeric_value(func, right);
+						self.emit_call(func, "i64_pow");
+						func.instruction(&Instruction::F64ConvertI64S);
+					}
 					_ => unreachable!(),
 				}
 			}
