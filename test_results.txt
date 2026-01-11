@@ -1,1 +1,1 @@
-  343 passed, 0 failed, 343 total tested
+  346 passed, 0 failed, 346 total tested
