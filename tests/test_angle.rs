@@ -213,7 +213,6 @@ fn test_if_two() {
 }
 
 #[test]
-#[ignore = "needs math expressions in if conditions"]
 fn test_if_math() {
 	is!("2+0", 2);
 
@@ -241,31 +240,27 @@ fn test_if_math() {
 	is!("4 or 3*1", 4);
 
 	// Colon syntax not yet implemented
-	// is!("if 0+2:{3*1} else 4+0", 3);
-	// is!("if(0*2):{3*1} else {4*1}", 4);
-	// is!("if 2+0 : 3 else 4+0", 3);
-	// is!("if 0*2:{3*1} else {4*1}", 4);
-	// is!("if 0*2:3*1", false);
-	// is!("if 0*2:3 else {4*1}", 4);
-	// is!("if {0}:3 else 4+0", 4);
-	// is!("if 0*2:3 else 4+0", 4);
-	// is!("if 0*2:{3*1} else 4+0", 4);
-	// is!("if(2*1):{3*1}", 3);
-	// is!("if(2*1):{3*1} else 4+0", 3);
-	// is!("if(2*1):{3*1} else {4*1}", 3);
-	// is!("if 0+2:3 else 4+0", 3);
-	// is!("if 0+2:{3*1} else {4*1}", 3);
-	// is!("if 0+2:3 else {4*1}", 3);
-	// is!("if(0*2):{3*1}", false);
-	// is!("if(0*2):{3*1} else 4+0", 4);
-	// is!("if 0*2:{3*1} else 4+0", 4);
-	// is!("if 0+2:{3*1}", 3);
-	// is!("if 0+2:3*1", 3);
+	is!("if 0+2:{3*1} else 4+0", 3);
+	is!("if(0*2):{3*1} else {4*1}", 4);
+	is!("if 2+0 : 3 else 4+0", 3);
+	is!("if 0*2:{3*1} else {4*1}", 4);
+	is!("if 0*2:3*1", false);
+	is!("if 0*2:3 else {4*1}", 4);
+	is!("if {0}:3 else 4+0", 4);
+	is!("if 0*2:3 else 4+0", 4);
+	is!("if 0*2:{3*1} else 4+0", 4);
+	is!("if(2*1):{3*1}", 3);
+	is!("if(2*1):{3*1} else 4+0", 3);
+	is!("if(2*1):{3*1} else {4*1}", 3);
+	is!("if 0+2:3 else 4+0", 3);
+	is!("if 0+2:{3*1} else {4*1}", 3);
+	is!("if 0+2:3 else {4*1}", 3);
+	is!("if(0*2):{3*1}", false);
+	is!("if(0*2):{3*1} else 4+0", 4);
+	is!("if 0*2:{3*1} else 4+0", 4);
+	is!("if 0+2:{3*1}", 3);
+	is!("if 0+2:3*1", 3);
 
-	// Function call style not yet implemented
-	// is!("if(2,3,4)", 3);
-	// is!("if({2},{3*1},{4*1})", 3);
-	// is!("if(2*1){3*1}{4*1}", 3);
 }
 #[test]
 #[ignore = "needs comparison in if conditions"]
