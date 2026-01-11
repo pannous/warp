@@ -598,8 +598,33 @@ impl WasmGcEmitter {
 
 	/// Check if an expression is numeric (int, float, or bool)
 	fn is_numeric(&self, node: &Node) -> bool {
-		let kind = self.get_type(node);
-		matches!(kind, Kind::Int | Kind::Float)
+		let node = node.drop_meta();
+		match node {
+			Node::Number(_) | Node::True | Node::False => true,
+			Node::Symbol(name) => {
+				// Check if symbol is a known numeric variable
+				if let Some(local) = self.scope.lookup(name) {
+					matches!(local.kind, Kind::Int | Kind::Float)
+				} else if let Some(&(_, kind)) = self.user_globals.get(name) {
+					matches!(kind, Kind::Int | Kind::Float)
+				} else {
+					false
+				}
+			}
+			Node::Key(left, op, right) if op.is_arithmetic() || op.is_comparison() => {
+				// Arithmetic and comparison ops return numeric
+				true
+			}
+			Node::Key(left, op, right) if op.is_logical() => {
+				// Logical ops are numeric only if both operands are numeric
+				self.is_numeric(left) && self.is_numeric(right)
+			}
+			Node::Key(_, Op::Define | Op::Assign, right) => {
+				self.is_numeric(right)
+			}
+			// Empty, Text, Char, List, etc. are not numeric
+			_ => false,
+		}
 	}
 
 	/// Emit comparison operator for i64 (result is i32, extended to i64)
@@ -1944,16 +1969,41 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, right);
 			func.instruction(&Instruction::End);
 		} else {
-			// Left is non-numeric - emit as Node and check kind for truthiness
-			// For simplicity, treat non-numeric as truthy (chars, strings, etc.)
-			// TODO: Implement proper truthiness check for non-numeric types
+			// Left is non-numeric - check if it's falsy at compile time
+			let left_is_falsy = Self::is_falsy_node(left);
+
 			if *op == Op::And {
-				// For and with non-numeric left: always return right (left is truthy)
-				self.emit_node_instructions(func, right);
+				if left_is_falsy {
+					// and with falsy left: return left
+					self.emit_node_instructions(func, left);
+				} else {
+					// and with truthy left: return right
+					self.emit_node_instructions(func, right);
+				}
 			} else {
-				// For or with non-numeric left: always return left (left is truthy)
-				self.emit_node_instructions(func, left);
+				// Op::Or
+				if left_is_falsy {
+					// or with falsy left: return right
+					self.emit_node_instructions(func, right);
+				} else {
+					// or with truthy left: return left
+					self.emit_node_instructions(func, left);
+				}
 			}
+		}
+	}
+
+	/// Check if a node is statically falsy (empty list, empty string, etc.)
+	fn is_falsy_node(node: &Node) -> bool {
+		let node = node.drop_meta();
+		match node {
+			Node::Empty => true,
+			Node::False => true,
+			Node::Number(n) => n.zero(),
+			Node::Text(s) => s.is_empty(),
+			Node::Char('\0') => true,
+			Node::List(items, _, _) => items.is_empty(),
+			_ => false,
 		}
 	}
 
