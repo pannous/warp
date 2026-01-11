@@ -100,29 +100,31 @@ fn test_if() {
 	is!("if 1 then 0 else 4", 0);
 	is!("if 0 then 3 else 4", 4);
 
-	// Colon syntax not yet implemented - requires parser changes
+	// Colon syntax: if cond:then [else else]
+	is!("if 2:3", 3);
+	is!("if 2:{3}", 3);
+	is!("if 2:3 else 4", 3);
+	is!("if 2:{3} else 4", 3);
+	is!("if 2:{3} else {4}", 3);
+	is!("if 2:3 else {4}", 3);
+	is!("if 0:3 else 4", 4);
+	is!("if 0:{3} else 4", 4);
+	is!("if 0:{3} else {4}", 4);
+	is!("if 0:3 else {4}", 4);
+
+	// Colon syntax with parens around condition
+	is!("if(2):{3}", 3);
+	is!("if(2):{3} else 4", 3);
+	is!("if(2):{3} else {4}", 3);
+	is!("if(0):{3} else {4}", 4);
+	is!("if(0):{3} else 4", 4);
+
+	// Falsy non-numeric values - not yet implemented (requires emitter changes)
 	// is!("if '':3", false);   // empty string falsy
 	// is!("if ():3", false);   // empty parens falsy
 	// is!("if ø:3", false);    // null falsy
 	// is!("if {}:3", false);   // empty block falsy
 	// is!("if x:3", false);    // undefined var falsy
-	// is!("if(2):{3}", 3);
-	// is!("if 2 : 3 else 4", 3);
-	// is!("if(0):{3}", false);
-	// is!("if(0):{3} else {4}", 4);
-	// is!("if(0):{3} else 4", 4);
-	// is!("if 0:3 else {4}", 4);
-	// is!("if {0}:3 else 4", 4);
-	// is!("if 0:3 else 4", 4);
-	// is!("if 0:{3} else 4", 4);
-	// is!("if(2):{3} else 4", 3);
-	// is!("if(2):{3} else {4}", 3);
-	// is!("if 2:{3} else 4", 3);
-	// is!("if 2:3 else 4", 3);
-	// is!("if 2:{3} else {4}", 3);
-	// is!("if 2:3 else {4}", 3);
-	// is!("if 2:{3}", 3);
-	// is!("if 2:3", 3);
 
 	// Function-call style if - not yet implemented
 	// is!("if{2 , 3 , 4}", 3);
