@@ -509,6 +509,8 @@ impl WaspParser {
 			// Logical
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
+			'&' => Some((Op::And, 1)),
+			'|' => Some((Op::Or, 1)),
 			'∧' => Some((Op::And, 1)),
 			'⋁' => Some((Op::Or, 1)),
 			'⊻' => Some((Op::Xor, 1)),
