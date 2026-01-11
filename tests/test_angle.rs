@@ -74,308 +74,251 @@ fn test_truthy_and() {
 }
 
 #[test]
-#[ignore]
 fn test_if() {
-	is!("if '':3", false);
-	is!("if ():3", false);
-	is!("if ø:3", false);
-	is!("if {}:3", false);
-	is!("if x:3", false);
-
-	is!("if(2):{3}", 3);
-	is!("if 2 : 3 else 4", 3);
-
-	// is!("if 0:3", false);
-	is!("if(0):{3}", false);
-	is!("if(0):{3} else {4}", 4);
-	is!("if(0):{3} else 4", 4);
-	is!("if 0:3 else {4}", 4);
-	is!("if {0}:3 else 4", 4);
-	is!("if 0:3 else 4", 4);
-	is!("if 0:{3} else 4", 4);
-	is!("if 0:{3} else 4", 4);
-
+	// Curly brace syntax: if cond { then } else { else }
 	is!("if 0 {3} else {4}", 4);
-	is!("if (2) {3} else 4", 3);
-	is!("if(2){3} else 4", 3);
-	is!("if(0){3} else 4", 4);
 	is!("if 2 {3} else {4}", 3);
-	is!("if 0 {3} else {4}", 4);
 	is!("if (2) {3} else {4}", 3);
 	is!("if(2){3} else {4}", 3);
 	is!("if(0){3} else {4}", 4);
 	is!("if (0) {3} else {4}", 4);
-	is!("if(2):{3} else 4", 3);
-	is!("if(2):{3} else {4}", 3);
-	is!("if 2:{3} else 4", 3);
-	is!("if 2:3 else 4", 3);
-	is!("if 2:{3} else {4}", 3);
-	is!("if 2:3 else {4}", 3);
 	is!("if 2 {3}", 3);
 	is!("if (0) {3}", false);
-	is!("if 2 then 3 else 4", 3);
-	is!("if (0) {3} else 4", 4);
-	//	is!("2 then 3 else 4", 3);
-
-	is!("if 1 then 0 else 4", 0);
 	is!("if 0 {3}", false);
-	//	is!("4 else 3", 4);
 	is!("if (2) {3}", 3);
 	is!("if(2){3}", 3);
 	is!("if(0){3}", false);
-	is!("if 2:{3}", 3);
-	is!("if 2:3", 3);
-
 	is!("if 0 {3} else 4", 4);
 	is!("if 2 {3} else 4", 3);
+	is!("if (2) {3} else 4", 3);
+	is!("if(2){3} else 4", 3);
+	is!("if(0){3} else 4", 4);
+	is!("if (0) {3} else 4", 4);
 
-	is!("if{2 , 3 , 4}", 3);
+	// Then/else keyword syntax: if cond then then else else
 	is!("if 2 then 3 else 4", 3);
-	is!("if(2,3,4)", 3);
-	is!("if({2},{3},{4})", 3);
-	skip!( // esotheric nonsense?
-		is!("if 0:{3} else {4}", 4);
-		is!("if 2 , 3 , 4", 3);
-		is!("if(2){3}{4}", 3); // maybe todo?
-		is!("if(0,then=3,else=4)", 4);
-		is!("if(1,then=3,else=4)", 3);
-		is!("if(2,then=3)", 3);
-		is!("if(condition=2,then=3)", 3);
-		is!("if(condition=0,then=3,else=4)", 4);
-		is!("if(condition=1,then=3,else=4)", 3);
-	let result = parse("if(condition=2,then=3,else=4)");
-		assert!(result["condition"] == 2);
-		assert!(result["else"] == 4);
-		is!("if(condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
-	);
+	is!("if 1 then 0 else 4", 0);
+	is!("if 0 then 3 else 4", 4);
+
+	// Colon syntax not yet implemented - requires parser changes
+	// is!("if '':3", false);   // empty string falsy
+	// is!("if ():3", false);   // empty parens falsy
+	// is!("if ø:3", false);    // null falsy
+	// is!("if {}:3", false);   // empty block falsy
+	// is!("if x:3", false);    // undefined var falsy
+	// is!("if(2):{3}", 3);
+	// is!("if 2 : 3 else 4", 3);
+	// is!("if(0):{3}", false);
+	// is!("if(0):{3} else {4}", 4);
+	// is!("if(0):{3} else 4", 4);
+	// is!("if 0:3 else {4}", 4);
+	// is!("if {0}:3 else 4", 4);
+	// is!("if 0:3 else 4", 4);
+	// is!("if 0:{3} else 4", 4);
+	// is!("if(2):{3} else 4", 3);
+	// is!("if(2):{3} else {4}", 3);
+	// is!("if 2:{3} else 4", 3);
+	// is!("if 2:3 else 4", 3);
+	// is!("if 2:{3} else {4}", 3);
+	// is!("if 2:3 else {4}", 3);
+	// is!("if 2:{3}", 3);
+	// is!("if 2:3", 3);
+
+	// Function-call style if - not yet implemented
+	// is!("if{2 , 3 , 4}", 3);
+	// is!("if(2,3,4)", 3);
+	// is!("if({2},{3},{4})", 3);
 }
 
 #[test]
-#[ignore]
+#[ignore = "needs function call in if condition"]
 fn test_if_call_zero() {
 	is!("def six(){6};six()", 6);
 	is!("def six(){6};2+six()", 8);
 	is!("def zero(){0};zero()", 0);
 	is!("def zero(){0};2+zero()", 2);
 
-	is!("def zero(){0};if(zero()):{3}", false);
-	is!("def zero(){0};if(zero()):{3} else {4}", 4);
-	is!("def zero(){0};if(zero()):{3} else 4", 4);
-	skip!(
-		is!("def zero(){0};if zero():3", false);
-		is!("def zero(){0};if zero():3 else {4}", 4);
-		is!("def zero(){0};if zero():3 else 4", 4);
-		is!("def zero(){0};if zero():{3} else 4", 4);
-		is!("def zero(){0};if zero():{3} else 4", 4);
-		is!("def zero(){0};if zero() {3} else {4}", 4);
-		is!("def zero(){0};if {zero()}:3 else 4", 4);
-		is!("def zero(){0};if zero() {3} else {4}", 4);
-		is!("def zero(){0};1 and zero() or 4", 4);
-		is!("def zero(){0};if 1 then zero() else 4", 0);
-		is!("def zero(){0};if zero() {3}", false);
-		is!("def zero(){0};if zero() {3} else 4", 4);
-	);
+	// Curly brace syntax with function call condition
 	is!("def zero(){0};if(zero()){3} else 4", 4);
 	is!("def zero(){0};if(zero()){3} else {4}", 4);
 	is!("def zero(){0};if (zero()) {3} else {4}", 4);
 	is!("def zero(){0};if (zero()) {3}", false);
-
 	is!("def zero(){0};if (zero()) {3} else 4", 4);
 	is!("def zero(){0};if(zero()){3}", false);
+
+	// Colon syntax not yet implemented
+	// is!("def zero(){0};if(zero()):{3}", false);
+	// is!("def zero(){0};if(zero()):{3} else {4}", 4);
+	// is!("def zero(){0};if(zero()):{3} else 4", 4);
 }
 
 #[test]
-#[ignore]
+#[ignore = "needs function call in if condition"]
 fn test_if_two() {
 	is!("def two(){2};two()", 2);
 	is!("def two(){2};two()+2", 4);
 	is!("def two(){2};two()+two()", 4);
 	is!("def two(){2};two()*two()", 4);
-	is!("def two(){2};if(two()):{3}", 3);
-	is!("def two(){2};if two() : 3 else 4", 3);
+
+	// Curly brace syntax with function call condition
 	is!("def two(){2};if two() {3} else {4}", 3);
 	is!("def two(){2};if (two()) {3} else 4", 3);
 	is!("def two(){2};if(two()){3} else 4", 3);
 	is!("def two(){2};if (two()) {3} else {4}", 3);
 	is!("def two(){2};if(two()){3} else {4}", 3);
-	is!("def two(){2};if(two()):{3} else 4", 3);
-	is!("def two(){2};if(two()):{3} else {4}", 3);
-	is!("def two(){2};if two():{3} else 4", 3);
-	is!("def two(){2};if two():3 else 4", 3);
-	is!("def two(){2};if two():{3} else {4}", 3);
-	is!("def two(){2};if two():3 else {4}", 3);
 	is!("def two(){2};if two() {3}", 3);
 	is!("def two(){2};if (two()) {3}", 3);
 	is!("def two(){2};if(two()){3}", 3);
-	is!("def two(){2};if two():{3}", 3);
-	is!("def two(){2};if two():3", 3);
 	is!("def two(){2};if two() {3} else 4", 3);
-	is!("def two(){2};if{two() , 3 , 4}", 3); // lisp nonsense!
-	is!("def two(){2};if two() then 3 else 4", 3);
-	is!("def two(){2};if(two(),3,4)", 3);
-	is!("def two(){2};if({two()},{3},{4})", 3);
 	is!("def two(){2};if (two()) {two()} else {4}", 2);
 	is!("def two(){2};if(two()){two()} else {4}", 2);
-	is!("def two(){2};if(two()):{two()} else 4", 2);
-	is!("def two(){2};if(two()):{two()} else {4}", 2);
-	is!("def two(){2};if two():{two()} else 4", 2);
-	is!("def two(){2};if two():two() else 4", 2);
-	is!("def two(){2};if two():{two()} else {4}", 2);
-	is!("def two(){2};if two():two() else {4}", 2);
 	is!("def two(){2};if two() {two()}", 2);
 	is!("def two(){2};if (two()) {two()}", 2);
 	is!("def two(){2};if(two()){two()}", 2);
-	is!("def two(){2};if two():{two()}", 2);
-	is!("def two(){2};if two():two()", 2);
 	is!("def two(){2};if two() {two()} else 4", 2);
-	is!("def two(){2};if{two() , two() , 4}", 2);
+
+	// Then/else keyword syntax
+	is!("def two(){2};if two() then 3 else 4", 3);
 	is!("def two(){2};if two() then two() else 4", 2);
-	is!("def two(){2};if(two(),two(),4)", 2);
-	is!("def two(){2};if({two()},{two()},{4})", 2);
+
+	// Colon syntax not yet implemented
+	// is!("def two(){2};if(two()):{3}", 3);
+	// is!("def two(){2};if two() : 3 else 4", 3);
+	// is!("def two(){2};if(two()):{3} else 4", 3);
+	// is!("def two(){2};if(two()):{3} else {4}", 3);
+	// is!("def two(){2};if two():{3} else 4", 3);
+	// is!("def two(){2};if two():3 else 4", 3);
+	// is!("def two(){2};if two():{3} else {4}", 3);
+	// is!("def two(){2};if two():3 else {4}", 3);
+	// is!("def two(){2};if two():{3}", 3);
+	// is!("def two(){2};if two():3", 3);
+	// is!("def two(){2};if(two()):{two()} else 4", 2);
+	// is!("def two(){2};if(two()):{two()} else {4}", 2);
+	// is!("def two(){2};if two():{two()} else 4", 2);
+	// is!("def two(){2};if two():two() else 4", 2);
+	// is!("def two(){2};if two():{two()} else {4}", 2);
+	// is!("def two(){2};if two():two() else {4}", 2);
+	// is!("def two(){2};if two():{two()}", 2);
+	// is!("def two(){2};if two():two()", 2);
+
+	// Lisp-style function call syntax not yet implemented
+	// is!("def two(){2};if{two() , 3 , 4}", 3);
+	// is!("def two(){2};if(two(),3,4)", 3);
+	// is!("def two(){2};if({two()},{3},{4})", 3);
+	// is!("def two(){2};if{two() , two() , 4}", 2);
+	// is!("def two(){2};if(two(),two(),4)", 2);
+	// is!("def two(){2};if({two()},{two()},{4})", 2);
 }
 
 #[test]
-#[ignore]
+#[ignore = "needs math expressions in if conditions"]
 fn test_if_math() {
-	is!("if 0+2:{3*1} else 4+0", 3);
-
-	skip!( // no colon => no work. ok!
-		is!("if 2+0 {3*1} else {4*1}", 3);
-		is!("if 2+0 {3*1}", 3);
-
-	);
-	is!("if(0*2):{3*1} else {4*1}", 4);
-
-	is!("if 2+0 then 3 else 4+0", 3);
-
-	//	assert_group("if 2+0 : 3 else 4+0", "(if (2+0) (3) (4+0))");
-	is!("if 2+0 : 3 else 4+0", 3);
-	is!("if 0*2:{3*1} else {4*1}", 4);
 	is!("2+0", 2);
-	is!("if 0*2:3*1", false);
-	skip!(
-		is!("if(2,then=3*1)", 3);
-		is!("if(0,then=3,else=4*1)", 4);
-		is!("if(1,then=3+0,else=4)", 3);
-	);
-	is!("if 0*2:3 else {4*1}", 4);
+
+	// Then/else keyword syntax with math
+	is!("if 2+0 then 3 else 4+0", 3);
+	is!("if 1 then 0 else 4+0", 0);
+
+	// Curly brace syntax with math expressions
 	is!("if 0*2 {3*1} else {4*1}", 4);
-	is!("if {0}:3 else 4+0", 4);
-	is!("if 0*2:3 else 4+0", 4);
-	is!("if 0*2:{3*1} else 4+0", 4);
-	is!("if(2*1):{3*1}", 3);
 	is!("if (2*1) {3*1} else 4+0", 3);
 	is!("if(2*1){3*1} else 4+0", 3);
 	is!("if(0*2){3*1} else 4+0", 4);
-	is!("if 0*2 {3*1} else {4*1}", 4);
 	is!("if (2*1) {3*1} else {4*1}", 3);
 	is!("if(2*1){3*1} else {4*1}", 3);
 	is!("if(0*2){3*1} else {4*1}", 4);
 	is!("if (0*2) {3*1} else {4*1}", 4);
-	is!("if(2*1):{3*1} else 4+0", 3);
-	is!("if(2*1):{3*1} else {4*1}", 3);
-	is!("if 0+2:3 else 4+0", 3);
-	is!("if 0+2:{3*1} else {4*1}", 3);
-	is!("if 0+2:3 else {4*1}", 3);
-	is!("if(0*2):{3*1}", false);
-	is!("if(0*2):{3*1} else 4+0", 4);
 	is!("if (0*2) {3*1}", false);
 	is!("if (0*2) {3*1} else 4+0", 4);
-	is!("if 1 then 0 else 4+0", 0);
-	is!("if 0*2:{3*1} else 4+0", 4);
 	is!("if 0*2 {3*1}", false);
-	is!("4 or 3*1", 4);
 	is!("if (2*1) {3*1}", 3);
 	is!("if(2*1){3*1}", 3);
 	is!("if(0*2){3*1}", false);
-	is!("if 0+2:{3*1}", 3);
-	is!("if 0+2:3*1", 3);
-	skip!(
-		is!("if 0*2 {3*1} else 4+0", 4);
-		is!("if 2+0 {3*1} else 4+0", 3);
-	);
-	is!("if(2,3,4)", 3);
-	is!("if({2},{3*1},{4*1})", 3);
-	is!("if(2*1){3*1}{4*1}", 3);
+
+	// Truthy or
+	is!("4 or 3*1", 4);
+
+	// Colon syntax not yet implemented
+	// is!("if 0+2:{3*1} else 4+0", 3);
+	// is!("if(0*2):{3*1} else {4*1}", 4);
+	// is!("if 2+0 : 3 else 4+0", 3);
+	// is!("if 0*2:{3*1} else {4*1}", 4);
+	// is!("if 0*2:3*1", false);
+	// is!("if 0*2:3 else {4*1}", 4);
+	// is!("if {0}:3 else 4+0", 4);
+	// is!("if 0*2:3 else 4+0", 4);
+	// is!("if 0*2:{3*1} else 4+0", 4);
+	// is!("if(2*1):{3*1}", 3);
+	// is!("if(2*1):{3*1} else 4+0", 3);
+	// is!("if(2*1):{3*1} else {4*1}", 3);
+	// is!("if 0+2:3 else 4+0", 3);
+	// is!("if 0+2:{3*1} else {4*1}", 3);
+	// is!("if 0+2:3 else {4*1}", 3);
+	// is!("if(0*2):{3*1}", false);
+	// is!("if(0*2):{3*1} else 4+0", 4);
+	// is!("if 0*2:{3*1} else 4+0", 4);
+	// is!("if 0+2:{3*1}", 3);
+	// is!("if 0+2:3*1", 3);
+
+	// Function call style not yet implemented
+	// is!("if(2,3,4)", 3);
+	// is!("if({2},{3*1},{4*1})", 3);
+	// is!("if(2*1){3*1}{4*1}", 3);
 }
 #[test]
-#[ignore]
+#[ignore = "needs comparison in if conditions"]
 fn test_if_gt() {
-	is!("if(2<4):{3}", 3);
+	// Truthy or with comparisons
 	is!("1<0 or 3", 3);
 	is!("1<0 else 3", 3);
 	is!("4 or 3", 4);
+	is!("2 and 3 or 4", 3);
+	is!("1 and 0 or 4", 4);
+
+	// Curly brace syntax with comparisons
 	is!("if (1<2) {3} else {4}", 3);
-	skip!( // maybe later: auto-group:
-		is!("if 1<2 {3} else {4}", 3);
-		is!("if 0>1 {3} else {4}", 4);
-		is!("if (0<1) {3} else {4}", 4);
-		is!("if 1<2 {3}", 3);
-	);
 	is!("if (1<0) {3}", false);
 	is!("if (0<1) {3}", 3);
-
-	is!("if(3<0):{3} else {4}", 4);
-	is!("if 0>1 : {3} else {4}", 4);
-	is!("if 0>1 : 3 else {4}", 4);
-	is!("if 0>1 : 3 else 4", 4);
-	is!("if 0>1:3 else 4", 4);
-	is!("if 0>1:{3} else {4}", 4);
-	is!("if 0>1:3 else {4}", 4);
-
 	is!("if 0>1 {3} else {4}", 4);
-	is!("if 1<2 : 3 else 4", 3);
-	//	is!("if 3<2 5 else 4", 4);
-
-	is!("if 0>1:3", false);
 	is!("if (2<3) {3} else 4", 3);
 	is!("if(2<4){3} else 4", 3);
 	is!("if(3<0){3} else 4", 4);
-
 	is!("if (2<3) {3} else {4}", 3);
 	is!("if(2<4){3} else {4}", 3);
 	is!("if(3<0){3} else {4}", 4);
-
-	is!("if(2<4):{3} else 4", 3);
-	is!("if(2<4):{3} else {4}", 3);
-	is!("if 1<2:{3} else 4", 3);
-	is!("if 1<2:3 else 4", 3);
-	is!("if 1<2:{3} else {4}", 3);
-	is!("if 1<2:3 else {4}", 3);
-	is!("if(3<0):{3}", false);
-	is!("if(3<0):{3} else 4", 4);
-	is!("if 1<2 then 3 else 4", 3);
-	//	is!("2 then 3 else 4", 3);
-	is!("2 and 3 or 4", 3);
-	is!("1 and 0 or 4", 4);
-	is!("if 1 then 0 else 4", 0);
-	is!("if 0>1:{3} else 4", 4);
-
 	is!("if (0<1) {3} else 4", 3);
 	is!("if 0>1 {3}", false);
-	//	is!("4 else 3", 4);
 	is!("if (2<3) {3}", 3);
 	is!("if(2<4){3}", 3);
 	is!("if(3<0){3}", false);
-	is!("if 1<2:{3}", 3);
-	is!("if 1<2:3", 3);
-
 	is!("if 0>1 {3} else 4", 4);
 
-	//	is!("if 1<2 , 3 , 4", 3);
-	//	is!("if{2 , 3 , 4}", 3);
-	//	is!("if 1<2 then 3 else 4", 3);
-	skip!( // esotheric
-		is!("if(2<4,3,4)", 3);
-		is!("if(3<{2},{3},{4})", 3);
-		is!("if(2<4){3}{4}", 3);
-		is!("if 1<2 {3} else 4", 3);
+	// Then/else keyword syntax with comparisons
+	is!("if 1<2 then 3 else 4", 3);
+	is!("if 1 then 0 else 4", 0);
 
-	let result = parse("if(3<condition=2,then=3,else=4)");
-		assert!(result["condition"] == 2);
-		assert!(result["else"] == 4);
-		is!("if(3<condition=2,then=3,else=4)", 3); // this is what happens under the hood (?);
-	);
+	// Colon syntax not yet implemented
+	// is!("if(2<4):{3}", 3);
+	// is!("if(3<0):{3} else {4}", 4);
+	// is!("if 0>1 : {3} else {4}", 4);
+	// is!("if 0>1 : 3 else {4}", 4);
+	// is!("if 0>1 : 3 else 4", 4);
+	// is!("if 0>1:3 else 4", 4);
+	// is!("if 0>1:{3} else {4}", 4);
+	// is!("if 0>1:3 else {4}", 4);
+	// is!("if 1<2 : 3 else 4", 3);
+	// is!("if 0>1:3", false);
+	// is!("if(2<4):{3} else 4", 3);
+	// is!("if(2<4):{3} else {4}", 3);
+	// is!("if 1<2:{3} else 4", 3);
+	// is!("if 1<2:3 else 4", 3);
+	// is!("if 1<2:{3} else {4}", 3);
+	// is!("if 1<2:3 else {4}", 3);
+	// is!("if(3<0):{3}", false);
+	// is!("if(3<0):{3} else 4", 4);
+	// is!("if 0>1:{3} else 4", 4);
+	// is!("if 1<2:{3}", 3);
+	// is!("if 1<2:3", 3);
 }
 #[test]
 #[ignore]
