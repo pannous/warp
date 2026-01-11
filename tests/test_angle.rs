@@ -238,8 +238,8 @@ fn test_if_math() {
 
 	// Truthy or
 	is!("4 or 3*1", 4);
+	is!("2+2 or 3*1", 4);
 
-	// Colon syntax not yet implemented
 	is!("if 0+2:{3*1} else 4+0", 3);
 	is!("if(0*2):{3*1} else {4*1}", 4);
 	is!("if 2+0 : 3 else 4+0", 3);
@@ -260,10 +260,8 @@ fn test_if_math() {
 	is!("if 0*2:{3*1} else 4+0", 4);
 	is!("if 0+2:{3*1}", 3);
 	is!("if 0+2:3*1", 3);
-
 }
 #[test]
-#[ignore = "needs comparison in if conditions"]
 fn test_if_gt() {
 	// Truthy or with comparisons
 	is!("1<0 or 3", 3);
