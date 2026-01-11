@@ -1773,6 +1773,34 @@ impl WasmGcEmitter {
 			}
 		} else if use_float {
 			// Float path: emit operands as f64, use F64 instructions
+			// Truthy and/or need special short-circuit handling
+			if *op == Op::And {
+				// Truthy and: if left is 0, return left; else return right
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+				func.instruction(&Instruction::F64Eq);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
+				self.emit_float_value(func, left);  // return left (0.0)
+				func.instruction(&Instruction::Else);
+				self.emit_float_value(func, right); // return right
+				func.instruction(&Instruction::End);
+				self.emit_call(func, "new_float");
+				return;
+			}
+			if *op == Op::Or {
+				// Truthy or: if left is non-0, return left; else return right
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+				func.instruction(&Instruction::F64Ne);
+				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
+				self.emit_float_value(func, left);  // return left (truthy)
+				func.instruction(&Instruction::Else);
+				self.emit_float_value(func, right); // return right
+				func.instruction(&Instruction::End);
+				self.emit_call(func, "new_float");
+				return;
+			}
+
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, right);
 
