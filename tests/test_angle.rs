@@ -21,25 +21,24 @@ fn test_function_params() {
 //}
 //
 #[test]
-#[ignore]
+// #[ignore]
 fn test_call() {
 	// #[cfg(feature = "WASMTIME")]{
 	// 	warn("square 3  => SIGABRT in WASMTIME! must be bug there!?");
 	// 	return ;
 	// }
-	is!("square 3", 9);
-	is!("square(3)", 9);
+	is!("square:=it^2;square 3", 9);
+	is!("square:=it^2;square(3)", 9);
 	//	functionSignatures["square"] = (*new Signature()).add(i32t).returns(i32t).import();
-	is!("square(1+2)", 9);
-	is!("square 1+2", 9);
+	is!("square:=it^2;square(1+2)", 9);
+	is!("square:=it^2;square 1+2", 9);
 	//	preRegisterSignatures();
-	is!("1+square 2+3", 26);
-	is!("1 + square 1+2", 10);
-	skip!(
-		// interpreter broken lol
-		is!("1+square(2+3)", 26);
-		is!("square{i:3}", 9) //todo: match arguments!
-	);
+	// TODO: precedence issue with function application without parens
+	// is!("square:=it^2;1+square 2+3", 26);
+	// is!("square:=it^2;1 + square 1+2", 10);
+
+	is!("square:=it^2;1+square(2+3)", 26);
+	// is!("square{i:3}", 9) //todo: match arguments!
 }
 
 #[test]
@@ -259,6 +258,7 @@ fn test_if_math() {
 	is!("if 0+2:{3*1}", 3);
 	is!("if 0+2:3*1", 3);
 }
+
 #[test]
 fn test_if_gt() {
 	// Truthy or with comparisons
@@ -373,13 +373,7 @@ fn test_smart_types() {
 
 //Prescedence type for Precedence
 #[test]
-// #[ignore]
 fn test_logic_precedence() {
-	#[cfg(not(feature = "WASM"))]
-	{
-		// assert!(precedence("and") > 1);
-		// assert!(precedence("and") < precedence("or"));
-	}
 	is!("true", true);
 	is!("false", false);
 	is!("true or true", true);
@@ -400,9 +394,7 @@ fn test_logic_precedence() {
 #[ignore]
 fn test_all_angle() {
 	// emmitting or not
-	//	test_smart_types();
-	test_if();
-	// test_call(); in testTodoBrowser();
+	test_call(); //in testTodoBrowser();
 	skip!(
 		testSwitch();
 		testFunctionParams(); // TODO!
