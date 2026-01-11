@@ -810,6 +810,34 @@ impl WaspParser {
 						let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 						Node::Key(Box::new(if_cond), Op::Then, then_expr.clone())
 					}
+				} else if let Node::List(items, _, _) = rhs.drop_meta() {
+					// Handle implicit application: if cond {block} parsed as List([cond, {block}])
+					if items.len() == 2 {
+						if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
+							let condition = items[0].clone();
+							let then_block = items[1].clone();
+							self.skip_spaces();
+							// Check for else
+							let c1 = self.current_char();
+							let c2 = self.peek_char(1);
+							let c3 = self.peek_char(2);
+							let c4 = self.peek_char(3);
+							if (c1, c2, c3, c4) == ('e', 'l', 's', 'e')
+								&& !self.peek_char(4).is_alphanumeric()
+							{
+								self.advance_by(4); // skip "else"
+								self.skip_spaces();
+								let else_block = self.parse_atom();
+								let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
+								let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+								return Node::Key(Box::new(if_then), Op::Else, Box::new(else_block));
+							} else {
+								let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
+								return Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+							}
+						}
+					}
+					Node::Key(Box::new(Empty), op, Box::new(rhs))
 				} else {
 					Node::Key(Box::new(Empty), op, Box::new(rhs))
 				}

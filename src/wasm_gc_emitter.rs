@@ -1569,6 +1569,15 @@ impl WasmGcEmitter {
 					return;
 				}
 				if items.len() == 1 {
+					// Check for zero-argument function call: (funcname)
+					if *bracket == Bracket::Round {
+						if let Node::Symbol(fn_name) = items[0].drop_meta() {
+							if self.user_functions.contains_key(fn_name) {
+								self.emit_user_function_call(func, fn_name, &[]);
+								return;
+							}
+						}
+					}
 					self.emit_node_instructions(func, &items[0]);
 					return;
 				}
@@ -1585,7 +1594,12 @@ impl WasmGcEmitter {
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						if self.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call(func, fn_name, &items[1..]);
+							// Check if it's a zero-arg call: (funcname Empty)
+							if items.len() == 2 && matches!(items[1].drop_meta(), Node::Empty) {
+								self.emit_user_function_call(func, fn_name, &[]);
+							} else {
+								self.emit_user_function_call(func, fn_name, &items[1..]);
+							}
 							return;
 						}
 					}
@@ -2569,12 +2583,26 @@ impl WasmGcEmitter {
 				}
 			}
 			// Statement sequence or function call
-			Node::List(items, _, _) if !items.is_empty() => {
+			Node::List(items, bracket, _) if !items.is_empty() => {
+				// Check for zero-argument function call: (funcname)
+				if items.len() == 1 && *bracket == Bracket::Round {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if self.user_functions.contains_key(fn_name) {
+							self.emit_user_function_call_numeric(func, fn_name, &[]);
+							return;
+						}
+					}
+				}
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						if self.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+							// Check if it's a zero-arg call: (funcname Empty)
+							if items.len() == 2 && matches!(items[1].drop_meta(), Node::Empty) {
+								self.emit_user_function_call_numeric(func, fn_name, &[]);
+							} else {
+								self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+							}
 							return;
 						}
 					}
