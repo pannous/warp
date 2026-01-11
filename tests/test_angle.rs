@@ -67,8 +67,10 @@ fn test_truthy_and() {
 	is!("false else 3", 3);
 	is!("1 and 0 or 4", 4);
 	is!("false or 3", 3);
-	is!("4 or 3", 4);
-	// );
+	is!("[] or 3", 3);
+	is!("() or 3", 3);
+	is!("'' or 3", 3);
+	is!("\"\" or 3", 3);
 }
 
 #[test]
