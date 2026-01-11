@@ -133,7 +133,6 @@ fn test_if() {
 }
 
 #[test]
-#[ignore = "needs function call in if condition"]
 fn test_if_call_zero() {
 	is!("def six(){6};six()", 6);
 	is!("def six(){6};2+six()", 8);
@@ -155,7 +154,6 @@ fn test_if_call_zero() {
 }
 
 #[test]
-#[ignore = "needs function call in if condition"]
 fn test_if_two() {
 	is!("def two(){2};two()", 2);
 	is!("def two(){2};two()+2", 4);
