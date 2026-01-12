@@ -150,10 +150,7 @@ fn test_fibonacci_auto_typed() {
 #[test]
 fn test_fibonacci_auto_param() {
 	// TODO: use newline once parser precedence is fixed for := vs newline
-	is!(
-		"fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",
-		55
-	);
+	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",55);
 }
 
 #[test]
@@ -165,9 +162,10 @@ fn test_fibonacci_typed() {
 
 #[test]
 fn test_fibonacci_typed2() {
-	// Working syntaxes (similar to test_fibonacci_typed):
-	is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
-	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+	// Working syntaxes (alread in test_fibonacci_typed etc):
+	// is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+	// is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+
 
 	// C-like syntaxes - not wasp style, use n:type instead of type n:
 	// is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}; fib(10)", 55);
@@ -193,8 +191,50 @@ fn test_function_definitions() {
 }
 
 #[test]
-#[ignore]
 fn test_variables() {
+	// Basic integers
 	is!("x=42; x", 42);
 	is!("y=3; y", 3);
+	is!("z=0; z", 0);
+	is!("n=-5; n", -5);
+	is!("big=1000000; big", 1000000);
+
+	// Floats
+	is!("f=3.14; f", 3.14);
+	is!("g=0.0; g", 0.0);
+	is!("h=-2.5; h", -2.5);
+	is!("tiny=0.001; tiny", 0.001);
+
+	// Variable operations
+	is!("a=10; a+5", 15);
+	is!("b=20; b-8", 12);
+	is!("c=7; c*3", 21);
+	is!("d=15; d/3", 5);
+
+	// Multiple variables
+	is!("x=1; y=2; x+y", 3);
+	is!("a=10; b=20; c=30; a+b+c", 60);
+	is!("p=5; q=3; p*q", 15);
+
+	// Using define operator
+	is!("x:=42; x", 42);
+	is!("y:=3.14; y", 3.14);
+
+	// Expressions as values
+	is!("x=2+3; x", 5);
+	is!("y=10*2; y", 20);
+	is!("z=100/4; z", 25);
+
+	// Chained operations with variables
+	is!("a=2; b=a*3; b", 6);
+	is!("x=5; y=x+1; z=y*2; z", 12);
+
+	// Edge cases
+	is!("zero=0; zero", 0);
+	is!("one=1; one", 1);
+	is!("neg=-1; neg", -1);
+
+	// Variable reassignment - not yet supported:
+	// is!("x=1; x=2; x", 2);
+	// is!("v=10; v=v+1; v", 11);
 }
