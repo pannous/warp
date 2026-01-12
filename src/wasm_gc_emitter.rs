@@ -103,10 +103,10 @@ pub struct WasmGcEmitter {
 #[derive(Clone, Debug)]
 pub struct UserFunctionDef {
 	pub name: String,
-	pub params: Vec<String>,     // Parameter names
-	pub body: Box<Node>,         // Function body AST
-	pub return_kind: Kind,       // Return type
-	pub func_index: Option<u32>, // WASM function index when compiled
+	pub params: Vec<(String, Option<Node>)>, // Parameter names with optional default values
+	pub body: Box<Node>,                     // Function body AST
+	pub return_kind: Kind,                   // Return type
+	pub func_index: Option<u32>,             // WASM function index when compiled
 }
 
 impl WasmGcEmitter {
@@ -237,6 +237,31 @@ impl WasmGcEmitter {
 		self.extract_user_functions_inner(node);
 	}
 
+	/// Extract parameter name and optional default value from a parameter node
+	fn extract_param(item: &Node) -> Option<(String, Option<Node>)> {
+		match item.drop_meta() {
+			// Simple parameter: x
+			Node::Symbol(s) => Some((s.clone(), None)),
+			// Typed parameter: x:Type
+			Node::Key(n, Op::Colon, _) => {
+				if let Node::Symbol(s) = n.drop_meta() {
+					Some((s.clone(), None))
+				} else {
+					None
+				}
+			}
+			// Parameter with default: x=value
+			Node::Key(n, Op::Assign, default) => {
+				if let Node::Symbol(s) = n.drop_meta() {
+					Some((s.clone(), Some(default.as_ref().clone())))
+				} else {
+					None
+				}
+			}
+			_ => None,
+		}
+	}
+
 	fn extract_user_functions_inner(&mut self, node: &Node) {
 		let node = node.drop_meta();
 		match node {
@@ -246,22 +271,9 @@ impl WasmGcEmitter {
 				if let Node::List(items, _, _) = left.drop_meta() {
 					if items.len() >= 1 {
 						if let Node::Symbol(name) = items[0].drop_meta() {
-							// Extract parameter names
-							let params: Vec<String> = items.iter().skip(1)
-								.filter_map(|item| {
-									match item.drop_meta() {
-										Node::Symbol(s) => Some(s.clone()),
-										// name:Type pattern
-										Node::Key(n, Op::Colon, _) => {
-											if let Node::Symbol(s) = n.drop_meta() {
-												Some(s.clone())
-											} else {
-												None
-											}
-										}
-										_ => None,
-									}
-								})
+							// Extract parameter names with defaults
+							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
+								.filter_map(Self::extract_param)
 								.collect();
 
 							let func_def = UserFunctionDef {
@@ -287,7 +299,7 @@ impl WasmGcEmitter {
 					if Self::uses_it(body) {
 						let func_def = UserFunctionDef {
 							name: name.clone(),
-							params: vec!["it".to_string()],
+							params: vec![("it".to_string(), None)],
 							body: body.clone(),
 							return_kind: Kind::Int,
 							func_index: None,
@@ -352,20 +364,8 @@ impl WasmGcEmitter {
 			if let Node::List(sig_items, _, _) = sig.drop_meta() {
 				if !sig_items.is_empty() {
 					if let Node::Symbol(name) = sig_items[0].drop_meta() {
-						let params: Vec<String> = sig_items.iter().skip(1)
-							.filter_map(|item| {
-								match item.drop_meta() {
-									Node::Symbol(s) => Some(s.clone()),
-									Node::Key(n, Op::Colon, _) => {
-										if let Node::Symbol(s) = n.drop_meta() {
-											Some(s.clone())
-										} else {
-											None
-										}
-									}
-									_ => None,
-								}
-							})
+						let params: Vec<(String, Option<Node>)> = sig_items.iter().skip(1)
+							.filter_map(Self::extract_param)
 							.collect();
 
 						return Some(UserFunctionDef {
@@ -390,36 +390,17 @@ impl WasmGcEmitter {
 					if !sig_items.is_empty() {
 						if let Node::Symbol(name) = sig_items[0].drop_meta() {
 							// Parameters might be in a nested list or directly
-							let params: Vec<String> = sig_items.iter().skip(1)
+							let params: Vec<(String, Option<Node>)> = sig_items.iter().skip(1)
 								.flat_map(|item| {
 									match item.drop_meta() {
-										Node::Symbol(s) => vec![s.clone()],
-										// Parameter wrapped in list: (x)
+										// Parameter wrapped in list: (x) or (x=3)
 										Node::List(param_items, _, _) => {
 											param_items.iter()
-												.filter_map(|p| {
-													match p.drop_meta() {
-														Node::Symbol(s) => Some(s.clone()),
-														Node::Key(n, Op::Colon, _) => {
-															if let Node::Symbol(s) = n.drop_meta() {
-																Some(s.clone())
-															} else {
-																None
-															}
-														}
-														_ => None,
-													}
-												})
-												.collect()
+												.filter_map(Self::extract_param)
+												.collect::<Vec<_>>()
 										}
-										Node::Key(n, Op::Colon, _) => {
-											if let Node::Symbol(s) = n.drop_meta() {
-												vec![s.clone()]
-											} else {
-												vec![]
-											}
-										}
-										_ => vec![],
+										// Direct parameter
+										_ => Self::extract_param(item).into_iter().collect(),
 									}
 								})
 								.collect();
@@ -475,7 +456,7 @@ impl WasmGcEmitter {
 
 		// Create function scope with parameters
 		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
-		for (_i, param_name) in user_fn.params.iter().enumerate() {
+		for (param_name, _default) in user_fn.params.iter() {
 			self.scope.define(param_name.clone(), None, Kind::Int);
 		}
 
@@ -523,9 +504,17 @@ impl WasmGcEmitter {
 			None => panic!("User function not yet compiled: {}", fn_name),
 		};
 
-		// Emit each argument value
-		for arg in args {
-			self.emit_numeric_value(func, arg);
+		// Emit arguments, using defaults for missing ones
+		for (i, (_param_name, default_value)) in user_fn.params.iter().enumerate() {
+			if i < args.len() {
+				// Use provided argument
+				self.emit_numeric_value(func, &args[i]);
+			} else if let Some(default) = default_value {
+				// Use default value
+				self.emit_numeric_value(func, default);
+			} else {
+				panic!("Missing argument {} for function {} (no default)", i, fn_name);
+			}
 		}
 
 		// Call the function
