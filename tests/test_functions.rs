@@ -34,8 +34,17 @@ fn test_function_declaration() {
 	is!("function x(a){42+a};x(1)+1", 44);
 
 	// Not yet supported:
-	// is!("def x(a=3){42+a};x+1", 46);    // default params
 	// is!("def x(a){42+a};x+1", 43);      // implicit call (no parens)
+}
+
+#[test]
+fn test_default_params() {
+	// Default parameter values
+	is!("def x(a=3): 42+a; x()", 45);      // use default
+	is!("def x(a=3): 42+a; x(10)", 52);    // override default
+	is!("f(a=5, b=10) = a+b; f()", 15);    // multiple defaults
+	is!("f(a=5, b=10) = a+b; f(1)", 11);   // override first
+	is!("f(a=5, b=10) = a+b; f(1, 2)", 3); // override both
 }
 
 #[test]
