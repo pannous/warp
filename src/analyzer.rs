@@ -1,11 +1,8 @@
 use crate::extensions::numbers::Number;
+use crate::function::{Function, FunctionRegistry, Signature};
 use crate::node::{Local, Node, Op};
 use crate::type_kinds::Kind;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use wasm_ast::Function;
-
-pub static FUNCTIONS: Lazy<HashMap<String, Function>> = Lazy::new(|| HashMap::new());
 
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
@@ -219,4 +216,131 @@ impl Scope {
 
 pub fn analyze(raw: Node) -> Node {
 	raw // Pass-through for now; analysis happens in emitter
+}
+
+/// Collect all function declarations from the AST into a FunctionRegistry
+pub fn collect_functions(node: &Node) -> FunctionRegistry {
+	let mut registry = FunctionRegistry::new();
+	collect_functions_inner(node, &mut registry);
+	registry
+}
+
+fn collect_functions_inner(node: &Node, registry: &mut FunctionRegistry) {
+	let node = node.drop_meta();
+	match node {
+		// Pattern: fun/fn/def/define/function name(params...) body
+		Node::List(items, _, _) if items.len() >= 2 => {
+			if let Node::Symbol(keyword) = items[0].drop_meta() {
+				if matches!(keyword.as_str(), "fun" | "fn" | "def" | "define" | "function") {
+					if let Some(func) = parse_function_declaration(items, keyword) {
+						registry.register(func);
+						return;
+					}
+				}
+			}
+			// Recurse into list items
+			for item in items {
+				collect_functions_inner(item, registry);
+			}
+		}
+		Node::Key(left, _, right) => {
+			collect_functions_inner(left, registry);
+			collect_functions_inner(right, registry);
+		}
+		_ => {}
+	}
+}
+
+/// Parse a function declaration from a list starting with fun/fn/def/define/function
+fn parse_function_declaration(items: &[Node], _keyword: &str) -> Option<Function> {
+	// Structure: [keyword, ((name (type param)...) body)]
+	// or: [keyword, ((name params...) body)]
+	if items.len() < 2 {
+		return None;
+	}
+
+	let decl = items[1].drop_meta();
+
+	// Get function name and params from the declaration structure
+	let (name, params, body) = match decl {
+		// Pattern: ((name params...) body)
+		Node::List(decl_items, _, _) if decl_items.len() >= 1 => {
+			let first = decl_items[0].drop_meta();
+			match first {
+				// (name params...)
+				Node::List(name_params, _, _) if !name_params.is_empty() => {
+					let func_name = name_params[0].name();
+					let params = &name_params[1..];
+					let body = if decl_items.len() > 1 {
+						Some(Box::new(decl_items[1].clone()))
+					} else {
+						None
+					};
+					(func_name, params.to_vec(), body)
+				}
+				// Just a name symbol
+				Node::Symbol(name) => {
+					let body = if decl_items.len() > 1 {
+						Some(Box::new(decl_items[1].clone()))
+					} else {
+						None
+					};
+					(name.clone(), Vec::new(), body)
+				}
+				_ => return None,
+			}
+		}
+		_ => return None,
+	};
+
+	if name.is_empty() {
+		return None;
+	}
+
+	let mut func = Function::new(&name);
+	func.body = body;
+
+	// Parse parameters
+	for param in &params {
+		let (param_name, param_kind) = parse_param(param);
+		func.signature.add(&param_name, param_kind);
+	}
+
+	Some(func)
+}
+
+/// Parse a parameter node into (name, kind)
+fn parse_param(param: &Node) -> (String, Kind) {
+	let param = param.drop_meta();
+	match param {
+		// Pattern: (type name) e.g., (float a)
+		Node::List(items, _, _) if items.len() >= 2 => {
+			let type_name = items[0].name();
+			let param_name = items[1].name();
+			let kind = type_name_to_kind(&type_name);
+			(param_name, kind)
+		}
+		// Pattern: name:type
+		Node::Key(left, Op::Colon, right) => {
+			let param_name = left.name();
+			let type_name = right.name();
+			let kind = type_name_to_kind(&type_name);
+			(param_name, kind)
+		}
+		// Just a name (infer type later)
+		Node::Symbol(name) => (name.clone(), Kind::Int),
+		_ => (String::new(), Kind::Int),
+	}
+}
+
+/// Convert type name string to Kind
+fn type_name_to_kind(name: &str) -> Kind {
+	match name.to_lowercase().as_str() {
+		"int" | "i32" | "i64" | "integer" | "long" => Kind::Int,
+		"float" | "f32" | "f64" | "double" | "real" | "number" => Kind::Float,
+		"string" | "str" | "text" => Kind::Text,
+		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
+		"char" | "codepoint" => Kind::Codepoint,
+		_ => Kind::Int, // Default to Int
+	}
 }

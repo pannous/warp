@@ -1,7 +1,8 @@
 // Function tests
 // Migrated from tests_*.rs files
 
-use warp::analyzer::analyze;
+use warp::analyzer::{analyze, collect_functions};
+use warp::type_kinds::Kind;
 use warp::wasp_parser::parse;
 use warp::Node;
 use warp::{eq, is, skip};
@@ -42,17 +43,13 @@ fn test_function_declaration() {
 fn test_function_declaration_parse() {
 	let node2 = analyze(parse("fun test(float a){return a*2}"));
 	eq!(node2.name(), "test");
-	// TODO: once implemented
-	// let node1 = analyze(parse("fn main(){}"));
-	// assert!(node1.kind == declaration);
-	// assert!(node1.name == "main");
-	// let node2 = analyze(parse("fun test(float a):int{return a*2}")); // cast return to int
-	// assert!(node2.kind == declaration);
-	// let functions = todo!();
-	// eq!(functions["test"].signature.size(), 1);
-	// eq!(functions["test"].signature.parameters[0].name, "a");
-	// eq!(functions["test"].signature.parameters[0].typo, Type::floats);
-	// eq!(*functions["test"].body, analyze(parse("return a*2")));
+
+	let functions = collect_functions(&node2);
+	eq!(functions["test"].signature.len(), 1);
+	eq!(functions["test"].signature.parameters[0].name, "a");
+	eq!(functions["test"].signature.parameters[0].kind, Kind::Float);
+	// TODO: once body comparison is implemented
+	// eq!(*functions["test"].body.as_ref().unwrap(), analyze(parse("return a*2")));
 }
 
 #[test]
