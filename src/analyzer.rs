@@ -108,8 +108,10 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Define, right) => {
 			if !skip_first_assign {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let kind = infer_type(right, scope);
-					scope.define(name.clone(), None, kind);
+					if scope.lookup(name).is_none() {
+						let kind = infer_type(right, scope);
+						scope.define(name.clone(), None, kind);
+					}
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
@@ -118,8 +120,10 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Assign, right) => {
 			if !skip_first_assign && !in_structure {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let kind = infer_type(right, scope);
-					scope.define(name.clone(), None, kind);
+					if scope.lookup(name).is_none() {
+						let kind = infer_type(right, scope);
+						scope.define(name.clone(), None, kind);
+					}
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
