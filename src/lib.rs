@@ -32,7 +32,7 @@ pub mod function;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
-pub use node::{Bracket, Node, Op, Separator};
+pub use node::{is_function_keyword, Bracket, Node, Op, Separator, FUNCTION_KEYWORDS};
 // Node convenience constructors
 pub use node::{block, codepoint, error, error_node, float, floats, data, int, ints, key, key_op, key_ops, list, parens, symbol, symbols, text, texts};
 // Node variants (except Number/List which conflict with extension types)

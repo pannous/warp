@@ -2,7 +2,7 @@ use crate::analyzer::{collect_variables, infer_type, Scope};
 use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, FunctionRegistry, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
-use crate::node::{Bracket, Node, Op};
+use crate::node::{is_function_keyword, Bracket, Node, Op};
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
 use crate::util::gc_engine;
 use crate::wasm_gc_reader::read_bytes;
@@ -305,7 +305,7 @@ impl WasmGcEmitter {
 				// Check for: def name(params): body or def name(params){body}
 				if items.len() >= 2 {
 					if let Node::Symbol(s) = items[0].drop_meta() {
-						if s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function" {
+						if is_function_keyword(s) {
 							if let Some(func_def) = self.extract_def_function(&items[1..]) {
 								self.user_functions.insert(func_def.name.clone(), func_def);
 								return;
@@ -1696,7 +1696,7 @@ impl WasmGcEmitter {
 						// def/fun/fn syntax starts a statement sequence
 						Node::List(list_items, _, _) if list_items.len() >= 2 => {
 							if let Node::Symbol(s) = list_items[0].drop_meta() {
-								s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function"
+								is_function_keyword(s)
 							} else {
 								false
 							}
@@ -1735,7 +1735,7 @@ impl WasmGcEmitter {
 								Node::List(list_items, _, _) => {
 									if list_items.len() >= 2 {
 										if let Node::Symbol(s) = list_items[0].drop_meta() {
-											if s == "def" || s == "define" || s == "fun" || s == "fn" || s == "function" {
+											if is_function_keyword(s) {
 												return false;
 											}
 										}

@@ -17,6 +17,14 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::node::Node::*;
 use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
+
+/// Keywords that introduce function definitions
+pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "function"];
+
+pub fn is_function_keyword(s: &str) -> bool {
+	FUNCTION_KEYWORDS.contains(&s)
+}
+
 // node[i]
 
 // Wasp ABI GC Node representation design:
@@ -554,8 +562,8 @@ impl Node {
 			List(items, _, _) => {
 				if let Some(first) = items.first() {
 					let first_name = first.name();
-					// For function declarations (fun/fn/def/define/function), the name is in the second element
-					if matches!(first_name.as_str(), "fun" | "fn" | "def" | "define" | "function") {
+					// For function declarations, the name is in the second element
+					if is_function_keyword(&first_name) {
 						if let Some(second) = items.get(1) {
 							return second.name();
 						}
