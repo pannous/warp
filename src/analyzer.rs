@@ -313,6 +313,10 @@ fn parse_function_declaration(items: &[Node], _keyword: &str) -> Option<Function
 fn parse_param(param: &Node) -> (String, Kind) {
 	let param = param.drop_meta();
 	match param {
+		// Pattern: (name:type) - single item list containing a Key
+		Node::List(items, _, _) if items.len() == 1 => {
+			parse_param(&items[0])
+		}
 		// Pattern: (type name) e.g., (float a)
 		Node::List(items, _, _) if items.len() >= 2 => {
 			let type_name = items[0].name();
