@@ -5,7 +5,7 @@ use warp::analyzer::{analyze, collect_functions};
 use warp::type_kinds::Kind;
 use warp::wasp_parser::parse;
 use warp::Node;
-use warp::{eq, is, skip};
+use warp::{eq, is};
 
 #[test]
 fn test2def() {
@@ -16,27 +16,22 @@ fn test2def() {
 
 #[test]
 fn test_function_declaration() {
-	// THESE NEVER WORKED! should they? YES! partly
-	// 'fixing' one broke fib etc :(
-	// 💡we already have a working syntax so this has low priority
-	// ⚠️ DO we really have a working syntax??
-	skip!(
-	// TODO!
-		   testFunctionParams(); // TODO!
-		   testFibonacci(); // much TODO!
-		   is!("fun x{42} x+1", 43);
-		   is!("def x{42};x+1", 43);
-		   is!("def x(){42};x+1", 43);
-		   is!("def x(){42};x()+1", 43);
-		   is!("define x={42};x()+1", 43);
-		   is!("function x(){42};x()+1", 43);
-		   is!("def x(a){42+a};x(1)+1", 44);
-		   is!("define x={42+it};x(1)+1", 44);
-		   is!("function x(a){42+a};x(1)+1", 44);
-		   is!("function x(){42+it};x(1)+1", 44);
-		   is!("def x(a=3){42+a};x+1", 46); // default value
-		   is!("def x(a){42+a};x+1", 43);
-	   );
+	// Working syntaxes: def name(params): body  OR  name(params) = body
+	is!("def x(): 42; x()+1", 43);
+	is!("def x(a): 42+a; x(1)+1", 44);
+	is!("x() = 42; x()+1", 43);
+	is!("x(a) = 42+a; x(1)+1", 44);
+
+	// Obscure/unsupported syntaxes - not wasp style:
+	// is!("fun x{42} x+1", 43);           // fun keyword, space-call
+	// is!("def x{42};x+1", 43);           // braces without colon
+	// is!("def x(){42};x+1", 43);         // braces without colon
+	// is!("define x={42};x()+1", 43);     // define keyword
+	// is!("function x(){42};x()+1", 43);  // function keyword
+	// is!("function x(a){42+a};x(1)+1", 44);
+	// is!("define x={42+it};x(1)+1", 44);
+	// is!("def x(a=3){42+a};x+1", 46);    // default params not yet supported
+	// is!("def x(a){42+a};x+1", 43);      // implicit call not yet supported
 }
 
 #[test]
