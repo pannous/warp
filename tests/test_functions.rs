@@ -22,16 +22,18 @@ fn test_function_declaration() {
 	is!("x() = 42; x()+1", 43);
 	is!("x(a) = 42+a; x(1)+1", 44);
 
-	// Obscure/unsupported syntaxes - not wasp style:
+	// WIP:
+	is!("function x(){42};x()+1", 43);  // function keyword
+	is!("function x(a){42+a};x(1)+1", 44);
 	// is!("fun x{42} x+1", 43);           // fun keyword, space-call
 	// is!("def x{42};x+1", 43);           // braces without colon
 	// is!("def x(){42};x+1", 43);         // braces without colon
 	// is!("define x={42};x()+1", 43);     // define keyword
-	// is!("function x(){42};x()+1", 43);  // function keyword
-	// is!("function x(a){42+a};x(1)+1", 44);
+	// is!("def x(a){42+a};x+1", 43);      // implicit call not yet supported
+
+	// Obscure/unsupported syntaxes - not wasp style:
 	// is!("define x={42+it};x(1)+1", 44);
 	// is!("def x(a=3){42+a};x+1", 46);    // default params not yet supported
-	// is!("def x(a){42+a};x+1", 43);      // implicit call not yet supported
 }
 
 #[test]
