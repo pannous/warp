@@ -465,6 +465,14 @@ impl FunctionRegistry {
 	}
 }
 
+impl std::ops::Index<&str> for FunctionRegistry {
+	type Output = Function;
+
+	fn index(&self, name: &str) -> &Self::Output {
+		self.get(name).unwrap_or_else(|| panic!("Function '{}' not found", name))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
