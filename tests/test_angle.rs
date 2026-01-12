@@ -6,8 +6,8 @@ use warp::{is, skip, Number};
 #[test]
 #[ignore]
 fn test_function_params() {
-	// eq!(parse("f(x)=x*x").param(),"x");
-	// is!("f(x)=x*x;f(3)", "9"); // functions => angle!
+	is!("f(x)=x*x;f(3)", "9"); // julia style functions => angle!  pattern ()= ?
+	// eq!(parse("f(x)=x*x").params(),["x"]);
 }
 
 //
@@ -21,7 +21,6 @@ fn test_function_params() {
 //}
 //
 #[test]
-// #[ignore]
 fn test_call() {
 	// #[cfg(feature = "WASMTIME")]{
 	// 	warn("square 3  => SIGABRT in WASMTIME! must be bug there!?");
@@ -42,7 +41,6 @@ fn test_call() {
 }
 
 #[test]
-// #[ignore]
 fn test_truthy_and() {
 	is!("0.0 and 4.0", 0.0);
 	is!("0.0 && 4.0", 0.0);
@@ -389,20 +387,4 @@ fn test_logic_precedence() {
 	is!("true or false and false", true);
 	is!("false or true and false", false);
 	is!("false or false and true", false);
-}
-#[test]
-#[ignore]
-fn test_all_angle() {
-	// emmitting or not
-	test_call(); //in testTodoBrowser();
-	skip!(
-		testSwitch();
-		testFunctionParams(); // TODO!
-	);
-}
-
-#[test]
-#[ignore]
-fn test_angle() {
-	test_all_angle();
 }
