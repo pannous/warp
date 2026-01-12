@@ -233,8 +233,10 @@ fn test_variables() {
 	is!("zero=0; zero", 0);
 	is!("one=1; one", 1);
 	is!("neg=-1; neg", -1);
+}
 
-	// Variable reassignment - not yet supported:
-	// is!("x=1; x=2; x", 2);
-	// is!("v=10; v=v+1; v", 11);
+#[test]
+fn test_variable_reassignment(){
+	is!("x=1; x=2; x", 2);
+	is!("v=10; v=v+1; v", 11);
 }

@@ -46,7 +46,6 @@ fn test_group_cascade2() {
 }
 
 #[test]
-// #[ignore]
 fn test_group_cascade() {
 	let result = parse(
 		r#"{ a b c, d e f; g h i , j k l
