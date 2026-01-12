@@ -829,6 +829,7 @@ impl Index<&str> for Node {
 	fn index(&self, i: &str) -> &Self::Output {
 		match self {
 			List(nodes, _, _) => {
+				// First, search directly in this list
 				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
 					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
@@ -840,6 +841,20 @@ impl Index<&str> for Node {
 						other => other,
 					}
 				} else {
+					// For tag structures like ((name params...) body), search in params
+					// Pattern: first element is a list containing [symbol, params...]
+					if let Some(first) = nodes.first() {
+						let first = first.drop_meta();
+						if let List(inner, _, _) = first {
+							// Skip the first element (tag name) and search in params
+							for param in inner.iter().skip(1) {
+								let result = &param[i];
+								if result != &Empty {
+									return result;
+								}
+							}
+						}
+					}
 					&Empty
 				}
 			}
