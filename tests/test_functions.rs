@@ -16,24 +16,26 @@ fn test2def() {
 
 #[test]
 fn test_function_declaration() {
-	// Working syntaxes: def name(params): body  OR  name(params) = body
+	// Working syntaxes: keyword name(params): body  OR  name(params) = body
+	// Keywords: def, fun, fn, define, function (all synonyms)
 	is!("def x(): 42; x()+1", 43);
 	is!("def x(a): 42+a; x(1)+1", 44);
+	is!("fun x(): 42; x()+1", 43);
+	is!("fun x(a): 42+a; x(1)+1", 44);
+	is!("define x(): 42; x()+1", 43);
+	is!("define x(a): 42+a; x(1)+1", 44);
+	is!("function x(): 42; x()+1", 43);
+	is!("function x(a): 42+a; x(1)+1", 44);
+	// Julia style: name(params) = body
 	is!("x() = 42; x()+1", 43);
 	is!("x(a) = 42+a; x(1)+1", 44);
-
-	// WIP:
-	is!("function x(){42};x()+1", 43);  // function keyword
+	// Braces body also works
+	is!("function x(){42};x()+1", 43);
 	is!("function x(a){42+a};x(1)+1", 44);
-	// is!("fun x{42} x+1", 43);           // fun keyword, space-call
-	// is!("def x{42};x+1", 43);           // braces without colon
-	// is!("def x(){42};x+1", 43);         // braces without colon
-	// is!("define x={42};x()+1", 43);     // define keyword
-	// is!("def x(a){42+a};x+1", 43);      // implicit call not yet supported
 
-	// Obscure/unsupported syntaxes - not wasp style:
-	// is!("define x={42+it};x(1)+1", 44);
-	// is!("def x(a=3){42+a};x+1", 46);    // default params not yet supported
+	// Not yet supported:
+	// is!("def x(a=3){42+a};x+1", 46);    // default params
+	// is!("def x(a){42+a};x+1", 43);      // implicit call (no parens)
 }
 
 #[test]
