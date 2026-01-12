@@ -39,26 +39,20 @@ fn test_function_declaration() {
 }
 
 #[test]
-#[ignore]
 fn test_function_declaration_parse() {
-	//    let node1 = analyze(parse("fn main(){}"));
-	//    assert!(node1.kind==declaration);
-	//    assert!(node1.name=="main");
-	// let node2 = analyze(parse("fun test(float a):int{return a*2}")); // todo: cast return to int and parseDeclaration!
 	let node2 = analyze(parse("fun test(float a){return a*2}"));
-	// assert!(node2.kind == declaration);
 	eq!(node2.name(), "test");
+	// TODO: once implemented
+	// let node1 = analyze(parse("fn main(){}"));
+	// assert!(node1.kind == declaration);
+	// assert!(node1.name == "main");
+	// let node2 = analyze(parse("fun test(float a):int{return a*2}")); // cast return to int
+	// assert!(node2.kind == declaration);
 	// let functions = todo!();
 	// eq!(functions["test"].signature.size(), 1);
 	// eq!(functions["test"].signature.parameters[0].name, "a");
 	// eq!(functions["test"].signature.parameters[0].typo, Type::floats);
-	// eq!(functions["test"].signature.parameters[0].typo, Type::reals); // upgrade float to real TODO not if explicit!
-	// assert!(functions["test"].body);
-	// assert!(not(*functions["test"].body != analyze(parse("return a*2"))));
-	skip!(
-		assert!(*functions["test"].body == analyze(parse("return a*2"))); // why != ok but == not?
-		eq!(*functions["test"].body, analyze(parse("return a*2")));
-	);
+	// eq!(*functions["test"].body, analyze(parse("return a*2")));
 }
 
 #[test]

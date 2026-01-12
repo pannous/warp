@@ -552,9 +552,15 @@ impl Node {
 			},
 			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
-				// todo only for specific cases like expressions
 				if let Some(first) = items.first() {
-					first.name()
+					let first_name = first.name();
+					// For function declarations (fun/fn/def/define/function), the name is in the second element
+					if matches!(first_name.as_str(), "fun" | "fn" | "def" | "define" | "function") {
+						if let Some(second) = items.get(1) {
+							return second.name();
+						}
+					}
+					first_name
 				} else {
 					String::new()
 				}
