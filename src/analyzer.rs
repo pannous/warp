@@ -182,6 +182,8 @@ impl Scope {
 			position,
 			is_param: false,
 			kind,
+			data_pointer: 0,
+			data_length: 0,
 		};
 		self.locals.insert(name, local.clone());
 		local
@@ -196,9 +198,19 @@ impl Scope {
 			position,
 			is_param: true,
 			kind: Kind::Int,  // Default to Int for params
+			data_pointer: 0,
+			data_length: 0,
 		};
 		self.locals.insert(name, local.clone());
 		local
+	}
+
+	/// Update a local's data pointer and length (for string assignments)
+	pub fn set_local_data(&mut self, name: &str, pointer: u32, length: u32) {
+		if let Some(local) = self.locals.get_mut(name) {
+			local.data_pointer = pointer;
+			local.data_length = length;
+		}
 	}
 
 	/// Define a type in current scope

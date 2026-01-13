@@ -334,6 +334,8 @@ pub struct Local {
 	pub position: u32,                  // WASM local index
 	pub is_param: bool,                 // Parameter vs local variable
 	pub kind: crate::type_kinds::Kind,  // Value kind (Int, Float, Text, etc.)
+	pub data_pointer: u32,              // Linear memory offset for reference data
+	pub data_length: u32,               // Length of data in memory (for strings)
 }
 
 pub type Variable = Local;
