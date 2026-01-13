@@ -3,6 +3,8 @@
 use warp::WasmGcEmitter;
 use warp::wasm_gc_reader::read_bytes_with_host;
 
+// todo this is a horrible test suite, just do is!("fetch(...)", result)
+
 /// Test that emitter can generate host imports
 #[test]
 fn test_emit_host_imports() {
