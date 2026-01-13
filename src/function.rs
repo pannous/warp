@@ -7,7 +7,7 @@
 //!
 //! Design based on wasp/source/Code.h Function/Signature classes.
 
-use crate::node::Node;
+use crate::node::{Local, Node};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 use wasm_encoder::ValType;
@@ -183,38 +183,6 @@ impl Signature {
 impl std::fmt::Display for Signature {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.format())
-	}
-}
-
-/// Local variable within a function
-#[derive(Debug, Clone, PartialEq)]
-pub struct Local {
-	pub position: u32,     // Index in locals array
-	pub name: String,
-	pub kind: Kind,
-	pub is_param: bool,    // Function parameter vs local variable
-	pub data_pointer: u32, // Linear memory offset for reference data
-}
-
-impl Local {
-	pub fn new(position: u32, name: impl Into<String>, kind: Kind) -> Self {
-		Local {
-			position,
-			name: name.into(),
-			kind,
-			is_param: false,
-			data_pointer: 0,
-		}
-	}
-
-	pub fn param(position: u32, name: impl Into<String>, kind: Kind) -> Self {
-		Local {
-			position,
-			name: name.into(),
-			kind,
-			is_param: true,
-			data_pointer: 0,
-		}
 	}
 }
 
