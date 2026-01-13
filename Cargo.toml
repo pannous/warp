@@ -71,6 +71,7 @@ rustyline = "15"
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
 wasmtime = { version = "40.0.0", default-features = false, features = ["cranelift", "gc", "gc-drc", "runtime", "wat"] }
+wasmtime-wasi = "40.0.0"
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime
