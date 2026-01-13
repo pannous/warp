@@ -1,21 +1,25 @@
 use warp::is;
 
 #[test]
-#[ignore]
 fn test_fd_write() {
-	// built-in wasi function
-	//    is!("x='hello';fd_write(1,20,1,8)",  0);// 20 = &x+4 {char*,len}
-	//    is!("puts 'ok';proc_exit(1)\nputs 'no'",  0);
-	//    is!("quit",0);
-	is!("x='hello';fd_write(1,x,1,8)", 0); // &x+4 {char*,len}
-										//    is!("len('123')", 3); // Map::len
-										//    quit();
-	is!("puts 'ok'", 0); // connect to wasi fd_write
-	is!("puts 'ok'", 0);
-	is!("puti 56", 56);
-	is!("putl 56", 56);
-	//    is!("putx 56", 56);
-	is!("putf 3.1", 0);
+	// Simple WASI puts test - just write to stdout
+	is!("puts 'ok'", 0); // puts returns 0 on success
+}
 
-	// assert!(module_cache.has("wasp-runtime.wasm"s.hash())); // TODO: fix module_cache
+#[test]
+fn test_wasi_puti() {
+	is!("puti 56", 56); // puti returns the value that was printed
+	is!("putl 56", 56); // putl is alias for puti
+}
+
+#[test]
+fn test_wasi_putf() {
+	is!("putf 3.1", 0); // putf returns 0
+}
+
+#[test]
+#[ignore = "fd_write with variables needs more work"]
+fn test_fd_write_raw() {
+	// built-in wasi function with raw memory layout
+	// is!("x='hello';fd_write(1,x,1,8)", 0); // needs string->iovec conversion
 }

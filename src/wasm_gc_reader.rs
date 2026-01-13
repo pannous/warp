@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::{Instance, Linker, Module, Store, Val};
+use wasmtime_wasi::{WasiCtxBuilder, p1};
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
@@ -401,4 +402,42 @@ pub fn call_constructor(
 	}
 
 	Ok(GcObject::new(results[0].clone(), store, instance.clone()))
+}
+
+/// WASI state for running modules with WASI imports (preview 1)
+pub struct WasiState {
+	ctx: p1::WasiP1Ctx,
+}
+
+impl WasiState {
+	pub fn new() -> Self {
+		let ctx = WasiCtxBuilder::new()
+			.inherit_stdout()
+			.inherit_stderr()
+			.build_p1();
+		WasiState { ctx }
+	}
+}
+
+/// Load WASM bytes with WASI support (for fd_write, puts, etc.)
+pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<i64> {
+	let engine = gc_engine();
+	let mut store: Store<WasiState> = Store::new(&engine, WasiState::new());
+
+	let module = Module::new(&engine, bytes)?;
+
+	let mut linker: Linker<WasiState> = Linker::new(&engine);
+	p1::add_to_linker_sync(&mut linker, |state: &mut WasiState| &mut state.ctx)?;
+
+	let instance = linker.instantiate(&mut store, &module)?;
+
+	let main = instance
+		.get_func(&mut store, "main")
+		.or_else(|| instance.get_func(&mut store, "_start"))
+		.ok_or_else(|| anyhow!("No main or _start function"))?;
+
+	let mut results = vec![Val::I64(0)];
+	main.call(&mut store, &[], &mut results)?;
+
+	Ok(results[0].unwrap_i64())
 }
