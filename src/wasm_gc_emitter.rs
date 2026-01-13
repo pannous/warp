@@ -98,8 +98,6 @@ pub struct WasmGcEmitter {
 	user_globals: HashMap<String, (u32, Kind)>,
 	// User-defined functions: name → (params, body, return_kind)
 	user_functions: HashMap<String, UserFunctionDef>,
-	// String literal assignments: variable_name → string_value (for WASI puts)
-	string_vars: HashMap<String, String>,
 }
 
 /// User-defined function definition
@@ -148,7 +146,6 @@ impl WasmGcEmitter {
 			type_registry: TypeRegistry::new(),
 			user_globals: HashMap::new(),
 			user_functions: HashMap::new(),
-			string_vars: HashMap::new(),
 		}
 	}
 
@@ -1420,10 +1417,11 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
-		self.collect_and_allocate_strings(node);
-
-		// Pre-pass: collect variables and count temp locals needed
+		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
+
+		// Allocate strings and update Local data pointers
+		self.collect_and_allocate_strings(node);
 		let var_count = self.scope.local_count();
 		self.next_temp_local = var_count; // Temp locals start after variables
 
@@ -1478,10 +1476,12 @@ impl WasmGcEmitter {
 			}
 			Node::Key(key, op, value) => {
 				// Track string variable assignments: x='hello' or x:='hello'
+				// Store data pointer/length in the Local for later use by WASI puts
 				if matches!(op, Op::Assign | Op::Define) {
 					if let Node::Symbol(var_name) = key.drop_meta() {
 						if let Node::Text(s) = value.drop_meta() {
-							self.string_vars.insert(var_name.clone(), s.clone());
+							let (ptr, len) = self.allocate_string(s);
+							self.scope.set_local_data(var_name, ptr, len);
 						}
 					}
 				}
@@ -1873,9 +1873,9 @@ impl WasmGcEmitter {
 
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
-			// Check for string assignment in WASI mode - skip emit (tracked statically)
+			// Check for string assignment in WASI mode - skip emit (tracked in Local)
 			if self.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
-				// String assignment tracked in string_vars, just emit 0
+				// String data stored in Local's data_pointer/data_length, just emit 0
 				func.instruction(&Instruction::I64Const(0));
 				return;
 			}
@@ -2187,23 +2187,24 @@ impl WasmGcEmitter {
 	/// Emit WASI puts: write string to stdout
 	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
 	fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
-		// Extract string from node - check for variable references
-		let s = match arg.drop_meta() {
-			Node::Text(s) => s.clone(),
+		// Get string data pointer and length
+		let (str_ptr, str_len) = match arg.drop_meta() {
+			Node::Text(s) => self.allocate_string(s),
 			Node::Symbol(var_name) => {
-				// Check if this is a string variable reference
-				if let Some(s) = self.string_vars.get(var_name) {
-					s.clone()
+				// Check if this is a string variable with stored data
+				if let Some(local) = self.scope.lookup(var_name) {
+					if local.data_pointer > 0 {
+						(local.data_pointer, local.data_length)
+					} else {
+						// Fallback: use the symbol name itself
+						self.allocate_string(var_name)
+					}
 				} else {
-					// Fallback: use the symbol name itself
-					var_name.clone()
+					self.allocate_string(var_name)
 				}
 			}
-			_ => "".to_string(),
+			_ => self.allocate_string(""),
 		};
-
-		// Store string in data section
-		let (str_ptr, str_len) = self.allocate_string(&s);
 
 		// Set up iovec at address 0: {buf_ptr: i32, buf_len: i32}
 		// i32.store at address 0 = str_ptr
