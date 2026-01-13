@@ -81,6 +81,7 @@ pub struct WasmGcEmitter {
 	emit_all_functions: bool,
 	emit_kind_globals: bool, // Emit Kind constants as globals for documentation
 	emit_host_imports: bool, // Emit host function imports (fetch, run)
+	emit_wasi_imports: bool, // Emit WASI imports (fd_write, etc.)
 	kind_global_indices: HashMap<Kind, u32>, // Kind -> global index
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
@@ -135,6 +136,7 @@ impl WasmGcEmitter {
 			emit_all_functions: true,
 			emit_kind_globals: true, // Enable by default for debugging
 			emit_host_imports: false, // Disabled by default for simpler modules
+			emit_wasi_imports: false, // Disabled by default
 			kind_global_indices: HashMap::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8,
@@ -193,6 +195,31 @@ impl WasmGcEmitter {
 		// Import run from "host" module
 		self.imports.import("host", "run", EntityType::Function(run_type_idx));
 		self.register_import("host_run");
+	}
+
+	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
+	pub fn set_wasi_imports(&mut self, enabled: bool) {
+		self.emit_wasi_imports = enabled;
+	}
+
+	/// Emit WASI imports (fd_write from wasi_snapshot_preview1)
+	/// Must be called before emit_gc_types() since type indices need to be correct
+	fn emit_wasi_imports(&mut self) {
+		if !self.emit_wasi_imports {
+			return;
+		}
+
+		// Type for fd_write: (fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> i32
+		let fd_write_type_idx = self.next_type_idx;
+		self.types.ty().function(
+			vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+			vec![ValType::I32],
+		);
+		self.next_type_idx += 1;
+
+		// Import fd_write from wasi_snapshot_preview1
+		self.imports.import("wasi_snapshot_preview1", "fd_write", EntityType::Function(fd_write_type_idx));
+		self.register_import("wasi_fd_write");
 	}
 
 	/// Register an import function
@@ -753,6 +780,7 @@ impl WasmGcEmitter {
 		self.exports.export("memory", ExportKind::Memory, 0);
 		// Host imports must come before GC types (imports section comes before types in WASM)
 		self.emit_host_imports();
+		self.emit_wasi_imports();
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
@@ -1398,7 +1426,12 @@ impl WasmGcEmitter {
 
 		let node_ref = self.node_ref(false);
 		let func_type = self.types.len();
-		self.types.ty().function(vec![], vec![Ref(node_ref)]);
+		// WASI mode: return i64 directly instead of Node ref
+		if self.emit_wasi_imports {
+			self.types.ty().function(vec![], vec![ValType::I64]);
+		} else {
+			self.types.ty().function(vec![], vec![Ref(node_ref)]);
+		}
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types
@@ -1637,6 +1670,37 @@ impl WasmGcEmitter {
 						if s == "fetch" {
 							self.emit_fetch_call(func, &items[1]);
 							return;
+						}
+					}
+				}
+				// Check for WASI calls: puts, puti, putl, putf, fd_write
+				// These return raw i32 (WASI mode uses read_bytes_with_wasi which returns i32)
+				if items.len() >= 2 && self.emit_wasi_imports {
+					if let Node::Symbol(s) = items[0].drop_meta() {
+						match s.as_str() {
+							"puts" => {
+								self.emit_wasi_puts(func, &items[1]);
+								// fd_write returns i32, convert to i64 for main return
+								func.instruction(&Instruction::I64ExtendI32S);
+								return;
+							}
+							"puti" | "putl" => {
+								self.emit_wasi_puti(func, &items[1]);
+								// Return the value that was printed
+								self.emit_numeric_value(func, &items[1]);
+								return;
+							}
+							"putf" => {
+								self.emit_wasi_putf(func, &items[1]);
+								// fd_write returns i32, convert to i64
+								func.instruction(&Instruction::I64ExtendI32S);
+								return;
+							}
+							"fd_write" if items.len() >= 5 => {
+								self.emit_wasi_fd_write_call(func, &items[1..]);
+								return;
+							}
+							_ => {}
 						}
 					}
 				}
@@ -2101,6 +2165,113 @@ impl WasmGcEmitter {
 		// Stack now has (result_ptr: i32, result_len: i32)
 		// Call new_text to create a Text node from the result
 		self.emit_call(func, "new_text");
+	}
+
+	/// Emit WASI puts: write string to stdout
+	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
+	fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
+		// Extract string from node
+		let s = match arg.drop_meta() {
+			Node::Text(s) => s.clone(),
+			Node::Symbol(s) => s.clone(),
+			_ => "".to_string(),
+		};
+
+		// Store string in data section
+		let (str_ptr, str_len) = self.allocate_string(&s);
+
+		// Set up iovec at address 0: {buf_ptr: i32, buf_len: i32}
+		// i32.store at address 0 = str_ptr
+		func.instruction(&I32Const(0)); // address
+		func.instruction(&I32Const(str_ptr as i32)); // value
+		func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+
+		// i32.store at address 4 = str_len
+		func.instruction(&I32Const(4)); // address
+		func.instruction(&I32Const(str_len as i32)); // value
+		func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+
+		// Call fd_write(fd=1, iovs=0, iovs_len=1, nwritten=8)
+		func.instruction(&I32Const(1)); // fd = stdout
+		func.instruction(&I32Const(0)); // iovs ptr
+		func.instruction(&I32Const(1)); // iovs len
+		func.instruction(&I32Const(8)); // nwritten ptr
+
+		if let Some(f) = self.func_registry.get("wasi_fd_write") {
+			func.instruction(&Instruction::Call(f.call_index as u32));
+		}
+		// Stack now has i32 (error code), leave it for conversion to Node
+	}
+
+	/// Emit WASI puti: write integer to stdout
+	/// Converts integer to string and writes via fd_write
+	fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
+		// For compile-time constants, we can pre-compute the string
+		if let Node::Number(n) = arg.drop_meta() {
+			let s = format!("{}", n); // Number implements Display
+			let (str_ptr, str_len) = self.allocate_string(&s);
+
+			// Set up iovec
+			func.instruction(&I32Const(0));
+			func.instruction(&I32Const(str_ptr as i32));
+			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&I32Const(4));
+			func.instruction(&I32Const(str_len as i32));
+			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+
+			// Call fd_write
+			func.instruction(&I32Const(1));
+			func.instruction(&I32Const(0));
+			func.instruction(&I32Const(1));
+			func.instruction(&I32Const(8));
+
+			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+				func.instruction(&Instruction::Call(f.call_index as u32));
+				func.instruction(&Instruction::Drop); // Drop return value
+			}
+		}
+		// For runtime values, we'd need itoa - just drop for now
+	}
+
+	/// Emit WASI putf: write float to stdout
+	fn emit_wasi_putf(&mut self, func: &mut Function, arg: &Node) {
+		// For compile-time constants, pre-compute the string
+		if let Node::Number(n) = arg.drop_meta() {
+			let s = format!("{}", n); // Number implements Display
+			let (str_ptr, str_len) = self.allocate_string(&s);
+
+			func.instruction(&I32Const(0));
+			func.instruction(&I32Const(str_ptr as i32));
+			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&I32Const(4));
+			func.instruction(&I32Const(str_len as i32));
+			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+
+			func.instruction(&I32Const(1));
+			func.instruction(&I32Const(0));
+			func.instruction(&I32Const(1));
+			func.instruction(&I32Const(8));
+
+			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+				func.instruction(&Instruction::Call(f.call_index as u32));
+			}
+		} else {
+			// Return 0 for non-constant
+			func.instruction(&I32Const(0));
+		}
+	}
+
+	/// Emit raw fd_write call
+	fn emit_wasi_fd_write_call(&mut self, func: &mut Function, args: &[Node]) {
+		// fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr) -> i32
+		for arg in args.iter().take(4) {
+			self.emit_numeric_value(func, arg);
+			func.instruction(&Instruction::I32WrapI64); // Convert i64 to i32
+		}
+		if let Some(f) = self.func_registry.get("wasi_fd_write") {
+			func.instruction(&Instruction::Call(f.call_index as u32));
+			func.instruction(&Instruction::I64ExtendI32S); // Convert result to i64
+		}
 	}
 
 	/// Extract URL string from parsed node tree
@@ -3246,10 +3417,17 @@ fn uses_fetch(code: &str) -> bool {
 	code.contains("fetch ")
 }
 
+/// Check if code uses WASI functions (puts, puti, putl, putf, fd_write)
+fn uses_wasi(code: &str) -> bool {
+	code.contains("puts ") || code.contains("puti ") || code.contains("putl ") ||
+	code.contains("putf ") || code.contains("fd_write")
+}
+
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
 	use crate::type_kinds::{TypeDef, extract_instance_values};
-	use crate::wasm_gc_reader::read_bytes_with_host;
+	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi};
+	use crate::extensions::numbers::Number;
 
 	let node = WaspParser::parse(code);
 
@@ -3269,13 +3447,27 @@ pub fn eval(code: &str) -> Node {
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
 	let needs_host = uses_fetch(code);
+	let needs_wasi = uses_wasi(code);
 	if needs_host {
 		emitter.set_host_imports(true);
+	}
+	if needs_wasi {
+		emitter.set_wasi_imports(true);
 	}
 	emitter.emit_for_node(&node);
 	let bytes = emitter.finish();
 
-	// Use host linker if we need host functions
+	// Use appropriate linker based on imports needed
+	if needs_wasi {
+		match read_bytes_with_wasi(&bytes) {
+			Ok(result) => return Node::Number(Number::Int(result)),
+			Err(e) => {
+				warn!("WASI eval failed: {}", e);
+				return node;
+			}
+		}
+	}
+
 	let result = if needs_host {
 		read_bytes_with_host(&bytes)
 	} else {
