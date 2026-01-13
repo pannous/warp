@@ -73,10 +73,8 @@ fn test_fetch() {
 	eq!(res, "test 2 5 3 7");
 	is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 	is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	skip!(
-		is!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
-		is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	);
+	is!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
+	is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 }
 
 #[test]
