@@ -98,6 +98,8 @@ pub struct WasmGcEmitter {
 	user_globals: HashMap<String, (u32, Kind)>,
 	// User-defined functions: name → (params, body, return_kind)
 	user_functions: HashMap<String, UserFunctionDef>,
+	// String literal assignments: variable_name → string_value (for WASI puts)
+	string_vars: HashMap<String, String>,
 }
 
 /// User-defined function definition
@@ -146,6 +148,7 @@ impl WasmGcEmitter {
 			type_registry: TypeRegistry::new(),
 			user_globals: HashMap::new(),
 			user_functions: HashMap::new(),
+			string_vars: HashMap::new(),
 		}
 	}
 
@@ -1473,7 +1476,15 @@ impl WasmGcEmitter {
 			Node::Text(s) | Node::Symbol(s) => {
 				self.allocate_string(s);
 			}
-			Node::Key(key, _, value) => {
+			Node::Key(key, op, value) => {
+				// Track string variable assignments: x='hello' or x:='hello'
+				if matches!(op, Op::Assign | Op::Define) {
+					if let Node::Symbol(var_name) = key.drop_meta() {
+						if let Node::Text(s) = value.drop_meta() {
+							self.string_vars.insert(var_name.clone(), s.clone());
+						}
+					}
+				}
 				self.collect_and_allocate_strings(key);
 				self.collect_and_allocate_strings(value);
 			}
@@ -1862,6 +1873,12 @@ impl WasmGcEmitter {
 
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
+			// Check for string assignment in WASI mode - skip emit (tracked statically)
+			if self.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
+				// String assignment tracked in string_vars, just emit 0
+				func.instruction(&Instruction::I64Const(0));
+				return;
+			}
 			// x:=42 or x=42 → emit value, store to local, return value
 			if use_float {
 				self.emit_float_value(func, right);
@@ -2170,10 +2187,18 @@ impl WasmGcEmitter {
 	/// Emit WASI puts: write string to stdout
 	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
 	fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
-		// Extract string from node
+		// Extract string from node - check for variable references
 		let s = match arg.drop_meta() {
 			Node::Text(s) => s.clone(),
-			Node::Symbol(s) => s.clone(),
+			Node::Symbol(var_name) => {
+				// Check if this is a string variable reference
+				if let Some(s) = self.string_vars.get(var_name) {
+					s.clone()
+				} else {
+					// Fallback: use the symbol name itself
+					var_name.clone()
+				}
+			}
 			_ => "".to_string(),
 		};
 
@@ -2261,16 +2286,40 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit raw fd_write call
+	/// Emit fd_write call - auto-detects string arguments and sets up iovec
 	fn emit_wasi_fd_write_call(&mut self, func: &mut Function, args: &[Node]) {
 		// fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr) -> i32
-		for arg in args.iter().take(4) {
-			self.emit_numeric_value(func, arg);
-			func.instruction(&Instruction::I32WrapI64); // Convert i64 to i32
-		}
-		if let Some(f) = self.func_registry.get("wasi_fd_write") {
-			func.instruction(&Instruction::Call(f.call_index as u32));
-			func.instruction(&Instruction::I64ExtendI32S); // Convert result to i64
+		// Check if second argument is a string (variable or literal)
+		// If so, use the puts mechanism to set up iovec automatically
+		let second_arg = args.get(1).map(|n| n.drop_meta());
+		let is_string_arg = match &second_arg {
+			Some(Node::Text(_)) => true,
+			Some(Node::Symbol(s)) => {
+				// Check if symbol refers to a string variable
+				if let Some(local) = self.scope.lookup(s) {
+					local.kind == Kind::Text
+				} else {
+					false
+				}
+			}
+			_ => false,
+		};
+
+		if is_string_arg && args.len() >= 4 {
+			// Use puts mechanism: set up iovec from string
+			self.emit_wasi_puts(func, &args[1]);
+			// fd_write already called by emit_wasi_puts, just extend to i64
+			func.instruction(&Instruction::I64ExtendI32S);
+		} else {
+			// Raw numeric mode
+			for arg in args.iter().take(4) {
+				self.emit_numeric_value(func, arg);
+				func.instruction(&Instruction::I32WrapI64);
+			}
+			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+				func.instruction(&Instruction::Call(f.call_index as u32));
+				func.instruction(&Instruction::I64ExtendI32S);
+			}
 		}
 	}
 
