@@ -18,8 +18,8 @@ fn test_wasi_putf() {
 }
 
 #[test]
-#[ignore = "fd_write with variables needs more work"]
+// #[ignore = "fd_write with variables needs more work"]
 fn test_fd_write_raw() {
 	// built-in wasi function with raw memory layout
-	// is!("x='hello';fd_write(1,x,1,8)", 0); // needs string->iovec conversion
+	is!("x='hello';fd_write(1,x,1,8)", 0); // needs string->iovec conversion
 }
