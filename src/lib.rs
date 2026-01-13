@@ -49,7 +49,9 @@ pub use wasm_gc_emitter::{WasmGcEmitter, RawFieldValue};
 // Host functions
 pub use host::{HostState, link_host_functions, create_host_linker};
 // Functions
-pub use function::{Function, FunctionRegistry, Signature, Arg, Local, ABI, kind_to_valtype};
+pub use function::{Function, FunctionRegistry, Signature, Arg, ABI, kind_to_valtype};
+// Local (unified struct for variables)
+pub use node::Local;
 // Legacy GcObject for backward compatibility (3-field Node layout)
 pub use wasm_gc_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access

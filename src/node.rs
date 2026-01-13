@@ -338,6 +338,32 @@ pub struct Local {
 	pub data_length: u32,               // Length of data in memory (for strings)
 }
 
+impl Local {
+	pub fn new(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
+		Local {
+			position,
+			name: name.into(),
+			type_node: None,
+			kind,
+			is_param: false,
+			data_pointer: 0,
+			data_length: 0,
+		}
+	}
+
+	pub fn param(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
+		Local {
+			position,
+			name: name.into(),
+			type_node: None,
+			kind,
+			is_param: true,
+			data_pointer: 0,
+			data_length: 0,
+		}
+	}
+}
+
 pub type Variable = Local;
 
 // use warp::Node;
