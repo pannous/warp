@@ -721,6 +721,11 @@ impl WasmGcEmitter {
 					if *op == Op::Pow {
 						self.required_functions.insert("i64_pow");
 					}
+				} else if *op == Op::Hash {
+					// List indexing - need list_at helper
+					self.required_functions.insert("list_at");
+					self.required_functions.insert("new_list");
+					self.required_functions.insert("new_int");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -1314,6 +1319,79 @@ impl WasmGcEmitter {
 			self.exports.export("new_list", ExportKind::Func, idx);
 		}
 
+		// list_at(list: ref $Node, index: i64) -> i64
+		// Get the numeric value of the element at index (1-based)
+		// Traverses linked list: for index N, follow value pointer N-1 times, return data
+		if self.should_emit_function("list_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64],
+				vec![ValType::I64],
+			);
+			self.functions.function(func_type);
+
+			// Locals: 0=list, 1=index, 2=current (loop variable)
+			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+
+			// current = list
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalSet(2));
+
+			// Loop while index > 1: current = current.value, index--
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			func.instruction(&Instruction::Loop(BlockType::Empty));
+
+			// if index <= 1, break
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64LeS);
+			func.instruction(&Instruction::BrIf(1)); // break to outer block
+
+			// current = current.value (field 2)
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 2,
+			});
+			func.instruction(&Instruction::LocalSet(2));
+
+			// index = index - 1
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64Sub);
+			func.instruction(&Instruction::LocalSet(1));
+
+			// continue loop
+			func.instruction(&Instruction::Br(0));
+			func.instruction(&Instruction::End); // end loop
+			func.instruction(&Instruction::End); // end block
+
+			// Get current.data (which is a ref to the element Node, cast from anyref)
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field (anyref holding ref $Node)
+			});
+			// Cast anyref to ref $Node
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+			// Get the inner node's data field (which holds the i64_box)
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field of the element node
+			});
+			// Cast to ref $i64box and get the i64 value
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.i64_box_type)));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.i64_box_type,
+				field_index: 0,
+			});
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("list_at");
+			self.exports.export("list_at", ExportKind::Func, idx);
+		}
+
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
@@ -1641,6 +1719,12 @@ impl WasmGcEmitter {
 				} else if *op == Op::Do {
 					// While loop: (while condition) do body
 					self.emit_while_loop(func, left, right);
+				} else if *op == Op::Hash {
+					// List indexing: list#index returns numeric value wrapped as Node
+					self.emit_node_instructions(func, left);  // emit list
+					self.emit_numeric_value(func, right);      // emit index
+					self.emit_call(func, "list_at");           // get value
+					self.emit_call(func, "new_int");           // wrap as Node
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -1747,11 +1831,12 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				// Check if this is a statement sequence with assignments/definitions/globals
+				// Check if this is a statement sequence with assignments/definitions/globals/indexing
 				let is_statement_sequence = items.iter().any(|item| {
 					let item = item.drop_meta();
 					match item {
 						Node::Key(_, Op::Assign | Op::Define, _) => true,
+						Node::Key(_, Op::Hash, _) => true, // Index operation
 						Node::Key(_, op, _) if op.is_compound_assign() => true,
 						// global:... is a statement
 						Node::Key(left, Op::Colon, _) => {
@@ -2835,6 +2920,15 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
 				self.emit_comparison(func, op);
+			}
+			// Index operator: list#index (1-based)
+			Node::Key(list, Op::Hash, index) => {
+				// Emit the list as a Node reference
+				self.emit_node_instructions(func, list);
+				// Emit the index
+				self.emit_numeric_value(func, index);
+				// Call list_at
+				self.emit_call(func, "list_at");
 			}
 			// Ternary operator: condition ? then_expr : else_expr
 			Node::Key(condition, Op::Question, then_else) => {

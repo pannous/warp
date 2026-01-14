@@ -872,6 +872,28 @@ impl WaspParser {
 				}
 			}
 
+			// Step 2b: Check for subscript access [index] - binds tight like Op::Hash
+			// binding power 170 matches Op::Hash
+			if self.current_char() == '[' && min_bp <= 170 {
+				self.advance(); // skip '['
+				self.skip_whitespace();
+				let index = self.parse_expr(0); // parse the index expression
+				self.skip_whitespace();
+				if self.current_char() == ']' {
+					self.advance(); // skip ']'
+					// Convert to Op::Hash but keep 0-indexed semantics
+					// [0] becomes #1, so add 1 to index
+					// Handle potential metadata wrapping
+					let index_unwrapped = index.drop_meta();
+					let adjusted_index = match index_unwrapped {
+						Node::Number(n) => Node::Number(n.clone() + crate::extensions::numbers::Number::Int(1)),
+						_ => Node::Key(Box::new(index), Op::Add, Box::new(Node::Number(crate::extensions::numbers::Number::Int(1)))),
+					};
+					lhs = Node::Key(Box::new(lhs), Op::Hash, Box::new(adjusted_index));
+					continue;
+				}
+			}
+
 			// Step 3: Check for infix operator
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
