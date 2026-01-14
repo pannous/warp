@@ -732,10 +732,10 @@ impl WasmGcEmitter {
 						self.required_functions.insert("i64_pow");
 					}
 				} else if *op == Op::Hash {
-					// List indexing - need list_at helper
+					// List indexing - need both helpers for node and numeric paths
+					self.required_functions.insert("list_node_at");
 					self.required_functions.insert("list_at");
 					self.required_functions.insert("new_list");
-					self.required_functions.insert("new_int");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -1402,6 +1402,67 @@ impl WasmGcEmitter {
 			self.exports.export("list_at", ExportKind::Func, idx);
 		}
 
+		// list_node_at(list: ref $Node, index: i64) -> ref $Node
+		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
+		if self.should_emit_function("list_node_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64],
+				vec![Ref(node_ref)],
+			);
+			self.functions.function(func_type);
+
+			// Locals: 0=list, 1=index, 2=current (loop variable)
+			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+
+			// current = list
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalSet(2));
+
+			// Loop while index > 1: current = current.value, index--
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			func.instruction(&Instruction::Loop(BlockType::Empty));
+
+			// if index <= 1, break
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64LeS);
+			func.instruction(&Instruction::BrIf(1)); // break to outer block
+
+			// current = current.value (field 2)
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 2,
+			});
+			func.instruction(&Instruction::LocalSet(2));
+
+			// index = index - 1
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64Sub);
+			func.instruction(&Instruction::LocalSet(1));
+
+			// continue loop
+			func.instruction(&Instruction::Br(0));
+			func.instruction(&Instruction::End); // end loop
+			func.instruction(&Instruction::End); // end block
+
+			// Get current.data (which is a ref to the element Node, cast from anyref)
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field (anyref holding ref $Node)
+			});
+			// Cast anyref to ref $Node and return it directly
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("list_node_at");
+			self.exports.export("list_node_at", ExportKind::Func, idx);
+		}
+
 		// list_set_at(list: ref $Node, index: i64, value: i64) -> i64
 		// Set the numeric value at index (1-based) and return the value
 		if self.should_emit_function("list_set_at") {
@@ -1840,11 +1901,10 @@ impl WasmGcEmitter {
 					// While loop: (while condition) do body
 					self.emit_while_loop(func, left, right);
 				} else if *op == Op::Hash {
-					// List indexing: list#index returns numeric value wrapped as Node
+					// List indexing: list#index returns the element node directly
 					self.emit_node_instructions(func, left);  // emit list
 					self.emit_numeric_value(func, right);      // emit index
-					self.emit_call(func, "list_at");           // get value
-					self.emit_call(func, "new_int");           // wrap as Node
+					self.emit_call(func, "list_node_at");      // get element node
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
