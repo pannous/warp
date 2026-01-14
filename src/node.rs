@@ -1642,15 +1642,14 @@ impl PartialEq for Node {
 				match other {
 					True => !s.is_empty(),
 					False => s.is_empty(),
-					Symbol(s2) => s == s2,
-					// todo variable values? nah not here
+					Symbol(s2) | Text(s2) => s == s2,
 					_ => false,
 				}
 			}
 			Text(s) => match other {
 				True => !s.is_empty(),
 				False => s.is_empty(),
-				Text(s2) => s == s2,
+				Text(s2) | Symbol(s2) => s == s2,
 				_ => false,
 			},
 
