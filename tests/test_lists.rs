@@ -1,8 +1,8 @@
-use warp::Node;
-use warp::*;
 use warp::analyzer::analyze;
 use warp::type_kinds::NodeKind;
 use warp::wasp_parser::parse;
+use warp::Node;
+use warp::*;
 
 // Array size tests
 #[test]
@@ -34,14 +34,8 @@ fn test_array_operations() {
 	// todo!
 	test_array_size();
 	// todo 'do' notation to modify versus return different list!
-	is!(
-		"pixel=[1 2 3];do add 4 to pixel; pixel",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];y=pixel + 4; pixel",
-		Node::ints(vec![1, 2, 3])
-	);
+	is!("pixel=[1 2 3];do add 4 to pixel; pixel", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];y=pixel + 4; pixel", Node::ints(vec![1, 2, 3]));
 
 	//        throws("pixel=[1 2 3];pixel + 4;pixel");// unused non-mutating operation
 	is!("pixels=[1 2 4];pixel#3", 4); // plural!
@@ -56,42 +50,15 @@ fn test_array_operations() {
 	is!("pixel=[1 2 3];pixel.add(4)", Node::ints(vec![1, 2, 3, 4]));
 	is!("pixel=[1 2 3];pixel.insert 4", Node::ints(vec![1, 2, 3, 4]));
 	is!("pixel=[1 2 3];pixel insert 4", Node::ints(vec![1, 2, 3, 4]));
-	is!(
-		"pixel=[1 2 3];pixel.insert(4)",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert(4,-1)",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at end",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at -1",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];insert 4 at end of pixel",
-		Node::ints(vec![1, 2, 3, 4])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert(4,0)",
-		Node::ints(vec![4, 1, 2, 3])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at 0",
-		Node::ints(vec![4, 1, 2, 3])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at start",
-		Node::ints(vec![4, 1, 2, 3])
-	);
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at head",
-		Node::ints(vec![4, 1, 2, 3])
-	);
+	is!("pixel=[1 2 3];pixel.insert(4)", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert(4,-1)", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert 4 at end", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert 4 at -1", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];insert 4 at end of pixel", Node::ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert(4,0)", Node::ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at 0", Node::ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at start", Node::ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at head", Node::ints(vec![4, 1, 2, 3]));
 	is!(
 		"pixel=[1 2 3];pixel.insert 4 at beginning",
 		Node::ints(vec![4, 1, 2, 3])
@@ -102,10 +69,7 @@ fn test_array_operations() {
 	);
 	is!("pixel=[1 2 3];pixel - [3]", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel - 3", Node::ints(vec![1, 2]));
-	is!(
-		"pixel=[1 2 3];remove [3] from pixel",
-		Node::ints(vec![1, 2])
-	);
+	is!("pixel=[1 2 3];remove [3] from pixel", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];remove 3 from pixel", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel.remove(3)", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel.remove 3", Node::ints(vec![1, 2]));
@@ -115,22 +79,13 @@ fn test_array_operations() {
 	is!("pixel=[1 2 3];pixel.remove [3]", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel remove([3])", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel remove [3]", Node::ints(vec![1, 2]));
-	is!(
-		"pixel=[1 2 3 4];pixel.remove([3 4])",
-		Node::ints(vec![1, 2])
-	);
+	is!("pixel=[1 2 3 4];pixel.remove([3 4])", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3 4];pixel.remove [3 4]", Node::ints(vec![1, 2]));
-	is!(
-		"pixel=[1 2 3 4];pixel remove([3 4])",
-		Node::ints(vec![1, 2])
-	);
+	is!("pixel=[1 2 3 4];pixel remove([3 4])", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3 4];pixel remove [3 4]", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3 4];pixel remove 3 4", Node::ints(vec![1, 2]));
 	is!("pixel=[1 2 3 4];pixel remove (3 4)", Node::ints(vec![1, 2]));
-	is!(
-		"pixels=[1 2 3 4];pixels without (3 4)",
-		Node::ints(vec![1, 2])
-	);
+	is!("pixels=[1 2 3 4];pixels without (3 4)", Node::ints(vec![1, 2]));
 }
 
 #[test]
@@ -154,30 +109,39 @@ fn test_index_offset() {
 	is!("(2 4 3)#2", 4);
 	is!("y=(1 4 3)#2", 4);
 	is!("y=(1 4 3)[1]", 4);
-	skip!(is!("x=(1 4 3);x#2=5;x#2", 5)); // TODO: index assignment
-	skip!(is!("x=(1 4 3);z=(9 8 7);x#2", 4)); // TODO: list variable storage
-	skip!(is!("x=(5 6 7);y=(1 4 3);y#2", 4)); // TODO: list variable storage
-	is!("x=(5 6 7);(1 4 3)#2", 4);
-	skip!(
+}
 
-		is!("y=(1 4 3);y[1]", 4); // CAN NOT WORK in data_mode because y[1] ≈ y:1 setter
-		is!("x=(5 6 7);y=(1 4 3);y[1]", 4);
-	);
+#[test]
+fn test_index_offset_advanced() {
+	// List variable storage and indexing
+	is!("x=(1 4 3);x#2=5;x#2", 5); // index assignment
+	is!("x=(1 4 3);z=(9 8 7);x#2", 4); // list variable storage
+	is!("x=(5 6 7);y=(1 4 3);y#2", 4); // list variable storage
+	is!("x=(5 6 7);(1 4 3)#2", 4);
+	is!("y=(1 4 3);y[1]", 4); // CAN NOT WORK in data_mode because y[1] ≈ y:1 setter
+	is!("x=(5 6 7);y=(1 4 3);y[1]", 4);
 	is!("(5 6 7);(2 4 3)[0]", 2);
-	skip!(is!("x=(5 6 7);y=(1 4 3);y#2", 4)); // TODO: list variable storage
+	is!("x=(5 6 7);y=(1 4 3);y#2", 4); // list variable storage
 	is!("(5 6 7);(1 4 3)#2", 4);
-	skip!(is!("x=(5 6 7);(1 4 3)#2", 4)); // TODO: list variable storage affects later stmt?
-	skip!(
-		is!("puts('ok');(1 4 3)#2", 4);
-	);
-	skip!(is!("x=0;while x++<11: nop;", 11)); // unrelated to indexing
-	skip!(is!("i=10007;x=i%10000", 7)); // unrelated to indexing
-	skip!(is!("k=(1,2,3);i=1;k#i=4;k#1", 4)); // TODO: index assignment
-	skip!(is!("k=(1,2,3);i=1;k#i=4;k#1", 4)); // TODO: index assignment
-	skip!(is!("maxi=3840*2160", 3840 * 2160)); // unrelated to indexing
-	skip!(is!("i=10007;x=i%10000", 7)); // unrelated to indexing
-	skip!(is!("x=(1 4 3);x#2=5;x#2", 5)); // TODO: index assignment
-	skip!(is!("x=(1 4 3);x#2", 4)); // TODO: list variable storage
+	is!("x=(5 6 7);(1 4 3)#2", 4); // list variable storage affects later stmt
+	is!("puts('ok');(1 4 3)#2", 4);
+	// Arithmetic (unrelated to indexing)
+	is!("i=10007;x=i%10000", 7);
+	is!("maxi=3840*2160", 3840 * 2160);
+	is!("i=10007;x=i%10000", 7);
+	// Index assignment with variable index
+	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
+	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
+	// More list tests
+	is!("x=(1 4 3);x#2=5;x#2", 5); // index assignment
+	is!("x=(1 4 3);x#2", 4); // list variable storage
+}
+
+#[test]
+#[ignore = "while loop with nop needs investigation"]
+fn test_while_nop_issue() {
+	// This test was failing before list indexing changes
+	is!("x=0;while x++<11: nop;", 11);
 }
 
 #[test]
@@ -242,7 +206,7 @@ fn test_root_lists() {
 #[test]
 #[ignore]
 fn test_root_list_strings() {
-	is!("(a,b,c)", Node::strings(vec!["a", "b", "c"]));
+	is!("(a,b,c)", Node::strings(vec!["a", "b", "c"])); // symbols shall match string
 	is!("(a;b;c)", Node::strings(vec!["a", "b", "c"]));
 	is!("a;b;c", Node::strings(vec!["a", "b", "c"]));
 	is!("a,b,c", Node::strings(vec!["a", "b", "c"]));
@@ -278,7 +242,6 @@ fn test_index() {
 	);
 }
 
-
 #[allow(dead_code)]
 #[test]
 fn test_indexed() {
@@ -306,7 +269,7 @@ fn test_filter() {
 
 #[test]
 #[ignore] // TODO: Node iteration needs type coercion
-fn test_iteration(){
+fn test_iteration() {
 	let xs = ints(vec![1, 2, 3]);
 	let mut count = 0;
 	for _x in xs {

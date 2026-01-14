@@ -4,6 +4,17 @@ use crate::node::{is_function_keyword, Local, Node, Op};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 
+/// Check if a node is pure data (not a statement/function call)
+fn is_data_node(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
+		Node::Symbol(s) => !is_function_keyword(s),
+		Node::List(items, _, _) => items.iter().all(is_data_node),
+		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
+		_ => false,
+	}
+}
+
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
@@ -26,10 +37,17 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Symbol  // Unknown symbol defaults to Symbol
 			}
 		}
-		// Function calls that return specific types
-		Node::List(items, _, _) if items.len() >= 2 => {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				if s == "fetch" { return Kind::Text; }  // fetch returns text
+		// List handling: distinguish data lists from statement sequences
+		Node::List(items, _, _) if !items.is_empty() => {
+			// Check for fetch function call
+			if items.len() >= 2 {
+				if let Node::Symbol(s) = items[0].drop_meta() {
+					if s == "fetch" { return Kind::Text; }
+				}
+			}
+			// Data list: all items are pure data → Kind::List
+			if items.iter().all(is_data_node) {
+				return Kind::List;
 			}
 			// Statement sequence: return type of last item
 			if let Some(last) = items.last() {
