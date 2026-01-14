@@ -703,6 +703,16 @@ impl WasmGcEmitter {
 				self.required_functions.insert("new_int");
 			}
 			Node::Key(key, op, value) => {
+				// Check for index assignment: Key(Key(_, Hash, _), Assign, _)
+				if *op == Op::Assign {
+					if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
+						self.required_functions.insert("list_set_at");
+						self.required_functions.insert("new_int");
+						self.analyze_required_functions(key);
+						self.analyze_required_functions(value);
+						return;
+					}
+				}
 				// Check for x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
 				if *op == Op::Assign || *op == Op::Define {
 					if let Node::List(items, _, _) = value.drop_meta() {
@@ -924,7 +934,7 @@ impl WasmGcEmitter {
 			}, // kind
 			FieldType {
 				element_type: Val(Ref(any_ref)),
-				mutable: false,
+				mutable: true,  // mutable for index assignment
 			}, // data
 			FieldType {
 				element_type: Val(Ref(node_ref)),
@@ -1392,6 +1402,80 @@ impl WasmGcEmitter {
 			self.exports.export("list_at", ExportKind::Func, idx);
 		}
 
+		// list_set_at(list: ref $Node, index: i64, value: i64) -> i64
+		// Set the numeric value at index (1-based) and return the value
+		if self.should_emit_function("list_set_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64, ValType::I64],
+				vec![ValType::I64],
+			);
+			self.functions.function(func_type);
+
+			// Locals: 0=list, 1=index, 2=value, 3=current (loop variable)
+			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+
+			// current = list
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalSet(3));
+
+			// Loop while index > 1: current = current.value, index--
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			func.instruction(&Instruction::Loop(BlockType::Empty));
+
+			// if index <= 1, break
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64LeS);
+			func.instruction(&Instruction::BrIf(1)); // break to outer block
+
+			// current = current.value (field 2)
+			func.instruction(&Instruction::LocalGet(3));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 2,
+			});
+			func.instruction(&Instruction::LocalSet(3));
+
+			// index = index - 1
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64Sub);
+			func.instruction(&Instruction::LocalSet(1));
+
+			// continue loop
+			func.instruction(&Instruction::Br(0));
+			func.instruction(&Instruction::End); // end loop
+			func.instruction(&Instruction::End); // end block
+
+			// Get current.data (which is the wrapper Node for the element)
+			func.instruction(&Instruction::LocalGet(3));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field
+			});
+			// Cast anyref to ref $Node
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+
+			// Create new i64box with the value
+			func.instruction(&Instruction::LocalGet(2)); // value
+			func.instruction(&Instruction::StructNew(self.i64_box_type));
+
+			// Set the inner node's data field to the new i64box
+			func.instruction(&Instruction::StructSet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field
+			});
+
+			// Return the value
+			func.instruction(&Instruction::LocalGet(2));
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("list_set_at");
+			self.exports.export("list_set_at", ExportKind::Func, idx);
+		}
+
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
@@ -1689,15 +1773,51 @@ impl WasmGcEmitter {
 				}
 				// Route to emit_arithmetic for:
 				// - Arithmetic/comparison/logical ops (when both operands are numeric)
-				// - Define (:=) always creates a numeric local
-				// - Assign (=) only if LHS is a known variable (numeric context)
+				// - Define (:=) always creates a numeric local (unless it's a list)
+				// - Assign (=) only if LHS is a known numeric variable
 				// - Compound assignments (+=, -=, etc.)
-				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_some());
+				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if {
+					self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+				});
+				let is_numeric_define = *op == Op::Define && matches!(left.drop_meta(), Node::Symbol(s) if {
+					self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+				});
+				// Handle ref-type variable assignment (lists, etc.)
+				let is_ref_assign = (*op == Op::Assign || *op == Op::Define) && matches!(left.drop_meta(), Node::Symbol(s) if {
+					self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
+				});
+				if is_ref_assign {
+					if let Node::Symbol(name) = left.drop_meta() {
+						// Emit the right side as a Node reference
+						self.emit_node_instructions(func, right);
+						// Store in ref-type local
+						if let Some(local) = self.scope.lookup(name) {
+							func.instruction(&Instruction::LocalTee(local.position));
+						}
+					}
+					return;
+				}
+				// Handle index assignment: list#index = value → list_set_at(list, index, value)
+				if *op == Op::Assign {
+					if let Node::Key(list_expr, Op::Hash, index_expr) = left.drop_meta() {
+						// Emit list (as node ref)
+						self.emit_node_instructions(func, list_expr);
+						// Emit index (as i64)
+						self.emit_numeric_value(func, index_expr);
+						// Emit value (as i64)
+						self.emit_numeric_value(func, right);
+						// Call list_set_at which returns the value
+						self.emit_call(func, "list_set_at");
+						// Wrap result as Node
+						self.emit_call(func, "new_int");
+						return;
+					}
+				}
 				// For logical ops with non-numeric operands, use Node-returning truthy path
 				let both_numeric = self.is_numeric(left) && self.is_numeric(right);
 				if op.is_logical() && !both_numeric {
 					self.emit_truthy_logical(func, left, op, right);
-				} else if op.is_arithmetic() || op.is_comparison() || op.is_logical() || *op == Op::Define || is_numeric_assign || op.is_compound_assign() {
+				} else if op.is_arithmetic() || op.is_comparison() || op.is_logical() || is_numeric_define || is_numeric_assign || op.is_compound_assign() {
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
