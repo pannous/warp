@@ -6,7 +6,6 @@ use crate::node::{error, float, key_ops, Bracket, Node, Op, Separator};
 use crate::normalize::hints as norm;
 use crate::*;
 use log::warn;
-use std::fs;
 use std::fs::read_to_string;
 
 /// Parser options for handling different file formats
@@ -126,11 +125,13 @@ impl WaspParser {
 	}
 
 	fn prev_char(&self) -> char {
-		if self.pos == 0 {
-			'\0'
-		} else {
-			self.chars.get(self.pos - 1).unwrap_or(&'\0').clone()
-		}
+		if self.pos == 0 { '\0' } else { *self.chars.get(self.pos - 1).unwrap_or(&'\0') }
+	}
+
+	/// Check if input at current position matches a keyword (followed by non-alphanumeric)
+	fn matches_keyword(&self, keyword: &str) -> bool {
+		keyword.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
+			&& !self.peek_char(keyword.len()).is_alphanumeric()
 	}
 
 	fn is_at_line_start(&self) -> bool {
@@ -188,78 +189,47 @@ impl WaspParser {
 		let mut comments = Vec::new();
 		loop {
 			let (newline, indent) = self.skip_whitespace();
-			had_newline = newline || had_newline;
-			if newline {
-				line_indent = indent;
-			}
-			// Check for # line comment (shell-style, shebang)
-			// Only treat # as comment if at line start (to allow list#index later)
-			if self.current_char() == '#' && self.is_at_line_start() {
-				self.advance(); // skip #
+			had_newline |= newline;
+			if newline { line_indent = indent; }
+
+			let (c1, c2) = (self.current_char(), self.peek_char(1));
+
+			// # line comment (shell-style) - only at line start
+			if c1 == '#' && self.is_at_line_start() {
+				self.advance();
 				let text = self.consume_rest_of_line();
-				if !text.is_empty() {
-					comments.push(text);
-				}
+				if !text.is_empty() { comments.push(text); }
 				had_newline = true;
 				continue;
 			}
-
-			// Check for // line comment (but not :// which is URL scheme separator)
-			if self.current_char() == '/' && self.peek_char(1) == '/' && self.prev_char() != ':' {
-				self.advance(); // skip first /
-				self.advance(); // skip second /
+			// // line comment (but not :// URL scheme)
+			if c1 == '/' && c2 == '/' && self.prev_char() != ':' {
+				self.advance_by(2);
 				let text = self.consume_rest_of_line();
-				if !text.is_empty() {
-					comments.push(text);
-				}
+				if !text.is_empty() { comments.push(text); }
 				had_newline = true;
 				continue;
 			}
-
-			if self.pos >= self.input.len() {
-				let comment = if comments.is_empty() {
-					None
-				} else {
-					Some(comments.join("\n"))
-				};
-				return (had_newline, line_indent, comment);
-			}
-
-			// Check for /* block comment */
-			if self.current_char() == '/' && self.peek_char(1) == '*' {
-				self.advance(); // skip /
-				self.advance(); // skip *
-				let mut block_comment = String::new();
-				loop {
-					let ch = self.current_char();
-					if ch == '\0' {
-						break;
-					} // unterminated comment
-					if ch == '*' && self.peek_char(1) == '/' {
-						self.advance(); // skip *
-						self.advance(); // skip /
+			// /* block comment */
+			if c1 == '/' && c2 == '*' {
+				self.advance_by(2);
+				let mut block = String::new();
+				while self.current_char() != '\0' {
+					if self.current_char() == '*' && self.peek_char(1) == '/' {
+						self.advance_by(2);
 						break;
 					}
-					if ch == '\n' {
-						had_newline = true;
-					}
-					block_comment.push(ch);
+					if self.current_char() == '\n' { had_newline = true; }
+					block.push(self.current_char());
 					self.advance();
 				}
-				let trimmed = block_comment.trim();
-				if !trimmed.is_empty() {
-					comments.push(trimmed.to_string());
-				}
+				let trimmed = block.trim();
+				if !trimmed.is_empty() { comments.push(trimmed.to_string()); }
 				continue;
 			}
-
 			break;
 		}
-		let comment = if comments.is_empty() {
-			None
-		} else {
-			Some(comments.join("\n"))
-		};
+		let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
 		(had_newline, line_indent, comment)
 	}
 
@@ -280,41 +250,29 @@ impl WaspParser {
 		text.trim().to_string()
 	}
 
-	/// Skip XML processing instruction: <?xml ... ?> or <?target ... ?>
-	/// Returns Empty since we don't preserve processing instructions
+	/// Skip XML processing instruction: <?xml ... ?>
 	fn skip_processing_instruction(&mut self) -> Node {
 		self.advance(); // skip '?'
-
-		// Skip everything until '?>'
 		while !self.end_of_input() {
 			if self.current_char() == '?' && self.peek_char(1) == '>' {
-				self.advance(); // skip '?'
-				self.advance(); // skip '>'
-				return Empty; // Processing instructions are skipped
+				self.advance_by(2);
+				return Empty;
 			}
 			self.advance();
 		}
-
 		Empty
 	}
 
 	/// Skip XML comment: <!--...-->
-	/// Returns Empty since comments are handled elsewhere
 	fn skip_xml_comment(&mut self) -> Node {
-		self.advance(); // skip first '-'
-		self.advance(); // skip second '-'
-
-		// Skip everything until '-->'
+		self.advance_by(2); // skip '--'
 		while !self.end_of_input() {
 			if self.current_char() == '-' && self.peek_char(1) == '-' && self.peek_char(2) == '>' {
-				self.advance(); // skip first '-'
-				self.advance(); // skip second '-'
-				self.advance(); // skip '>'
-				return Empty; // Comments are skipped in XML mode
+				self.advance_by(3);
+				return Empty;
 			}
 			self.advance();
 		}
-
 		Empty
 	}
 
@@ -343,37 +301,24 @@ impl WaspParser {
 	}
 
 	/// Parse CDATA section: <![CDATA[...]]>
-	/// Returns the content as a Text node
 	fn parse_cdata(&mut self) -> Node {
 		// Expect: [CDATA[
-		if self.current_char() != '[' {
+		let marker = "[CDATA[";
+		if !marker.chars().enumerate().all(|(i, c)| self.peek_char(i) == c) {
 			return Empty;
 		}
-		self.advance(); // skip '['
+		self.advance_by(marker.len());
 
-		// Check for "CDATA["
-		let expected = "CDATA[";
-		for expected_char in expected.chars() {
-			if self.current_char() != expected_char {
-				return Empty;
-			}
-			self.advance();
-		}
-
-		// Collect content until ]]>
 		let mut content = String::new();
 		while !self.end_of_input() {
 			if self.current_char() == ']' && self.peek_char(1) == ']' && self.peek_char(2) == '>' {
-				self.advance(); // skip first ']'
-				self.advance(); // skip second ']'
-				self.advance(); // skip '>'
+				self.advance_by(3);
 				return Node::Text(content);
 			}
 			content.push(self.current_char());
 			self.advance();
 		}
-
-		Node::Text(content) // Return what we have even if unterminated
+		Node::Text(content)
 	}
 
 	fn is_at_line_end(&self) -> bool {
@@ -396,198 +341,98 @@ impl WaspParser {
 	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
 	/// Checks longer operators first (greedy matching)
 	fn peek_operator(&self) -> Option<(Op, usize)> {
-		let c1 = self.current_char();
-		let c2 = self.peek_char(1);
-		let c3 = self.peek_char(2);
-		let c4 = self.peek_char(3);
+		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 
-		// Check 4-char operators first
-		match (c1, c2, c3, c4) {
-			('t', 'h', 'e', 'n') if !self.peek_char(4).is_alphanumeric() => {
-				return Some((Op::Then, 4)) // "then"
-			}
-			('e', 'l', 's', 'e') if !self.peek_char(4).is_alphanumeric() => {
-				return Some((Op::Else, 4)) // "else"
-			}
-			_ => {}
-		}
+		// Keywords (4-char)
+		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
+		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
 
-		// Check 3-char operators
+		// 3-char operators
 		match (c1, c2, c3) {
-			('.', '.', '.') => return Some((Op::To, 3)), // ... ellipsis range
-			// Compound logical assignments
+			('.', '.', '.') => return Some((Op::To, 3)),
 			('&', '&', '=') => return Some((Op::AndAssign, 3)),
 			('|', '|', '=') => return Some((Op::OrAssign, 3)),
 			('^', '^', '=') => return Some((Op::XorAssign, 3)),
-			('*', '*', '=') => return Some((Op::PowAssign, 3)), // **= for power
-			('a', 'n', 'd') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::And, 3)) // "and"
-			}
-			('x', 'o', 'r') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::Xor, 3)) // "xor"
-			}
-			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::Not, 3)) // "not"
-			}
+			('*', '*', '=') => return Some((Op::PowAssign, 3)),
 			_ => {}
 		}
+		// Keywords (3-char)
+		if self.matches_keyword("and") { return Some((Op::And, 3)); }
+		if self.matches_keyword("xor") { return Some((Op::Xor, 3)); }
+		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
 
-		// Check 2-char operators
+		// 2-char operators
 		match (c1, c2) {
-			// Type conversion
 			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
-
-			// Structural
 			(':', '=') => return Some((Op::Define, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
-
-			// Arithmetic
-			('*', '*') => {
-				norm::power_operator("**");
-				return Some((Op::Pow, 2));
-			}
-
-			// Compound assignment (must check before comparison for >= etc)
+			('*', '*') => { norm::power_operator("**"); return Some((Op::Pow, 2)); }
 			('+', '=') => return Some((Op::AddAssign, 2)),
 			('-', '=') => return Some((Op::SubAssign, 2)),
 			('*', '=') => return Some((Op::MulAssign, 2)),
 			('/', '=') => return Some((Op::DivAssign, 2)),
 			('%', '=') => return Some((Op::ModAssign, 2)),
 			('^', '=') => return Some((Op::PowAssign, 2)),
-
-			// Comparison
 			('<', '=') => return Some((Op::Le, 2)),
 			('>', '=') => return Some((Op::Ge, 2)),
 			('=', '=') => return Some((Op::Eq, 2)),
 			('!', '=') => return Some((Op::Ne, 2)),
-
-			// Suffix (only if previous was identifier/number)
 			('+', '+') => return Some((Op::Inc, 2)),
 			('-', '-') => return Some((Op::Dec, 2)),
-
-			// Range
 			('.', '.') => return Some((Op::Range, 2)),
-
-			// Logical (2-char versions)
-			('o', 'r') if !c3.is_alphanumeric() => return Some((Op::Or, 2)),
-			('&', '&') => {
-				norm::and_operator("&&");
-				return Some((Op::And, 2));
-			}
-			('|', '|') => {
-				norm::or_operator("||");
-				return Some((Op::Or, 2));
-			}
-
-			// Conditional
-			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
-
-			// Loop
-			('d', 'o') if !c3.is_alphanumeric() => return Some((Op::Do, 2)),
-
+			('&', '&') => { norm::and_operator("&&"); return Some((Op::And, 2)); }
+			('|', '|') => { norm::or_operator("||"); return Some((Op::Or, 2)); }
 			_ => {}
 		}
+		// Keywords (2-char)
+		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
+		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 
-		// Check 1-char operators
+		// 1-char operators
 		match c1 {
-			// Structural
 			':' => Some((Op::Colon, 1)),
 			'=' => Some((Op::Assign, 1)),
 			'.' => Some((Op::Dot, 1)),
-
-			// Arithmetic
 			'+' => Some((Op::Add, 1)),
-			'-' => Some((Op::Sub, 1)), // Note: could be prefix Neg, context determines
+			'-' => Some((Op::Sub, 1)),
 			'*' => Some((Op::Mul, 1)),
 			'/' => Some((Op::Div, 1)),
 			'%' => Some((Op::Mod, 1)),
 			'^' => Some((Op::Pow, 1)),
-
-			// Unicode arithmetic
-			'×' => Some((Op::Mul, 1)),
+			'×' | '⋅' => Some((Op::Mul, 1)),
 			'÷' => Some((Op::Div, 1)),
-			'⋅' => Some((Op::Mul, 1)),
-
-			// Comparison
 			'<' => Some((Op::Lt, 1)),
 			'>' => Some((Op::Gt, 1)),
-
-			// Unicode comparison
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
-
-			// Logical
-			'!' => {
-				norm::not_operator("!");
-				Some((Op::Not, 1))
-			}
+			'!' => { norm::not_operator("!"); Some((Op::Not, 1)) }
 			'¬' => Some((Op::Not, 1)),
-			'&' => {
-				norm::and_operator("&");
-				Some((Op::And, 1))
-			}
-			'|' => {
-				norm::or_operator("|");
-				Some((Op::Or, 1))
-			}
+			'&' => { norm::and_operator("&"); Some((Op::And, 1)) }
+			'|' => { norm::or_operator("|"); Some((Op::Or, 1)) }
 			'∧' => Some((Op::And, 1)),
 			'⋁' => Some((Op::Or, 1)),
 			'⊻' => Some((Op::Xor, 1)),
-
-			// Index
 			'#' => Some((Op::Hash, 1)),
-
-			// Ternary
-			'?' => {
-				norm::conditional(true); // true = used ternary
-				Some((Op::Question, 1))
-			}
-
-			// Range
-			'…' => Some((Op::To, 1)), // single unicode ellipsis
-
+			'?' => { norm::conditional(true); Some((Op::Question, 1)) }
+			'…' => Some((Op::To, 1)),
 			_ => None,
 		}
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
-		let c1 = self.current_char();
-		let c2 = self.peek_char(1);
-		let c3 = self.peek_char(2);
-		let c4 = self.peek_char(3);
-		let c5 = self.peek_char(4);
+		if self.matches_keyword("while") { return Some((Op::While, 5)); }
+		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
+		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
-		// Check 5-char prefix operators
-		if (c1, c2, c3, c4, c5) == ('w', 'h', 'i', 'l', 'e')
-			&& !self.peek_char(5).is_alphanumeric()
-		{
-			return Some((Op::While, 5));
-		}
-
-		// Check word-based prefix operators (3-char)
-		match (c1, c2, c3) {
-			('n', 'o', 't') if !self.peek_char(3).is_alphanumeric() => {
-				return Some((Op::Not, 3))
-			}
-			_ => {}
-		}
-
-		// Check 2-char prefix operators
-		match (c1, c2) {
-			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
-			_ => {}
-		}
-
-		// Single-char prefix operators
+		let (c1, c2) = (self.current_char(), self.peek_char(1));
 		match c1 {
-			// Only treat '-' as prefix operator if NOT followed by a digit (let parse_number handle negative literals)
 			'-' if !c2.is_ascii_digit() => Some((Op::Neg, 1)),
-			'!' => Some((Op::Not, 1)),
-			'¬' => Some((Op::Not, 1)),
+			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			_ => None,
@@ -596,20 +441,11 @@ impl WaspParser {
 
 	/// Peek for suffix operators (unary operators that bind to left operand)
 	fn peek_suffix_operator(&self) -> Option<(Op, usize)> {
-		let c1 = self.current_char();
-		let c2 = self.peek_char(1);
-
-		// Check 2-char suffix operators first
-		match (c1, c2) {
-			('+', '+') => return Some((Op::Inc, 2)),
-			('-', '-') => return Some((Op::Dec, 2)),
-			_ => {}
-		}
-
-		// Check 1-char suffix operators
-		match c1 {
-			'²' => Some((Op::Square, 1)),
-			'³' => Some((Op::Cube, 1)),
+		match (self.current_char(), self.peek_char(1)) {
+			('+', '+') => Some((Op::Inc, 2)),
+			('-', '-') => Some((Op::Dec, 2)),
+			('²', _) => Some((Op::Square, 1)),
+			('³', _) => Some((Op::Cube, 1)),
 			_ => None,
 		}
 	}
@@ -790,14 +626,7 @@ impl WaspParser {
 				if self.current_char() == '{' {
 					let then_block = self.parse_atom(); // parse { block }
 					self.skip_spaces();
-					// Check for else { block }
-					let c1 = self.current_char();
-					let c2 = self.peek_char(1);
-					let c3 = self.peek_char(2);
-					let c4 = self.peek_char(3);
-					if (c1, c2, c3, c4) == ('e', 'l', 's', 'e')
-						&& !self.peek_char(4).is_alphanumeric()
-					{
+					if self.matches_keyword("else") {
 						self.advance_by(4); // skip "else"
 						self.skip_spaces();
 						let else_block = self.parse_atom(); // parse { block }
@@ -814,14 +643,7 @@ impl WaspParser {
 				} else if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
 					// if cond:then - convert colon to then structure
 					self.skip_spaces();
-					// Check for else
-					let c1 = self.current_char();
-					let c2 = self.peek_char(1);
-					let c3 = self.peek_char(2);
-					let c4 = self.peek_char(3);
-					if (c1, c2, c3, c4) == ('e', 'l', 's', 'e')
-						&& !self.peek_char(4).is_alphanumeric()
-					{
+					if self.matches_keyword("else") {
 						self.advance_by(4); // skip "else"
 						self.skip_spaces();
 						let else_expr = self.parse_expr(0);
@@ -842,24 +664,15 @@ impl WaspParser {
 							let condition = items[0].clone();
 							let then_block = items[1].clone();
 							self.skip_spaces();
-							// Check for else
-							let c1 = self.current_char();
-							let c2 = self.peek_char(1);
-							let c3 = self.peek_char(2);
-							let c4 = self.peek_char(3);
-							if (c1, c2, c3, c4) == ('e', 'l', 's', 'e')
-								&& !self.peek_char(4).is_alphanumeric()
-							{
-								self.advance_by(4); // skip "else"
+							let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
+							let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+							return if self.matches_keyword("else") {
+								self.advance_by(4);
 								self.skip_spaces();
-								let else_block = self.parse_atom();
-								let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-								let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-								return Node::Key(Box::new(if_then), Op::Else, Box::new(else_block));
+								Node::Key(Box::new(if_then), Op::Else, Box::new(self.parse_atom()))
 							} else {
-								let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-								return Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-							}
+								if_then
+							};
 						}
 					}
 					Node::Key(Box::new(Empty), op, Box::new(rhs))
@@ -1126,31 +939,6 @@ impl WaspParser {
 		} else {
 			Ok(symbol)
 		}
-	}
-
-	fn parse_parenthesized(&mut self) -> Result<String, String> {
-		let mut result = String::new();
-		result.push('(');
-		self.advance(); // skip '('
-
-		let mut depth = 1;
-		while !self.end_of_input() {
-			let ch = self.current_char();
-			result.push(ch);
-			if ch == '(' {
-				depth += 1;
-			} else if ch == ')' {
-				depth -= 1;
-				self.advance();
-				if depth == 0 {
-					return Ok(result);
-				}
-				continue;
-			}
-			self.advance();
-		}
-
-		Err("Unterminated parentheses".to_string())
 	}
 
 	fn parse_bracketed(&mut self, open: char) -> Node {
@@ -1554,18 +1342,15 @@ impl WaspParser {
 	}
 }
 
-fn check_constants(p0: &String) -> Option<Node> {
-	match p0.to_lowercase().as_str() {
-		//  ⚠️⚡️ 🚨  ambivalence 𐄂 ≈ ❎ can mean 'no' or 'check=>yes'
-		// wtf unicode, so many check marks √
+fn check_constants(s: &str) -> Option<Node> {
+	match s.to_lowercase().as_str() {
 		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
-		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False), // vs "ƒ" fun!
-		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing"  => Some(Empty),
-		"empty" | "void" => Some(Empty),
+		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False),
+		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing" | "empty" | "void" => Some(Empty),
 		"π" | "pi" => Some(float(std::f64::consts::PI)),
-		"τ" | "tau" => Some(float(std::f64::consts::TAU)), // overwrite symbol? NAH! IT's TAU
-		"euler" | "ℯ" => Some(float(std::f64::consts::E)), // LOG2_E via logarithm
-		"⚠️" | "⚡" | "⚡️" => Some(error(p0)),             // todo read to rest of line and throw
+		"τ" | "tau" => Some(float(std::f64::consts::TAU)),
+		"euler" | "ℯ" => Some(float(std::f64::consts::E)),
+		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}
 }
