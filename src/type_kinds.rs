@@ -33,6 +33,26 @@ impl Kind {
 	pub fn is_ref(&self) -> bool { !self.is_primitive() }
 }
 
+impl std::fmt::Display for Kind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Kind::Empty => write!(f, "empty"),
+			Kind::Int => write!(f, "int"),
+			Kind::Float => write!(f, "float"),
+			Kind::Text => write!(f, "text"),
+			Kind::Codepoint => write!(f, "codepoint"),
+			Kind::Symbol => write!(f, "symbol"),
+			Kind::Key => write!(f, "key"),
+			Kind::Block => write!(f, "block"),
+			Kind::List => write!(f, "list"),
+			Kind::Data => write!(f, "data"),
+			Kind::Meta => write!(f, "meta"),
+			Kind::Error => write!(f, "error"),
+			Kind::TypeDef => write!(f, "typedef"),
+		}
+	}
+}
+
 
 /// Alias for backward compatibility
 pub type NodeKind = Kind;
