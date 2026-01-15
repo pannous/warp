@@ -1,11 +1,151 @@
-///! Normalization hints for guiding users toward canonical syntax
-///!
-///! Wasp accepts many syntactic forms but has preferred canonical forms.
-///! This module emits gentle hints to educate users about the preferred way.
+//! Normalization hints for guiding users toward canonical syntax
+//!
+//! Wasp accepts many syntactic forms but has preferred canonical forms.
+//! This module emits gentle hints to educate users about the preferred way.
+//!
+//! # Configuration
+//! To change which form is canonical, modify the `Style` struct defaults.
+//! For example, to prefer `def f(x) {...}` over `f(x) := ...`:
+//! ```ignore
+//! style.function_def = FunctionStyle::Def;
+//! ```
 
+use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
+
+// ============================================================================
+// Style Configuration - Change these to swap canonical forms
+// ============================================================================
+
+/// Preferred style for type casting
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CastStyle {
+    /// `x as int` (postfix)
+    AsOperator,
+    /// `int(x)` (constructor call)
+    Constructor,
+}
+
+/// Preferred style for function definitions
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FunctionStyle {
+    /// `f(x) := x*2`
+    ColonEquals,
+    /// `def f(x): x*2` or `def f(x) { x*2 }`
+    Def,
+    /// `fn f(x) = x*2`
+    Fn,
+    /// `fun f(x) = x*2`
+    Fun,
+    /// `function f(x) { x*2 }`
+    Function,
+}
+
+/// Preferred style for variable definitions
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VarStyle {
+    /// `x := 5`
+    ColonEquals,
+    /// `let x = 5`
+    Let,
+    /// `var x = 5`
+    Var,
+}
+
+/// Preferred style for logical operators
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LogicalStyle {
+    /// `and`, `or`, `not`
+    Words,
+    /// `&&`, `||`, `!`
+    Symbols,
+}
+
+/// Preferred style for string quotes
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum QuoteStyle {
+    /// `'hello'`
+    Single,
+    /// `"hello"`
+    Double,
+}
+
+/// Preferred style for indexing
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IndexStyle {
+    /// `x#0`
+    Hash,
+    /// `x[0]`
+    Bracket,
+}
+
+/// Preferred style for conditionals
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConditionalStyle {
+    /// `if x then y else z`
+    IfThenElse,
+    /// `x ? y : z`
+    Ternary,
+}
+
+/// Preferred style for power operator
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PowerStyle {
+    /// `x^2`
+    Caret,
+    /// `x**2`
+    DoubleStar,
+}
+
+/// Global style configuration
+#[derive(Debug, Clone)]
+pub struct Style {
+    pub cast: CastStyle,
+    pub function_def: FunctionStyle,
+    pub var_def: VarStyle,
+    pub logical: LogicalStyle,
+    pub quotes: QuoteStyle,
+    pub index: IndexStyle,
+    pub conditional: ConditionalStyle,
+    pub power: PowerStyle,
+    pub prefer_string_over_str: bool,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            cast: CastStyle::AsOperator,
+            function_def: FunctionStyle::ColonEquals,
+            var_def: VarStyle::ColonEquals,
+            logical: LogicalStyle::Words,
+            quotes: QuoteStyle::Single,
+            index: IndexStyle::Hash,
+            conditional: ConditionalStyle::IfThenElse,
+            power: PowerStyle::Caret,
+            prefer_string_over_str: true,
+        }
+    }
+}
+
+/// Global style setting
+static STYLE: Lazy<Mutex<Style>> = Lazy::new(|| Mutex::new(Style::default()));
+
+/// Set the global style
+pub fn set_style(style: Style) {
+    if let Ok(mut s) = STYLE.lock() {
+        *s = style;
+    }
+}
+
+/// Get the current style (cloned)
+pub fn style() -> Style {
+    STYLE.lock().map(|s| s.clone()).unwrap_or_default()
+}
+
+// ============================================================================
+// Hint Mode Configuration
+// ============================================================================
 
 /// Global set of hints already shown (for "once" mode)
 static SHOWN_HINTS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
@@ -36,6 +176,17 @@ pub fn hint_mode() -> HintMode {
     HINT_MODE.lock().map(|m| *m).unwrap_or(HintMode::Always)
 }
 
+/// Clear shown hints (useful for testing)
+pub fn clear_shown_hints() {
+    if let Ok(mut shown) = SHOWN_HINTS.lock() {
+        shown.clear();
+    }
+}
+
+// ============================================================================
+// Core Hint Function
+// ============================================================================
+
 /// Emit a normalization hint to stderr
 pub fn hint(original: &str, canonical: &str, reason: &str) {
     let mode = hint_mode();
@@ -54,96 +205,219 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
         }
     }
 
-    eprintln!("\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`", canonical, original);
+    eprintln!(
+        "\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
+        canonical, original
+    );
     eprintln!("      {}", reason);
 }
 
-/// Common normalization hints as constants for consistency
+// ============================================================================
+// Hint Functions - Check style before emitting
+// ============================================================================
+
 pub mod hints {
-    use super::hint;
+    use super::*;
 
     /// Type constructor vs 'as' operator
     pub fn type_constructor(type_name: &str, value: &str) {
-        let original = format!("{}({})", type_name, value);
-        let canonical = format!("{} as {}", value, type_name);
-        hint(&original, &canonical, "postfix 'as' reads naturally: value as type");
+        let s = style();
+        if s.cast == CastStyle::AsOperator {
+            let original = format!("{}({})", type_name, value);
+            let canonical = format!("{} as {}", value, type_name);
+            hint(&original, &canonical, "postfix 'as' reads naturally: value as type");
+        }
     }
 
-    /// String type name variations
+    /// 'as' operator when constructor style is preferred
+    pub fn as_operator(value: &str, type_name: &str) {
+        let s = style();
+        if s.cast == CastStyle::Constructor {
+            let original = format!("{} as {}", value, type_name);
+            let canonical = format!("{}({})", type_name, value);
+            hint(&original, &canonical, "constructor style preferred for casts");
+        }
+    }
+
+    /// String type name variations (str, String -> string)
     pub fn string_type(used: &str) {
-        if used == "str" || used == "String" {
+        let s = style();
+        if s.prefer_string_over_str && (used == "str" || used == "String") {
             hint(used, "string", "use lowercase 'string' for the string type");
         }
     }
 
-    /// Double quotes vs single quotes
+    /// Double quotes when single preferred
     pub fn double_quotes(content: &str) {
-        let original = format!("\"{}\"", content);
-        let canonical = format!("'{}'", content);
-        hint(&original, &canonical, "single quotes preferred for strings");
+        let s = style();
+        if s.quotes == QuoteStyle::Single {
+            let original = format!("\"{}\"", content);
+            let canonical = format!("'{}'", content);
+            hint(&original, &canonical, "single quotes preferred for strings");
+        }
     }
 
-    /// C-style operators vs word operators
-    pub fn c_style_and() {
-        hint("&&", "and", "word operators are more readable");
+    /// Single quotes when double preferred
+    pub fn single_quotes(content: &str) {
+        let s = style();
+        if s.quotes == QuoteStyle::Double {
+            let original = format!("'{}'", content);
+            let canonical = format!("\"{}\"", content);
+            hint(&original, &canonical, "double quotes preferred for strings");
+        }
     }
 
-    pub fn c_style_or() {
-        hint("||", "or", "word operators are more readable");
+    /// && operator
+    pub fn and_operator(used: &str) {
+        let s = style();
+        match (used, s.logical) {
+            ("&&", LogicalStyle::Words) => hint("&&", "and", "word operators are more readable"),
+            ("and", LogicalStyle::Symbols) => hint("and", "&&", "symbol operators preferred"),
+            _ => {}
+        }
     }
 
-    pub fn c_style_not() {
-        hint("!", "not", "word operators are more readable");
+    /// || operator
+    pub fn or_operator(used: &str) {
+        let s = style();
+        match (used, s.logical) {
+            ("||", LogicalStyle::Words) => hint("||", "or", "word operators are more readable"),
+            ("or", LogicalStyle::Symbols) => hint("or", "||", "symbol operators preferred"),
+            _ => {}
+        }
     }
 
-    pub fn c_style_ne() {
-        hint("!=", "<>", "mathematical notation for not-equal");
+    /// ! or not operator
+    pub fn not_operator(used: &str) {
+        let s = style();
+        match (used, s.logical) {
+            ("!", LogicalStyle::Words) => hint("!", "not", "word operators are more readable"),
+            ("not", LogicalStyle::Symbols) => hint("not", "!", "symbol operators preferred"),
+            _ => {}
+        }
     }
 
-    /// Power operator
-    pub fn double_star_power() {
-        hint("**", "^", "use ^ for exponentiation");
+    /// Power operator ** vs ^
+    pub fn power_operator(used: &str) {
+        let s = style();
+        match (used, s.power) {
+            ("**", PowerStyle::Caret) => hint("**", "^", "use ^ for exponentiation"),
+            ("^", PowerStyle::DoubleStar) => hint("^", "**", "use ** for exponentiation"),
+            _ => {}
+        }
     }
 
     /// Ternary vs if-then-else
-    pub fn ternary_operator() {
-        hint("? :", "if ... then ... else ...", "if-then-else is more readable");
+    pub fn conditional(used_ternary: bool) {
+        let s = style();
+        match (used_ternary, s.conditional) {
+            (true, ConditionalStyle::IfThenElse) => {
+                hint("x ? y : z", "if x then y else z", "if-then-else is more readable")
+            }
+            (false, ConditionalStyle::Ternary) => {
+                hint("if x then y else z", "x ? y : z", "ternary operator is more concise")
+            }
+            _ => {}
+        }
     }
 
-    /// Let/var keywords
-    pub fn let_keyword() {
-        hint("let x = ...", "x := ...", "no 'let' keyword needed, use := for definition");
+    /// Variable definition keywords
+    pub fn var_keyword(used: &str) {
+        let s = style();
+        let canonical = match s.var_def {
+            VarStyle::ColonEquals => "x := ...",
+            VarStyle::Let => "let x = ...",
+            VarStyle::Var => "var x = ...",
+        };
+        let reason = match s.var_def {
+            VarStyle::ColonEquals => "use := for definition",
+            VarStyle::Let => "use 'let' for definition",
+            VarStyle::Var => "use 'var' for definition",
+        };
+        match used {
+            "let" if s.var_def != VarStyle::Let => hint("let x = ...", canonical, reason),
+            "var" if s.var_def != VarStyle::Var => hint("var x = ...", canonical, reason),
+            ":=" if s.var_def != VarStyle::ColonEquals => hint("x := ...", canonical, reason),
+            _ => {}
+        }
     }
 
-    pub fn var_keyword() {
-        hint("var x = ...", "x := ...", "no 'var' keyword needed, use := for definition");
+    /// Function definition keywords
+    pub fn function_keyword(used: &str, name: &str, params: &str) {
+        let s = style();
+        let canonical_form = match s.function_def {
+            FunctionStyle::ColonEquals => format!("{}({}) := ...", name, params),
+            FunctionStyle::Def => format!("def {}({}): ...", name, params),
+            FunctionStyle::Fn => format!("fn {}({}) = ...", name, params),
+            FunctionStyle::Fun => format!("fun {}({}) = ...", name, params),
+            FunctionStyle::Function => format!("function {}({}) {{ ... }}", name, params),
+        };
+        let reason = match s.function_def {
+            FunctionStyle::ColonEquals => "short := form preferred",
+            FunctionStyle::Def => "'def' keyword preferred",
+            FunctionStyle::Fn => "'fn' keyword preferred",
+            FunctionStyle::Fun => "'fun' keyword preferred",
+            FunctionStyle::Function => "'function' keyword preferred",
+        };
+
+        let original = match used {
+            "def" => format!("def {}({}): ...", name, params),
+            "fn" => format!("fn {}({}) = ...", name, params),
+            "fun" => format!("fun {}({}) = ...", name, params),
+            "function" => format!("function {}({}) {{ ... }}", name, params),
+            ":=" => format!("{}({}) := ...", name, params),
+            _ => return,
+        };
+
+        // Only hint if used style differs from preferred
+        let used_style = match used {
+            "def" => FunctionStyle::Def,
+            "fn" => FunctionStyle::Fn,
+            "fun" => FunctionStyle::Fun,
+            "function" => FunctionStyle::Function,
+            ":=" => FunctionStyle::ColonEquals,
+            _ => return,
+        };
+
+        if used_style != s.function_def {
+            hint(&original, &canonical_form, reason);
+        }
     }
 
-    /// Function definition styles
-    pub fn function_keyword() {
-        hint("function f(...) {...}", "f(...) := ...", "short definition form preferred");
-    }
-
-    pub fn def_keyword() {
-        hint("def f(...): ...", "f(...) := ...", "short definition form preferred");
-    }
-
-    pub fn fn_keyword() {
-        hint("fn f(...) = ...", "f(...) := ...", "short definition form preferred");
-    }
-
-    /// Array indexing
-    pub fn bracket_index(var: &str, idx: &str) {
-        let original = format!("{}[{}]", var, idx);
-        let canonical = format!("{}#{}", var, idx);
-        hint(&original, &canonical, "use # for indexing");
+    /// Bracket indexing vs hash indexing
+    pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
+        let s = style();
+        match (used_bracket, s.index) {
+            (true, IndexStyle::Hash) => {
+                let original = format!("{}[{}]", var, idx);
+                let canonical = format!("{}#{}", var, idx);
+                hint(&original, &canonical, "use # for indexing");
+            }
+            (false, IndexStyle::Bracket) => {
+                let original = format!("{}#{}", var, idx);
+                let canonical = format!("{}[{}]", var, idx);
+                hint(&original, &canonical, "use [] for indexing");
+            }
+            _ => {}
+        }
     }
 
     /// Length method vs # operator
-    pub fn length_method(var: &str) {
-        let original = format!("{}.length()", var);
-        let canonical = format!("#{}", var);
-        hint(&original, &canonical, "use # prefix for length");
+    pub fn length_operator(var: &str, used_method: bool) {
+        let s = style();
+        match (used_method, s.index) {
+            (true, IndexStyle::Hash) => {
+                let original = format!("{}.length()", var);
+                let canonical = format!("#{}", var);
+                hint(&original, &canonical, "use # prefix for length");
+            }
+            (false, IndexStyle::Bracket) => {
+                let original = format!("#{}", var);
+                let canonical = format!("{}.length()", var);
+                hint(&original, &canonical, "use .length() for length");
+            }
+            _ => {}
+        }
     }
 }
 
@@ -161,5 +435,23 @@ mod tests {
 
         set_hint_mode(HintMode::Always);
         assert_eq!(hint_mode(), HintMode::Always);
+    }
+
+    #[test]
+    fn test_style_swap() {
+        // Default prefers 'as' operator
+        let s = style();
+        assert_eq!(s.cast, CastStyle::AsOperator);
+
+        // Swap to constructor style
+        let mut new_style = Style::default();
+        new_style.cast = CastStyle::Constructor;
+        set_style(new_style);
+
+        let s = style();
+        assert_eq!(s.cast, CastStyle::Constructor);
+
+        // Reset to default
+        set_style(Style::default());
     }
 }
