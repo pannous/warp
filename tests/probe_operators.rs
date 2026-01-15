@@ -1,6 +1,7 @@
 /// Tests for operator parsing
 use warp::wasp_parser::parse;
-use warp::node::{Node, Op};
+use warp::node::Node;
+use warp::Op;
 
 /// Helper to get the operator from a Key node (unwrapping Meta if needed)
 fn get_op(node: &Node) -> Option<Op> {
