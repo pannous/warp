@@ -468,6 +468,16 @@ impl WaspParser {
 			'<' => self.parse_bracketed('<'),
 			';' | '>' => Empty,
 			'ø' => return Empty,
+			// $n parameter reference (e.g., $0 = first param)
+			'$' if self.peek_char(1).is_numeric() => {
+				self.advance(); // skip '$'
+				let mut num_str = String::new();
+				while self.current_char().is_numeric() {
+					num_str.push(self.current_char());
+					self.advance();
+				}
+				Node::Symbol(format!("${}", num_str))
+			}
 			ch if ch.is_numeric() || (ch == '-' && self.peek_char(1).is_numeric()) => {
 				self.parse_number()
 			}
@@ -688,6 +698,17 @@ impl WaspParser {
 					// Structure: (while condition) do body
 					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
 					Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block))
+				} else if let Node::List(items, _, _) = rhs.drop_meta() {
+					// Handle implicit application: while(cond){block} parsed as List([(cond), {block}])
+					if items.len() == 2 {
+						if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
+							let condition = items[0].clone();
+							let body_block = items[1].clone();
+							let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
+							return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
+						}
+					}
+					Node::Key(Box::new(Empty), op, Box::new(rhs))
 				} else {
 					Node::Key(Box::new(Empty), op, Box::new(rhs))
 				}
@@ -750,12 +771,28 @@ impl WaspParser {
 				Some(pair) => pair,
 				None => {
 					// Step 3b: Check for implicit function application (space between atoms)
-					// Only apply when inside assignment RHS (min_bp around 59-60)
-					// This makes `x = f y` parse as `x = (f y)` but NOT `a : T x` as `a : (T x)`
-					// Assignment r_bp is 59, so we only trigger when min_bp <= 60
+					// This makes `x = f y` parse as `x = (f y)` and `252 > f y` as `252 > (f y)`
+					// Only apply when:
+					// - min_bp > 0 (not at top level)
+					// - min_bp <= 130 (inside assignment/comparison/arithmetic)
+					// - lhs is a Symbol or a function call (List with Bracket::None)
+					// - NOT parenthesized expressions (List with Bracket::Round)
+					// - Argument conditions vary by context:
+					//   - In assignment (min_bp <= 60): allow ANY argument (including identifiers)
+					//   - In colon/comparison (min_bp > 60): only non-identifier args
+					//   This allows `fetch url` but prevents `a: b c d` from chaining
 					const APPLICATION_BP: u8 = 165;
-					const MAX_BP_FOR_APPLICATION: u8 = 60;
-					if min_bp > 0 && min_bp <= MAX_BP_FOR_APPLICATION && self.can_start_atom() {
+					const MAX_BP_FOR_APPLICATION: u8 = 130;
+					let lhs_is_callable = match lhs.drop_meta() {
+						Node::Symbol(_) => true,
+						Node::List(_, Bracket::None, _) => true, // Function call from implicit application
+						_ => false,
+					};
+					let ch = self.current_char();
+					let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
+					let arg_is_non_identifier = ch.is_numeric() || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{' || ch == '-';
+					let should_apply = in_assignment_context || arg_is_non_identifier;
+					if min_bp > 0 && min_bp <= MAX_BP_FOR_APPLICATION && lhs_is_callable && self.can_start_atom() && should_apply {
 						// Parse argument with high binding power (tighter than application itself)
 						let arg = self.parse_expr(APPLICATION_BP + 1);
 						if arg != Empty {
