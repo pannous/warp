@@ -758,13 +758,35 @@ impl WasmGcEmitter {
 				if items.is_empty() {
 					self.required_functions.insert("new_empty");
 				} else {
-					// Check for fetch pattern: [Symbol("fetch"), url_node]
+					// Check for type constructor: int('123'), str(42), etc.
+					// But NOT typed variable declarations like "string x=fetch..."
 					if items.len() == 2 {
 						if let Node::Symbol(s) = items[0].drop_meta() {
-							if s == "fetch" {
-								// fetch returns a string, needs new_text
-								self.required_functions.insert("new_text");
-								return;
+							// Skip if second arg is assignment/define (typed variable declaration)
+							let is_typed_decl = matches!(items[1].drop_meta(),
+								Node::Key(_, Op::Assign | Op::Define, _));
+							if !is_typed_decl {
+								match s.as_str() {
+									"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
+										// Type constructor - same requirements as Op::As
+										self.required_functions.insert("new_int");
+										self.required_functions.insert("new_float");
+										self.required_functions.insert("new_text");
+										self.required_functions.insert("new_codepoint");
+										self.analyze_required_functions(&items[1]);
+										return;
+									}
+									_ => {}
+								}
+							}
+							// Non-constructor patterns
+							match s.as_str() {
+								"fetch" => {
+									// fetch returns a string, needs new_text
+									self.required_functions.insert("new_text");
+									return;
+								}
+								_ => {}
 							}
 						}
 					}
@@ -2208,6 +2230,24 @@ impl WasmGcEmitter {
 								return;
 							}
 							_ => {}
+						}
+					}
+				}
+				// Check for type constructor calls: int('123'), str(123), char(0x41), etc.
+				// But NOT typed variable declarations like "string x=fetch..."
+				if items.len() == 2 {
+					if let Node::Symbol(type_name) = items[0].drop_meta() {
+						// Skip if second arg is assignment/define (typed variable declaration)
+						let is_typed_decl = matches!(items[1].drop_meta(),
+							Node::Key(_, Op::Assign | Op::Define, _));
+						if !is_typed_decl {
+							match type_name.as_str() {
+								"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
+									self.emit_cast(func, &items[1], &items[0]);
+									return;
+								}
+								_ => {}
+							}
 						}
 					}
 				}
