@@ -29,6 +29,16 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Read|Edit|Write|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/claudeignore-hook.sh",
+            "timeout": 500
+          }
+        ]
+      },
+      {
         "matcher": "ExitPlanMode|Edit|MultiEdit|Write|NotebookEdit|WebFetch|WebSearch|Bash|BashOutput|Read",
         "hooks": [
           {
