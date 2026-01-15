@@ -3,3 +3,7 @@ target
 *.wasm
 wiki/
 out
+
+/Users/me/dev/angles/warp/vendor
+
+vendor
