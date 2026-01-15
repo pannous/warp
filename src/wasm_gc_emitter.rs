@@ -3602,6 +3602,44 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, right);
 				self.emit_comparison(func, op);
 			}
+			// Prefix operators: √x, -x, !x, ‖x‖
+			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+				match op {
+					Op::Sqrt => {
+						// √x = sqrt(x), need f64 for sqrt then convert back to i64
+						self.emit_float_value(func, right);
+						func.instruction(&Instruction::F64Sqrt);
+						func.instruction(&Instruction::I64TruncF64S);
+					}
+					Op::Neg => {
+						// -x = 0 - x
+						func.instruction(&Instruction::I64Const(0));
+						self.emit_numeric_value(func, right);
+						func.instruction(&Instruction::I64Sub);
+					}
+					Op::Not => {
+						// !x = x == 0
+						self.emit_numeric_value(func, right);
+						func.instruction(&Instruction::I64Eqz);
+						func.instruction(&Instruction::I64ExtendI32U);
+					}
+					Op::Abs => {
+						// |x| = if x < 0 then -x else x
+						self.emit_numeric_value(func, right);
+						func.instruction(&Instruction::LocalTee(0)); // save value
+						func.instruction(&Instruction::I64Const(0));
+						func.instruction(&Instruction::I64LtS);
+						func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+						func.instruction(&Instruction::I64Const(0));
+						func.instruction(&Instruction::LocalGet(0));
+						func.instruction(&Instruction::I64Sub);
+						func.instruction(&Instruction::Else);
+						func.instruction(&Instruction::LocalGet(0));
+						func.instruction(&Instruction::End);
+					}
+					_ => panic!("Unhandled prefix operator: {:?}", op),
+				}
+			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
 				// Emit the list as a Node reference
@@ -3621,6 +3659,13 @@ impl WasmGcEmitter {
 			}
 			// Variable lookup (local or global)
 			Node::Symbol(name) => {
+				// Handle $n parameter reference (e.g., $0 = first param)
+				if name.starts_with('$') {
+					if let Ok(idx) = name[1..].parse::<u32>() {
+						func.instruction(&Instruction::LocalGet(idx));
+						return;
+					}
+				}
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 				} else if let Some(&(idx, kind)) = self.user_globals.get(name) {
