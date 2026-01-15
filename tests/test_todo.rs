@@ -24,10 +24,7 @@ fn test_paint_wasm() {
 
 		//(√((x-c)^2+(y-c)^2)<r?0:255);
 		//(x-c)^2+(y-c)^2
-		is!(
-			"h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x-c)^2+(y-c)^2‖<r",
-			1
-		);
+		is!("h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x-c)^2+(y-c)^2‖<r", 1);
 		////char *wasm_paint_routine = "urface=(1,2);i=0;while(i<1000000){i++;surface#i=i*(10-√i);};paint";
 		//         char * wasm_paint_routine = "w=1920;c=500;r=100;surface=(1,2);i=0;"
 		//         "while(i<1000000){"
@@ -54,12 +51,14 @@ fn test_bad_in_wasm() {
 	// Fixable bugs:
 	is!("if 4>1 then 2 else 3", 2);
 	is!("puts('ok');(1 4 3)#2", 4);
-
+	is!("3 + √9", 6);
+	// Lambda/closure tests:
+	is!("grows:=it*2; grows 3", 6);
+	is!("grows:=it*2; grows 3*4", 24);
+	is!("grows:=it*2; grows(3*42) > grows 2*3", 1);
 	skip!(
-		// $0 syntax not supported in emitter:
+		// $0 syntax needs function definition syntax like add1(x):=$0+1
 		is!("add1 x:=$0+1;add1 3", 4);
-		// Lambda/closure comparison issue (returns 6 instead of 1):
-		is!("grows:=it*2; grows(3*42) > grows 2*3", 1);
 		// Requires emitter support for index assignment in loops:
 		is!("i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ", 800 * 800);
 		// Requires polymorphic function dispatch (major feature):
@@ -67,7 +66,6 @@ fn test_bad_in_wasm() {
 		is!("print 3", 3);
 		// UTF-8 char indexing vs byte indexing (encoding redesign):
 		is!("'αβγδε'#3", 'γ');
-		// Sqrt precedence/parsing issue (needs investigation):
-		is!("3 + √9", 6);
+
 	);
 }
