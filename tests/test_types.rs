@@ -140,20 +140,9 @@ fn test_cast_as() {
 }
 
 #[test]
-#[ignore]
 fn test_emit_cast() {
-	is!("(2 as float, 4.3 as int)  == 2.0 ,4", 1);
-	is!("(2 as float, 4.3 as int)  == 2,4", 1);
-	// advanced, needs cast() to be implemented in wasm
-	is!("2 as char", '2'); // ≠ char(0x41) ==  'a'
+	// Simple casts first
 	is!("2 as string", "2");
-	is!("'2' as number", 2);
-	is!("'2.1' as number", 2.1);
-	is!("'2' as bool", true);
-	is!("2 as bool", true);
-	is!("'false' as bool", false);
-	is!("'no' as bool", false);
-	is!("'ø' as bool", false);
 	is!("'2' as int", 2);
 	is!("'2' as long", 2);
 	is!("'2.1' as int", 2);
@@ -161,6 +150,23 @@ fn test_emit_cast() {
 	is!("'2.1' as real", 2.1);
 	is!("'2.1' as float", 2.1);
 	is!("'2.1' as double", 2.1);
+	// Char and number types
+	is!("2 as char", '2'); // ≠ char(0x41) ==  'a'
+	is!("'2' as number", 2);
+	is!("'2.1' as number", 2.1);
+	// Bool casts
+	is!("'2' as bool", true);
+	is!("2 as bool", true);
+	is!("'false' as bool", false);
+	is!("'no' as bool", false);
+	is!("'ø' as bool", false);
+}
+
+#[test]
+#[ignore = "tuple comparison with cast - complex"]
+fn test_emit_cast_tuple() {
+	is!("(2 as float, 4.3 as int)  == 2.0 ,4", 1);
+	is!("(2 as float, 4.3 as int)  == 2,4", 1);
 }
 
 #[test]
