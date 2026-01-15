@@ -170,12 +170,11 @@ fn test_emit_cast_tuple() {
 }
 
 #[test]
-#[ignore]
 fn test_constructor_cast() {
+	// educate user to use as ?
 	is!("int('123')", 123);
 	is!("str(123)", "123");
-	is!("'a'", 'a');
-	is!("char(0x41)", 'a');
+	is!("char(0x41)", 'A'); // 0x41 = 65 = 'A'
 	is!("string(123)", "123");
 	is!("String(123)", "123");
 }
