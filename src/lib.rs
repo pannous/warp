@@ -29,11 +29,13 @@ pub mod meta;
 pub mod host;
 pub mod function;
 pub mod normalize;
+pub mod local;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
-pub use node::{is_function_keyword, Bracket, Node, Op, Separator, FUNCTION_KEYWORDS};
+pub use node::{Bracket, Node, Separator};
+pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
 pub use node::{block, codepoint, error, error_node, float, floats, data, int, ints, key, key_op, key_ops, list, parens, symbol, symbols, text, texts};
 // Node variants (except Number/List which conflict with extension types)
@@ -52,7 +54,7 @@ pub use host::{HostState, link_host_functions, create_host_linker};
 // Functions
 pub use function::{Function, FunctionRegistry, Signature, Arg, ABI, kind_to_valtype};
 // Local (unified struct for variables)
-pub use node::Local;
+pub use local::Local;
 // Legacy GcObject for backward compatibility (3-field Node layout)
 pub use wasm_gc_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
