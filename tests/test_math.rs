@@ -214,7 +214,7 @@ fn test_runtime_equality_autocast() {
         Node rhs = node.children[1]; //["rhs"];
         const Code &lhs_code = emitExpression(lhs, context);
         Type lhs_type = last_type;
-        arg_type = last_type; // needs to be visible to array index [1,2,3]#1 gets FUCKED up in rhs operations!!
+        arg_type = last_type; 
         if (isGeneric(last_type))
             arg_type = last_type.generics.value_type;
         const Code &rhs_code = emitExpression(rhs, context);

@@ -87,22 +87,7 @@ fn test_wit_function() {
 
 #[test]
 fn test_float_return_through_main() {
-	//     double
-	//     let x = 0.0000001; // 3e...
-	//	double x=1000000000.1;// 4...
-	//	double x=-1000000000.1;// c1…
-	//	double x=9999999999999999.99999999;// 43…
-	//	double x=-9999999999999999.99999999;// c3…
-	//	double x=1.1;// 3ff199999999999a
-	//	double x=-1.1;// bff199999999999a
-	//     int64
-	//     y = *(int64 *) & x;
-	let y: i64 = 0x00FF000000000000; // -> 0.000000 OK
-								  // #[cfg(not(feature = "WASM"))]{
-								  // printf!("%llx\n", y);
-								  // }
-								  // x = *(double *) & y;
-								  // printf!("%lf\n", x);
+	let y: i64 = 0x00FF000000000000;
 	is!(y.to_string().as_str(), 0x00FF000000000000i64);
 }
 
