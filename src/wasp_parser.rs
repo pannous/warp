@@ -711,24 +711,36 @@ impl WaspParser {
 				}
 			}
 
-			// Step 2b: Check for subscript access [index] - binds tight like Op::Hash
+			// Step 2b: Check for subscript access [index] or [i,j,...] - binds tight like Op::Hash
 			// binding power 170 matches Op::Hash
+			// Comma-index syntax: a[i,j] means a[i][j] (nested indexing)
 			if self.current_char() == '[' && min_bp <= 170 {
 				self.advance(); // skip '['
 				self.skip_whitespace();
-				let index = self.parse_expr(0); // parse the index expression
+
+				// Collect all comma-separated indices
+				let mut indices = vec![self.parse_expr(0)];
 				self.skip_whitespace();
+
+				while self.current_char() == ',' {
+					self.advance(); // skip ','
+					self.skip_whitespace();
+					indices.push(self.parse_expr(0));
+					self.skip_whitespace();
+				}
+
 				if self.current_char() == ']' {
 					self.advance(); // skip ']'
-					// Convert to Op::Hash but keep 0-indexed semantics
-					// [0] becomes #1, so add 1 to index
-					// Handle potential metadata wrapping
-					let index_unwrapped = index.drop_meta();
-					let adjusted_index = match index_unwrapped {
-						Node::Number(n) => Node::Number(n.clone() + crate::extensions::numbers::Number::Int(1)),
-						_ => Node::Key(Box::new(index), Op::Add, Box::new(Node::Number(crate::extensions::numbers::Number::Int(1)))),
-					};
-					lhs = Node::Key(Box::new(lhs), Op::Hash, Box::new(adjusted_index));
+					// Chain indexing operations for each index
+					// [i,j] becomes ((lhs#(i+1))#(j+1))
+					for index in indices {
+						let index_unwrapped = index.drop_meta();
+						let adjusted_index = match index_unwrapped {
+							Node::Number(n) => Node::Number(n.clone() + crate::extensions::numbers::Number::Int(1)),
+							_ => Node::Key(Box::new(index), Op::Add, Box::new(Node::Number(crate::extensions::numbers::Number::Int(1)))),
+						};
+						lhs = Node::Key(Box::new(lhs), Op::Hash, Box::new(adjusted_index));
+					}
 					continue;
 				}
 			}
