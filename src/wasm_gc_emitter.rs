@@ -747,6 +747,7 @@ impl WasmGcEmitter {
 					self.required_functions.insert("new_int");
 					self.required_functions.insert("new_float");
 					self.required_functions.insert("new_text");
+					self.required_functions.insert("new_codepoint");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -3202,9 +3203,17 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::I64Const(*f as i64));
 						self.emit_call(func, "new_int");
 					}
-					// Compile-time: string literal to int
+					// Compile-time: string literal to int (parse, truncate if float)
 					Node::Text(s) => {
-						let n: i64 = s.parse().unwrap_or(0);
+						let n: i64 = s.parse::<i64>().unwrap_or_else(|_| {
+							s.parse::<f64>().map(|f| f as i64).unwrap_or(0)
+						});
+						func.instruction(&Instruction::I64Const(n));
+						self.emit_call(func, "new_int");
+					}
+					// Compile-time: char literal to int (parse digit)
+					Node::Char(c) => {
+						let n: i64 = c.to_string().parse().unwrap_or(*c as i64);
 						func.instruction(&Instruction::I64Const(n));
 						self.emit_call(func, "new_int");
 					}
@@ -3227,6 +3236,12 @@ impl WasmGcEmitter {
 					// Compile-time: string literal to float
 					Node::Text(s) => {
 						let f: f64 = s.parse().unwrap_or(0.0);
+						func.instruction(&Instruction::F64Const(f.into()));
+						self.emit_call(func, "new_float");
+					}
+					// Compile-time: char literal to float (parse digit)
+					Node::Char(c) => {
+						let f: f64 = c.to_string().parse().unwrap_or(*c as i64 as f64);
 						func.instruction(&Instruction::F64Const(f.into()));
 						self.emit_call(func, "new_float");
 					}
@@ -3253,6 +3268,14 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::I32Const(len as i32));
 						self.emit_call(func, "new_text");
 					}
+					// Compile-time: char to string
+					Node::Char(c) => {
+						let s = c.to_string();
+						let (ptr, len) = self.allocate_string(&s);
+						func.instruction(&Instruction::I32Const(ptr as i32));
+						func.instruction(&Instruction::I32Const(len as i32));
+						self.emit_call(func, "new_text");
+					}
 					// Already a string - use the string table
 					Node::Text(s) => {
 						self.emit_string_call(func, s, "new_text");
@@ -3261,6 +3284,106 @@ impl WasmGcEmitter {
 					_ => {
 						self.emit_node_instructions(func, value);
 						self.emit_call(func, "cast_to_string");
+					}
+				}
+			}
+			"char" | "character" => {
+				// Cast to char: int to char (digit representation)
+				// new_codepoint expects i32
+				match value {
+					Node::Number(Number::Int(n)) => {
+						// Convert digit to char: 2 → '2'
+						let c = if *n >= 0 && *n <= 9 {
+							char::from_digit(*n as u32, 10).unwrap_or('?')
+						} else {
+							char::from_u32(*n as u32).unwrap_or('?')
+						};
+						func.instruction(&Instruction::I32Const(c as i32));
+						self.emit_call(func, "new_codepoint");
+					}
+					Node::Char(c) => {
+						func.instruction(&Instruction::I32Const(*c as i32));
+						self.emit_call(func, "new_codepoint");
+					}
+					_ => {
+						self.emit_numeric_value(func, value);
+						func.instruction(&Instruction::I32WrapI64);
+						self.emit_call(func, "new_codepoint");
+					}
+				}
+			}
+			"bool" | "boolean" => {
+				// Cast to bool
+				match value {
+					// Compile-time: string to bool
+					Node::Text(s) => {
+						let b = !matches!(s.to_lowercase().as_str(),
+							"" | "0" | "false" | "no" | "ø" | "nil" | "null" | "none");
+						func.instruction(&Instruction::I64Const(if b { 1 } else { 0 }));
+						self.emit_call(func, "new_int");
+					}
+					Node::Char(c) => {
+						let b = !matches!(*c, '0' | 'ø');
+						func.instruction(&Instruction::I64Const(if b { 1 } else { 0 }));
+						self.emit_call(func, "new_int");
+					}
+					Node::Number(Number::Int(n)) => {
+						let b = *n != 0;
+						func.instruction(&Instruction::I64Const(if b { 1 } else { 0 }));
+						self.emit_call(func, "new_int");
+					}
+					Node::Number(Number::Float(f)) => {
+						let b = *f != 0.0;
+						func.instruction(&Instruction::I64Const(if b { 1 } else { 0 }));
+						self.emit_call(func, "new_int");
+					}
+					Node::True => {
+						func.instruction(&Instruction::I64Const(1));
+						self.emit_call(func, "new_int");
+					}
+					Node::False => {
+						func.instruction(&Instruction::I64Const(0));
+						self.emit_call(func, "new_int");
+					}
+					_ => {
+						// Runtime: non-zero/non-empty is truthy
+						self.emit_numeric_value(func, value);
+						func.instruction(&Instruction::I64Eqz);
+						func.instruction(&Instruction::I64ExtendI32U);
+						func.instruction(&Instruction::I64Const(1));
+						func.instruction(&Instruction::I64Xor);
+						self.emit_call(func, "new_int");
+					}
+				}
+			}
+			"number" | "num" => {
+				// Cast to number: auto-detect int or float
+				match value {
+					Node::Text(s) => {
+						// Try parsing as int first, then float
+						if let Ok(n) = s.parse::<i64>() {
+							func.instruction(&Instruction::I64Const(n));
+							self.emit_call(func, "new_int");
+						} else if let Ok(f) = s.parse::<f64>() {
+							func.instruction(&Instruction::F64Const(f.into()));
+							self.emit_call(func, "new_float");
+						} else {
+							func.instruction(&Instruction::I64Const(0));
+							self.emit_call(func, "new_int");
+						}
+					}
+					Node::Char(c) => {
+						if let Some(n) = c.to_digit(10) {
+							func.instruction(&Instruction::I64Const(n as i64));
+							self.emit_call(func, "new_int");
+						} else {
+							func.instruction(&Instruction::I64Const(*c as i64));
+							self.emit_call(func, "new_int");
+						}
+					}
+					_ => {
+						// Already numeric
+						self.emit_node_instructions(func, value);
 					}
 				}
 			}
