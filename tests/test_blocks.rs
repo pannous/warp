@@ -78,13 +78,17 @@ fn test_group_cascade() {
 
 
 #[test]
-#[ignore]
 fn test_matrix_order() {
 	is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
 	is!("([[1, 2], [3, 4]])[0][1]", 2);
 	is!("([[1, 2], [3, 4]])[1][0]", 3);
 	is!("([1, 2], [3, 4])[1][0]", 3);
 	is!("(1, 2; 3, 4)[1][0]", 3);
+}
+
+#[test]
+#[ignore = "comma-index syntax [i,j] not yet implemented"]
+fn test_matrix_comma_index() {
 	is!("(1, 2; 3, 4)[1,0]", 3);
 	is!("(1 2, 3 4)[1,0]", 3);
 }
