@@ -19,7 +19,8 @@ pub mod host;
 pub mod util;
 pub mod function;
 pub mod normalize;
-
+pub mod run;
+pub mod local;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
@@ -251,4 +252,3 @@ fn extract_after(s: &str, sep: &str) -> String {
     s.split_once(sep).map(|(_, after)| after.to_string()).unwrap_or_default()
 }
 
-pub mod run;

@@ -7,7 +7,8 @@
 //!
 //! Design based on wasp/source/Code.h Function/Signature classes.
 
-use crate::node::{Local, Node};
+use crate::local::Local;
+use crate::node::Node;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 use wasm_encoder::ValType;

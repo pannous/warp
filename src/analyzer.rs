@@ -1,7 +1,9 @@
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
-use crate::node::{is_function_keyword, Local, Node, Op};
+use crate::local::Local;
+use crate::node::Node;
 use crate::normalize::hints as norm;
+use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 
