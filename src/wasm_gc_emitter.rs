@@ -3,6 +3,7 @@ use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, FunctionRegistry, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{is_function_keyword, Bracket, Node, Op};
+use crate::normalize::hints as norm;
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
 use crate::util::gc_engine;
 use crate::wasm_gc_reader::read_bytes;
@@ -2243,6 +2244,11 @@ impl WasmGcEmitter {
 						if !is_typed_decl {
 							match type_name.as_str() {
 								"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
+									// Emit normalization hint: prefer 'x as int' over 'int(x)'
+									norm::type_constructor(type_name, &items[1].to_string());
+									if type_name == "str" || type_name == "String" {
+										norm::string_type(type_name);
+									}
 									self.emit_cast(func, &items[1], &items[0]);
 									return;
 								}
