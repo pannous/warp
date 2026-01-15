@@ -87,7 +87,6 @@ fn test_matrix_order() {
 }
 
 #[test]
-#[ignore = "comma-index syntax [i,j] not yet implemented"]
 fn test_matrix_comma_index() {
 	is!("(1, 2; 3, 4)[1,0]", 3);
 	is!("(1 2, 3 4)[1,0]", 3);
