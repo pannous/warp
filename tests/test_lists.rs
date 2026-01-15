@@ -132,7 +132,7 @@ fn test_index_offset_advanced() {
 	// Index assignment with variable index
 	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
 	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
-	// More list tests
+									// More list tests
 	is!("x=(1 4 3);x#2=5;x#2", 5); // index assignment
 	is!("x=(1 4 3);x#2", 4); // list variable storage
 }
@@ -184,7 +184,6 @@ fn test_array_indices() {
 }
 
 #[test]
-#[ignore]
 fn test_root_lists() {
 	// vargs needs to be 0 terminated, otherwise pray!
 	is!("1 2 3", Node::ints(vec![1, 2, 3]));
@@ -204,7 +203,6 @@ fn test_root_lists() {
 }
 
 #[test]
-#[ignore]
 fn test_root_list_strings() {
 	is!("(a,b,c)", Node::strings(vec!["a", "b", "c"])); // symbols shall match string
 	is!("(a;b;c)", Node::strings(vec!["a", "b", "c"]));
@@ -221,15 +219,13 @@ fn test_root_list_strings() {
 }
 
 #[test]
-fn test_index() {
+	fn test_index() {
 	let result = parse("[a b c]#2");
 	// eqs!(result, "[a  b  c]#2");
 	eq!(result.first().length(), 3); // (# [a b c] 2)
-	skip!(
-		is!("(a b c)#2", "b"); // or compile time list indexing??
-		is!("{a b c}#2", "b");
-		is!("[a b c]#2", "b");
-	);
+	is!("(a b c)#2", "b"); // or compile time list indexing??
+	is!("{a b c}#2", "b");
+	is!("[a b c]#2", "b");
 	skip!(
 			is!("{a:1 b:2}.a", 1);
 			is!("a of {a:1 b:2}", 1);
