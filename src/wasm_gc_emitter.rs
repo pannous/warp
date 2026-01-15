@@ -706,6 +706,9 @@ impl WasmGcEmitter {
 				// Check for index assignment: Key(Key(_, Hash, _), Assign, _)
 				if *op == Op::Assign {
 					if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
+						// Runtime dispatch for index assignment
+						self.required_functions.insert("node_set_at");
+						self.required_functions.insert("string_set_char_at");
 						self.required_functions.insert("list_set_at");
 						self.required_functions.insert("new_int");
 						self.analyze_required_functions(key);
@@ -732,7 +735,10 @@ impl WasmGcEmitter {
 						self.required_functions.insert("i64_pow");
 					}
 				} else if *op == Op::Hash {
-					// List indexing - need both helpers for node and numeric paths
+					// Indexing - need runtime dispatch and all helpers
+					self.required_functions.insert("node_index_at");
+					self.required_functions.insert("string_char_at");
+					self.required_functions.insert("new_codepoint");
 					self.required_functions.insert("list_node_at");
 					self.required_functions.insert("list_at");
 					self.required_functions.insert("new_list");
@@ -1463,6 +1469,112 @@ impl WasmGcEmitter {
 			self.exports.export("list_node_at", ExportKind::Func, idx);
 		}
 
+		// string_char_at(node: ref $Node, index: i64) -> ref $Node
+		// Get the character at index (1-based) from a Text/Symbol node, returns Codepoint node
+		if self.should_emit_function("string_char_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64],
+				vec![Ref(node_ref)],
+			);
+			self.functions.function(func_type);
+
+			let mut func = Function::new(vec![]);
+
+			// Get node.data (which is a ref $String)
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field
+			});
+			// Cast anyref to ref $String
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.string_type)));
+
+			// Get ptr from $String
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.string_type,
+				field_index: 0, // ptr
+			});
+
+			// Add (index - 1) to ptr for 1-based indexing
+			func.instruction(&Instruction::LocalGet(1)); // index
+			func.instruction(&Instruction::I32WrapI64);
+			func.instruction(&Instruction::I32Const(1));
+			func.instruction(&Instruction::I32Sub);
+			func.instruction(&Instruction::I32Add); // ptr + (index - 1)
+
+			// Load byte from memory at that address
+			func.instruction(&Instruction::I32Load8U(MemArg {
+				offset: 0,
+				align: 0,
+				memory_index: 0,
+			}));
+
+			// Create Codepoint node with this value
+			self.emit_call(&mut func, "new_codepoint");
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("string_char_at");
+			self.exports.export("string_char_at", ExportKind::Func, idx);
+		}
+
+		// node_index_at(node: ref $Node, index: i64) -> ref $Node
+		// Runtime dispatch: for Text/Symbol call string_char_at, for List/Block call list_node_at
+		if self.should_emit_function("node_index_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64],
+				vec![Ref(node_ref)],
+			);
+			self.functions.function(func_type);
+
+			let mut func = Function::new(vec![]);
+
+			// Get node.kind
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 0, // kind field
+			});
+
+			// Check if kind is Text (3) or Symbol (5)
+			// kind == 3 || kind == 5 means it's a string
+			func.instruction(&Instruction::I64Const(3)); // Kind::Text
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			// It's a Text - call string_char_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			self.emit_call(&mut func, "string_char_at");
+			func.instruction(&Instruction::Else);
+			// Check for Symbol
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 0,
+			});
+			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			// It's a Symbol - call string_char_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			self.emit_call(&mut func, "string_char_at");
+			func.instruction(&Instruction::Else);
+			// Otherwise it's a list - call list_node_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			self.emit_call(&mut func, "list_node_at");
+			func.instruction(&Instruction::End); // end inner if
+			func.instruction(&Instruction::End); // end outer if
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("node_index_at");
+			self.exports.export("node_index_at", ExportKind::Func, idx);
+		}
+
 		// list_set_at(list: ref $Node, index: i64, value: i64) -> i64
 		// Set the numeric value at index (1-based) and return the value
 		if self.should_emit_function("list_set_at") {
@@ -1535,6 +1647,116 @@ impl WasmGcEmitter {
 			self.code.function(&func);
 			let idx = self.register_func("list_set_at");
 			self.exports.export("list_set_at", ExportKind::Func, idx);
+		}
+
+		// string_set_char_at(node: ref $Node, index: i64, value: i64) -> i64
+		// Set the character at index (1-based) in a Text/Symbol node, returns the value
+		if self.should_emit_function("string_set_char_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64, ValType::I64],
+				vec![ValType::I64],
+			);
+			self.functions.function(func_type);
+
+			let mut func = Function::new(vec![]);
+
+			// Get node.data (which is a ref $String)
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 1, // data field
+			});
+			// Cast anyref to ref $String
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.string_type)));
+
+			// Get ptr from $String
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.string_type,
+				field_index: 0, // ptr
+			});
+
+			// Calculate address: ptr + (index - 1) for 1-based indexing
+			func.instruction(&Instruction::LocalGet(1)); // index
+			func.instruction(&Instruction::I32WrapI64);
+			func.instruction(&Instruction::I32Const(1));
+			func.instruction(&Instruction::I32Sub);
+			func.instruction(&Instruction::I32Add); // address = ptr + (index - 1)
+
+			// Store the value as a byte
+			func.instruction(&Instruction::LocalGet(2)); // value
+			func.instruction(&Instruction::I32WrapI64);
+			func.instruction(&Instruction::I32Store8(MemArg {
+				offset: 0,
+				align: 0,
+				memory_index: 0,
+			}));
+
+			// Return the value
+			func.instruction(&Instruction::LocalGet(2));
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("string_set_char_at");
+			self.exports.export("string_set_char_at", ExportKind::Func, idx);
+		}
+
+		// node_set_at(node: ref $Node, index: i64, value: i64) -> i64
+		// Runtime dispatch for index assignment: string_set_char_at or list_set_at
+		if self.should_emit_function("node_set_at") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref), ValType::I64, ValType::I64],
+				vec![ValType::I64],
+			);
+			self.functions.function(func_type);
+
+			let mut func = Function::new(vec![]);
+
+			// Get node.kind
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 0, // kind field
+			});
+
+			// Check if kind is Text (3) or Symbol (5)
+			func.instruction(&Instruction::I64Const(3)); // Kind::Text
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+			// It's a Text - call string_set_char_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::LocalGet(2));
+			self.emit_call(&mut func, "string_set_char_at");
+			func.instruction(&Instruction::Else);
+			// Check for Symbol
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 0,
+			});
+			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+			// It's a Symbol - call string_set_char_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::LocalGet(2));
+			self.emit_call(&mut func, "string_set_char_at");
+			func.instruction(&Instruction::Else);
+			// Otherwise it's a list - call list_set_at
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::LocalGet(2));
+			self.emit_call(&mut func, "list_set_at");
+			func.instruction(&Instruction::End); // end inner if
+			func.instruction(&Instruction::End); // end outer if
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("node_set_at");
+			self.exports.export("node_set_at", ExportKind::Func, idx);
 		}
 
 		// Emit helper functions
@@ -1858,17 +2080,18 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				// Handle index assignment: list#index = value → list_set_at(list, index, value)
+				// Handle index assignment: node#index = value → node_set_at(node, index, value)
+				// Works for both lists and strings via runtime dispatch
 				if *op == Op::Assign {
-					if let Node::Key(list_expr, Op::Hash, index_expr) = left.drop_meta() {
-						// Emit list (as node ref)
-						self.emit_node_instructions(func, list_expr);
+					if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
+						// Emit node (string or list ref)
+						self.emit_node_instructions(func, node_expr);
 						// Emit index (as i64)
 						self.emit_numeric_value(func, index_expr);
 						// Emit value (as i64)
 						self.emit_numeric_value(func, right);
-						// Call list_set_at which returns the value
-						self.emit_call(func, "list_set_at");
+						// Call node_set_at which dispatches to string_set_char_at or list_set_at
+						self.emit_call(func, "node_set_at");
 						// Wrap result as Node
 						self.emit_call(func, "new_int");
 						return;
@@ -1901,10 +2124,10 @@ impl WasmGcEmitter {
 					// While loop: (while condition) do body
 					self.emit_while_loop(func, left, right);
 				} else if *op == Op::Hash {
-					// List indexing: list#index returns the element node directly
-					self.emit_node_instructions(func, left);  // emit list
+					// Indexing: dispatches to string_char_at or list_node_at at runtime
+					self.emit_node_instructions(func, left);  // emit node (string or list)
 					self.emit_numeric_value(func, right);      // emit index
-					self.emit_call(func, "list_node_at");      // get element node
+					self.emit_call(func, "node_index_at");     // runtime dispatch
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -2987,6 +3210,9 @@ impl WasmGcEmitter {
 			}
 			Node::False => {
 				func.instruction(&Instruction::I64Const(0));
+			}
+			Node::Char(c) => {
+				func.instruction(&Instruction::I64Const(*c as i64));
 			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => {
