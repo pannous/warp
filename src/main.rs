@@ -18,6 +18,7 @@ pub mod operators;
 pub mod host;
 pub mod util;
 pub mod function;
+pub mod normalize;
 
 use std::env;
 use std::fs;
