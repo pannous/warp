@@ -114,6 +114,9 @@ pub enum Op {
 	Range, // ..
 	To,    // to  ...  …
 
+	// Type conversion
+	As, // as  (type cast)
+
 	// User(Node), allow user defined operators, name==symbol
 
 	None, // implicit/unknown
@@ -146,6 +149,9 @@ impl Op {
 
 			// Range
 			Op::Range | Op::To => (130, 131),
+
+			// Type cast (binds tighter than comparison: 1.5 as int == 1)
+			Op::As => (125, 126),
 
 			// Comparison (left-assoc, no chaining)
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
@@ -248,6 +254,9 @@ impl Op {
 			Op::Hash => "#",
 			Op::Range => "..",
 			Op::To => "to",
+
+			// Type conversion
+			Op::As => "as",
 
 			// Conditional
 			Op::If => "if",

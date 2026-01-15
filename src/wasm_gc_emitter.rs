@@ -742,6 +742,11 @@ impl WasmGcEmitter {
 					self.required_functions.insert("list_node_at");
 					self.required_functions.insert("list_at");
 					self.required_functions.insert("new_list");
+				} else if *op == Op::As {
+					// Type cast - needs constructors for all possible target types
+					self.required_functions.insert("new_int");
+					self.required_functions.insert("new_float");
+					self.required_functions.insert("new_text");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -2128,6 +2133,9 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, left);  // emit node (string or list)
 					self.emit_numeric_value(func, right);      // emit index
 					self.emit_call(func, "node_index_at");     // runtime dispatch
+				} else if *op == Op::As {
+					// Type cast: value as type
+					self.emit_cast(func, left, right);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -3167,6 +3175,103 @@ impl WasmGcEmitter {
 
 	fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
 		self.emit_while_loop_impl(func, left, body, false);
+	}
+
+	/// Emit type cast: value as type
+	/// Handles conversions between int, float, string
+	/// Optimizes literal conversions at compile time
+	fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		let type_name = match target_type.drop_meta() {
+			Node::Symbol(s) => s.to_lowercase(),
+			Node::Text(s) => s.to_lowercase(),
+			_ => {
+				// Unknown type, emit as-is
+				self.emit_node_instructions(func, value);
+				return;
+			}
+		};
+
+		let value = value.drop_meta();
+
+		match type_name.as_str() {
+			"int" | "integer" | "i32" | "i64" | "long" => {
+				// Cast to integer
+				match value {
+					// Compile-time: float literal to int
+					Node::Number(Number::Float(f)) => {
+						func.instruction(&Instruction::I64Const(*f as i64));
+						self.emit_call(func, "new_int");
+					}
+					// Compile-time: string literal to int
+					Node::Text(s) => {
+						let n: i64 = s.parse().unwrap_or(0);
+						func.instruction(&Instruction::I64Const(n));
+						self.emit_call(func, "new_int");
+					}
+					// Runtime: float expression to int
+					_ if self.needs_float(value) => {
+						self.emit_float_value(func, value);
+						func.instruction(&Instruction::I64TruncF64S);
+						self.emit_call(func, "new_int");
+					}
+					// Already int or coercible
+					_ => {
+						self.emit_numeric_value(func, value);
+						self.emit_call(func, "new_int");
+					}
+				}
+			}
+			"float" | "real" | "double" | "f32" | "f64" => {
+				// Cast to float
+				match value {
+					// Compile-time: string literal to float
+					Node::Text(s) => {
+						let f: f64 = s.parse().unwrap_or(0.0);
+						func.instruction(&Instruction::F64Const(f.into()));
+						self.emit_call(func, "new_float");
+					}
+					// Compile-time: int literal to float
+					Node::Number(Number::Int(n)) => {
+						func.instruction(&Instruction::F64Const((*n as f64).into()));
+						self.emit_call(func, "new_float");
+					}
+					// Runtime: emit as float
+					_ => {
+						self.emit_float_value(func, value);
+						self.emit_call(func, "new_float");
+					}
+				}
+			}
+			"string" | "str" | "text" => {
+				// Cast to string
+				match value {
+					// Compile-time: number literal to string
+					Node::Number(n) => {
+						let s = n.to_string();
+						let (ptr, len) = self.allocate_string(&s);
+						func.instruction(&Instruction::I32Const(ptr as i32));
+						func.instruction(&Instruction::I32Const(len as i32));
+						self.emit_call(func, "new_text");
+					}
+					// Already a string - use the string table
+					Node::Text(s) => {
+						self.emit_string_call(func, s, "new_text");
+					}
+					// Runtime: use cast function
+					_ => {
+						self.emit_node_instructions(func, value);
+						self.emit_call(func, "cast_to_string");
+					}
+				}
+			}
+			_ => {
+				// Unknown type, emit as key node for dynamic dispatch
+				self.emit_node_instructions(func, value);
+				self.emit_node_instructions(func, target_type);
+				func.instruction(&Instruction::I64Const(op_to_code(&Op::As)));
+				self.emit_call(func, "new_key");
+			}
+		}
 	}
 
 	/// Extract numeric value from a block { expr } or plain expr
