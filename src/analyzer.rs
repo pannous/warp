@@ -1,6 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
 use crate::node::{is_function_keyword, Local, Node, Op};
+use crate::normalize::hints as norm;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 
@@ -267,6 +268,12 @@ fn collect_functions_inner(node: &Node, registry: &mut FunctionRegistry) {
 			if let Node::Symbol(keyword) = items[0].drop_meta() {
 				if is_function_keyword(keyword) {
 					if let Some(func) = parse_function_declaration(items, keyword) {
+						// Emit normalization hint for function keyword style
+						let params_str = func.signature.parameters.iter()
+							.map(|p| p.name.clone())
+							.collect::<Vec<_>>()
+							.join(", ");
+						norm::function_keyword(keyword, &func.name, &params_str);
 						registry.register(func);
 						return;
 					}
