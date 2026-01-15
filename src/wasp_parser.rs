@@ -3,6 +3,7 @@ use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, float, key_ops, Bracket, Node, Op, Separator};
+use crate::normalize::hints as norm;
 use crate::*;
 use log::warn;
 use std::fs;
@@ -443,7 +444,10 @@ impl WaspParser {
 			('=', '>') => return Some((Op::FatArrow, 2)),
 
 			// Arithmetic
-			('*', '*') => return Some((Op::Pow, 2)),
+			('*', '*') => {
+				norm::power_operator("**");
+				return Some((Op::Pow, 2));
+			}
 
 			// Compound assignment (must check before comparison for >= etc)
 			('+', '=') => return Some((Op::AddAssign, 2)),
@@ -468,8 +472,14 @@ impl WaspParser {
 
 			// Logical (2-char versions)
 			('o', 'r') if !c3.is_alphanumeric() => return Some((Op::Or, 2)),
-			('&', '&') => return Some((Op::And, 2)),
-			('|', '|') => return Some((Op::Or, 2)),
+			('&', '&') => {
+				norm::and_operator("&&");
+				return Some((Op::And, 2));
+			}
+			('|', '|') => {
+				norm::or_operator("||");
+				return Some((Op::Or, 2));
+			}
 
 			// Conditional
 			('i', 'f') if !c3.is_alphanumeric() => return Some((Op::If, 2)),
@@ -510,10 +520,19 @@ impl WaspParser {
 			'≠' => Some((Op::Ne, 1)),
 
 			// Logical
-			'!' => Some((Op::Not, 1)),
+			'!' => {
+				norm::not_operator("!");
+				Some((Op::Not, 1))
+			}
 			'¬' => Some((Op::Not, 1)),
-			'&' => Some((Op::And, 1)),
-			'|' => Some((Op::Or, 1)),
+			'&' => {
+				norm::and_operator("&");
+				Some((Op::And, 1))
+			}
+			'|' => {
+				norm::or_operator("|");
+				Some((Op::Or, 1))
+			}
 			'∧' => Some((Op::And, 1)),
 			'⋁' => Some((Op::Or, 1)),
 			'⊻' => Some((Op::Xor, 1)),
@@ -522,7 +541,10 @@ impl WaspParser {
 			'#' => Some((Op::Hash, 1)),
 
 			// Ternary
-			'?' => Some((Op::Question, 1)),
+			'?' => {
+				norm::conditional(true); // true = used ternary
+				Some((Op::Question, 1))
+			}
 
 			// Range
 			'…' => Some((Op::To, 1)), // single unicode ellipsis
@@ -984,6 +1006,7 @@ impl WaspParser {
 
 	fn parse_string(&mut self) -> Node {
 		let quote = self.current_char();
+		let is_double_quote = quote == '"';
 		self.advance(); // skip opening quote
 
 		let mut s = String::new();
@@ -994,7 +1017,11 @@ impl WaspParser {
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
-					// quotes with exactly one character become Codepoint
+				// Hint for double quotes (only for multi-char strings)
+				if is_double_quote && s.len() > 1 {
+					norm::double_quotes(&s);
+				}
+				// quotes with exactly one character become Codepoint
 				let mut chars = s.chars();
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
