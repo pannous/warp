@@ -3800,19 +3800,14 @@ impl WasmGcEmitter {
 		// Emit first item
 		self.emit_node_instructions(func, &items[0]);
 
-		// Emit rest
-		if items.len() > 2 {
-			// Recursive: rest is another list
-			let rest = Node::List(
-				items[1..].to_vec(),
-				bracket.clone(),
-				crate::node::Separator::None,
-			);
-			self.emit_node_instructions(func, &rest);
-		} else if items.len() == 2 {
-			// Last pair: rest is the second item directly
-			self.emit_node_instructions(func, &items[1]);
+		// Emit rest as a proper linked list
+		// The value field must always be a list node (or null), never an element directly
+		if items.len() > 1 {
+			// Recursively build the rest of the list
+			// This ensures proper cons-cell structure: (data=first, value=list_node_for_rest)
+			self.emit_list_structure(func, &items[1..], bracket);
 		} else {
+			// Single element list: rest is null
 			self.emit_node_null(func);
 		}
 
