@@ -433,6 +433,9 @@ impl WaspParser {
 
 		// Check 2-char operators
 		match (c1, c2) {
+			// Type conversion
+			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+
 			// Structural
 			(':', '=') => return Some((Op::Define, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),

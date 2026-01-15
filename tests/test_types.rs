@@ -133,23 +133,10 @@ fn cast(node: Node, to_type: NodeKind) -> Node {
 }
 
 #[test]
-fn test_cast() {
-	// is!("2", cast(Node(2),  NodeKind::Text).value.string);
-	// eq!(cast(Node(2), longs), 2); // trivial
-	// eq!(cast(Node(2.1), longs), 2);
-	// eq!(cast(Node(2), reals).value.real, 2.0);
-	// eq!(cast(Node(2.1), reals).value.real, 2.1);
-	// is!("2.1", cast(Node(2.1), NodeKind::Text).value.string);
-	// is!("a", cast(Node('a'), NodeKind::Text).value.string);
-	// no need to cast!
-	// eq!(false, cast(Node('0'), bools));
-	// eq!(false, cast(Node('ø'), bools));
-	// eq!(false, cast(Node("False", false), bools));
-	// eq!(false, cast(Node("ø", false), bools));
-	// eq!(true, cast(Node("True", false), bools));
-	// eq!(true, cast(Node("1", false), bools));
-	// eq!(true, cast(Node(1), bools));
-	// eq!(true, cast(Node("abcd", false), bools));
+fn test_cast_as() {
+	is!("123.1 as int", 123);
+	is!("123 as string", "123");
+	is!("'2.5' as float", 2.5);
 }
 
 #[test]
