@@ -143,6 +143,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 						let kind = infer_type(right, scope);
 						scope.define(name.clone(), None, kind);
 					}
+					// Note: type mismatch checking happens in check_type_errors
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
@@ -250,7 +251,104 @@ impl Scope {
 }
 
 pub fn analyze(raw: Node) -> Node {
-	raw // Pass-through for now; analysis happens in emitter
+	let mut scope = Scope::new();
+	if let Some(err) = check_type_errors(&raw, &mut scope) {
+		return err;
+	}
+	raw
+}
+
+/// Check for type errors in the AST, returns Some(Node::Error) if found
+fn check_type_errors(node: &Node, scope: &mut Scope) -> Option<Node> {
+	check_type_errors_inner(node, scope, false)
+}
+
+fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structure: bool) -> Option<Node> {
+	let node = node.drop_meta();
+	match node {
+		Node::Key(left, Op::Colon, right) => {
+			if let Node::Symbol(kw) = left.drop_meta() {
+				if kw == "global" {
+					return check_type_errors_inner(right, scope, false);
+				}
+				// Tag structure: check both sides, right is structure context
+				if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
+					return Some(err);
+				}
+				return check_type_errors_inner(right, scope, true);
+			}
+			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
+				return Some(err);
+			}
+			check_type_errors_inner(right, scope, in_structure)
+		}
+		Node::Key(left, Op::Define, right) => {
+			if let Node::Symbol(name) = left.drop_meta() {
+				let new_kind = infer_type(right, scope);
+				if let Some(existing) = scope.lookup(name) {
+					if !types_compatible(existing.kind, new_kind) {
+						return Some(type_error(name, existing.kind, new_kind));
+					}
+				} else {
+					scope.define(name.clone(), None, new_kind);
+				}
+			}
+			check_type_errors_inner(right, scope, in_structure)
+		}
+		Node::Key(left, Op::Assign, right) => {
+			if !in_structure {
+				if let Node::Symbol(name) = left.drop_meta() {
+					let new_kind = infer_type(right, scope);
+					if let Some(existing) = scope.lookup(name) {
+						if !types_compatible(existing.kind, new_kind) {
+							return Some(type_error(name, existing.kind, new_kind));
+						}
+					} else {
+						scope.define(name.clone(), None, new_kind);
+					}
+				}
+			}
+			check_type_errors_inner(right, scope, in_structure)
+		}
+		Node::Key(left, _, right) => {
+			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
+				return Some(err);
+			}
+			check_type_errors_inner(right, scope, in_structure)
+		}
+		Node::List(items, _, _) => {
+			for item in items {
+				if let Some(err) = check_type_errors_inner(item, scope, in_structure) {
+					return Some(err);
+				}
+			}
+			None
+		}
+		_ => None,
+	}
+}
+
+fn type_error(name: &str, existing: Kind, new: Kind) -> Node {
+	Node::Error(Box::new(Node::Text(format!(
+		"type mismatch: cannot assign {} to variable '{}' of type {}",
+		new, name, existing
+	))))
+}
+
+/// Check if two types are compatible for assignment
+fn types_compatible(existing: Kind, new: Kind) -> bool {
+	match (existing, new) {
+		// Same type is always compatible
+		(a, b) if a == b => true,
+		// Int and Float are NOT compatible (x=1; x=1.0 should fail)
+		(Kind::Int, Kind::Float) | (Kind::Float, Kind::Int) => false,
+		// Text and other types are NOT compatible
+		(Kind::Text, _) | (_, Kind::Text) => false,
+		// Codepoint and Int may be compatible (char as number)
+		(Kind::Int, Kind::Codepoint) | (Kind::Codepoint, Kind::Int) => true,
+		// Default: incompatible
+		_ => false,
+	}
 }
 
 /// Collect all function declarations from the AST into a FunctionRegistry

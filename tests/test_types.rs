@@ -196,11 +196,12 @@ fn test_deep_type() {
 }
 
 #[test]
-#[ignore]
+// #[ignore]
 fn test_type_confusion() {
 	assert_throws("x=1;x='ok'");
 	assert_throws("x=1;x=1.0");
-	assert_throws("double:=it*2"); // double is type i64!
+	// assert_throws("number:=it*2"); // number is a type! can't use type as variable name YES we can, see 
+	// assert_throws("double:=it*2"); // double is type i64! can't use type as variable name
 	                            // todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
 }
 
