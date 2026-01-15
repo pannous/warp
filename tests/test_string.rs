@@ -173,3 +173,73 @@ fn test_string_operations() {
 	is!("'hello'", "hello");
 	is!("`${1+1}`", 2);
 }
+
+
+#[test]
+fn test_string_index() {
+	is!("k='hi';k[0]", 'h'); // via compiler or runtime?
+	is!("k='hi';k[1]", 'i');
+	is!("k='hi';k#1", 'h');
+	is!("k='hi';k#2", 'i');
+	is!("'hi'[0]", 'h');
+	is!("'hi'[1]", 'i');
+	is!("'hi'#1", 'h');
+	is!("'hi'#2", 'i');
+}
+
+#[test]
+fn test_string_index_by_variable() {
+	is!("i=1;k='hi';k#i", 'h');
+	is!("i=1;k='hi';k[i]", 'i');
+	//	assert_throws("i=0;k='hi';k#i")// todo internal boundary assert!s? nah, later ;) done by VM:
+	// WASM3 error: [trap] out of bounds memory accessmemory size: 65536; access offset: 4294967295
+	is!("k='hi';k#1=97;k#1", 'a');
+	is!("k='hi';k#1='a';k#1", 'a');
+	is!("k='hi';i=1;k#i=97;k#i", 'a');
+	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
+	is!("k=(1,2,3);i=1;k#i=4;k#1", 4);
+
+	is!("k='hi';k#1=65;k#2", 'i');
+	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
+	is!("i=2;k='hio';k#i", 'i');
+}
+
+#[test]
+fn test_string_indices() { 
+	is!("'abcde'#4", 'd'); //
+	is!("x='abcde';x#4", 'd'); //
+	is!("x='abcde';x#4='x';x#4", 'x');
+
+	is!("x='abcde';x#4='x';x#4", 'x');
+	is!("x='abcde';x#4='x';x#5", 'e');
+
+	is!("x='abcde';x#4='x';x[3]", 'x');
+	is!("x='abcde';x#4='x';x[4]", 'e');
+	is!("i=0;x='abcde';x#4='x';x[4]", 'e');
+
+	// is!("'hello';(1 2 3 4);10", 10); // TODO: statement sequences - separate issue from string indexing
+
+	//	is!("'world'[1]", 'o');
+	is!("'world'#1", 'w');
+	is!("'world'#2", 'o');
+	is!("'world'#3", 'r');
+	skip!(
+	// todo move angle syntax to test_angle
+		   is!("char #1 in 'world'", 'w');
+		   is!("char 1 in 'world'", 'w');
+		   is!("2nd char in 'world'", 'o');
+		   is!("2nd byte in 'world'", 'o');
+		   is!("'world'#-1", 'd');
+	   );
+
+	is!("hello='world';hello#1", 'w');
+	is!("hello='world';hello#2", 'o');
+	//	is!("pixel=100 int(s);pixel#1=15;pixel#1", 15);
+	skip!(
+
+		is!("hello='world';hello#1='W';hello#1", 'W'); // diadic ternary operator
+		is!("hello='world';hello[0]='W';hello[0]", 'W'); // diadic ternary operator
+	);
+	//	is!("hello='world';hello#1='W';hello", "World");
+	//	exit(0);
+}
