@@ -28,6 +28,7 @@ pub mod ast;
 pub mod meta;
 pub mod host;
 pub mod function;
+pub mod normalize;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
