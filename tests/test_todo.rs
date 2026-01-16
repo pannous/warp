@@ -1,4 +1,5 @@
-use warp::is;
+use warp::{is, Node};
+// @claude once tests here are passing, move them to the appropriate correct test file!
 
 #[test]
 #[cfg(feature = "GRAFIX")]
@@ -80,6 +81,55 @@ fn test_param_reference() {
 fn test_index_assign_in_loop() {
 	// Index assignment with properly sized array
 	is!("i=0;pixel=(0 0 0 0 0);while(i++<5){pixel[i]=i%2};i", 5);
+}
+
+
+#[test]
+fn test_type() {
+	// type() returns a Symbol with the type name
+	is!("type(42)", Node::Symbol("int".to_string()));
+	is!("type(3.14)", Node::Symbol("float".to_string()));
+	is!("type('hello')", Node::Symbol("text".to_string()));
+	// Type of inferred variable
+	is!("x=42;type(x)", Node::Symbol("int".to_string()));
+}
+
+#[test]
+#[ignore = "typed variable declaration tracking not yet implemented"]
+fn test_type_annotated() {
+	// Explicit type annotation - needs type tracking in scope
+	is!("x:int=1;type(x)", Node::Symbol("int".to_string()));
+}
+
+
+#[test]
+#[ignore = "todo"]
+fn test_array_type_generics() {
+	is!("pixels=(1,2,3);type(pixels)","list<int>");
+}
+
+
+
+#[test]
+#[ignore = "array introspection functions not yet implemented"]
+fn test_array_length() {
+	is!("pixels=(1,2,3);#pixels", 3); // element count ⚠️ number operator ≠ index ≠ comment
+	is!("pixels=(1,2,3);count(pixels)", 3); // element count
+	is!("pixels=(1,2,3);pixels.count()", 3); // element count
+	is!("pixels=(1,2,3);pixels.count", 3); // element count methods/getters don't need ()
+	// is!("pixels=(1,2,3);pixel count", 3); // element count
+	is!("pixels=(1,2,3);number of pixels", 3); // element count
+	is!("pixels=(1,2,3);pixels.number()", 3); // element count
+	is!("pixels=(1,2,3);size(pixels) ", 3 * 8); // ⚠️ byte count as i64
+	// is!("pixels=(1,2,3);length(pixels) ", 3 * xyz); // ⚠️ byte count as node ???
+}
+
+
+#[test]
+#[ignore = "typed array constructor not yet implemented"]
+fn test_array_constructor() {
+	is!("i=0;w=800;h=800;pixels=640000*int;size(pixels) ", 800 * 800 * 4); // byte count
+	is!("i=0;w=800;h=800;pixels=640000*int;length(pixels) ", 800 * 800); // element count
 }
 
 // === Still pending (requires major features) ===

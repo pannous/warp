@@ -2163,6 +2163,22 @@ pub fn key(k: &str, v: Node) -> Node {
 	Key(Box::new(Symbol(k.to_string())), Op::Colon, Box::new(v))
 }
 
+pub fn types(name: &str) -> Node {
+	// todo look up in existing types map &Node
+	// instead of returning new instances every time and then matching through equality
+	Type {
+		name: Box::new(Node::Symbol(name.to_string())),
+		body: Box::new(Node::Empty),
+	}
+}
+pub fn typeDefinition(name: &str, body: Node) -> Node {
+	Type {
+		name: Box::new(Node::Symbol(name.to_string())),
+		body: Box::new(body),
+	}
+}
+
+
 pub fn key_op(k: Node, op: Op, v: Node) -> Node {
 	Key(Box::new(k), op, Box::new(v))
 }

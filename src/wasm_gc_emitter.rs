@@ -819,6 +819,11 @@ impl WasmGcEmitter {
 							}
 							// Non-constructor patterns
 							match s.as_str() {
+								"type" => {
+									// type() introspection returns a Symbol
+									self.required_functions.insert("new_symbol");
+									return;
+								}
 								"fetch" => {
 									// fetch returns a string, needs new_text
 									self.required_functions.insert("new_text");
@@ -2268,6 +2273,22 @@ impl WasmGcEmitter {
 								return;
 							}
 							_ => {}
+						}
+					}
+				}
+				// Check for type() introspection: type(x) returns the type of x as a Symbol
+				if items.len() == 2 {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if fn_name == "type" {
+							// Get the type of the argument and emit it as a Symbol
+							let kind = self.get_type(&items[1]);
+							let type_name = kind.to_string();
+							// Allocate the type name string and emit
+							let (ptr, len) = self.allocate_string(&type_name);
+							func.instruction(&Instruction::I32Const(ptr as i32));
+							func.instruction(&Instruction::I32Const(len as i32));
+							self.emit_call(func, "new_symbol");
+							return;
 						}
 					}
 				}
