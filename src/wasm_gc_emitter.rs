@@ -876,6 +876,12 @@ impl WasmGcEmitter {
 									self.required_functions.insert("new_text");
 									return;
 								}
+								"range" => {
+									// range function produces a list of integers
+									self.required_functions.insert("new_list");
+									self.required_functions.insert("new_int");
+									return;
+								}
 								_ => {}
 							}
 						}
@@ -2489,6 +2495,16 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Check for range function: range start end
+				if items.len() == 3 {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if fn_name == "range" {
+							// range start end produces [start, start+1, ..., end] (inclusive)
+							self.emit_range(func, &items[1], &items[2], true);
+							return;
+						}
+					}
+				}
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -4088,6 +4104,28 @@ impl WasmGcEmitter {
 			}
 			_ => panic!("Cannot extract float value from {:?}", node),
 		}
+	}
+
+	/// Emit a range as a list of integers
+	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
+	fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
+		let start_val = match start.drop_meta() {
+			Node::Number(Number::Int(i)) => *i,
+			_ => panic!("Range start must be a constant integer, got {:?}", start),
+		};
+		let end_val = match end.drop_meta() {
+			Node::Number(Number::Int(i)) => *i,
+			_ => panic!("Range end must be a constant integer, got {:?}", end),
+		};
+		let actual_end = if inclusive { end_val + 1 } else { end_val };
+		let items: Vec<Node> = (start_val..actual_end)
+			.map(|i| Node::Number(Number::Int(i)))
+			.collect();
+		if items.is_empty() {
+			self.emit_call(func, "new_empty");
+			return;
+		}
+		self.emit_list_structure(func, &items, &Bracket::Square);
 	}
 
 	/// Emit a list as linked cons cells
