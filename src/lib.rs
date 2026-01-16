@@ -27,6 +27,7 @@ pub mod operators;
 pub mod ast;
 pub mod meta;
 pub mod host;
+pub mod ffi;
 pub mod function;
 pub mod normalize;
 pub mod local;

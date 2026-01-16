@@ -447,3 +447,73 @@ pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<i64> {
 
 	Ok(results[0].unwrap_i64())
 }
+
+/// Load WASM bytes with FFI support (for native function imports)
+/// Uses inline reading to handle GC references with FFI state
+pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
+	use crate::ffi::{link_ffi_functions, FfiState};
+	use crate::extensions::numbers::Number;
+	use crate::type_kinds::Kind;
+
+	let engine = gc_engine();
+	let mut store: Store<FfiState> = Store::new(&engine, FfiState::new());
+
+	let module = Module::new(&engine, bytes)?;
+
+	// Create linker with FFI functions
+	let mut linker: Linker<FfiState> = Linker::new(&engine);
+	link_ffi_functions(&mut linker, &engine)?;
+
+	let instance = linker.instantiate(&mut store, &module)?;
+
+	let main = instance
+		.get_func(&mut store, "main")
+		.ok_or_else(|| anyhow!("No main function"))?;
+
+	let mut results = vec![Val::I32(0)];
+	main.call(&mut store, &[], &mut results)?;
+
+	// Read the GC struct fields directly
+	let result_val = results[0];
+	if let Some(anyref) = result_val.unwrap_anyref() {
+		if let Ok(structref) = anyref.unwrap_struct(&store) {
+			// Read kind field (i64)
+			let kind_val = structref.field(&mut store, FIELD_KIND)?;
+			let kind = kind_val.unwrap_i64();
+			let tag = (kind & 0xFF) as u8;
+
+			match tag {
+				t if t == Kind::Empty as u8 => return Ok(Node::Empty),
+				t if t == Kind::Int as u8 => {
+					// data field contains boxed i64
+					let data_val = structref.field(&mut store, FIELD_DATA)?;
+					if let Some(data_any) = data_val.unwrap_anyref() {
+						if let Ok(box_ref) = data_any.unwrap_struct(&store) {
+							let inner = box_ref.field(&mut store, 0)?;
+							return Ok(Node::Number(Number::Int(inner.unwrap_i64())));
+						}
+					}
+					return Ok(Node::Number(Number::Int(0)));
+				}
+				t if t == Kind::Float as u8 => {
+					// data field contains boxed f64
+					let data_val = structref.field(&mut store, FIELD_DATA)?;
+					if let Some(data_any) = data_val.unwrap_anyref() {
+						if let Ok(box_ref) = data_any.unwrap_struct(&store) {
+							let inner = box_ref.field(&mut store, 0)?;
+							return Ok(Node::Number(Number::Float(inner.unwrap_f64())));
+						}
+					}
+					return Ok(Node::Number(Number::Float(0.0)));
+				}
+				_ => {
+					// For other types, return Empty for now (can be expanded)
+					return Ok(Node::Empty);
+				}
+			}
+		}
+	}
+
+	// If we couldn't read as GC struct, return Empty
+	Ok(Node::Empty)
+}
