@@ -896,9 +896,9 @@ impl Node {
 							match item.drop_meta() {
 								Key(k, _, v) => {
 									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-										if key_str.starts_with('.') {
+										if let Some(attr_name) = key_str.strip_prefix('.') {
 											// This is an attribute
-											let attr_name = &key_str[1..]; // Remove leading dot
+											// Remove leading dot
 											match v.as_ref() {
 												True => {
 													// Boolean attribute (no value)
@@ -1142,7 +1142,7 @@ impl IntoIterator for Node {
 	}
 }
 
-impl<'a> IntoIterator for &'a Node {
+impl IntoIterator for &Node {
 	type Item = Node;
 	type IntoIter = NodeIter;
 
@@ -1246,7 +1246,7 @@ impl fmt::Display for Separator {
 			Separator::Space => write!(f, " "),
 			Separator::Colon => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
-			Separator::Newline => write!(f, "\n"),
+			Separator::Newline => writeln!(f),
 			Separator::Tab => write!(f, "\t"),
 			Separator::None => Ok(()),
 		}
@@ -1381,10 +1381,10 @@ impl PartialEq<bool> for Node {
 			// Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },
 			// Node::Number(Number::Float(f)) => *f == if *other { 1.0 } else { 0.0 },
 			Empty => !*other,
-			Symbol(s) => s.is_empty() == !*other,
-			Text(s) => s.is_empty() == !*other,
-			List(l, _, _) => l.is_empty() == !*other,
-			Key(_, _, v) => v.is_nil() == !*other, // Key is true if its value is non-empty
+			Symbol(s) => s.is_empty() != *other,
+			Text(s) => s.is_empty() != *other,
+			List(l, _, _) => l.is_empty() != *other,
+			Key(_, _, v) => v.is_nil() != *other, // Key is true if its value is non-empty
 			_ => false,
 		}
 	}
@@ -1392,7 +1392,7 @@ impl PartialEq<bool> for Node {
 
 impl PartialEq<i32> for Node {
 	fn eq(&self, other: &i32) -> bool {
-		self == &(*other as i64)
+		self == (*other as i64)
 	}
 }
 
@@ -1600,7 +1600,7 @@ impl PartialEq<serde_json::Value> for Node {
 							if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 								json_obj
 									.get(key_str.as_str())
-									.map_or(false, |json_val| v.as_ref() == json_val)
+									.is_some_and(|json_val| v.as_ref() == json_val)
 							} else {
 								false
 							}
@@ -1619,7 +1619,7 @@ impl PartialEq<serde_json::Value> for Node {
 					json_obj.len() == 1
 						&& json_obj
 							.get(key_str.as_str())
-							.map_or(false, |json_val| v.as_ref() == json_val)
+							.is_some_and(|json_val| v.as_ref() == json_val)
 				} else {
 					false
 				}

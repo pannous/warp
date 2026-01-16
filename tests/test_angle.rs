@@ -1,7 +1,7 @@
 use warp::smarty::{float_data28, smarty32};
 use warp::Node;
 use warp::Node::Empty;
-use warp::{is, skip, Number};
+use warp::{is, Number};
 
 #[test]
 #[ignore]
@@ -348,7 +348,7 @@ fn test_smart_types() {
 	// short typ=getSmartType(string_header_32);
 	// assert!(typ==0x1);
 	// printf!("%08x", '√');// ok 0x221a
-	println!("{}", '𒈚'); // too small: character too large for enclosing character literal type
+	println!("𒈚"); // too small: character too large for enclosing character literal type
 	assert_eq!(smarty32(0xC001221A), '𒈚');
 	assert_eq!(smarty32(0xC001221A), "𒈚");
 	//	assert!(Node(0xD808DE1A)=='𒈚'); // utf-8-bytes

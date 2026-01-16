@@ -9,7 +9,6 @@ fn test_tools_availability() {
 	}
 	if !WasmOptimizer::tree_shaking_available() {
 		eprintln!("Skipping: wasm-metadce not found");
-		return;
 	}
 }
 

@@ -11,17 +11,13 @@ use std::fs::read_to_string;
 
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Default)]
 pub struct ParserOptions {
 	/// XML mode: treat <tag> as XML tags, not C++ generics
 	pub xml_mode: bool,
 	// Future: other format-specific options can be added here
 }
 
-impl Default for ParserOptions {
-	fn default() -> Self {
-		ParserOptions { xml_mode: false }
-	}
-}
 
 impl ParserOptions {
 	pub fn xml() -> Self {
@@ -351,6 +347,7 @@ impl WaspParser {
 		// 3-char operators
 		match (c1, c2, c3) {
 			('.', '.', '.') => return Some((Op::To, 3)),
+			('.', '.', '<') => return Some((Op::Range, 3)), // Swift-style exclusive range
 			('&', '&', '=') => return Some((Op::AndAssign, 3)),
 			('|', '|', '=') => return Some((Op::OrAssign, 3)),
 			('^', '^', '=') => return Some((Op::XorAssign, 3)),
@@ -391,6 +388,7 @@ impl WaspParser {
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
+		if self.matches_keyword("to") { return Some((Op::To, 2)); }
 
 		// 1-char operators
 		match c1 {
@@ -759,7 +757,7 @@ impl WaspParser {
 					for index in indices {
 						let index_unwrapped = index.drop_meta();
 						let adjusted_index = match index_unwrapped {
-							Node::Number(n) => Node::Number(n.clone() + crate::extensions::numbers::Number::Int(1)),
+							Node::Number(n) => Node::Number(*n + crate::extensions::numbers::Number::Int(1)),
 							_ => Node::Key(Box::new(index), Op::Add, Box::new(Node::Number(crate::extensions::numbers::Number::Int(1)))),
 						};
 						lhs = Node::Key(Box::new(lhs), Op::Hash, Box::new(adjusted_index));

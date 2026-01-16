@@ -306,7 +306,7 @@ impl Op {
 			Op::AndAssign => Op::And,
 			Op::OrAssign => Op::Or,
 			Op::XorAssign => Op::Xor,
-			_ => self.clone(),
+			_ => *self,
 		}
 	}
 }

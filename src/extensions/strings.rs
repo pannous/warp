@@ -264,7 +264,7 @@ trait PartialEqNum {
 
 impl PartialEqStr for char {
 	fn is(&self, other: &str) -> bool {
-		other.len() == 1 && other.chars().next() == Some(*self)
+		other.len() == 1 && other.starts_with(*self)
 	}
 }
 
@@ -276,7 +276,7 @@ impl PartialEqStr for char {
 
 impl PartialEqChar for str {
 	fn is(&self, other: &char) -> bool {
-		self.len() == 1 && self.chars().next() == Some(*other)
+		self.len() == 1 && self.starts_with(*other)
 	}
 }
 
@@ -284,6 +284,20 @@ impl PartialEqChar for String {
 	fn is(&self, other: &char) -> bool {
 		self.as_str() == other.to_string()
 	}
+}
+
+#[allow(unused)]
+macro_rules! s {
+	($lit:literal) => {
+		String::from($lit)
+	};
+}
+
+// Test it see tests/string_tests.rs !!
+fn main() {
+	let s1 = String::from("RustRover");
+	let s2 = &String::from("RustRover");
+	eq!(s1 == *s2, true);
 }
 
 // fn assert<T: PartialEq + Debug>(x: T) {
@@ -316,18 +330,4 @@ mod tests {
 		eq!("a".s() + "b", "ab");
 		// eq!("a".s()+2, "a2");
 	}
-}
-
-#[allow(unused)]
-macro_rules! s {
-	($lit:literal) => {
-		String::from($lit)
-	};
-}
-
-// Test it see tests/string_tests.rs !!
-fn main() {
-	let s1 = String::from("RustRover");
-	let s2 = &String::from("RustRover");
-	eq!(s1 == *s2, true);
 }

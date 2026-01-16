@@ -176,7 +176,7 @@ pub fn smarty32(smart: u32) -> Node {
 		0x1 => unsafe { string56(data24 as u64) },
 		0xC => char24(data24),
 		0xD => unsafe { parse(str32(data24, 3)) },
-		0xE => unsafe { error(&format!("{}", str32(data24, 3))) }, // error with string message
+		0xE => unsafe { error(str32(data24, 3)) }, // error with string message
 		_ => unreachable!(),
 	}
 }
@@ -199,7 +199,7 @@ pub fn smarty(smart: u64) -> Node {
 		0x10 => unsafe { string56(data56) },
 		0xC0 => char24(data32),
 		0xD0 => unsafe { parse(str56(data56)) }, // wasp data string!
-		0xE1 => unsafe { error(&format!("{}", str56(data56))) }, // error with string message
+		0xE1 => unsafe { error(str56(data56)) }, // error with string message
 		// _ => unreachable!(),
 		_ => {
 			if header16 == 0xB001 {  // BOOL wasteful header
