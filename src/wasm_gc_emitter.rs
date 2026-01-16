@@ -321,11 +321,36 @@ impl WasmGcEmitter {
 				self.extract_user_functions_inner(left);
 				self.extract_user_functions_inner(body);
 			}
-			// Pattern: name := body (uses implicit `it` parameter)
+			// Pattern: name x := body (with explicit parameter x using $0 or `it`)
+			// Parses as Key(List([name, x]), Define, body)
 			Node::Key(left, Op::Define, body) => {
+				if let Node::List(items, _, _) = left.drop_meta() {
+					if items.len() >= 1 {
+						if let Node::Symbol(name) = items[0].drop_meta() {
+							// Extract parameter names
+							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
+								.filter_map(Self::extract_param)
+								.collect();
+
+							// If body uses $n params, or has explicit params, it's a function
+							if !params.is_empty() || Self::uses_dollar_param(body) || Self::uses_it(body) {
+								let func_def = UserFunctionDef {
+									name: name.clone(),
+									params: if params.is_empty() { vec![("it".to_string(), None)] } else { params },
+									body: body.clone(),
+									return_kind: Kind::Int,
+									func_index: None,
+								};
+								self.user_functions.insert(name.clone(), func_def);
+								return;
+							}
+						}
+					}
+				}
+				// Pattern: name := body (uses implicit `it` parameter)
 				if let Node::Symbol(name) = left.drop_meta() {
-					// Check if body uses `it` - if so, this is a function
-					if Self::uses_it(body) {
+					// Check if body uses `it` or $n - if so, this is a function
+					if Self::uses_it(body) || Self::uses_dollar_param(body) {
 						let func_def = UserFunctionDef {
 							name: name.clone(),
 							params: vec![("it".to_string(), None)],
@@ -374,6 +399,17 @@ impl WasmGcEmitter {
 			Node::Symbol(s) if s == "it" => true,
 			Node::Key(left, _, right) => Self::uses_it(left) || Self::uses_it(right),
 			Node::List(items, _, _) => items.iter().any(Self::uses_it),
+			_ => false,
+		}
+	}
+
+	/// Check if a node uses $n parameter references (e.g., $0, $1)
+	fn uses_dollar_param(node: &Node) -> bool {
+		let node = node.drop_meta();
+		match node {
+			Node::Symbol(s) if s.starts_with('$') && s[1..].parse::<u32>().is_ok() => true,
+			Node::Key(left, _, right) => Self::uses_dollar_param(left) || Self::uses_dollar_param(right),
+			Node::List(items, _, _) => items.iter().any(Self::uses_dollar_param),
 			_ => false,
 		}
 	}
@@ -2320,10 +2356,21 @@ impl WasmGcEmitter {
 						.filter(|item| {
 							match item.drop_meta() {
 								// Pattern: name := body (uses implicit `it` parameter)
+								// or name(params...) := body
 								Node::Key(left, Op::Define, _) => {
 									if let Node::Symbol(name) = left.drop_meta() {
 										if self.user_functions.contains_key(name) {
 											return false;
+										}
+									}
+									// Pattern: name(params...) := body
+									if let Node::List(items, _, _) = left.drop_meta() {
+										if !items.is_empty() {
+											if let Node::Symbol(name) = items[0].drop_meta() {
+												if self.user_functions.contains_key(name) {
+													return false;
+												}
+											}
 										}
 									}
 								}
