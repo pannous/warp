@@ -436,6 +436,7 @@ impl WaspParser {
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
+			'#' => Some((Op::Hash, 1)), // prefix # means count/length
 			_ => None,
 		}
 	}
