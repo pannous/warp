@@ -423,35 +423,35 @@ pub mod hints {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn test_hint_mode() {
-        set_hint_mode(HintMode::Off);
-        assert_eq!(hint_mode(), HintMode::Off);
+	#[test]
+	fn test_hint_mode() {
+		set_hint_mode(HintMode::Off);
+		assert_eq!(hint_mode(), HintMode::Off);
 
-        set_hint_mode(HintMode::Once);
-        assert_eq!(hint_mode(), HintMode::Once);
+		set_hint_mode(HintMode::Once);
+		assert_eq!(hint_mode(), HintMode::Once);
 
-        set_hint_mode(HintMode::Always);
-        assert_eq!(hint_mode(), HintMode::Always);
-    }
+		set_hint_mode(HintMode::Always);
+		assert_eq!(hint_mode(), HintMode::Always);
+	}
 
-    #[test]
-    fn test_style_swap() {
-        // Default prefers 'as' operator
-        let s = style();
-        assert_eq!(s.cast, CastStyle::AsOperator);
+	#[test]
+	fn test_style_swap() {
+		// Default prefers 'as' operator
+		let s = style();
+		assert_eq!(s.cast, CastStyle::AsOperator);
 
-        // Swap to constructor style
-        let mut new_style = Style::default();
-        new_style.cast = CastStyle::Constructor;
-        set_style(new_style);
+		// Swap to constructor style
+		let mut new_style = Style::default();
+		new_style.cast = CastStyle::Constructor;
+		set_style(new_style);
 
-        let s = style();
-        assert_eq!(s.cast, CastStyle::Constructor);
+		let s = style();
+		assert_eq!(s.cast, CastStyle::Constructor);
 
-        // Reset to default
-        set_style(Style::default());
-    }
+		// Reset to default
+		set_style(Style::default());
+	}
 }
