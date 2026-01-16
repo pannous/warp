@@ -138,13 +138,13 @@ impl ToVal for String {
 
 impl ToVal for Rooted<StructRef> {
     fn to_val(&self, _store: &mut Store<()>, _instance: Option<&Instance>) -> Result<Val> {
-        Ok(Val::AnyRef(Some(self.clone().into())))
+        Ok(Val::AnyRef(Some((*self).into())))
     }
 }
 
 impl ToVal for Val {
     fn to_val(&self, _store: &mut Store<()>, _instance: Option<&Instance>) -> Result<Val> {
-        Ok(self.clone())
+        Ok(*self)
     }
 }
 
@@ -331,7 +331,7 @@ impl GcObject {
     where
         F: FnOnce(&mut Store<()>) -> R,
     {
-        f(&mut *self.store.borrow_mut())
+        f(&mut self.store.borrow_mut())
     }
 
     /// Get a field with automatic type conversion (supports both index and field name)
@@ -395,7 +395,7 @@ impl GcObject {
         Ok(GcObject::from_struct_shared(
             struct_ref,
             self.store.clone(),
-            self.instance.clone(),
+            self.instance,
         ))
     }
 
@@ -419,7 +419,7 @@ impl GcObject {
         self.with_store(|store| {
             let idx = index.to_field_index(&self.inner, &*store)?;
             let val = self.inner.field(&mut *store, idx)?;
-            Ok(!val.unwrap_anyref().is_none())
+            Ok(val.unwrap_anyref().is_some())
         })
     }
 
@@ -439,7 +439,7 @@ impl GcObject {
 
     /// Convert to Val for passing to WASM functions
     pub fn to_val(&self) -> Val {
-        Val::AnyRef(Some(self.inner.clone().into()))
+        Val::AnyRef(Some(self.inner.into()))
     }
 
     /// Get a clone of the store
@@ -449,7 +449,7 @@ impl GcObject {
 
     /// Get a clone of the instance
     pub fn clone_instance(&self) -> Option<Instance> {
-        self.instance.clone()
+        self.instance
     }
 }
 
@@ -497,7 +497,7 @@ impl GcString {
             &mut results,
         )?;
 
-        Ok(results[0].clone())
+        Ok(results[0])
     }
 
     /// Create from a Val (auto-detects struct vs array)
@@ -1218,7 +1218,7 @@ pub mod wasm_name_resolver {
             field_names: &mut HashMap<u32, Vec<(u32, String)>>,
             type_names: &mut HashMap<u32, String>,
         ) -> Result<()> {
-            while let Some(entry) = reader.next() {
+            for entry in reader {
                 match entry? {
                     wp::Name::Type(map) => {
                         for naming in map {
@@ -1646,7 +1646,7 @@ pub mod wasm_name_resolver {
                     if parsed_ref.nullable != runtime_ref.is_nullable() {
                         return false;
                     }
-                    self.match_heap_type(&parsed_ref.heap, &runtime_ref.heap_type())
+                    self.match_heap_type(&parsed_ref.heap, runtime_ref.heap_type())
                 }
                 _ => false,
             }

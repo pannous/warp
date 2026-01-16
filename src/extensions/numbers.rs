@@ -170,9 +170,9 @@ impl Div for Number {
 	}
 }
 
-impl Into<f64> for Number {
-	fn into(self) -> f64 {
-		match self {
+impl From<Number> for f64 {
+	fn from(val: Number) -> Self {
+		match val {
 			Number::Int(i) => i as f64,
 			Number::Float(f) => f,
 			Number::Quotient(numer, denom) => numer as f64 / denom as f64,

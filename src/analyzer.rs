@@ -143,7 +143,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
 					Node::Symbol(name) => {
-						if scope.lookup(&name).is_none() {
+						if scope.lookup(name).is_none() {
 							let kind = infer_type(right, scope);
 							scope.define(name.clone(), None, kind);
 						}
@@ -151,7 +151,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
 						if let Node::Symbol(name) = var_name.drop_meta() {
-							if scope.lookup(&name).is_none() {
+							if scope.lookup(name).is_none() {
 								// Get kind from type annotation
 								let type_str = type_node.drop_meta().to_string();
 								let kind = type_name_to_kind(&type_str);
@@ -419,7 +419,7 @@ fn parse_function_declaration(items: &[Node], _keyword: &str) -> Option<Function
 	// Get function name and params from the declaration structure
 	let (name, params, body) = match decl {
 		// Pattern: ((name params...) body)
-		Node::List(decl_items, _, _) if decl_items.len() >= 1 => {
+		Node::List(decl_items, _, _) if !decl_items.is_empty() => {
 			let first = decl_items[0].drop_meta();
 			match first {
 				// (name params...)

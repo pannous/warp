@@ -50,8 +50,7 @@ fn test_ffi_floor() {
 }
 
 #[test]
-fn test_ffi_strlen() {
-	return; // clashes with wasp runtime strlen!
+fn test_ffi_strlen() {// clashes with wasp runtime strlen!
 	     // Test: char* . int32 (strlen from libc);
 	     // is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
 	     // is!("import strlen from \"c\"\nstrlen(\"\")", 0);
@@ -544,7 +543,7 @@ CloseWindow()
 #[test]
 #[ignore]
 fn test_ffi_raylib_simple_use_import() {
-	let _modul = load_native_library("raylib");
+	load_native_library("raylib");
 	// assert!(modul);
 	// assert!(modul.functions.has("InitWindow"));
 	// assert!(modul.functions.has("DrawCircle"));
@@ -565,7 +564,7 @@ fn test_ffi_raylib_simple_use_import() {
 #[test]
 #[ignore]
 fn test_ffi_raylib() {
-	let _modul = load_native_library("raylib");
+	load_native_library("raylib");
 	// assert!(modul);
 	// assert!(modul.functions.has("InitWindow"));
 	// assert!(modul.functions.has("DrawCircle"));
@@ -583,7 +582,7 @@ fn test_ffi_raylib() {
 #[ignore]
 fn test_ffi_all() {
 	// Main comprehensive test function that runs all FFI tests
-	let _modul = load_native_library("m");
+	load_native_library("m");
 	// assert!(modul);
 	// assert!(modul.functions.has("fmin"));
 	test_ffi_atof(); // careful this is already a built-in wasp library function
@@ -601,6 +600,6 @@ fn test_ffi_all() {
 	// test_dynlib_import_emit();
 }
 
-fn load_native_library(_p0: &str) -> () {
+fn load_native_library(_p0: &str) {
 	todo!()
 }

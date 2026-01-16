@@ -57,7 +57,7 @@ fn write_string_to_caller(
 	let ptr = caller.data_mut().alloc(len);
 
 	// Grow memory if needed
-	let pages_needed = ((ptr + len) as usize + 65535) / 65536;
+	let pages_needed = ((ptr + len) as usize).div_ceil(65536);
 	let current_pages = memory.size(&*caller) as usize;
 	if pages_needed > current_pages {
 		let grow = (pages_needed - current_pages) as u64;

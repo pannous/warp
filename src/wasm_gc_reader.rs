@@ -70,7 +70,7 @@ impl GcObject {
 		Ok(GcObject::new(
 			val,
 			self.store.clone(),
-			self.instance.clone(),
+			self.instance,
 		))
 	}
 
@@ -161,7 +161,7 @@ impl GcObject {
 		Ok(GcObject::new(
 			val,
 			self.store.clone(),
-			self.instance.clone(),
+			self.instance,
 		))
 	}
 }
@@ -216,7 +216,7 @@ impl FromVal for GcObject {
 		instance: &Instance,
 		store_rc: &Rc<RefCell<Store<()>>>,
 	) -> Result<Self> {
-		Ok(GcObject::new(val, store_rc.clone(), instance.clone()))
+		Ok(GcObject::new(val, store_rc.clone(), *instance))
 	}
 }
 
@@ -247,7 +247,7 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 		main.call(&mut *s, &[], &mut results)?;
 	}
 
-	Ok(GcObject::new(results[0].clone(), store_rc, instance))
+	Ok(GcObject::new(results[0], store_rc, instance))
 }
 
 /// Load WASM bytes and return Node (calls from_gc_object)
@@ -283,7 +283,7 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 		main.call(&mut *s, &[], &mut results)?;
 	}
 
-	Ok(GcObject::new(results[0].clone(), store_rc, instance))
+	Ok(GcObject::new(results[0], store_rc, instance))
 }
 
 /// Load WASM bytes with host function support and return Node
@@ -401,12 +401,18 @@ pub fn call_constructor(
 		func.call(&mut *s, args, &mut results)?;
 	}
 
-	Ok(GcObject::new(results[0].clone(), store, instance.clone()))
+	Ok(GcObject::new(results[0], store, *instance))
 }
 
 /// WASI state for running modules with WASI imports (preview 1)
 pub struct WasiState {
 	ctx: p1::WasiP1Ctx,
+}
+
+impl Default for WasiState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WasiState {

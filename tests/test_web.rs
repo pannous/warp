@@ -31,7 +31,6 @@ fn test_js() {
 fn test_inner_html() {
 	#[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]
 	{
-		return;
 	}
 	// let html = parse("<html><bold>test</bold></html>");
 	// eq!(*html.value(), "<bold>test</bold>");
@@ -113,7 +112,6 @@ fn test_dom() {
 fn test_dom_property() {
 	#[cfg(not(feature = "WEBAPP"))]
 	{
-		return;
 	}
 	#[cfg(feature = "WEBAPP")]
 	{
