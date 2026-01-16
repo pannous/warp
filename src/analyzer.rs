@@ -140,12 +140,26 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		// Assign creates variables only at top level (not inside structures)
 		Node::Key(left, Op::Assign, right) => {
 			if !skip_first_assign && !in_structure {
-				if let Node::Symbol(name) = left.drop_meta() {
-					if scope.lookup(name).is_none() {
-						let kind = infer_type(right, scope);
-						scope.define(name.clone(), None, kind);
+				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
+				match left.drop_meta() {
+					Node::Symbol(name) => {
+						if scope.lookup(&name).is_none() {
+							let kind = infer_type(right, scope);
+							scope.define(name.clone(), None, kind);
+						}
 					}
-					// Note: type mismatch checking happens in check_type_errors
+					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
+					Node::Key(var_name, Op::Colon, type_node) => {
+						if let Node::Symbol(name) = var_name.drop_meta() {
+							if scope.lookup(&name).is_none() {
+								// Get kind from type annotation
+								let type_str = type_node.drop_meta().to_string();
+								let kind = type_name_to_kind(&type_str);
+								scope.define(name.clone(), Some(type_node.clone()), kind);
+							}
+						}
+					}
+					_ => {}
 				}
 			}
 			collect_variables_inner(right, scope, false, in_structure)
