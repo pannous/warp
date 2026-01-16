@@ -14,7 +14,8 @@ use crate::wasp_parser::parse;
 // #define buffer_header_32  0x44000000 // incompatible with List!
 // //#define map_header_32    0x46000000 // compatible with Map
 // #define map_header_32    0x50000000 // compatible with Map
-// #define ref_header_32    0x60000000 // index of externref == js object ! in table (export "externref_table") 1 externref
+// #define ref_header_32    0x60000000 // index of externref == js object
+// ! in table (export "externref_table") 1 externref
 // //#define smart_mask_32    0x70000000 ??
 // #define node_header_32   0x80000000 // more complex than array!
 // #define kind_header_32   0xDD000000
@@ -69,6 +70,9 @@ use crate::wasp_parser::parse;
 // 	double56 = 0x7F, // first hex of nearly all f64 by coincidence
 // }
 
+
+/// # Safety
+/// none;)
 pub unsafe fn str56(ptr: u64) -> &'static str {
 	let p = ptr as *const u8;
 	let len: usize = 100; // todo strlen(ptr) as usize;
@@ -76,6 +80,9 @@ pub unsafe fn str56(ptr: u64) -> &'static str {
 	core::str::from_utf8_unchecked(bytes)
 }
 
+/// # Safety
+///
+/// no Safety;)
 pub unsafe fn str32(ptr: u32, len: u32) -> &'static str {
 	let bytes = core::slice::from_raw_parts(ptr as *const u8, len as usize);
 	core::str::from_utf8_unchecked(bytes)
