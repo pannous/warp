@@ -56,9 +56,9 @@ fn test_bad_in_wasm() {
 	is!("grows:=it*2; grows 3", 6);
 	is!("grows:=it*2; grows 3*4", 24);
 	is!("grows:=it*2; grows(3*42) > grows 2*3", 1);
+	// $0 parameter reference (explicit param style with parentheses)
+	is!("add1(x):=$0+1;add1(3)", 4);
 	skip!(
-		// $0 syntax needs function definition syntax like add1(x):=$0+1
-		is!("add1 x:=$0+1;add1 3", 4);
 		// Requires emitter support for index assignment in loops:
 		is!("i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ", 800 * 800);
 		// Requires polymorphic function dispatch (major feature):
