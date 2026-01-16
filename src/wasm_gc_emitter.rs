@@ -773,19 +773,50 @@ impl WasmGcEmitter {
 						self.required_functions.insert("i64_pow");
 					}
 				} else if *op == Op::Hash {
-					// Indexing - need runtime dispatch and all helpers
-					self.required_functions.insert("node_index_at");
-					self.required_functions.insert("string_char_at");
-					self.required_functions.insert("new_codepoint");
-					self.required_functions.insert("list_node_at");
-					self.required_functions.insert("list_at");
-					self.required_functions.insert("new_list");
+					// Check if prefix (count) or infix (index)
+					if matches!(key.drop_meta(), Node::Empty) {
+						// Prefix #x = count
+						self.required_functions.insert("node_count");
+						self.required_functions.insert("new_int"); // wrap count result
+					} else {
+						// Infix x#y = indexing - need runtime dispatch and all helpers
+						self.required_functions.insert("node_index_at");
+						self.required_functions.insert("string_char_at");
+						self.required_functions.insert("new_codepoint");
+						self.required_functions.insert("list_node_at");
+						self.required_functions.insert("list_at");
+						self.required_functions.insert("new_list");
+					}
 				} else if *op == Op::As {
 					// Type cast - needs constructors for all possible target types
 					self.required_functions.insert("new_int");
 					self.required_functions.insert("new_float");
 					self.required_functions.insert("new_text");
 					self.required_functions.insert("new_codepoint");
+				} else if *op == Op::Dot {
+					// Check for introspection method calls: obj.count(), obj.size(), etc.
+					let method_name = match value.drop_meta() {
+						Node::Symbol(s) => Some(s.clone()),
+						Node::List(items, _, _) if items.len() == 1 => {
+							if let Node::Symbol(s) = items[0].drop_meta() {
+								Some(s.clone())
+							} else {
+								None
+							}
+						}
+						_ => None,
+					};
+					if let Some(method) = method_name {
+						match method.as_str() {
+							"count" | "number" | "size" => {
+								self.required_functions.insert("node_count");
+								self.required_functions.insert("new_int");
+								return;
+							}
+							_ => {}
+						}
+					}
+					self.required_functions.insert("new_key");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -822,6 +853,12 @@ impl WasmGcEmitter {
 								"type" => {
 									// type() introspection returns a Symbol
 									self.required_functions.insert("new_symbol");
+									return;
+								}
+								"count" | "size" => {
+									// count() and size() introspection functions
+									self.required_functions.insert("node_count");
+									self.required_functions.insert("new_int");
 									return;
 								}
 								"fetch" => {
@@ -1540,6 +1577,64 @@ impl WasmGcEmitter {
 			self.exports.export("list_node_at", ExportKind::Func, idx);
 		}
 
+		// node_count(node: ref $Node) -> i64
+		// Count the number of elements in a list/block by traversing the value chain
+		if self.should_emit_function("node_count") {
+			let func_type = self.types.len();
+			self.types.ty().function(
+				vec![Ref(node_ref)],
+				vec![ValType::I64],
+			);
+			self.functions.function(func_type);
+
+			// Locals: 0=node, 1=count, 2=current
+			let mut func = Function::new(vec![(1, ValType::I64), (1, Ref(node_ref_nullable))]);
+
+			// count = 0
+			func.instruction(&Instruction::I64Const(0));
+			func.instruction(&Instruction::LocalSet(1));
+
+			// current = node
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::LocalSet(2));
+
+			// Loop: while current is not null, count++ and current = current.value
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			func.instruction(&Instruction::Loop(BlockType::Empty));
+
+			// if current is null, break
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::RefIsNull);
+			func.instruction(&Instruction::BrIf(1)); // break to outer block
+
+			// count = count + 1
+			func.instruction(&Instruction::LocalGet(1));
+			func.instruction(&Instruction::I64Const(1));
+			func.instruction(&Instruction::I64Add);
+			func.instruction(&Instruction::LocalSet(1));
+
+			// current = current.value (field 2)
+			func.instruction(&Instruction::LocalGet(2));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: self.node_type,
+				field_index: 2,
+			});
+			func.instruction(&Instruction::LocalSet(2));
+
+			// continue loop
+			func.instruction(&Instruction::Br(0));
+			func.instruction(&Instruction::End); // end loop
+			func.instruction(&Instruction::End); // end block
+
+			// return count
+			func.instruction(&Instruction::LocalGet(1));
+
+			func.instruction(&Instruction::End);
+			self.code.function(&func);
+			let idx = self.register_func("node_count");
+			self.exports.export("node_count", ExportKind::Func, idx);
+		}
+
 		// string_char_at(node: ref $Node, index: i64) -> ref $Node
 		// Get the character at index (1-based) from a Text/Symbol node, returns Codepoint node
 		if self.should_emit_function("string_char_at") {
@@ -2195,13 +2290,63 @@ impl WasmGcEmitter {
 					// While loop: (while condition) do body
 					self.emit_while_loop(func, left, right);
 				} else if *op == Op::Hash {
-					// Indexing: dispatches to string_char_at or list_node_at at runtime
-					self.emit_node_instructions(func, left);  // emit node (string or list)
-					self.emit_numeric_value(func, right);      // emit index
-					self.emit_call(func, "node_index_at");     // runtime dispatch
+					// Check if prefix (count) or infix (index)
+					if matches!(left.drop_meta(), Node::Empty) {
+						// Prefix #x = count - emit the node and call node_count
+						self.emit_node_instructions(func, right);
+						self.emit_call(func, "node_count");
+						// node_count returns i64, wrap in new_int
+						self.emit_call(func, "new_int");
+					} else {
+						// Infix x#y = indexing - dispatches to string_char_at or list_node_at at runtime
+						self.emit_node_instructions(func, left);  // emit node (string or list)
+						self.emit_numeric_value(func, right);      // emit index
+						self.emit_call(func, "node_index_at");     // runtime dispatch
+					}
 				} else if *op == Op::As {
 					// Type cast: value as type
 					self.emit_cast(func, left, right);
+				} else if *op == Op::Dot {
+					// Method call syntax: obj.method() or obj.property
+					// Check for introspection methods: count, number, size
+					let method_name = match right.drop_meta() {
+						Node::Symbol(s) => Some(s.clone()),
+						Node::List(items, _, _) if items.len() == 1 => {
+							// Method call: obj.method() parses as Key(obj, Dot, List([method]))
+							if let Node::Symbol(s) = items[0].drop_meta() {
+								Some(s.clone())
+							} else {
+								None
+							}
+						}
+						_ => None,
+					};
+					if let Some(ref method) = method_name {
+						match method.as_str() {
+							"count" | "number" => {
+								// obj.count() or obj.count returns element count
+								self.emit_node_instructions(func, left);
+								self.emit_call(func, "node_count");
+								self.emit_call(func, "new_int");
+								return;
+							}
+							"size" => {
+								// obj.size() returns byte count (elements * 8)
+								self.emit_node_instructions(func, left);
+								self.emit_call(func, "node_count");
+								func.instruction(&Instruction::I64Const(8));
+								func.instruction(&Instruction::I64Mul);
+								self.emit_call(func, "new_int");
+								return;
+							}
+							_ => {}
+						}
+					}
+					// Default: emit as Key node
+					self.emit_node_instructions(func, left);
+					self.emit_node_instructions(func, right);
+					func.instruction(&Instruction::I64Const(op_to_code(op)));
+					self.emit_call(func, "new_key");
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -2288,6 +2433,22 @@ impl WasmGcEmitter {
 							func.instruction(&Instruction::I32Const(ptr as i32));
 							func.instruction(&Instruction::I32Const(len as i32));
 							self.emit_call(func, "new_symbol");
+							return;
+						}
+						if fn_name == "count" {
+							// count(x) returns element count of list/array
+							self.emit_node_instructions(func, &items[1]);
+							self.emit_call(func, "node_count");
+							self.emit_call(func, "new_int");
+							return;
+						}
+						if fn_name == "size" {
+							// size(x) returns byte count (element count * 8 for i64)
+							self.emit_node_instructions(func, &items[1]);
+							self.emit_call(func, "node_count");
+							func.instruction(&Instruction::I64Const(8));
+							func.instruction(&Instruction::I64Mul);
+							self.emit_call(func, "new_int");
 							return;
 						}
 					}
@@ -3682,7 +3843,7 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, right);
 				self.emit_comparison(func, op);
 			}
-			// Prefix operators: √x, -x, !x, ‖x‖
+			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
 			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 				match op {
 					Op::Sqrt => {
@@ -3719,6 +3880,11 @@ impl WasmGcEmitter {
 					}
 					_ => panic!("Unhandled prefix operator: {:?}", op),
 				}
+			}
+			// Prefix # means count/length: #list returns element count
+			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
+				self.emit_node_instructions(func, right);
+				self.emit_call(func, "node_count");
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
