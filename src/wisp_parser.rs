@@ -26,7 +26,6 @@ use crate::node::*;
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 
-
 pub struct WispParser {
 	chars: Vec<char>,
 	pos: usize,
@@ -444,9 +443,7 @@ impl WispParser {
 		if self.current() == '-' {
 			s.push(self.advance());
 		}
-		while !self.end()
-			&& (self.current().is_ascii_digit() || self.current() == '.' || self.current() == '_')
-		{
+		while !self.end() && (self.current().is_ascii_digit() || self.current() == '.' || self.current() == '_') {
 			if self.current() == '.' && self.peek(1) == '.' {
 				break; // range operator
 			}
@@ -473,11 +470,7 @@ impl WispParser {
 		let mut s = String::new();
 		while !self.end() {
 			let c = self.current();
-			if c.is_whitespace()
-				|| c == '(' || c == ')'
-				|| c == '[' || c == ']'
-				|| c == '"' || c == '\''
-			{
+			if c.is_whitespace() || c == '(' || c == ')' || c == '[' || c == ']' || c == '"' || c == '\'' {
 				break;
 			}
 			// check for key operator
@@ -658,7 +651,6 @@ impl WispEmitter {
 	}
 }
 
-
 #[macro_export]
 macro_rules! wis {
 	// Wisp roundtrip: parse wisp -> Node -> emit wisp -> parse again -> compare
@@ -666,7 +658,11 @@ macro_rules! wis {
 		let node = parse_wisp($input);
 		let emitted = emit_wisp(&node);
 		let reparsed = parse_wisp(&emitted);
-		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", $input, emitted);
+		assert_eq!(
+			node, reparsed,
+			"roundtrip failed:\n  input: {}\n  emitted: {}",
+			$input, emitted
+		);
 		node
 	}};
 	// Wisp eval: parse wisp -> Node -> compare to expected
@@ -677,12 +673,10 @@ macro_rules! wis {
 	}};
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{expression, is, put, wis, NodeKind, Strings};
-	use crate::DataType::String;
+	use crate::{expression, put, wis};
 
 	#[test]
 	fn test_wisp_basic_atom_types() {
@@ -871,27 +865,35 @@ mod tests {
 
 	#[test]
 	fn test_wisp_emit_atoms() {
-		wis!("ø",(&Empty));
-		wis!("true",(&True));
-		wis!("false",(&False));
-		wis!("(int 42)",(&Number(Number::Int(42))));
-		wis!("(float 3.11)",(&Number(Number::Float(3.11))));
-		wis!("(char 'x')",(&Char('x')));
-		wis!("(text 'hello')",(&Text("hello".into())));
-		wis!("foo",(&Symbol("foo".into())));
+		wis!("ø", (&Empty));
+		wis!("true", (&True));
+		wis!("false", (&False));
+		wis!("(int 42)", (&Number(Number::Int(42))));
+		wis!("(float 3.11)", (&Number(Number::Float(3.11))));
+		wis!("(char 'x')", (&Char('x')));
+		wis!("(text 'hello')", (&Text("hello".into())));
+		wis!("foo", (&Symbol("foo".into())));
 	}
 
 	#[test]
 	fn test_wisp_emit_compound() {
 		// let list = Strings!["a", "b"];
 		let list = expression!["a", "b"];
-		wis!("[a b]",list);
+		wis!("[a b]", list);
 
-		let key = Key(Box::new(Symbol("x".into())), Op::Colon, Box::new(Number(Number::Int(1))));
-		wis!("(key x (int 1))",&key);
+		let key = Key(
+			Box::new(Symbol("x".into())),
+			Op::Colon,
+			Box::new(Number(Number::Int(1))),
+		);
+		wis!("(key x (int 1))", &key);
 
-		let pair = Key(Box::new(Symbol("y".into())), Op::Assign, Box::new(Number(Number::Int(2))));
-		wis!("(pair y (int 2))",&pair);
+		let pair = Key(
+			Box::new(Symbol("y".into())),
+			Op::Assign,
+			Box::new(Number(Number::Int(2))),
+		);
+		wis!("(pair y (int 2))", &pair);
 	}
 
 	// ==================== Roundtrip Tests ====================
@@ -900,7 +902,11 @@ mod tests {
 		let node = parse_wisp(input);
 		let emitted = emit_wisp(&node);
 		let reparsed = parse_wisp(&emitted);
-		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", input, emitted);
+		assert_eq!(
+			node, reparsed,
+			"roundtrip failed:\n  input: {}\n  emitted: {}",
+			input, emitted
+		);
 	}
 
 	#[test]
