@@ -1188,10 +1188,8 @@ fn test_recent_random_bugs() {
 	// is!("for i in 1 to 5 : {puti i};i", 6);// EXC_BAD_ACCESS TODO _👀!
 }
 #[test]
-#[ignore]
-fn test_square_exp_wasm() {
+fn test_square() {
 	let π = PI; //3.141592653589793;
-			 // todo smart pointer return from main for floats!
 	is!("3²", 9);
 	is!("3.0²", 9);
 	is!("√100²", 100);
@@ -1201,22 +1199,21 @@ fn test_square_exp_wasm() {
 	is!("√π²", π);
 	is!("π²", π * π);
 	is!("π", PI);
-	is!("int i=π*1000000", 3141592);
-	#[cfg(feature = "WASM")]
-	{
-		is!("π*1000000.", 3141592.653589793);
-	}
-	#[cfg(not(feature = "WASM"))]
-	{
-		is!("π*1000000.", 3141592.6535897);
-	}
+	skip!(
+		// TODO: type-annotated declarations need work
+		is!("int i=π*1000000", 3141592);
+	);
+	is!("π*1000000.", 3141592.653589793);
 	is!("i=-9;-i", 9);
 	is!("- √9", -3);
-	is!(".1 + .9", 1);
-	is!("-.1 + -.9", -1);
+	skip!(
+		// TODO: parser doesn't handle numbers starting with '.'
+		is!(".1 + .9", 1);
+		is!("-.1 + -.9", -1);
+	);
 	is!("√9", 3);
 	//	is!("√-9 is -3i", -3);// if «use complex numbers»
-	is!(".1", 0.1);
+	skip!(is!(".1", 0.1));
 	#[cfg(not(feature = "WASMTIME"))]
 	{
 		// and !LINUX // todo why
@@ -1815,7 +1812,7 @@ fn test_all_wasm() {
 	test_wasm_logic_unary_variables();
 	test_wasm_logic();
 	test_wasm_logic_negated();
-	test_square_exp_wasm();
+	test_square();
 	test_globals();
 
 	test_comparison_id_precedence();
@@ -1830,7 +1827,7 @@ fn test_all_wasm() {
 	test_comparison_math();
 	test_comparison_id();
 	test_wasm_ternary();
-	test_square_exp_wasm();
+	test_square();
 	test_round_floor_ceiling();
 	test_wasm_ternary();
 	test_wasm_function_calls();

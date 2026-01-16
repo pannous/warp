@@ -944,7 +944,8 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			// '三'.is_numeric() is true but not ASCII
-			if ch.is_numeric() {
+			// Exclude ² and ³ as they are suffix operators, not part of the number
+			if ch.is_numeric() && ch != '²' && ch != '³' {
 				num_str.push(ch);
 				self.advance();
 			} else if ch == '.' && !has_dot && self.peek_char(1) != '.' {
