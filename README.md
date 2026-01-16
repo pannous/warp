@@ -1,6 +1,6 @@
-# 𖦹 Warp
+# 🌀Warp
 
-<!-- 𓏲 w 𓍢 𐀸 we ꩜ CHAM PUNCTUATION SPIRAL -->
+<!-- 🌀 𖦹 𓏲 w 𓍢 𐀸 we ꩜ CHAM PUNCTUATION SPIRAL -->
 
 𖦹 **Warp** is a new **data format** and **programming language** that is wasm-first and written in Rust.
 It's a rewrite of [Wasp](https://github.com/pannous/wasp) which was written in c⁺⁺ and [Angle](
