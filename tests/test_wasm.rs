@@ -1228,13 +1228,14 @@ fn test_square() {
 }
 
 #[test]
-#[ignore]
 fn test_round_floor_ceiling() {
 	is!("ceil 3.7", 4);
-	is!("floor 3.7", 3); // todo: only if «use math» namespace
-					  //	is!("ceiling 3.7", 4);// todo: only if «use math» namespace
+	is!("floor 3.7", 3);
 	is!("round 3.7", 4);
-	//	is!("i=3.7;.3+i", 4);// floor
+	skip!(
+		// TODO: parser doesn't handle numbers starting with '.'
+		is!("i=3.7;.3+i", 4);
+	);
 	// lol "⌊3.7⌋" is cursed and is transformed into \n\t or something in wasm and IDE!
 	//	is!("⌊3.7", 3);// floor
 	//	is!("⌊3.7⌋", 3);// floor
@@ -1244,6 +1245,7 @@ fn test_round_floor_ceiling() {
 	//	is!("i=3.7;.3+i⌋", 3);// floor
 	//	is!("i=3.7;.3+ floor i", 3);// floor
 }
+
 #[test]
 #[ignore]
 fn test_wasm_typed_globals() {

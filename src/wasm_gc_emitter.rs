@@ -913,6 +913,11 @@ impl WasmGcEmitter {
 									self.required_functions.insert("new_int");
 									return;
 								}
+								"ceil" | "floor" | "round" => {
+									// WASM builtin math functions return int
+									self.required_functions.insert("new_int");
+									return;
+								}
 								_ => {}
 							}
 						}
@@ -2565,6 +2570,28 @@ impl WasmGcEmitter {
 							self.emit_call(func, "node_count");
 							func.instruction(&Instruction::I64Const(8));
 							func.instruction(&Instruction::I64Mul);
+							self.emit_call(func, "new_int");
+							return;
+						}
+						// ceil/floor/round: map to WASM built-in f64 instructions
+						if fn_name == "ceil" {
+							self.emit_float_value(func, &items[1]);
+							func.instruction(&Instruction::F64Ceil);
+							func.instruction(&Instruction::I64TruncF64S);
+							self.emit_call(func, "new_int");
+							return;
+						}
+						if fn_name == "floor" {
+							self.emit_float_value(func, &items[1]);
+							func.instruction(&Instruction::F64Floor);
+							func.instruction(&Instruction::I64TruncF64S);
+							self.emit_call(func, "new_int");
+							return;
+						}
+						if fn_name == "round" {
+							self.emit_float_value(func, &items[1]);
+							func.instruction(&Instruction::F64Nearest);
+							func.instruction(&Instruction::I64TruncF64S);
 							self.emit_call(func, "new_int");
 							return;
 						}
