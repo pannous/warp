@@ -786,6 +786,29 @@ impl WasmGcEmitter {
 					if *op == Op::Pow {
 						self.required_functions.insert("i64_pow");
 					}
+				} else if *op == Op::Square || *op == Op::Cube {
+					// Suffix operators need both int and float constructors
+					self.required_functions.insert("new_int");
+					self.required_functions.insert("new_float");
+					self.analyze_required_functions(key);
+					return;
+				} else if op.is_prefix() && matches!(key.drop_meta(), Node::Empty) {
+					// Prefix operators: √x, -x, !x, ‖x‖
+					match op {
+						Op::Sqrt => {
+							self.required_functions.insert("new_float");
+						}
+						Op::Neg | Op::Abs => {
+							self.required_functions.insert("new_int");
+							self.required_functions.insert("new_float");
+						}
+						Op::Not => {
+							self.required_functions.insert("new_int");
+						}
+						_ => {}
+					}
+					self.analyze_required_functions(value);
+					return;
 				} else if *op == Op::Hash {
 					// Check if prefix (count) or infix (index)
 					if matches!(key.drop_meta(), Node::Empty) {
@@ -912,6 +935,10 @@ impl WasmGcEmitter {
 				self.type_registry.register_from_node(node);
 				self.analyze_required_functions(name);
 				self.analyze_required_functions(body);
+			}
+			Node::Error(inner) => {
+				// Analyze inner node to capture any required functions
+				self.analyze_required_functions(inner);
 			}
 			_ => {}
 		}
@@ -2271,6 +2298,91 @@ impl WasmGcEmitter {
 					|| op.is_compound_assign()
 				{
 					self.emit_arithmetic(func, left, op, right);
+				} else if *op == Op::Square || *op == Op::Cube {
+					// Suffix operators: x² = x*x, x³ = x*x*x
+					// Emit the operand multiple times (safe for pure expressions)
+					let use_float = self.needs_float(left);
+					if use_float {
+						self.emit_float_value(func, left);
+						self.emit_float_value(func, left);
+						func.instruction(&Instruction::F64Mul);
+						if *op == Op::Cube {
+							self.emit_float_value(func, left);
+							func.instruction(&Instruction::F64Mul);
+						}
+						self.emit_call(func, "new_float");
+					} else {
+						self.emit_numeric_value(func, left);
+						self.emit_numeric_value(func, left);
+						func.instruction(&Instruction::I64Mul);
+						if *op == Op::Cube {
+							self.emit_numeric_value(func, left);
+							func.instruction(&Instruction::I64Mul);
+						}
+						self.emit_call(func, "new_int");
+					}
+				} else if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) {
+					// Prefix operators: √x, -x, !x, ‖x‖
+					match op {
+						Op::Sqrt => {
+							// √x = sqrt(x), returns float
+							self.emit_float_value(func, right);
+							func.instruction(&Instruction::F64Sqrt);
+							self.emit_call(func, "new_float");
+						}
+						Op::Neg => {
+							// -x = 0 - x
+							let use_float = self.needs_float(right);
+							if use_float {
+								func.instruction(&Instruction::F64Const(0.0.into()));
+								self.emit_float_value(func, right);
+								func.instruction(&Instruction::F64Sub);
+								self.emit_call(func, "new_float");
+							} else {
+								func.instruction(&Instruction::I64Const(0));
+								self.emit_numeric_value(func, right);
+								func.instruction(&Instruction::I64Sub);
+								self.emit_call(func, "new_int");
+							}
+						}
+						Op::Not => {
+							// !x = x == 0
+							self.emit_numeric_value(func, right);
+							func.instruction(&Instruction::I64Eqz);
+							func.instruction(&Instruction::I64ExtendI32U);
+							self.emit_call(func, "new_int");
+						}
+						Op::Abs => {
+							// ‖x‖ = abs(x)
+							let use_float = self.needs_float(right);
+							if use_float {
+								self.emit_float_value(func, right);
+								func.instruction(&Instruction::F64Abs);
+								self.emit_call(func, "new_float");
+							} else {
+								// i64 abs: if x < 0 then -x else x
+								self.emit_numeric_value(func, right);
+								func.instruction(&Instruction::LocalTee(self.next_temp_local));
+								func.instruction(&Instruction::I64Const(0));
+								func.instruction(&Instruction::I64LtS);
+								func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+								func.instruction(&Instruction::I64Const(0));
+								func.instruction(&Instruction::LocalGet(self.next_temp_local));
+								func.instruction(&Instruction::I64Sub);
+								func.instruction(&Instruction::Else);
+								func.instruction(&Instruction::LocalGet(self.next_temp_local));
+								func.instruction(&Instruction::End);
+								self.emit_call(func, "new_int");
+							}
+						}
+						_ => {
+							// Fallback: emit as Key node
+							self.emit_node_instructions(func, left);
+							self.emit_node_instructions(func, right);
+							func.instruction(&Instruction::I64Const(op_to_code(op)));
+							self.emit_call(func, "new_key");
+						}
+					}
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
 					self.emit_ternary(func, left, right);
@@ -4135,6 +4247,35 @@ impl WasmGcEmitter {
 					}
 					_ => unreachable!(),
 				}
+			}
+			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
+			Node::Key(left, Op::Square, _) => {
+				self.emit_float_value(func, left);
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Mul);
+			}
+			Node::Key(left, Op::Cube, _) => {
+				self.emit_float_value(func, left);
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Mul);
+				self.emit_float_value(func, left);
+				func.instruction(&Instruction::F64Mul);
+			}
+			// Prefix operators: √x = sqrt(x) (returns f64)
+			Node::Key(left, Op::Sqrt, right) if matches!(left.drop_meta(), Node::Empty) => {
+				self.emit_float_value(func, right);
+				func.instruction(&Instruction::F64Sqrt);
+			}
+			// Prefix negation: -x (returns f64)
+			Node::Key(left, Op::Neg, right) if matches!(left.drop_meta(), Node::Empty) => {
+				func.instruction(&Instruction::F64Const(0.0.into()));
+				self.emit_float_value(func, right);
+				func.instruction(&Instruction::F64Sub);
+			}
+			// Prefix abs: ‖x‖ (returns f64)
+			Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
+				self.emit_float_value(func, right);
+				func.instruction(&Instruction::F64Abs);
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => {
