@@ -82,3 +82,11 @@ fn probe_test2_check() {
     println!("Result: {:?}", result);
     assert_eq!(result, 4);
 }
+
+#[test]
+fn probe_dollar_param() {
+    use warp::wasm_gc_emitter::eval;
+    // $0 references first parameter in function definitions
+    let result = eval("add1(x):=$0+1; add1(3)");
+    assert_eq!(result, 4);
+}
