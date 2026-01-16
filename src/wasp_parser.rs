@@ -546,8 +546,9 @@ impl WaspParser {
 			return Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(decl));
 		}
 
-		// Handle "class" keyword: class Name { fields }
-		if symbol == "class" || symbol == "struct" || symbol == "type" {
+		// Handle "class"/"struct"/"type" keyword: class Name { fields }
+		// But NOT type(x) which is a function call for type introspection
+		if symbol == "class" || symbol == "struct" || (symbol == "type" && self.current_char() != '(') {
 			self.skip_whitespace();
 			let type_name = match self.parse_symbol() {
 				Ok(s) => s,
