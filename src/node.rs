@@ -2164,12 +2164,8 @@ pub fn key(k: &str, v: Node) -> Node {
 }
 
 pub fn types(name: &str) -> Node {
-	// todo look up in existing types map &Node
-	// instead of returning new instances every time and then matching through equality
-	Type {
-		name: Box::new(Node::Symbol(name.to_string())),
-		body: Box::new(Node::Empty),
-	}
+	// Returns a Symbol with the type name, matching what type() introspection returns
+	Node::Symbol(name.to_string())
 }
 pub fn typeDefinition(name: &str, body: Node) -> Node {
 	Type {
