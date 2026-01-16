@@ -16,6 +16,7 @@ pub mod meta;
 pub mod smarty;
 pub mod operators;
 pub mod host;
+pub mod ffi;
 pub mod util;
 pub mod function;
 pub mod normalize;

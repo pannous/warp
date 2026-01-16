@@ -85,6 +85,8 @@ pub struct WasmGcEmitter {
 	emit_kind_globals: bool,                 // Emit Kind constants as globals for documentation
 	emit_host_imports: bool,                 // Emit host function imports (fetch, run)
 	emit_wasi_imports: bool,                 // Emit WASI imports (fd_write, etc.)
+	emit_ffi_imports: bool,                  // Emit FFI imports (libc, libm, etc.)
+	ffi_imports: HashMap<String, crate::ffi::FfiSignature>, // FFI function imports
 	kind_global_indices: HashMap<Kind, u32>, // Kind -> global index
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
@@ -146,6 +148,8 @@ impl WasmGcEmitter {
 			emit_kind_globals: true,  // Enable by default for debugging
 			emit_host_imports: false, // Disabled by default for simpler modules
 			emit_wasi_imports: false, // Disabled by default
+			emit_ffi_imports: false,  // Disabled by default
+			ffi_imports: HashMap::new(),
 			kind_global_indices: HashMap::new(),
 			string_table: HashMap::new(),
 			next_data_offset: 8,
@@ -232,6 +236,54 @@ impl WasmGcEmitter {
 			EntityType::Function(fd_write_type_idx),
 		);
 		self.register_import("wasi_fd_write");
+	}
+
+	/// Enable/disable FFI imports (libc, libm functions)
+	pub fn set_ffi_imports(&mut self, enabled: bool) {
+		self.emit_ffi_imports = enabled;
+	}
+
+	/// Add an FFI import by function name
+	pub fn add_ffi_import(&mut self, name: &str, _library: &str) {
+		use crate::ffi::get_ffi_signature;
+		if let Some(sig) = get_ffi_signature(name) {
+			self.ffi_imports.insert(name.to_string(), sig);
+			self.emit_ffi_imports = true;
+		}
+	}
+
+	/// Emit FFI imports for all registered FFI functions
+	/// Must be called before emit_gc_types() since type indices need to be correct
+	fn emit_ffi_imports(&mut self) {
+		if !self.emit_ffi_imports || self.ffi_imports.is_empty() {
+			return;
+		}
+
+		// Clone data to avoid borrow conflict - collect (name, params, results) tuples
+		let mut imports: Vec<(String, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>)> =
+			self.ffi_imports.iter()
+				.map(|(name, sig)| (name.clone(), sig.params.clone(), sig.results.clone()))
+				.collect();
+		imports.sort_by(|(a, _, _), (b, _, _)| a.cmp(b));
+
+		for (name, params, results) in imports {
+			let type_idx = self.next_type_idx;
+			self.types.ty().function(params, results);
+			self.next_type_idx += 1;
+
+			// Import from "ffi" module
+			self.imports.import("ffi", &name, EntityType::Function(type_idx));
+
+			// Register as an import function - use a leaked string for static lifetime
+			let static_name: &'static str = Box::leak(format!("ffi_{}", name).into_boxed_str());
+			self.register_import(static_name);
+		}
+	}
+
+	/// Get FFI function call index by name
+	fn ffi_func_index(&self, name: &str) -> Option<u32> {
+		let ffi_name = format!("ffi_{}", name);
+		self.func_registry.get(&ffi_name).map(|f| f.call_index as u32)
 	}
 
 	/// Register an import function
@@ -868,6 +920,34 @@ impl WasmGcEmitter {
 				if items.is_empty() {
 					self.required_functions.insert("new_empty");
 				} else {
+					// Check for FFI function calls
+					if !items.is_empty() {
+						if let Node::Symbol(fn_name) = items[0].drop_meta() {
+							if let Some(sig) = self.ffi_imports.get(fn_name.as_str()).cloned() {
+								// FFI function call - add required result wrapper
+								if sig.results.is_empty() {
+									self.required_functions.insert("new_empty");
+								} else {
+									match sig.results[0] {
+										wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
+											self.required_functions.insert("new_float");
+										}
+										wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
+											self.required_functions.insert("new_int");
+										}
+										_ => {
+											self.required_functions.insert("new_int");
+										}
+									}
+								}
+								// Analyze arguments
+								for item in items.iter().skip(1) {
+									self.analyze_required_functions(item);
+								}
+								return;
+							}
+						}
+					}
 					// Check for type constructor: int('123'), str(42), etc.
 					// But NOT typed variable declarations like "string x=fetch..."
 					if items.len() == 2 {
@@ -966,6 +1046,7 @@ impl WasmGcEmitter {
 		// Host imports must come before GC types (imports section comes before types in WASM)
 		self.emit_host_imports();
 		self.emit_wasi_imports();
+		self.emit_ffi_imports();
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
@@ -1051,6 +1132,8 @@ impl WasmGcEmitter {
 
 	pub fn emit_for_node(&mut self, node: &Node) {
 		self.emit_all_functions = false;
+		// Extract FFI imports first (must come before emit() to set up imports)
+		self.extract_ffi_imports(node);
 		// Extract user-defined functions first
 		self.extract_user_functions(node);
 		self.analyze_required_functions(node);
@@ -1064,6 +1147,98 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
+	}
+
+	/// Extract FFI imports from "import X from Y" and "use Y" statements
+	fn extract_ffi_imports(&mut self, node: &Node) {
+		let node = node.drop_meta();
+		match node {
+			// Handle various import/use patterns
+			Node::List(items, _, _) => {
+				if !items.is_empty() {
+					// Check if first item is directly a Symbol (not a nested list)
+					match items[0].drop_meta() {
+						Node::Symbol(first_sym) => {
+							if first_sym == "import" && items.len() >= 3 {
+								let func_name = items[1].name();
+								// Check for Key(from, _, lib) pattern
+								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
+									if key.name() == "from" {
+										let lib = value.name();
+										self.add_ffi_import(&func_name, &lib);
+										return;
+									}
+								}
+								// Check for Symbol("from"), Y pattern (4 items)
+								if items.len() >= 4 && items[2].name() == "from" {
+									let lib = items[3].name();
+									self.add_ffi_import(&func_name, &lib);
+									return;
+								}
+							} else if first_sym == "use" && items.len() >= 2 {
+								// "use lib" parses as List[Symbol("use"), Symbol("lib")]
+								let lib = items[1].name();
+								self.add_ffi_lib(&lib);
+								return;
+							}
+						}
+						// First item is a nested list - could be statement sequence
+						Node::List(inner_items, _, _) => {
+							// Check for nested "use lib" pattern: [[use, lib], expr]
+							if inner_items.len() >= 2 {
+								if let Node::Symbol(inner_first) = inner_items[0].drop_meta() {
+									if inner_first == "use" {
+										let lib = inner_items[1].name();
+										self.add_ffi_lib(&lib);
+										// Continue to process remaining items
+									}
+								}
+							}
+						}
+						_ => {}
+					}
+				}
+				// Recurse into list items
+				for item in items {
+					self.extract_ffi_imports(item);
+				}
+			}
+			Node::Key(ref key, _, ref value) => {
+				// "import X from Y" might parse as Key structure
+				if key.name() == "import" {
+					// Handle import as key
+					if let Node::Key(ref from_key, _, ref lib) = value.drop_meta() {
+						if from_key.name() == "from" {
+							// Get function name from somewhere
+							let func_name = key.name();
+							let lib_name = lib.name();
+							self.add_ffi_import(&func_name, &lib_name);
+							return;
+						}
+					}
+				}
+				self.extract_ffi_imports(key);
+				self.extract_ffi_imports(value);
+			}
+			Node::Meta { ref node, .. } => {
+				self.extract_ffi_imports(node);
+			}
+			_ => {}
+		}
+	}
+
+	/// Add all common functions from a library
+	fn add_ffi_lib(&mut self, lib: &str) {
+		let lib_alias = crate::ffi::resolve_library_alias(lib);
+		if lib_alias == "m" {
+			for name in ["fmin", "fmax", "fabs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "fmod", "pow", "exp", "log", "log10"] {
+				self.add_ffi_import(name, "m");
+			}
+		} else if lib_alias == "c" {
+			for name in ["strlen", "atoi", "atol", "atof", "abs", "strcmp", "strncmp", "rand"] {
+				self.add_ffi_import(name, "c");
+			}
+		}
 	}
 
 	/// Emit the compact 3-field GC types
@@ -2641,6 +2816,11 @@ impl WasmGcEmitter {
 							}
 							return;
 						}
+						// Check for FFI function call
+						if self.ffi_imports.contains_key(fn_name) {
+							self.emit_ffi_call(func, fn_name, &items[1..]);
+							return;
+						}
 					}
 				}
 				// Check if this list contains type definitions (class/struct)
@@ -2674,7 +2854,8 @@ impl WasmGcEmitter {
 						// def/fun/fn syntax starts a statement sequence
 						Node::List(list_items, _, _) if list_items.len() >= 2 => {
 							if let Node::Symbol(s) = list_items[0].drop_meta() {
-								is_function_keyword(s)
+								// use/import for FFI also indicates statement sequence
+								is_function_keyword(s) || s == "use" || s == "import"
 							} else {
 								false
 							}
@@ -2722,10 +2903,11 @@ impl WasmGcEmitter {
 									}
 								}
 								// Pattern: def/fun/fn name(params...): body or {body}
+								// Also filter out use/import statements (FFI side effects only)
 								Node::List(list_items, _, _) => {
 									if list_items.len() >= 2 {
 										if let Node::Symbol(s) = list_items[0].drop_meta() {
-											if is_function_keyword(s) {
+											if is_function_keyword(s) || s == "use" || s == "import" {
 												return false;
 											}
 										}
@@ -3132,6 +3314,163 @@ impl WasmGcEmitter {
 		// Stack now has (result_ptr: i32, result_len: i32)
 		// Call new_text to create a Text node from the result
 		self.emit_call(func, "new_text");
+	}
+
+	/// Emit an FFI function call
+	/// Handles marshalling arguments and wrapping results
+	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+
+		// Emit arguments according to signature
+		for (i, param_type) in sig.params.iter().enumerate() {
+			if i >= args.len() {
+				// Missing argument - emit default value
+				match param_type {
+					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
+					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
+					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
+					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
+					_ => func.instruction(&Instruction::I32Const(0)),
+				};
+				continue;
+			}
+
+			let arg = &args[i];
+			match param_type {
+				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
+				wasm_encoder::ValType::F32 => {
+					self.emit_float_value(func, arg);
+					func.instruction(&Instruction::F32DemoteF64);
+				}
+				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
+				wasm_encoder::ValType::I32 => {
+					// Check if this is a string argument (for libc string functions)
+					// C string functions expect a pointer to null-terminated string
+					if self.is_string_arg(arg) {
+						// Emit only the pointer (C strings are null-terminated)
+						self.emit_string_ptr_only(func, arg);
+					} else {
+						self.emit_numeric_value(func, arg);
+						func.instruction(&Instruction::I32WrapI64);
+					}
+				}
+				_ => self.emit_numeric_value(func, arg),
+			}
+		}
+
+		// Call the FFI function
+		if let Some(idx) = self.ffi_func_index(fn_name) {
+			func.instruction(&Instruction::Call(idx));
+		}
+
+		// Wrap result in appropriate Node type
+		if sig.results.is_empty() {
+			self.emit_call(func, "new_empty");
+		} else {
+			match sig.results[0] {
+				wasm_encoder::ValType::F64 => self.emit_call(func, "new_float"),
+				wasm_encoder::ValType::F32 => {
+					func.instruction(&Instruction::F64PromoteF32);
+					self.emit_call(func, "new_float");
+				}
+				wasm_encoder::ValType::I64 => self.emit_call(func, "new_int"),
+				wasm_encoder::ValType::I32 => {
+					func.instruction(&Instruction::I64ExtendI32S);
+					self.emit_call(func, "new_int");
+				}
+				_ => self.emit_call(func, "new_int"),
+			}
+		}
+	}
+
+	/// Check if a node argument should be treated as a string
+	fn is_string_arg(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Text(_) => true,
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					local.data_pointer > 0 // Has string data stored
+				} else {
+					false
+				}
+			}
+			_ => false,
+		}
+	}
+
+	/// Emit string pointer and length for FFI calls
+	fn emit_string_ptr_len(&mut self, func: &mut Function, node: &Node) {
+		match node.drop_meta() {
+			Node::Text(s) => {
+				let (ptr, len) = self.allocate_string(s);
+				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&Instruction::I32Const(len as i32));
+			}
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					if local.data_pointer > 0 {
+						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
+						func.instruction(&Instruction::I32Const(local.data_length as i32));
+					} else {
+						// Fallback: use symbol name
+						let (ptr, len) = self.allocate_string(name);
+						func.instruction(&Instruction::I32Const(ptr as i32));
+						func.instruction(&Instruction::I32Const(len as i32));
+					}
+				} else {
+					// Unknown symbol - use name as string
+					let (ptr, len) = self.allocate_string(name);
+					func.instruction(&Instruction::I32Const(ptr as i32));
+					func.instruction(&Instruction::I32Const(len as i32));
+				}
+			}
+			_ => {
+				// For other nodes, try to get a string representation
+				let s = node.to_string();
+				let (ptr, len) = self.allocate_string(&s);
+				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&Instruction::I32Const(len as i32));
+			}
+		}
+	}
+
+	/// Emit only string pointer for C-style FFI calls (null-terminated strings)
+	fn emit_string_ptr_only(&mut self, func: &mut Function, node: &Node) {
+		match node.drop_meta() {
+			Node::Text(s) => {
+				// Add null terminator for C string
+				let c_str = format!("{}\0", s);
+				let (ptr, _) = self.allocate_string(&c_str);
+				func.instruction(&Instruction::I32Const(ptr as i32));
+			}
+			Node::Symbol(name) => {
+				if let Some(local) = self.scope.lookup(name) {
+					if local.data_pointer > 0 {
+						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
+					} else {
+						// Fallback: use symbol name with null terminator
+						let c_str = format!("{}\0", name);
+						let (ptr, _) = self.allocate_string(&c_str);
+						func.instruction(&Instruction::I32Const(ptr as i32));
+					}
+				} else {
+					// Unknown symbol - use name as string
+					let c_str = format!("{}\0", name);
+					let (ptr, _) = self.allocate_string(&c_str);
+					func.instruction(&Instruction::I32Const(ptr as i32));
+				}
+			}
+			_ => {
+				// For other nodes, try to get a string representation
+				let s = node.to_string();
+				let c_str = format!("{}\0", s);
+				let (ptr, _) = self.allocate_string(&c_str);
+				func.instruction(&Instruction::I32Const(ptr as i32));
+			}
+		}
 	}
 
 	/// Emit WASI puts: write string to stdout
@@ -4858,11 +5197,28 @@ fn uses_wasi(code: &str) -> bool {
 		|| code.contains("fd_write")
 }
 
+/// Check if code uses FFI imports (import X from Y, use m/c)
+fn uses_ffi(code: &str) -> bool {
+	// Check for "import X from" pattern
+	if code.contains("import ") && code.contains(" from ") {
+		return true;
+	}
+	// Check for "use m", "use c", "use math" etc
+	if code.contains("use m;") || code.contains("use c;") || code.contains("use math;") {
+		return true;
+	}
+	// Check for "use m\n" or "use c\n" etc
+	if code.contains("use m\n") || code.contains("use c\n") {
+		return true;
+	}
+	false
+}
+
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
 	use crate::extensions::numbers::Number;
 	use crate::type_kinds::{extract_instance_values, TypeDef};
-	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi};
+	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
 	let node = WaspParser::parse(code);
 
@@ -4883,6 +5239,7 @@ pub fn eval(code: &str) -> Node {
 	let mut emitter = WasmGcEmitter::new();
 	let needs_host = uses_fetch(code);
 	let needs_wasi = uses_wasi(code);
+	let needs_ffi = uses_ffi(code);
 	if needs_host {
 		emitter.set_host_imports(true);
 	}
@@ -4893,6 +5250,16 @@ pub fn eval(code: &str) -> Node {
 	let bytes = emitter.finish();
 
 	// Use appropriate linker based on imports needed
+	if needs_ffi {
+		match read_bytes_with_ffi(&bytes) {
+			Ok(result) => return result,
+			Err(e) => {
+				warn!("FFI eval failed: {}", e);
+				return node;
+			}
+		}
+	}
+
 	if needs_wasi {
 		match read_bytes_with_wasi(&bytes) {
 			Ok(result) => return Node::Number(Number::Int(result)),
