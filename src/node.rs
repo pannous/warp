@@ -853,6 +853,11 @@ impl Node {
 		}
 	}
 
+	// method `into_iter` can be confused for the standard trait method `std::iter::IntoIterator::into_iter`
+	// Help: consider implementing the trait `std::iter::IntoIterator` or choosing a less ambiguous method name
+	// Help: for further information visit
+	// https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#should_implement_trait
+	// Note: `#[warn(clippy::should_implement_trait)]` on by default
 	pub fn into_iter(self) -> NodeIter {
 		match self {
 			List(items, _, _) => NodeIter::new(items),
@@ -869,6 +874,9 @@ impl Node {
 			Meta { node, .. } => node.len(),
 			_ => 0,
 		}
+	}
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0 || self == &Empty
 	}
 
 	pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -2167,7 +2175,8 @@ pub fn types(name: &str) -> Node {
 	// Returns a Symbol with the type name, matching what type() introspection returns
 	Node::Symbol(name.to_string())
 }
-pub fn typeDefinition(name: &str, body: Node) -> Node {
+
+pub fn type_definition(name: &str, body: Node) -> Node {
 	Type {
 		name: Box::new(Node::Symbol(name.to_string())),
 		body: Box::new(body),

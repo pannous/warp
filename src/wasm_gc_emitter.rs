@@ -3,14 +3,15 @@ use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, FunctionRegistry, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node};
-use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
+use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::{FieldDef, Kind, TypeDef, TypeRegistry};
 use crate::util::gc_engine;
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
 use std::collections::{HashMap, HashSet};
+use wasm_ast::instruction;
 use wasm_encoder::*;
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
@@ -81,9 +82,9 @@ pub struct WasmGcEmitter {
 	used_functions: HashSet<&'static str>,
 	required_functions: HashSet<&'static str>,
 	emit_all_functions: bool,
-	emit_kind_globals: bool, // Emit Kind constants as globals for documentation
-	emit_host_imports: bool, // Emit host function imports (fetch, run)
-	emit_wasi_imports: bool, // Emit WASI imports (fd_write, etc.)
+	emit_kind_globals: bool,                 // Emit Kind constants as globals for documentation
+	emit_host_imports: bool,                 // Emit host function imports (fetch, run)
+	emit_wasi_imports: bool,                 // Emit WASI imports (fd_write, etc.)
 	kind_global_indices: HashMap<Kind, u32>, // Kind -> global index
 	// String storage in linear memory
 	string_table: HashMap<String, u32>,
@@ -113,9 +114,9 @@ pub struct UserFunctionDef {
 }
 
 impl Default for WasmGcEmitter {
-    fn default() -> Self {
-        Self::new()
-    }
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl WasmGcEmitter {
@@ -142,7 +143,7 @@ impl WasmGcEmitter {
 			used_functions: HashSet::new(),
 			required_functions: HashSet::new(),
 			emit_all_functions: true,
-			emit_kind_globals: true, // Enable by default for debugging
+			emit_kind_globals: true,  // Enable by default for debugging
 			emit_host_imports: false, // Disabled by default for simpler modules
 			emit_wasi_imports: false, // Disabled by default
 			kind_global_indices: HashMap::new(),
@@ -181,23 +182,22 @@ impl WasmGcEmitter {
 		// Type for fetch: (i32, i32) -> (i32, i32)
 		// Takes (url_ptr, url_len), returns (result_ptr, result_len)
 		let fetch_type_idx = self.next_type_idx;
-		self.types.ty().function(
-			vec![ValType::I32, ValType::I32],
-			vec![ValType::I32, ValType::I32],
-		);
+		self.types
+			.ty()
+			.function(vec![ValType::I32, ValType::I32], vec![ValType::I32, ValType::I32]);
 		self.next_type_idx += 1;
 
 		// Type for run: (i32, i32) -> i64
 		// Takes (wasm_ptr, wasm_len), returns result value
 		let run_type_idx = self.next_type_idx;
-		self.types.ty().function(
-			vec![ValType::I32, ValType::I32],
-			vec![ValType::I64],
-		);
+		self.types
+			.ty()
+			.function(vec![ValType::I32, ValType::I32], vec![ValType::I64]);
 		self.next_type_idx += 1;
 
 		// Import fetch from "host" module
-		self.imports.import("host", "fetch", EntityType::Function(fetch_type_idx));
+		self.imports
+			.import("host", "fetch", EntityType::Function(fetch_type_idx));
 		self.register_import("host_fetch");
 
 		// Import run from "host" module
@@ -226,7 +226,11 @@ impl WasmGcEmitter {
 		self.next_type_idx += 1;
 
 		// Import fd_write from wasi_snapshot_preview1
-		self.imports.import("wasi_snapshot_preview1", "fd_write", EntityType::Function(fd_write_type_idx));
+		self.imports.import(
+			"wasi_snapshot_preview1",
+			"fd_write",
+			EntityType::Function(fd_write_type_idx),
+		);
 		self.register_import("wasi_fd_write");
 	}
 
@@ -255,7 +259,8 @@ impl WasmGcEmitter {
 			}
 		}
 		// Then check registry (builtins/imports)
-		self.func_registry.get(name)
+		self.func_registry
+			.get(name)
 			.map(|f| f.call_index as u32)
 			.unwrap_or_else(|| panic!("Unknown function: {}", name))
 	}
@@ -307,9 +312,8 @@ impl WasmGcEmitter {
 					if !items.is_empty() {
 						if let Node::Symbol(name) = items[0].drop_meta() {
 							// Extract parameter names with defaults
-							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
-								.filter_map(Self::extract_param)
-								.collect();
+							let params: Vec<(String, Option<Node>)> =
+								items.iter().skip(1).filter_map(Self::extract_param).collect();
 
 							let func_def = UserFunctionDef {
 								name: name.clone(),
@@ -334,15 +338,18 @@ impl WasmGcEmitter {
 					if !items.is_empty() {
 						if let Node::Symbol(name) = items[0].drop_meta() {
 							// Extract parameter names
-							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
-								.filter_map(Self::extract_param)
-								.collect();
+							let params: Vec<(String, Option<Node>)> =
+								items.iter().skip(1).filter_map(Self::extract_param).collect();
 
 							// If body uses $n params, or has explicit params, it's a function
 							if !params.is_empty() || Self::uses_dollar_param(body) || Self::uses_it(body) {
 								let func_def = UserFunctionDef {
 									name: name.clone(),
-									params: if params.is_empty() { vec![("it".to_string(), None)] } else { params },
+									params: if params.is_empty() {
+										vec![("it".to_string(), None)]
+									} else {
+										params
+									},
 									body: body.clone(),
 									return_kind: Kind::Int,
 									func_index: None,
@@ -435,9 +442,8 @@ impl WasmGcEmitter {
 			if let Node::List(sig_items, _, _) = sig.drop_meta() {
 				if !sig_items.is_empty() {
 					if let Node::Symbol(name) = sig_items[0].drop_meta() {
-						let params: Vec<(String, Option<Node>)> = sig_items.iter().skip(1)
-							.filter_map(Self::extract_param)
-							.collect();
+						let params: Vec<(String, Option<Node>)> =
+							sig_items.iter().skip(1).filter_map(Self::extract_param).collect();
 
 						return Some(UserFunctionDef {
 							name: name.clone(),
@@ -461,14 +467,14 @@ impl WasmGcEmitter {
 					if !sig_items.is_empty() {
 						if let Node::Symbol(name) = sig_items[0].drop_meta() {
 							// Parameters might be in a nested list or directly
-							let params: Vec<(String, Option<Node>)> = sig_items.iter().skip(1)
+							let params: Vec<(String, Option<Node>)> = sig_items
+								.iter()
+								.skip(1)
 								.flat_map(|item| {
 									match item.drop_meta() {
 										// Parameter wrapped in list: (x) or (x=3)
 										Node::List(param_items, _, _) => {
-											param_items.iter()
-												.filter_map(Self::extract_param)
-												.collect::<Vec<_>>()
+											param_items.iter().filter_map(Self::extract_param).collect::<Vec<_>>()
 										}
 										// Direct parameter
 										_ => Self::extract_param(item).into_iter().collect(),
@@ -598,12 +604,16 @@ impl WasmGcEmitter {
 
 	/// Create a RefType for node references
 	fn node_ref(&self, nullable: bool) -> RefType {
-		RefType { nullable, heap_type: HeapType::Concrete(self.node_type) }
+		RefType {
+			nullable,
+			heap_type: HeapType::Concrete(self.node_type),
+		}
 	}
 
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self.string_table
+		let (ptr, len) = self
+			.string_table
 			.get(s)
 			.map(|&offset| (offset, s.len() as u32))
 			.unwrap_or((0, s.len() as u32));
@@ -679,9 +689,7 @@ impl WasmGcEmitter {
 				// Logical ops are numeric only if both operands are numeric
 				self.is_numeric(left) && self.is_numeric(right)
 			}
-			Node::Key(_, Op::Define | Op::Assign, right) => {
-				self.is_numeric(right)
-			}
+			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
 			// Empty, Text, Char, List, etc. are not numeric
 			_ => false,
 		}
@@ -842,8 +850,8 @@ impl WasmGcEmitter {
 					if items.len() == 2 {
 						if let Node::Symbol(s) = items[0].drop_meta() {
 							// Skip if second arg is assignment/define (typed variable declaration)
-							let is_typed_decl = matches!(items[1].drop_meta(),
-								Node::Key(_, Op::Assign | Op::Define, _));
+							let is_typed_decl =
+								matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 							if !is_typed_decl {
 								match s.as_str() {
 									"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
@@ -954,8 +962,7 @@ impl WasmGcEmitter {
 			.collect();
 
 		self.types.ty().struct_(fields);
-		self.user_type_indices
-			.insert(type_def.name.clone(), self.next_type_idx);
+		self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
 		self.next_type_idx += 1;
 	}
 
@@ -995,8 +1002,7 @@ impl WasmGcEmitter {
 				},
 				&ConstExpr::i64_const(tag as i64),
 			);
-			self.exports
-				.export(name, ExportKind::Global, self.next_global_idx);
+			self.exports.export(name, ExportKind::Global, self.next_global_idx);
 			self.kind_global_indices.insert(tag, self.next_global_idx);
 			self.next_global_idx += 1;
 		}
@@ -1064,7 +1070,7 @@ impl WasmGcEmitter {
 			}, // kind
 			FieldType {
 				element_type: Val(Ref(any_ref)),
-				mutable: true,  // mutable for index assignment
+				mutable: true, // mutable for index assignment
 			}, // data
 			FieldType {
 				element_type: Val(Ref(node_ref)),
@@ -1100,8 +1106,7 @@ impl WasmGcEmitter {
 				.collect();
 
 			self.types.ty().struct_(fields);
-			self.user_type_indices
-				.insert(type_def.name.clone(), self.next_type_idx);
+			self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
 			self.next_type_idx += 1;
 		}
 	}
@@ -1200,17 +1205,11 @@ impl WasmGcEmitter {
 		};
 
 		// Build parameter types
-		let params: Vec<ValType> = type_def
-			.fields
-			.iter()
-			.map(|f| self.field_def_to_val_type(f))
-			.collect();
+		let params: Vec<ValType> = type_def.fields.iter().map(|f| self.field_def_to_val_type(f)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
 		let func_type = self.types.len();
-		self.types
-			.ty()
-			.function(params.clone(), vec![Ref(type_ref)]);
+		self.types.ty().function(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -1287,9 +1286,7 @@ impl WasmGcEmitter {
 		// new_int(i64) -> (ref $Node) - box the i64 in $i64box
 		if self.should_emit_function("new_int") {
 			let func_type = self.types.len();
-			self.types
-				.ty()
-				.function(vec![ValType::I64], vec![Ref(node_ref)]);
+			self.types.ty().function(vec![ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Int);
@@ -1307,9 +1304,7 @@ impl WasmGcEmitter {
 		// new_float(f64) -> (ref $Node) - box the f64 in $f64box
 		if self.should_emit_function("new_float") {
 			let func_type = self.types.len();
-			self.types
-				.ty()
-				.function(vec![ValType::F64], vec![Ref(node_ref)]);
+			self.types.ty().function(vec![ValType::F64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Float);
@@ -1327,9 +1322,7 @@ impl WasmGcEmitter {
 		// new_codepoint(i32) -> (ref $Node) - use i31ref for codepoint
 		if self.should_emit_function("new_codepoint") {
 			let func_type = self.types.len();
-			self.types
-				.ty()
-				.function(vec![ValType::I32], vec![Ref(node_ref)]);
+			self.types.ty().function(vec![ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Codepoint);
@@ -1464,10 +1457,9 @@ impl WasmGcEmitter {
 		// Traverses linked list: for index N, follow value pointer N-1 times, return data
 		if self.should_emit_function("list_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64],
-				vec![ValType::I64],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			// Locals: 0=list, 1=index, 2=current (loop variable)
@@ -1536,10 +1528,9 @@ impl WasmGcEmitter {
 		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
 		if self.should_emit_function("list_node_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64],
-				vec![Ref(node_ref)],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 
 			// Locals: 0=list, 1=index, 2=current (loop variable)
@@ -1597,10 +1588,7 @@ impl WasmGcEmitter {
 		// Count the number of elements in a list/block by traversing the value chain
 		if self.should_emit_function("node_count") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref)],
-				vec![ValType::I64],
-			);
+			self.types.ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			// Locals: 0=node, 1=count, 2=current
@@ -1655,10 +1643,9 @@ impl WasmGcEmitter {
 		// Get the character at index (1-based) from a Text/Symbol node, returns Codepoint node
 		if self.should_emit_function("string_char_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64],
-				vec![Ref(node_ref)],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
@@ -1705,10 +1692,9 @@ impl WasmGcEmitter {
 		// Runtime dispatch: for Text/Symbol call string_char_at, for List/Block call list_node_at
 		if self.should_emit_function("node_index_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64],
-				vec![Ref(node_ref)],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
@@ -1761,10 +1747,9 @@ impl WasmGcEmitter {
 		// Set the numeric value at index (1-based) and return the value
 		if self.should_emit_function("list_set_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64, ValType::I64],
-				vec![ValType::I64],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			// Locals: 0=list, 1=index, 2=value, 3=current (loop variable)
@@ -1835,10 +1820,9 @@ impl WasmGcEmitter {
 		// Set the character at index (1-based) in a Text/Symbol node, returns the value
 		if self.should_emit_function("string_set_char_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64, ValType::I64],
-				vec![ValType::I64],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
@@ -1887,10 +1871,9 @@ impl WasmGcEmitter {
 		// Runtime dispatch for index assignment: string_set_char_at or list_set_at
 		if self.should_emit_function("node_set_at") {
 			let func_type = self.types.len();
-			self.types.ty().function(
-				vec![Ref(node_ref), ValType::I64, ValType::I64],
-				vec![ValType::I64],
-			);
+			self.types
+				.ty()
+				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
@@ -1951,9 +1934,7 @@ impl WasmGcEmitter {
 
 		// get_kind(node: ref $Node) -> i64
 		let func_type = self.types.len();
-		self.types
-			.ty()
-			.function(vec![Ref(node_ref)], vec![ValType::I64]);
+		self.types.ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
 		self.functions.function(func_type);
 		let mut func = Function::new(vec![]);
 		func.instruction(&Instruction::LocalGet(0));
@@ -2032,11 +2013,8 @@ impl WasmGcEmitter {
 		}
 		let offset = self.next_data_offset;
 		let bytes = s.as_bytes();
-		self.data.active(
-			0,
-			&ConstExpr::i32_const(offset as i32),
-			bytes.iter().copied(),
-		);
+		self.data
+			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
 		self.string_table.insert(s.to_string(), offset);
 		self.next_data_offset += bytes.len() as u32;
 		(offset, bytes.len() as u32)
@@ -2090,8 +2068,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 
 		self.code.function(&func);
-		self.exports
-			.export("main", ExportKind::Func, self.next_func_idx);
+		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.next_func_idx += 1;
 	}
 
@@ -2173,7 +2150,7 @@ impl WasmGcEmitter {
 				if let Some(local) = self.scope.lookup(s) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
-						return;  // Already a Node reference
+						return; // Already a Node reference
 					} else if local.kind.is_float() {
 						self.emit_call(func, "new_float");
 					} else {
@@ -2241,16 +2218,19 @@ impl WasmGcEmitter {
 				// - Define (:=) always creates a numeric local (unless it's a list)
 				// - Assign (=) only if LHS is a known numeric variable
 				// - Compound assignments (+=, -=, etc.)
-				let is_numeric_assign = *op == Op::Assign && matches!(left.drop_meta(), Node::Symbol(s) if {
-					self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
-				});
-				let is_numeric_define = *op == Op::Define && matches!(left.drop_meta(), Node::Symbol(s) if {
-					self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
-				});
+				let is_numeric_assign = *op == Op::Assign
+					&& matches!(left.drop_meta(), Node::Symbol(s) if {
+						self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+					});
+				let is_numeric_define = *op == Op::Define
+					&& matches!(left.drop_meta(), Node::Symbol(s) if {
+						self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+					});
 				// Handle ref-type variable assignment (lists, etc.)
-				let is_ref_assign = (*op == Op::Assign || *op == Op::Define) && matches!(left.drop_meta(), Node::Symbol(s) if {
-					self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
-				});
+				let is_ref_assign = (*op == Op::Assign || *op == Op::Define)
+					&& matches!(left.drop_meta(), Node::Symbol(s) if {
+						self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
+					});
 				if is_ref_assign {
 					if let Node::Symbol(name) = left.drop_meta() {
 						// Emit the right side as a Node reference
@@ -2283,7 +2263,13 @@ impl WasmGcEmitter {
 				let both_numeric = self.is_numeric(left) && self.is_numeric(right);
 				if op.is_logical() && !both_numeric {
 					self.emit_truthy_logical(func, left, op, right);
-				} else if op.is_arithmetic() || op.is_comparison() || op.is_logical() || is_numeric_define || is_numeric_assign || op.is_compound_assign() {
+				} else if op.is_arithmetic()
+					|| op.is_comparison()
+					|| op.is_logical()
+					|| is_numeric_define
+					|| is_numeric_assign
+					|| op.is_compound_assign()
+				{
 					self.emit_arithmetic(func, left, op, right);
 				} else if *op == Op::Question {
 					// Ternary: condition ? then : else
@@ -2315,9 +2301,9 @@ impl WasmGcEmitter {
 						self.emit_call(func, "new_int");
 					} else {
 						// Infix x#y = indexing - dispatches to string_char_at or list_node_at at runtime
-						self.emit_node_instructions(func, left);  // emit node (string or list)
-						self.emit_numeric_value(func, right);      // emit index
-						self.emit_call(func, "node_index_at");     // runtime dispatch
+						self.emit_node_instructions(func, left); // emit node (string or list)
+						self.emit_numeric_value(func, right); // emit index
+						self.emit_call(func, "node_index_at"); // runtime dispatch
 					}
 				} else if *op == Op::As {
 					// Type cast: value as type
@@ -2477,8 +2463,7 @@ impl WasmGcEmitter {
 				if items.len() == 2 {
 					if let Node::Symbol(type_name) = items[0].drop_meta() {
 						// Skip if second arg is assignment/define (typed variable declaration)
-						let is_typed_decl = matches!(items[1].drop_meta(),
-							Node::Key(_, Op::Assign | Op::Define, _));
+						let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 						if !is_typed_decl {
 							match type_name.as_str() {
 								"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
@@ -2521,14 +2506,13 @@ impl WasmGcEmitter {
 				}
 				// Check if this list contains type definitions (class/struct)
 				// If so, treat as statement sequence and return last non-Type item
-				let has_type_def = items.iter().any(|item| {
-					matches!(item.drop_meta(), Node::Type { .. })
-				});
+				let has_type_def = items.iter().any(|item| matches!(item.drop_meta(), Node::Type { .. }));
 				if has_type_def {
 					// Find last non-Type item to return
-					let last_expr = items.iter().rev().find(|item| {
-						!matches!(item.drop_meta(), Node::Type { .. })
-					});
+					let last_expr = items
+						.iter()
+						.rev()
+						.find(|item| !matches!(item.drop_meta(), Node::Type { .. }));
 					if let Some(expr) = last_expr {
 						self.emit_node_instructions(func, expr);
 					} else {
@@ -2563,7 +2547,8 @@ impl WasmGcEmitter {
 				if is_statement_sequence {
 					// Execute statements in order, return last result
 					// Filter out user function definitions (they don't produce values)
-					let non_func_items: Vec<_> = items.iter()
+					let non_func_items: Vec<_> = items
+						.iter()
 						.filter(|item| {
 							match item.drop_meta() {
 								// Pattern: name := body (uses implicit `it` parameter)
@@ -2700,7 +2685,9 @@ impl WasmGcEmitter {
 			// i++ → i = i + 1 (returns new value)
 			// i-- → i = i - 1 (returns new value)
 			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self.scope.lookup(name)
+				let local_pos = self
+					.scope
+					.lookup(name)
 					.map(|l| l.position)
 					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
 				// Get current value
@@ -2720,7 +2707,9 @@ impl WasmGcEmitter {
 		} else if op.is_compound_assign() {
 			// x += y → x = x + y
 			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self.scope.lookup(name)
+				let local_pos = self
+					.scope
+					.lookup(name)
 					.map(|l| l.position)
 					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
 				let base_op = op.base_op();
@@ -2768,7 +2757,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
 				func.instruction(&Instruction::F64Eq);
 				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-				self.emit_float_value(func, left);  // return left (0.0)
+				self.emit_float_value(func, left); // return left (0.0)
 				func.instruction(&Instruction::Else);
 				self.emit_float_value(func, right); // return right
 				func.instruction(&Instruction::End);
@@ -2781,7 +2770,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
 				func.instruction(&Instruction::F64Ne);
 				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-				self.emit_float_value(func, left);  // return left (truthy)
+				self.emit_float_value(func, left); // return left (truthy)
 				func.instruction(&Instruction::Else);
 				self.emit_float_value(func, right); // return right
 				func.instruction(&Instruction::End);
@@ -2793,10 +2782,18 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, right);
 
 			match op {
-				Op::Add => { func.instruction(&Instruction::F64Add); }
-				Op::Sub => { func.instruction(&Instruction::F64Sub); }
-				Op::Mul => { func.instruction(&Instruction::F64Mul); }
-				Op::Div => { func.instruction(&Instruction::F64Div); }
+				Op::Add => {
+					func.instruction(&Instruction::F64Add);
+				}
+				Op::Sub => {
+					func.instruction(&Instruction::F64Sub);
+				}
+				Op::Mul => {
+					func.instruction(&Instruction::F64Mul);
+				}
+				Op::Div => {
+					func.instruction(&Instruction::F64Div);
+				}
 				Op::Mod => {
 					// WASM doesn't have F64Rem. Use integer modulo path instead.
 					// Drop the f64 values and re-emit as i64
@@ -2857,15 +2854,27 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, right);
 
 			match op {
-				Op::Add => { func.instruction(&Instruction::I64Add); }
-				Op::Sub => { func.instruction(&Instruction::I64Sub); }
-				Op::Mul => { func.instruction(&Instruction::I64Mul); }
-				Op::Div => { func.instruction(&Instruction::I64DivS); }
-				Op::Mod => { func.instruction(&Instruction::I64RemS); }
+				Op::Add => {
+					func.instruction(&Instruction::I64Add);
+				}
+				Op::Sub => {
+					func.instruction(&Instruction::I64Sub);
+				}
+				Op::Mul => {
+					func.instruction(&Instruction::I64Mul);
+				}
+				Op::Div => {
+					func.instruction(&Instruction::I64DivS);
+				}
+				Op::Mod => {
+					func.instruction(&Instruction::I64RemS);
+				}
 				Op::Pow => {
 					self.emit_call(func, "i64_pow");
 				}
-				Op::Xor => { func.instruction(&Instruction::I64Xor); }
+				Op::Xor => {
+					func.instruction(&Instruction::I64Xor);
+				}
 				op if op.is_comparison() => self.emit_comparison(func, op),
 				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
 			}
@@ -3012,12 +3021,20 @@ impl WasmGcEmitter {
 		// i32.store at address 0 = str_ptr
 		func.instruction(&I32Const(0)); // address
 		func.instruction(&I32Const(str_ptr as i32)); // value
-		func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+		func.instruction(&Instruction::I32Store(MemArg {
+			offset: 0,
+			align: 2,
+			memory_index: 0,
+		}));
 
 		// i32.store at address 4 = str_len
 		func.instruction(&I32Const(4)); // address
 		func.instruction(&I32Const(str_len as i32)); // value
-		func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+		func.instruction(&Instruction::I32Store(MemArg {
+			offset: 0,
+			align: 2,
+			memory_index: 0,
+		}));
 
 		// Call fd_write(fd=1, iovs=0, iovs_len=1, nwritten=8)
 		func.instruction(&I32Const(1)); // fd = stdout
@@ -3042,10 +3059,18 @@ impl WasmGcEmitter {
 			// Set up iovec
 			func.instruction(&I32Const(0));
 			func.instruction(&I32Const(str_ptr as i32));
-			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&Instruction::I32Store(MemArg {
+				offset: 0,
+				align: 2,
+				memory_index: 0,
+			}));
 			func.instruction(&I32Const(4));
 			func.instruction(&I32Const(str_len as i32));
-			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&Instruction::I32Store(MemArg {
+				offset: 0,
+				align: 2,
+				memory_index: 0,
+			}));
 
 			// Call fd_write
 			func.instruction(&I32Const(1));
@@ -3070,10 +3095,18 @@ impl WasmGcEmitter {
 
 			func.instruction(&I32Const(0));
 			func.instruction(&I32Const(str_ptr as i32));
-			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&Instruction::I32Store(MemArg {
+				offset: 0,
+				align: 2,
+				memory_index: 0,
+			}));
 			func.instruction(&I32Const(4));
 			func.instruction(&I32Const(str_len as i32));
-			func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
+			func.instruction(&Instruction::I32Store(MemArg {
+				offset: 0,
+				align: 2,
+				memory_index: 0,
+			}));
 
 			func.instruction(&I32Const(1));
 			func.instruction(&I32Const(0));
@@ -3144,9 +3177,7 @@ impl WasmGcEmitter {
 					let right_str = node_to_string(right);
 					format!("{}{}{}", left_str, op_str, right_str)
 				}
-				Node::List(items, _, _) => {
-					items.iter().map(node_to_string).collect::<Vec<_>>().join("")
-				}
+				Node::List(items, _, _) => items.iter().map(node_to_string).collect::<Vec<_>>().join(""),
 				Node::Error(inner) => {
 					// Handle parse errors - check if it's an "Unexpected character '/'" error
 					if let Node::Text(msg) = inner.drop_meta() {
@@ -3352,12 +3383,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit if-then-else returning i64: if condition then then_expr else else_expr
-	fn emit_if_then_else_numeric(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		else_expr: Option<&Node>,
-	) {
+	fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let (condition, then_expr) = match left.drop_meta() {
@@ -3397,12 +3423,7 @@ impl WasmGcEmitter {
 	/// Emit if-then-else expression: if condition then then_expr [else else_expr]
 	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
 	/// Or for if-then without else: Key(Key(Empty, If, condition), Then, then_expr)
-	fn emit_if_then_else(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		else_expr: Option<&Node>,
-	) {
+	fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let (condition, then_expr) = match left.drop_meta() {
@@ -3510,9 +3531,9 @@ impl WasmGcEmitter {
 					}
 					// Compile-time: string literal to int (parse, truncate if float)
 					Node::Text(s) => {
-						let n: i64 = s.parse::<i64>().unwrap_or_else(|_| {
-							s.parse::<f64>().map(|f| f as i64).unwrap_or(0)
-						});
+						let n: i64 = s
+							.parse::<i64>()
+							.unwrap_or_else(|_| s.parse::<f64>().map(|f| f as i64).unwrap_or(0));
 						func.instruction(&Instruction::I64Const(n));
 						self.emit_call(func, "new_int");
 					}
@@ -3622,8 +3643,10 @@ impl WasmGcEmitter {
 				match value {
 					// Compile-time: string to bool
 					Node::Text(s) => {
-						let b = !matches!(s.to_lowercase().as_str(),
-							"" | "0" | "false" | "no" | "ø" | "nil" | "null" | "none");
+						let b = !matches!(
+							s.to_lowercase().as_str(),
+							"" | "0" | "false" | "no" | "ø" | "nil" | "null" | "none"
+						);
 						func.instruction(&Instruction::I64Const(if b { 1 } else { 0 }));
 						self.emit_call(func, "new_int");
 					}
@@ -3777,7 +3800,9 @@ impl WasmGcEmitter {
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, _right) if *op == Op::Inc || *op == Op::Dec => {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let local_pos = self.scope.lookup(name)
+					let local_pos = self
+						.scope
+						.lookup(name)
 						.map(|l| l.position)
 						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
 					// Get current value
@@ -3799,7 +3824,9 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_compound_assign() => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					// Get local position first to avoid borrow issues
-					let local_pos = self.scope.lookup(name)
+					let local_pos = self
+						.scope
+						.lookup(name)
 						.map(|l| l.position)
 						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
 					let base_op = op.base_op();
@@ -3809,15 +3836,33 @@ impl WasmGcEmitter {
 					self.emit_numeric_value(func, right);
 					// Apply base operation
 					match base_op {
-						Op::Add => { func.instruction(&Instruction::I64Add); }
-						Op::Sub => { func.instruction(&Instruction::I64Sub); }
-						Op::Mul => { func.instruction(&Instruction::I64Mul); }
-						Op::Div => { func.instruction(&Instruction::I64DivS); }
-						Op::Mod => { func.instruction(&Instruction::I64RemS); }
-						Op::Pow => { self.emit_call(func, "i64_pow"); }
-						Op::And => { func.instruction(&Instruction::I64And); }
-						Op::Or => { func.instruction(&Instruction::I64Or); }
-						Op::Xor => { func.instruction(&Instruction::I64Xor); }
+						Op::Add => {
+							func.instruction(&Instruction::I64Add);
+						}
+						Op::Sub => {
+							func.instruction(&Instruction::I64Sub);
+						}
+						Op::Mul => {
+							func.instruction(&Instruction::I64Mul);
+						}
+						Op::Div => {
+							func.instruction(&Instruction::I64DivS);
+						}
+						Op::Mod => {
+							func.instruction(&Instruction::I64RemS);
+						}
+						Op::Pow => {
+							self.emit_call(func, "i64_pow");
+						}
+						Op::And => {
+							func.instruction(&Instruction::I64And);
+						}
+						Op::Or => {
+							func.instruction(&Instruction::I64Or);
+						}
+						Op::Xor => {
+							func.instruction(&Instruction::I64Xor);
+						}
 						_ => panic!("Unexpected base op: {:?}", base_op),
 					}
 					// Store result and leave on stack
@@ -3831,12 +3876,24 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, left);
 				self.emit_numeric_value(func, right);
 				match op {
-					Op::Add => { func.instruction(&Instruction::I64Add); }
-					Op::Sub => { func.instruction(&Instruction::I64Sub); }
-					Op::Mul => { func.instruction(&Instruction::I64Mul); }
-					Op::Div => { func.instruction(&Instruction::I64DivS); }
-					Op::Mod => { func.instruction(&Instruction::I64RemS); }
-					Op::Pow => { self.emit_call(func, "i64_pow"); }
+					Op::Add => {
+						func.instruction(&Instruction::I64Add);
+					}
+					Op::Sub => {
+						func.instruction(&Instruction::I64Sub);
+					}
+					Op::Mul => {
+						func.instruction(&Instruction::I64Mul);
+					}
+					Op::Div => {
+						func.instruction(&Instruction::I64DivS);
+					}
+					Op::Mod => {
+						func.instruction(&Instruction::I64RemS);
+					}
+					Op::Pow => {
+						self.emit_call(func, "i64_pow");
+					}
 					_ => unreachable!(),
 				}
 			}
@@ -3935,8 +3992,8 @@ impl WasmGcEmitter {
 			// Variable lookup (local or global)
 			Node::Symbol(name) => {
 				// Handle $n parameter reference (e.g., $0 = first param)
-				if name.starts_with('$') {
-					if let Ok(idx) = name[1..].parse::<u32>() {
+				if let Some(rest) = name.strip_prefix('$') {
+					if let Ok(idx) = rest.parse::<u32>() {
 						func.instruction(&Instruction::LocalGet(idx));
 						return;
 					}
@@ -4046,10 +4103,18 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, left);
 				self.emit_float_value(func, right);
 				match op {
-					Op::Add => { func.instruction(&Instruction::F64Add); }
-					Op::Sub => { func.instruction(&Instruction::F64Sub); }
-					Op::Mul => { func.instruction(&Instruction::F64Mul); }
-					Op::Div => { func.instruction(&Instruction::F64Div); }
+					Op::Add => {
+						func.instruction(&Instruction::F64Add);
+					}
+					Op::Sub => {
+						func.instruction(&Instruction::F64Sub);
+					}
+					Op::Mul => {
+						func.instruction(&Instruction::F64Mul);
+					}
+					Op::Div => {
+						func.instruction(&Instruction::F64Div);
+					}
 					Op::Mod => {
 						// WASM doesn't have F64Rem. Drop f64 values and use i64 path.
 						func.instruction(&Instruction::Drop);
@@ -4118,9 +4183,7 @@ impl WasmGcEmitter {
 			_ => panic!("Range end must be a constant integer, got {:?}", end),
 		};
 		let actual_end = if inclusive { end_val + 1 } else { end_val };
-		let items: Vec<Node> = (start_val..actual_end)
-			.map(|i| Node::Number(Number::Int(i)))
-			.collect();
+		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
 		if items.is_empty() {
 			self.emit_call(func, "new_empty");
 			return;
@@ -4285,7 +4348,10 @@ impl WasmGcEmitter {
 
 		// Function names - sort by index for deterministic output
 		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self.func_registry.all().iter()
+		let mut sorted: Vec<_> = self
+			.func_registry
+			.all()
+			.iter()
 			.map(|f| (f.name.as_str(), f.call_index as u32))
 			.collect();
 		sorted.sort_by_key(|(_, idx)| *idx);
@@ -4321,7 +4387,9 @@ impl WasmGcEmitter {
 	}
 
 	pub fn get_unused_functions(&self) -> Vec<String> {
-		self.func_registry.all().iter()
+		self.func_registry
+			.all()
+			.iter()
 			.map(|f| f.name.clone())
 			.filter(|name: &String| !self.used_functions.contains(name.as_str()))
 			.collect()
@@ -4341,8 +4409,8 @@ impl WasmGcEmitter {
 	/// # Returns
 	/// WASM bytes that can be loaded and executed to get the GC struct
 	pub fn emit_raw_struct(type_def: &TypeDef, field_values: &[RawFieldValue]) -> Vec<u8> {
-		use wasm_encoder::*;
 		use wasm_encoder::StorageType::Val;
+		use wasm_encoder::*;
 
 		let mut module = Module::new();
 
@@ -4366,29 +4434,48 @@ impl WasmGcEmitter {
 
 		// Type 0: $String = struct { ptr: i32, len: i32 }
 		types.ty().struct_(vec![
-			FieldType { element_type: Val(ValType::I32), mutable: false },
-			FieldType { element_type: Val(ValType::I32), mutable: false },
+			FieldType {
+				element_type: Val(ValType::I32),
+				mutable: false,
+			},
+			FieldType {
+				element_type: Val(ValType::I32),
+				mutable: false,
+			},
 		]);
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type
-		let string_ref = RefType { nullable: false, heap_type: HeapType::Concrete(string_type_idx) };
-		let struct_fields: Vec<FieldType> = type_def.fields.iter().map(|f| {
-			let element_type = match f.type_name.as_str() {
-				"i64" | "Int" | "long" => Val(ValType::I64),
-				"i32" | "int" => Val(ValType::I32),
-				"f64" | "Float" | "double" => Val(ValType::F64),
-				"f32" | "float" => Val(ValType::F32),
-				"String" | "Text" | "string" => Val(ValType::Ref(string_ref)),
-				_ => Val(ValType::I64), // default
-			};
-			FieldType { element_type, mutable: false }
-		}).collect();
+		let string_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(string_type_idx),
+		};
+		let struct_fields: Vec<FieldType> = type_def
+			.fields
+			.iter()
+			.map(|f| {
+				let element_type = match f.type_name.as_str() {
+					"i64" | "Int" | "long" => Val(ValType::I64),
+					"i32" | "int" => Val(ValType::I32),
+					"f64" | "Float" | "double" => Val(ValType::F64),
+					"f32" | "float" => Val(ValType::F32),
+					"String" | "Text" | "string" => Val(ValType::Ref(string_ref)),
+					_ => Val(ValType::I64), // default
+				};
+				FieldType {
+					element_type,
+					mutable: false,
+				}
+			})
+			.collect();
 		types.ty().struct_(struct_fields);
 		let struct_type_idx = 1u32;
 
 		// Type 2: main() -> ref $StructType
-		let struct_ref = RefType { nullable: false, heap_type: HeapType::Concrete(struct_type_idx) };
+		let struct_ref = RefType {
+			nullable: false,
+			heap_type: HeapType::Concrete(struct_type_idx),
+		};
 		types.ty().func_type(&FuncType::new([], [ValType::Ref(struct_ref)]));
 
 		module.section(&types);
@@ -4508,32 +4595,44 @@ pub enum RawFieldValue {
 }
 
 impl From<i64> for RawFieldValue {
-	fn from(v: i64) -> Self { RawFieldValue::I64(v) }
+	fn from(v: i64) -> Self {
+		RawFieldValue::I64(v)
+	}
 }
 
 impl From<i32> for RawFieldValue {
-	fn from(v: i32) -> Self { RawFieldValue::I32(v) }
+	fn from(v: i32) -> Self {
+		RawFieldValue::I32(v)
+	}
 }
 
 impl From<f64> for RawFieldValue {
-	fn from(v: f64) -> Self { RawFieldValue::F64(v) }
+	fn from(v: f64) -> Self {
+		RawFieldValue::F64(v)
+	}
 }
 
 impl From<f32> for RawFieldValue {
-	fn from(v: f32) -> Self { RawFieldValue::F32(v) }
+	fn from(v: f32) -> Self {
+		RawFieldValue::F32(v)
+	}
 }
 
 impl From<&str> for RawFieldValue {
-	fn from(v: &str) -> Self { RawFieldValue::String(v.to_string()) }
+	fn from(v: &str) -> Self {
+		RawFieldValue::String(v.to_string())
+	}
 }
 
 impl From<String> for RawFieldValue {
-	fn from(v: String) -> Self { RawFieldValue::String(v) }
+	fn from(v: String) -> Self {
+		RawFieldValue::String(v)
+	}
 }
 
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
-	use wasmtime::{Store, Module, Linker, Val};
+	use wasmtime::{Linker, Module, Store, Val};
 
 	// Register WASM metadata for field name lookup in Debug output
 	let _ = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes);
@@ -4543,16 +4642,19 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	let module = Module::new(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
 	let linker = Linker::new(&engine);
-	let instance = linker.instantiate(&mut store, &module).map_err(|e: wasmtime::Error| e.to_string())?;
+	let instance = linker
+		.instantiate(&mut store, &module)
+		.map_err(|e: wasmtime::Error| e.to_string())?;
 
-	let main = instance.get_func(&mut store, "main")
+	let main = instance
+		.get_func(&mut store, "main")
 		.ok_or_else(|| "no main function".to_string())?;
 
 	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results).map_err(|e: wasmtime::Error| e.to_string())?;
+	main.call(&mut store, &[], &mut results)
+		.map_err(|e: wasmtime::Error| e.to_string())?;
 
-	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance))
-		.map_err(|e: anyhow::Error| e.to_string())?;
+	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance)).map_err(|e: anyhow::Error| e.to_string())?;
 
 	Ok(crate::node::data(gc_obj))
 }
@@ -4581,15 +4683,18 @@ fn uses_fetch(code: &str) -> bool {
 
 /// Check if code uses WASI functions (puts, puti, putl, putf, fd_write)
 fn uses_wasi(code: &str) -> bool {
-	code.contains("puts ") || code.contains("puti ") || code.contains("putl ") ||
-	code.contains("putf ") || code.contains("fd_write")
+	code.contains("puts ")
+		|| code.contains("puti ")
+		|| code.contains("putl ")
+		|| code.contains("putf ")
+		|| code.contains("fd_write")
 }
 
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
-	use crate::type_kinds::{TypeDef, extract_instance_values};
-	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi};
 	use crate::extensions::numbers::Number;
+	use crate::type_kinds::{extract_instance_values, TypeDef};
+	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi};
 
 	let node = WaspParser::parse(code);
 
