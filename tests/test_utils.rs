@@ -116,7 +116,7 @@ pub fn read_bytes_fast(bytes: &[u8]) -> Result<GcObject> {
 		main.call(&mut *s, &[], &mut results)?;
 	}
 
-	Ok(GcObject::new(results[0].clone(), store_rc, instance))
+	Ok(GcObject::new(results[0], store_rc, instance))
 }
 
 /// Fast path for reading WASM file using shared engine

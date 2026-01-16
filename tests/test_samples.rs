@@ -70,7 +70,7 @@ fn test_parse_all_samples() {
 		}
 
 		// Known problematic files that can fail
-		let known_issues = vec!["lib.wasp", "errors.wasp", "webgpu.wasp"];
+		let known_issues = ["lib.wasp", "errors.wasp", "webgpu.wasp"];
 		let unexpected_failures: Vec<_> = failed_files
 			.iter()
 			.filter(|f| !known_issues.contains(&f.as_str()))

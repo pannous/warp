@@ -13,12 +13,15 @@ use warp::{eq, is, skip};
 #[test]
 #[ignore]
 fn test_range() {
-	is!("0..3", ints(0, 1, 2));
-	is!("0...3", ints4(0, 1, 2, 3));
-	is!("0 to 3", ints4(0, 1, 2, 3));
-	is!("[0 to 3]", ints4(0, 1, 2, 3));
-	is!("range 1 3", ints(1, 2, 3));
-	//    is!("(0 to 3)", Node(1,2)); open intervals nah
+	is!("0..3", ints(0, 1, 2));       // exclusive: 0, 1, 2
+	is!("0..<3", ints(0, 1, 2));      // Swift-style exclusive
+	is!("0...3", ints4(0, 1, 2, 3));  // inclusive: 0, 1, 2, 3
+	is!("0…3", ints4(0, 1, 2, 3));    // ellipsis = inclusive
+	is!("0 to 3", ints4(0, 1, 2, 3)); // inclusive like math
+	is!("range 1 3", ints(1, 2, 3));  // range function = inclusive
+	skip!(
+		is!("[0 to 3]", ints4(0, 1, 2, 3)); // bracketed range
+	);
 }
 
 fn ints(p0: i32, p1: i32, p2: i32) -> Node {
@@ -165,7 +168,7 @@ fn test_get_local() {
 fn test_wasm_function_definiton() {
 	//	eq!("add1 x:=x+1;add1 3",  4);
 	is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
-	is!("fac:= if it<=0 : 1 else it * fac it-1; fac(5)", 5 * 4 * 3 * 2 * 1);
+	is!("fac:= if it<=0 : 1 else it * fac it-1; fac(5)", (5 * 4 * 3 * 2));
 
 	is!("add1 x:=x+1;add1 3", 4);
 	is!("add2 x:=x+2;add2 3", 5);
@@ -201,7 +204,7 @@ fn test_wasm_ternary() {
 	is!("1<0?3:4", 4);
 	//	is!("(1<2)?10:255", 255);
 
-	is!("fac:= it<=0 ? 1 : it * fac it-1; fac(5)", 5 * 4 * 3 * 2 * 1);
+	is!("fac:= it<=0 ? 1 : it * fac it-1; fac(5)", (5 * 4 * 3 * 2));
 	skip!(
 
 		// What seems to be the problem?
@@ -214,7 +217,7 @@ fn test_lazy_evaluation() {
 	//	if op==or emitIf(not lhs,then:rhs);
 	//	if op==or emitIf(lhs,else:rhs);
 	//	if op==and emitIf(lhs,then:rhs);
-	is!("fac:= it<=0 or it * fac it-1; fac(5)", 5 * 4 * 3 * 2 * 1); // requires lazy evaluation
+	is!("fac:= it<=0 or it * fac it-1; fac(5)", (5 * 4 * 3 * 2)); // requires lazy evaluation
 }
 
 #[test]
@@ -632,10 +635,10 @@ fn test_wasm_variables0() {
 	}
 	#[cfg(not(feature = "WASM"))]
 	{
-		is!("8.33333333332248946124e+01", 83.3333333332248946124);
+		is!("8.33333333332248946124e+01", 83.333_333_333_224_9);
 	}
 
-	is!("8.33333333332248946124e+03", 8333.33333332248946124);
+	is!("8.33333333332248946124e+03", 8_333.333_333_322_49);
 	is!("S1  = -1.6666", -1.6666);
 	//    is!("grows S1  = -1.6666", -1);
 	// may be evaluated by compiler!
@@ -1168,7 +1171,7 @@ fn test_recent_random_bugs() {
 	is!("√100²", 100);
 	//    is!("puts('ok');", 0);
 	let result = parse("{ç:☺}");
-	assert!(result["ç"] == "☺");
+	eq!(result["ç"], "☺");
 	#[cfg(not(feature = "WASMTIME"))]
 	{
 		// and !LINUX // todo why
@@ -1183,7 +1186,7 @@ fn test_recent_random_bugs() {
 		is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
 	);
 	is!("add1 x:=x+1;add1 3", 4);
-	// is!("for i in 1 to 5 : {puti i};i", 6);// EXC_BAD_ACCESS TODO!!
+	// is!("for i in 1 to 5 : {puti i};i", 6);// EXC_BAD_ACCESS TODO _👀!
 }
 #[test]
 #[ignore]
@@ -1607,7 +1610,7 @@ fn test_sinus() {
 fn test_emit_basics() {
 	is!("true", true);
 	is!("false", false);
-	is!("8.33333333332248946124e-03", 8.33333333332248946124e-03);
+	is!("8.33333333332248946124e-03", 8.333_333_333_322_49e-3);
 	is!("42", 42);
 	is!("-42", -42);
 	is!("3.3415", 3.3415);

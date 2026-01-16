@@ -13,7 +13,7 @@ extern "C" {
 
 #[cfg(test)]
 pub fn download(url: &str) -> String {
-	String::from("mock".s() + url)
+	"mock".s() + url 
 }
 
 #[must_use]
@@ -50,11 +50,10 @@ pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
 
 	// Create parent directory if it doesn't exist
 	if let Some(parent) = path.parent() {
-		if !parent.exists() {
-			if create_dir_all(parent).is_err() {
+		if !parent.exists()
+			&& create_dir_all(parent).is_err() {
 				return false;
 			}
-		}
 	}
 
 	// Write file
