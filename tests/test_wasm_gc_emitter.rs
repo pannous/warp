@@ -11,7 +11,7 @@ fn normalize_blocks(node: &Node) -> Node {
 		List(items, Bracket::Curly, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		List(items, _, _) if items.len() == 1 => normalize_blocks(&items[0]),
 		// Preserve Op since WASM roundtrip now preserves it
-		Key(k, op, v) => Key(Box::new(normalize_blocks(k)), op.clone(), Box::new(normalize_blocks(v))),
+		Key(k, op, v) => Key(Box::new(normalize_blocks(k)), *op, Box::new(normalize_blocks(v))),
 		_ => node.clone(),
 	}
 }

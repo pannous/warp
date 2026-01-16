@@ -112,6 +112,12 @@ pub struct UserFunctionDef {
 	pub func_index: Option<u32>,             // WASM function index when compiled
 }
 
+impl Default for WasmGcEmitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WasmGcEmitter {
 	pub fn new() -> Self {
 		WasmGcEmitter {
@@ -298,7 +304,7 @@ impl WasmGcEmitter {
 			// Parses as Key(List([name, param1, param2, ...]), Assign, body)
 			Node::Key(left, Op::Assign, body) => {
 				if let Node::List(items, _, _) = left.drop_meta() {
-					if items.len() >= 1 {
+					if !items.is_empty() {
 						if let Node::Symbol(name) = items[0].drop_meta() {
 							// Extract parameter names with defaults
 							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
@@ -325,7 +331,7 @@ impl WasmGcEmitter {
 			// Parses as Key(List([name, x]), Define, body)
 			Node::Key(left, Op::Define, body) => {
 				if let Node::List(items, _, _) = left.drop_meta() {
-					if items.len() >= 1 {
+					if !items.is_empty() {
 						if let Node::Symbol(name) = items[0].drop_meta() {
 							// Extract parameter names
 							let params: Vec<(String, Option<Node>)> = items.iter().skip(1)
@@ -531,7 +537,7 @@ impl WasmGcEmitter {
 		// Declare locals (parameters are already accounted for)
 		let num_params = user_fn.params.len() as u32;
 		let num_locals = self.scope.local_count();
-		let extra_locals = if num_locals > num_params { num_locals - num_params } else { 0 };
+		let extra_locals = num_locals.saturating_sub(num_params);
 
 		let mut func = Function::new(vec![(extra_locals, ValType::I64)]);
 
@@ -817,6 +823,10 @@ impl WasmGcEmitter {
 						}
 					}
 					self.required_functions.insert("new_key");
+				} else if *op == Op::Range || *op == Op::To {
+					// Range operators produce lists of integers
+					self.required_functions.insert("new_list");
+					self.required_functions.insert("new_int");
 				} else {
 					self.required_functions.insert("new_key");
 				}
@@ -947,7 +957,7 @@ impl WasmGcEmitter {
 	fn emit_registered_user_type_constructors(&mut self) {
 		let types: Vec<TypeDef> = self.type_registry.types().to_vec();
 		for type_def in &types {
-			self.emit_user_type_constructor(&type_def);
+			self.emit_user_type_constructor(type_def);
 		}
 	}
 
@@ -2347,6 +2357,9 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, right);
 					func.instruction(&Instruction::I64Const(op_to_code(op)));
 					self.emit_call(func, "new_key");
+				} else if *op == Op::Range || *op == Op::To {
+					// Range operators: 0..3 (exclusive) or 0...3 / 0…3 (inclusive)
+					self.emit_range(func, left, right, *op == Op::To);
 				} else {
 					self.emit_node_instructions(func, left);
 					// For struct instances like Person{...}, emit block as list
@@ -3284,13 +3297,13 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
 
 		// Then branch
-		self.emit_numeric_value(func, &then_expr);
+		self.emit_numeric_value(func, then_expr);
 		self.emit_call(func, "new_int");
 
 		func.instruction(&Instruction::Else);
 
 		// Else branch
-		self.emit_numeric_value(func, &else_expr);
+		self.emit_numeric_value(func, else_expr);
 		self.emit_call(func, "new_int");
 
 		func.instruction(&Instruction::End);
@@ -3312,12 +3325,12 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
 
 		// Then branch
-		self.emit_numeric_value(func, &then_expr);
+		self.emit_numeric_value(func, then_expr);
 
 		func.instruction(&Instruction::Else);
 
 		// Else branch
-		self.emit_numeric_value(func, &else_expr);
+		self.emit_numeric_value(func, else_expr);
 
 		func.instruction(&Instruction::End);
 	}
@@ -3388,14 +3401,14 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
-		self.emit_block_value(func, &condition);
+		self.emit_block_value(func, condition);
 		func.instruction(&Instruction::I32WrapI64);
 
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
 
 		// Then branch - extract value from block if needed
-		self.emit_block_value(func, &then_expr);
+		self.emit_block_value(func, then_expr);
 		self.emit_call(func, "new_int");
 
 		func.instruction(&Instruction::Else);
@@ -3428,7 +3441,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Block(BlockType::Empty));
 		func.instruction(&Instruction::Loop(BlockType::Empty));
 
-		self.emit_block_value(func, &condition);
+		self.emit_block_value(func, condition);
 		func.instruction(&Instruction::I32WrapI64);
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
@@ -4148,7 +4161,7 @@ impl WasmGcEmitter {
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
 		features.set(WasmFeatures::GC, true);
 		let mut validator = Validator::new_with_features(features);
-		match validator.validate_all(&bytes) {
+		match validator.validate_all(bytes) {
 			Ok(_) => {
 				trace!("✓ WASM validation with GC features passed");
 				Ok(())
@@ -4500,7 +4513,7 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	let mut results = vec![Val::I32(0)];
 	main.call(&mut store, &[], &mut results).map_err(|e: wasmtime::Error| e.to_string())?;
 
-	let gc_obj = ErgonomicGcObject::new(results[0].clone(), store, Some(instance))
+	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance))
 		.map_err(|e: anyhow::Error| e.to_string())?;
 
 	Ok(crate::node::data(gc_obj))

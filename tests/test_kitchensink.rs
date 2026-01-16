@@ -151,7 +151,7 @@ fn test_kitchensink_complex_tree() {
 	// Verify with wasm-tools
 	use std::process::Command;
 	let output = Command::new("wasm-tools")
-		.args(&["print", filename])
+		.args(["print", filename])
 		.output();
 
 	if let Ok(result) = output {
@@ -199,7 +199,7 @@ fn test_kitchensink_wasmtime_execution() {
 
 	// Try to run with wasmtime
 	use std::process::Command;
-	let output = Command::new("wasmtime").args(&["--version"]).output();
+	let output = Command::new("wasmtime").args(["--version"]).output();
 
 	if let Ok(result) = output {
 		let version = String::from_utf8_lossy(&result.stdout);
