@@ -11,7 +11,6 @@ use warp::Node::{Empty, False, True};
 use warp::{eq, is, skip};
 
 #[test]
-#[ignore]
 fn test_range() {
 	is!("0..3", ints(0, 1, 2));       // exclusive: 0, 1, 2
 	is!("0..<3", ints(0, 1, 2));      // Swift-style exclusive
