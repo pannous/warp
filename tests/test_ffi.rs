@@ -48,7 +48,6 @@ fn test_ffi_floor() {
 }
 
 #[test]
-#[ignore = "clashes with wasp runtime strlen"]
 fn test_ffi_strlen() {
 	// Test: char* . int32 (strlen from libc);
 	is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
@@ -57,7 +56,6 @@ fn test_ffi_strlen() {
 }
 
 #[test]
-#[ignore = "string argument marshalling needs work"]
 fn test_ffi_atof() {
 	is!("import atof from \"c\"\natof(\"3.14159\")", 3.14159);
 	is!("import atof from \"c\"\natof(\"2.71828\")", 2.71828);
@@ -65,7 +63,7 @@ fn test_ffi_atof() {
 }
 
 #[test]
-#[ignore = "wasp file test - needs file to exist"]
+#[ignore = "eval doesn't support loading .wasp files yet"]
 fn test_ffi_fmin_wasp_file() {
 	is!("tests/wasp/ffi/test_ffi_fmin.wasp", 2.1);
 }
@@ -90,7 +88,6 @@ fn test_ffi_combined() {
 
 
 #[test]
-#[ignore = "string argument marshalling needs work"]
 fn test_ffi_strcmp() {
 	// Test: int strcmp(const char* s1, const char* s2);
 	is!("import strcmp from \"c\"\nstrcmp(\"hello\", \"hello\")", 0);
