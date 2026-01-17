@@ -372,6 +372,27 @@ pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
         },
     );
 
+    // Add common libc functions that may not be directly in parsed headers
+    // (defined in _stdlib.h which is included by stdlib.h)
+    sigs.insert(
+        "abs".to_string(),
+        FfiSignature {
+            name: "abs",
+            library: "c",
+            params: vec![ValType::I32],
+            results: vec![ValType::I32],
+        },
+    );
+    sigs.insert(
+        "labs".to_string(),
+        FfiSignature {
+            name: "labs",
+            library: "c",
+            params: vec![ValType::I64],
+            results: vec![ValType::I64],
+        },
+    );
+
     sigs
 }
 
