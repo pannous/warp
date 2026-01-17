@@ -294,11 +294,6 @@ macro_rules! s {
 }
 
 // Test it see tests/string_tests.rs !!
-fn main() {
-	let s1 = String::from("RustRover");
-	let s2 = &String::from("RustRover");
-	eq!(s1 == *s2, true);
-}
 
 // fn assert<T: PartialEq + Debug>(x: T) {
 //     eq!(x, true);
