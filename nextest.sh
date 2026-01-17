@@ -6,7 +6,7 @@ TEMP_FILE=$(mktemp)
 
 unset CARGO_TARGET_DIR
 
-FEATURES="--features ffi,optimizer"
+FEATURES="--all-features"
 echo "Compiling all tests..."
 cargo --offline nextest run $FEATURES --no-run || exit 1
 

@@ -40,7 +40,7 @@ fn node_to_i32(node: &Node) -> i32 {
     }
 }
 
-#[cfg(not(any(feature = "wasm", test)))]
+#[cfg(not(test))]
 fn main() {
     let args: Vec<String> = env::args().collect();
     let _executable_path = &args[0];

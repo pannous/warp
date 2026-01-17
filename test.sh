@@ -11,7 +11,7 @@ unset CARGO_TARGET_DIR
 echo "Compiling tests..."
 # Match RustRover's runner injection exactly
 RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
-FEATURES="--features ffi,optimizer"
+FEATURES="--all-features"
 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
 
 echo "Running all tests..."
