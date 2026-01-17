@@ -632,3 +632,12 @@ fn test_ffi_fabs_from_m() {
 	is!("import fabs from 'm'\nfabs(-3.14)", 3.14);
 	is!("import fabs from 'm'\nfabs(3.14)", 3.14);
 }
+
+#[test]
+fn test_ffi_nested_calls() {
+	// Nested FFI calls: fabs(sin(3.14)) ≈ 0.00159...
+	// sin(π) ≈ 0, so fabs(sin(3.14)) should be close to 0
+	is!("import fabs from 'm'\nimport sin from 'm'\nfabs(sin(3.14)) < 0.01", 1);
+	// sin(π/2) = 1, fabs(1) = 1
+	is!("import fabs from 'm'\nimport sin from 'm'\nfabs(sin(1.5707963267948966))", 1.0);
+}
