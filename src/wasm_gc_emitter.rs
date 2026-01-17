@@ -259,20 +259,20 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Clone data to avoid borrow conflict - collect (name, params, results) tuples
-		let mut imports: Vec<(String, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>)> =
+		// Clone data to avoid borrow conflict - collect (name, library, params, results) tuples
+		let mut imports: Vec<(String, String, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>)> =
 			self.ffi_imports.iter()
-				.map(|(name, sig)| (name.clone(), sig.params.clone(), sig.results.clone()))
+				.map(|(name, sig)| (name.clone(), sig.library.to_string(), sig.params.clone(), sig.results.clone()))
 				.collect();
-		imports.sort_by(|(a, _, _), (b, _, _)| a.cmp(b));
+		imports.sort_by(|(a, _, _, _), (b, _, _, _)| a.cmp(b));
 
-		for (name, params, results) in imports {
+		for (name, library, params, results) in imports {
 			let type_idx = self.next_type_idx;
 			self.types.ty().function(params, results);
 			self.next_type_idx += 1;
 
-			// Import from "ffi" module
-			self.imports.import("ffi", &name, EntityType::Function(type_idx));
+			// Import from library module (e.g., "m" for libm, "c" for libc)
+			self.imports.import(&library, &name, EntityType::Function(type_idx));
 
 			// Register as an import function - use a leaked string for static lifetime
 			let static_name: &'static str = Box::leak(format!("ffi_{}", name).into_boxed_str());
