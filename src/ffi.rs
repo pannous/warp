@@ -214,44 +214,9 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
     })
 }
 
-/// Get standard header file paths for a library
-pub fn get_library_header_paths(library: &str) -> Vec<&'static str> {
-    match resolve_library_alias(library) {
-        "m" => vec![
-            "/usr/include/math.h",
-            "/opt/homebrew/include/math.h",
-            "/usr/local/include/math.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/math.h",
-        ],
-        "c" => vec![
-            "/usr/include/string.h",
-            "/usr/include/stdlib.h",
-            "/usr/include/stdio.h",
-            "/opt/homebrew/include/string.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/string.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h",
-        ],
-        "SDL2" => vec![
-            "/opt/homebrew/include/SDL2/SDL.h",
-            "/opt/homebrew/include/SDL2/SDL_events.h",
-            "/opt/homebrew/include/SDL2/SDL_render.h",
-            "/usr/local/include/SDL2/SDL.h",
-            "/usr/include/SDL2/SDL.h",
-        ],
-        "raylib" => vec![
-            "/opt/homebrew/include/raylib.h",
-            "/usr/local/include/raylib.h",
-            "/usr/include/raylib.h",
-        ],
-        "newlib" => vec![
-            "/opt/homebrew/include/newlib.h",
-            "/usr/local/include/newlib.h",
-            "/usr/include/newlib.h",
-            "/opt/homebrew/arm-none-eabi/include/newlib.h",
-            "/usr/local/arm-none-eabi/include/newlib.h",
-        ],
-        _ => vec![],
-    }
+/// Get standard header file paths for a library (delegates to ffi_parser)
+pub fn get_library_header_paths(library: &str) -> Vec<String> {
+    crate::ffi_parser::find_library_headers(resolve_library_alias(library))
 }
 
 /// Parse a header file and extract all function signatures
@@ -302,7 +267,7 @@ pub fn get_signatures_from_headers(library: &str) -> HashMap<String, FfiSignatur
     let paths = get_library_header_paths(library);
 
     for path in paths {
-        let header_sigs = parse_header_file(path, library);
+        let header_sigs = parse_header_file(&path, library);
         for hsig in header_sigs {
             if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
                 sigs.insert(hsig.name.clone(), ffi_sig);
@@ -348,28 +313,33 @@ extern "C" {
 }
 
 /// Get known FFI function signatures by parsing system header files
-/// Uses ffi_parser module to discover signatures from /usr/include, etc.
+/// Uses unified Kind/Signature types from ffi_parser module
 pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
     use crate::ffi_parser::get_all_signatures;
+    use crate::function::kind_to_valtype;
 
     let mut sigs = HashMap::new();
 
-    // Convert from ffi_parser's CSignature to our FfiSignature
-    for (name, (csig, library)) in get_all_signatures() {
-        let params: Vec<wasm_encoder::ValType> = csig.params.iter()
-            .filter_map(|p| p.ctype.to_wasm())
+    // Convert from ffi_parser's FfiFunction to FfiSignature
+    for (name, func) in get_all_signatures() {
+        // Convert Kind parameters to ValType (kind_to_valtype returns wasm_encoder::ValType)
+        let params: Vec<wasm_encoder::ValType> = func.signature.parameters.iter()
+            .map(|p| kind_to_valtype(p.kind))
             .collect();
 
-        let results: Vec<wasm_encoder::ValType> = csig.return_type.to_wasm()
-            .map(|v| vec![v])
-            .unwrap_or_default();
+        // Convert Kind return types to ValType
+        let results: Vec<wasm_encoder::ValType> = func.signature.return_types.iter()
+            .map(|k| kind_to_valtype(*k))
+            .collect();
 
         // Use leaked strings for 'static lifetime
         let name_static: &'static str = Box::leak(name.clone().into_boxed_str());
-        let lib_static: &'static str = match library {
+        let lib_static: &'static str = match func.library.as_str() {
             "m" => "m",
             "c" => "c",
-            _ => Box::leak(library.to_string().into_boxed_str()),
+            "SDL2" => "SDL2",
+            "raylib" => "raylib",
+            _ => Box::leak(func.library.clone().into_boxed_str()),
         };
 
         sigs.insert(name, FfiSignature {
@@ -411,15 +381,15 @@ pub fn is_ffi_function(name: &str) -> bool {
 }
 
 /// Get FFI signature for a function by name
-/// Tries header-based lookup first, then falls back to hardcoded signatures
+/// Searches well-known libraries (m, c, SDL2) via dynamic header discovery
 pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
-    // First check hardcoded signatures (fastest)
+    // First check cached signatures from well-known libraries
     if let Some(sig) = get_ffi_signatures().get(name).cloned() {
         return Some(sig);
     }
 
-    // Try to find in headers for common libraries
-    for lib in ["m", "c", "SDL2", "raylib", "newlib"] {
+    // Try well-known libraries via header discovery
+    for lib in ["m", "c", "SDL2"] {
         let header_sigs = get_signatures_from_headers(lib);
         if let Some(sig) = header_sigs.get(name).cloned() {
             return Some(sig);
@@ -738,21 +708,26 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     Ok(())
 }
 
-/// Resolve library alias to full name
+/// Resolve library alias to canonical name
 pub fn resolve_library_alias(alias: &str) -> &str {
     match alias {
         "m" | "math" | "libm" => "m",
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
-        "raylib" => "raylib",
-        "newlib" => "newlib",
-        _ => alias,
+        _ => alias, // Pass through - dynamic discovery handles any library
     }
 }
 
-/// Check if a library is a known FFI library
+/// Check if a library has discoverable headers
+/// Returns true for well-known libraries or any library with headers found on filesystem
 pub fn is_ffi_library(lib: &str) -> bool {
-    matches!(resolve_library_alias(lib), "m" | "c" | "SDL2" | "raylib" | "newlib")
+    let canonical = resolve_library_alias(lib);
+    // Well-known libraries
+    if matches!(canonical, "m" | "c" | "SDL2") {
+        return true;
+    }
+    // Dynamic discovery - check if headers exist
+    !get_library_header_paths(canonical).is_empty()
 }
 
 // ============================================================================
@@ -826,7 +801,7 @@ mod tests {
         // Try to parse math.h if it exists
         let paths = get_library_header_paths("m");
         for path in paths {
-            let sigs = parse_header_file(path, "m");
+            let sigs = parse_header_file(&path, "m");
             if !sigs.is_empty() {
                 // Found some signatures, verify we can find common math functions
                 let names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();

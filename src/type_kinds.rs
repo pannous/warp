@@ -4,42 +4,83 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Kind {
 	#[default]
-	Empty = 0,
+	Empty = 0,     // void / no value
 	Int = 1,       // i64 value (boxed in $i64box)
 	Float = 2,     // f64 value (boxed in $f64box)
 	Text = 3,      // string (via $String struct)
-	Codepoint = 4, // char as i31ref
+	Codepoint = 4, // char/i32 as i31ref
 	Symbol = 5,    // string (via $String struct)
-	Key = 6,      // data=key node, value=value node (also used for pairs)
-	Block = 7,    // curly braces {}
-	List = 8,     // square brackets []
-	Data = 9,     // arbitrary data container
-	Meta = 10,    // metadata wrapper
-	Error = 11,   // error node
-	TypeDef = 12, // type definition: name + body (fields)
+	Key = 6,       // data=key node, value=value node (also used for pairs)
+	Block = 7,     // curly braces {}
+	List = 8,      // square brackets []
+	Data = 9,      // arbitrary data container
+	Meta = 10,     // metadata wrapper
+	Error = 11,    // error node
+	TypeDef = 12,  // type definition: name + body (fields)
+	Pointer = 13,  // FFI pointer (i64 handle)
+	Int32 = 14,    // explicit i32 (for FFI)
+	Float32 = 15,  // explicit f32 (for FFI)
 }
 
 impl Kind {
 	/// Check if this is an integer type (WASM i64 local)
-	pub fn is_int(&self) -> bool { matches!(self, Kind::Int) }
+	pub fn is_int(&self) -> bool { matches!(self, Kind::Int | Kind::Int32) }
 
 	/// Check if this is a float type (WASM f64 local)
-	pub fn is_float(&self) -> bool { matches!(self, Kind::Float) }
+	pub fn is_float(&self) -> bool { matches!(self, Kind::Float | Kind::Float32) }
 
 	/// Check if this is a primitive numeric type (stored as WASM primitive)
-	pub fn is_primitive(&self) -> bool { matches!(self, Kind::Int | Kind::Float) }
+	pub fn is_primitive(&self) -> bool {
+		matches!(self, Kind::Int | Kind::Int32 | Kind::Float | Kind::Float32 | Kind::Codepoint | Kind::Pointer)
+	}
 
 	/// Check if this is a reference type (stored as WASM ref $Node)
 	pub fn is_ref(&self) -> bool { !self.is_primitive() }
+
+	/// Check if this is a pointer type (FFI)
+	pub fn is_pointer(&self) -> bool { matches!(self, Kind::Pointer | Kind::Text) }
+
+	/// Parse a C type string to Kind with smart defaults
+	pub fn from_c_type(s: &str) -> Kind {
+		let s = s.trim();
+
+		// Handle pointer types
+		if s.contains('*') {
+			if s.contains("char") {
+				return Kind::Text; // char* is a string
+			}
+			return Kind::Pointer; // other pointers as i64 handles
+		}
+
+		// Strip qualifiers
+		let s = s.replace("const ", "").replace("unsigned ", "").replace("signed ", "");
+		let s = s.trim();
+
+		match s {
+			"void" => Kind::Empty,
+			"int" | "int32_t" | "uint32_t" | "Uint32" => Kind::Int32,
+			"long" | "long int" | "int64_t" | "uint64_t" | "long long" => Kind::Int,
+			"float" => Kind::Float32,
+			"double" => Kind::Float,
+			"size_t" | "ssize_t" | "ptrdiff_t" => Kind::Int,
+			"bool" | "_Bool" => Kind::Int32,
+			"short" | "int16_t" | "uint16_t" => Kind::Int32,
+			"char" | "int8_t" | "uint8_t" => Kind::Codepoint,
+			"Color" => Kind::Int32, // raylib Color is 4 bytes packed
+			_ => Kind::Data, // unknown types as generic data
+		}
+	}
 }
 
 impl std::fmt::Display for Kind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Kind::Empty => write!(f, "empty"),
-			Kind::Int => write!(f, "int"),
-			Kind::Float => write!(f, "float"),
-			Kind::Text => write!(f, "text"),
+			Kind::Int => write!(f, "int"),      // wasp uses "int" for i64
+			Kind::Int32 => write!(f, "i32"),
+			Kind::Float => write!(f, "float"),  // wasp uses "float" for f64
+			Kind::Float32 => write!(f, "f32"),
+			Kind::Text => write!(f, "text"),    // wasp uses "text" for strings
 			Kind::Codepoint => write!(f, "codepoint"),
 			Kind::Symbol => write!(f, "symbol"),
 			Kind::Key => write!(f, "key"),
@@ -49,6 +90,7 @@ impl std::fmt::Display for Kind {
 			Kind::Meta => write!(f, "meta"),
 			Kind::Error => write!(f, "error"),
 			Kind::TypeDef => write!(f, "typedef"),
+			Kind::Pointer => write!(f, "pointer"),
 		}
 	}
 }
