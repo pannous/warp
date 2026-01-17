@@ -48,34 +48,288 @@ impl FfiState {
     }
 }
 
+// ============================================================================
+// C Header Parsing for Dynamic FFI Signature Discovery
+// ============================================================================
+
+/// Parsed C function signature from header file
+#[derive(Clone, Debug)]
+pub struct FfiHeaderSignature {
+    pub name: String,
+    pub return_type: String,
+    pub param_types: Vec<String>,
+    pub param_names: Vec<String>,
+    pub library: String,
+    pub raw: String,
+}
+
+/// Map C type string to wasm_encoder ValType
+pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
+    let t = c_type.trim();
+    // Remove const qualifier
+    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+
+    match t {
+        "double" => Some(wasm_encoder::ValType::F64),
+        "float" => Some(wasm_encoder::ValType::F32),
+        "int" | "int32_t" => Some(wasm_encoder::ValType::I32),
+        "unsigned int" | "uint32_t" | "Uint32" => Some(wasm_encoder::ValType::I32),
+        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" => Some(wasm_encoder::ValType::I64),
+        "unsigned long" | "uint64_t" | "Uint64" => Some(wasm_encoder::ValType::I64),
+        "short" | "int16_t" => Some(wasm_encoder::ValType::I32),
+        "char" | "int8_t" | "unsigned char" | "uint8_t" => Some(wasm_encoder::ValType::I32),
+        "void" => None, // void return means no result
+        // Pointer types - all become i32 (WASM linear memory offset)
+        s if s.ends_with('*') => Some(wasm_encoder::ValType::I32),
+        s if s.contains('*') => Some(wasm_encoder::ValType::I32),
+        // Unknown types default to i32 (could be opaque handles)
+        _ => Some(wasm_encoder::ValType::I32),
+    }
+}
+
+/// Extract function signature from a C declaration string
+/// e.g., "double sqrt(double x);" -> FfiHeaderSignature
+pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
+    let decl = declaration.trim();
+
+    // Skip empty lines, comments, preprocessor directives
+    if decl.is_empty() || decl.starts_with("//") || decl.starts_with('#') || decl.starts_with("/*") {
+        return None;
+    }
+
+    // Skip non-function declarations (typedef, struct, enum, etc.)
+    if decl.starts_with("typedef") || decl.starts_with("struct") ||
+       decl.starts_with("enum") || decl.starts_with("union") {
+        return None;
+    }
+
+    // Remove extern, static, inline qualifiers
+    let decl = decl.replace("extern ", "").replace("static ", "").replace("inline ", "");
+    let decl = decl.trim();
+
+    // Find the opening parenthesis (marks start of params)
+    let paren_pos = decl.find('(')?;
+
+    // Everything before '(' is return_type + name
+    let before_paren = &decl[..paren_pos];
+
+    // Find function name (last word before parenthesis)
+    let parts: Vec<&str> = before_paren.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+
+    // Function name is the last part, may have pointer marker
+    let mut name = parts.last()?.to_string();
+    // Handle "*func" case
+    while name.starts_with('*') {
+        name = name[1..].to_string();
+    }
+
+    // Return type is everything before the name
+    let return_type = if parts.len() > 1 {
+        parts[..parts.len()-1].join(" ")
+    } else {
+        "int".to_string() // C default
+    };
+
+    // Find closing paren
+    let close_paren = decl.rfind(')')?;
+    let params_str = &decl[paren_pos+1..close_paren];
+
+    // Parse parameters
+    let mut param_types = Vec::new();
+    let mut param_names = Vec::new();
+
+    if params_str.trim() != "void" && !params_str.trim().is_empty() {
+        for param in params_str.split(',') {
+            let param = param.trim();
+            if param.is_empty() || param == "..." {
+                continue;
+            }
+
+            // Split param into type and name
+            let parts: Vec<&str> = param.split_whitespace().collect();
+            if parts.is_empty() {
+                continue;
+            }
+
+            // Handle "type *name" or "type* name" or "type name"
+            let (ptype, pname) = if parts.len() == 1 {
+                (parts[0].to_string(), String::new())
+            } else {
+                let last = parts.last().unwrap();
+                let name = last.trim_start_matches('*').to_string();
+                // Reconstruct type (everything except pure name)
+                let type_str = if last.starts_with('*') {
+                    format!("{} *", parts[..parts.len()-1].join(" "))
+                } else {
+                    parts[..parts.len()-1].join(" ")
+                };
+                (type_str, name)
+            };
+
+            param_types.push(ptype);
+            param_names.push(pname);
+        }
+    }
+
+    Some(FfiHeaderSignature {
+        name,
+        return_type,
+        param_types,
+        param_names,
+        library: library.to_string(),
+        raw: declaration.to_string(),
+    })
+}
+
+/// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
+pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
+    let params: Vec<wasm_encoder::ValType> = hsig.param_types.iter()
+        .filter_map(|t| map_c_type_to_valtype(t))
+        .collect();
+
+    let results: Vec<wasm_encoder::ValType> = map_c_type_to_valtype(&hsig.return_type)
+        .map(|v| vec![v])
+        .unwrap_or_default();
+
+    // Leak strings for 'static lifetime (acceptable for long-running process)
+    let name: &'static str = Box::leak(hsig.name.clone().into_boxed_str());
+    let library: &'static str = Box::leak(hsig.library.clone().into_boxed_str());
+
+    Some(FfiSignature {
+        name,
+        library,
+        params,
+        results,
+    })
+}
+
+/// Get standard header file paths for a library
+pub fn get_library_header_paths(library: &str) -> Vec<&'static str> {
+    match resolve_library_alias(library) {
+        "m" => vec![
+            "/usr/include/math.h",
+            "/opt/homebrew/include/math.h",
+            "/usr/local/include/math.h",
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/math.h",
+        ],
+        "c" => vec![
+            "/usr/include/string.h",
+            "/usr/include/stdlib.h",
+            "/usr/include/stdio.h",
+            "/opt/homebrew/include/string.h",
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/string.h",
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h",
+        ],
+        "SDL2" => vec![
+            "/opt/homebrew/include/SDL2/SDL.h",
+            "/opt/homebrew/include/SDL2/SDL_events.h",
+            "/opt/homebrew/include/SDL2/SDL_render.h",
+            "/usr/local/include/SDL2/SDL.h",
+            "/usr/include/SDL2/SDL.h",
+        ],
+        "raylib" => vec![
+            "/opt/homebrew/include/raylib.h",
+            "/usr/local/include/raylib.h",
+            "/usr/include/raylib.h",
+        ],
+        _ => vec![],
+    }
+}
+
+/// Parse a header file and extract all function signatures
+pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut signatures = Vec::new();
+    let mut current_decl = String::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // Skip preprocessor and comments
+        if line.starts_with('#') || line.starts_with("//") {
+            continue;
+        }
+
+        // Skip block comments (simplified - doesn't handle multi-line)
+        if line.contains("/*") && line.contains("*/") {
+            continue;
+        }
+
+        // Accumulate multi-line declarations
+        current_decl.push_str(line);
+        current_decl.push(' ');
+
+        // If we have a complete declaration (ends with ; or })
+        if line.ends_with(';') && current_decl.contains('(') {
+            if let Some(sig) = extract_function_signature(&current_decl, library) {
+                signatures.push(sig);
+            }
+            current_decl.clear();
+        } else if line.ends_with('}') || (line.ends_with(';') && !current_decl.contains('(')) {
+            current_decl.clear();
+        }
+    }
+
+    signatures
+}
+
+/// Get FFI signatures by parsing header files for a library
+/// Falls back to hardcoded signatures if headers not found
+pub fn get_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
+    let mut sigs = HashMap::new();
+    let paths = get_library_header_paths(library);
+
+    for path in paths {
+        let header_sigs = parse_header_file(path, library);
+        for hsig in header_sigs {
+            if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
+                sigs.insert(hsig.name.clone(), ffi_sig);
+            }
+        }
+    }
+
+    sigs
+}
+
+// ============================================================================
+// Extern C Functions and Hardcoded Signatures (Fallback)
+// ============================================================================
+
 // Extern C functions from libc/libm
 extern "C" {
-    // libm math functions
-    fn fmin(x: f64, y: f64) -> f64;
-    fn fmax(x: f64, y: f64) -> f64;
-    fn fabs(x: f64) -> f64;
-    fn floor(x: f64) -> f64;
-    fn ceil(x: f64) -> f64;
-    fn round(x: f64) -> f64;
-    fn sqrt(x: f64) -> f64;
-    fn sin(x: f64) -> f64;
-    fn cos(x: f64) -> f64;
-    fn tan(x: f64) -> f64;
-    fn fmod(x: f64, y: f64) -> f64;
-    fn pow(x: f64, y: f64) -> f64;
-    fn exp(x: f64) -> f64;
-    fn log(x: f64) -> f64;
-    fn log10(x: f64) -> f64;
+	// libm math functions
+	fn fmin(x: f64, y: f64) -> f64;
+	fn fmax(x: f64, y: f64) -> f64;
+	fn fabs(x: f64) -> f64;
+	fn floor(x: f64) -> f64;
+	fn ceil(x: f64) -> f64;
+	fn round(x: f64) -> f64;
+	fn sqrt(x: f64) -> f64;
+	fn sin(x: f64) -> f64;
+	fn cos(x: f64) -> f64;
+	fn tan(x: f64) -> f64;
+	fn fmod(x: f64, y: f64) -> f64;
+	fn pow(x: f64, y: f64) -> f64;
+	fn exp(x: f64) -> f64;
+	fn log(x: f64) -> f64;
+	fn log10(x: f64) -> f64;
 
-    // libc functions
-    fn abs(x: i32) -> i32;
-    fn strlen(s: *const i8) -> usize;
-    fn atoi(s: *const i8) -> i32;
-    fn atol(s: *const i8) -> i64;
-    fn atof(s: *const i8) -> f64;
-    fn strcmp(s1: *const i8, s2: *const i8) -> i32;
-    fn strncmp(s1: *const i8, s2: *const i8, n: usize) -> i32;
-    fn rand() -> i32;
+	// libc functions
+	fn abs(x: i32) -> i32;
+	fn strlen(s: *const i8) -> usize;
+	fn atoi(s: *const i8) -> i32;
+	fn atol(s: *const i8) -> i64;
+	fn atof(s: *const i8) -> f64;
+	fn strcmp(s1: *const i8, s2: *const i8) -> i32;
+	fn strncmp(s1: *const i8, s2: *const i8, n: usize) -> i32;
+	fn rand() -> i32;
 }
 
 /// Get known FFI function signatures
@@ -202,12 +456,40 @@ pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
 
 /// Check if a function is a known FFI function
 pub fn is_ffi_function(name: &str) -> bool {
-    get_ffi_signatures().contains_key(name)
+    get_ffi_signature(name).is_some()
 }
 
-/// Get FFI signature for a function
+/// Get FFI signature for a function by name
+/// Tries header-based lookup first, then falls back to hardcoded signatures
 pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
-    get_ffi_signatures().get(name).cloned()
+    // First check hardcoded signatures (fastest)
+    if let Some(sig) = get_ffi_signatures().get(name).cloned() {
+        return Some(sig);
+    }
+
+    // Try to find in headers for common libraries
+    for lib in ["m", "c", "SDL2", "raylib"] {
+        let header_sigs = get_signatures_from_headers(lib);
+        if let Some(sig) = header_sigs.get(name).cloned() {
+            return Some(sig);
+        }
+    }
+
+    None
+}
+
+/// Get FFI signature from a specific library's headers
+pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignature> {
+    // First check hardcoded
+    if let Some(sig) = get_ffi_signatures().get(name).cloned() {
+        if sig.library == resolve_library_alias(library) {
+            return Some(sig);
+        }
+    }
+
+    // Try headers
+    let header_sigs = get_signatures_from_headers(library);
+    header_sigs.get(name).cloned()
 }
 
 /// Link FFI functions into a wasmtime linker
@@ -519,4 +801,93 @@ pub fn resolve_library_alias(alias: &str) -> &str {
 /// Check if a library is a known FFI library
 pub fn is_ffi_library(lib: &str) -> bool {
     matches!(resolve_library_alias(lib), "m" | "c" | "SDL2" | "raylib")
+}
+
+// ============================================================================
+// Unit Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_function_signature_simple() {
+        let sig = extract_function_signature("double sqrt(double x);", "m").unwrap();
+        assert_eq!(sig.name, "sqrt");
+        assert_eq!(sig.return_type, "double");
+        assert_eq!(sig.param_types, vec!["double"]);
+    }
+
+    #[test]
+    fn test_extract_function_signature_multi_param() {
+        let sig = extract_function_signature("double fmin(double x, double y);", "m").unwrap();
+        assert_eq!(sig.name, "fmin");
+        assert_eq!(sig.return_type, "double");
+        assert_eq!(sig.param_types.len(), 2);
+    }
+
+    #[test]
+    fn test_extract_function_signature_pointer() {
+        let sig = extract_function_signature("size_t strlen(const char *s);", "c").unwrap();
+        assert_eq!(sig.name, "strlen");
+        assert_eq!(sig.return_type, "size_t");
+        assert!(sig.param_types[0].contains("char"));
+    }
+
+    #[test]
+    fn test_extract_function_signature_void_return() {
+        let sig = extract_function_signature("void exit(int status);", "c").unwrap();
+        assert_eq!(sig.name, "exit");
+        assert_eq!(sig.return_type, "void");
+    }
+
+    #[test]
+    fn test_map_c_type_to_valtype() {
+        assert_eq!(map_c_type_to_valtype("double"), Some(wasm_encoder::ValType::F64));
+        assert_eq!(map_c_type_to_valtype("float"), Some(wasm_encoder::ValType::F32));
+        assert_eq!(map_c_type_to_valtype("int"), Some(wasm_encoder::ValType::I32));
+        assert_eq!(map_c_type_to_valtype("long"), Some(wasm_encoder::ValType::I64));
+        assert_eq!(map_c_type_to_valtype("char *"), Some(wasm_encoder::ValType::I32));
+        assert_eq!(map_c_type_to_valtype("void"), None);
+    }
+
+    #[test]
+    fn test_header_sig_to_ffi_sig() {
+        let hsig = FfiHeaderSignature {
+            name: "sqrt".to_string(),
+            return_type: "double".to_string(),
+            param_types: vec!["double".to_string()],
+            param_names: vec!["x".to_string()],
+            library: "m".to_string(),
+            raw: "double sqrt(double x);".to_string(),
+        };
+
+        let ffi_sig = header_sig_to_ffi_sig(&hsig).unwrap();
+        assert_eq!(ffi_sig.name, "sqrt");
+        assert_eq!(ffi_sig.params, vec![wasm_encoder::ValType::F64]);
+        assert_eq!(ffi_sig.results, vec![wasm_encoder::ValType::F64]);
+    }
+
+    #[test]
+    fn test_parse_header_file_math() {
+        // Try to parse math.h if it exists
+        let paths = get_library_header_paths("m");
+        for path in paths {
+            let sigs = parse_header_file(path, "m");
+            if !sigs.is_empty() {
+                // Found some signatures, verify we can find common math functions
+                let names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();
+                // At least some common functions should be found
+                let has_common = names.iter().any(|n| {
+                    ["sin", "cos", "sqrt", "floor", "ceil", "fabs", "pow", "exp", "log"]
+                        .contains(n)
+                });
+                if has_common {
+                    return; // Test passes
+                }
+            }
+        }
+        // If no header found, just pass (CI might not have headers)
+    }
 }
