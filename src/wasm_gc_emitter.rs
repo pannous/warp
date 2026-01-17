@@ -3386,6 +3386,130 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Emit an FFI function call returning raw numeric value (i64)
+	/// Used in numeric contexts where we don't want to wrap in a Node
+	fn emit_ffi_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+
+		// Emit arguments according to signature
+		for (i, param_type) in sig.params.iter().enumerate() {
+			if i >= args.len() {
+				match param_type {
+					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
+					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
+					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
+					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
+					_ => func.instruction(&Instruction::I32Const(0)),
+				};
+				continue;
+			}
+
+			let arg = &args[i];
+			match param_type {
+				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
+				wasm_encoder::ValType::F32 => {
+					self.emit_float_value(func, arg);
+					func.instruction(&Instruction::F32DemoteF64);
+				}
+				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
+				wasm_encoder::ValType::I32 => {
+					if self.is_string_arg(arg) {
+						self.emit_string_ptr_only(func, arg);
+					} else {
+						self.emit_numeric_value(func, arg);
+						func.instruction(&Instruction::I32WrapI64);
+					}
+				}
+				_ => self.emit_numeric_value(func, arg),
+			}
+		}
+
+		// Call the FFI function
+		if let Some(idx) = self.ffi_func_index(fn_name) {
+			func.instruction(&Instruction::Call(idx));
+		}
+
+		// Convert result to i64 for numeric context
+		if !sig.results.is_empty() {
+			match sig.results[0] {
+				wasm_encoder::ValType::F64 => { func.instruction(&Instruction::I64TruncF64S); }
+				wasm_encoder::ValType::F32 => {
+					func.instruction(&Instruction::F64PromoteF32);
+					func.instruction(&Instruction::I64TruncF64S);
+				}
+				wasm_encoder::ValType::I32 => { func.instruction(&Instruction::I64ExtendI32S); }
+				_ => {} // I64 already correct
+			}
+		} else {
+			func.instruction(&Instruction::I64Const(0));
+		}
+	}
+
+	/// Emit an FFI function call returning raw float value (f64)
+	/// Used in float contexts where we don't want to wrap in a Node
+	fn emit_ffi_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+
+		// Emit arguments according to signature
+		for (i, param_type) in sig.params.iter().enumerate() {
+			if i >= args.len() {
+				match param_type {
+					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
+					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
+					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
+					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
+					_ => func.instruction(&Instruction::I32Const(0)),
+				};
+				continue;
+			}
+
+			let arg = &args[i];
+			match param_type {
+				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
+				wasm_encoder::ValType::F32 => {
+					self.emit_float_value(func, arg);
+					func.instruction(&Instruction::F32DemoteF64);
+				}
+				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
+				wasm_encoder::ValType::I32 => {
+					if self.is_string_arg(arg) {
+						self.emit_string_ptr_only(func, arg);
+					} else {
+						self.emit_numeric_value(func, arg);
+						func.instruction(&Instruction::I32WrapI64);
+					}
+				}
+				_ => self.emit_numeric_value(func, arg),
+			}
+		}
+
+		// Call the FFI function
+		if let Some(idx) = self.ffi_func_index(fn_name) {
+			func.instruction(&Instruction::Call(idx));
+		}
+
+		// Convert result to f64 for float context
+		if !sig.results.is_empty() {
+			match sig.results[0] {
+				wasm_encoder::ValType::F32 => { func.instruction(&Instruction::F64PromoteF32); }
+				wasm_encoder::ValType::I64 => { func.instruction(&Instruction::F64ConvertI64S); }
+				wasm_encoder::ValType::I32 => {
+					func.instruction(&Instruction::I64ExtendI32S);
+					func.instruction(&Instruction::F64ConvertI64S);
+				}
+				_ => {} // F64 already correct
+			}
+		} else {
+			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+		}
+	}
+
 	/// Check if a node argument should be treated as a string
 	fn is_string_arg(&self, node: &Node) -> bool {
 		match node.drop_meta() {
@@ -4511,6 +4635,11 @@ impl WasmGcEmitter {
 							}
 							return;
 						}
+						// Check for FFI function call
+						if self.ffi_imports.contains_key(fn_name) {
+							self.emit_ffi_call_numeric(func, fn_name, &items[1..]);
+							return;
+						}
 					}
 				}
 				// Otherwise treat as statement sequence: execute all, return last
@@ -4661,8 +4790,34 @@ impl WasmGcEmitter {
 					panic!("Undefined variable: {}", name);
 				}
 			}
-			// Statement sequence: execute all, return last as float
-			Node::List(items, _, _) if !items.is_empty() => {
+			// Function calls and statement sequences
+			Node::List(items, bracket, _) if !items.is_empty() => {
+				// Check for function call: [Symbol("funcname"), arg1, arg2, ...]
+				if items.len() >= 2 {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						// Check for FFI function call
+						if self.ffi_imports.contains_key(fn_name) {
+							self.emit_ffi_call_float(func, fn_name, &items[1..]);
+							return;
+						}
+						// Check for user function call
+						if self.user_functions.contains_key(fn_name) {
+							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+							func.instruction(&Instruction::F64ConvertI64S);
+							return;
+						}
+					}
+				}
+				// Check for zero-arg function call: (funcname)
+				if items.len() == 1 && *bracket == Bracket::Round {
+					if let Node::Symbol(fn_name) = items[0].drop_meta() {
+						if self.ffi_imports.contains_key(fn_name) {
+							self.emit_ffi_call_float(func, fn_name, &[]);
+							return;
+						}
+					}
+				}
+				// Statement sequence: execute all, return last as float
 				for (i, item) in items.iter().enumerate() {
 					if i < items.len() - 1 {
 						// For non-last items, use regular emit and drop
