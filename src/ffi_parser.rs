@@ -1,133 +1,93 @@
 // FFI header parser - discovers function signatures from system header files
-// Parses C function declarations and maps to WASM types
+// Uses unified Kind and Signature types from function.rs
 
 use std::collections::HashMap;
 use std::path::Path;
-use wasm_encoder::ValType;
+use crate::type_kinds::Kind;
+use crate::function::{Signature, Arg};
 
-/// Parsed C function signature
-#[derive(Clone, Debug)]
-pub struct CSignature {
+/// Common include directories to search for headers
+const INCLUDE_DIRS: &[&str] = &[
+    "/opt/homebrew/include",
+    "/usr/local/include",
+    "/usr/include",
+    "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include",
+];
+
+/// Find header files for a library by searching common locations
+pub fn find_library_headers(library: &str) -> Vec<String> {
+    match library {
+        "m" | "math" | "libm" => find_existing_headers(&["math.h"]),
+        "c" | "libc" => find_existing_headers(&["string.h", "stdlib.h", "stdio.h"]),
+        "SDL2" | "sdl2" | "sdl" => {
+            let mut paths = Vec::new();
+            for dir in INCLUDE_DIRS {
+                for header in ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"] {
+                    let path = format!("{}/SDL2/{}", dir, header);
+                    if Path::new(&path).exists() {
+                        paths.push(path);
+                    }
+                }
+            }
+            paths
+        }
+        _ => {
+            // Generic: search for {library}.h
+            let header_name = format!("{}.h", library);
+            let mut paths = Vec::new();
+            for dir in INCLUDE_DIRS {
+                let path = format!("{}/{}", dir, header_name);
+                if Path::new(&path).exists() {
+                    paths.push(path);
+                }
+                let subdir_path = format!("{}/{}/{}", dir, library, header_name);
+                if Path::new(&subdir_path).exists() {
+                    paths.push(subdir_path);
+                }
+            }
+            paths
+        }
+    }
+}
+
+fn find_existing_headers(headers: &[&str]) -> Vec<String> {
+    let mut paths = Vec::new();
+    for dir in INCLUDE_DIRS {
+        for header in headers {
+            let path = format!("{}/{}", dir, header);
+            if Path::new(&path).exists() {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+
+/// FFI function info - combines Signature with library metadata
+#[derive(Debug, Clone)]
+pub struct FfiFunction {
     pub name: String,
-    pub return_type: CType,
-    pub params: Vec<CParam>,
+    pub signature: Signature,
     pub library: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct CParam {
-    pub ctype: CType,
-    pub name: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum CType {
-    Void,
-    Int,
-    Long,
-    Float,
-    Double,
-    SizeT,
-    CharPtr,
-    Pointer, // generic pointer (SDL_Window*, etc.)
-    Bool,
-    Unknown,
-}
-
-impl CType {
-    pub fn to_wasm(&self) -> Option<ValType> {
-        match self {
-            CType::Void => None,
-            CType::Int => Some(ValType::I32),
-            CType::Long => Some(ValType::I64),
-            CType::Float => Some(ValType::F32),
-            CType::Double => Some(ValType::F64),
-            CType::SizeT => Some(ValType::I64),
-            CType::CharPtr => Some(ValType::I32),
-            CType::Pointer => Some(ValType::I64), // pointers as i64 handles
-            CType::Bool => Some(ValType::I32),
-            CType::Unknown => Some(ValType::I32), // default to i32
+impl FfiFunction {
+    pub fn new(name: impl Into<String>, library: impl Into<String>) -> Self {
+        FfiFunction {
+            name: name.into(),
+            signature: Signature::new(),
+            library: library.into(),
         }
     }
 }
 
-/// Standard header file locations for each library
-pub fn get_library_header_paths(library: &str) -> Vec<&'static str> {
-    match library {
-        "m" | "math" | "libm" => vec![
-            "/usr/include/math.h",
-            "/usr/local/include/math.h",
-            "/opt/homebrew/include/math.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/math.h",
-        ],
-        "c" | "libc" => vec![
-            "/usr/include/string.h",
-            "/usr/include/stdlib.h",
-            "/usr/include/stdio.h",
-            "/usr/local/include/string.h",
-            "/usr/local/include/stdlib.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/string.h",
-            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h",
-        ],
-        "SDL2" | "sdl2" | "sdl" => vec![
-            "/opt/homebrew/include/SDL2/SDL.h",
-            "/opt/homebrew/include/SDL2/SDL_events.h",
-            "/opt/homebrew/include/SDL2/SDL_render.h",
-            "/opt/homebrew/include/SDL2/SDL_timer.h",
-            "/usr/local/include/SDL2/SDL.h",
-            "/usr/include/SDL2/SDL.h",
-        ],
-        "raylib" => vec![
-            "/opt/homebrew/include/raylib.h",
-            "/usr/local/include/raylib.h",
-            "/usr/include/raylib.h",
-        ],
-        "newlib" => vec![
-            "/opt/homebrew/include/newlib.h",
-            "/usr/local/include/newlib.h",
-            "/usr/include/newlib.h",
-            "/opt/homebrew/arm-none-eabi/include/newlib.h",
-            "/usr/local/arm-none-eabi/include/newlib.h",
-        ],
-        _ => vec![],
-    }
-}
-
-/// Parse a C type string to CType
-fn parse_type(s: &str) -> CType {
-    let s = s.trim();
-
-    // Handle pointer types
-    if s.contains('*') {
-        if s.contains("char") {
-            return CType::CharPtr;
-        }
-        return CType::Pointer;
-    }
-
-    // Strip const/unsigned/etc qualifiers
-    let s = s.replace("const ", "").replace("unsigned ", "").replace("signed ", "");
-    let s = s.trim();
-
-    match s {
-        "void" => CType::Void,
-        "int" | "int32_t" => CType::Int,
-        "long" | "long int" | "int64_t" | "long long" => CType::Long,
-        "float" => CType::Float,
-        "double" => CType::Double,
-        "size_t" | "ssize_t" => CType::SizeT,
-        "bool" | "_Bool" => CType::Bool,
-        "short" | "int16_t" => CType::Int,
-        "char" | "int8_t" | "uint8_t" => CType::Int,
-        "Uint32" | "uint32_t" => CType::Int,
-        "Uint64" | "uint64_t" => CType::Long,
-        "Color" => CType::Int, // raylib Color is 4 bytes
-        _ => CType::Unknown,
-    }
+/// Parse a C type string to Kind
+fn parse_c_type(s: &str) -> Kind {
+    Kind::from_c_type(s)
 }
 
 /// Extract function signature from a C declaration line
-pub fn parse_declaration(decl: &str, library: &str) -> Option<CSignature> {
+pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
     let decl = decl.trim();
 
     // Skip non-function lines
@@ -143,8 +103,8 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<CSignature> {
         || decl.starts_with("return")
         || !decl.contains('(')
         || !decl.contains(')')
-        || decl.contains('[')  // array declarations
-        || decl.contains("->") // member access
+        || decl.contains('[')
+        || decl.contains("->")
     {
         return None;
     }
@@ -173,14 +133,13 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<CSignature> {
     let before_paren = &decl[..paren_pos];
     let params_str = &decl[paren_pos + 1..close_paren];
 
-    // Extract function name (last identifier before '(')
+    // Extract function name
     let parts: Vec<&str> = before_paren.split_whitespace().collect();
     if parts.is_empty() {
         return None;
     }
 
     let mut name = parts.last()?.to_string();
-    // Handle "*func" pointer-returning functions
     while name.starts_with('*') {
         name = name[1..].to_string();
     }
@@ -193,57 +152,60 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<CSignature> {
     let return_type_str = if parts.len() > 1 {
         parts[..parts.len() - 1].join(" ")
     } else {
-        "int".to_string() // C default
+        "int".to_string()
     };
-    let return_type = parse_type(&return_type_str);
+    let return_kind = parse_c_type(&return_type_str);
+
+    // Build signature
+    let mut sig = Signature::new();
+
+    // Add return type
+    if return_kind != Kind::Empty {
+        sig.return_types.push(return_kind);
+    }
 
     // Parse parameters
-    let params = if params_str.trim() == "void" || params_str.trim().is_empty() {
-        vec![]
-    } else {
-        params_str
-            .split(',')
-            .filter_map(|p| {
-                let p = p.trim();
-                if p.is_empty() || p == "..." {
-                    return None;
-                }
+    if params_str.trim() != "void" && !params_str.trim().is_empty() {
+        for (i, p) in params_str.split(',').enumerate() {
+            let p = p.trim();
+            if p.is_empty() || p == "..." {
+                continue;
+            }
 
-                let p = p.replace("const ", "");
-                let parts: Vec<&str> = p.split_whitespace().collect();
-                if parts.is_empty() {
-                    return None;
-                }
+            let p = p.replace("const ", "");
+            let parts: Vec<&str> = p.split_whitespace().collect();
+            if parts.is_empty() {
+                continue;
+            }
 
-                // Find the type (everything except the last identifier if it's a name)
-                let (type_str, name_part) = if parts.len() == 1 {
-                    (parts[0].to_string(), None)
+            // Extract type and optional name
+            let (type_str, param_name) = if parts.len() == 1 {
+                (parts[0].to_string(), format!("p{}", i))
+            } else {
+                let last = *parts.last().unwrap();
+                let is_name = last.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false)
+                    && !last.contains('*');
+                if is_name && parts.len() > 1 {
+                    (parts[..parts.len() - 1].join(" "), last.trim_start_matches('*').to_string())
                 } else {
-                    let last = *parts.last()?;
-                    let is_name = last.chars().next()?.is_alphabetic() && !last.contains('*');
-                    if is_name && parts.len() > 1 {
-                        (parts[..parts.len() - 1].join(" "), Some(last.trim_start_matches('*').to_string()))
-                    } else {
-                        (parts.join(" "), None)
-                    }
-                };
+                    (parts.join(" "), format!("p{}", i))
+                }
+            };
 
-                let ctype = parse_type(&type_str);
-                Some(CParam { ctype, name: name_part })
-            })
-            .collect()
-    };
+            let kind = parse_c_type(&type_str);
+            sig.parameters.push(Arg::new(param_name, kind));
+        }
+    }
 
-    Some(CSignature {
+    Some(FfiFunction {
         name,
-        return_type,
-        params,
+        signature: sig,
         library: library.to_string(),
     })
 }
 
 /// Parse a header file and extract all function signatures
-pub fn parse_header_file(path: &str, library: &str) -> Vec<CSignature> {
+pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiFunction> {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(_) => return vec![],
@@ -255,19 +217,15 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<CSignature> {
         .collect()
 }
 
-/// Get all FFI signatures by parsing system header files
-pub fn get_all_signatures() -> HashMap<String, (CSignature, &'static str)> {
+/// Get all FFI signatures by parsing system headers for known libraries
+pub fn get_all_signatures() -> HashMap<String, FfiFunction> {
     let mut sigs = HashMap::new();
 
-    // Parse headers for each library
-    for (library, lib_static) in [("m", "m"), ("c", "c"), ("SDL2", "SDL2"), ("raylib", "raylib"), ("newlib", "newlib")] {
-        for path in get_library_header_paths(library) {
-            if Path::new(path).exists() {
-                for sig in parse_header_file(path, library) {
-                    // Don't overwrite existing signatures (first found wins)
-                    if !sigs.contains_key(&sig.name) {
-                        sigs.insert(sig.name.clone(), (sig, lib_static));
-                    }
+    for library in ["m", "c", "SDL2"] {
+        for path in find_library_headers(library) {
+            for func in parse_header_file(&path, library) {
+                if !sigs.contains_key(&func.name) {
+                    sigs.insert(func.name.clone(), func);
                 }
             }
         }
@@ -276,18 +234,25 @@ pub fn get_all_signatures() -> HashMap<String, (CSignature, &'static str)> {
     sigs
 }
 
-/// Get signature for a specific function from a specific library
-pub fn get_signature(name: &str, library: &str) -> Option<CSignature> {
-    for path in get_library_header_paths(library) {
-        if Path::new(path).exists() {
-            for sig in parse_header_file(path, library) {
-                if sig.name == name {
-                    return Some(sig);
-                }
+/// Get signature for a specific function by name
+pub fn get_signature(name: &str, library: &str) -> Option<FfiFunction> {
+    for path in find_library_headers(library) {
+        for func in parse_header_file(&path, library) {
+            if func.name == name {
+                return Some(func);
             }
         }
     }
     None
+}
+
+/// Get all signatures from a specific library
+pub fn get_library_signatures(library: &str) -> Vec<FfiFunction> {
+    let mut sigs = Vec::new();
+    for path in find_library_headers(library) {
+        sigs.extend(parse_header_file(&path, library));
+    }
+    sigs
 }
 
 #[cfg(test)]
@@ -296,102 +261,70 @@ mod tests {
 
     #[test]
     fn test_parse_simple_function() {
-        let sig = parse_declaration("double sin(double x);", "m").unwrap();
-        assert_eq!(sig.name, "sin");
-        assert_eq!(sig.return_type, CType::Double);
-        assert_eq!(sig.params.len(), 1);
-        assert_eq!(sig.params[0].ctype, CType::Double);
+        let func = parse_declaration("double sin(double x);", "m").unwrap();
+        assert_eq!(func.name, "sin");
+        assert_eq!(func.signature.return_types, vec![Kind::Float]);
+        assert_eq!(func.signature.parameters.len(), 1);
+        assert_eq!(func.signature.parameters[0].kind, Kind::Float);
     }
 
     #[test]
     fn test_parse_two_params() {
-        let sig = parse_declaration("double pow(double base, double exp);", "m").unwrap();
-        assert_eq!(sig.name, "pow");
-        assert_eq!(sig.params.len(), 2);
+        let func = parse_declaration("double pow(double base, double exp);", "m").unwrap();
+        assert_eq!(func.name, "pow");
+        assert_eq!(func.signature.parameters.len(), 2);
     }
 
     #[test]
     fn test_parse_void_params() {
-        let sig = parse_declaration("int rand(void);", "c").unwrap();
-        assert_eq!(sig.name, "rand");
-        assert_eq!(sig.params.len(), 0);
+        let func = parse_declaration("int rand(void);", "c").unwrap();
+        assert_eq!(func.name, "rand");
+        assert_eq!(func.signature.parameters.len(), 0);
     }
 
     #[test]
     fn test_parse_pointer_param() {
-        let sig = parse_declaration("size_t strlen(const char *s);", "c").unwrap();
-        assert_eq!(sig.name, "strlen");
-        assert_eq!(sig.params[0].ctype, CType::CharPtr);
+        let func = parse_declaration("size_t strlen(const char *s);", "c").unwrap();
+        assert_eq!(func.name, "strlen");
+        assert_eq!(func.signature.parameters[0].kind, Kind::Text); // char* -> Text
+    }
+
+    #[test]
+    fn test_parse_int32_return() {
+        let func = parse_declaration("int abs(int x);", "c").unwrap();
+        assert_eq!(func.name, "abs");
+        assert_eq!(func.signature.return_types, vec![Kind::Int32]);
+        assert_eq!(func.signature.parameters[0].kind, Kind::Int32);
     }
 
     #[test]
     fn test_parse_system_headers() {
-        // This test actually reads system header files
         let sigs = get_all_signatures();
-
-        // Should find at least some math functions if math.h exists
-        let has_math = sigs.contains_key("sin") || sigs.contains_key("cos") || sigs.contains_key("sqrt");
-
-        // Print what we found for debugging
-        if !has_math {
-            eprintln!("No math functions found. Available signatures: {:?}",
-                sigs.keys().take(10).collect::<Vec<_>>());
-        }
-
-        // Don't fail if headers not available (CI environments)
-        // Just verify the parsing works when headers exist
         if !sigs.is_empty() {
-            assert!(sigs.len() > 0);
-        }
-    }
-
-    #[test]
-    fn test_header_paths_exist() {
-        // Check which header paths actually exist on this system
-        let mut found_any = false;
-        for lib in ["m", "c"] {
-            for path in get_library_header_paths(lib) {
-                if Path::new(path).exists() {
-                    found_any = true;
-                    eprintln!("Found header: {}", path);
-                }
+            let has_math = sigs.contains_key("sin") || sigs.contains_key("cos");
+            if !has_math {
+                eprintln!("Available: {:?}", sigs.keys().take(10).collect::<Vec<_>>());
             }
-        }
-        // Just informational - don't fail if no headers
-        if !found_any {
-            eprintln!("No system headers found - this is OK for some environments");
         }
     }
 
     #[test]
     fn test_raylib_functions() {
-        // Test that we can discover raylib functions from the header
         let raylib_path = "/opt/homebrew/include/raylib.h";
         if !Path::new(raylib_path).exists() {
-            eprintln!("raylib.h not found - skipping test");
+            eprintln!("raylib.h not found - skipping");
             return;
         }
 
-        let sigs = parse_header_file(raylib_path, "raylib");
-        eprintln!("Found {} raylib functions", sigs.len());
+        let funcs = parse_header_file(raylib_path, "raylib");
+        eprintln!("Found {} raylib functions", funcs.len());
 
-        // Should find key functions
-        let key_funcs = ["InitWindow", "CloseWindow", "WindowShouldClose",
-                         "BeginDrawing", "EndDrawing", "SetTargetFPS"];
-
-        for func in key_funcs {
-            let found = sigs.iter().find(|s| s.name == func);
-            assert!(found.is_some(), "Should find {}", func);
-            eprintln!("✓ Found: {}", func);
-        }
-
-        // Verify InitWindow signature
-        let init = sigs.iter().find(|s| s.name == "InitWindow").unwrap();
-        assert_eq!(init.return_type, CType::Void);
-        assert_eq!(init.params.len(), 3); // width, height, title
-        assert_eq!(init.params[0].ctype, CType::Int);
-        assert_eq!(init.params[1].ctype, CType::Int);
-        assert_eq!(init.params[2].ctype, CType::CharPtr);
-        eprintln!("✓ InitWindow signature correct: void(int, int, char*)");
+        let init = funcs.iter().find(|f| f.name == "InitWindow").unwrap();
+        assert_eq!(init.signature.return_types, vec![]); // void
+        assert_eq!(init.signature.parameters.len(), 3);
+        assert_eq!(init.signature.parameters[0].kind, Kind::Int32); // width
+        assert_eq!(init.signature.parameters[1].kind, Kind::Int32); // height
+        assert_eq!(init.signature.parameters[2].kind, Kind::Text);  // title (char*)
+        eprintln!("✓ InitWindow: void(i32, i32, string)");
     }
 }
