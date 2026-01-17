@@ -213,9 +213,8 @@ pub fn prints(msg: String) {
 pub fn assert_throws(code: &str) {
 	use crate::analyzer::analyze;
 	let parsed = parse(code);
-	match &parsed {
-		Node::Error(_) => return, // Parse error - test passes
-		_ => {}
+	if let Node::Error(_) = &parsed {
+		return; // Parse error - test passes
 	}
 	// Also check for analysis errors (type mismatches, etc.)
 	match analyze(parsed) {
