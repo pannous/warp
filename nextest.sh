@@ -6,11 +6,12 @@ TEMP_FILE=$(mktemp)
 
 unset CARGO_TARGET_DIR
 
+FEATURES="--features ffi,optimizer"
 echo "Compiling all tests..."
-cargo --offline nextest run --no-run || exit 1
+cargo --offline nextest run $FEATURES --no-run || exit 1
 
 echo "Running all tests..."
-cargo --offline nextest run 2>&1 | tee "$TEMP_FILE"
+cargo --offline nextest run $FEATURES 2>&1 | tee "$TEMP_FILE"
 
 # Count test results (nextest output format)
 TOTAL_PASSED=$(grep -E "PASS \[" "$TEMP_FILE" | wc -l | tr -d ' ')
