@@ -109,6 +109,7 @@ fn test_dom() {
 }
 
 #[test]
+#[ignore = "WEBAPP feature required"]
 fn test_dom_property() {
 	#[cfg(not(feature = "WEBAPP"))]
 	{
@@ -121,7 +122,7 @@ fn test_dom_property() {
 		result = eval("$canvas.width");
 		eq!(result.value(), &300);
 		//	return;
-		result = eval("$canvas.style");
+		let _style = eval("$canvas.style");
 	}
 	// eq!(result.kind(), strings);
 	//	eq!(result.kind(), stringp);

@@ -1600,31 +1600,27 @@ fn test_node_data_binary_reconstruction() {
 #[test]
 #[ignore]
 fn test_wasm_string() {
-	#[cfg(feature = "WASM")]
-	{
-		return; // todo!
-	}
-	is!("“c”", 'c');
-	is!("“a”", "a");
-	is!("“b”", "b");
-	is!("\"d\"", 'd');
-	is!("'e'", 'e');
-	#[cfg(feature = "WASM")]
-	{
-		is!("'f'", 'f');
-		is!("'g'", 'g');
-	}
-	is!("'h'", "h");
-	is!("\"i\"", "i");
-	is!("'j'", Node::Text("j".into()));
 	#[cfg(not(feature = "WASM"))]
 	{
+		is!(""c"", 'c');
+		is!(""a"", "a");
+		is!(""b"", "b");
+		is!("\"d\"", 'd');
+		is!("'e'", 'e');
+		is!("'h'", "h");
+		is!("\"i\"", "i");
+		is!("'j'", Node::Text("j".into()));
 		// todo
 		// let x : wasm_string = reinterpret_cast<wasm_string>("\03abc");
 		// let y : String = String(x);
 		// assert!(y == "abc");
 		// assert!(y.length() == 3);
-		is!("“hello1”", "hello1"); // Invalid typed array length: 12655
+		is!(""hello1"", "hello1"); // Invalid typed array length: 12655
+	}
+	#[cfg(feature = "WASM")]
+	{
+		is!("'f'", 'f');
+		is!("'g'", 'g');
 	}
 }
 #[test]
