@@ -243,6 +243,13 @@ pub fn get_library_header_paths(library: &str) -> Vec<&'static str> {
             "/usr/local/include/raylib.h",
             "/usr/include/raylib.h",
         ],
+        "newlib" => vec![
+            "/opt/homebrew/include/newlib.h",
+            "/usr/local/include/newlib.h",
+            "/usr/include/newlib.h",
+            "/opt/homebrew/arm-none-eabi/include/newlib.h",
+            "/usr/local/arm-none-eabi/include/newlib.h",
+        ],
         _ => vec![],
     }
 }
@@ -412,7 +419,7 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     }
 
     // Try to find in headers for common libraries
-    for lib in ["m", "c", "SDL2", "raylib"] {
+    for lib in ["m", "c", "SDL2", "raylib", "newlib"] {
         let header_sigs = get_signatures_from_headers(lib);
         if let Some(sig) = header_sigs.get(name).cloned() {
             return Some(sig);
@@ -738,13 +745,14 @@ pub fn resolve_library_alias(alias: &str) -> &str {
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
         "raylib" => "raylib",
+        "newlib" => "newlib",
         _ => alias,
     }
 }
 
 /// Check if a library is a known FFI library
 pub fn is_ffi_library(lib: &str) -> bool {
-    matches!(resolve_library_alias(lib), "m" | "c" | "SDL2" | "raylib")
+    matches!(resolve_library_alias(lib), "m" | "c" | "SDL2" | "raylib" | "newlib")
 }
 
 // ============================================================================
