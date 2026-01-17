@@ -97,7 +97,6 @@ fn test_ffi_strcmp() {
 }
 
 #[test]
-#[ignore = "string argument marshalling needs work"]
 fn test_ffi_strncmp() {
 	// Test: int strncmp(const char* s1, const char* s2, size_t n);
 	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)",0);
