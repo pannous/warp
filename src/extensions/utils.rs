@@ -5,20 +5,28 @@ use std::path::Path;
 //noinspection ALL
 use crate::extensions::strings::StringExtensions;
 
-// #[cfg(any(feature = "wasm",test))]
-#[cfg(feature = "wasm")]
-extern "C" {
-	fn download(url: &str) -> String;
-} // String not FFI-safe
-
-#[cfg(test)]
-pub fn download(url: &str) -> String {
-	"mock".s() + url 
+// wasm target: use extern FFI
+#[cfg(target_family = "wasm")]
+mod wasm_ffi {
+	extern "C" {
+		pub fn download(url: &str) -> String;
+	} // String not FFI-safe
 }
 
+#[cfg(target_family = "wasm")]
+pub fn download(url: &str) -> String {
+	unsafe { wasm_ffi::download(url) }
+}
+
+// test mode (native): use mock
+#[cfg(all(test, not(target_family = "wasm")))]
+pub fn download(url: &str) -> String {
+	"mock".s() + url
+}
+
+// normal mode (native): use ureq
 #[must_use]
-#[cfg(not(feature = "wasm"))]
-#[cfg(not(test))]
+#[cfg(all(not(target_family = "wasm"), not(test)))]
 pub fn download(url: &str) -> String {
 	ureq::get(url)
 		.call()
