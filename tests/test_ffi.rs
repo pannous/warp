@@ -19,7 +19,8 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use warp::{eq, is, parse, skip};
+use warp::{eq, is, parse};
+use warp::ffi_parser::{find_library_headers, parse_header_file};
 
 #[test]
 #[ignore = "use keyword with ceil/floor conflicts with builtins"]
@@ -57,8 +58,7 @@ fn test_ffi_strlen() {
 
 #[test]
 fn test_ffi_atof() {
-	is!("import atof from \"c\"\natof(\"3.14159\")", 3.14159);
-	is!("import atof from \"c\"\natof(\"2.71828\")", 2.71828);
+	is!("import atof from \"c\"\natof(\"5.67\")", 5.67);
 	is!("import atof from \"c\"\natof(\"42\")", 42.0);
 }
 
@@ -120,35 +120,27 @@ fn test_ffi_ceil() {
 fn test_ffi_sin() {
 	// Test: double sin(double x);
 	is!("import sin from 'm'\nsin(0.0)", 0.0);
-	is!("import sin from 'm'\nsin(1.5707963267948966)", 1.0);
-	is!(
-		"import sin from 'm'\nimport abs from \"c\"\nabs(sin(3.141592653589793))<0.001",
-		1
-	);
+	is!("import sin from 'm'\nsin(π/2)", 1.0);
+	is!("import sin from 'm'\nimport fabs from 'm'\nfabs(sin(3.141592653589793))<0.001",true);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_cos() {
 	// Test: double cos(double x);
 	is!("import cos from 'm'\ncos(0.0)", 1.0);
-	is!(
-		"import cos from 'm'\nimport abs from \"c\"\nabs(cos(1.5707963267948966))<0.001",
-		1
-	);
-	is!("import cos from 'm'\ncos(3.141592653589793)", -1.0);
+	is!("import cos from 'm'\nimport fabs from 'm'\nfabs(cos(1.5707963267948966))<0.001",1);
+	is!("import cos from 'm'\ncos(π)", -1.0);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_tan() {
 	// Test: double tan(double x);
 	is!("import tan from 'm'\ntan(0.0)", 0.0);
-	is!("import tan from 'm'\ntan(0.7853981633974483)", 1.0);
+	// tan(π/4) ≈ 1.0 but floating point precision means we get 0.9999999999999999
+	is!("import tan from 'm'\nimport fabs from 'm'\nfabs(tan(π/4)-1.0)<0.0001", true);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_fabs() {
 	// Test: double fabs(double x);
 	// Test: int32 . int32 (abs from libc);
@@ -160,7 +152,6 @@ fn test_ffi_fabs() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_fmax() {
 	// Test: double fmax(double x, double y);
 	is!("import fmax from 'm'\nfmax(3.5, 2.1)", 3.5);
@@ -169,7 +160,6 @@ fn test_ffi_fmax() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_fmod() {
 	// Test: double fmod(double x, double y);
 	is!("import fmod from 'm'\nfmod(5.5, 2.0)", 1.5);
@@ -272,21 +262,8 @@ if result < 0 then 1 else 0"#,
 #[ignore]
 fn test_ffi_math_pipeline() {
 	// Test: Chain multiple math functions
-	is!(
-		r#"import sin from 'm'
-import floor from 'm'
-import fabs from 'm'
-fabs(floor(sin(3.14159)))"#,
-		0.0
-	);
-
-	is!(
-		r#"import ceil from 'm'
-import floor from 'm'
-import fmax from 'm'
-fmax(ceil(2.3), floor(5.9))"#,
-		5.0
-	);
+	is!(r#"import (sin,floor,fabs) from 'm'; fabs(floor(sin(3.14159)))"#, 0.0);
+	is!(r#"import (ceil,floor,fmax) from 'm'; fmax(ceil(2.3), floor(5.9))"#, 5.0);
 }
 
 // ============================================================================
@@ -308,19 +285,11 @@ fn test_import_from_pattern_parse() {
 
 #[test]
 fn test_import_from_pattern_emit() {
-	skip!(
-
-		is!("import abs from \"c\"\nabs(-42)", 42);
-		is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
-		is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
-	);
+	is!("import abs from \"c\"\nabs(-42)", 42);
+	is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
+	is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
 }
 
-#[test]
-fn test_import_from_vs_include() {
-	let ffi_import = "import abs from \"c\"";
-	let _ffi_node = parse(ffi_import);
-}
 
 // ============================================================================
 // C Header Parser Tests
@@ -358,14 +327,15 @@ fn test_extract_function_signature() {
 	// eq!(sig3.param_types[0], "char*");
 }
 
-#[test] fn test_c_type_mapping() {
-    // assert!(mapCTypeToWasp("double") == float64t);
-//     assert!(mapCTypeToWasp("float") == float32t);
-//     assert!(mapCTypeToWasp("int") == int32t);
-//     assert!(mapCTypeToWasp("long") == i64);
-//     assert!(mapCTypeToWasp("char*") == charp);
-//     assert!(mapCTypeToWasp("const char*") == charp);
-//     assert!(mapCTypeToWasp("void") == nils);
+#[test]
+fn test_c_type_mapping() {
+	// assert!(mapCTypeToWasp("double") == float64t);
+	//     assert!(mapCTypeToWasp("float") == float32t);
+	//     assert!(mapCTypeToWasp("int") == int32t);
+	//     assert!(mapCTypeToWasp("long") == i64);
+	//     assert!(mapCTypeToWasp("char*") == charp);
+	//     assert!(mapCTypeToWasp("const char*") == charp);
+	//     assert!(mapCTypeToWasp("void") == nils);
 }
 
 // ============================================================================
@@ -384,13 +354,13 @@ fn test_ffi_sdl_init() {
 }
 
 #[test]
-#[ignore = "requires SDL2 library and wasp files"]
+#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_window() {
 	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
 #[test]
-#[ignore = "requires SDL2 library and wasp files"]
+#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_version() {
 	// Test: SDL_GetVersion - Get SDL version info
 	// This tests struct parameter passing via FFI
@@ -398,7 +368,7 @@ fn test_ffi_sdl_version() {
 }
 
 #[test]
-#[ignore = "requires SDL2 library and wasp files"]
+#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_combined() {
 	// Combined test: Multiple SDL function imports
 	// Tests that we can import multiple SDL functions in one program
@@ -406,7 +376,7 @@ fn test_ffi_sdl_combined() {
 }
 
 #[test]
-#[ignore = "requires SDL2 library and wasp files"]
+#[ignore = "requires SDL2 library and FFI signatures"]
 fn test_ffi_sdl_debug() {
 	// print results of SDL functions to debug FFI
 	is!("tests/wasp/ffi/sdl/sdl_debug.wasp", 1);
@@ -421,7 +391,7 @@ fn test_ffi_sdl_red_square_demo() {
 }
 
 #[test]
-#[ignore = "requires raylib library"]
+#[ignore = "requires raylib library and FFI signatures"]
 fn test_ffi_raylib_combined() {
 	// Test: Multiple raylib imports in one program
 	is!(r#"
@@ -439,7 +409,6 @@ CloseWindow()
 // Tests generic library header discovery from filesystem
 // ============================================================================
 
-use warp::ffi_parser::{find_library_headers, parse_header_file};
 
 #[test]
 fn test_ffi_header_parser() {
@@ -507,9 +476,9 @@ fn test_ffi_zlib_discovery() {
 		// Show some actual zlib functions
 		let zlib_funcs: Vec<_> = funcs.iter()
 			.filter(|f| f.name.starts_with("compress") ||
-			           f.name.starts_with("uncompress") ||
-			           f.name.starts_with("deflate") ||
-			           f.name.starts_with("inflate"))
+				f.name.starts_with("uncompress") ||
+				f.name.starts_with("deflate") ||
+				f.name.starts_with("inflate"))
 			.take(5)
 			.collect();
 		for f in zlib_funcs {

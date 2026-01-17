@@ -247,6 +247,18 @@ impl WasmGcEmitter {
 	pub fn add_ffi_import(&mut self, name: &str, _library: &str) {
 		use crate::ffi::get_ffi_signature;
 		if let Some(sig) = get_ffi_signature(name) {
+			// Add required wrapper functions based on return type
+			if let Some(result_type) = sig.results.first() {
+				match result_type {
+					wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
+						self.required_functions.insert("new_float");
+					}
+					wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
+						self.required_functions.insert("new_int");
+					}
+					_ => {}
+				}
+			}
 			self.ffi_imports.insert(name.to_string(), sig);
 			self.emit_ffi_imports = true;
 		}
@@ -2748,26 +2760,29 @@ impl WasmGcEmitter {
 							return;
 						}
 						// ceil/floor/round: map to WASM built-in f64 instructions
-						if fn_name == "ceil" {
-							self.emit_float_value(func, &items[1]);
-							func.instruction(&Instruction::F64Ceil);
-							func.instruction(&Instruction::I64TruncF64S);
-							self.emit_call(func, "new_int");
-							return;
-						}
-						if fn_name == "floor" {
-							self.emit_float_value(func, &items[1]);
-							func.instruction(&Instruction::F64Floor);
-							func.instruction(&Instruction::I64TruncF64S);
-							self.emit_call(func, "new_int");
-							return;
-						}
-						if fn_name == "round" {
-							self.emit_float_value(func, &items[1]);
-							func.instruction(&Instruction::F64Nearest);
-							func.instruction(&Instruction::I64TruncF64S);
-							self.emit_call(func, "new_int");
-							return;
+						// Skip builtin handling if explicitly imported via FFI
+						if !self.ffi_imports.contains_key(fn_name) {
+							if fn_name == "ceil" {
+								self.emit_float_value(func, &items[1]);
+								func.instruction(&Instruction::F64Ceil);
+								func.instruction(&Instruction::I64TruncF64S);
+								self.emit_call(func, "new_int");
+								return;
+							}
+							if fn_name == "floor" {
+								self.emit_float_value(func, &items[1]);
+								func.instruction(&Instruction::F64Floor);
+								func.instruction(&Instruction::I64TruncF64S);
+								self.emit_call(func, "new_int");
+								return;
+							}
+							if fn_name == "round" {
+								self.emit_float_value(func, &items[1]);
+								func.instruction(&Instruction::F64Nearest);
+								func.instruction(&Instruction::I64TruncF64S);
+								self.emit_call(func, "new_int");
+								return;
+							}
 						}
 					}
 				}
