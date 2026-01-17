@@ -8,7 +8,7 @@
 //! - kind: node type (text, symbol, number, list, key, pair, tag, meta, ...)
 //! - data: primary payload of arbitrary data type depending on kind (also node)
 //! - value: secondary payload of type node, can be ø (empty, null)
-//!  final ø is optional in notation but not in wasm / node structure
+//!   final ø is optional in notation but not in wasm / node structure
 //!
 //! Shorthands:
 //! - "ok"       → (text "ok") → (text "ok" ø)
