@@ -850,6 +850,10 @@ impl WasmGcEmitter {
 					if *op == Op::Pow {
 						self.required_functions.insert("i64_pow");
 					}
+					if *op == Op::Div {
+						// Division always uses float to preserve precision: 1/2 = 0.5
+						self.required_functions.insert("new_float");
+					}
 				} else if *op == Op::Square || *op == Op::Cube {
 					// Suffix operators need both int and float constructors
 					self.required_functions.insert("new_int");
