@@ -392,6 +392,52 @@ pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
             results: vec![ValType::I64],
         },
     );
+    // String functions from string.h
+    sigs.insert(
+        "strlen".to_string(),
+        FfiSignature {
+            name: "strlen",
+            library: "c",
+            params: vec![ValType::I32], // ptr to null-terminated string
+            results: vec![ValType::I64], // returns size_t (i64)
+        },
+    );
+    sigs.insert(
+        "atoi".to_string(),
+        FfiSignature {
+            name: "atoi",
+            library: "c",
+            params: vec![ValType::I32], // ptr to null-terminated string
+            results: vec![ValType::I32],
+        },
+    );
+    sigs.insert(
+        "atol".to_string(),
+        FfiSignature {
+            name: "atol",
+            library: "c",
+            params: vec![ValType::I32], // ptr to null-terminated string
+            results: vec![ValType::I64],
+        },
+    );
+    sigs.insert(
+        "atof".to_string(),
+        FfiSignature {
+            name: "atof",
+            library: "c",
+            params: vec![ValType::I32], // ptr to null-terminated string
+            results: vec![ValType::F64],
+        },
+    );
+    sigs.insert(
+        "rand".to_string(),
+        FfiSignature {
+            name: "rand",
+            library: "c",
+            params: vec![],
+            results: vec![ValType::I32],
+        },
+    );
 
     sigs
 }

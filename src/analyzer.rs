@@ -1,7 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
 use crate::local::Local;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
@@ -40,12 +40,32 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Symbol  // Unknown symbol defaults to Symbol
 			}
 		}
-		// List handling: distinguish data lists from statement sequences
-		Node::List(items, _, _) if !items.is_empty() => {
-			// Check for fetch function call
+		// List handling: distinguish data lists from statement sequences and function calls
+		Node::List(items, bracket, _) if !items.is_empty() => {
+			// Check for function calls: (funcname args...) where first item is a symbol
 			if items.len() >= 2 {
 				if let Node::Symbol(s) = items[0].drop_meta() {
 					if s == "fetch" { return Kind::Text; }
+					// FFI/builtin function calls return Int by default
+					// This handles strcmp, strlen, abs, etc.
+					if crate::ffi::is_ffi_function(s) {
+						// Get actual return type from FFI signature if available
+						if let Some(sig) = crate::ffi::get_ffi_signature(s) {
+							if !sig.results.is_empty() {
+								return match sig.results[0] {
+									wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+									_ => Kind::Int,
+								};
+							}
+						}
+						return Kind::Int;
+					}
+				}
+			}
+			// Function call with parentheses: assume Int result
+			if *bracket == Bracket::Round && items.len() >= 2 {
+				if let Node::Symbol(_) = items[0].drop_meta() {
+					return Kind::Int;
 				}
 			}
 			// Data list: all items are pure data → Kind::List
