@@ -4512,16 +4512,17 @@ impl WasmGcEmitter {
 					}
 					Op::Abs => {
 						// |x| = if x < 0 then -x else x
+						let temp = self.next_temp_local;
 						self.emit_numeric_value(func, right);
-						func.instruction(&Instruction::LocalTee(0)); // save value
+						func.instruction(&Instruction::LocalTee(temp));
 						func.instruction(&Instruction::I64Const(0));
 						func.instruction(&Instruction::I64LtS);
 						func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
 						func.instruction(&Instruction::I64Const(0));
-						func.instruction(&Instruction::LocalGet(0));
+						func.instruction(&Instruction::LocalGet(temp));
 						func.instruction(&Instruction::I64Sub);
 						func.instruction(&Instruction::Else);
-						func.instruction(&Instruction::LocalGet(0));
+						func.instruction(&Instruction::LocalGet(temp));
 						func.instruction(&Instruction::End);
 					}
 					_ => panic!("Unhandled prefix operator: {:?}", op),

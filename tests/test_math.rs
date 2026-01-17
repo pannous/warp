@@ -320,8 +320,8 @@ fn test_sqrt_alias() {
 
 #[test]
 fn test_abs_alias() {
-	// Note: integer abs has a bug (uses undeclared local), use floats for now
+	is!("abs -3", 3);
+	is!("abs 3", 3);
 	is!("abs -3.14", 3.14);
 	is!("abs 3.14", 3.14);
-	is!("abs -0.0", 0.0);
 }
