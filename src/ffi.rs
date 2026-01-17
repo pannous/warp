@@ -340,10 +340,10 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// Get known FFI function signatures from parsed header definitions
-/// Uses ffi_parser module for single source of truth
+/// Get known FFI function signatures by parsing system header files
+/// Uses ffi_parser module to discover signatures from /usr/include, etc.
 pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
-    use crate::ffi_parser::{get_all_signatures, CType};
+    use crate::ffi_parser::get_all_signatures;
 
     let mut sigs = HashMap::new();
 
