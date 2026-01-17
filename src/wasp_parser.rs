@@ -425,6 +425,7 @@ impl WaspParser {
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
+		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 

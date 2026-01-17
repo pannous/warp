@@ -2991,7 +2991,8 @@ impl WasmGcEmitter {
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		// Determine if we need float operations (type upgrading)
-		let use_float = self.needs_float(left) || self.needs_float(right);
+		// Division always uses float to preserve precision: 1/2 = 0.5, not 0
+		let use_float = self.needs_float(left) || self.needs_float(right) || *op == Op::Div;
 
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
