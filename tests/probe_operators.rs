@@ -1,7 +1,7 @@
 /// Tests for operator parsing
 use warp::wasp_parser::parse;
 use warp::node::Node;
-use warp::Op;
+use warp::{is, Op};
 
 /// Helper to get the operator from a Key node (unwrapping Meta if needed)
 fn get_op(node: &Node) -> Option<Op> {
@@ -112,8 +112,9 @@ fn test_hash_index() {
 #[test]
 fn test_division_type_upgrade() {
 	// Integer division should auto-promote to float: 1/2 = 0.5, not 0
-	use warp::is;
 	is!("1/2", 0.5);
 	is!("3/2", 1.5);
 	is!("-1/2", -0.5);
+	is!("10/4", 2.5);
+	is!("-1/6", -1.0 / 6.0);
 }
