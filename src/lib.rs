@@ -28,6 +28,7 @@ pub mod ast;
 pub mod meta;
 pub mod host;
 pub mod ffi;
+pub mod ffi_parser;
 pub mod function;
 pub mod normalize;
 pub mod local;

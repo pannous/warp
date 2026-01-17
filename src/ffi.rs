@@ -1,5 +1,13 @@
 // FFI (Foreign Function Interface) support for calling native C libraries
 // Provides imports for libc and libm functions via wasmtime linker
+//
+// Architecture:
+// - ffi_parser.rs: Built-in/embedded C header definitions (portable, no dependencies)
+// - This file (ffi.rs): Runtime parsing of system headers for additional functions
+//
+// Signature lookup order (see get_ffi_signature):
+// 1. Built-in signatures from ffi_parser (libc, libm basics)
+// 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -332,93 +340,42 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// Get known FFI function signatures
+/// Get known FFI function signatures from parsed header definitions
+/// Uses ffi_parser module for single source of truth
 pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
-    use wasm_encoder::ValType;
+    use crate::ffi_parser::{get_all_signatures, CType};
+
     let mut sigs = HashMap::new();
 
-    // libm functions (f64 -> f64)
-    for name in ["floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "fabs", "exp", "log", "log10"] {
-        sigs.insert(
-            name.to_string(),
-            FfiSignature {
-                name,
-                library: "m",
-                params: vec![ValType::F64],
-                results: vec![ValType::F64],
-            },
-        );
+    // Convert from ffi_parser's CSignature to our FfiSignature
+    for (name, (csig, library)) in get_all_signatures() {
+        let params: Vec<wasm_encoder::ValType> = csig.params.iter()
+            .filter_map(|p| p.ctype.to_wasm())
+            .collect();
+
+        let results: Vec<wasm_encoder::ValType> = csig.return_type.to_wasm()
+            .map(|v| vec![v])
+            .unwrap_or_default();
+
+        // Use leaked strings for 'static lifetime
+        let name_static: &'static str = Box::leak(name.clone().into_boxed_str());
+        let lib_static: &'static str = match library {
+            "m" => "m",
+            "c" => "c",
+            _ => Box::leak(library.to_string().into_boxed_str()),
+        };
+
+        sigs.insert(name, FfiSignature {
+            name: name_static,
+            library: lib_static,
+            params,
+            results,
+        });
     }
 
-    // libm functions (f64, f64 -> f64)
-    for name in ["fmin", "fmax", "fmod", "pow"] {
-        sigs.insert(
-            name.to_string(),
-            FfiSignature {
-                name,
-                library: "m",
-                params: vec![ValType::F64, ValType::F64],
-                results: vec![ValType::F64],
-            },
-        );
-    }
-
-    // libc: abs (i32 -> i32)
-    sigs.insert(
-        "abs".to_string(),
-        FfiSignature {
-            name: "abs",
-            library: "c",
-            params: vec![ValType::I32],
-            results: vec![ValType::I32],
-        },
-    );
-
-    // libc: strlen (ptr -> i64) - C string with null terminator
-    sigs.insert(
-        "strlen".to_string(),
-        FfiSignature {
-            name: "strlen",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I64],
-        },
-    );
-
-    // libc: atoi (ptr -> i32) - C string with null terminator
-    sigs.insert(
-        "atoi".to_string(),
-        FfiSignature {
-            name: "atoi",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I32],
-        },
-    );
-
-    // libc: atol (ptr -> i64) - C string with null terminator
-    sigs.insert(
-        "atol".to_string(),
-        FfiSignature {
-            name: "atol",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::I64],
-        },
-    );
-
-    // libc: atof (ptr -> f64) - C string with null terminator
-    sigs.insert(
-        "atof".to_string(),
-        FfiSignature {
-            name: "atof",
-            library: "c",
-            params: vec![ValType::I32], // ptr to null-terminated string
-            results: vec![ValType::F64],
-        },
-    );
-
-    // libc: strcmp (ptr1, len1, ptr2, len2 -> i32)
+    // Override specific WASM-adapted signatures that differ from C conventions:
+    // strcmp/strncmp use (ptr, len, ptr, len) instead of (ptr, ptr) for WASM strings
+    use wasm_encoder::ValType;
     sigs.insert(
         "strcmp".to_string(),
         FfiSignature {
@@ -428,25 +385,12 @@ pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
             results: vec![ValType::I32],
         },
     );
-
-    // libc: strncmp (ptr1, len1, ptr2, len2, n -> i32)
     sigs.insert(
         "strncmp".to_string(),
         FfiSignature {
             name: "strncmp",
             library: "c",
             params: vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64],
-            results: vec![ValType::I32],
-        },
-    );
-
-    // libc: rand (-> i32)
-    sigs.insert(
-        "rand".to_string(),
-        FfiSignature {
-            name: "rand",
-            library: "c",
-            params: vec![],
             results: vec![ValType::I32],
         },
     );
