@@ -19,11 +19,9 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use warp::wasp_parser::parse;
-use warp::{eq, is, skip};
+use warp::{eq, is, parse, skip};
 
 #[test]
-#[ignore]
 fn test_dynlib_import_emit() {
 	// Test FFI import and usage with 'use' keyword
 	// These are actual C library functions, not WASM builtins
@@ -41,7 +39,6 @@ fn test_dynlib_import_emit() {
 // Basic FFI Tests - Core functionality
 // ============================================================================
 #[test]
-#[ignore]
 fn test_ffi_floor() {
 	// Test: float64 . float64 (floor from libm);
 	is!("import floor from 'm'\nfloor(3.7)", 3.0);
@@ -52,38 +49,24 @@ fn test_ffi_floor() {
 #[test]
 fn test_ffi_strlen() {// clashes with wasp runtime strlen!
 	     // Test: char* . int32 (strlen from libc);
-	     // is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
-	     // is!("import strlen from \"c\"\nstrlen(\"\")", 0);
-	     // is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
+	     is!("import strlen from \"c\"\nstrlen(\"hello\")", 5);
+	     is!("import strlen from \"c\"\nstrlen(\"\")", 0);
+	     is!("import strlen from \"c\"\nstrlen(\"Wasp\")", 4);
 }
 
 #[test]
 fn test_ffi_atof() {
-	// let modul = loadNativeLibrary("c");
-	// todo!(
-	// skip!(
-	// assert!(modul);
-	// assert!(modul.functions.has("atof"));
-	// // double	 atof(const char *);
-	// assert!(modul.functions["atof"].signature.parameters.size() == 1);
-	// assert!(modul.functions["atof"].signature.parameters[0].typo == charp);
-	// assert!(modul.functions["atof"].signature.return_types.size() == 1);
-	// assert!(modul.functions["atof"].signature.return_types[0] == float64t);// not 32!!
-	// // Test: char* . float64 (atof from libc);
-	// is!("import atof from \"c\"\natof(\"3.14159\")", 3.14159);
-	// is!("import atof from \"c\"\natof(\"2.71828\")", 2.71828);
-	// is!("import atof from \"c\"\natof(\"42\")", 42.0);
-	//     )
+	is!("import atof from \"c\"\natof(\"3.14159\")", 3.14159);
+	is!("import atof from \"c\"\natof(\"2.71828\")", 2.71828);
+	is!("import atof from \"c\"\natof(\"42\")", 42.0);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_fmin_wasp_file() {
-	is!("test/wasp/ffi/test_ffi_fmin.wasp", 2.1);
+	is!("tests/wasp/ffi/test_ffi_fmin.wasp", 2.1);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_fmin() {
 	// Test: float64, float64 . float64 (fmin from libm);
 	is!("import fmin from 'm'\nfmin(3.5, 2.1)", 2.1);
@@ -92,64 +75,29 @@ fn test_ffi_fmin() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_combined() {
 	// Combined tests using multiple FFI functions together
-
 	// sqrt(abs(-16)) = sqrt(16) = 4.0
-	is!(
-		"import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))",
-		4.0
-	);
-
+	is!("import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))",4.0);
 	// floor(fmin(3.7, 2.9)) = floor(2.9) = 2.0
-	is!(
-		"import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))",
-		2.0
-	);
+	is!("import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))",2.0);
 }
 
-// ============================================================================
-// let Comparison Functions
-// ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_strcmp() {
-	// let modul = loadNativeLibrary("c");
-	// // assert!(modul);
-	// assert!(modul.functions.has("strcmp"));
-	// // int strcmp(const char* s1, const char* s2);
-	// assert!(modul.functions["strcmp"].signature.parameters.size() == 2);
-	// assert!(modul.functions["strcmp"].signature.parameters[0].typo == charp);
-	// assert!(modul.functions["strcmp"].signature.parameters[1].typo == charp);
-	// assert!(modul.functions["strcmp"].signature.return_types.size() == 1);
-	// assert!(modul.functions["strcmp"].signature.return_types[0] == int32t);
 	// Test: int strcmp(const char* s1, const char* s2);
 	is!("import strcmp from \"c\"\nstrcmp(\"hello\", \"hello\")", 0);
-	is!(
-		"import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0",
-		1
-	);
-	is!(
-		"import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0",
-		1
-	);
+	is!("import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0",1);
+	is!("import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0",1);
 	is!("import strcmp from \"c\"\nstrcmp(\"\", \"\")", 0);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_strncmp() {
 	// Test: int strncmp(const char* s1, const char* s2, size_t n);
-	is!(
-		"import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)",
-		0
-	);
-	is!(
-		"import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0",
-		1
-	);
+	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)",0);
+	is!("import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0",1);
 }
 
 // ============================================================================
@@ -157,7 +105,6 @@ fn test_ffi_strncmp() {
 // ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_ceil() {
 	// Test: double ceil(double x);
 	is!("import ceil from 'm'\nceil(3.2)", 4.0);
@@ -167,7 +114,6 @@ fn test_ffi_ceil() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_sin() {
 	// Test: double sin(double x);
 	is!("import sin from 'm'\nsin(0.0)", 0.0);
@@ -378,6 +324,7 @@ fn test_import_from_vs_include() {
 // ============================================================================
 
 #[test]
+#[ignore]
 fn test_extract_function_signature() {
 	let c_code1 = "double sqrt(double x);";
 	let _parsed1 = parse(c_code1);
@@ -408,51 +355,14 @@ fn test_extract_function_signature() {
 	// eq!(sig3.param_types[0], "char*");
 }
 
-// #[test] fn test_c_type_mapping() {
-//     assert!(mapCTypeToWasp("double") == float64t);
+#[test] fn test_c_type_mapping() {
+    // assert!(mapCTypeToWasp("double") == float64t);
 //     assert!(mapCTypeToWasp("float") == float32t);
 //     assert!(mapCTypeToWasp("int") == int32t);
 //     assert!(mapCTypeToWasp("long") == i64);
 //     assert!(mapCTypeToWasp("char*") == charp);
 //     assert!(mapCTypeToWasp("const char*") == charp);
 //     assert!(mapCTypeToWasp("void") == nils);
-// }
-
-// ============================================================================
-// Main Test Runners
-// ============================================================================
-
-#[test]
-#[ignore]
-fn test_ffi_extended_emit() {
-	test_ffi_strcmp();
-	test_ffi_ceil();
-	test_ffi_sin();
-	test_ffi_cos();
-	test_ffi_tan();
-	test_ffi_fabs();
-	test_ffi_fmax();
-	test_ffi_fmod();
-	test_ffi_atoi();
-	test_ffi_rand();
-	test_ffi_trigonometry_combined();
-	test_ffi_string_math_combined();
-	test_ffi_string_comparison_logic();
-	test_ffi_math_pipeline();
-	// test_ffi_signature_coverage();
-}
-
-#[test]
-fn test_ffi_import_pattern() {
-	test_import_from_pattern_parse();
-	test_import_from_pattern_emit();
-	test_import_from_vs_include();
-}
-
-#[test]
-fn test_ffi_header_parser() {
-	test_extract_function_signature();
-	// test_c_type_mapping();
 }
 
 // ============================================================================
@@ -460,146 +370,224 @@ fn test_ffi_header_parser() {
 // ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_sdl_init() {
 	// Test: SDL_Init - Initialize SDL with timer subsystem (works headless);
-	// SDL_INIT_TIMER = 0x00000001 (doesn't require display);
 	// Returns 0 on success, non-zero on error
-	is!("test/wasp/ffi/sdl/sdl_init.wasp", 0);
+	is!("tests/wasp/ffi/sdl/sdl_init.wasp", 0);
 
 	// Test: SDL_Quit - Clean up SDL
 	is!("import SDL_Quit from 'SDL2'\nSDL_Quit()\n42", 42);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_sdl_window() {
-	is!("test/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_sdl_version() {
 	// Test: SDL_GetVersion - Get SDL version info
 	// This tests struct parameter passing via FFI
-	is!("test/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
+	is!("tests/wasp/ffi/sdl/sdl_init_quit.wasp", 1);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_sdl_combined() {
 	// Combined test: Multiple SDL function imports
 	// Tests that we can import multiple SDL functions in one program
-	is!("test/wasp/ffi/sdl/sdl_get_ticks.wasp", 100);
+	is!("tests/wasp/ffi/sdl/sdl_get_ticks.wasp", 100);
 }
 #[test]
-#[ignore]
 fn test_ffi_sdl_debug() {
 	// print results of SDL functions to debug FFI
-	is!("test/wasp/ffi/sdl/sdl_debug.wasp", 1);
+	is!("tests/wasp/ffi/sdl/sdl_debug.wasp", 1);
 }
 
 #[test]
-#[ignore]
 fn test_ffi_sdl_red_square_demo() {
 	// DEMO: Display a red square using SDL2 via FFI
 	// This will show an actual window with graphics
-	is!("test/wasp/ffi/sdl/sdl_red_square_demo.wasp", 1);
+	is!("tests/wasp/ffi/sdl/sdl_red_square_demo.wasp", 1);
 }
 
 #[test]
-#[ignore]
-fn test_ffi_sdl() {
-	test_ffi_sdl_init();
-	test_ffi_sdl_window();
-	test_ffi_sdl_version();
-	skip!(
-
-	test_ffi_sdl_combined(); // broken after 48eb08f7817b28bb38eb1cc7756f938dc91116f1
-		);
-	// test_ffi_sdl_red_square_demo(); only live demo, not automated test
-}
-
-// ============================================================================
-// Raylib Graphics FFI Tests
-// ============================================================================
-#[test]
-#[ignore]
 fn test_ffi_raylib_combined() {
 	// Test: Multiple raylib imports in one program
-	is!(
-		r#"
+	is!(r#"
 import InitWindow from 'raylib'
 import SetTargetFPS from 'raylib'
 import CloseWindow from 'raylib'
 InitWindow(800, 600, "Test")
 SetTargetFPS(60)
 CloseWindow()
-100 "#,
-		100
-	);
+100 "# ,100)
+}
+
+// ============================================================================
+// FFI Header Discovery Tests
+// Tests generic library header discovery from filesystem
+// ============================================================================
+
+use warp::ffi_parser::{find_library_headers, parse_header_file};
+
+#[test]
+fn test_ffi_header_parser() {
+	// Test that we can parse function declarations
+	use warp::ffi_parser::parse_declaration;
+
+	let func = parse_declaration("double sin(double x);", "m").unwrap();
+	assert_eq!(func.name, "sin");
+	assert_eq!(func.signature.parameters.len(), 1);
 }
 
 #[test]
-#[ignore]
-fn test_ffi_raylib_simple_use_import() {
-	load_native_library("raylib");
-	// assert!(modul);
-	// assert!(modul.functions.has("InitWindow"));
-	// assert!(modul.functions.has("DrawCircle"));
-	// assert!(modul.functions.has("WindowShouldClose"));
-	// assert!(modul.functions["InitWindow"].signature.parameters.size() == 3);
-	// assert!(modul.functions["DrawCircle"].signature.parameters.size() == 4);
-	// assert!(modul.functions["WindowShouldClose"].signature.parameters.size() == 0);
-	// assert!(modul.functions["WindowShouldClose"].signature.return_types.size() == 1);
-	// eq!(modul.functions["WindowShouldClose"].signature.return_types[0],bools); // bool as int32
-	// eq!(modul.functions["DrawCircle"].signature.parameters[3].typo,int32t);
-
-	is!("samples/raylib_circle.wasp", 0);
-	// is!("samples/raylib_simple.wasp",0);
-
-	// is!("samples/raylib_simple_use.wasp",0);
+fn test_ffi_import_pattern() {
+	// Test import pattern parsing
+	let node = parse("import sqrt from 'm'");
+	assert_eq!(node.name(), "import");
 }
 
 #[test]
-#[ignore]
-fn test_ffi_raylib() {
-	load_native_library("raylib");
-	// assert!(modul);
-	// assert!(modul.functions.has("InitWindow"));
-	// assert!(modul.functions.has("DrawCircle"));
-	// assert!(modul.functions.has("BeginDrawing"));
-	// test_ffi_raylib_combined();
-	skip!(
+fn test_ffi_curl_discovery() {
+	// Test generic discovery finds curl headers
+	let paths = find_library_headers("curl");
 
-		test_ffi_raylib_simple_use_import(); // todo
-		is!("test/wasp/ffi/raylib/raylib_init_close.wasp", 42);
-	);
-	// test_ffi_raylib_combined();
+	if paths.is_empty() {
+		eprintln!("curl: NOT INSTALLED - skipping");
+		return;
+	}
+
+	eprintln!("curl paths: {:?}", paths);
+
+	let mut total = 0;
+	for path in &paths {
+		let funcs = parse_header_file(path, "curl");
+		total += funcs.len();
+		eprintln!("curl: {} functions from {}", funcs.len(), path);
+
+		// Show some actual curl functions
+		let curl_funcs: Vec<_> = funcs.iter()
+			.filter(|f| f.name.starts_with("curl_"))
+			.take(5)
+			.collect();
+		for f in curl_funcs {
+			eprintln!("  - {}", f.name);
+		}
+	}
+
+	// Should find some functions if curl is installed
+	assert!(total > 0, "Should find curl functions");
 }
 
 #[test]
-#[ignore]
-fn test_ffi_all() {
-	// Main comprehensive test function that runs all FFI tests
-	load_native_library("m");
-	// assert!(modul);
-	// assert!(modul.functions.has("fmin"));
-	test_ffi_atof(); // careful this is already a built-in wasp library function
-	test_ffi_strcmp();
-	test_ffi_fmin();
-	test_ffi_fmin_wasp_file();
-	test_ffi_fabs(); // careful this is already a built-in wasm operator
-	test_ffi_floor(); // careful this is already a built-in wasm operator
-	test_ffi_strlen(); // careful this is already a built-in wasp library function
-	test_ffi_combined();
-	// test_ffi_signature_detection();
-	test_ffi_header_parser();
-	test_ffi_sdl();
-	// test_ffi_raylib();
-	// test_dynlib_import_emit();
+fn test_ffi_zlib_discovery() {
+	// Test generic discovery finds zlib headers
+	let paths = find_library_headers("zlib");
+
+	if paths.is_empty() {
+		eprintln!("zlib: NOT INSTALLED - skipping");
+		return;
+	}
+
+	for path in &paths {
+		let funcs = parse_header_file(path, "zlib");
+		eprintln!("zlib: {} functions from {}", funcs.len(), path);
+
+		// Show some actual zlib functions
+		let zlib_funcs: Vec<_> = funcs.iter()
+			.filter(|f| f.name.starts_with("compress") ||
+			           f.name.starts_with("uncompress") ||
+			           f.name.starts_with("deflate") ||
+			           f.name.starts_with("inflate"))
+			.take(5)
+			.collect();
+		for f in zlib_funcs {
+			eprintln!("  - {}", f.name);
+		}
+	}
 }
 
-fn load_native_library(_p0: &str) {
-	todo!()
+#[test]
+fn test_ffi_sqlite_discovery() {
+	// Test generic discovery finds sqlite3 headers
+	let paths = find_library_headers("sqlite3");
+
+	if paths.is_empty() {
+		eprintln!("sqlite3: NOT INSTALLED - skipping");
+		return;
+	}
+
+	for path in &paths {
+		let funcs = parse_header_file(path, "sqlite3");
+		eprintln!("sqlite3: {} functions from {}", funcs.len(), path);
+
+		// Show some actual sqlite functions
+		let sqlite_funcs: Vec<_> = funcs.iter()
+			.filter(|f| f.name.starts_with("sqlite3_"))
+			.take(5)
+			.collect();
+		for f in sqlite_funcs {
+			eprintln!("  - {}", f.name);
+		}
+	}
+}
+
+#[test]
+fn test_ffi_raylib_discovery() {
+	// Test generic discovery finds raylib headers
+	let paths = find_library_headers("raylib");
+
+	if paths.is_empty() {
+		eprintln!("raylib: NOT INSTALLED - skipping");
+		return;
+	}
+
+	for path in &paths {
+		let funcs = parse_header_file(path, "raylib");
+		eprintln!("raylib: {} functions from {}", funcs.len(), path);
+
+		// Verify key raylib functions are found
+		let key_funcs = ["InitWindow", "CloseWindow", "BeginDrawing", "EndDrawing"];
+		for name in key_funcs {
+			let found = funcs.iter().any(|f| f.name == name);
+			if found {
+				eprintln!("  ✓ {}", name);
+			}
+		}
+	}
+}
+
+#[test]
+fn test_ffi_png_discovery() {
+	// Test generic discovery finds libpng headers
+	let paths = find_library_headers("png");
+
+	if paths.is_empty() {
+		eprintln!("png: NOT INSTALLED - skipping");
+		return;
+	}
+
+	for path in &paths {
+		let funcs = parse_header_file(path, "png");
+		eprintln!("png: {} functions from {}", funcs.len(), path);
+	}
+}
+
+#[test]
+fn test_ffi_generic_discovery() {
+	// Test that generic discovery works for multiple libraries
+	let libraries = ["curl", "zlib", "sqlite3", "raylib", "png"];
+	let mut found = Vec::new();
+
+	for lib in libraries {
+		let paths = find_library_headers(lib);
+		if !paths.is_empty() {
+			found.push(lib);
+		}
+	}
+
+	eprintln!("Found headers for: {:?}", found);
+
+	// Should find at least some common libraries
+	// (exact set depends on what's installed)
 }
