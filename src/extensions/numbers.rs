@@ -191,11 +191,32 @@ impl PartialEq for Number {
 		match (self, other) {
 			(Number::Int(i1), Number::Int(i2)) => i1 == i2,
 			// simple approximation:  f64 as f32
-			(Number::Float(f1), Number::Float(f2)) => *f1 as f32 == *f2 as f32,
+			(Number::Float(f1), Number::Float(f2)) => {
+				// Handle NaN and Inf specially for semantic equality
+				if f1.is_nan() && f2.is_nan() {
+					true
+				} else if f1.is_infinite() && f2.is_infinite() {
+					f1.signum() == f2.signum() // both +Inf or both -Inf
+				} else {
+					*f1 as f32 == *f2 as f32
+				}
+			}
 			// (Number::Float(f1), Number::Float(f2)) => *f1 == *f2,
 			// (Number::Float(f1), Number::Float(f2)) => f1 == f2,
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => n1 * d2 == n2 * d1,
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
+			// Special values: semantic equality (not IEEE 754)
+			(Number::Nan, Number::Nan) => true,
+			(Number::Inf, Number::Inf) => true,
+			(Number::NegInf, Number::NegInf) => true,
+			// Cross-type special value equality: Float(NaN) == Nan, etc.
+			(Number::Float(f), Number::Nan) | (Number::Nan, Number::Float(f)) => f.is_nan(),
+			(Number::Float(f), Number::Inf) | (Number::Inf, Number::Float(f)) => {
+				f.is_infinite() && f.is_sign_positive()
+			}
+			(Number::Float(f), Number::NegInf) | (Number::NegInf, Number::Float(f)) => {
+				f.is_infinite() && f.is_sign_negative()
+			}
 			_ => false,
 		}
 	}
