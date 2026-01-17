@@ -591,3 +591,44 @@ fn test_ffi_generic_discovery() {
 	// Should find at least some common libraries
 	// (exact set depends on what's installed)
 }
+
+// ============================================================================
+// Working FFI Tests - these tests verify actual FFI calls work
+// ============================================================================
+
+#[test]
+fn test_ffi_sin_works() {
+	is!("import sin from 'm'\nsin(0.0)", 0.0);
+}
+
+#[test]
+fn test_ffi_sin_pi_half() {
+	// sin(π/2) = 1.0
+	is!("import sin from 'm'\nsin(1.5707963267948966)", 1.0);
+}
+
+#[test]
+fn test_ffi_cos_works() {
+	// cos(0) = 1
+	is!("import cos from 'm'\ncos(0.0)", 1.0);
+}
+
+#[test]
+fn test_ffi_sqrt_works() {
+	is!("import sqrt from 'm'\nsqrt(4.0)", 2.0);
+}
+
+#[test]
+fn test_ffi_abs_from_c() {
+	// abs from libc takes i32 and returns i32
+	is!("import abs from \"c\"\nabs(-42)", 42);
+	is!("import abs from \"c\"\nabs(42)", 42);
+	is!("import abs from \"c\"\nabs(0)", 0);
+}
+
+#[test]
+fn test_ffi_fabs_from_m() {
+	// fabs from libm takes f64 and returns f64
+	is!("import fabs from 'm'\nfabs(-3.14)", 3.14);
+	is!("import fabs from 'm'\nfabs(3.14)", 3.14);
+}
