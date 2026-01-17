@@ -63,7 +63,6 @@ fn test_ffi_atof() {
 }
 
 #[test]
-#[ignore = "eval doesn't support loading .wasp files yet"]
 fn test_ffi_fmin_wasp_file() {
 	is!("tests/wasp/ffi/test_ffi_fmin.wasp", 2.1);
 }

@@ -5313,7 +5313,18 @@ pub fn eval(code: &str) -> Node {
 	use crate::type_kinds::{extract_instance_values, TypeDef};
 	use crate::wasm_gc_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
-	let node = WaspParser::parse(code);
+	// Detect file path and load file content
+	let code = if !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp")) {
+		if let Ok(content) = std::fs::read_to_string(code) {
+			content
+		} else {
+			code.to_string()
+		}
+	} else {
+		code.to_string()
+	};
+
+	let node = WaspParser::parse(&code);
 
 	// Check for class definition + instance pattern
 	if let Some((class_node, instance_node)) = is_class_with_instance(&node) {
@@ -5330,9 +5341,9 @@ pub fn eval(code: &str) -> Node {
 
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
-	let needs_host = uses_fetch(code);
-	let needs_wasi = uses_wasi(code);
-	let needs_ffi = uses_ffi(code);
+	let needs_host = uses_fetch(&code);
+	let needs_wasi = uses_wasi(&code);
+	let needs_ffi = uses_ffi(&code);
 	if needs_host {
 		emitter.set_host_imports(true);
 	}
