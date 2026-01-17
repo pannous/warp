@@ -1,3 +1,8 @@
+// Skip FFI tests on Linux (CI) - requires native libraries (libc/libm)
+// Primary guard: Cargo.toml required-features = ["ffi"]
+// Secondary guard: this cfg attribute
+#![cfg(not(target_os = "linux"))]
+
 // Comprehensive FFI Tests
 // All FFI-related tests consolidated from:
 //   - test_dynlib_import.h
