@@ -17,6 +17,7 @@ pub mod smarty;
 pub mod operators;
 pub mod host;
 pub mod ffi;
+pub mod ffi_parser;
 pub mod util;
 pub mod function;
 pub mod normalize;
