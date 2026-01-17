@@ -87,6 +87,12 @@ fn main() {
         let result = eval(&warp_code);
         println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
+    } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
+        // Compile WAT/WAST text format to WASM binary, then execute
+        let wat_code = load_file(&arg_string);
+        let result = run::wasmtime_runner::run_wat(&wat_code);
+        println!("{}", result.serialize());
+        std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wasm") {
         if args.len() >= 3 {
             #[cfg(any(feature = "WABT_MERGE", feature = "INCLUDE_MERGER"))]
