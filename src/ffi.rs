@@ -486,7 +486,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: fmin(f64, f64) -> f64
     let fmin_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "fmin", fmin_type, |_caller, params, results| {
+    linker.func_new("m", "fmin", fmin_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         let y = params[1].unwrap_f64();
         results[0] = Val::F64(unsafe { fmin(x, y) }.to_bits());
@@ -495,7 +495,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: fmax(f64, f64) -> f64
     let fmax_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "fmax", fmax_type, |_caller, params, results| {
+    linker.func_new("m", "fmax", fmax_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         let y = params[1].unwrap_f64();
         results[0] = Val::F64(unsafe { fmax(x, y) }.to_bits());
@@ -504,7 +504,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: fabs(f64) -> f64
     let fabs_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "fabs", fabs_type, |_caller, params, results| {
+    linker.func_new("m", "fabs", fabs_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { fabs(x) }.to_bits());
         Ok(())
@@ -512,7 +512,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: floor(f64) -> f64
     let floor_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "floor", floor_type, |_caller, params, results| {
+    linker.func_new("m", "floor", floor_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { floor(x) }.to_bits());
         Ok(())
@@ -520,7 +520,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: ceil(f64) -> f64
     let ceil_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "ceil", ceil_type, |_caller, params, results| {
+    linker.func_new("m", "ceil", ceil_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { ceil(x) }.to_bits());
         Ok(())
@@ -528,7 +528,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: round(f64) -> f64
     let round_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "round", round_type, |_caller, params, results| {
+    linker.func_new("m", "round", round_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { round(x) }.to_bits());
         Ok(())
@@ -536,7 +536,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: sqrt(f64) -> f64
     let sqrt_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "sqrt", sqrt_type, |_caller, params, results| {
+    linker.func_new("m", "sqrt", sqrt_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { sqrt(x) }.to_bits());
         Ok(())
@@ -544,7 +544,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: sin(f64) -> f64
     let sin_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "sin", sin_type, |_caller, params, results| {
+    linker.func_new("m", "sin", sin_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { sin(x) }.to_bits());
         Ok(())
@@ -552,7 +552,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: cos(f64) -> f64
     let cos_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "cos", cos_type, |_caller, params, results| {
+    linker.func_new("m", "cos", cos_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { cos(x) }.to_bits());
         Ok(())
@@ -560,7 +560,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: tan(f64) -> f64
     let tan_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "tan", tan_type, |_caller, params, results| {
+    linker.func_new("m", "tan", tan_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { tan(x) }.to_bits());
         Ok(())
@@ -568,7 +568,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: fmod(f64, f64) -> f64
     let fmod_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "fmod", fmod_type, |_caller, params, results| {
+    linker.func_new("m", "fmod", fmod_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         let y = params[1].unwrap_f64();
         results[0] = Val::F64(unsafe { fmod(x, y) }.to_bits());
@@ -577,7 +577,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: pow(f64, f64) -> f64
     let pow_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "pow", pow_type, |_caller, params, results| {
+    linker.func_new("m", "pow", pow_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         let y = params[1].unwrap_f64();
         results[0] = Val::F64(unsafe { pow(x, y) }.to_bits());
@@ -586,7 +586,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: exp(f64) -> f64
     let exp_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "exp", exp_type, |_caller, params, results| {
+    linker.func_new("m", "exp", exp_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { exp(x) }.to_bits());
         Ok(())
@@ -594,7 +594,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: log(f64) -> f64
     let log_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "log", log_type, |_caller, params, results| {
+    linker.func_new("m", "log", log_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { log(x) }.to_bits());
         Ok(())
@@ -602,7 +602,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libm: log10(f64) -> f64
     let log10_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("ffi", "log10", log10_type, |_caller, params, results| {
+    linker.func_new("m", "log10", log10_type, |_caller, params, results| {
         let x = params[0].unwrap_f64();
         results[0] = Val::F64(unsafe { log10(x) }.to_bits());
         Ok(())
@@ -610,7 +610,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libc: abs(i32) -> i32
     let abs_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
-    linker.func_new("ffi", "abs", abs_type, |_caller, params, results| {
+    linker.func_new("c", "abs", abs_type, |_caller, params, results| {
         let x = params[0].unwrap_i32();
         results[0] = Val::I32(unsafe { abs(x) });
         Ok(())
@@ -619,7 +619,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     // libc: strlen(ptr) -> i64
     // We receive ptr to null-terminated string in WASM memory
     let strlen_type = FuncType::new(engine, [ValType::I32], [ValType::I64]);
-    linker.func_new("ffi", "strlen", strlen_type, |mut caller, params, results| {
+    linker.func_new("c", "strlen", strlen_type, |mut caller, params, results| {
         let ptr = params[0].unwrap_i32() as usize;
 
         if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
@@ -641,7 +641,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     // libc: atoi(ptr) -> i32
     // We receive ptr to null-terminated string in WASM memory
     let atoi_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
-    linker.func_new("ffi", "atoi", atoi_type, |mut caller, params, results| {
+    linker.func_new("c", "atoi", atoi_type, |mut caller, params, results| {
         let ptr = params[0].unwrap_i32() as usize;
 
         if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
@@ -665,7 +665,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     // libc: atol(ptr) -> i64
     // We receive ptr to null-terminated string in WASM memory
     let atol_type = FuncType::new(engine, [ValType::I32], [ValType::I64]);
-    linker.func_new("ffi", "atol", atol_type, |mut caller, params, results| {
+    linker.func_new("c", "atol", atol_type, |mut caller, params, results| {
         let ptr = params[0].unwrap_i32() as usize;
 
         if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
@@ -684,7 +684,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     // libc: atof(ptr) -> f64
     // We receive ptr to null-terminated string in WASM memory
     let atof_type = FuncType::new(engine, [ValType::I32], [ValType::F64]);
-    linker.func_new("ffi", "atof", atof_type, |mut caller, params, results| {
+    linker.func_new("c", "atof", atof_type, |mut caller, params, results| {
         let ptr = params[0].unwrap_i32() as usize;
 
         if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
@@ -706,7 +706,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
         [ValType::I32, ValType::I32, ValType::I32, ValType::I32],
         [ValType::I32],
     );
-    linker.func_new("ffi", "strcmp", strcmp_type, |mut caller, params, results| {
+    linker.func_new("c", "strcmp", strcmp_type, |mut caller, params, results| {
         let ptr1 = params[0].unwrap_i32() as usize;
         let len1 = params[1].unwrap_i32() as usize;
         let ptr2 = params[2].unwrap_i32() as usize;
@@ -738,7 +738,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
         [ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64],
         [ValType::I32],
     );
-    linker.func_new("ffi", "strncmp", strncmp_type, |mut caller, params, results| {
+    linker.func_new("c", "strncmp", strncmp_type, |mut caller, params, results| {
         let ptr1 = params[0].unwrap_i32() as usize;
         let len1 = params[1].unwrap_i32() as usize;
         let ptr2 = params[2].unwrap_i32() as usize;
@@ -767,7 +767,7 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 
     // libc: rand() -> i32
     let rand_type = FuncType::new(engine, [], [ValType::I32]);
-    linker.func_new("ffi", "rand", rand_type, |_caller, _params, results| {
+    linker.func_new("c", "rand", rand_type, |_caller, _params, results| {
         results[0] = Val::I32(unsafe { rand() });
         Ok(())
     })?;
