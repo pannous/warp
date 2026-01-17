@@ -88,6 +88,8 @@ pub unsafe fn str32(ptr: u32, len: u32) -> &'static str {
 	core::str::from_utf8_unchecked(bytes)
 }
 
+/// # Safety
+/// Caller must ensure `pointer` encodes a valid 56-bit pointer to a valid UTF-8 string.
 pub unsafe fn string56(pointer: u64) -> Node {
 	text(str56(pointer))
 }

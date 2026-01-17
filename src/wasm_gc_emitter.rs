@@ -4871,13 +4871,13 @@ impl WasmGcEmitter {
 		panic!("new_list function required but not available");
 	}
 
-	fn validate_wasm(bytes: &Vec<u8>) {
+	fn validate_wasm(bytes: &[u8]) {
 		if let Err(e) = Self::try_validate_wasm(bytes) {
 			panic!("WASM validation failed: {}", e);
 		}
 	}
 
-	fn try_validate_wasm(bytes: &Vec<u8>) -> Result<(), String> {
+	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
 		features.set(WasmFeatures::GC, true);

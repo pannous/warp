@@ -853,19 +853,6 @@ impl Node {
 		}
 	}
 
-	// method `into_iter` can be confused for the standard trait method `std::iter::IntoIterator::into_iter`
-	// Help: consider implementing the trait `std::iter::IntoIterator` or choosing a less ambiguous method name
-	// Help: for further information visit
-	// https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#should_implement_trait
-	// Note: `#[warn(clippy::should_implement_trait)]` on by default
-	pub fn into_iter(self) -> NodeIter {
-		match self {
-			List(items, _, _) => NodeIter::new(items),
-			Meta { node, .. } => (*node).clone().into_iter(),
-			_ => NodeIter::new(vec![]),
-		}
-	}
-
 	// fixme unify with size() ?
 	// fixme create one variant which counts meta comment nodes and one which ignores them
 	pub fn len(&self) -> usize {
@@ -1146,7 +1133,11 @@ impl IntoIterator for Node {
 	type IntoIter = NodeIter;
 
 	fn into_iter(self) -> Self::IntoIter {
-		self.into_iter()
+		match self {
+			List(items, _, _) => NodeIter::new(items),
+			Meta { node, .. } => (*node).clone().into_iter(),
+			_ => NodeIter::new(vec![]),
+		}
 	}
 }
 
