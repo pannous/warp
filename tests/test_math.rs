@@ -307,6 +307,8 @@ fn test_global_with_pi() {
 	use std::f64::consts::PI;
 	is!("global x=1+π", 1.0 + PI);
 	is!("global x=1+π;x+2", 3.0 + PI); // x = 1+π ≈ 4.14, then x+2 ≈ 6.14 = 3+π
+	is!("pi", PI);       // pi is alias for π
+	is!("1+pi", 1.0 + PI);
 }
 
 #[test]
