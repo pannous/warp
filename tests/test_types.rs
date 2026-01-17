@@ -4,7 +4,6 @@
 use warp::analyzer::analyze;
 use warp::extensions::assert_throws;
 use warp::Node;
-use warp::Node::False;
 use warp::type_kinds::NodeKind;
 use warp::wasp_parser::parse;
 use warp::{is, skip, Number};

@@ -427,6 +427,7 @@ impl WaspParser {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
 		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
+		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
 		let (c1, c2) = (self.current_char(), self.peek_char(1));
