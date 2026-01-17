@@ -115,6 +115,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
+		// Prefix operators (neg, abs, sqrt): inherit type from operand
+		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+			infer_type(right, scope)
+		}
 		// Default to Int for other cases
 		_ => Kind::Int,
 	}
@@ -191,6 +195,10 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Do, right) => {
 			// While loop needs a temp local for result
 			1 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
+		}
+		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
+			// Integer abs needs a temp local for the if-then-else pattern
+			1 + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, _, right) => {
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
