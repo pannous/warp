@@ -67,16 +67,23 @@ fn test_go_types() {
 }
 
 #[test]
-#[ignore]
 fn test_auto_type() {
-	is!("0/0", False);
-	is!("0÷0", Node::Number(Number::Nan));
 	is!("-1/6.", -1.0 / 6.0);
 	is!("-1/6", -1.0 / 6.0); // Auto-promote int/int division to float
 	is!("-1÷6", -1.0 / 6.0); // Auto-promote int/int division to float
 }
 
+
 #[test]
+#[ignore]
+fn test_auto_type_nan() {
+	// is!("0/0", False);
+	is!("0÷0", Node::Number(Number::Nan));
+	is!("1÷0", Node::Number(Number::Inf));
+	is!("-1÷0", Node::Number(Number::NegInf));
+}
+
+	#[test]
 fn test_type_synonyms() {
 	// eq!(Type("i32"s),Type("int32"s));
 	// eq!(Type("i32"s),Type("int"s));

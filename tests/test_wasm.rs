@@ -1602,7 +1602,7 @@ fn test_node_data_binary_reconstruction() {
 #[test]
 #[ignore]
 fn test_todo_browser() {
-	test_fixed_in_browser();
+	// test_fixed_in_browser(); // undefined
 	test_old_random_bugs(); // currently ok
 
 	skip!(

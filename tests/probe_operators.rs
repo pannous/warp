@@ -108,3 +108,12 @@ fn test_hash_index() {
 	let result = parse("list#3");
 	assert_eq!(get_op(&result), Some(Op::Hash));
 }
+
+#[test]
+fn test_division_type_upgrade() {
+	// Integer division should auto-promote to float: 1/2 = 0.5, not 0
+	use warp::is;
+	is!("1/2", 0.5);
+	is!("3/2", 1.5);
+	is!("-1/2", -0.5);
+}

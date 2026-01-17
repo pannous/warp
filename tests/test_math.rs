@@ -308,3 +308,10 @@ fn test_global_with_pi() {
 	is!("global x=1+π", 1.0 + PI);
 	is!("global x=1+π;x+2", 3.0 + PI); // x = 1+π ≈ 4.14, then x+2 ≈ 6.14 = 3+π
 }
+
+#[test]
+fn test_sqrt_alias() {
+	is!("sqrt 9", 3);
+	is!("sqrt 16", 4);
+	is!("sqrt 2", 1.4142135623730951);
+}
