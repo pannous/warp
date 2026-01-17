@@ -55,10 +55,17 @@ fn float32t() -> Node {
 fn stringp() -> Node {
 	Node::Empty
 }
+
 #[allow(dead_code)]
-fn array() -> Node {
-	Node::Empty
-}
+fn array() -> Node { Node::Empty }
+
+// todo get real type for em all:
+// pub fn types(name: &str) -> Node {
+// 	// Returns a Symbol with the type name, matching what type() introspection returns
+// 	Node::Symbol(name.to_string())
+// }
+// #[allow(dead_code)]
+// fn array() -> types("array")
 
 #[test]
 #[ignore]
@@ -68,6 +75,7 @@ fn test_go_types() {
 
 #[test]
 fn test_auto_type() {
+	// todo redundant test_division_type_upgrade
 	is!("-1/6.", -1.0 / 6.0);
 	is!("-1/6", -1.0 / 6.0); // Auto-promote int/int division to float
 	is!("-1÷6", -1.0 / 6.0); // Auto-promote int/int division to float
@@ -75,12 +83,12 @@ fn test_auto_type() {
 
 
 #[test]
-#[ignore]
 fn test_auto_type_nan() {
-	// is!("0/0", False);
+	// Division by zero produces special float values (semantically equal to Nan/Inf)
+	is!("0/0", Node::Number(Number::Nan));
 	is!("0÷0", Node::Number(Number::Nan));
-	is!("1÷0", Node::Number(Number::Inf));
-	is!("-1÷0", Node::Number(Number::NegInf));
+	is!("1/0", Node::Number(Number::Inf));
+	is!("-1/0", Node::Number(Number::NegInf));
 }
 
 	#[test]
