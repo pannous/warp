@@ -2817,7 +2817,7 @@ impl WasmGcEmitter {
 						}
 						// Check for FFI function call
 						if self.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call(func, fn_name, &items[1..]);
+							self.emit_ffi_call(func, fn_name, &items[1..], None);
 							return;
 						}
 					}
@@ -3448,8 +3448,9 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit FFI call wrapping result in Node (for general expression context)
-	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	/// Emit FFI function call with automatic result handling based on context
+	/// Context: None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
+	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
 		let sig = match self.ffi_imports.get(fn_name) {
 			Some(s) => s.clone(),
 			None => return,
@@ -3458,33 +3459,11 @@ impl WasmGcEmitter {
 		if let Some(idx) = self.ffi_func_index(fn_name) {
 			func.instruction(&Instruction::Call(idx));
 		}
-		self.emit_ffi_result_node(func, &sig);
-	}
-
-	/// Emit FFI call returning raw i64 (for numeric context)
-	fn emit_ffi_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let sig = match self.ffi_imports.get(fn_name) {
-			Some(s) => s.clone(),
-			None => return,
-		};
-		self.emit_ffi_args(func, fn_name, args, &sig);
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
+		match ctx {
+			None => self.emit_ffi_result_node(func, &sig),
+			Some(Kind::Float) => self.emit_ffi_result_float(func, &sig),
+			Some(_) => self.emit_ffi_result_numeric(func, &sig), // Int or other → i64
 		}
-		self.emit_ffi_result_numeric(func, &sig);
-	}
-
-	/// Emit FFI call returning raw f64 (for float context)
-	fn emit_ffi_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let sig = match self.ffi_imports.get(fn_name) {
-			Some(s) => s.clone(),
-			None => return,
-		};
-		self.emit_ffi_args(func, fn_name, args, &sig);
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-		self.emit_ffi_result_float(func, &sig);
 	}
 
 	/// Check if a node argument should be treated as a string
@@ -4614,7 +4593,7 @@ impl WasmGcEmitter {
 						}
 						// Check for FFI function call
 						if self.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call_numeric(func, fn_name, &items[1..]);
+							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
 							return;
 						}
 					}
@@ -4774,7 +4753,7 @@ impl WasmGcEmitter {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						// Check for FFI function call
 						if self.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call_float(func, fn_name, &items[1..]);
+							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
 							return;
 						}
 						// Check for user function call
@@ -4789,7 +4768,7 @@ impl WasmGcEmitter {
 				if items.len() == 1 && *bracket == Bracket::Round {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						if self.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call_float(func, fn_name, &[]);
+							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Float));
 							return;
 						}
 					}
