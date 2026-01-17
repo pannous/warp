@@ -1,451 +1,906 @@
 === Test Results (nextest) ===
 
 PASSED:
-  ✓ (  1/445) warp extensions::strings::tests::test_char_str_eq
-  ✓ (  2/445) warp ffi::tests::test_extract_function_signature_simple
-  ✓ (  3/445) warp ffi::tests::test_map_c_type_to_valtype
-  ✓ (  4/445) warp ffi_parser::tests::test_parse_simple_function
-  ✓ (  5/445) warp ffi_parser::tests::test_parse_void_params
-  ✓ (  6/445) warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ (  1/445) warp ffi::tests::test_extract_function_signature_simple
+  ✓ (  2/445) warp ffi_parser::tests::test_parse_int32_return
+  ✓ (  3/445) warp ffi_parser::tests::test_parse_pointer_param
+  ✓ (  4/445) warp ffi::tests::test_parse_header_file_math
+  ✓ (  5/445) warp ffi::tests::test_extract_function_signature_void_return
+  ✓ (  6/445) warp ffi::tests::test_map_c_type_to_valtype
   ✓ (  7/445) warp extensions::strings::tests::test_str_plus
-  ✓ (  8/445) warp ffi_parser::tests::test_parse_int32_return
-  ✓ (  9/445) warp ffi::tests::test_extract_function_signature_void_return
-  ✓ ( 10/445) warp ffi::tests::test_parse_header_file_math
-  ✓ ( 11/445) warp ffi::tests::test_header_sig_to_ffi_sig
-  ✓ ( 12/445) warp ffi_parser::tests::test_parse_two_params
-  ✓ ( 13/445) warp ffi::tests::test_extract_function_signature_pointer
-  ✓ ( 14/445) warp ffi_parser::tests::test_parse_pointer_param
-  ✓ ( 15/445) warp function::tests::test_function_host
-  ✓ ( 16/445) warp function::tests::test_arg
-  ✓ ( 17/445) warp ffi_parser::tests::test_raylib_functions
-  ✓ ( 18/445) warp function::tests::test_signature_builder
-  ✓ ( 19/445) warp ffi_parser::tests::test_parse_system_headers
-  ✓ ( 20/445) warp function::tests::test_function_locals
-  ✓ ( 21/445) warp function::tests::test_function_registry
-  ✓ ( 22/445) warp function::tests::test_kind_to_valtype
-  ✓ ( 23/445) warp host::tests::test_host_state
-  ✓ ( 24/445) warp function::tests::test_signature_format
-  ✓ ( 25/445) warp normalize::tests::test_hint_mode
-  ✓ ( 26/445) warp function::tests::test_function_builder
-  ✓ ( 27/445) warp normalize::tests::test_style_swap
-  ✓ ( 28/445) warp wisp_parser::tests::test_wisp_call
-  ✓ ( 29/445) warp wisp_parser::tests::test_wisp_basic_atom_types
-  ✓ ( 30/445) warp wisp_parser::tests::test_wisp_cons_dotted_pair
-  ✓ ( 31/445) warp wisp_parser::tests::test_wisp_key_pair
-  ✓ ( 32/445) warp wisp_parser::tests::test_wisp_emit_atoms
-  ✓ ( 33/445) warp wisp_parser::tests::test_wisp_nested
+  ✓ (  8/445) warp extensions::strings::tests::test_char_str_eq
+  ✓ (  9/445) warp ffi_parser::tests::test_parse_simple_function
+  ✓ ( 10/445) warp ffi_parser::tests::test_parse_void_params
+  ✓ ( 11/445) warp ffi::tests::test_extract_function_signature_pointer
+  ✓ ( 12/445) warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ ( 13/445) warp ffi_parser::tests::test_parse_two_params
+  ✓ ( 14/445) warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ ( 15/445) warp ffi_parser::tests::test_parse_system_headers
+  ✓ ( 16/445) warp normalize::tests::test_style_swap
+  ✓ ( 17/445) warp function::tests::test_function_builder
+  ✓ ( 18/445) warp normalize::tests::test_hint_mode
+  ✓ ( 19/445) warp function::tests::test_signature_format
+  ✓ ( 20/445) warp ffi_parser::tests::test_raylib_functions
+  ✓ ( 21/445) warp function::tests::test_function_locals
+  ✓ ( 22/445) warp function::tests::test_signature_builder
+  ✓ ( 23/445) warp function::tests::test_arg
+  ✓ ( 24/445) warp function::tests::test_function_registry
+  ✓ ( 25/445) warp function::tests::test_kind_to_valtype
+  ✓ ( 26/445) warp host::tests::test_host_state
+  ✓ ( 27/445) warp function::tests::test_function_host
+  ✓ ( 28/445) warp wisp_parser::tests::test_wisp_cons_dotted_pair
+  ✓ ( 29/445) warp wisp_parser::tests::test_wisp_roundtrip_compound
+  ✓ ( 30/445) warp wisp_parser::tests::test_wisp_nested
+  ✓ ( 31/445) warp wisp_parser::tests::test_wisp_basic_atom_types
+  ✓ ( 32/445) warp wisp_parser::tests::test_wisp_list
+  ✓ ( 33/445) warp wisp_parser::tests::test_wisp_call
   ✓ ( 34/445) warp wisp_parser::tests::test_wisp_emit_compound
-  ✓ ( 35/445) warp wisp_parser::tests::test_wisp_roundtrip_atoms
-  ✓ ( 36/445) warp wisp_parser::tests::test_wisp_roundtrip_compound
-  ✓ ( 37/445) warp wisp_parser::tests::test_wisp_roundtrip_nested
-  ✓ ( 38/445) warp wisp_parser::tests::test_wisp_meta
-  ✓ ( 39/445) warp wisp_parser::tests::test_wisp_list
-  ✓ ( 40/445) warp wisp_parser::tests::test_wisp_sexpr_types
-  ✓ ( 41/445) warp wisp_parser::tests::test_wisp_shorthand_operators
-  ✓ ( 42/445) warp wisp_parser::tests::test_wisp_tag
-  ✓ ( 43/445) warp wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
-  ✓ ( 44/445) warp wisp_parser::tests::test_wisp_roundtrip_sexpr
-  ✓ ( 45/445) warp::node_values_test test_values_meta
-  ✓ ( 46/445) warp::node_values_test test_values_nested_key
+  ✓ ( 35/445) warp wisp_parser::tests::test_wisp_emit_atoms
+  ✓ ( 36/445) warp wisp_parser::tests::test_wisp_meta
+  ✓ ( 37/445) warp wisp_parser::tests::test_wisp_roundtrip_atoms
+  ✓ ( 38/445) warp wisp_parser::tests::test_wisp_roundtrip_nested
+  ✓ ( 39/445) warp wisp_parser::tests::test_wisp_roundtrip_sexpr
+  ✓ ( 40/445) warp wisp_parser::tests::test_wisp_key_pair
+  ✓ ( 41/445) warp wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
+  ✓ ( 42/445) warp wisp_parser::tests::test_wisp_sexpr_types
+  ✓ ( 43/445) warp wisp_parser::tests::test_wisp_tag
+  ✓ ( 44/445) warp wisp_parser::tests::test_wisp_shorthand_operators
+  ✓ ( 45/445) warp::node_values_test test_values_nested_key
+  ✓ ( 46/445) warp::node_values_test test_values_list
   ✓ ( 47/445) warp::node_values_test test_values_key
-  ✓ ( 48/445) warp::node_values_test test_values_number
-  ✓ ( 49/445) warp::probe_def_syntax probe_multiple_syntaxes
-  ✓ ( 50/445) warp::node_values_test test_values_empty
-  ✓ ( 51/445) warp::node_values_test test_values_list
+  ✓ ( 48/445) warp::node_values_test test_values_empty
+  ✓ ( 49/445) warp::node_values_test test_values_number
+  ✓ ( 50/445) warp::node_values_test test_values_meta
+  ✓ ( 51/445) warp::probe_def_syntax probe_multiple_syntaxes
   ✓ ( 52/445) warp::probe_def_syntax probe_def_syntax
   ✓ ( 53/445) warp::probe_increment probe_increment
   ✓ ( 54/445) warp::probe_def_syntax probe_parse_add_call
-  ✓ ( 55/445) warp::probe_operators test_arithmetic_basic
-  ✓ ( 56/445) warp::probe_operators test_assignment_right_assoc
-  ✓ ( 57/445) warp::probe_def_syntax probe_test2_check
-  ✓ ( 58/445) warp::probe_operators test_comparison
-  ✓ ( 59/445) warp::probe_operators test_arithmetic_precedence
-  ✓ ( 60/445) warp::probe_operators test_comparison_eq
-  ✓ ( 61/445) warp::probe_operators test_logical_or
-  ✓ ( 62/445) warp::probe_operators test_logical_and
-  ✓ ( 63/445) warp::probe_operators test_mixed_prefix_infix
-  ✓ ( 64/445) warp::probe_def_syntax probe_def_block_syntax
-  ✓ ( 65/445) warp::probe_operators test_hash_index
-  ✓ ( 66/445) warp::probe_operators test_power_right_assoc
-  ✓ ( 67/445) warp::probe_operators test_prefix_neg
-  ✓ ( 68/445) warp::probe_operators test_unicode_le
-  ✓ ( 69/445) warp::probe_operators test_suffix_square
-  ✓ ( 70/445) warp::probe_operators test_range
-  ✓ ( 71/445) warp::probe_precedence probe_fib_parsing
-  ✓ ( 72/445) warp::probe_operators test_unicode_mul
-  ✓ ( 73/445) warp::probe_precedence test_key_equality
-  ✓ ( 74/445) warp::probe_precedence test_key_operators
-  ✓ ( 75/445) warp::probe_precedence test_precedence
-  ✓ ( 76/445) warp::probe_precedence test_type_annotation_block_with_assignment
-  ✓ ( 77/445) warp::probe_precedence test_type_annotation_with_block
-  ✓ ( 78/445) warp::probe_def_syntax probe_dollar_param
-  ✓ ( 79/445) warp::probe_type test_type_string
-  ✓ ( 80/445) warp::probe_type test_type_float
-  ✓ ( 81/445) warp::probe_type test_type_symbol
-  ✓ ( 82/445) warp::probe_increment probe_while_execution
-  ✓ ( 83/445) warp::probe_def_syntax probe_def_add
+  ✓ ( 55/445) warp::probe_def_syntax probe_def_block_syntax
+  ✓ ( 56/445) warp::probe_def_syntax probe_dollar_param
+  ✓ ( 57/445) warp::probe_operators test_arithmetic_basic
+  ✓ ( 58/445) warp::probe_def_syntax probe_def_add
+  ✓ ( 59/445) warp::probe_def_syntax probe_test2_check
+  ✓ ( 60/445) warp::probe_operators test_arithmetic_precedence
+  ✓ ( 61/445) warp::probe_increment probe_while_execution
+  ✓ ( 62/445) warp::probe_operators test_assignment_right_assoc
+  ✓ ( 63/445) warp::probe_operators test_comparison
+  ✓ ( 64/445) warp::probe_operators test_comparison_eq
+  ✓ ( 65/445) warp::probe_operators test_logical_or
+  ✓ ( 66/445) warp::probe_operators test_hash_index
+  ✓ ( 67/445) warp::probe_operators test_logical_and
+  ✓ ( 68/445) warp::probe_operators test_mixed_prefix_infix
+  ✓ ( 69/445) warp::probe_operators test_power_right_assoc
+  ✓ ( 70/445) warp::probe_operators test_prefix_neg
+  ✓ ( 71/445) warp::probe_operators test_range
+  ✓ ( 72/445) warp::probe_precedence probe_fib_parsing
+  ✓ ( 73/445) warp::probe_operators test_suffix_square
+  ✓ ( 74/445) warp::probe_operators test_unicode_le
+  ✓ ( 75/445) warp::probe_precedence test_key_equality
+  ✓ ( 76/445) warp::probe_operators test_unicode_mul
+  ✓ ( 77/445) warp::probe_precedence test_key_operators
+  ✓ ( 78/445) warp::probe_precedence test_precedence
+  ✓ ( 79/445) warp::probe_precedence test_type_annotation_block_with_assignment
+  ✓ ( 80/445) warp::probe_precedence test_type_annotation_with_block
+  ✓ ( 81/445) warp::probe_type test_type_string
+  ✓ ( 82/445) warp::probe_type test_type_symbol
+  ✓ ( 83/445) warp::probe_type test_type_float
   ✓ ( 84/445) warp::probe_type test_type_number
-  ✓ ( 85/445) warp::test_angle test_smart_types
-  ✓ ( 86/445) warp::test_asts test_ast
-  ✓ ( 87/445) warp::probe_type test_type_variable
-  ✓ ( 88/445) warp::test_blocks test_group_cascade
-  ✓ ( 89/445) warp::test_blocks test_group_cascade1
-  ✓ ( 90/445) warp::test_blocks test_group_cascade2
-  ✓ ( 91/445) warp::test_blocks test_indent_as_block
-  ✓ ( 92/445) warp::probe_index_loop test_index_assign_return_counter
-  ✓ ( 93/445) warp::probe_index_loop test_index_assign_in_while_with_increment
-  ✓ ( 94/445) warp::probe_index_loop test_simple_index_assign
-  ✓ ( 95/445) warp::test_data test_node_data_clone
-  ✓ ( 96/445) warp::probe_index_loop test_index_assign_in_while_loop
-  ✓ ( 97/445) warp::test_data test_node_data
-  ✓ ( 98/445) warp::test_data test_node_data_equality
-  ✓ ( 99/445) warp::test_data test_node_data_type_mismatch
-  ✓ (100/445) warp::test_data test_node_data_metadata
-  ✓ (101/445) warp::test_data test_node_data_various_types
-  ✓ (102/445) warp::probe_index_loop test_index_assign_25_elements
-  ✓ (103/445) warp::test_emitter test_optimizer_graph_generation
-  ✓ (104/445) warp::test_emitter test_compact_float
-  ✓ (105/445) warp::test_emitter test_compact_int
-  ✓ (106/445) warp::test_emitter test_compact_empty
-  ✓ (107/445) warp::test_ffi test_c_type_mapping
-  ✓ (108/445) warp::probe_index_loop test_index_assign_with_variable
+  ✓ ( 85/445) warp::probe_type test_type_variable
+  ✓ ( 86/445) warp::probe_index_loop test_index_assign_with_variable
+  ✓ ( 87/445) warp::probe_index_loop test_index_assign_in_while_with_increment
+  ✓ ( 88/445) warp::test_blocks test_group_cascade1
+  ✓ ( 89/445) warp::test_asts test_ast
+  ✓ ( 90/445) warp::probe_index_loop test_index_assign_in_while_loop
+  ✓ ( 91/445) warp::test_blocks test_group_cascade
+  ✓ ( 92/445) warp::test_angle test_smart_types
+  ✓ ( 93/445) warp::probe_index_loop test_index_assign_return_counter
+  ✓ ( 94/445) warp::test_blocks test_group_cascade2
+  ✓ ( 95/445) warp::test_data test_node_data
+  ✓ ( 96/445) warp::test_blocks test_indent_as_block
+  ✓ ( 97/445) warp::probe_index_loop test_simple_index_assign
+  ✓ ( 98/445) warp::test_data test_node_data_clone
+  ✓ ( 99/445) warp::test_data test_node_data_various_types
+  ✓ (100/445) warp::test_data test_node_data_equality
+  ✓ (101/445) warp::test_data test_node_data_type_mismatch
+  ✓ (102/445) warp::test_data test_node_data_metadata
+  ✓ (103/445) warp::test_emitter test_compact_float
+  ✓ (104/445) warp::test_emitter test_optimizer_graph_generation
+  ✓ (105/445) warp::probe_index_loop test_index_assign_25_elements
+  ✓ (106/445) warp::test_emitter test_compact_int
+  ✓ (107/445) warp::test_emitter test_compact_empty
+  ✓ (108/445) warp::test_ffi test_c_type_mapping
   ✓ (109/445) warp::test_ffi test_ffi_curl_discovery
   ✓ (110/445) warp::test_ffi test_ffi_cos_works
-  ✓ (111/445) warp::test_ffi test_ffi_atof
-  ✓ (112/445) warp::test_ffi test_ffi_fabs_from_m
+  ✓ (111/445) warp::test_blocks test_matrix_comma_index
+  ✓ (112/445) warp::test_emitter test_tools_available
   ✓ (113/445) warp::test_ffi test_ffi_fabs
-  ✓ (114/445) warp::test_blocks test_matrix_comma_index
+  ✓ (114/445) warp::test_ffi test_ffi_atof
   ✓ (115/445) warp::test_ffi test_ffi_abs_from_c
   ✓ (116/445) warp::test_ffi test_ffi_generic_discovery
-  ✓ (117/445) warp::test_ffi test_ffi_fmin_wasp_file
-  ✓ (118/445) warp::test_ffi test_ffi_header_parser
-  ✓ (119/445) warp::test_emitter test_tools_available
-  ✓ (120/445) warp::test_ffi test_ffi_import_pattern
-  ✓ (121/445) warp::test_ffi test_ffi_png_discovery
-  ✓ (122/445) warp::test_ffi test_ffi_fmod
-  ✓ (123/445) warp::test_ffi test_ffi_raylib_discovery
-  ✓ (124/445) warp::test_angle test_call
-  ✓ (125/445) warp::test_ffi test_ffi_sin_pi_half
-  ✓ (126/445) warp::test_ffi test_ffi_cos
-  ✓ (127/445) warp::test_ffi test_ffi_sqlite_discovery
-  ✓ (128/445) warp::test_ffi test_ffi_fmax
-  ✓ (129/445) warp::test_ffi test_ffi_sin_works
-  ✓ (130/445) warp::test_angle test_logic_precedence
-  ✓ (131/445) warp::test_ffi test_ffi_fmin
-  ✓ (132/445) warp::test_ffi test_ffi_nested_calls
-  ✓ (133/445) warp::test_ffi test_ffi_sqrt_works
+  ✓ (117/445) warp::test_angle test_call
+  ✓ (118/445) warp::test_ffi test_ffi_fabs_from_m
+  ✓ (119/445) warp::test_ffi test_ffi_fmin_wasp_file
+  ✓ (120/445) warp::test_ffi test_ffi_fmax
+  ✓ (121/445) warp::test_ffi test_ffi_import_pattern
+  ✓ (122/445) warp::test_ffi test_ffi_header_parser
+  ✓ (123/445) warp::test_ffi test_ffi_cos
+  ✓ (124/445) warp::test_ffi test_ffi_png_discovery
+  ✓ (125/445) warp::test_ffi test_ffi_fmod
+  ✓ (126/445) warp::test_ffi test_ffi_raylib_discovery
+  ✓ (127/445) warp::test_ffi test_ffi_fmin
+  ✓ (128/445) warp::test_ffi test_ffi_sin_works
+  ✓ (129/445) warp::test_ffi test_ffi_sin_pi_half
+  ✓ (130/445) warp::test_ffi test_ffi_sqlite_discovery
+  ✓ (131/445) warp::test_ffi test_ffi_sqrt_works
+  ✓ (132/445) warp::test_angle test_logic_precedence
+  ✓ (133/445) warp::test_ffi test_ffi_zlib_discovery
   ✓ (134/445) warp::test_ffi test_import_from_pattern_parse
-  ✓ (135/445) warp::test_ffi test_ffi_zlib_discovery
-  ✓ (136/445) warp::test_functions test_fibonacci_auto_param
-  ✓ (137/445) warp::test_functions test2def
-  ✓ (138/445) warp::test_ffi test_ffi_tan
-  ✓ (139/445) warp::test_functions test_fibonacci_typed2
+  ✓ (135/445) warp::test_ffi test_ffi_nested_calls
+  ✓ (136/445) warp::test_ffi test_ffi_strlen
+  ✓ (137/445) warp::test_ffi test_ffi_tan
+  ✓ (138/445) warp::test_ffi test_import_from_pattern_emit
+  ✓ (139/445) warp::test_ffi test_ffi_sin
   ✓ (140/445) warp::test_functions test_fibonacci_auto_typed
-  ✓ (141/445) warp::test_functions test_float_return_through_main
-  ✓ (142/445) warp::test_functions test_fibonacci_typed
-  ✓ (143/445) warp::test_ffi test_ffi_strlen
-  ✓ (144/445) warp::test_functions test_function_declaration_parse
-  ✓ (145/445) warp::test_ffi test_ffi_sin
-  ✓ (146/445) warp::test_functions test_graph_params
+  ✓ (141/445) warp::test_functions test_fibonacci_auto_param
+  ✓ (142/445) warp::test_functions test2def
+  ✓ (143/445) warp::test_ffi test_ffi_strncmp
+  ✓ (144/445) warp::test_functions test_fibonacci_typed2
+  ✓ (145/445) warp::test_functions test_graph_params
+  ✓ (146/445) warp::test_functions test_function_declaration_parse
   ✓ (147/445) warp::test_functions test_params
-  ✓ (148/445) warp::test_functions test_rename_wasm_function
-  ✓ (149/445) warp::test_functions test_function_definitions
-  ✓ (150/445) warp::test_gc_struct test_class_instance_raw
-  ✓ (151/445) warp::test_ffi test_ffi_strncmp
-  ✓ (152/445) warp::test_ffi test_import_from_pattern_emit
-  ✓ (153/445) warp::test_gc_struct test_gc_object_index_access
-  ✓ (154/445) warp::test_gc_struct test_gc_struct_macro
-  ✓ (155/445) warp::test_gc_struct test_raw_person_struct
-  ✓ (156/445) warp::test_functions test_variable_reassignment
-  ✓ (157/445) warp::test_globals test_global_int_simple
-  ✓ (158/445) warp::test_globals test_global_int_multiple
-  ✓ (159/445) warp::test_host test_emit_host_imports
-  ✓ (160/445) warp::test_globals test_global_reassignment
-  ✓ (161/445) warp::test_globals test_global_with_expression
-  ✓ (162/445) warp::test_host test_emitter_with_host_imports_valid
-  ✓ (163/445) warp::test_globals test_global_float_with_pi
-  ✓ (164/445) warp::test_json test_block_node_json
-  ✓ (165/445) warp::test_functions test_default_params
-  ✓ (166/445) warp::test_json test_complex_node_json
-  ✓ (167/445) warp::test_host test_host_run_import
-  ✓ (168/445) warp::test_json test_nested_node_json
-  ✓ (169/445) warp::test_json test_implicit_html_structure
+  ✓ (148/445) warp::test_functions test_float_return_through_main
+  ✓ (149/445) warp::test_angle test_if_call_zero
+  ✓ (150/445) warp::test_functions test_rename_wasm_function
+  ✓ (151/445) warp::test_functions test_fibonacci_typed
+  ✓ (152/445) warp::test_functions test_function_definitions
+  ✓ (153/445) warp::test_blocks test_matrix_order
+  ✓ (154/445) warp::test_functions test_default_params
+  ✓ (155/445) warp::test_functions test_variable_reassignment
+  ✓ (156/445) warp::test_gc_struct test_gc_struct_macro
+  ✓ (157/445) warp::test_gc_struct test_raw_person_struct
+  ✓ (158/445) warp::test_gc_struct test_class_instance_raw
+  ✓ (159/445) warp::test_gc_struct test_gc_object_index_access
+  ✓ (160/445) warp::test_ffi test_ffi_strcmp
+  ✓ (161/445) warp::test_globals test_global_int_multiple
+  ✓ (162/445) warp::test_globals test_global_reassignment
+  ✓ (163/445) warp::test_globals test_global_int_simple
+  ✓ (164/445) warp::test_globals test_global_float_with_pi
+  ✓ (165/445) warp::test_host test_emit_host_imports
+  ✓ (166/445) warp::test_angle test_truthy_and
+  ✓ (167/445) warp::test_host test_emitter_with_host_imports_valid
+  ✓ (168/445) warp::test_globals test_global_with_expression
+  ✓ (169/445) warp::test_json test_block_node_json
   ✓ (170/445) warp::test_json test_node_eq_json_curly_lists
   ✓ (171/445) warp::test_json test_node_eq_json_keys
-  ✓ (172/445) warp::test_json test_data_node_json
-  ✓ (173/445) warp::test_json test_node_eq_json_meta
-  ✓ (174/445) warp::test_json test_node_eq_json_lists
-  ✓ (175/445) warp::test_json test_node_from_json
-  ✓ (176/445) warp::test_json test_node_eq_json_primitives
-  ✓ (177/445) warp::test_json test_node_neq_json
-  ✓ (178/445) warp::test_json test_simple_values
-  ✓ (179/445) warp::test_json test_node_to_json_compact
-  ✓ (180/445) warp::test_blocks test_matrix_order
-  ✓ (181/445) warp::test_kitchensink test_kitchensink_wasmtime_execution
-  ✓ (182/445) warp::test_lists test_filter
-  ✓ (183/445) warp::test_kitchensink test_kitchensink_complex_tree
-  ✓ (184/445) warp::test_kitchensink test_kitchensink_all_node_types
-  ✓ (185/445) warp::test_lists test_indexed
-  ✓ (186/445) warp::test_host test_host_fetch_import
-  ✓ (187/445) warp::test_math test_arithmetic
-  ✓ (188/445) warp::test_math test_global_with_pi
-  ✓ (189/445) warp::test_angle test_if_call_zero
-  ✓ (190/445) warp::test_math test_harder_arithmetic
-  ✓ (191/445) warp::test_ffi test_ffi_strcmp
-  ✓ (192/445) warp::test_lists test_index
-  ✓ (193/445) warp::test_math test_logarithm_in_runtime
-  ✓ (194/445) warp::test_math test_if_then_else
-  ✓ (195/445) warp::test_math test_power
-  ✓ (196/445) warp::test_math test_modulo
-  ✓ (197/445) warp::test_math test_runtime_equality_autocast
-  ✓ (198/445) warp::test_angle test_truthy_and
-  ✓ (199/445) warp::test_math test_runtime_equality
-  ✓ (200/445) warp::test_math test_ternary_with_comparison
-  ✓ (201/445) warp::test_math test_compound_assignment
-  ✓ (202/445) warp::test_math test_variable_minus
-  ✓ (203/445) warp::test_meta test_parent
-  ✓ (204/445) warp::test_module_cache test_different_modules_not_cached
-  ✓ (205/445) warp::test_node test_mark_as_map
-  ✓ (206/445) warp::test_module_cache test_module_cache_reuse
-  ✓ (207/445) warp::test_math test_simple_variables
-  ✓ (208/445) warp::test_node_operators test_chaining
-  ✓ (209/445) warp::test_node_operators test_complex_expression
-  ✓ (210/445) warp::test_node_operators test_mixed_types
-  ✓ (211/445) warp::test_node_operators test_node_add_basic
-  ✓ (212/445) warp::test_node_operators test_node_add_empty
-  ✓ (213/445) warp::test_node_operators test_node_add_booleans
-  ✓ (214/445) warp::test_math test_while_loop
-  ✓ (215/445) warp::test_node_operators test_node_div_booleans
-  ✓ (216/445) warp::test_node_operators test_node_div_basic
-  ✓ (217/445) warp::test_lists test_index_offset
-  ✓ (218/445) warp::test_node_operators test_node_meta_preservation
-  ✓ (219/445) warp::test_node_operators test_node_mul_basic
-  ✓ (220/445) warp::test_node_operators test_node_mul_booleans
-  ✓ (221/445) warp::test_node_operators test_node_sub_booleans
-  ✓ (222/445) warp::test_node_operators test_node_mul_empty
-  ✓ (223/445) warp::test_node_operators test_operations_with_primitives_mixed
+  ✓ (172/445) warp::test_json test_implicit_html_structure
+  ✓ (173/445) warp::test_json test_complex_node_json
+  ✓ (174/445) warp::test_json test_data_node_json
+  ✓ (175/445) warp::test_json test_node_eq_json_lists
+  ✓ (176/445) warp::test_json test_nested_node_json
+  ✓ (177/445) warp::test_angle test_if_gt
+  ✓ (178/445) warp::test_json test_node_eq_json_meta
+  ✓ (179/445) warp::test_json test_node_from_json
+  ✓ (180/445) warp::test_json test_node_eq_json_primitives
+  ✓ (181/445) warp::test_json test_node_neq_json
+  ✓ (182/445) warp::test_json test_simple_values
+  ✓ (183/445) warp::test_host test_host_run_import
+  ✓ (184/445) warp::test_json test_node_to_json_compact
+  ✓ (185/445) warp::test_lists test_filter
+  ✓ (186/445) warp::test_kitchensink test_kitchensink_complex_tree
+  ✓ (187/445) warp::test_kitchensink test_kitchensink_wasmtime_execution
+  ✓ (188/445) warp::test_lists test_indexed
+  ✓ (189/445) warp::test_kitchensink test_kitchensink_all_node_types
+  ✓ (190/445) warp::test_host test_host_fetch_import
+  ✓ (191/445) warp::test_math test_harder_arithmetic
+  ✓ (192/445) warp::test_math test_logarithm_in_runtime
+  ✓ (193/445) warp::test_math test_global_with_pi
+  ✓ (194/445) warp::test_math test_arithmetic
+  ✓ (195/445) warp::test_math test_if_then_else
+  ✓ (196/445) warp::test_functions test_function_declaration
+  ✓ (197/445) warp::test_angle test_if_two
+  ✓ (198/445) warp::test_math test_power
+  ✓ (199/445) warp::test_math test_runtime_equality_autocast
+  ✓ (200/445) warp::test_lists test_index
+  ✓ (201/445) warp::test_math test_ternary_with_comparison
+  ✓ (202/445) warp::test_math test_modulo
+  ✓ (203/445) warp::test_math test_simple_variables
+  ✓ (204/445) warp::test_math test_variable_minus
+  ✓ (205/445) warp::test_math test_runtime_equality
+  ✓ (206/445) warp::test_lists test_index_offset
+  ✓ (207/445) warp::test_math test_compound_assignment
+  ✓ (208/445) warp::test_lists test_root_list_strings
+  ✓ (209/445) warp::test_meta test_parent
+  ✓ (210/445) warp::test_math test_if_block_syntax
+  ✓ (211/445) warp::test_node_operators test_node_add_booleans
+  ✓ (212/445) warp::test_node_operators test_node_add_basic
+  ✓ (213/445) warp::test_module_cache test_different_modules_not_cached
+  ✓ (214/445) warp::test_node_operators test_complex_expression
+  ✓ (215/445) warp::test_node_operators test_mixed_types
+  ✓ (216/445) warp::test_node test_mark_as_map
+  ✓ (217/445) warp::test_node_operators test_chaining
+  ✓ (218/445) warp::test_node_operators test_node_add_empty
+  ✓ (219/445) warp::test_module_cache test_module_cache_reuse
+  ✓ (220/445) warp::test_node_operators test_node_div_basic
+  ✓ (221/445) warp::test_node_operators test_node_div_booleans
+  ✓ (222/445) warp::test_node_operators test_node_mul_basic
+  ✓ (223/445) warp::test_node_operators test_node_meta_preservation
   ✓ (224/445) warp::test_node_operators test_node_sub_basic
-  ✓ (225/445) warp::test_number test_number
-  ✓ (226/445) warp::test_lists test_root_lists
-  ✓ (227/445) warp::test_number test_number_floats
-  ✓ (228/445) warp::test_math test_if_block_syntax
-  ✓ (229/445) warp::test_number test_number_mix
+  ✓ (225/445) warp::test_node_operators test_node_mul_empty
+  ✓ (226/445) warp::test_node_operators test_node_sub_booleans
+  ✓ (227/445) warp::test_node_operators test_operations_with_primitives_mixed
+  ✓ (228/445) warp::test_node_operators test_node_mul_booleans
+  ✓ (229/445) warp::test_number test_number_floats
   ✓ (230/445) warp::test_operators test_add_boxed_list_item
-  ✓ (231/445) warp::test_operators test_add_list_item_explicit
-  ✓ (232/445) warp::test_operators test_add_item_list
-  ✓ (233/445) warp::test_operators test_add_lists
-  ✓ (234/445) warp::test_operators test_add_numbers
-  ✓ (235/445) warp::test_operators test_add_meta_on_right
-  ✓ (236/445) warp::test_operators test_add_text
-  ✓ (237/445) warp::test_operators test_add_with_meta
-  ✓ (238/445) warp::test_lists test_root_list_strings
-  ✓ (239/445) warp::test_operators test_for_each
-  ✓ (240/445) warp::test_operators test_key
-  ✓ (241/445) warp::test_operators test_while_true_forever
-  ✓ (242/445) warp::test_number test_hex
-  ✓ (243/445) warp::test_parser parse_list_via_separator
-  ✓ (244/445) warp::test_parser parse_list_via_separator3
-  ✓ (245/445) warp::test_angle test_if_gt
-  ✓ (246/445) warp::test_parser parse_list_via_separator_semicolon
-  ✓ (247/445) warp::test_parser parse_list_via_separator_space
-  ✓ (248/445) warp::test_parser test_colon_lists
-  ✓ (249/445) warp::test_parser test_colon_object
-  ✓ (250/445) warp::test_parser test_bit_field
-  ✓ (251/445) warp::test_parser test_cpp
-  ✓ (252/445) warp::test_parser test_empty
+  ✓ (231/445) warp::test_number test_number_mix
+  ✓ (232/445) warp::test_number test_number
+  ✓ (233/445) warp::test_operators test_add_item_list
+  ✓ (234/445) warp::test_lists test_root_lists
+  ✓ (235/445) warp::test_operators test_add_list_item_explicit
+  ✓ (236/445) warp::test_operators test_add_lists
+  ✓ (237/445) warp::test_operators test_add_numbers
+  ✓ (238/445) warp::test_operators test_add_text
+  ✓ (239/445) warp::test_operators test_add_meta_on_right
+  ✓ (240/445) warp::test_math test_while_loop
+  ✓ (241/445) warp::test_operators test_for_each
+  ✓ (242/445) warp::test_operators test_add_with_meta
+  ✓ (243/445) warp::test_operators test_while_true_forever
+  ✓ (244/445) warp::test_operators test_key
+  ✓ (245/445) warp::test_parser parse_list_via_separator3
+  ✓ (246/445) warp::test_parser parse_list_via_separator
+  ✓ (247/445) warp::test_parser parse_list_via_separator_semicolon
+  ✓ (248/445) warp::test_parser parse_list_via_separator_space
+  ✓ (249/445) warp::test_parser test_bit_field
+  ✓ (250/445) warp::test_parser test_colon_lists
+  ✓ (251/445) warp::test_parser test_colon_object
+  ✓ (252/445) warp::test_parser test_cpp
   ✓ (253/445) warp::test_parser test_eval3
-  ✓ (254/445) warp::test_parser test_key_object_set
-  ✓ (255/445) warp::test_parser test_expected_structure
-  ✓ (256/445) warp::test_parser test_group_cascade0
-  ✓ (257/445) warp::test_parser test_newline_groups
-  ✓ (258/445) warp::test_parser test_parse_complex
-  ✓ (259/445) warp::test_parser test_parse_key_value
-  ✓ (260/445) warp::test_parser test_parse_list
-  ✓ (261/445) warp::test_parser test_parse_function
-  ✓ (262/445) warp::test_parser test_parse_multiple_values
-  ✓ (263/445) warp::test_parser test_parse_named_block
-  ✓ (264/445) warp::test_parser test_parse_number
-  ✓ (265/445) warp::test_parser test_parser_serialize
-  ✓ (266/445) warp::test_parser test_parse_string
-  ✓ (267/445) warp::test_parser test_parse_symbol
-  ✓ (268/445) warp::test_parser test_roundtrip
-  ✓ (269/445) warp::test_parser test_sample
-  ✓ (270/445) warp::test_parser test_semicolon_groups
-  ✓ (271/445) warp::test_parser test_use
-  ✓ (272/445) warp::test_parser test_simple_separators
-  ✓ (273/445) warp::test_string test_first_char
-  ✓ (274/445) warp::test_string test_interpolation
-  ✓ (275/445) warp::test_string test_map
-  ✓ (276/445) warp::test_person_struct test_person_struct_roundtrip
-  ✓ (277/445) warp::test_string test_primitive_char
-  ✓ (278/445) warp::test_string test_primitive_float
-  ✓ (279/445) warp::test_string test_primitive_hello
-  ✓ (280/445) warp::test_string test_primitive_int
-  ✓ (281/445) warp::test_string test_reverse
+  ✓ (254/445) warp::test_parser test_empty
+  ✓ (255/445) warp::test_angle test_if
+  ✓ (256/445) warp::test_parser test_expected_structure
+  ✓ (257/445) warp::test_parser test_group_cascade0
+  ✓ (258/445) warp::test_parser test_key_object_set
+  ✓ (259/445) warp::test_parser test_newline_groups
+  ✓ (260/445) warp::test_parser test_parse_multiple_values
+  ✓ (261/445) warp::test_parser test_parse_complex
+  ✓ (262/445) warp::test_parser test_parse_key_value
+  ✓ (263/445) warp::test_parser test_parse_function
+  ✓ (264/445) warp::test_parser test_parse_list
+  ✓ (265/445) warp::test_parser test_parse_named_block
+  ✓ (266/445) warp::test_number test_hex
+  ✓ (267/445) warp::test_parser test_parse_number
+  ✓ (268/445) warp::test_parser test_parse_string
+  ✓ (269/445) warp::test_parser test_parser_serialize
+  ✓ (270/445) warp::test_parser test_simple_separators
+  ✓ (271/445) warp::test_parser test_parse_symbol
+  ✓ (272/445) warp::test_parser test_sample
+  ✓ (273/445) warp::test_parser test_use
+  ✓ (274/445) warp::test_parser test_semicolon_groups
+  ✓ (275/445) warp::test_parser test_roundtrip
+  ✓ (276/445) warp::test_string test_first_char
+  ✓ (277/445) warp::test_angle test_if_math
+  ✓ (278/445) warp::test_string test_interpolation
+  ✓ (279/445) warp::test_string test_map
+  ✓ (280/445) warp::test_string test_reverse
+  ✓ (281/445) warp::test_string test_string_at
   ✓ (282/445) warp::test_string test_str_string
-  ✓ (283/445) warp::test_string test_primitive_string
-  ✓ (284/445) warp::test_string test_string_at
-  ✓ (285/445) warp::test_string test_string_from
-  ✓ (286/445) warp::test_string test_string_basics
-  ✓ (287/445) warp::test_string test_string_concatenation
-  ✓ (288/445) warp::test_string test_string_set_at
-  ✓ (289/445) warp::test_string test_string_substring
-  ✓ (290/445) warp::test_strcmp_single test_strcmp_with_assign
-  ✓ (291/445) warp::test_string test_string_substring_from
-  ✓ (292/445) warp::test_strlen_sig test_strlen_sig
-  ✓ (293/445) warp::test_strlen_debug test_strlen_debug
-  ✓ (294/445) warp::test_struct_types test_class_instance2
-  ✓ (295/445) warp::test_struct_types test_class_definition
-  ✓ (296/445) warp::test_struct_types test_class_instance_explicit
-  ✓ (297/445) warp::test_struct_types test_class_instance_magic_roundtrip
-  ✓ (298/445) warp::test_struct_types test_class_instance_raw
-  ✓ (299/445) warp::test_struct_types test_debug_format
-  ✓ (300/445) warp::test_struct_types test_codepoint
-  ✓ (301/445) warp::test_struct_types test_magic_object_roundtrip
+  ✓ (283/445) warp::test_functions test_variables
+  ✓ (284/445) warp::test_string test_string_from
+  ✓ (285/445) warp::test_person_struct test_person_struct_roundtrip
+  ✓ (286/445) warp::test_string test_primitive_string
+  ✓ (287/445) warp::test_string test_primitive_float
+  ✓ (288/445) warp::test_string test_primitive_int
+  ✓ (289/445) warp::test_string test_primitive_char
+  ✓ (290/445) warp::test_string test_string_basics
+  ✓ (291/445) warp::test_string test_string_concatenation
+  ✓ (292/445) warp::test_string test_primitive_hello
+  ✓ (293/445) warp::test_string test_string_set_at
+  ✓ (294/445) warp::test_string test_string_substring
+  ✓ (295/445) warp::test_string test_string_substring_from
+  ✓ (296/445) warp::test_strlen_sig test_strlen_sig
+  ✓ (297/445) warp::test_node_operators test_type_mismatch_add
+  ✓ (298/445) warp::test_node_operators test_type_mismatch_mul
+  ✓ (299/445) warp::test_node_operators test_type_mismatch_div
+  ✓ (300/445) warp::test_node_operators test_type_mismatch_sub
+  ✓ (301/445) warp::test_struct_types test_class_instance2
   ✓ (302/445) warp::test_struct_types test_symbol
-  ✓ (303/445) warp::test_struct_types test_text
-  ✓ (304/445) warp::test_todo test_if_then_else
-  ✓ (305/445) warp::test_functions test_function_declaration
-  ✓ (306/445) warp::test_angle test_if_two
-  ✓ (307/445) warp::test_todo test_index_assign_in_loop
-  ✓ (308/445) warp::test_todo test_lambda_comparison
-  ✓ (309/445) warp::test_todo test_lambda_simple
-  ✓ (310/445) warp::test_todo test_lambda_with_multiply
-  ✓ (311/445) warp::test_todo test_param_reference
-  ✓ (312/445) warp::test_todo test_sqrt_arithmetic
-  ✓ (313/445) warp::test_todo test_list_index_after_puts
-  ✓ (314/445) warp::test_todo test_type_annotated
-  ✓ (315/445) warp::test_todo test_array_length
-  ✓ (316/445) warp::test_todo test_type
-  ✓ (317/445) warp::test_node_operators test_type_mismatch_sub
-  ✓ (318/445) warp::test_node_operators test_type_mismatch_add
-  ✓ (319/445) warp::test_node_operators test_type_mismatch_mul
-  ✓ (320/445) warp::test_node_operators test_type_mismatch_div
-  ✓ (321/445) warp::test_type_upgrading test_float_plus_int_type_upgrading
-  ✓ (322/445) warp::test_todo test_type_equivalence
-  ✓ (323/445) warp::test_type_upgrading test_global_with_float
-  ✓ (324/445) warp::test_types test_bad_type
-  ✓ (325/445) warp::test_types test_deep_type
+  ✓ (303/445) warp::test_struct_types test_class_instance_magic_roundtrip
+  ✓ (304/445) warp::test_strcmp_single test_strcmp_with_assign
+  ✓ (305/445) warp::test_struct_types test_class_instance_raw
+  ✓ (306/445) warp::test_struct_types test_class_instance_explicit
+  ✓ (307/445) warp::test_struct_types test_magic_object_roundtrip
+  ✓ (308/445) warp::test_struct_types test_debug_format
+  ✓ (309/445) warp::test_struct_types test_codepoint
+  ✓ (310/445) warp::test_struct_types test_class_definition
+  ✓ (311/445) warp::test_struct_types test_text
+  ✓ (312/445) warp::test_strlen_debug test_strlen_debug
+  ✓ (313/445) warp::test_todo test_sqrt_arithmetic
+  ✓ (314/445) warp::test_todo test_param_reference
+  ✓ (315/445) warp::test_todo test_lambda_with_multiply
+  ✓ (316/445) warp::test_todo test_lambda_simple
+  ✓ (317/445) warp::test_todo test_if_then_else
+  ✓ (318/445) warp::test_todo test_type_annotated
+  ✓ (319/445) warp::test_todo test_lambda_comparison
+  ✓ (320/445) warp::test_types test_bad_type
+  ✓ (321/445) warp::test_todo test_list_index_after_puts
+  ✓ (322/445) warp::test_todo test_type
+  ✓ (323/445) warp::test_todo test_index_assign_in_loop
+  ✓ (324/445) warp::test_types test_deep_type
+  ✓ (325/445) warp::test_todo test_type_equivalence
   ✓ (326/445) warp::test_types test_type_confusion
-  ✓ (327/445) warp::test_type_upgrading test_int_plus_pi_type_upgrading
-  ✓ (328/445) warp::test_type_upgrading test_global_with_reference
-  ✓ (329/445) warp::test_types test_type_node
-  ✓ (330/445) warp::test_types test_type_registry
+  ✓ (327/445) warp::test_types test_type_registry
+  ✓ (328/445) warp::test_types test_type_node
+  ✓ (329/445) warp::test_struct_types test_magic_object_mismatch
+  ✓ (330/445) warp::test_types test_type_registry_from_node
   ✓ (331/445) warp::test_types test_type_synonyms
-  ✓ (332/445) warp::test_types test_type_registry_from_node
-  ✓ (333/445) warp::test_types test_types_simple
-  ✓ (334/445) warp::test_types test_types_simple2
-  ✓ (335/445) warp::test_struct_types test_magic_object_mismatch
-  ✓ (336/445) warp::test_types test_user_type_wasm_emission
-  ✓ (337/445) warp::test_type_upgrading test_float_operations
-  ✓ (338/445) warp::test_types test_cast_as
-  ✓ (339/445) warp::test_wasi test_wasi_putf
-  ✓ (340/445) warp::test_wasi test_fd_write_raw
-  ✓ (341/445) warp::test_wasm test_const_return
-  ✓ (342/445) warp::test_wasi test_fd_write
-  ✓ (343/445) warp::test_wasm test_emitter
-  ✓ (344/445) warp::test_wasm test_merge_wabt
-  ✓ (345/445) warp::test_wasm test_logarithm
-  ✓ (346/445) warp::test_wasm test_dom
+  ✓ (332/445) warp::test_type_upgrading test_global_with_float
+  ✓ (333/445) warp::test_type_upgrading test_int_plus_pi_type_upgrading
+  ✓ (334/445) warp::test_type_upgrading test_float_plus_int_type_upgrading
+  ✓ (335/445) warp::test_type_upgrading test_global_with_reference
+  ✓ (336/445) warp::test_types test_types_simple2
+  ✓ (337/445) warp::test_types test_types_simple
+  ✓ (338/445) warp::test_types test_user_type_wasm_emission
+  ✓ (339/445) warp::test_wasm test_emitter
+  ✓ (340/445) warp::test_type_upgrading test_float_operations
+  ✓ (341/445) warp::test_wasm test_merge_wabt
+  ✓ (342/445) warp::test_wasm test_logarithm
+  ✓ (343/445) warp::test_types test_cast_as
+  ✓ (344/445) warp::test_wasi test_fd_write
+  ✓ (345/445) warp::test_wasi test_wasi_putf
+  ✓ (346/445) warp::test_wasi test_fd_write_raw
   ✓ (347/445) warp::test_wasm test_root
-  ✓ (348/445) warp::test_wasm test_old_random_bugs
-  ✓ (349/445) warp::test_wasi test_wasi_puti
-  ✓ (350/445) warp::test_wasm_gc_emitter test_emit_for_node_tree_shaking
-  ✓ (351/445) warp::test_wasm_gc_emitter test_emit_gc_types
-  ✓ (352/445) warp::test_wasm_gc_emitter test_function_usage_tracking
+  ✓ (348/445) warp::test_wasm test_const_return
+  ✓ (349/445) warp::test_wasm test_old_random_bugs
+  ✓ (350/445) warp::test_wasm test_dom
+  ✓ (351/445) warp::test_wasi test_wasi_puti
+  ✓ (352/445) warp::test_todo test_array_length
   ✓ (353/445) warp::test_wasm test_round_floor_ceiling
-  ✓ (354/445) warp::test_wasm_gc_emitter test_generate_wasm
-  ✓ (355/445) warp::test_wasm test_wasm_while
-  ✓ (356/445) warp::test_wasm_gc_emitter test_node_kind_enum_abi
-  ✓ (357/445) warp::test_wasm_reader test_create_wasm_gc_nodes_from_host_concept
-  ✓ (358/445) warp::test_wasm_reader test_node_serialization_workflow_design
-  ✓ (359/445) warp::test_wasp_comments test_block_comments
-  ✓ (360/445) warp::test_wasp_comments test_comment_metadata
-  ✓ (361/445) warp::test_wasm_reader test_wasm_gc_node_reading_concept
-  ✓ (362/445) warp::test_types test_constructor_cast
-  ✓ (363/445) warp::test_wasp_comments test_comment_with_metadata_accessor
-  ✓ (364/445) warp::test_wasp_comments test_line_comments
-  ✓ (365/445) warp::test_wasm_gc_emitter test_wasm_roundtrip_via_is
-  ✓ (366/445) warp::test_wasp_comments test_comments_in_html_structure
-  ✓ (367/445) warp::test_wasp_comments test_inline_comments
-  ✓ (368/445) warp::test_wasp_format test_empty_structures
-  ✓ (369/445) warp::test_wasp_format test_function_syntax
-  ✓ (370/445) warp::test_wasp_format test_list_operations
-  ✓ (371/445) warp::test_wasm test_range
-  ✓ (372/445) warp::test_wasp_format test_nested_structures
-  ✓ (373/445) warp::test_wasp_format test_mixed_syntax
+  ✓ (354/445) warp::test_types test_constructor_cast
+  ✓ (355/445) warp::test_wasm test_range
+  ✓ (356/445) warp::test_wasm_gc_emitter test_emit_gc_types
+  ✓ (357/445) warp::test_wasm_gc_emitter test_function_usage_tracking
+  ✓ (358/445) warp::test_wasm_gc_emitter test_generate_wasm
+  ✓ (359/445) warp::test_wasm_gc_emitter test_emit_for_node_tree_shaking
+  ✓ (360/445) warp::test_wasm_gc_emitter test_node_kind_enum_abi
+  ✓ (361/445) warp::test_wasm test_wasm_while
+  ✓ (362/445) warp::test_wasm_reader test_node_serialization_workflow_design
+  ✓ (363/445) warp::test_wasm_reader test_create_wasm_gc_nodes_from_host_concept
+  ✓ (364/445) warp::test_string test_string_index
+  ✓ (365/445) warp::test_wasp_format test_function_syntax
+  ✓ (366/445) warp::test_wasp_comments test_block_comments
+  ✓ (367/445) warp::test_wasp_comments test_comment_with_metadata_accessor
+  ✓ (368/445) warp::test_wasp_comments test_inline_comments
+  ✓ (369/445) warp::test_wasp_comments test_comment_metadata
+  ✓ (370/445) warp::test_wasp_comments test_comments_in_html_structure
+  ✓ (371/445) warp::test_wasp_format test_empty_structures
+  ✓ (372/445) warp::test_wasp_comments test_line_comments
+  ✓ (373/445) warp::test_wasp_format test_list_operations
   ✓ (374/445) warp::test_wasp_format test_wasp_roundtrip
-  ✓ (375/445) warp::test_wasp_format test_wasp_to_json
-  ✓ (376/445) warp::test_wasp_position test_column_tracking
-  ✓ (377/445) warp::test_wasp_position test_multiline_structure
-  ✓ (378/445) warp::test_wasm_gc_emitter test_wasm_roundtrip
-  ✓ (379/445) warp::test_wasp_position test_position_in_json_output
-  ✓ (380/445) warp::test_wasp_position test_position_tracking
-  ✓ (381/445) warp::test_wasp_position test_nested_position_tracking
-  ✓ (382/445) warp::test_wasp_position test_position_with_comments
-  ✓ (383/445) warp::test_wit test_timeout_protection
-  ✓ (384/445) warp::test_xml test_boolean_attribute
-  ✓ (385/445) warp::test_xml test_cdata
-  ✓ (386/445) warp::test_xml test_doctype
-  ✓ (387/445) warp::test_xml test_complex_xml_document
-  ✓ (388/445) warp::test_xml test_nested_xml
-  ✓ (389/445) warp::test_xml test_real_world_xml
-  ✓ (390/445) warp::test_xml test_self_closing_tag
-  ✓ (391/445) warp::test_xml test_simple_xml_tag
-  ✓ (392/445) warp::test_web test_html_wasp
-  ✓ (393/445) warp::test_xml test_to_xml_boolean_attribute
-  ✓ (394/445) warp::test_xml test_to_xml_nested
-  ✓ (395/445) warp::test_xml test_to_xml_self_closing
-  ✓ (396/445) warp::test_xml test_to_xml_simple
-  ✓ (397/445) warp::test_xml test_to_xml_with_attributes
-  ✓ (398/445) warp::test_xml test_xml_declaration
-  ✓ (399/445) warp::test_xml test_xml_comments
-  ✓ (400/445) warp::test_xml test_xml_roundtrip
-  ✓ (401/445) warp::test_xml test_xml_to_json
-  ✓ (402/445) warp::test_xml test_xml_with_attributes
-  ✓ (403/445) warp::wasm_optimizer_test test_no_optimization
-  ✓ (404/445) warp::bin/warp extensions::strings::tests::test_char_str_eq
-  ✓ (405/445) warp::bin/warp extensions::strings::tests::test_str_plus
-  ✓ (406/445) warp::bin/warp ffi::tests::test_extract_function_signature_multi_param
-  ✓ (407/445) warp::bin/warp ffi::tests::test_extract_function_signature_pointer
-  ✓ (408/445) warp::bin/warp ffi::tests::test_extract_function_signature_simple
-  ✓ (409/445) warp::bin/warp ffi::tests::test_extract_function_signature_void_return
-  ✓ (410/445) warp::bin/warp ffi::tests::test_header_sig_to_ffi_sig
-  ✓ (411/445) warp::bin/warp ffi::tests::test_map_c_type_to_valtype
-  ✓ (412/445) warp::test_wasm test_square
-  ✓ (413/445) warp::test_angle test_if
-  ✓ (414/445) warp::bin/warp ffi_parser::tests::test_parse_int32_return
-  ✓ (415/445) warp::bin/warp ffi::tests::test_parse_header_file_math
-  ✓ (416/445) warp::bin/warp ffi_parser::tests::test_parse_simple_function
+  ✓ (375/445) warp::test_wasp_format test_nested_structures
+  ✓ (376/445) warp::test_wasp_format test_mixed_syntax
+  ✓ (377/445) warp::test_wasm_reader test_wasm_gc_node_reading_concept
+  ✓ (378/445) warp::test_wasp_format test_wasp_to_json
+  ✓ (379/445) warp::test_wasm_gc_emitter test_wasm_roundtrip_via_is
+  ✓ (380/445) warp::test_wasm test_square
+  ✓ (381/445) warp::test_wasm_gc_emitter test_wasm_roundtrip
+  ✓ (382/445) warp::test_wasp_position test_nested_position_tracking
+  ✓ (383/445) warp::test_wasp_position test_position_in_json_output
+  ✓ (384/445) warp::test_wasp_position test_column_tracking
+  ✓ (385/445) warp::test_wasp_position test_multiline_structure
+  ✓ (386/445) warp::test_wit test_timeout_protection
+  ✓ (387/445) warp::test_wasp_position test_position_tracking
+  ✓ (388/445) warp::test_xml test_boolean_attribute
+  ✓ (389/445) warp::test_xml test_cdata
+  ✓ (390/445) warp::test_wasp_position test_position_with_comments
+  ✓ (391/445) warp::test_xml test_nested_xml
+  ✓ (392/445) warp::test_xml test_doctype
+  ✓ (393/445) warp::test_xml test_real_world_xml
+  ✓ (394/445) warp::test_xml test_complex_xml_document
+  ✓ (395/445) warp::test_xml test_self_closing_tag
+  ✓ (396/445) warp::test_xml test_simple_xml_tag
+  ✓ (397/445) warp::test_xml test_to_xml_nested
+  ✓ (398/445) warp::test_xml test_to_xml_boolean_attribute
+  ✓ (399/445) warp::test_web test_html_wasp
+  ✓ (400/445) warp::test_xml test_to_xml_simple
+  ✓ (401/445) warp::test_xml test_to_xml_self_closing
+  ✓ (402/445) warp::test_xml test_xml_comments
+  ✓ (403/445) warp::test_xml test_xml_to_json
+  ✓ (404/445) warp::test_xml test_to_xml_with_attributes
+  ✓ (405/445) warp::test_xml test_xml_declaration
+  ✓ (406/445) warp::test_xml test_xml_roundtrip
+  ✓ (407/445) warp::test_xml test_xml_with_attributes
+  ✓ (408/445) warp::bin/warp extensions::strings::tests::test_char_str_eq
+  ✓ (409/445) warp::wasm_optimizer_test test_no_optimization
+  ✓ (410/445) warp::bin/warp extensions::strings::tests::test_str_plus
+  ✓ (411/445) warp::bin/warp ffi::tests::test_extract_function_signature_simple
+  ✓ (412/445) warp::bin/warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ (413/445) warp::bin/warp ffi::tests::test_extract_function_signature_pointer
+  ✓ (414/445) warp::bin/warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ (415/445) warp::bin/warp ffi::tests::test_extract_function_signature_void_return
+  ✓ (416/445) warp::bin/warp ffi::tests::test_map_c_type_to_valtype
   ✓ (417/445) warp::bin/warp ffi_parser::tests::test_parse_pointer_param
-  ✓ (418/445) warp::bin/warp ffi_parser::tests::test_parse_system_headers
-  ✓ (419/445) warp::wasm_optimizer_test test_library_optimization
-  ✓ (420/445) warp::bin/warp ffi_parser::tests::test_parse_two_params
-  ✓ (421/445) warp::wasm_optimizer_test test_tools_availability
+  ✓ (418/445) warp::bin/warp ffi_parser::tests::test_parse_int32_return
+  ✓ (419/445) warp::bin/warp ffi_parser::tests::test_parse_simple_function
+  ✓ (420/445) warp::bin/warp ffi::tests::test_parse_header_file_math
+  ✓ (421/445) warp::bin/warp ffi_parser::tests::test_parse_two_params
   ✓ (422/445) warp::bin/warp ffi_parser::tests::test_parse_void_params
-  ✓ (423/445) warp::bin/warp function::tests::test_function_builder
-  ✓ (424/445) warp::bin/warp function::tests::test_arg
-  ✓ (425/445) warp::bin/warp function::tests::test_function_locals
+  ✓ (423/445) warp::bin/warp function::tests::test_arg
+  ✓ (424/445) warp::bin/warp ffi_parser::tests::test_parse_system_headers
+  ✓ (425/445) warp::bin/warp ffi_parser::tests::test_raylib_functions
   ✓ (426/445) warp::bin/warp function::tests::test_function_host
-  ✓ (427/445) warp::bin/warp ffi_parser::tests::test_raylib_functions
-  ✓ (428/445) warp::test_functions test_variables
-  ✓ (429/445) warp::bin/warp function::tests::test_kind_to_valtype
-  ✓ (430/445) warp::bin/warp function::tests::test_signature_builder
-  ✓ (431/445) warp::bin/warp function::tests::test_signature_format
-  ✓ (432/445) warp::bin/warp host::tests::test_host_state
+  ✓ (427/445) warp::bin/warp function::tests::test_function_builder
+  ✓ (428/445) warp::bin/warp function::tests::test_function_locals
+  ✓ (429/445) warp::bin/warp function::tests::test_function_registry
+  ✓ (430/445) warp::bin/warp function::tests::test_kind_to_valtype
+  ✓ (431/445) warp::bin/warp host::tests::test_host_state
+  ✓ (432/445) warp::bin/warp function::tests::test_signature_format
   ✓ (433/445) warp::bin/warp normalize::tests::test_hint_mode
-  ✓ (434/445) warp::bin/warp function::tests::test_function_registry
-  ✓ (435/445) warp::test_angle test_if_math
-  ✓ (436/445) warp::bin/warp normalize::tests::test_style_swap
-  ✓ (437/445) warp::test_string test_string_index
-  ✓ (438/445) warp::wasm_optimizer_test test_executable_tree_shaking
-  ✓ (439/445) warp::test_web test_fetch
-  ✓ (440/445) warp::test_string test_string_index_by_variable
-  ✓ (441/445) warp::test_types test_emit_cast
-  ✓ (442/445) warp::test_lists test_index_offset_advanced
-  ✓ (443/445) warp::test_string test_string_indices
+  ✓ (434/445) warp::bin/warp normalize::tests::test_style_swap
+  ✓ (435/445) warp::bin/warp function::tests::test_signature_builder
+  ✓ (436/445) warp::test_string test_string_index_by_variable
+  ✓ (437/445) warp::test_lists test_index_offset_advanced
+  ✓ (438/445) warp::wasm_optimizer_test test_tools_availability
+  ✓ (439/445) warp::wasm_optimizer_test test_library_optimization
+  ✓ (440/445) warp::test_types test_emit_cast
+  ✓ (441/445) warp::wasm_optimizer_test test_executable_tree_shaking
+  ✓ (442/445) warp::test_string test_string_indices
+  ✓ (443/445) warp::test_web test_fetch
 
 FAILED:
 
 SUMMARY:
   0 ignored, 443 passed, 0 failed, 443 total tested
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+Clean summary saved to: test_results.txt
+=== Test Results (nextest) ===
+
+PASSED:
+  ✓ (  1/445) warp ffi::tests::test_extract_function_signature_simple
+  ✓ (  2/445) warp ffi_parser::tests::test_parse_int32_return
+  ✓ (  3/445) warp ffi_parser::tests::test_parse_pointer_param
+  ✓ (  4/445) warp ffi::tests::test_parse_header_file_math
+  ✓ (  5/445) warp ffi::tests::test_extract_function_signature_void_return
+  ✓ (  6/445) warp ffi::tests::test_map_c_type_to_valtype
+  ✓ (  7/445) warp extensions::strings::tests::test_str_plus
+  ✓ (  8/445) warp extensions::strings::tests::test_char_str_eq
+  ✓ (  9/445) warp ffi_parser::tests::test_parse_simple_function
+  ✓ ( 10/445) warp ffi_parser::tests::test_parse_void_params
+  ✓ ( 11/445) warp ffi::tests::test_extract_function_signature_pointer
+  ✓ ( 12/445) warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ ( 13/445) warp ffi_parser::tests::test_parse_two_params
+  ✓ ( 14/445) warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ ( 15/445) warp ffi_parser::tests::test_parse_system_headers
+  ✓ ( 16/445) warp normalize::tests::test_style_swap
+  ✓ ( 17/445) warp function::tests::test_function_builder
+  ✓ ( 18/445) warp normalize::tests::test_hint_mode
+  ✓ ( 19/445) warp function::tests::test_signature_format
+  ✓ ( 20/445) warp ffi_parser::tests::test_raylib_functions
+  ✓ ( 21/445) warp function::tests::test_function_locals
+  ✓ ( 22/445) warp function::tests::test_signature_builder
+  ✓ ( 23/445) warp function::tests::test_arg
+  ✓ ( 24/445) warp function::tests::test_function_registry
+  ✓ ( 25/445) warp function::tests::test_kind_to_valtype
+  ✓ ( 26/445) warp host::tests::test_host_state
+  ✓ ( 27/445) warp function::tests::test_function_host
+  ✓ ( 28/445) warp wisp_parser::tests::test_wisp_cons_dotted_pair
+  ✓ ( 29/445) warp wisp_parser::tests::test_wisp_roundtrip_compound
+  ✓ ( 30/445) warp wisp_parser::tests::test_wisp_nested
+  ✓ ( 31/445) warp wisp_parser::tests::test_wisp_basic_atom_types
+  ✓ ( 32/445) warp wisp_parser::tests::test_wisp_list
+  ✓ ( 33/445) warp wisp_parser::tests::test_wisp_call
+  ✓ ( 34/445) warp wisp_parser::tests::test_wisp_emit_compound
+  ✓ ( 35/445) warp wisp_parser::tests::test_wisp_emit_atoms
+  ✓ ( 36/445) warp wisp_parser::tests::test_wisp_meta
+  ✓ ( 37/445) warp wisp_parser::tests::test_wisp_roundtrip_atoms
+  ✓ ( 38/445) warp wisp_parser::tests::test_wisp_roundtrip_nested
+  ✓ ( 39/445) warp wisp_parser::tests::test_wisp_roundtrip_sexpr
+  ✓ ( 40/445) warp wisp_parser::tests::test_wisp_key_pair
+  ✓ ( 41/445) warp wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
+  ✓ ( 42/445) warp wisp_parser::tests::test_wisp_sexpr_types
+  ✓ ( 43/445) warp wisp_parser::tests::test_wisp_tag
+  ✓ ( 44/445) warp wisp_parser::tests::test_wisp_shorthand_operators
+  ✓ ( 45/445) warp::node_values_test test_values_nested_key
+  ✓ ( 46/445) warp::node_values_test test_values_list
+  ✓ ( 47/445) warp::node_values_test test_values_key
+  ✓ ( 48/445) warp::node_values_test test_values_empty
+  ✓ ( 49/445) warp::node_values_test test_values_number
+  ✓ ( 50/445) warp::node_values_test test_values_meta
+  ✓ ( 51/445) warp::probe_def_syntax probe_multiple_syntaxes
+  ✓ ( 52/445) warp::probe_def_syntax probe_def_syntax
+  ✓ ( 53/445) warp::probe_increment probe_increment
+  ✓ ( 54/445) warp::probe_def_syntax probe_parse_add_call
+  ✓ ( 55/445) warp::probe_def_syntax probe_def_block_syntax
+  ✓ ( 56/445) warp::probe_def_syntax probe_dollar_param
+  ✓ ( 57/445) warp::probe_operators test_arithmetic_basic
+  ✓ ( 58/445) warp::probe_def_syntax probe_def_add
+  ✓ ( 59/445) warp::probe_def_syntax probe_test2_check
+  ✓ ( 60/445) warp::probe_operators test_arithmetic_precedence
+  ✓ ( 61/445) warp::probe_increment probe_while_execution
+  ✓ ( 62/445) warp::probe_operators test_assignment_right_assoc
+  ✓ ( 63/445) warp::probe_operators test_comparison
+  ✓ ( 64/445) warp::probe_operators test_comparison_eq
+  ✓ ( 65/445) warp::probe_operators test_logical_or
+  ✓ ( 66/445) warp::probe_operators test_hash_index
+  ✓ ( 67/445) warp::probe_operators test_logical_and
+  ✓ ( 68/445) warp::probe_operators test_mixed_prefix_infix
+  ✓ ( 69/445) warp::probe_operators test_power_right_assoc
+  ✓ ( 70/445) warp::probe_operators test_prefix_neg
+  ✓ ( 71/445) warp::probe_operators test_range
+  ✓ ( 72/445) warp::probe_precedence probe_fib_parsing
+  ✓ ( 73/445) warp::probe_operators test_suffix_square
+  ✓ ( 74/445) warp::probe_operators test_unicode_le
+  ✓ ( 75/445) warp::probe_precedence test_key_equality
+  ✓ ( 76/445) warp::probe_operators test_unicode_mul
+  ✓ ( 77/445) warp::probe_precedence test_key_operators
+  ✓ ( 78/445) warp::probe_precedence test_precedence
+  ✓ ( 79/445) warp::probe_precedence test_type_annotation_block_with_assignment
+  ✓ ( 80/445) warp::probe_precedence test_type_annotation_with_block
+  ✓ ( 81/445) warp::probe_type test_type_string
+  ✓ ( 82/445) warp::probe_type test_type_symbol
+  ✓ ( 83/445) warp::probe_type test_type_float
+  ✓ ( 84/445) warp::probe_type test_type_number
+  ✓ ( 85/445) warp::probe_type test_type_variable
+  ✓ ( 86/445) warp::probe_index_loop test_index_assign_with_variable
+  ✓ ( 87/445) warp::probe_index_loop test_index_assign_in_while_with_increment
+  ✓ ( 88/445) warp::test_blocks test_group_cascade1
+  ✓ ( 89/445) warp::test_asts test_ast
+  ✓ ( 90/445) warp::probe_index_loop test_index_assign_in_while_loop
+  ✓ ( 91/445) warp::test_blocks test_group_cascade
+  ✓ ( 92/445) warp::test_angle test_smart_types
+  ✓ ( 93/445) warp::probe_index_loop test_index_assign_return_counter
+  ✓ ( 94/445) warp::test_blocks test_group_cascade2
+  ✓ ( 95/445) warp::test_data test_node_data
+  ✓ ( 96/445) warp::test_blocks test_indent_as_block
+  ✓ ( 97/445) warp::probe_index_loop test_simple_index_assign
+  ✓ ( 98/445) warp::test_data test_node_data_clone
+  ✓ ( 99/445) warp::test_data test_node_data_various_types
+  ✓ (100/445) warp::test_data test_node_data_equality
+  ✓ (101/445) warp::test_data test_node_data_type_mismatch
+  ✓ (102/445) warp::test_data test_node_data_metadata
+  ✓ (103/445) warp::test_emitter test_compact_float
+  ✓ (104/445) warp::test_emitter test_optimizer_graph_generation
+  ✓ (105/445) warp::probe_index_loop test_index_assign_25_elements
+  ✓ (106/445) warp::test_emitter test_compact_int
+  ✓ (107/445) warp::test_emitter test_compact_empty
+  ✓ (108/445) warp::test_ffi test_c_type_mapping
+  ✓ (109/445) warp::test_ffi test_ffi_curl_discovery
+  ✓ (110/445) warp::test_ffi test_ffi_cos_works
+  ✓ (111/445) warp::test_blocks test_matrix_comma_index
+  ✓ (112/445) warp::test_emitter test_tools_available
+  ✓ (113/445) warp::test_ffi test_ffi_fabs
+  ✓ (114/445) warp::test_ffi test_ffi_atof
+  ✓ (115/445) warp::test_ffi test_ffi_abs_from_c
+  ✓ (116/445) warp::test_ffi test_ffi_generic_discovery
+  ✓ (117/445) warp::test_angle test_call
+  ✓ (118/445) warp::test_ffi test_ffi_fabs_from_m
+  ✓ (119/445) warp::test_ffi test_ffi_fmin_wasp_file
+  ✓ (120/445) warp::test_ffi test_ffi_fmax
+  ✓ (121/445) warp::test_ffi test_ffi_import_pattern
+  ✓ (122/445) warp::test_ffi test_ffi_header_parser
+  ✓ (123/445) warp::test_ffi test_ffi_cos
+  ✓ (124/445) warp::test_ffi test_ffi_png_discovery
+  ✓ (125/445) warp::test_ffi test_ffi_fmod
+  ✓ (126/445) warp::test_ffi test_ffi_raylib_discovery
+  ✓ (127/445) warp::test_ffi test_ffi_fmin
+  ✓ (128/445) warp::test_ffi test_ffi_sin_works
+  ✓ (129/445) warp::test_ffi test_ffi_sin_pi_half
+  ✓ (130/445) warp::test_ffi test_ffi_sqlite_discovery
+  ✓ (131/445) warp::test_ffi test_ffi_sqrt_works
+  ✓ (132/445) warp::test_angle test_logic_precedence
+  ✓ (133/445) warp::test_ffi test_ffi_zlib_discovery
+  ✓ (134/445) warp::test_ffi test_import_from_pattern_parse
+  ✓ (135/445) warp::test_ffi test_ffi_nested_calls
+  ✓ (136/445) warp::test_ffi test_ffi_strlen
+  ✓ (137/445) warp::test_ffi test_ffi_tan
+  ✓ (138/445) warp::test_ffi test_import_from_pattern_emit
+  ✓ (139/445) warp::test_ffi test_ffi_sin
+  ✓ (140/445) warp::test_functions test_fibonacci_auto_typed
+  ✓ (141/445) warp::test_functions test_fibonacci_auto_param
+  ✓ (142/445) warp::test_functions test2def
+  ✓ (143/445) warp::test_ffi test_ffi_strncmp
+  ✓ (144/445) warp::test_functions test_fibonacci_typed2
+  ✓ (145/445) warp::test_functions test_graph_params
+  ✓ (146/445) warp::test_functions test_function_declaration_parse
+  ✓ (147/445) warp::test_functions test_params
+  ✓ (148/445) warp::test_functions test_float_return_through_main
+  ✓ (149/445) warp::test_angle test_if_call_zero
+  ✓ (150/445) warp::test_functions test_rename_wasm_function
+  ✓ (151/445) warp::test_functions test_fibonacci_typed
+  ✓ (152/445) warp::test_functions test_function_definitions
+  ✓ (153/445) warp::test_blocks test_matrix_order
+  ✓ (154/445) warp::test_functions test_default_params
+  ✓ (155/445) warp::test_functions test_variable_reassignment
+  ✓ (156/445) warp::test_gc_struct test_gc_struct_macro
+  ✓ (157/445) warp::test_gc_struct test_raw_person_struct
+  ✓ (158/445) warp::test_gc_struct test_class_instance_raw
+  ✓ (159/445) warp::test_gc_struct test_gc_object_index_access
+  ✓ (160/445) warp::test_ffi test_ffi_strcmp
+  ✓ (161/445) warp::test_globals test_global_int_multiple
+  ✓ (162/445) warp::test_globals test_global_reassignment
+  ✓ (163/445) warp::test_globals test_global_int_simple
+  ✓ (164/445) warp::test_globals test_global_float_with_pi
+  ✓ (165/445) warp::test_host test_emit_host_imports
+  ✓ (166/445) warp::test_angle test_truthy_and
+  ✓ (167/445) warp::test_host test_emitter_with_host_imports_valid
+  ✓ (168/445) warp::test_globals test_global_with_expression
+  ✓ (169/445) warp::test_json test_block_node_json
+  ✓ (170/445) warp::test_json test_node_eq_json_curly_lists
+  ✓ (171/445) warp::test_json test_node_eq_json_keys
+  ✓ (172/445) warp::test_json test_implicit_html_structure
+  ✓ (173/445) warp::test_json test_complex_node_json
+  ✓ (174/445) warp::test_json test_data_node_json
+  ✓ (175/445) warp::test_json test_node_eq_json_lists
+  ✓ (176/445) warp::test_json test_nested_node_json
+  ✓ (177/445) warp::test_angle test_if_gt
+  ✓ (178/445) warp::test_json test_node_eq_json_meta
+  ✓ (179/445) warp::test_json test_node_from_json
+  ✓ (180/445) warp::test_json test_node_eq_json_primitives
+  ✓ (181/445) warp::test_json test_node_neq_json
+  ✓ (182/445) warp::test_json test_simple_values
+  ✓ (183/445) warp::test_host test_host_run_import
+  ✓ (184/445) warp::test_json test_node_to_json_compact
+  ✓ (185/445) warp::test_lists test_filter
+  ✓ (186/445) warp::test_kitchensink test_kitchensink_complex_tree
+  ✓ (187/445) warp::test_kitchensink test_kitchensink_wasmtime_execution
+  ✓ (188/445) warp::test_lists test_indexed
+  ✓ (189/445) warp::test_kitchensink test_kitchensink_all_node_types
+  ✓ (190/445) warp::test_host test_host_fetch_import
+  ✓ (191/445) warp::test_math test_harder_arithmetic
+  ✓ (192/445) warp::test_math test_logarithm_in_runtime
+  ✓ (193/445) warp::test_math test_global_with_pi
+  ✓ (194/445) warp::test_math test_arithmetic
+  ✓ (195/445) warp::test_math test_if_then_else
+  ✓ (196/445) warp::test_functions test_function_declaration
+  ✓ (197/445) warp::test_angle test_if_two
+  ✓ (198/445) warp::test_math test_power
+  ✓ (199/445) warp::test_math test_runtime_equality_autocast
+  ✓ (200/445) warp::test_lists test_index
+  ✓ (201/445) warp::test_math test_ternary_with_comparison
+  ✓ (202/445) warp::test_math test_modulo
+  ✓ (203/445) warp::test_math test_simple_variables
+  ✓ (204/445) warp::test_math test_variable_minus
+  ✓ (205/445) warp::test_math test_runtime_equality
+  ✓ (206/445) warp::test_lists test_index_offset
+  ✓ (207/445) warp::test_math test_compound_assignment
+  ✓ (208/445) warp::test_lists test_root_list_strings
+  ✓ (209/445) warp::test_meta test_parent
+  ✓ (210/445) warp::test_math test_if_block_syntax
+  ✓ (211/445) warp::test_node_operators test_node_add_booleans
+  ✓ (212/445) warp::test_node_operators test_node_add_basic
+  ✓ (213/445) warp::test_module_cache test_different_modules_not_cached
+  ✓ (214/445) warp::test_node_operators test_complex_expression
+  ✓ (215/445) warp::test_node_operators test_mixed_types
+  ✓ (216/445) warp::test_node test_mark_as_map
+  ✓ (217/445) warp::test_node_operators test_chaining
+  ✓ (218/445) warp::test_node_operators test_node_add_empty
+  ✓ (219/445) warp::test_module_cache test_module_cache_reuse
+  ✓ (220/445) warp::test_node_operators test_node_div_basic
+  ✓ (221/445) warp::test_node_operators test_node_div_booleans
+  ✓ (222/445) warp::test_node_operators test_node_mul_basic
+  ✓ (223/445) warp::test_node_operators test_node_meta_preservation
+  ✓ (224/445) warp::test_node_operators test_node_sub_basic
+  ✓ (225/445) warp::test_node_operators test_node_mul_empty
+  ✓ (226/445) warp::test_node_operators test_node_sub_booleans
+  ✓ (227/445) warp::test_node_operators test_operations_with_primitives_mixed
+  ✓ (228/445) warp::test_node_operators test_node_mul_booleans
+  ✓ (229/445) warp::test_number test_number_floats
+  ✓ (230/445) warp::test_operators test_add_boxed_list_item
+  ✓ (231/445) warp::test_number test_number_mix
+  ✓ (232/445) warp::test_number test_number
+  ✓ (233/445) warp::test_operators test_add_item_list
+  ✓ (234/445) warp::test_lists test_root_lists
+  ✓ (235/445) warp::test_operators test_add_list_item_explicit
+  ✓ (236/445) warp::test_operators test_add_lists
+  ✓ (237/445) warp::test_operators test_add_numbers
+  ✓ (238/445) warp::test_operators test_add_text
+  ✓ (239/445) warp::test_operators test_add_meta_on_right
+  ✓ (240/445) warp::test_math test_while_loop
+  ✓ (241/445) warp::test_operators test_for_each
+  ✓ (242/445) warp::test_operators test_add_with_meta
+  ✓ (243/445) warp::test_operators test_while_true_forever
+  ✓ (244/445) warp::test_operators test_key
+  ✓ (245/445) warp::test_parser parse_list_via_separator3
+  ✓ (246/445) warp::test_parser parse_list_via_separator
+  ✓ (247/445) warp::test_parser parse_list_via_separator_semicolon
+  ✓ (248/445) warp::test_parser parse_list_via_separator_space
+  ✓ (249/445) warp::test_parser test_bit_field
+  ✓ (250/445) warp::test_parser test_colon_lists
+  ✓ (251/445) warp::test_parser test_colon_object
+  ✓ (252/445) warp::test_parser test_cpp
+  ✓ (253/445) warp::test_parser test_eval3
+  ✓ (254/445) warp::test_parser test_empty
+  ✓ (255/445) warp::test_angle test_if
+  ✓ (256/445) warp::test_parser test_expected_structure
+  ✓ (257/445) warp::test_parser test_group_cascade0
+  ✓ (258/445) warp::test_parser test_key_object_set
+  ✓ (259/445) warp::test_parser test_newline_groups
+  ✓ (260/445) warp::test_parser test_parse_multiple_values
+  ✓ (261/445) warp::test_parser test_parse_complex
+  ✓ (262/445) warp::test_parser test_parse_key_value
+  ✓ (263/445) warp::test_parser test_parse_function
+  ✓ (264/445) warp::test_parser test_parse_list
+  ✓ (265/445) warp::test_parser test_parse_named_block
+  ✓ (266/445) warp::test_number test_hex
+  ✓ (267/445) warp::test_parser test_parse_number
+  ✓ (268/445) warp::test_parser test_parse_string
+  ✓ (269/445) warp::test_parser test_parser_serialize
+  ✓ (270/445) warp::test_parser test_simple_separators
+  ✓ (271/445) warp::test_parser test_parse_symbol
+  ✓ (272/445) warp::test_parser test_sample
+  ✓ (273/445) warp::test_parser test_use
+  ✓ (274/445) warp::test_parser test_semicolon_groups
+  ✓ (275/445) warp::test_parser test_roundtrip
+  ✓ (276/445) warp::test_string test_first_char
+  ✓ (277/445) warp::test_angle test_if_math
+  ✓ (278/445) warp::test_string test_interpolation
+  ✓ (279/445) warp::test_string test_map
+  ✓ (280/445) warp::test_string test_reverse
+  ✓ (281/445) warp::test_string test_string_at
+  ✓ (282/445) warp::test_string test_str_string
+  ✓ (283/445) warp::test_functions test_variables
+  ✓ (284/445) warp::test_string test_string_from
+  ✓ (285/445) warp::test_person_struct test_person_struct_roundtrip
+  ✓ (286/445) warp::test_string test_primitive_string
+  ✓ (287/445) warp::test_string test_primitive_float
+  ✓ (288/445) warp::test_string test_primitive_int
+  ✓ (289/445) warp::test_string test_primitive_char
+  ✓ (290/445) warp::test_string test_string_basics
+  ✓ (291/445) warp::test_string test_string_concatenation
+  ✓ (292/445) warp::test_string test_primitive_hello
+  ✓ (293/445) warp::test_string test_string_set_at
+  ✓ (294/445) warp::test_string test_string_substring
+  ✓ (295/445) warp::test_string test_string_substring_from
+  ✓ (296/445) warp::test_strlen_sig test_strlen_sig
+  ✓ (297/445) warp::test_node_operators test_type_mismatch_add
+  ✓ (298/445) warp::test_node_operators test_type_mismatch_mul
+  ✓ (299/445) warp::test_node_operators test_type_mismatch_div
+  ✓ (300/445) warp::test_node_operators test_type_mismatch_sub
+  ✓ (301/445) warp::test_struct_types test_class_instance2
+  ✓ (302/445) warp::test_struct_types test_symbol
+  ✓ (303/445) warp::test_struct_types test_class_instance_magic_roundtrip
+  ✓ (304/445) warp::test_strcmp_single test_strcmp_with_assign
+  ✓ (305/445) warp::test_struct_types test_class_instance_raw
+  ✓ (306/445) warp::test_struct_types test_class_instance_explicit
+  ✓ (307/445) warp::test_struct_types test_magic_object_roundtrip
+  ✓ (308/445) warp::test_struct_types test_debug_format
+  ✓ (309/445) warp::test_struct_types test_codepoint
+  ✓ (310/445) warp::test_struct_types test_class_definition
+  ✓ (311/445) warp::test_struct_types test_text
+  ✓ (312/445) warp::test_strlen_debug test_strlen_debug
+  ✓ (313/445) warp::test_todo test_sqrt_arithmetic
+  ✓ (314/445) warp::test_todo test_param_reference
+  ✓ (315/445) warp::test_todo test_lambda_with_multiply
+  ✓ (316/445) warp::test_todo test_lambda_simple
+  ✓ (317/445) warp::test_todo test_if_then_else
+  ✓ (318/445) warp::test_todo test_type_annotated
+  ✓ (319/445) warp::test_todo test_lambda_comparison
+  ✓ (320/445) warp::test_types test_bad_type
+  ✓ (321/445) warp::test_todo test_list_index_after_puts
+  ✓ (322/445) warp::test_todo test_type
+  ✓ (323/445) warp::test_todo test_index_assign_in_loop
+  ✓ (324/445) warp::test_types test_deep_type
+  ✓ (325/445) warp::test_todo test_type_equivalence
+  ✓ (326/445) warp::test_types test_type_confusion
+  ✓ (327/445) warp::test_types test_type_registry
+  ✓ (328/445) warp::test_types test_type_node
+  ✓ (329/445) warp::test_struct_types test_magic_object_mismatch
+  ✓ (330/445) warp::test_types test_type_registry_from_node
+  ✓ (331/445) warp::test_types test_type_synonyms
+  ✓ (332/445) warp::test_type_upgrading test_global_with_float
+  ✓ (333/445) warp::test_type_upgrading test_int_plus_pi_type_upgrading
+  ✓ (334/445) warp::test_type_upgrading test_float_plus_int_type_upgrading
+  ✓ (335/445) warp::test_type_upgrading test_global_with_reference
+  ✓ (336/445) warp::test_types test_types_simple2
+  ✓ (337/445) warp::test_types test_types_simple
+  ✓ (338/445) warp::test_types test_user_type_wasm_emission
+  ✓ (339/445) warp::test_wasm test_emitter
+  ✓ (340/445) warp::test_type_upgrading test_float_operations
+  ✓ (341/445) warp::test_wasm test_merge_wabt
+  ✓ (342/445) warp::test_wasm test_logarithm
+  ✓ (343/445) warp::test_types test_cast_as
+  ✓ (344/445) warp::test_wasi test_fd_write
+  ✓ (345/445) warp::test_wasi test_wasi_putf
+  ✓ (346/445) warp::test_wasi test_fd_write_raw
+  ✓ (347/445) warp::test_wasm test_root
+  ✓ (348/445) warp::test_wasm test_const_return
+  ✓ (349/445) warp::test_wasm test_old_random_bugs
+  ✓ (350/445) warp::test_wasm test_dom
+  ✓ (351/445) warp::test_wasi test_wasi_puti
+  ✓ (352/445) warp::test_todo test_array_length
+  ✓ (353/445) warp::test_wasm test_round_floor_ceiling
+  ✓ (354/445) warp::test_types test_constructor_cast
+  ✓ (355/445) warp::test_wasm test_range
+  ✓ (356/445) warp::test_wasm_gc_emitter test_emit_gc_types
+  ✓ (357/445) warp::test_wasm_gc_emitter test_function_usage_tracking
+  ✓ (358/445) warp::test_wasm_gc_emitter test_generate_wasm
+  ✓ (359/445) warp::test_wasm_gc_emitter test_emit_for_node_tree_shaking
+  ✓ (360/445) warp::test_wasm_gc_emitter test_node_kind_enum_abi
+  ✓ (361/445) warp::test_wasm test_wasm_while
+  ✓ (362/445) warp::test_wasm_reader test_node_serialization_workflow_design
+  ✓ (363/445) warp::test_wasm_reader test_create_wasm_gc_nodes_from_host_concept
+  ✓ (364/445) warp::test_string test_string_index
+  ✓ (365/445) warp::test_wasp_format test_function_syntax
+  ✓ (366/445) warp::test_wasp_comments test_block_comments
+  ✓ (367/445) warp::test_wasp_comments test_comment_with_metadata_accessor
+  ✓ (368/445) warp::test_wasp_comments test_inline_comments
+  ✓ (369/445) warp::test_wasp_comments test_comment_metadata
+  ✓ (370/445) warp::test_wasp_comments test_comments_in_html_structure
+  ✓ (371/445) warp::test_wasp_format test_empty_structures
+  ✓ (372/445) warp::test_wasp_comments test_line_comments
+  ✓ (373/445) warp::test_wasp_format test_list_operations
+  ✓ (374/445) warp::test_wasp_format test_wasp_roundtrip
+  ✓ (375/445) warp::test_wasp_format test_nested_structures
+  ✓ (376/445) warp::test_wasp_format test_mixed_syntax
+  ✓ (377/445) warp::test_wasm_reader test_wasm_gc_node_reading_concept
+  ✓ (378/445) warp::test_wasp_format test_wasp_to_json
+  ✓ (379/445) warp::test_wasm_gc_emitter test_wasm_roundtrip_via_is
+  ✓ (380/445) warp::test_wasm test_square
+  ✓ (381/445) warp::test_wasm_gc_emitter test_wasm_roundtrip
+  ✓ (382/445) warp::test_wasp_position test_nested_position_tracking
+  ✓ (383/445) warp::test_wasp_position test_position_in_json_output
+  ✓ (384/445) warp::test_wasp_position test_column_tracking
+  ✓ (385/445) warp::test_wasp_position test_multiline_structure
+  ✓ (386/445) warp::test_wit test_timeout_protection
+  ✓ (387/445) warp::test_wasp_position test_position_tracking
+  ✓ (388/445) warp::test_xml test_boolean_attribute
+  ✓ (389/445) warp::test_xml test_cdata
+  ✓ (390/445) warp::test_wasp_position test_position_with_comments
+  ✓ (391/445) warp::test_xml test_nested_xml
+  ✓ (392/445) warp::test_xml test_doctype
+  ✓ (393/445) warp::test_xml test_real_world_xml
+  ✓ (394/445) warp::test_xml test_complex_xml_document
+  ✓ (395/445) warp::test_xml test_self_closing_tag
+  ✓ (396/445) warp::test_xml test_simple_xml_tag
+  ✓ (397/445) warp::test_xml test_to_xml_nested
+  ✓ (398/445) warp::test_xml test_to_xml_boolean_attribute
+  ✓ (399/445) warp::test_web test_html_wasp
+  ✓ (400/445) warp::test_xml test_to_xml_simple
+  ✓ (401/445) warp::test_xml test_to_xml_self_closing
+  ✓ (402/445) warp::test_xml test_xml_comments
+  ✓ (403/445) warp::test_xml test_xml_to_json
+  ✓ (404/445) warp::test_xml test_to_xml_with_attributes
+  ✓ (405/445) warp::test_xml test_xml_declaration
+  ✓ (406/445) warp::test_xml test_xml_roundtrip
+  ✓ (407/445) warp::test_xml test_xml_with_attributes
+  ✓ (408/445) warp::bin/warp extensions::strings::tests::test_char_str_eq
+  ✓ (409/445) warp::wasm_optimizer_test test_no_optimization
+  ✓ (410/445) warp::bin/warp extensions::strings::tests::test_str_plus
+  ✓ (411/445) warp::bin/warp ffi::tests::test_extract_function_signature_simple
+  ✓ (412/445) warp::bin/warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ (413/445) warp::bin/warp ffi::tests::test_extract_function_signature_pointer
+  ✓ (414/445) warp::bin/warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ (415/445) warp::bin/warp ffi::tests::test_extract_function_signature_void_return
+  ✓ (416/445) warp::bin/warp ffi::tests::test_map_c_type_to_valtype
+  ✓ (417/445) warp::bin/warp ffi_parser::tests::test_parse_pointer_param
+  ✓ (418/445) warp::bin/warp ffi_parser::tests::test_parse_int32_return
+  ✓ (419/445) warp::bin/warp ffi_parser::tests::test_parse_simple_function
+  ✓ (420/445) warp::bin/warp ffi::tests::test_parse_header_file_math
+  ✓ (421/445) warp::bin/warp ffi_parser::tests::test_parse_two_params
+  ✓ (422/445) warp::bin/warp ffi_parser::tests::test_parse_void_params
+  ✓ (423/445) warp::bin/warp function::tests::test_arg
+  ✓ (424/445) warp::bin/warp ffi_parser::tests::test_parse_system_headers
+  ✓ (425/445) warp::bin/warp ffi_parser::tests::test_raylib_functions
+  ✓ (426/445) warp::bin/warp function::tests::test_function_host
+  ✓ (427/445) warp::bin/warp function::tests::test_function_builder
+  ✓ (428/445) warp::bin/warp function::tests::test_function_locals
+  ✓ (429/445) warp::bin/warp function::tests::test_function_registry
+  ✓ (430/445) warp::bin/warp function::tests::test_kind_to_valtype
+  ✓ (431/445) warp::bin/warp host::tests::test_host_state
+  ✓ (432/445) warp::bin/warp function::tests::test_signature_format
+  ✓ (433/445) warp::bin/warp normalize::tests::test_hint_mode
+  ✓ (434/445) warp::bin/warp normalize::tests::test_style_swap
+  ✓ (435/445) warp::bin/warp function::tests::test_signature_builder
+  ✓ (436/445) warp::test_string test_string_index_by_variable
+  ✓ (437/445) warp::test_lists test_index_offset_advanced
+  ✓ (438/445) warp::wasm_optimizer_test test_tools_availability
+  ✓ (439/445) warp::wasm_optimizer_test test_library_optimization
+  ✓ (440/445) warp::test_types test_emit_cast
+  ✓ (441/445) warp::wasm_optimizer_test test_executable_tree_shaking
+  ✓ (442/445) warp::test_string test_string_indices
+  ✓ (443/445) warp::test_web test_fetch
+
+FAILED:
+
+SUMMARY:
+  0 ignored, 443 passed, 0 failed, 443 total tested
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+Clean summary saved to: test_results.txt
