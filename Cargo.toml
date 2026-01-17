@@ -37,6 +37,7 @@ WASMTIME = []
 WEBAPP = []
 release = []
 wasm = []
+ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 
 [dependencies]
 # ⚠️ toggle OFFLINE mode!
@@ -125,3 +126,7 @@ strip = true           # Strip symbols
 # to compile to wasm using `wasm-pack build` :
 crate-type = ["cdylib", "rlib"]
 #https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
+
+[[test]]
+name = "test_ffi"
+required-features = ["ffi"]  # Only run FFI tests when 'ffi' feature is enabled

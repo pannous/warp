@@ -27,6 +27,6 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - run: cargo build --verbose
-    - run: cargo test --verbose --no-fail-fast -- --skip test_ffi
+    - run: cargo test --verbose --no-fail-fast
     - run: cargo clippy -- -D warnings
       continue-on-error: true
