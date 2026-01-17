@@ -3315,168 +3315,86 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_text");
 	}
 
-	/// Check if function needs (ptr, len) pairs for string arguments
-	/// Returns number of string arguments expected (0 = use standard arg matching)
+	/// Number of string arguments that need (ptr, len) pairs for FFI functions
+	/// Detected from function name - functions like strcmp need paired marshalling
 	fn string_pair_arg_count(&self, fn_name: &str) -> usize {
 		match fn_name {
-			"strcmp" => 2,   // (ptr1, len1, ptr2, len2) - 2 string args
-			"strncmp" => 2,  // (ptr1, len1, ptr2, len2, n) - 2 string args + int
+			"strcmp" | "strncmp" => 2, // (ptr1, len1, ptr2, len2, ...)
 			_ => 0,
 		}
 	}
 
-	/// Emit an FFI function call
-	/// Handles marshalling arguments and wrapping results
-	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let sig = match self.ffi_imports.get(fn_name) {
-			Some(s) => s.clone(),
-			None => return,
-		};
-
+	/// Emit FFI function arguments according to signature
+	/// Handles both standard args and (ptr, len) string pair marshalling
+	fn emit_ffi_args(&mut self, func: &mut Function, fn_name: &str, args: &[Node], sig: &crate::ffi::FfiSignature) {
 		let string_pair_count = self.string_pair_arg_count(fn_name);
-
-		// Special handling for functions that need (ptr, len) pairs for string args
-		if string_pair_count > 0 {
-			self.emit_ffi_call_with_string_pairs(func, fn_name, args, &sig, string_pair_count);
-			return;
-		}
-
-		// Standard argument emission: args[i] maps to params[i]
-		for (i, param_type) in sig.params.iter().enumerate() {
-			if i >= args.len() {
-				// Missing argument - emit default value
-				match param_type {
-					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-					_ => func.instruction(&Instruction::I32Const(0)),
-				};
-				continue;
-			}
-
-			let arg = &args[i];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
-					// Check if this is a string argument (for libc string functions)
-					// C string functions expect a pointer to null-terminated string
-					if self.is_string_arg(arg) {
-						// Emit only the pointer (C strings are null-terminated)
-						self.emit_string_ptr_only(func, arg);
-					} else {
-						self.emit_numeric_value(func, arg);
-						func.instruction(&Instruction::I32WrapI64);
-					}
-				}
-				_ => self.emit_numeric_value(func, arg),
-			}
-		}
-
-		// Call the FFI function
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-
-		// Wrap result in appropriate Node type
-		if sig.results.is_empty() {
-			self.emit_call(func, "new_empty");
-		} else {
-			match sig.results[0] {
-				wasm_encoder::ValType::F64 => self.emit_call(func, "new_float"),
-				wasm_encoder::ValType::F32 => {
-					func.instruction(&Instruction::F64PromoteF32);
-					self.emit_call(func, "new_float");
-				}
-				wasm_encoder::ValType::I64 => self.emit_call(func, "new_int"),
-				wasm_encoder::ValType::I32 => {
-					func.instruction(&Instruction::I64ExtendI32S);
-					self.emit_call(func, "new_int");
-				}
-				_ => self.emit_call(func, "new_int"),
-			}
-		}
-	}
-
-	/// Emit FFI call for functions that need (ptr, len) pairs for string arguments
-	/// e.g., strcmp(str1, str2) expects (ptr1, len1, ptr2, len2) params
-	fn emit_ffi_call_with_string_pairs(
-		&mut self,
-		func: &mut Function,
-		fn_name: &str,
-		args: &[Node],
-		sig: &crate::ffi::FfiSignature,
-		string_pair_count: usize,
-	) {
 		let mut arg_idx = 0;
 		let mut param_idx = 0;
 
-		// Process string arguments first (they consume 2 params each: ptr + len)
+		// Process string arguments that need (ptr, len) pairs
 		for _ in 0..string_pair_count {
 			if arg_idx < args.len() && self.is_string_arg(&args[arg_idx]) {
-				// Emit both ptr and len for this string argument
 				self.emit_string_ptr_len(func, &args[arg_idx]);
 				arg_idx += 1;
-				param_idx += 2; // Consumed both ptr and len params
+				param_idx += 2;
 			} else if arg_idx < args.len() {
-				// Non-string arg in string position - emit as ptr, 0 as len
 				self.emit_numeric_value(func, &args[arg_idx]);
 				func.instruction(&Instruction::I32WrapI64);
 				func.instruction(&Instruction::I32Const(0));
 				arg_idx += 1;
 				param_idx += 2;
 			} else {
-				// Missing arg - emit zeros
 				func.instruction(&Instruction::I32Const(0));
 				func.instruction(&Instruction::I32Const(0));
 				param_idx += 2;
 			}
 		}
 
-		// Process remaining non-string arguments
-		while param_idx < sig.params.len() && arg_idx < args.len() {
-			let param_type = &sig.params[param_idx];
-			let arg = &args[arg_idx];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
+		// Process remaining arguments according to param types
+		while param_idx < sig.params.len() {
+			if arg_idx < args.len() {
+				self.emit_ffi_arg(func, &args[arg_idx], &sig.params[param_idx]);
+				arg_idx += 1;
+			} else {
+				self.emit_ffi_default(func, &sig.params[param_idx]);
+			}
+			param_idx += 1;
+		}
+	}
+
+	/// Emit a single FFI argument with appropriate type conversion
+	fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &wasm_encoder::ValType) {
+		match param_type {
+			wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
+			wasm_encoder::ValType::F32 => {
+				self.emit_float_value(func, arg);
+				func.instruction(&Instruction::F32DemoteF64);
+			}
+			wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
+			wasm_encoder::ValType::I32 => {
+				if self.is_string_arg(arg) {
+					self.emit_string_ptr_only(func, arg);
+				} else {
 					self.emit_numeric_value(func, arg);
 					func.instruction(&Instruction::I32WrapI64);
 				}
-				_ => self.emit_numeric_value(func, arg),
 			}
-			param_idx += 1;
-			arg_idx += 1;
+			_ => self.emit_numeric_value(func, arg),
 		}
+	}
 
-		// Fill in any missing params with defaults
-		while param_idx < sig.params.len() {
-			match &sig.params[param_idx] {
-				wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-				wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-				wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-				wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-				_ => func.instruction(&Instruction::I32Const(0)),
-			};
-			param_idx += 1;
-		}
+	/// Emit default value for missing FFI argument
+	fn emit_ffi_default(&mut self, func: &mut Function, param_type: &wasm_encoder::ValType) {
+		match param_type {
+			wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
+			wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
+			wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
+			_ => func.instruction(&Instruction::I32Const(0)),
+		};
+	}
 
-		// Call the FFI function
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-
-		// Wrap result in appropriate Node type
+	/// Emit FFI result handling - wrap in Node type
+	fn emit_ffi_result_node(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
 		if sig.results.is_empty() {
 			self.emit_call(func, "new_empty");
 		} else {
@@ -3496,62 +3414,11 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit an FFI function call returning raw numeric value (i64)
-	/// Used in numeric contexts where we don't want to wrap in a Node
-	fn emit_ffi_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let sig = match self.ffi_imports.get(fn_name) {
-			Some(s) => s.clone(),
-			None => return,
-		};
-
-		let string_pair_count = self.string_pair_arg_count(fn_name);
-
-		// Special handling for functions that need (ptr, len) pairs
-		if string_pair_count > 0 {
-			self.emit_ffi_call_numeric_with_string_pairs(func, fn_name, args, &sig, string_pair_count);
-			return;
-		}
-
-		// Emit arguments according to signature
-		for (i, param_type) in sig.params.iter().enumerate() {
-			if i >= args.len() {
-				match param_type {
-					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-					_ => func.instruction(&Instruction::I32Const(0)),
-				};
-				continue;
-			}
-
-			let arg = &args[i];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
-					if self.is_string_arg(arg) {
-						self.emit_string_ptr_only(func, arg);
-					} else {
-						self.emit_numeric_value(func, arg);
-						func.instruction(&Instruction::I32WrapI64);
-					}
-				}
-				_ => self.emit_numeric_value(func, arg),
-			}
-		}
-
-		// Call the FFI function
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-
-		// Convert result to i64 for numeric context
-		if !sig.results.is_empty() {
+	/// Emit FFI result handling - convert to raw i64
+	fn emit_ffi_result_numeric(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
+		if sig.results.is_empty() {
+			func.instruction(&Instruction::I64Const(0));
+		} else {
 			match sig.results[0] {
 				wasm_encoder::ValType::F64 => { func.instruction(&Instruction::I64TruncF64S); }
 				wasm_encoder::ValType::F32 => {
@@ -3561,151 +3428,14 @@ impl WasmGcEmitter {
 				wasm_encoder::ValType::I32 => { func.instruction(&Instruction::I64ExtendI32S); }
 				_ => {} // I64 already correct
 			}
-		} else {
-			func.instruction(&Instruction::I64Const(0));
 		}
 	}
 
-	/// Emit FFI call returning raw i64 for functions needing (ptr, len) pairs
-	fn emit_ffi_call_numeric_with_string_pairs(
-		&mut self,
-		func: &mut Function,
-		fn_name: &str,
-		args: &[Node],
-		sig: &crate::ffi::FfiSignature,
-		string_pair_count: usize,
-	) {
-		let mut arg_idx = 0;
-		let mut param_idx = 0;
-
-		// Process string arguments first
-		for _ in 0..string_pair_count {
-			if arg_idx < args.len() && self.is_string_arg(&args[arg_idx]) {
-				self.emit_string_ptr_len(func, &args[arg_idx]);
-				arg_idx += 1;
-				param_idx += 2;
-			} else if arg_idx < args.len() {
-				self.emit_numeric_value(func, &args[arg_idx]);
-				func.instruction(&Instruction::I32WrapI64);
-				func.instruction(&Instruction::I32Const(0));
-				arg_idx += 1;
-				param_idx += 2;
-			} else {
-				func.instruction(&Instruction::I32Const(0));
-				func.instruction(&Instruction::I32Const(0));
-				param_idx += 2;
-			}
-		}
-
-		// Process remaining arguments
-		while param_idx < sig.params.len() && arg_idx < args.len() {
-			let param_type = &sig.params[param_idx];
-			let arg = &args[arg_idx];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
-					self.emit_numeric_value(func, arg);
-					func.instruction(&Instruction::I32WrapI64);
-				}
-				_ => self.emit_numeric_value(func, arg),
-			}
-			param_idx += 1;
-			arg_idx += 1;
-		}
-
-		// Fill defaults
-		while param_idx < sig.params.len() {
-			match &sig.params[param_idx] {
-				wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-				wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-				wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-				wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-				_ => func.instruction(&Instruction::I32Const(0)),
-			};
-			param_idx += 1;
-		}
-
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-
-		// Convert result to i64
-		if !sig.results.is_empty() {
-			match sig.results[0] {
-				wasm_encoder::ValType::F64 => { func.instruction(&Instruction::I64TruncF64S); }
-				wasm_encoder::ValType::F32 => {
-					func.instruction(&Instruction::F64PromoteF32);
-					func.instruction(&Instruction::I64TruncF64S);
-				}
-				wasm_encoder::ValType::I32 => { func.instruction(&Instruction::I64ExtendI32S); }
-				_ => {}
-			}
+	/// Emit FFI result handling - convert to raw f64
+	fn emit_ffi_result_float(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
+		if sig.results.is_empty() {
+			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
 		} else {
-			func.instruction(&Instruction::I64Const(0));
-		}
-	}
-
-	/// Emit an FFI function call returning raw float value (f64)
-	/// Used in float contexts where we don't want to wrap in a Node
-	fn emit_ffi_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let sig = match self.ffi_imports.get(fn_name) {
-			Some(s) => s.clone(),
-			None => return,
-		};
-
-		let string_pair_count = self.string_pair_arg_count(fn_name);
-
-		// Special handling for functions that need (ptr, len) pairs
-		if string_pair_count > 0 {
-			self.emit_ffi_call_float_with_string_pairs(func, fn_name, args, &sig, string_pair_count);
-			return;
-		}
-
-		// Emit arguments according to signature
-		for (i, param_type) in sig.params.iter().enumerate() {
-			if i >= args.len() {
-				match param_type {
-					wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-					wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-					wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-					wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-					_ => func.instruction(&Instruction::I32Const(0)),
-				};
-				continue;
-			}
-
-			let arg = &args[i];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
-					if self.is_string_arg(arg) {
-						self.emit_string_ptr_only(func, arg);
-					} else {
-						self.emit_numeric_value(func, arg);
-						func.instruction(&Instruction::I32WrapI64);
-					}
-				}
-				_ => self.emit_numeric_value(func, arg),
-			}
-		}
-
-		// Call the FFI function
-		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
-		}
-
-		// Convert result to f64 for float context
-		if !sig.results.is_empty() {
 			match sig.results[0] {
 				wasm_encoder::ValType::F32 => { func.instruction(&Instruction::F64PromoteF32); }
 				wasm_encoder::ValType::I64 => { func.instruction(&Instruction::F64ConvertI64S); }
@@ -3715,93 +3445,46 @@ impl WasmGcEmitter {
 				}
 				_ => {} // F64 already correct
 			}
-		} else {
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
 		}
 	}
 
-	/// Emit FFI call returning raw f64 for functions needing (ptr, len) pairs
-	fn emit_ffi_call_float_with_string_pairs(
-		&mut self,
-		func: &mut Function,
-		fn_name: &str,
-		args: &[Node],
-		sig: &crate::ffi::FfiSignature,
-		string_pair_count: usize,
-	) {
-		let mut arg_idx = 0;
-		let mut param_idx = 0;
-
-		// Process string arguments first
-		for _ in 0..string_pair_count {
-			if arg_idx < args.len() && self.is_string_arg(&args[arg_idx]) {
-				self.emit_string_ptr_len(func, &args[arg_idx]);
-				arg_idx += 1;
-				param_idx += 2;
-			} else if arg_idx < args.len() {
-				self.emit_numeric_value(func, &args[arg_idx]);
-				func.instruction(&Instruction::I32WrapI64);
-				func.instruction(&Instruction::I32Const(0));
-				arg_idx += 1;
-				param_idx += 2;
-			} else {
-				func.instruction(&Instruction::I32Const(0));
-				func.instruction(&Instruction::I32Const(0));
-				param_idx += 2;
-			}
-		}
-
-		// Process remaining arguments
-		while param_idx < sig.params.len() && arg_idx < args.len() {
-			let param_type = &sig.params[param_idx];
-			let arg = &args[arg_idx];
-			match param_type {
-				wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-				wasm_encoder::ValType::F32 => {
-					self.emit_float_value(func, arg);
-					func.instruction(&Instruction::F32DemoteF64);
-				}
-				wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-				wasm_encoder::ValType::I32 => {
-					self.emit_numeric_value(func, arg);
-					func.instruction(&Instruction::I32WrapI64);
-				}
-				_ => self.emit_numeric_value(func, arg),
-			}
-			param_idx += 1;
-			arg_idx += 1;
-		}
-
-		// Fill defaults
-		while param_idx < sig.params.len() {
-			match &sig.params[param_idx] {
-				wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-				wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-				wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-				wasm_encoder::ValType::I32 => func.instruction(&Instruction::I32Const(0)),
-				_ => func.instruction(&Instruction::I32Const(0)),
-			};
-			param_idx += 1;
-		}
-
+	/// Emit FFI call wrapping result in Node (for general expression context)
+	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+		self.emit_ffi_args(func, fn_name, args, &sig);
 		if let Some(idx) = self.ffi_func_index(fn_name) {
 			func.instruction(&Instruction::Call(idx));
 		}
+		self.emit_ffi_result_node(func, &sig);
+	}
 
-		// Convert result to f64
-		if !sig.results.is_empty() {
-			match sig.results[0] {
-				wasm_encoder::ValType::F32 => { func.instruction(&Instruction::F64PromoteF32); }
-				wasm_encoder::ValType::I64 => { func.instruction(&Instruction::F64ConvertI64S); }
-				wasm_encoder::ValType::I32 => {
-					func.instruction(&Instruction::I64ExtendI32S);
-					func.instruction(&Instruction::F64ConvertI64S);
-				}
-				_ => {}
-			}
-		} else {
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+	/// Emit FFI call returning raw i64 (for numeric context)
+	fn emit_ffi_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+		self.emit_ffi_args(func, fn_name, args, &sig);
+		if let Some(idx) = self.ffi_func_index(fn_name) {
+			func.instruction(&Instruction::Call(idx));
 		}
+		self.emit_ffi_result_numeric(func, &sig);
+	}
+
+	/// Emit FFI call returning raw f64 (for float context)
+	fn emit_ffi_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let sig = match self.ffi_imports.get(fn_name) {
+			Some(s) => s.clone(),
+			None => return,
+		};
+		self.emit_ffi_args(func, fn_name, args, &sig);
+		if let Some(idx) = self.ffi_func_index(fn_name) {
+			func.instruction(&Instruction::Call(idx));
+		}
+		self.emit_ffi_result_float(func, &sig);
 	}
 
 	/// Check if a node argument should be treated as a string
