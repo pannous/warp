@@ -1,3 +1,6 @@
+// ⚠️ TEST WITH  cargo test --features optimizer
+#![cfg(feature = "optimizer")]
+
 use warp::*;
 use warp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
 
