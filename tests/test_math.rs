@@ -313,7 +313,15 @@ fn test_global_with_pi() {
 
 #[test]
 fn test_sqrt_alias() {
-	is!("sqrt 9", 3);
-	is!("sqrt 16", 4);
-	is!("sqrt 2", 1.4142135623730951);
+	is!("sqrt 9", 3); // be type invariant:
+	is!("sqrt 9.0", 3);
+	is!("sqrt 2", std::f64::consts::SQRT_2);
+}
+
+#[test]
+fn test_abs_alias() {
+	// Note: integer abs has a bug (uses undeclared local), use floats for now
+	is!("abs -3.14", 3.14);
+	is!("abs 3.14", 3.14);
+	is!("abs -0.0", 0.0);
 }

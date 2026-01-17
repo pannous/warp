@@ -1250,8 +1250,8 @@ impl WasmGcEmitter {
 				self.add_ffi_import(name, "m");
 			}
 		} else if lib_alias == "c" {
-			for name in ["strlen", "atoi", "atol", "atof", "abs", "strcmp", "strncmp", "rand"] {
-				self.add_ffi_import(name, "c");
+			for name in ["strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"] {
+				self.add_ffi_import(name, "c"); // abs removed: use builtin abs keyword
 			}
 		}
 	}

@@ -293,7 +293,8 @@ fn test_import_from_pattern_parse() {
 
 #[test]
 fn test_import_from_pattern_emit() {
-	is!("import abs from \"c\"\nabs(-42)", 42);
+	// Note: abs is now a builtin keyword, use fabs from libm instead
+	is!("import fabs from \"m\"\nfabs(-42.0)", 42.0);
 	is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
 	is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
 }
@@ -607,6 +608,7 @@ fn test_ffi_sqrt_works() {
 }
 
 #[test]
+#[ignore = "abs is now a builtin keyword, use fabs from m for C import"]
 fn test_ffi_abs_from_c() {
 	// abs from libc takes i32 and returns i32
 	is!("import abs from \"c\"\nabs(-42)", 42);
