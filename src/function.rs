@@ -27,8 +27,13 @@ pub enum ABI {
 pub fn kind_to_valtype(kind: Kind) -> ValType {
 	match kind {
 		Kind::Int => ValType::I64,
+		Kind::Int32 => ValType::I32,
 		Kind::Float => ValType::F64,
+		Kind::Float32 => ValType::F32,
 		Kind::Codepoint => ValType::I32,
+		Kind::Pointer => ValType::I64, // pointers as i64 handles
+		Kind::Text => ValType::I32,    // string pointer
+		Kind::Empty => ValType::I32,   // void functions still need a placeholder sometimes
 		_ => ValType::Ref(wasm_encoder::RefType {
 			nullable: true,
 			heap_type: wasm_encoder::HeapType::Abstract {
