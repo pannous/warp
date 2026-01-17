@@ -776,12 +776,20 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 }
 
 /// Resolve library alias to canonical name
-pub fn resolve_library_alias(alias: &str) -> &str {
+pub fn resolve_library_alias(alias: &str) -> &'static str {
     match alias {
         "m" | "math" | "libm" => "m",
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
-        _ => alias, // Pass through - dynamic discovery handles any library
+        _ => {
+            // Strip "lib" prefix for any library (e.g., "libfoo" → "foo")
+            if let Some(stripped) = alias.strip_prefix("lib") {
+                // Leak the string to get static lifetime (safe for small number of libs)
+                Box::leak(stripped.to_string().into_boxed_str())
+            } else {
+                Box::leak(alias.to_string().into_boxed_str())
+            }
+        }
     }
 }
 
