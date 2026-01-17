@@ -772,6 +772,11 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
         Ok(())
     })?;
 
+    // Add aliases: "libm" → "m", "libc" → "c"
+    // This allows both (import "m" "fmin" ...) and (import "libm" "fmin" ...)
+    linker.alias_module("m", "libm")?;
+    linker.alias_module("c", "libc")?;
+
     Ok(())
 }
 
