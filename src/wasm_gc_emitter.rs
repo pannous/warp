@@ -3393,63 +3393,49 @@ impl WasmGcEmitter {
 		};
 	}
 
-	/// Emit FFI result handling - wrap in Node type
-	fn emit_ffi_result_node(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
-		if sig.results.is_empty() {
-			self.emit_call(func, "new_empty");
-		} else {
-			match sig.results[0] {
-				wasm_encoder::ValType::F64 => self.emit_call(func, "new_float"),
-				wasm_encoder::ValType::F32 => {
+	/// Emit FFI result conversion based on context
+	/// None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
+	fn emit_ffi_result(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature, ctx: Option<Kind>) {
+		let result_type = sig.results.first().copied();
+		match ctx {
+			None => match result_type {
+				None => self.emit_call(func, "new_empty"),
+				Some(wasm_encoder::ValType::F64) => self.emit_call(func, "new_float"),
+				Some(wasm_encoder::ValType::F32) => {
 					func.instruction(&Instruction::F64PromoteF32);
 					self.emit_call(func, "new_float");
 				}
-				wasm_encoder::ValType::I64 => self.emit_call(func, "new_int"),
-				wasm_encoder::ValType::I32 => {
+				Some(wasm_encoder::ValType::I64) => self.emit_call(func, "new_int"),
+				Some(wasm_encoder::ValType::I32) => {
 					func.instruction(&Instruction::I64ExtendI32S);
 					self.emit_call(func, "new_int");
 				}
 				_ => self.emit_call(func, "new_int"),
-			}
-		}
-	}
-
-	/// Emit FFI result handling - convert to raw i64
-	fn emit_ffi_result_numeric(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
-		if sig.results.is_empty() {
-			func.instruction(&Instruction::I64Const(0));
-		} else {
-			match sig.results[0] {
-				wasm_encoder::ValType::F64 => { func.instruction(&Instruction::I64TruncF64S); }
-				wasm_encoder::ValType::F32 => {
-					func.instruction(&Instruction::F64PromoteF32);
-					func.instruction(&Instruction::I64TruncF64S);
-				}
-				wasm_encoder::ValType::I32 => { func.instruction(&Instruction::I64ExtendI32S); }
-				_ => {} // I64 already correct
-			}
-		}
-	}
-
-	/// Emit FFI result handling - convert to raw f64
-	fn emit_ffi_result_float(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature) {
-		if sig.results.is_empty() {
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-		} else {
-			match sig.results[0] {
-				wasm_encoder::ValType::F32 => { func.instruction(&Instruction::F64PromoteF32); }
-				wasm_encoder::ValType::I64 => { func.instruction(&Instruction::F64ConvertI64S); }
-				wasm_encoder::ValType::I32 => {
+			},
+			Some(Kind::Float) => match result_type {
+				None => { func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))); }
+				Some(wasm_encoder::ValType::F32) => { func.instruction(&Instruction::F64PromoteF32); }
+				Some(wasm_encoder::ValType::I64) => { func.instruction(&Instruction::F64ConvertI64S); }
+				Some(wasm_encoder::ValType::I32) => {
 					func.instruction(&Instruction::I64ExtendI32S);
 					func.instruction(&Instruction::F64ConvertI64S);
 				}
 				_ => {} // F64 already correct
-			}
+			},
+			Some(_) => match result_type { // Int or other → i64
+				None => { func.instruction(&Instruction::I64Const(0)); }
+				Some(wasm_encoder::ValType::F64) => { func.instruction(&Instruction::I64TruncF64S); }
+				Some(wasm_encoder::ValType::F32) => {
+					func.instruction(&Instruction::F64PromoteF32);
+					func.instruction(&Instruction::I64TruncF64S);
+				}
+				Some(wasm_encoder::ValType::I32) => { func.instruction(&Instruction::I64ExtendI32S); }
+				_ => {} // I64 already correct
+			},
 		}
 	}
 
 	/// Emit FFI function call with automatic result handling based on context
-	/// Context: None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
 	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
 		let sig = match self.ffi_imports.get(fn_name) {
 			Some(s) => s.clone(),
@@ -3459,11 +3445,7 @@ impl WasmGcEmitter {
 		if let Some(idx) = self.ffi_func_index(fn_name) {
 			func.instruction(&Instruction::Call(idx));
 		}
-		match ctx {
-			None => self.emit_ffi_result_node(func, &sig),
-			Some(Kind::Float) => self.emit_ffi_result_float(func, &sig),
-			Some(_) => self.emit_ffi_result_numeric(func, &sig), // Int or other → i64
-		}
+		self.emit_ffi_result(func, &sig, ctx);
 	}
 
 	/// Check if a node argument should be treated as a string
