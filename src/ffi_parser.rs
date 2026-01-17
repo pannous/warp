@@ -82,6 +82,13 @@ pub fn get_library_header_paths(library: &str) -> Vec<&'static str> {
             "/usr/local/include/raylib.h",
             "/usr/include/raylib.h",
         ],
+        "newlib" => vec![
+            "/opt/homebrew/include/newlib.h",
+            "/usr/local/include/newlib.h",
+            "/usr/include/newlib.h",
+            "/opt/homebrew/arm-none-eabi/include/newlib.h",
+            "/usr/local/arm-none-eabi/include/newlib.h",
+        ],
         _ => vec![],
     }
 }
@@ -253,7 +260,7 @@ pub fn get_all_signatures() -> HashMap<String, (CSignature, &'static str)> {
     let mut sigs = HashMap::new();
 
     // Parse headers for each library
-    for (library, lib_static) in [("m", "m"), ("c", "c"), ("SDL2", "SDL2"), ("raylib", "raylib")] {
+    for (library, lib_static) in [("m", "m"), ("c", "c"), ("SDL2", "SDL2"), ("raylib", "raylib"), ("newlib", "newlib")] {
         for path in get_library_header_paths(library) {
             if Path::new(path).exists() {
                 for sig in parse_header_file(path, library) {
@@ -354,5 +361,37 @@ mod tests {
         if !found_any {
             eprintln!("No system headers found - this is OK for some environments");
         }
+    }
+
+    #[test]
+    fn test_raylib_functions() {
+        // Test that we can discover raylib functions from the header
+        let raylib_path = "/opt/homebrew/include/raylib.h";
+        if !Path::new(raylib_path).exists() {
+            eprintln!("raylib.h not found - skipping test");
+            return;
+        }
+
+        let sigs = parse_header_file(raylib_path, "raylib");
+        eprintln!("Found {} raylib functions", sigs.len());
+
+        // Should find key functions
+        let key_funcs = ["InitWindow", "CloseWindow", "WindowShouldClose",
+                         "BeginDrawing", "EndDrawing", "SetTargetFPS"];
+
+        for func in key_funcs {
+            let found = sigs.iter().find(|s| s.name == func);
+            assert!(found.is_some(), "Should find {}", func);
+            eprintln!("✓ Found: {}", func);
+        }
+
+        // Verify InitWindow signature
+        let init = sigs.iter().find(|s| s.name == "InitWindow").unwrap();
+        assert_eq!(init.return_type, CType::Void);
+        assert_eq!(init.params.len(), 3); // width, height, title
+        assert_eq!(init.params[0].ctype, CType::Int);
+        assert_eq!(init.params[1].ctype, CType::Int);
+        assert_eq!(init.params[2].ctype, CType::CharPtr);
+        eprintln!("✓ InitWindow signature correct: void(int, int, char*)");
     }
 }
