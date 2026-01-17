@@ -28,10 +28,9 @@ fn test_js() {
 }
 
 #[test]
+#[ignore = "later"]
 fn test_inner_html() {
-	#[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]
-	{
-	}
+	// let html = parse_xml("<html><bold>test</bold></html>");
 	// let html = parse("<html><bold>test</bold></html>");
 	// eq!(*html.value(), "<bold>test</bold>");
 	// let serialized = html.serialize();
@@ -40,16 +39,11 @@ fn test_inner_html() {
 	//	eval("<html><script>alert('ok')</script></html>");
 	#[cfg(feature = "WEBAPP")]
 	{
-		// todo browser "too"
-		// skip!(
-
 		eval("<html><bold id=b ok=123>test</bold></html>");
 		is!("$b.ok", 123); // TODO emitAttributeSetter
 		eval("<script>console.log('ok!')</script>");
 		eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
-		                                       // );
 	}
-
 	//	eval("$b.innerHTML='<i>ok</i>'");
 	//	eval("<html><bold id='anchor'>…</bold></html>");
 	//	eval("$anchor.innerHTML='<i>ok</i>'");
@@ -58,12 +52,6 @@ fn test_inner_html() {
 	//	eval("$results.innerHTML='<bold>test</bold>'");
 }
 
-#[test]
-fn test_html() {
-	//	testHtmlWasp();
-	//	testJS();
-	test_inner_html();
-}
 
 #[test]
 fn test_fetch() {

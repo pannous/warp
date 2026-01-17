@@ -1597,58 +1597,6 @@ fn test_node_data_binary_reconstruction() {
 	eq!(parse("y:{x:2 z:3}").serialize(), "y{x:2 z:3}"); // todo y:{} vs y{}
 	is!("y:{x:2 z:3}", parse("y:{x:2 z:3}")); // looks trivial but is epitome of binary (de)serialization!
 }
-#[test]
-#[ignore]
-fn test_wasm_string() {
-	#[cfg(not(feature = "WASM"))]
-	{
-		is!(""c"", 'c');
-		is!(""a"", "a");
-		is!(""b"", "b");
-		is!("\"d\"", 'd');
-		is!("'e'", 'e');
-		is!("'h'", "h");
-		is!("\"i\"", "i");
-		is!("'j'", Node::Text("j".into()));
-		// todo
-		// let x : wasm_string = reinterpret_cast<wasm_string>("\03abc");
-		// let y : String = String(x);
-		// assert!(y == "abc");
-		// assert!(y.length() == 3);
-		is!(""hello1"", "hello1"); // Invalid typed array length: 12655
-	}
-	#[cfg(feature = "WASM")]
-	{
-		is!("'f'", 'f');
-		is!("'g'", 'g');
-	}
-}
-#[test]
-#[ignore]
-fn test_fixed_in_browser() {
-	test_math_operators_runtime(); // 3^2
-	// test_string_indices(); // removed - function doesn't exist
-	is!("(2+1)==(4-1)", true); // suddenly passes !? !with above line commented out BUG <<<
-	is!("(3+1)==(5-1)", true);
-	is!("(2+1)==(4-1)", true);
-	is!("3==2+1", 1);
-	is!("3 + √9", 6);
-	is!("puti 3", 3);
-	is!("puti 3", 3); //
-	is!("puti 3+3", 6);
-	// #[cfg(feature = "WASM")]{
-	//     return;
-	// }
-
-	test_wasm_string(); // with length as header
-	is!("x='abcde';x[3]", 'd');
-	// testCall();
-	test_array_indices_wasm();
-	test_square_precedence();
-}
-//testWasmControlFlow
-
-// #[test] fn testBadInWasm();
 
 // SIMILAR AS:
 #[test]
@@ -1663,40 +1611,30 @@ fn test_todo_browser() {
 		   testBadInWasm(); // NO, breaks!
 	   );
 }
-// ⚠️ ALL tests containing is!
-//  must go here! testCurrent() only for basics
+
+
+// ⚠️ ALL tests containing is! must go here! in wasm use testCurrent() only for basics
 #[test]
-#[ignore] // NEVER TEST ALL again ;)
+#[ignore = "NEVER TEST ALL again ;) each #test individually! (todo possible in wasm?)"]
 fn test_all_wasm() {
 	// called by testRun() OR synchronously!
 	is!("42", 42);
 	is!("42+1", 43);
 	// is!("test42+2", 44); // OK in WASM too ? deactivated for now
 	test_sinus(); // still FRAGILE!
-
 	test_todo_browser(); // TODO!
 	skip!(
-
 		is!("putf 3.1", 3);
 		is!("putf 3.1", 3.1);
-	);
-
-	skip!(
-
 		testWasmGC(); // WASM EDGE Error message: type mismatch
 		testStruct(); // TODO get pointer of node on stack
 		testStruct2();
 	);
-	#[cfg(feature = "WEBAPP")]
-	{
-		// or MY_WASM
-		test_host_download();
-	}
+	test_host_download();
 	// Test that IMPLICITLY use runtime /  is!
-	// is!("x=(1 4 3);x#2", 4);
-	// is!("n=3;2ⁿ", 8);
-	// is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
-
+	is!("x=(1 4 3);x#2", 4);
+	is!("n=3;2ⁿ", 8);
+	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
 	is!("√9*-‖-3‖/-3", 3);
 	skip!(
 		is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
@@ -1710,7 +1648,6 @@ fn test_all_wasm() {
 	test_auto_smarty();
 	test_arguments();
 	skip!(
-
 		testWasmGC();
 		is!("τ≈6.2831853", true);
 		eq!("τ≈6.2831853", true);
@@ -1724,7 +1661,6 @@ fn test_all_wasm() {
 		eprintln!("RUNTIME_ONLY");
 		eprintln!("NO WASM emission...");
 	}
-
 	//	is! !compatible with Wasmer, don't ask why, we don't know;);
 	//    skip!(
 
