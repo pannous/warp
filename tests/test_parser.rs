@@ -1,9 +1,9 @@
 use warp::eq;
+use warp::int;
+use warp::wasp_parser::parse;
+use warp::Kind::Key;
 use warp::Node;
 use warp::Node::Empty;
-use warp::int;
-use warp::Kind::Key;
-use warp::wasp_parser::parse;
 
 #[test]
 pub fn test_parser_serialize() {
@@ -54,7 +54,7 @@ fn test_colon_object() {
 #[test]
 fn test_key_object_set() {
 	let mut person = parse(r#"person:{name:"Joe" age:42}"#);
-	person["age"]=int(41);
+	person["age"] = int(41);
 	eq!(person["age"], 41);
 }
 

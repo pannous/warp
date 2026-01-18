@@ -1,7 +1,7 @@
 /// Test to verify module caching is working
 use warp::Node;
 // use warp::test_utils::{cache_stats, read_bytes_fast};
-use warp::wasm_gc_emitter::WasmGcEmitter;
+use warp::wasm_emitter::WasmGcEmitter;
 
 
 #[test]

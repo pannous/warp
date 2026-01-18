@@ -1,5 +1,5 @@
 use warp::is;
-use warp::wasm_gc_emitter::eval;
+use warp::wasm_emitter::eval;
 use warp::node::Node;
 use warp::Number;
 

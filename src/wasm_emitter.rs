@@ -6,7 +6,7 @@ use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
-use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
 use crate::util::gc_engine;
 use crate::wasm_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
@@ -194,7 +194,7 @@ impl WasmGcEmitter {
 		}
 
 		// Clone data to avoid borrow conflict - collect (name, library, params, results) tuples
-		let mut imports: Vec<(String, String, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>)> =
+		let mut imports: Vec<(String, String, Vec<ValType>, Vec<ValType>)> =
 			self.ctx.ffi_imports.iter()
 				.map(|(name, sig)| (name.clone(), sig.library.to_string(), sig.params.clone(), sig.results.clone()))
 				.collect();
@@ -1194,7 +1194,7 @@ impl WasmGcEmitter {
 			// Add (index - 1) to ptr for 1-based indexing
 			func.instruction(&Instruction::LocalGet(1)); // index
 			func.instruction(&Instruction::I32WrapI64);
-			func.instruction(&Instruction::I32Const(1));
+			func.instruction(&I32Const(1));
 			func.instruction(&Instruction::I32Sub);
 			func.instruction(&Instruction::I32Add); // ptr + (index - 1)
 
@@ -1371,7 +1371,7 @@ impl WasmGcEmitter {
 			// Calculate address: ptr + (index - 1) for 1-based indexing
 			func.instruction(&Instruction::LocalGet(1)); // index
 			func.instruction(&Instruction::I32WrapI64);
-			func.instruction(&Instruction::I32Const(1));
+			func.instruction(&I32Const(1));
 			func.instruction(&Instruction::I32Sub);
 			func.instruction(&Instruction::I32Add); // address = ptr + (index - 1)
 
@@ -2046,8 +2046,8 @@ impl WasmGcEmitter {
 							let type_name = kind.to_string();
 							// Allocate the type name string and emit
 							let (ptr, len) = self.allocate_string(&type_name);
-							func.instruction(&Instruction::I32Const(ptr as i32));
-							func.instruction(&Instruction::I32Const(len as i32));
+							func.instruction(&I32Const(ptr as i32));
+							func.instruction(&I32Const(len as i32));
 							self.emit_call(func, "new_symbol");
 							return;
 						}
@@ -2650,12 +2650,12 @@ impl WasmGcEmitter {
 			} else if arg_idx < args.len() {
 				self.emit_numeric_value(func, &args[arg_idx]);
 				func.instruction(&Instruction::I32WrapI64);
-				func.instruction(&Instruction::I32Const(0));
+				func.instruction(&I32Const(0));
 				arg_idx += 1;
 				param_idx += 2;
 			} else {
-				func.instruction(&Instruction::I32Const(0));
-				func.instruction(&Instruction::I32Const(0));
+				func.instruction(&I32Const(0));
+				func.instruction(&I32Const(0));
 				param_idx += 2;
 			}
 		}
@@ -2673,15 +2673,15 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit a single FFI argument with appropriate type conversion
-	fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &wasm_encoder::ValType) {
+	fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &ValType) {
 		match param_type {
-			wasm_encoder::ValType::F64 => self.emit_float_value(func, arg),
-			wasm_encoder::ValType::F32 => {
+			ValType::F64 => self.emit_float_value(func, arg),
+			ValType::F32 => {
 				self.emit_float_value(func, arg);
 				func.instruction(&Instruction::F32DemoteF64);
 			}
-			wasm_encoder::ValType::I64 => self.emit_numeric_value(func, arg),
-			wasm_encoder::ValType::I32 => {
+			ValType::I64 => self.emit_numeric_value(func, arg),
+			ValType::I32 => {
 				if self.is_string_arg(arg) {
 					self.emit_string_ptr_only(func, arg);
 				} else {
@@ -2694,12 +2694,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default value for missing FFI argument
-	fn emit_ffi_default(&mut self, func: &mut Function, param_type: &wasm_encoder::ValType) {
+	fn emit_ffi_default(&mut self, func: &mut Function, param_type: &ValType) {
 		match param_type {
-			wasm_encoder::ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-			wasm_encoder::ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-			wasm_encoder::ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-			_ => func.instruction(&Instruction::I32Const(0)),
+			ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
+			ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
+			ValType::I64 => func.instruction(&Instruction::I64Const(0)),
+			_ => func.instruction(&I32Const(0)),
 		};
 	}
 
@@ -2710,13 +2710,13 @@ impl WasmGcEmitter {
 		match ctx {
 			None => match result_type {
 				None => self.emit_call(func, "new_empty"),
-				Some(wasm_encoder::ValType::F64) => self.emit_call(func, "new_float"),
-				Some(wasm_encoder::ValType::F32) => {
+				Some(ValType::F64) => self.emit_call(func, "new_float"),
+				Some(ValType::F32) => {
 					func.instruction(&Instruction::F64PromoteF32);
 					self.emit_call(func, "new_float");
 				}
-				Some(wasm_encoder::ValType::I64) => self.emit_call(func, "new_int"),
-				Some(wasm_encoder::ValType::I32) => {
+				Some(ValType::I64) => self.emit_call(func, "new_int"),
+				Some(ValType::I32) => {
 					func.instruction(&Instruction::I64ExtendI32S);
 					self.emit_call(func, "new_int");
 				}
@@ -2724,9 +2724,9 @@ impl WasmGcEmitter {
 			},
 			Some(Kind::Float) => match result_type {
 				None => { func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))); }
-				Some(wasm_encoder::ValType::F32) => { func.instruction(&Instruction::F64PromoteF32); }
-				Some(wasm_encoder::ValType::I64) => { func.instruction(&Instruction::F64ConvertI64S); }
-				Some(wasm_encoder::ValType::I32) => {
+				Some(ValType::F32) => { func.instruction(&Instruction::F64PromoteF32); }
+				Some(ValType::I64) => { func.instruction(&Instruction::F64ConvertI64S); }
+				Some(ValType::I32) => {
 					func.instruction(&Instruction::I64ExtendI32S);
 					func.instruction(&Instruction::F64ConvertI64S);
 				}
@@ -2734,12 +2734,12 @@ impl WasmGcEmitter {
 			},
 			Some(_) => match result_type { // Int or other → i64
 				None => { func.instruction(&Instruction::I64Const(0)); }
-				Some(wasm_encoder::ValType::F64) => { func.instruction(&Instruction::I64TruncF64S); }
-				Some(wasm_encoder::ValType::F32) => {
+				Some(ValType::F64) => { func.instruction(&Instruction::I64TruncF64S); }
+				Some(ValType::F32) => {
 					func.instruction(&Instruction::F64PromoteF32);
 					func.instruction(&Instruction::I64TruncF64S);
 				}
-				Some(wasm_encoder::ValType::I32) => { func.instruction(&Instruction::I64ExtendI32S); }
+				Some(ValType::I32) => { func.instruction(&Instruction::I64ExtendI32S); }
 				_ => {} // I64 already correct
 			},
 		}
@@ -2778,33 +2778,33 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Text(s) => {
 				let (ptr, len) = self.allocate_string(s);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I32Const(ptr as i32));
+				func.instruction(&I32Const(len as i32));
 			}
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					if local.data_pointer > 0 {
-						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
-						func.instruction(&Instruction::I32Const(local.data_length as i32));
+						func.instruction(&I32Const(local.data_pointer as i32));
+						func.instruction(&I32Const(local.data_length as i32));
 					} else {
 						// Fallback: use symbol name
 						let (ptr, len) = self.allocate_string(name);
-						func.instruction(&Instruction::I32Const(ptr as i32));
-						func.instruction(&Instruction::I32Const(len as i32));
+						func.instruction(&I32Const(ptr as i32));
+						func.instruction(&I32Const(len as i32));
 					}
 				} else {
 					// Unknown symbol - use name as string
 					let (ptr, len) = self.allocate_string(name);
-					func.instruction(&Instruction::I32Const(ptr as i32));
-					func.instruction(&Instruction::I32Const(len as i32));
+					func.instruction(&I32Const(ptr as i32));
+					func.instruction(&I32Const(len as i32));
 				}
 			}
 			_ => {
 				// For other nodes, try to get a string representation
 				let s = node.to_string();
 				let (ptr, len) = self.allocate_string(&s);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I32Const(ptr as i32));
+				func.instruction(&I32Const(len as i32));
 			}
 		}
 	}
@@ -2816,23 +2816,23 @@ impl WasmGcEmitter {
 				// Add null terminator for C string
 				let c_str = format!("{}\0", s);
 				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&I32Const(ptr as i32));
 			}
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					if local.data_pointer > 0 {
-						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
+						func.instruction(&I32Const(local.data_pointer as i32));
 					} else {
 						// Fallback: use symbol name with null terminator
 						let c_str = format!("{}\0", name);
 						let (ptr, _) = self.allocate_string(&c_str);
-						func.instruction(&Instruction::I32Const(ptr as i32));
+						func.instruction(&I32Const(ptr as i32));
 					}
 				} else {
 					// Unknown symbol - use name as string
 					let c_str = format!("{}\0", name);
 					let (ptr, _) = self.allocate_string(&c_str);
-					func.instruction(&Instruction::I32Const(ptr as i32));
+					func.instruction(&I32Const(ptr as i32));
 				}
 			}
 			_ => {
@@ -2840,7 +2840,7 @@ impl WasmGcEmitter {
 				let s = node.to_string();
 				let c_str = format!("{}\0", s);
 				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&I32Const(ptr as i32));
 			}
 		}
 	}
@@ -3191,7 +3191,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I32WrapI64);
 
 		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
+		func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
 
 		// Then branch
 		self.emit_numeric_value(func, then_expr);
@@ -3292,7 +3292,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I32WrapI64);
 
 		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::Ref(self.node_ref(false)))));
+		func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
 
 		// Then branch - extract value from block if needed
 		self.emit_block_value(func, then_expr);
@@ -3440,16 +3440,16 @@ impl WasmGcEmitter {
 					Node::Number(n) => {
 						let s = n.to_string();
 						let (ptr, len) = self.allocate_string(&s);
-						func.instruction(&Instruction::I32Const(ptr as i32));
-						func.instruction(&Instruction::I32Const(len as i32));
+						func.instruction(&I32Const(ptr as i32));
+						func.instruction(&I32Const(len as i32));
 						self.emit_call(func, "new_text");
 					}
 					// Compile-time: char to string
 					Node::Char(c) => {
 						let s = c.to_string();
 						let (ptr, len) = self.allocate_string(&s);
-						func.instruction(&Instruction::I32Const(ptr as i32));
-						func.instruction(&Instruction::I32Const(len as i32));
+						func.instruction(&I32Const(ptr as i32));
+						func.instruction(&I32Const(len as i32));
 						self.emit_call(func, "new_text");
 					}
 					// Already a string - use the string table
@@ -3474,11 +3474,11 @@ impl WasmGcEmitter {
 						} else {
 							char::from_u32(*n as u32).unwrap_or('?')
 						};
-						func.instruction(&Instruction::I32Const(c as i32));
+						func.instruction(&I32Const(c as i32));
 						self.emit_call(func, "new_codepoint");
 					}
 					Node::Char(c) => {
-						func.instruction(&Instruction::I32Const(*c as i32));
+						func.instruction(&I32Const(*c as i32));
 						self.emit_call(func, "new_codepoint");
 					}
 					_ => {
@@ -4379,7 +4379,7 @@ impl WasmGcEmitter {
 					"i32" | "int" => Val(ValType::I32),
 					"f64" | "Float" | "double" => Val(ValType::F64),
 					"f32" | "float" => Val(ValType::F32),
-					"String" | "Text" | "string" => Val(ValType::Ref(string_ref)),
+					"String" | "Text" | "string" => Val(Ref(string_ref)),
 					_ => Val(ValType::I64), // default
 				};
 				FieldType {
@@ -4396,7 +4396,7 @@ impl WasmGcEmitter {
 			nullable: false,
 			heap_type: HeapType::Concrete(struct_type_idx),
 		};
-		types.ty().func_type(&FuncType::new([], [ValType::Ref(struct_ref)]));
+		types.ty().func_type(&FuncType::new([], [Ref(struct_ref)]));
 
 		module.section(&types);
 
@@ -4439,7 +4439,7 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::I64Const(*v));
 				}
 				RawFieldValue::I32(v) => {
-					func.instruction(&Instruction::I32Const(*v));
+					func.instruction(&I32Const(*v));
 				}
 				RawFieldValue::F64(v) => {
 					func.instruction(&Instruction::F64Const(Ieee64::new(v.to_bits())));
@@ -4449,8 +4449,8 @@ impl WasmGcEmitter {
 				}
 				RawFieldValue::String(_) => {
 					let (ptr, len) = string_offsets[string_idx];
-					func.instruction(&Instruction::I32Const(ptr as i32));
-					func.instruction(&Instruction::I32Const(len as i32));
+					func.instruction(&I32Const(ptr as i32));
+					func.instruction(&I32Const(len as i32));
 					func.instruction(&Instruction::StructNew(string_type_idx));
 					string_idx += 1;
 				}
@@ -4504,52 +4504,6 @@ impl WasmGcEmitter {
 	}
 }
 
-/// Raw field values for emit_raw_struct
-#[derive(Debug, Clone)]
-pub enum RawFieldValue {
-	I64(i64),
-	I32(i32),
-	F64(f64),
-	F32(f32),
-	String(String),
-}
-
-impl From<i64> for RawFieldValue {
-	fn from(v: i64) -> Self {
-		RawFieldValue::I64(v)
-	}
-}
-
-impl From<i32> for RawFieldValue {
-	fn from(v: i32) -> Self {
-		RawFieldValue::I32(v)
-	}
-}
-
-impl From<f64> for RawFieldValue {
-	fn from(v: f64) -> Self {
-		RawFieldValue::F64(v)
-	}
-}
-
-impl From<f32> for RawFieldValue {
-	fn from(v: f32) -> Self {
-		RawFieldValue::F32(v)
-	}
-}
-
-impl From<&str> for RawFieldValue {
-	fn from(v: &str) -> Self {
-		RawFieldValue::String(v.to_string())
-	}
-}
-
-impl From<String> for RawFieldValue {
-	fn from(v: String) -> Self {
-		RawFieldValue::String(v)
-	}
-}
-
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	use wasmtime::{Linker, Module, Store, Val};
@@ -4580,6 +4534,7 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 }
 
 /// Check if code uses fetch (needs host imports)
+///  todo get rid of hard-coded logic, see usage
 fn uses_fetch(code: &str) -> bool {
 	code.contains("fetch ")
 }
@@ -4595,33 +4550,22 @@ fn uses_wasi(code: &str) -> bool {
 
 /// Check if code uses FFI imports (import X from Y, use m/c)
 fn uses_ffi(code: &str) -> bool {
-	// Check for "import X from" pattern
-	if code.contains("import ") && code.contains(" from ") {
-		return true;
-	}
-	// Check for "use m", "use c", "use math" etc
-	if code.contains("use m;") || code.contains("use c;") || code.contains("use math;") {
-		return true;
-	}
-	// Check for "use m\n" or "use c\n" etc
-	if code.contains("use m\n") || code.contains("use c\n") {
-		return true;
-	}
+	// Todo: we need to pre-load the libraries in analyzer anyways,
+	// and in that process, we can check if the library is FFI or not.
+	if code.contains("import ") { return true;}
+	if code.contains("use "){ return true; }
 	false
 }
 
 /// Find a struct instantiation anywhere in the AST using TypeRegistry
-fn find_struct_instantiation(
-	registry: &crate::type_kinds::TypeRegistry,
-	node: &Node,
-) -> Option<(crate::type_kinds::TypeDef, Vec<RawFieldValue>)> {
+/// todo instead of recursing different types individually, we should have one central walker and delegate from there.
+fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
 	find_instantiation_recursive(registry, node)
 }
 
-fn find_instantiation_recursive(
-	registry: &crate::type_kinds::TypeRegistry,
-	node: &Node,
-) -> Option<(crate::type_kinds::TypeDef, Vec<RawFieldValue>)> {
+
+fn find_instantiation_recursive(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
+/// todo instead of recursing different types individually, we should have one central walker and delegate from there.
 	use crate::type_kinds::extract_instance_values;
 	let node = node.drop_meta();
 	match node {
@@ -4682,7 +4626,7 @@ pub fn eval(code: &str) -> Node {
 
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
-	let needs_host = uses_fetch(&code);
+	let needs_host = uses_fetch(&code); // todo iterate over all used functions and check if they are a host import.
 	let needs_wasi = uses_wasi(&code);
 	let needs_ffi = uses_ffi(&code);
 	if needs_host {
