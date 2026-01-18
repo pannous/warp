@@ -451,7 +451,7 @@ pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<i64> {
 /// Load WASM bytes with FFI support (for native function imports)
 /// Uses inline reading to handle GC references with FFI state
 pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
-	use crate::ffi::{link_ffi_functions, FfiState};
+	use crate::ffi::{link_ffi_functions, link_module_libraries, FfiState};
 	use crate::extensions::numbers::Number;
 	use crate::type_kinds::Kind;
 
@@ -463,6 +463,9 @@ pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
 	// Create linker with FFI functions
 	let mut linker: Linker<FfiState> = Linker::new(&engine);
 	link_ffi_functions(&mut linker, &engine)?;
+
+	// Auto-link dynamic libraries discovered from module imports (raylib, SDL2, etc.)
+	link_module_libraries(&mut linker, &engine, &module)?;
 
 	let instance = linker.instantiate(&mut store, &module)?;
 

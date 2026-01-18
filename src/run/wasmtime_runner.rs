@@ -51,7 +51,7 @@ pub fn run(path: &str) -> Node {
 /// Run WAT/WAST text format code - compiles to WASM binary first
 pub fn run_wat(wat_code: &str) -> Node {
 	use crate::extensions::numbers::Number;
-	use crate::ffi::{link_ffi_functions, FfiState};
+	use crate::ffi::{link_ffi_functions, link_module_libraries, FfiState};
 	use crate::type_kinds::Kind;
 
 	// Create engine with GC support
@@ -76,6 +76,12 @@ pub fn run_wat(wat_code: &str) -> Node {
 	let mut linker: Linker<FfiState> = Linker::new(&engine);
 	if let Err(e) = link_ffi_functions(&mut linker, &engine) {
 		eprintln!("FFI linking error: {}", e);
+		return Node::Empty;
+	}
+
+	// Auto-link dynamic libraries discovered from module imports (raylib, SDL2, etc.)
+	if let Err(e) = link_module_libraries(&mut linker, &engine, &module) {
+		eprintln!("Dynamic library linking error: {}", e);
 		return Node::Empty;
 	}
 

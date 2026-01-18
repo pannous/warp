@@ -68,6 +68,24 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					return Kind::Int;
 				}
 			}
+			// Zero-arg function call: (funcname) with no args
+			if *bracket == Bracket::Round && items.len() == 1 {
+				if let Node::Symbol(s) = items[0].drop_meta() {
+					if crate::ffi::is_ffi_function(s) {
+						if let Some(sig) = crate::ffi::get_ffi_signature(s) {
+							if !sig.results.is_empty() {
+								return match sig.results[0] {
+									wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+									_ => Kind::Int,
+								};
+							}
+						}
+						return Kind::Int;
+					}
+					// Assume zero-arg user function returns Int
+					return Kind::Int;
+				}
+			}
 			// Data list: all items are pure data → Kind::List
 			if items.iter().all(is_data_node) {
 				return Kind::List;

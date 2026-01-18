@@ -244,9 +244,14 @@ impl WasmGcEmitter {
 	}
 
 	/// Add an FFI import by function name
-	pub fn add_ffi_import(&mut self, name: &str, _library: &str) {
-		use crate::ffi::get_ffi_signature;
-		if let Some(sig) = get_ffi_signature(name) {
+	pub fn add_ffi_import(&mut self, name: &str, library: &str) {
+		use crate::ffi::{get_ffi_signature, get_ffi_signature_from_lib};
+
+		// Try library-specific lookup first, then fallback to generic lookup
+		let sig = get_ffi_signature_from_lib(name, library)
+			.or_else(|| get_ffi_signature(name));
+
+		if let Some(sig) = sig {
 			// Add required wrapper functions based on return type
 			if let Some(result_type) = sig.results.first() {
 				match result_type {
@@ -1174,14 +1179,22 @@ impl WasmGcEmitter {
 					// Check if first item is directly a Symbol (not a nested list)
 					match items[0].drop_meta() {
 						Node::Symbol(first_sym) => {
-							if first_sym == "import" && items.len() >= 3 {
+							if first_sym == "import" && items.len() >= 2 {
+								// Check for "import lib" pattern (wildcard import)
+								if items.len() == 2 {
+									let lib = items[1].name();
+									self.add_ffi_lib(&lib);
+									return;
+								}
 								let func_name = items[1].name();
 								// Check for Key(from, _, lib) pattern
-								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
-									if key.name() == "from" {
-										let lib = value.name();
-										self.add_ffi_import(&func_name, &lib);
-										return;
+								if items.len() >= 3 {
+									if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
+										if key.name() == "from" {
+											let lib = value.name();
+											self.add_ffi_import(&func_name, &lib);
+											return;
+										}
 									}
 								}
 								// Check for Symbol("from"), Y pattern (4 items)
@@ -1243,6 +1256,8 @@ impl WasmGcEmitter {
 	}
 
 	/// Add all common functions from a library
+	/// For libc/libm: uses predefined list
+	/// For other libs (raylib, SDL2, etc.): discovers via header parsing
 	fn add_ffi_lib(&mut self, lib: &str) {
 		let lib_alias = crate::ffi::resolve_library_alias(lib);
 		if lib_alias == "m" {
@@ -1253,7 +1268,40 @@ impl WasmGcEmitter {
 			for name in ["strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"] {
 				self.add_ffi_import(name, "c"); // abs removed: use builtin abs keyword
 			}
+		} else {
+			// Dynamic discovery: parse library headers to find all functions
+			self.add_ffi_lib_dynamic(lib);
 		}
+	}
+
+	/// Dynamically discover and add all functions from a library via header parsing
+	fn add_ffi_lib_dynamic(&mut self, lib: &str) {
+		use crate::ffi::{get_signatures_from_headers, FfiSignature};
+
+		let signatures = get_signatures_from_headers(lib);
+		if signatures.is_empty() {
+			eprintln!("[FFI] Warning: No functions found for library '{}'", lib);
+			return;
+		}
+
+		let _count = signatures.len();
+		for (name, sig) in signatures {
+			// Add required wrapper functions based on return type
+			if let Some(result_type) = sig.results.first() {
+				match result_type {
+					wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
+						self.required_functions.insert("new_float");
+					}
+					wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
+						self.required_functions.insert("new_int");
+					}
+					_ => {}
+				}
+			}
+			self.ffi_imports.insert(name, sig);
+			self.emit_ffi_imports = true;
+		}
+
 	}
 
 	/// Emit the compact 3-field GC types
@@ -4550,6 +4598,12 @@ impl WasmGcEmitter {
 			Node::Key(if_then, Op::Else, else_expr) => {
 				self.emit_if_then_else_numeric(func, if_then, Some(else_expr));
 			}
+			// If-then (no else): if condition then then_expr
+			Node::Key(if_cond, Op::Then, then_expr) => {
+				// Construct node for emit_if_then_else_numeric
+				let full_node = Node::Key(if_cond.clone(), Op::Then, then_expr.clone());
+				self.emit_if_then_else_numeric(func, &full_node, None);
+			}
 			// Variable lookup (local or global)
 			Node::Symbol(name) => {
 				// Handle $n parameter reference (e.g., $0 = first param)
@@ -4578,6 +4632,11 @@ impl WasmGcEmitter {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						if self.user_functions.contains_key(fn_name) {
 							self.emit_user_function_call_numeric(func, fn_name, &[]);
+							return;
+						}
+						// Check for zero-arg FFI function call
+						if self.ffi_imports.contains_key(fn_name) {
+							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Int));
 							return;
 						}
 					}
