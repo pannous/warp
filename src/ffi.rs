@@ -10,8 +10,10 @@
 // 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
 use anyhow::Result;
+use libloading::Library;
 use std::collections::HashMap;
-use wasmtime::{Engine, FuncType, Linker, Store, Val};
+use std::sync::{Arc, OnceLock};
+use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
 /// FFI function signature descriptor
 /// Uses wasm_encoder::ValType for consistency with emitter
@@ -111,8 +113,20 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
         return None;
     }
 
-    // Remove extern, static, inline qualifiers
-    let decl = decl.replace("extern ", "").replace("static ", "").replace("inline ", "");
+    // Remove extern, static, inline qualifiers and API macros (RLAPI, SDL_CALL, etc.)
+    let decl = decl
+        .replace("extern ", "")
+        .replace("static ", "")
+        .replace("inline ", "")
+        .replace("RLAPI ", "")
+        .replace("RAYGUIAPI ", "")
+        .replace("RMAPI ", "")
+        .replace("PHYSACDEF ", "")
+        .replace("RL_API ", "")
+        .replace("SDL_CALL ", "")
+        .replace("SDLCALL ", "")
+        .replace("__cdecl ", "")
+        .replace("__stdcall ", "");
     let decl = decl.trim();
 
     // Find the opening parenthesis (marks start of params)
@@ -232,27 +246,40 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
     for line in content.lines() {
         let line = line.trim();
 
-        // Skip preprocessor and comments
+        // Skip preprocessor and pure comment lines
         if line.starts_with('#') || line.starts_with("//") {
             continue;
         }
 
         // Skip block comments (simplified - doesn't handle multi-line)
-        if line.contains("/*") && line.contains("*/") {
+        if line.contains("/*") && line.contains("*/") && !line.contains('(') {
             continue;
         }
 
-        // Accumulate multi-line declarations
-        current_decl.push_str(line);
+        // Skip empty lines and typedefs/structs in the middle of accumulation
+        if line.is_empty() {
+            current_decl.clear();
+            continue;
+        }
+
+        // Strip inline comments (// ...) for processing but keep declaration
+        let line_for_check = if let Some(comment_pos) = line.find("//") {
+            line[..comment_pos].trim()
+        } else {
+            line
+        };
+
+        // Accumulate multi-line declarations (use original line content)
+        current_decl.push_str(line_for_check);
         current_decl.push(' ');
 
         // If we have a complete declaration (ends with ; or })
-        if line.ends_with(';') && current_decl.contains('(') {
+        if line_for_check.ends_with(';') && current_decl.contains('(') {
             if let Some(sig) = extract_function_signature(&current_decl, library) {
                 signatures.push(sig);
             }
             current_decl.clear();
-        } else if line.ends_with('}') || (line.ends_with(';') && !current_decl.contains('(')) {
+        } else if line_for_check.ends_with('}') || (line_for_check.ends_with(';') && !current_decl.contains('(')) {
             current_decl.clear();
         }
     }
@@ -266,8 +293,8 @@ pub fn get_signatures_from_headers(library: &str) -> HashMap<String, FfiSignatur
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);
 
-    for path in paths {
-        let header_sigs = parse_header_file(&path, library);
+    for path in &paths {
+        let header_sigs = parse_header_file(path, library);
         for hsig in header_sigs {
             if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
                 sigs.insert(hsig.name.clone(), ffi_sig);
@@ -778,6 +805,564 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
     linker.alias_module("c", "libc")?;
 
     Ok(())
+}
+
+// ============================================================================
+// Dynamic FFI - Load any library through reflection (raylib, SDL2, etc.)
+// Parses C headers to discover signatures, loads dylib, creates wasm wrappers
+// Uses direct function pointer calls with signature pattern matching
+// ============================================================================
+
+/// Global cache of loaded dynamic libraries
+static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>>> = OnceLock::new();
+
+/// Get or load a dynamic library
+fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
+    let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    let mut guard = cache.lock().ok()?;
+
+    if let Some(lib) = guard.get(lib_name) {
+        return Some(Arc::clone(lib));
+    }
+
+    // Try various library paths
+    let paths = get_library_paths(lib_name);
+    for path in paths {
+        if let Ok(lib) = unsafe { Library::new(&path) } {
+            let arc = Arc::new(lib);
+            guard.insert(lib_name.to_string(), Arc::clone(&arc));
+            return Some(arc);
+        }
+    }
+    None
+}
+
+/// Get possible paths for a library
+fn get_library_paths(lib_name: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+
+    // macOS paths
+    #[cfg(target_os = "macos")]
+    {
+        paths.push(format!("/opt/homebrew/lib/lib{}.dylib", lib_name));
+        paths.push(format!("/usr/local/lib/lib{}.dylib", lib_name));
+        paths.push(format!("lib{}.dylib", lib_name));
+    }
+
+    // Linux paths
+    #[cfg(target_os = "linux")]
+    {
+        paths.push(format!("/usr/lib/lib{}.so", lib_name));
+        paths.push(format!("/usr/local/lib/lib{}.so", lib_name));
+        paths.push(format!("lib{}.so", lib_name));
+    }
+
+    paths
+}
+
+/// Normalized parameter type for signature matching
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum ParamType {
+    I32,
+    I64,
+    F32,
+    F64,
+    Ptr,
+}
+
+/// Normalized return type for signature matching
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum RetType {
+    Void,
+    I32,
+    I64,
+    F32,
+    F64,
+    Bool,
+}
+
+/// Map C type string to normalized ParamType
+fn c_type_to_param_type(c_type: &str) -> ParamType {
+    let t = c_type.trim();
+    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+
+    match t {
+        "float" => ParamType::F32,
+        "double" => ParamType::F64,
+        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
+            ParamType::I64
+        }
+        s if s.contains('*') => ParamType::Ptr,
+        _ => ParamType::I32, // int, bool, char, short, Color, etc.
+    }
+}
+
+/// Map C type string to normalized RetType
+fn c_type_to_ret_type(c_type: &str) -> RetType {
+    let t = c_type.trim();
+    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+
+    match t {
+        "void" => RetType::Void,
+        "float" => RetType::F32,
+        "double" => RetType::F64,
+        "bool" => RetType::Bool,
+        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
+            RetType::I64
+        }
+        _ => RetType::I32,
+    }
+}
+
+/// Map C type string to wasmtime ValType
+fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
+    let t = c_type.trim();
+    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+
+    match t {
+        "void" => None,
+        "float" => Some(ValType::F32),
+        "double" => Some(ValType::F64),
+        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
+            Some(ValType::I64)
+        }
+        _ => Some(ValType::I32),
+    }
+}
+
+/// Link all functions from a library discovered through header reflection
+pub fn link_dynamic_library(
+    linker: &mut Linker<FfiState>,
+    engine: &Engine,
+    lib_name: &str,
+) -> Result<usize> {
+    // Load the dynamic library
+    let library = match get_or_load_library(lib_name) {
+        Some(lib) => lib,
+        None => {
+            return Ok(0);
+        }
+    };
+
+    // Parse headers to discover function signatures
+    let header_paths = crate::ffi_parser::find_library_headers(lib_name);
+    if header_paths.is_empty() {
+        return Ok(0);
+    }
+
+    let mut linked_count = 0;
+
+    for header_path in &header_paths {
+        let signatures = parse_header_file(header_path, lib_name);
+
+        for sig in signatures {
+            if link_single_function(linker, engine, lib_name, &library, &sig).is_ok() {
+                linked_count += 1;
+            }
+        }
+    }
+
+    Ok(linked_count)
+}
+
+/// Link a single function from a parsed header signature
+fn link_single_function(
+    linker: &mut Linker<FfiState>,
+    engine: &Engine,
+    lib_name: &str,
+    library: &Arc<Library>,
+    sig: &FfiHeaderSignature,
+) -> Result<()> {
+    let func_name = sig.name.clone();
+
+    // Get symbol
+    let func_ptr: usize = unsafe {
+        let symbol: libloading::Symbol<*const ()> = library
+            .get(func_name.as_bytes())
+            .map_err(|e| anyhow::anyhow!("Symbol {} not found: {}", func_name, e))?;
+        *symbol as usize
+    };
+
+    if func_ptr == 0 {
+        return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
+    }
+
+    // Build wasmtime function type
+    let wasm_params: Vec<ValType> = sig
+        .param_types
+        .iter()
+        .filter_map(|t| c_type_to_wasm_valtype(t))
+        .collect();
+
+    let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type)
+        .into_iter()
+        .collect();
+
+    let func_type = FuncType::new(engine, wasm_params.clone(), wasm_results.clone());
+
+    // Get normalized types for dispatch
+    let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
+    let ret_type = c_type_to_ret_type(&sig.return_type);
+
+    // Generate signature key for dispatch (e.g., "III_I" for 3 ints returning int)
+    let sig_key = generate_signature_key(&param_types, ret_type);
+
+    // Create the wasmtime function wrapper using macro-generated dispatchers
+    create_ffi_wrapper(linker, lib_name, &func_name, func_type, func_ptr, &sig_key, &param_types, ret_type)
+}
+
+/// Generate a signature key string for dispatch
+fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
+    let mut key = String::new();
+    for p in params {
+        key.push(match p {
+            ParamType::I32 => 'I',
+            ParamType::I64 => 'L',
+            ParamType::F32 => 'F',
+            ParamType::F64 => 'D',
+            ParamType::Ptr => 'P',
+        });
+    }
+    key.push('_');
+    key.push(match ret {
+        RetType::Void => 'V',
+        RetType::I32 => 'I',
+        RetType::I64 => 'L',
+        RetType::F32 => 'F',
+        RetType::F64 => 'D',
+        RetType::Bool => 'B',
+    });
+    key
+}
+
+/// Create FFI wrapper with typed function pointer call
+fn create_ffi_wrapper(
+    linker: &mut Linker<FfiState>,
+    lib_name: &str,
+    func_name: &str,
+    func_type: FuncType,
+    func_ptr: usize,
+    sig_key: &str,
+    param_types: &[ParamType],
+    ret_type: RetType,
+) -> Result<()> {
+    // Clone for closure
+    let param_types = param_types.to_vec();
+
+    // Dispatch based on signature - common patterns for raylib/SDL/etc.
+    match sig_key {
+        // void -> void
+        "_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, _, _| {
+                let f: extern "C" fn() = unsafe { std::mem::transmute(func_ptr) };
+                f();
+                Ok(())
+            })?;
+        }
+        // void -> int (WindowShouldClose, GetMouseX, etc.)
+        "_I" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::I32(f());
+                Ok(())
+            })?;
+        }
+        // void -> bool
+        "_B" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::I32(if f() != 0 { 1 } else { 0 });
+                Ok(())
+            })?;
+        }
+        // void -> float
+        "_F" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+                let f: extern "C" fn() -> f32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::F32(f().to_bits());
+                Ok(())
+            })?;
+        }
+        // void -> double
+        "_D" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+                let f: extern "C" fn() -> f64 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::F64(f().to_bits());
+                Ok(())
+            })?;
+        }
+        // int -> void (SetTargetFPS, etc.)
+        "I_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+                let f: extern "C" fn(i32) = unsafe { std::mem::transmute(func_ptr) };
+                f(params[0].unwrap_i32());
+                Ok(())
+            })?;
+        }
+        // int -> int (IsKeyPressed, etc.)
+        "I_I" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::I32(f(params[0].unwrap_i32()));
+                Ok(())
+            })?;
+        }
+        // int -> bool
+        "I_B" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::I32(if f(params[0].unwrap_i32()) != 0 { 1 } else { 0 });
+                Ok(())
+            })?;
+        }
+        // int,int -> void
+        "II_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+                let f: extern "C" fn(i32, i32) = unsafe { std::mem::transmute(func_ptr) };
+                f(params[0].unwrap_i32(), params[1].unwrap_i32());
+                Ok(())
+            })?;
+        }
+        // int,int -> int
+        "II_I" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::I32(f(params[0].unwrap_i32(), params[1].unwrap_i32()));
+                Ok(())
+            })?;
+        }
+        // int,int,ptr -> void (InitWindow with title)
+        "IIP_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+                let f: extern "C" fn(i32, i32, *const u8) = unsafe { std::mem::transmute(func_ptr) };
+                let ptr = get_memory_ptr(&mut caller, params[2].unwrap_i32() as usize);
+                f(params[0].unwrap_i32(), params[1].unwrap_i32(), ptr);
+                Ok(())
+            })?;
+        }
+        // int,int,float,int -> void (DrawCircle: x, y, radius, color)
+        "IIFI_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+                let f: extern "C" fn(i32, i32, f32, i32) = unsafe { std::mem::transmute(func_ptr) };
+                f(
+                    params[0].unwrap_i32(),
+                    params[1].unwrap_i32(),
+                    params[2].unwrap_f32(),
+                    params[3].unwrap_i32(),
+                );
+                Ok(())
+            })?;
+        }
+        // int,int,int,int,int -> void (DrawRectangle: x, y, w, h, color)
+        "IIIII_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+                let f: extern "C" fn(i32, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
+                f(
+                    params[0].unwrap_i32(),
+                    params[1].unwrap_i32(),
+                    params[2].unwrap_i32(),
+                    params[3].unwrap_i32(),
+                    params[4].unwrap_i32(),
+                );
+                Ok(())
+            })?;
+        }
+        // ptr,int,int,int -> void (DrawText: text, x, y, fontSize, color)
+        "PIII_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+                let f: extern "C" fn(*const u8, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
+                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
+                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32());
+                Ok(())
+            })?;
+        }
+        // ptr,int,int,int,int -> void (DrawText with color: text, x, y, fontSize, color)
+        "PIIII_V" => {
+            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+                let f: extern "C" fn(*const u8, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
+                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
+                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32(), params[4].unwrap_i32());
+                Ok(())
+            })?;
+        }
+        // float -> float
+        "F_F" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(f32) -> f32 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::F32(f(params[0].unwrap_f32()).to_bits());
+                Ok(())
+            })?;
+        }
+        // double -> double
+        "D_D" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::F64(f(params[0].unwrap_f64()).to_bits());
+                Ok(())
+            })?;
+        }
+        // double,double -> double
+        "DD_D" => {
+            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+                let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
+                results[0] = Val::F64(f(params[0].unwrap_f64(), params[1].unwrap_f64()).to_bits());
+                Ok(())
+            })?;
+        }
+        // Generic fallback using dynamic dispatch
+        _ => {
+            return create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, &param_types, ret_type);
+        }
+    }
+
+    Ok(())
+}
+
+/// Link all dynamic libraries required by a WASM module's imports
+/// Scans the module for import statements and links matching libraries via reflection
+pub fn link_module_libraries(
+    linker: &mut Linker<FfiState>,
+    engine: &Engine,
+    module: &wasmtime::Module,
+) -> Result<()> {
+    use std::collections::HashSet;
+
+    // Collect unique library names from imports
+    let mut libs_to_link: HashSet<String> = HashSet::new();
+
+    for import in module.imports() {
+        let module_name = import.module();
+        // Skip built-in libraries that are already linked
+        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1") {
+            libs_to_link.insert(module_name.to_string());
+        }
+    }
+
+    // Link each discovered library
+    for lib_name in libs_to_link {
+        match link_dynamic_library(linker, engine, &lib_name) {
+            Ok(count) if count > 0 => {
+            }
+            Ok(_) => {
+                eprintln!("[FFI] Warning: No functions linked from {}", lib_name);
+            }
+            Err(e) => {
+                eprintln!("[FFI] Warning: Failed to link {}: {}", lib_name, e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
+fn create_generic_ffi_wrapper(
+    linker: &mut Linker<FfiState>,
+    lib_name: &str,
+    func_name: &str,
+    func_type: FuncType,
+    func_ptr: usize,
+    param_types: &[ParamType],
+    ret_type: RetType,
+) -> Result<()> {
+    let param_types = param_types.to_vec();
+
+    // For generic case, we pack all args into an array and use assembly/platform-specific calling
+    // This is a simplified version that handles up to 8 args (enough for most APIs)
+    linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
+        // Convert params to raw values
+        let mut args: [u64; 8] = [0; 8];
+        for (i, (param, ptype)) in params.iter().zip(param_types.iter()).enumerate() {
+            if i >= 8 {
+                break;
+            }
+            args[i] = match ptype {
+                ParamType::I32 => param.unwrap_i32() as u64,
+                ParamType::I64 => param.unwrap_i64() as u64,
+                ParamType::F32 => (param.unwrap_f32() as f64).to_bits(),
+                ParamType::F64 => param.unwrap_f64().to_bits(),
+                ParamType::Ptr => {
+                    let offset = param.unwrap_i32() as usize;
+                    get_memory_ptr(&mut caller, offset) as u64
+                }
+            };
+        }
+
+        // Call using platform-specific calling convention
+        // ARM64 and x86_64 use similar conventions for first 8 integer/pointer args
+        let ret = unsafe { call_native_function(func_ptr, &args, params.len()) };
+
+        // Convert return value
+        if !results.is_empty() {
+            results[0] = match ret_type {
+                RetType::Void => return Ok(()),
+                RetType::I32 => Val::I32(ret as i32),
+                RetType::I64 => Val::I64(ret as i64),
+                RetType::F32 => Val::F32((ret as f32).to_bits()),
+                RetType::F64 => Val::F64(ret),
+                RetType::Bool => Val::I32(if ret != 0 { 1 } else { 0 }),
+            };
+        }
+
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
+/// Get pointer into WASM linear memory
+fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) -> *const u8 {
+    if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
+        unsafe { memory.data_ptr(&caller).add(offset) }
+    } else {
+        std::ptr::null()
+    }
+}
+
+/// Call native function with up to 8 arguments
+/// Uses platform calling convention (ARM64/x86_64)
+#[inline(never)]
+unsafe fn call_native_function(func_ptr: usize, args: &[u64; 8], arg_count: usize) -> u64 {
+    // Cast to function pointer type based on arg count
+    // Both ARM64 and x86_64 pass first 6-8 integer args in registers
+    match arg_count {
+        0 => {
+            let f: extern "C" fn() -> u64 = std::mem::transmute(func_ptr);
+            f()
+        }
+        1 => {
+            let f: extern "C" fn(u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0])
+        }
+        2 => {
+            let f: extern "C" fn(u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1])
+        }
+        3 => {
+            let f: extern "C" fn(u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2])
+        }
+        4 => {
+            let f: extern "C" fn(u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2], args[3])
+        }
+        5 => {
+            let f: extern "C" fn(u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2], args[3], args[4])
+        }
+        6 => {
+            let f: extern "C" fn(u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2], args[3], args[4], args[5])
+        }
+        7 => {
+            let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+        }
+        _ => {
+            let f: extern "C" fn(u64, u64, u64, u64, u64, u64, u64, u64) -> u64 = std::mem::transmute(func_ptr);
+            f(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+        }
+    }
 }
 
 /// Resolve library alias to canonical name
