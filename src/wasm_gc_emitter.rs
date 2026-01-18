@@ -1113,7 +1113,7 @@ impl WasmGcEmitter {
 
 	/// Dynamically discover and add all functions from a library via header parsing
 	fn add_ffi_lib_dynamic(&mut self, lib: &str) {
-		use crate::ffi::{get_signatures_from_headers, FfiSignature};
+		use crate::ffi::get_signatures_from_headers;
 
 		let signatures = get_signatures_from_headers(lib);
 		if signatures.is_empty() {
