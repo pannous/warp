@@ -1,5 +1,4 @@
-use warp::*;
-// test are their OWN crate!
+use warp::{eq, is, put, skip, CharExtensions, StringExtensions};
 
 macro_rules! s {
 	($lit:literal) => {
@@ -121,9 +120,11 @@ fn test_primitive_char() {
 fn test_primitive_string() {
 	is!("\"🍏\"", '🍏'); // !
 }
+
 #[test]
 fn test_primitive_hello() {
-	is!("hello", "hello"); // goes through eval! may serialize and deserialize wasm ;)
+	// goes through eval! may serialize and deserialize wasm ;)
+	is!("hello", "hello"); // symbol to string equality!
 }
 
 // #[test]
@@ -205,7 +206,7 @@ fn test_string_index_by_variable() {
 }
 
 #[test]
-fn test_string_indices() { 
+fn test_string_indices() {
 	is!("'abcde'#4", 'd'); //
 	is!("x='abcde';x#4", 'd'); //
 	is!("x='abcde';x#4='x';x#4", 'x');
