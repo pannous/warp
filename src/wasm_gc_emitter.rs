@@ -143,7 +143,14 @@ impl WasmGcEmitter {
 			next_global_idx: 0,
 			func_registry: FunctionRegistry::new(),
 			used_functions: HashSet::new(),
-			required_functions: HashSet::new(),
+			required_functions: HashSet::from([
+				"new_int",
+				"new_float",
+				"new_text",
+				"new_codepoint",
+				"new_key",
+				"new_list",
+			]),
 			emit_all_functions: true,
 			emit_kind_globals: true,  // Enable by default for debugging
 			emit_host_imports: false, // Disabled by default for simpler modules
