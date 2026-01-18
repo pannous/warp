@@ -1,3 +1,4 @@
+use crate::context::{Context, UserFunctionDef};
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
 use crate::local::Local;
@@ -547,5 +548,440 @@ fn type_name_to_kind(name: &str) -> Kind {
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
 		_ => Kind::Int, // Default to Int
+	}
+}
+
+/// Extract user-defined functions from the AST into context
+/// Recognizes patterns:
+/// - `name(param) = body` → Key(List[name, param], Assign, body)
+/// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
+pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
+	extract_user_functions_inner(ctx, node);
+}
+
+fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
+	let node = node.drop_meta();
+	match node {
+		// Pattern: name(param1, param2, ...) = body
+		Node::Key(left, Op::Assign, body) => {
+			if let Node::List(items, _, _) = left.drop_meta() {
+				if !items.is_empty() {
+					if let Node::Symbol(name) = items[0].drop_meta() {
+						let params: Vec<(String, Option<Node>)> =
+							items.iter().skip(1).filter_map(extract_param).collect();
+						let func_def = UserFunctionDef {
+							name: name.clone(),
+							params,
+							body: body.clone(),
+							return_kind: Kind::Int,
+							func_index: None,
+						};
+						ctx.user_functions.insert(name.clone(), func_def);
+						return;
+					}
+				}
+			}
+			extract_user_functions_inner(ctx, left);
+			extract_user_functions_inner(ctx, body);
+		}
+		// Pattern: name x := body (with explicit parameter x using $0 or `it`)
+		Node::Key(left, Op::Define, body) => {
+			if let Node::List(items, _, _) = left.drop_meta() {
+				if !items.is_empty() {
+					if let Node::Symbol(name) = items[0].drop_meta() {
+						let params: Vec<(String, Option<Node>)> =
+							items.iter().skip(1).filter_map(extract_param).collect();
+						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
+							let func_def = UserFunctionDef {
+								name: name.clone(),
+								params: if params.is_empty() {
+									vec![("it".to_string(), None)]
+								} else {
+									params
+								},
+								body: body.clone(),
+								return_kind: Kind::Int,
+								func_index: None,
+							};
+							ctx.user_functions.insert(name.clone(), func_def);
+							return;
+						}
+					}
+				}
+			}
+			// Pattern: name := body (uses implicit `it` parameter)
+			if let Node::Symbol(name) = left.drop_meta() {
+				if uses_it(body) || uses_dollar_param(body) {
+					let func_def = UserFunctionDef {
+						name: name.clone(),
+						params: vec![("it".to_string(), None)],
+						body: body.clone(),
+						return_kind: Kind::Int,
+						func_index: None,
+					};
+					ctx.user_functions.insert(name.clone(), func_def);
+					return;
+				}
+			}
+			extract_user_functions_inner(ctx, left);
+			extract_user_functions_inner(ctx, body);
+		}
+		// Check for def/fun/fn syntax
+		Node::List(items, _, _) => {
+			if items.len() >= 2 {
+				if let Node::Symbol(s) = items[0].drop_meta() {
+					if is_function_keyword(s) {
+						if let Some(func_def) = extract_def_function(&items[1..]) {
+							ctx.user_functions.insert(func_def.name.clone(), func_def);
+							return;
+						}
+					}
+				}
+			}
+			for item in items {
+				extract_user_functions_inner(ctx, item);
+			}
+		}
+		Node::Key(left, _, right) => {
+			extract_user_functions_inner(ctx, left);
+			extract_user_functions_inner(ctx, right);
+		}
+		_ => {}
+	}
+}
+
+/// Extract parameter name and optional default value from a parameter node
+fn extract_param(item: &Node) -> Option<(String, Option<Node>)> {
+	match item.drop_meta() {
+		Node::Symbol(s) => Some((s.clone(), None)),
+		Node::Key(n, Op::Colon, _) => {
+			if let Node::Symbol(s) = n.drop_meta() {
+				Some((s.clone(), None))
+			} else {
+				None
+			}
+		}
+		Node::Key(n, Op::Assign, default) => {
+			if let Node::Symbol(s) = n.drop_meta() {
+				Some((s.clone(), Some(default.as_ref().clone())))
+			} else {
+				None
+			}
+		}
+		_ => None,
+	}
+}
+
+/// Check if a node uses the implicit `it` parameter
+fn uses_it(node: &Node) -> bool {
+	let node = node.drop_meta();
+	match node {
+		Node::Symbol(s) if s == "it" => true,
+		Node::Key(left, _, right) => uses_it(left) || uses_it(right),
+		Node::List(items, _, _) => items.iter().any(uses_it),
+		_ => false,
+	}
+}
+
+/// Check if a node uses $n parameter references (e.g., $0, $1)
+fn uses_dollar_param(node: &Node) -> bool {
+	let node = node.drop_meta();
+	match node {
+		Node::Symbol(s) if s.starts_with('$') && s[1..].parse::<u32>().is_ok() => true,
+		Node::Key(left, _, right) => uses_dollar_param(left) || uses_dollar_param(right),
+		Node::List(items, _, _) => items.iter().any(uses_dollar_param),
+		_ => false,
+	}
+}
+
+/// Extract function from def/fun/fn syntax
+fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
+	if items.is_empty() {
+		return None;
+	}
+	let first = items[0].drop_meta();
+
+	// Pattern 1: def (name params...): body
+	if let Node::Key(sig, Op::Colon, body) = first {
+		if let Node::List(sig_items, _, _) = sig.drop_meta() {
+			if !sig_items.is_empty() {
+				if let Node::Symbol(name) = sig_items[0].drop_meta() {
+					let params: Vec<(String, Option<Node>)> =
+						sig_items.iter().skip(1).filter_map(extract_param).collect();
+					return Some(UserFunctionDef {
+						name: name.clone(),
+						params,
+						body: body.clone(),
+						return_kind: Kind::Int,
+						func_index: None,
+					});
+				}
+			}
+		}
+	}
+
+	// Pattern 2: def ((name params...) {body})
+	if let Node::List(inner_items, _, _) = first {
+		if inner_items.len() >= 2 {
+			if let Node::List(sig_items, _, _) = inner_items[0].drop_meta() {
+				if !sig_items.is_empty() {
+					if let Node::Symbol(name) = sig_items[0].drop_meta() {
+						let params: Vec<(String, Option<Node>)> = sig_items
+							.iter()
+							.skip(1)
+							.flat_map(|item| {
+								match item.drop_meta() {
+									Node::List(param_items, _, _) => {
+										param_items.iter().filter_map(extract_param).collect::<Vec<_>>()
+									}
+									_ => extract_param(item).into_iter().collect(),
+								}
+							})
+							.collect();
+						let body = inner_items[1].clone();
+						return Some(UserFunctionDef {
+							name: name.clone(),
+							params,
+							body: Box::new(body),
+							return_kind: Kind::Int,
+							func_index: None,
+						});
+					}
+				}
+			}
+		}
+	}
+	None
+}
+
+/// Analyze node tree for non-default required functions.
+/// Default functions (new_empty, new_int, new_float, new_text, new_symbol, new_codepoint, new_key, new_list)
+/// are always included and don't need to be inserted here.
+pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
+	let node = node.drop_meta();
+	match node {
+		Node::Empty | Node::Number(_) | Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {}
+		Node::Key(key, op, value) => {
+			if *op == Op::Assign {
+				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
+					ctx.required_functions.insert("node_set_at");
+					ctx.required_functions.insert("string_set_char_at");
+					ctx.required_functions.insert("list_set_at");
+					analyze_required_functions(ctx, key);
+					analyze_required_functions(ctx, value);
+					return;
+				}
+			}
+			if *op == Op::Pow {
+				ctx.required_functions.insert("i64_pow");
+			} else if *op == Op::Square || *op == Op::Cube {
+				analyze_required_functions(ctx, key);
+				return;
+			} else if op.is_prefix() && matches!(key.drop_meta(), Node::Empty) {
+				analyze_required_functions(ctx, value);
+				return;
+			} else if *op == Op::Hash {
+				if matches!(key.drop_meta(), Node::Empty) {
+					ctx.required_functions.insert("node_count");
+				} else {
+					ctx.required_functions.insert("node_index_at");
+					ctx.required_functions.insert("string_char_at");
+					ctx.required_functions.insert("list_node_at");
+					ctx.required_functions.insert("list_at");
+				}
+			} else if *op == Op::Dot {
+				let method_name = match value.drop_meta() {
+					Node::Symbol(s) => Some(s.clone()),
+					Node::List(items, _, _) if items.len() == 1 => {
+						if let Node::Symbol(s) = items[0].drop_meta() {
+							Some(s.clone())
+						} else {
+							None
+						}
+					}
+					_ => None,
+				};
+				if let Some(method) = method_name {
+					if matches!(method.as_str(), "count" | "number" | "size") {
+						ctx.required_functions.insert("node_count");
+						return;
+					}
+				}
+			}
+			analyze_required_functions(ctx, key);
+			analyze_required_functions(ctx, value);
+		}
+		Node::List(items, _, _) => {
+			if items.is_empty() {
+				return;
+			}
+			if let Node::Symbol(fn_name) = items[0].drop_meta() {
+				if ctx.ffi_imports.contains_key(fn_name.as_str()) {
+					for item in items.iter().skip(1) {
+						analyze_required_functions(ctx, item);
+					}
+					return;
+				}
+				if items.len() == 2 && matches!(fn_name.as_str(), "count" | "size") {
+					ctx.required_functions.insert("node_count");
+					return;
+				}
+			}
+			for item in items {
+				analyze_required_functions(ctx, item);
+			}
+		}
+		Node::Data(_) => {
+			ctx.required_functions.insert("new_data");
+		}
+		Node::Meta { node, .. } => {
+			analyze_required_functions(ctx, node);
+		}
+		Node::Type { name, body } => {
+			ctx.required_functions.insert("new_type");
+			ctx.type_registry.register_from_node(node);
+			analyze_required_functions(ctx, name);
+			analyze_required_functions(ctx, body);
+		}
+		Node::Error(inner) => {
+			analyze_required_functions(ctx, inner);
+		}
+	}
+}
+
+/// Recursively collect all type definitions from the AST into the TypeRegistry
+/// This pre-scan enables forward references (use a type before defining it)
+pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &Node) {
+	match node.drop_meta() {
+		Node::Type { .. } => {
+			registry.register_from_node(node);
+		}
+		Node::Key(l, _, r) => {
+			collect_all_types(registry, l);
+			collect_all_types(registry, r);
+		}
+		Node::List(items, _, _) => {
+			for item in items {
+				collect_all_types(registry, item);
+			}
+		}
+		Node::Meta { node, .. } => collect_all_types(registry, node),
+		_ => {}
+	}
+}
+
+/// Extract FFI imports from "import X from Y" and "use Y" statements
+pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
+	let node = node.drop_meta();
+	match node {
+		Node::List(items, _, _) => {
+			if !items.is_empty() {
+				match items[0].drop_meta() {
+					Node::Symbol(first_sym) => {
+						if first_sym == "import" && items.len() >= 2 {
+							if items.len() == 2 {
+								let lib = items[1].name();
+								add_ffi_lib(ctx, &lib);
+								return;
+							}
+							let func_name = items[1].name();
+							if items.len() >= 3 {
+								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
+									if key.name() == "from" {
+										let lib = value.name();
+										add_ffi_import(ctx, &func_name, &lib);
+										return;
+									}
+								}
+							}
+							if items.len() >= 4 && items[2].name() == "from" {
+								let lib = items[3].name();
+								add_ffi_import(ctx, &func_name, &lib);
+								return;
+							}
+						} else if first_sym == "use" && items.len() >= 2 {
+							let lib = items[1].name();
+							add_ffi_lib(ctx, &lib);
+							return;
+						}
+					}
+					Node::List(inner_items, _, _) => {
+						if inner_items.len() >= 2 {
+							if let Node::Symbol(inner_first) = inner_items[0].drop_meta() {
+								if inner_first == "use" {
+									let lib = inner_items[1].name();
+									add_ffi_lib(ctx, &lib);
+								}
+							}
+						}
+					}
+					_ => {}
+				}
+			}
+			for item in items {
+				extract_ffi_imports(ctx, item);
+			}
+		}
+		Node::Key(ref key, _, ref value) => {
+			if key.name() == "import" {
+				if let Node::Key(ref from_key, _, ref lib) = value.drop_meta() {
+					if from_key.name() == "from" {
+						let func_name = key.name();
+						let lib_name = lib.name();
+						add_ffi_import(ctx, &func_name, &lib_name);
+						return;
+					}
+				}
+			}
+			extract_ffi_imports(ctx, key);
+			extract_ffi_imports(ctx, value);
+		}
+		Node::Meta { ref node, .. } => {
+			extract_ffi_imports(ctx, node);
+		}
+		_ => {}
+	}
+}
+
+/// Add an FFI import by function name
+fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
+	use crate::ffi::{get_ffi_signature, get_ffi_signature_from_lib};
+
+	let sig = get_ffi_signature_from_lib(name, library)
+		.or_else(|| get_ffi_signature(name));
+
+	if let Some(sig) = sig {
+		ctx.ffi_imports.insert(name.to_string(), sig);
+	}
+}
+
+/// Add all common functions from a library
+fn add_ffi_lib(ctx: &mut Context, lib: &str) {
+	let lib_alias = crate::ffi::resolve_library_alias(lib);
+	if lib_alias == "m" {
+		for name in ["fmin", "fmax", "fabs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "fmod", "pow", "exp", "log", "log10"] {
+			add_ffi_import(ctx, name, "m");
+		}
+	} else if lib_alias == "c" {
+		for name in ["strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"] {
+			add_ffi_import(ctx, name, "c");
+		}
+	} else {
+		add_ffi_lib_dynamic(ctx, lib);
+	}
+}
+
+/// Dynamically discover and add all functions from a library via header parsing
+fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
+	use crate::ffi::get_signatures_from_headers;
+
+	let signatures = get_signatures_from_headers(lib);
+	if signatures.is_empty() {
+		eprintln!("[FFI] Warning: No functions found for library '{}'", lib);
+		return;
+	}
+
+	for (name, sig) in signatures {
+		ctx.ffi_imports.insert(name, sig);
 	}
 }
