@@ -4,7 +4,7 @@
 use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::util::fetch;
-use warp::wasm_gc_emitter::eval;
+use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::{eq, is, put, skip};
 

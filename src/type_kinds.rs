@@ -1,3 +1,8 @@
+use wasm_encoder::{AbstractHeapType, HeapType, RefType, ValType};
+use wasm_encoder::ValType::Ref;
+use crate::type_kinds;
+use crate::wasm_emitter::WasmGcEmitter;
+
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]
@@ -168,9 +173,9 @@ impl TypeDef {
 /// Extract field values from a class instance Node
 /// Instance structure: Key("Person", Colon, List([Key("name", Colon, Text), Key("age", Colon, Number)]))
 /// Returns (type_name, field_values) for use with emit_raw_struct
-pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<crate::wasm_gc_emitter::RawFieldValue>)> {
+pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<RawFieldValue>)> {
 	use crate::node::Node;
-	use crate::wasm_gc_emitter::RawFieldValue;
+	use crate::type_kinds::RawFieldValue;
 	use crate::extensions::numbers::Number;
 
 	// Instance is Key(TypeName, :, List([Key(field, :, value), ...]))
@@ -184,9 +189,9 @@ pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<
 	}
 }
 
-fn extract_field_values(body: &crate::node::Node) -> Vec<crate::wasm_gc_emitter::RawFieldValue> {
+fn extract_field_values(body: &crate::node::Node) -> Vec<type_kinds::RawFieldValue> {
 	use crate::node::Node;
-	use crate::wasm_gc_emitter::RawFieldValue;
+	use crate::type_kinds::RawFieldValue;
 	use crate::extensions::numbers::Number;
 
 	let mut values = Vec::new();
@@ -367,3 +372,90 @@ pub enum AstKind {
 	Identifier,
 }
 
+
+/// Convert FieldDef to ValType for function parameters
+pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValType {
+	match field.type_name.as_str() {
+		"Int" | "i64" | "long" => ValType::I64,
+		"Float" | "f64" | "double" => ValType::F64,
+		"i32" | "int" => ValType::I32,
+		"f32" | "float" => ValType::F32,
+		"Text" | "String" | "string" => Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(emitter.string_type),
+		}),
+		"Node" => Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(emitter.node_type),
+		}),
+		other => {
+			if let Some(&type_idx) = emitter.ctx.user_type_indices.get(other) {
+				Ref(RefType {
+					nullable: true,
+					heap_type: HeapType::Concrete(type_idx),
+				})
+			} else {
+				Ref(RefType {
+					nullable: true,
+					heap_type: any_heap_type(),
+				})
+			}
+		}
+	}
+}
+
+/// Helper to create abstract heap type refs
+pub fn any_heap_type() -> HeapType {
+	HeapType::Abstract {
+		shared: false,
+		ty: AbstractHeapType::Any,
+	}
+}
+
+
+/// Raw field values for emit_raw_struct
+/// todo we can most likely get rid of this. We already have three different containers for types
+#[derive(Debug, Clone)]
+pub enum RawFieldValue {
+	I64(i64),
+	I32(i32),
+	F64(f64),
+	F32(f32),
+	String(String),
+}
+
+impl From<i64> for RawFieldValue {
+	fn from(v: i64) -> Self {
+		RawFieldValue::I64(v)
+	}
+}
+
+impl From<i32> for RawFieldValue {
+	fn from(v: i32) -> Self {
+		RawFieldValue::I32(v)
+	}
+}
+
+impl From<f64> for RawFieldValue {
+	fn from(v: f64) -> Self {
+		RawFieldValue::F64(v)
+	}
+}
+
+impl From<f32> for RawFieldValue {
+	fn from(v: f32) -> Self {
+		RawFieldValue::F32(v)
+	}
+}
+
+impl From<&str> for RawFieldValue {
+	fn from(v: &str) -> Self {
+		RawFieldValue::String(v.to_string())
+	}
+}
+
+impl From<String> for RawFieldValue {
+	fn from(v: String) -> Self {
+		RawFieldValue::String(v)
+	}
+}

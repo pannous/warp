@@ -4,7 +4,7 @@ use std::process::exit;
 use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::type_kinds::NodeKind;
-use warp::wasm_gc_emitter::eval;
+use warp::wasm_emitter::eval;
 use warp::wasp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};

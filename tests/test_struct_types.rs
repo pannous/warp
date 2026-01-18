@@ -1,6 +1,6 @@
 use warp::Node::{Empty, Type};
 use warp::*;
-use warp::wasm_gc_emitter::eval;
+use warp::wasm_emitter::eval;
 use warp::{eq, is, key, symbol, wasm_object, wasm_struct, Node};
 
 // End goal API achieved - unified struct for both Rust and WASM GC
@@ -126,7 +126,7 @@ fn test_class_instance_raw() {
 	let alice = Person::new("Alice", 30);
 
 	// eval() automatically detects class+instance and returns Node::Data(GcObject)
-	let result = warp::wasm_gc_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	let result = warp::wasm_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 
 	// Extract GcObject and convert to Person struct
 	if let warp::Node::Data(dada) = &result {

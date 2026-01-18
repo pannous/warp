@@ -1,7 +1,7 @@
 use warp::Node::*;
 use warp::{Bracket, Node, Op};
 use warp::run::wasmtime_runner::run;
-use warp::wasm_gc_emitter::{eval, WasmGcEmitter};
+use warp::wasm_emitter::{eval, WasmGcEmitter};
 use warp::StringExtensions;
 use warp::{eq, is, write_wasm};
 
