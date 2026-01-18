@@ -144,9 +144,11 @@ impl WasmGcEmitter {
 			func_registry: FunctionRegistry::new(),
 			used_functions: HashSet::new(),
 			required_functions: HashSet::from([
+				"new_empty",
 				"new_int",
 				"new_float",
 				"new_text",
+				"new_symbol",
 				"new_codepoint",
 				"new_key",
 				"new_list",
@@ -259,18 +261,6 @@ impl WasmGcEmitter {
 			.or_else(|| get_ffi_signature(name));
 
 		if let Some(sig) = sig {
-			// Add required wrapper functions based on return type
-			if let Some(result_type) = sig.results.first() {
-				match result_type {
-					wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
-						self.required_functions.insert("new_float");
-					}
-					wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
-						self.required_functions.insert("new_int");
-					}
-					_ => {}
-				}
-			}
 			self.ffi_imports.insert(name.to_string(), sig);
 			self.emit_ffi_imports = true;
 		}
@@ -801,117 +791,42 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I64ExtendI32U);
 	}
 
+	/// Analyze node tree for non-default required functions.
+	/// Default functions (new_empty, new_int, new_float, new_text, new_symbol, new_codepoint, new_key, new_list)
+	/// are always included and don't need to be inserted here.
 	pub fn analyze_required_functions(&mut self, node: &Node) {
 		let node = node.drop_meta();
 		match node {
-			Node::Empty => {
-				self.required_functions.insert("new_empty");
-			}
-			Node::Number(num) => match num {
-				Number::Int(_) => {
-					self.required_functions.insert("new_int");
-				}
-				Number::Float(_) => {
-					self.required_functions.insert("new_float");
-				}
-				_ => {
-					self.required_functions.insert("new_empty");
-				}
-			},
-			Node::Text(_) => {
-				self.required_functions.insert("new_text");
-			}
-			Node::Char(_) => {
-				self.required_functions.insert("new_codepoint");
-			}
-			Node::Symbol(_) => {
-				self.required_functions.insert("new_symbol");
-			}
-			Node::True | Node::False => {
-				self.required_functions.insert("new_int");
-			}
+			Node::Empty | Node::Number(_) | Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {}
 			Node::Key(key, op, value) => {
-				// Check for index assignment: Key(Key(_, Hash, _), Assign, _)
 				if *op == Op::Assign {
 					if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
-						// Runtime dispatch for index assignment
 						self.required_functions.insert("node_set_at");
 						self.required_functions.insert("string_set_char_at");
 						self.required_functions.insert("list_set_at");
-						self.required_functions.insert("new_int");
 						self.analyze_required_functions(key);
 						self.analyze_required_functions(value);
 						return;
 					}
 				}
-				// Check for x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
-				if *op == Op::Assign || *op == Op::Define {
-					if let Node::List(items, _, _) = value.drop_meta() {
-						if items.len() == 2 {
-							if let Node::Symbol(s) = items[0].drop_meta() {
-								if s == "fetch" {
-									self.required_functions.insert("new_text");
-									return;
-								}
-							}
-						}
-					}
-				}
-				if op.is_arithmetic() || op.is_comparison() || op.is_logical() {
-					self.required_functions.insert("new_int");
-					if *op == Op::Pow {
-						self.required_functions.insert("i64_pow");
-					}
-					if *op == Op::Div {
-						// Division always uses float to preserve precision: 1/2 = 0.5
-						self.required_functions.insert("new_float");
-					}
+				if *op == Op::Pow {
+					self.required_functions.insert("i64_pow");
 				} else if *op == Op::Square || *op == Op::Cube {
-					// Suffix operators need both int and float constructors
-					self.required_functions.insert("new_int");
-					self.required_functions.insert("new_float");
 					self.analyze_required_functions(key);
 					return;
 				} else if op.is_prefix() && matches!(key.drop_meta(), Node::Empty) {
-					// Prefix operators: √x, -x, !x, ‖x‖
-					match op {
-						Op::Sqrt => {
-							self.required_functions.insert("new_float");
-						}
-						Op::Neg | Op::Abs => {
-							self.required_functions.insert("new_int");
-							self.required_functions.insert("new_float");
-						}
-						Op::Not => {
-							self.required_functions.insert("new_int");
-						}
-						_ => {}
-					}
 					self.analyze_required_functions(value);
 					return;
 				} else if *op == Op::Hash {
-					// Check if prefix (count) or infix (index)
 					if matches!(key.drop_meta(), Node::Empty) {
-						// Prefix #x = count
 						self.required_functions.insert("node_count");
-						self.required_functions.insert("new_int"); // wrap count result
 					} else {
-						// Infix x#y = indexing - need runtime dispatch and all helpers
 						self.required_functions.insert("node_index_at");
 						self.required_functions.insert("string_char_at");
-						self.required_functions.insert("new_codepoint");
 						self.required_functions.insert("list_node_at");
 						self.required_functions.insert("list_at");
-						self.required_functions.insert("new_list");
 					}
-				} else if *op == Op::As {
-					// Type cast - needs constructors for all possible target types
-					self.required_functions.insert("new_int");
-					self.required_functions.insert("new_float");
-					self.required_functions.insert("new_text");
-					self.required_functions.insert("new_codepoint");
 				} else if *op == Op::Dot {
-					// Check for introspection method calls: obj.count(), obj.size(), etc.
 					let method_name = match value.drop_meta() {
 						Node::Symbol(s) => Some(s.clone()),
 						Node::List(items, _, _) if items.len() == 1 => {
@@ -924,116 +839,33 @@ impl WasmGcEmitter {
 						_ => None,
 					};
 					if let Some(method) = method_name {
-						match method.as_str() {
-							"count" | "number" | "size" => {
-								self.required_functions.insert("node_count");
-								self.required_functions.insert("new_int");
-								return;
-							}
-							_ => {}
+						if matches!(method.as_str(), "count" | "number" | "size") {
+							self.required_functions.insert("node_count");
+							return;
 						}
 					}
-					self.required_functions.insert("new_key");
-				} else if *op == Op::Range || *op == Op::To {
-					// Range operators produce lists of integers
-					self.required_functions.insert("new_list");
-					self.required_functions.insert("new_int");
-				} else {
-					self.required_functions.insert("new_key");
 				}
 				self.analyze_required_functions(key);
 				self.analyze_required_functions(value);
 			}
 			Node::List(items, _, _) => {
 				if items.is_empty() {
-					self.required_functions.insert("new_empty");
-				} else {
-					// Check for FFI function calls
-					if !items.is_empty() {
-						if let Node::Symbol(fn_name) = items[0].drop_meta() {
-							if let Some(sig) = self.ffi_imports.get(fn_name.as_str()).cloned() {
-								// FFI function call - add required result wrapper
-								if sig.results.is_empty() {
-									self.required_functions.insert("new_empty");
-								} else {
-									match sig.results[0] {
-										wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
-											self.required_functions.insert("new_float");
-										}
-										wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
-											self.required_functions.insert("new_int");
-										}
-										_ => {
-											self.required_functions.insert("new_int");
-										}
-									}
-								}
-								// Analyze arguments
-								for item in items.iter().skip(1) {
-									self.analyze_required_functions(item);
-								}
-								return;
-							}
+					return;
+				}
+				if let Node::Symbol(fn_name) = items[0].drop_meta() {
+					if self.ffi_imports.contains_key(fn_name.as_str()) {
+						for item in items.iter().skip(1) {
+							self.analyze_required_functions(item);
 						}
+						return;
 					}
-					// Check for type constructor: int('123'), str(42), etc.
-					// But NOT typed variable declarations like "string x=fetch..."
-					if items.len() == 2 {
-						if let Node::Symbol(s) = items[0].drop_meta() {
-							// Skip if second arg is assignment/define (typed variable declaration)
-							let is_typed_decl =
-								matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
-							if !is_typed_decl {
-								match s.as_str() {
-									"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
-										// Type constructor - same requirements as Op::As
-										self.required_functions.insert("new_int");
-										self.required_functions.insert("new_float");
-										self.required_functions.insert("new_text");
-										self.required_functions.insert("new_codepoint");
-										self.analyze_required_functions(&items[1]);
-										return;
-									}
-									_ => {}
-								}
-							}
-							// Non-constructor patterns
-							match s.as_str() {
-								"type" => {
-									// type() introspection returns a Symbol
-									self.required_functions.insert("new_symbol");
-									return;
-								}
-								"count" | "size" => {
-									// count() and size() introspection functions
-									self.required_functions.insert("node_count");
-									self.required_functions.insert("new_int");
-									return;
-								}
-								"fetch" => {
-									// fetch returns a string, needs new_text
-									self.required_functions.insert("new_text");
-									return;
-								}
-								"range" => {
-									// range function produces a list of integers
-									self.required_functions.insert("new_list");
-									self.required_functions.insert("new_int");
-									return;
-								}
-								"ceil" | "floor" | "round" => {
-									// WASM builtin math functions return int
-									self.required_functions.insert("new_int");
-									return;
-								}
-								_ => {}
-							}
-						}
+					if items.len() == 2 && matches!(fn_name.as_str(), "count" | "size") {
+						self.required_functions.insert("node_count");
+						return;
 					}
-					self.required_functions.insert("new_list");
-					for item in items {
-						self.analyze_required_functions(item);
-					}
+				}
+				for item in items {
+					self.analyze_required_functions(item);
 				}
 			}
 			Node::Data(_) => {
@@ -1044,13 +876,11 @@ impl WasmGcEmitter {
 			}
 			Node::Type { name, body } => {
 				self.required_functions.insert("new_type");
-				// Register the type definition in the registry
 				self.type_registry.register_from_node(node);
 				self.analyze_required_functions(name);
 				self.analyze_required_functions(body);
 			}
 			Node::Error(inner) => {
-				// Analyze inner node to capture any required functions
 				self.analyze_required_functions(inner);
 			}
 		}
@@ -1291,24 +1121,10 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		let _count = signatures.len();
 		for (name, sig) in signatures {
-			// Add required wrapper functions based on return type
-			if let Some(result_type) = sig.results.first() {
-				match result_type {
-					wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => {
-						self.required_functions.insert("new_float");
-					}
-					wasm_encoder::ValType::I64 | wasm_encoder::ValType::I32 => {
-						self.required_functions.insert("new_int");
-					}
-					_ => {}
-				}
-			}
 			self.ffi_imports.insert(name, sig);
 			self.emit_ffi_imports = true;
 		}
-
 	}
 
 	/// Emit the compact 3-field GC types
