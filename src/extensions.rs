@@ -107,12 +107,12 @@ macro_rules! is {
 	// Evaluate string expressions like "3+3" and roundtrip through WASM
 	// Standard comparison for built-in types
 	($a:expr, $b:expr) => {{
-		let result = warp::wasm_gc_emitter::eval($a);
+		let result = $crate::wasm_emitter::eval($a);
 		assert_eq!(result, $b);
 	}};
 	// For wasm_struct! types: use reverse comparison (Person == Node)
 	($a:expr, $b:expr, gc) => {{
-		let result = warp::wasm_gc_emitter::eval($a);
+		let result = $crate::wasm_emitter::eval($a);
 		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
 	}};
 }

@@ -38,7 +38,7 @@ fn probe_increment() {
 
 #[test]
 fn probe_while_execution() {
-    use warp::wasm_gc_emitter::eval;
+    use warp::wasm_emitter::eval;
     println!("\n=== Testing i=1;while(i<9){{i++}};i+1 ===");
     let result = eval("i=1;while(i<9){i++};i+1");
     println!("Result: {:?}", result);

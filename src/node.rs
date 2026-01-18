@@ -5,7 +5,7 @@ use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{CloneAny, Dada, DataType, LineInfo};
-use crate::wasm_gc_reader::GcObject;
+use crate::wasm_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -323,7 +323,7 @@ impl Node {
 				// data field contains key node, value field contains value node
 				// op_info is encoded in upper bits of kind: (op_info << 8) | Key
 				let op_code = (kind >> 8) & 0xFF;
-				let op = crate::wasm_gc_emitter::code_to_op(op_code);
+				let op = crate::operators::code_to_op(op_code);
 				let key = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
@@ -865,6 +865,22 @@ impl Node {
 	pub fn is_empty(&self) -> bool {
 		self.len() == 0 || self == &Empty
 	}
+
+	pub fn is_falsy(&self) -> bool {
+		match self {
+			Empty => true,
+			False => true,
+			Node::Number(n) => n.zero(),
+			Text(s) => s.is_empty(),
+			Char('\0') => true,
+			List(items, _, _) => items.is_empty(),
+			Key(a, _, b) => a.is_falsy() && b.is_falsy(),
+			Meta { node, .. } => node.is_falsy(), // metadata doesn't affect truthiness
+			// Data(d) if d.data_type == DataType::None => true,
+			_ => false,
+		}
+	}
+
 
 	pub fn to_json(&self) -> Result<String, serde_json::Error> {
 		let value = self.to_json_value();
@@ -1648,7 +1664,7 @@ pub trait GcComparable {
 
 impl Node {
 	/// Compare with a GcComparable type by extracting from Data variant
-	pub fn eq_gc<T: GcComparable + std::fmt::Debug>(&self, other: &T) -> bool {
+	pub fn eq_gc<T: GcComparable + fmt::Debug>(&self, other: &T) -> bool {
 		if let Data(dada) = self {
 			if let Some(gc_obj) = dada.downcast_ref::<crate::gc_traits::GcObject>() {
 				if let Some(extracted) = T::try_from_gc(gc_obj) {
@@ -1662,7 +1678,7 @@ impl Node {
 
 /// Blanket impl: Node can be compared with any GcComparable type
 /// This enables `assert_eq!(result, alice)` where alice is a wasm_struct! type
-impl<T: GcComparable + std::fmt::Debug> PartialEq<T> for Node {
+impl<T: GcComparable + fmt::Debug> PartialEq<T> for Node {
 	fn eq(&self, other: &T) -> bool {
 		self.eq_gc(other)
 	}
@@ -2164,12 +2180,12 @@ pub fn key(k: &str, v: Node) -> Node {
 
 pub fn types(name: &str) -> Node {
 	// Returns a Symbol with the type name, matching what type() introspection returns
-	Node::Symbol(name.to_string())
+	Symbol(name.to_string())
 }
 
 pub fn type_definition(name: &str, body: Node) -> Node {
 	Type {
-		name: Box::new(Node::Symbol(name.to_string())),
+		name: Box::new(Symbol(name.to_string())),
 		body: Box::new(body),
 	}
 }

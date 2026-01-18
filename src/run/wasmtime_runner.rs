@@ -1,5 +1,5 @@
 use crate::node::Node;
-use crate::wasm_gc_reader;
+use crate::wasm_reader;
 use std::fs::read;
 use std::path::Path;
 use wasmtime::*;
@@ -44,7 +44,7 @@ fn test_func(_caller: Caller<'_, u32>, param: &[Val], _xyz: &mut [Val]) -> Resul
 }
 
 pub fn run(path: &str) -> Node {
-	let result = wasm_gc_reader::run_wasm_gc_object(path).unwrap();
+	let result = wasm_reader::run_wasm_gc_object(path).unwrap();
 	Node::from_gc_object(&result)
 }
 
