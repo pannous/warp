@@ -586,7 +586,7 @@ impl WaspParser {
 			'(' => {
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
-				self.skip_whitespace();
+				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				if self.current_char() == '{' {
 					// Function with body: name(params) { body }
