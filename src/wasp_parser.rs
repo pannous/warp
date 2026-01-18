@@ -4,7 +4,7 @@ use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, float, key_ops, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::normalize::hints as norm;
+use crate::normalize::{hints as norm, set_hint_position};
 use crate::*;
 use log::warn;
 use std::fs::read_to_string;
@@ -75,6 +75,11 @@ impl WaspParser {
 			base_indent: 0,
 			options,
 		}
+	}
+
+	/// Set the hint position to current parser position
+	fn set_hint_pos(&self) {
+		set_hint_position(self.line_nr, self.column);
 	}
 
 	pub fn parse(input: &str) -> Node {
@@ -366,7 +371,7 @@ impl WaspParser {
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
-			('*', '*') => { norm::power_operator("**"); return Some((Op::Pow, 2)); }
+			('*', '*') => { self.set_hint_pos(); norm::power_operator("**"); return Some((Op::Pow, 2)); }
 			('+', '=') => return Some((Op::AddAssign, 2)),
 			('-', '=') => return Some((Op::SubAssign, 2)),
 			('*', '=') => return Some((Op::MulAssign, 2)),
@@ -380,8 +385,8 @@ impl WaspParser {
 			('+', '+') => return Some((Op::Inc, 2)),
 			('-', '-') => return Some((Op::Dec, 2)),
 			('.', '.') => return Some((Op::Range, 2)),
-			('&', '&') => { norm::and_operator("&&"); return Some((Op::And, 2)); }
-			('|', '|') => { norm::or_operator("||"); return Some((Op::Or, 2)); }
+			('&', '&') => { self.set_hint_pos(); norm::and_operator("&&"); return Some((Op::And, 2)); }
+			('|', '|') => { self.set_hint_pos(); norm::or_operator("||"); return Some((Op::Or, 2)); }
 			_ => {}
 		}
 		// Keywords (2-char)
@@ -408,15 +413,15 @@ impl WaspParser {
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
-			'!' => { norm::not_operator("!"); Some((Op::Not, 1)) }
+			'!' => { self.set_hint_pos(); norm::not_operator("!"); Some((Op::Not, 1)) }
 			'¬' => Some((Op::Not, 1)),
-			'&' => { norm::and_operator("&"); Some((Op::And, 1)) }
-			'|' => { norm::or_operator("|"); Some((Op::Or, 1)) }
+			'&' => { self.set_hint_pos(); norm::and_operator("&"); Some((Op::And, 1)) }
+			'|' => { self.set_hint_pos(); norm::or_operator("|"); Some((Op::Or, 1)) }
 			'∧' => Some((Op::And, 1)),
 			'⋁' => Some((Op::Or, 1)),
 			'⊻' => Some((Op::Xor, 1)),
 			'#' => Some((Op::Hash, 1)),
-			'?' => { norm::conditional(true); Some((Op::Question, 1)) }
+			'?' => { self.set_hint_pos(); norm::conditional(true); Some((Op::Question, 1)) }
 			'…' => Some((Op::To, 1)),
 			_ => None,
 		}
@@ -871,7 +876,8 @@ impl WaspParser {
 
 	fn parse_string(&mut self) -> Node {
 		let quote = self.current_char();
-		let is_double_quote = quote == '"';
+		// let is_double_quote = quote == '"';
+		let is_single_quote = quote == '\'';
 		self.advance(); // skip opening quote
 
 		let mut s = String::new();
@@ -883,8 +889,9 @@ impl WaspParser {
 			if ch == quote {
 				self.advance(); // skip closing quote
 				// Hint for double quotes (only for multi-char strings)
-				if is_double_quote && s.len() > 1 {
-					norm::double_quotes(&s);
+				if is_single_quote && s.len() > 1 {
+					self.set_hint_pos();
+					norm::single_quotes(&s);
 				}
 				// quotes with exactly one character become Codepoint
 				let mut chars = s.chars();

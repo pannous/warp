@@ -11,8 +11,62 @@
 //! ```
 
 use once_cell::sync::Lazy;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Mutex;
+
+// ============================================================================
+// Position Tracking for Hints
+// ============================================================================
+
+/// Current source position for hint messages (thread-local)
+#[derive(Debug, Clone, Default)]
+pub struct HintPosition {
+    pub file: Option<String>,
+    pub line: usize,
+    pub column: usize,
+}
+
+thread_local! {
+    static HINT_POSITION: RefCell<HintPosition> = RefCell::new(HintPosition::default());
+}
+
+/// Set the current position for hint messages
+pub fn set_hint_position(line: usize, column: usize) {
+    HINT_POSITION.with(|pos| {
+        let mut p = pos.borrow_mut();
+        p.line = line;
+        p.column = column;
+    });
+}
+
+/// Set the current file for hint messages
+pub fn set_hint_file(file: &str) {
+    HINT_POSITION.with(|pos| {
+        pos.borrow_mut().file = Some(file.to_string());
+    });
+}
+
+/// Clear the hint position
+pub fn clear_hint_position() {
+    HINT_POSITION.with(|pos| {
+        *pos.borrow_mut() = HintPosition::default();
+    });
+}
+
+/// Get position string in clickable format (file:line:col or line:col)
+fn position_string() -> String {
+    HINT_POSITION.with(|pos| {
+        let p = pos.borrow();
+        if p.line == 0 {
+            return String::new();
+        }
+        match &p.file {
+            Some(f) => format!("{}:{}:{}", f, p.line, p.column),
+            None => format!("{}:{}", p.line, p.column),
+        }
+    })
+}
 
 // ============================================================================
 // Style Configuration - Change these to swap canonical forms
@@ -205,10 +259,18 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
         }
     }
 
-    eprintln!(
-        "\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
-        canonical, original
-    );
+    let pos = position_string();
+    if pos.is_empty() {
+        eprintln!(
+            "\x1b[36mhint:\x1b[0m prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
+            canonical, original
+        );
+    } else {
+        eprintln!(
+            "\x1b[36mhint\x1b[0m \x1b[90m{}\x1b[0m: prefer `\x1b[32m{}\x1b[0m` over `\x1b[33m{}\x1b[0m`",
+            pos, canonical, original
+        );
+    }
     eprintln!("      {}", reason);
 }
 
@@ -244,16 +306,6 @@ pub mod hints {
         let s = style();
         if s.prefer_string_over_str && (used == "str" || used == "String") {
             hint(used, "string", "use lowercase 'string' for the string type");
-        }
-    }
-
-    /// Double quotes when single preferred
-    pub fn double_quotes(content: &str) {
-        let s = style();
-        if s.quotes == QuoteStyle::Single {
-            let original = format!("\"{}\"", content);
-            let canonical = format!("'{}'", content);
-            hint(&original, &canonical, "single quotes preferred for strings");
         }
     }
 
@@ -453,5 +505,25 @@ mod tests {
 
 		// Reset to default
 		set_style(Style::default());
+	}
+
+	#[test]
+	fn test_hint_position() {
+		// Clear position
+		clear_hint_position();
+		assert_eq!(position_string(), "");
+
+		// Set position without file
+		set_hint_position(10, 5);
+		assert_eq!(position_string(), "10:5");
+
+		// Set file
+		set_hint_file("test.wasp");
+		set_hint_position(42, 13);
+		assert_eq!(position_string(), "test.wasp:42:13");
+
+		// Clear again
+		clear_hint_position();
+		assert_eq!(position_string(), "");
 	}
 }
