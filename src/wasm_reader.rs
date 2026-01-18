@@ -136,7 +136,7 @@ impl GcObject {
 
 	/// Read string from linear memory
 	pub fn read_string(&self, ptr: i32, len: i32) -> Result<String> {
-		if ptr == 0 || len == 0 {
+		if len == 0 {
 			return Ok(String::new());
 		}
 		let mut store = self.store.borrow_mut();

@@ -1,5 +1,5 @@
 use warp::{block, float, int, key, list, parens, symbol, text, Node};
-use warp::wasm_gc_emitter::WasmGcEmitter;
+use warp::wasm_emitter::WasmGcEmitter;
 use warp::wasp_parser::WaspParser;
 use warp::write_wasm;
 

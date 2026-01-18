@@ -316,3 +316,27 @@ impl fmt::Display for Op {
 		write!(f, "{}", self.as_str())
 	}
 }
+
+/// Encode Op as i64 for storage in kind field
+pub fn op_to_code(op: &Op) -> i64 {
+	match op {
+		Op::None => 0,
+		Op::Colon => 1,
+		Op::Assign => 2,
+		Op::Define => 3,
+		Op::Dot => 4,
+		_ => 0, // Default to None for other ops
+	}
+}
+
+/// Decode i64 back to Op
+pub fn code_to_op(code: i64) -> Op {
+	match code {
+		0 => Op::None,
+		1 => Op::Colon,
+		2 => Op::Assign,
+		3 => Op::Define,
+		4 => Op::Dot,
+		_ => Op::None,
+	}
+}

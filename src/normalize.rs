@@ -475,6 +475,7 @@ pub mod hints {
 
 #[cfg(test)]
 mod tests {
+	use crate::is;
 	use super::*;
 
 	#[test]
@@ -509,6 +510,7 @@ mod tests {
 
 	#[test]
 	fn test_hint_position() {
+		is!("'abc'", "abc");// hint:
 		// Clear position
 		clear_hint_position();
 		assert_eq!(position_string(), "");
