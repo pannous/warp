@@ -1,6 +1,7 @@
 use crate::analyzer::{collect_variables, infer_type, Scope};
+use crate::emitter_context::{EmitterContext, UserFunctionDef};
 use crate::extensions::numbers::Number;
-use crate::function::{Function as FuncDef, FunctionRegistry, Signature};
+use crate::function::{Function as FuncDef, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node};
 use crate::normalize::hints as norm;
@@ -10,7 +11,7 @@ use crate::util::gc_engine;
 use crate::wasm_gc_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use wasm_ast::instruction;
 use wasm_encoder::*;
 use wasmparser::{Validator, WasmFeatures};
@@ -71,48 +72,15 @@ pub struct WasmGcEmitter {
 	data: DataSection,
 	globals: GlobalSection,
 	// Type indices
-	string_type: u32,  // (struct (field $ptr i32) (field $len i32))
-	i64_box_type: u32, // (struct (field i64)) for ints
-	f64_box_type: u32, // (struct (field f64)) for floats
-	node_type: u32,    // Main 3-field Node struct
+	string_type: u32,
+	i64_box_type: u32,
+	f64_box_type: u32,
+	node_type: u32,
 	next_type_idx: u32,
 	next_func_idx: u32,
 	next_global_idx: u32,
-	func_registry: FunctionRegistry,
-	used_functions: HashSet<&'static str>,
-	required_functions: HashSet<&'static str>,
-	emit_all_functions: bool,
-	emit_kind_globals: bool,                 // Emit Kind constants as globals for documentation
-	emit_host_imports: bool,                 // Emit host function imports (fetch, run)
-	emit_wasi_imports: bool,                 // Emit WASI imports (fd_write, etc.)
-	emit_ffi_imports: bool,                  // Emit FFI imports (libc, libm, etc.)
-	ffi_imports: HashMap<String, crate::ffi::FfiSignature>, // FFI function imports
-	kind_global_indices: HashMap<Kind, u32>, // Kind -> global index
-	// String storage in linear memory
-	string_table: HashMap<String, u32>,
-	next_data_offset: u32,
-	// Variable scope
-	scope: Scope,
-	// Temp local index for while loops etc
-	next_temp_local: u32,
-	// User-defined type indices
-	user_type_indices: HashMap<String, u32>,
-	// Type registry for user-defined types parsed from class/struct definitions
-	type_registry: TypeRegistry,
-	// User-defined global variables: name → (index, kind)
-	user_globals: HashMap<String, (u32, Kind)>,
-	// User-defined functions: name → (params, body, return_kind)
-	user_functions: HashMap<String, UserFunctionDef>,
-}
-
-/// User-defined function definition
-#[derive(Clone, Debug)]
-pub struct UserFunctionDef {
-	pub name: String,
-	pub params: Vec<(String, Option<Node>)>, // Parameter names with optional default values
-	pub body: Box<Node>,                     // Function body AST
-	pub return_kind: Kind,                   // Return type
-	pub func_index: Option<u32>,             // WASM function index when compiled
+	// Compilation context
+	ctx: EmitterContext,
 }
 
 impl Default for WasmGcEmitter {
@@ -141,54 +109,28 @@ impl WasmGcEmitter {
 			next_type_idx: 0,
 			next_func_idx: 0,
 			next_global_idx: 0,
-			func_registry: FunctionRegistry::new(),
-			used_functions: HashSet::new(),
-			required_functions: HashSet::from([
-				"new_empty",
-				"new_int",
-				"new_float",
-				"new_text",
-				"new_symbol",
-				"new_codepoint",
-				"new_key",
-				"new_list",
-			]),
-			emit_all_functions: true,
-			emit_kind_globals: true,  // Enable by default for debugging
-			emit_host_imports: false, // Disabled by default for simpler modules
-			emit_wasi_imports: false, // Disabled by default
-			emit_ffi_imports: false,  // Disabled by default
-			ffi_imports: HashMap::new(),
-			kind_global_indices: HashMap::new(),
-			string_table: HashMap::new(),
-			next_data_offset: 8,
-			scope: Scope::new(),
-			next_temp_local: 0,
-			user_type_indices: HashMap::new(),
-			type_registry: TypeRegistry::new(),
-			user_globals: HashMap::new(),
-			user_functions: HashMap::new(),
+			ctx: EmitterContext::new(),
 		}
 	}
 
 	/// Enable/disable emitting Kind globals for documentation
 	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
-		self.emit_kind_globals = enabled;
+		self.ctx.emit_kind_globals = enabled;
 	}
 
 	pub fn set_tree_shaking(&mut self, enabled: bool) {
-		self.emit_all_functions = !enabled;
+		self.ctx.emit_all_functions = !enabled;
 	}
 
 	/// Enable/disable host function imports (fetch, run)
 	pub fn set_host_imports(&mut self, enabled: bool) {
-		self.emit_host_imports = enabled;
+		self.ctx.emit_host_imports = enabled;
 	}
 
 	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_host_imports(&mut self) {
-		if !self.emit_host_imports {
+		if !self.ctx.emit_host_imports {
 			return;
 		}
 
@@ -220,13 +162,13 @@ impl WasmGcEmitter {
 
 	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
 	pub fn set_wasi_imports(&mut self, enabled: bool) {
-		self.emit_wasi_imports = enabled;
+		self.ctx.emit_wasi_imports = enabled;
 	}
 
 	/// Emit WASI imports (fd_write from wasi_snapshot_preview1)
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_wasi_imports(&mut self) {
-		if !self.emit_wasi_imports {
+		if !self.ctx.emit_wasi_imports {
 			return;
 		}
 
@@ -249,7 +191,7 @@ impl WasmGcEmitter {
 
 	/// Enable/disable FFI imports (libc, libm functions)
 	pub fn set_ffi_imports(&mut self, enabled: bool) {
-		self.emit_ffi_imports = enabled;
+		self.ctx.emit_ffi_imports = enabled;
 	}
 
 	/// Add an FFI import by function name
@@ -261,21 +203,21 @@ impl WasmGcEmitter {
 			.or_else(|| get_ffi_signature(name));
 
 		if let Some(sig) = sig {
-			self.ffi_imports.insert(name.to_string(), sig);
-			self.emit_ffi_imports = true;
+			self.ctx.ffi_imports.insert(name.to_string(), sig);
+			self.ctx.emit_ffi_imports = true;
 		}
 	}
 
 	/// Emit FFI imports for all registered FFI functions
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_ffi_imports(&mut self) {
-		if !self.emit_ffi_imports || self.ffi_imports.is_empty() {
+		if !self.ctx.emit_ffi_imports || self.ctx.ffi_imports.is_empty() {
 			return;
 		}
 
 		// Clone data to avoid borrow conflict - collect (name, library, params, results) tuples
 		let mut imports: Vec<(String, String, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>)> =
-			self.ffi_imports.iter()
+			self.ctx.ffi_imports.iter()
 				.map(|(name, sig)| (name.clone(), sig.library.to_string(), sig.params.clone(), sig.results.clone()))
 				.collect();
 		imports.sort_by(|(a, _, _, _), (b, _, _, _)| a.cmp(b));
@@ -297,35 +239,35 @@ impl WasmGcEmitter {
 	/// Get FFI function call index by name
 	fn ffi_func_index(&self, name: &str) -> Option<u32> {
 		let ffi_name = format!("ffi_{}", name);
-		self.func_registry.get(&ffi_name).map(|f| f.call_index as u32)
+		self.ctx.func_registry.get(&ffi_name).map(|f| f.call_index as u32)
 	}
 
 	/// Register an import function
 	fn register_import(&mut self, name: &'static str) -> u32 {
 		let func = FuncDef::host(name);
-		let idx = self.func_registry.register(func);
-		self.next_func_idx = self.func_registry.import_count() + self.func_registry.code_count();
+		let idx = self.ctx.func_registry.register(func);
+		self.next_func_idx = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		idx
 	}
 
 	/// Register a code function
 	fn register_func(&mut self, name: &'static str) -> u32 {
 		let func = FuncDef::builtin(name);
-		let idx = self.func_registry.register(func);
-		self.next_func_idx = self.func_registry.import_count() + self.func_registry.code_count();
+		let idx = self.ctx.func_registry.register(func);
+		self.next_func_idx = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		idx
 	}
 
 	/// Get function call index by name
 	fn func_index(&self, name: &str) -> u32 {
 		// First check user functions
-		if let Some(user_fn) = self.user_functions.get(name) {
+		if let Some(user_fn) = self.ctx.user_functions.get(name) {
 			if let Some(idx) = user_fn.func_index {
 				return idx;
 			}
 		}
 		// Then check registry (builtins/imports)
-		self.func_registry
+		self.ctx.func_registry
 			.get(name)
 			.map(|f| f.call_index as u32)
 			.unwrap_or_else(|| panic!("Unknown function: {}", name))
@@ -388,7 +330,7 @@ impl WasmGcEmitter {
 								return_kind: Kind::Int, // Infer later
 								func_index: None,
 							};
-							self.user_functions.insert(name.clone(), func_def);
+							self.ctx.user_functions.insert(name.clone(), func_def);
 							return;
 						}
 					}
@@ -420,7 +362,7 @@ impl WasmGcEmitter {
 									return_kind: Kind::Int,
 									func_index: None,
 								};
-								self.user_functions.insert(name.clone(), func_def);
+								self.ctx.user_functions.insert(name.clone(), func_def);
 								return;
 							}
 						}
@@ -437,7 +379,7 @@ impl WasmGcEmitter {
 							return_kind: Kind::Int,
 							func_index: None,
 						};
-						self.user_functions.insert(name.clone(), func_def);
+						self.ctx.user_functions.insert(name.clone(), func_def);
 						return;
 					}
 				}
@@ -452,7 +394,7 @@ impl WasmGcEmitter {
 					if let Node::Symbol(s) = items[0].drop_meta() {
 						if is_function_keyword(s) {
 							if let Some(func_def) = self.extract_def_function(&items[1..]) {
-								self.user_functions.insert(func_def.name.clone(), func_def);
+								self.ctx.user_functions.insert(func_def.name.clone(), func_def);
 								return;
 							}
 						}
@@ -570,7 +512,7 @@ impl WasmGcEmitter {
 	/// Compile all extracted user functions to WASM
 	fn compile_user_functions(&mut self) {
 		// Clone the function names to avoid borrow issues
-		let func_names: Vec<String> = self.user_functions.keys().cloned().collect();
+		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
 
 		for name in func_names {
 			self.compile_user_function(&name);
@@ -579,7 +521,7 @@ impl WasmGcEmitter {
 
 	/// Compile a single user function to WASM
 	fn compile_user_function(&mut self, name: &str) {
-		let user_fn = self.user_functions.get(name).unwrap().clone();
+		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 
 		// Create function type: (params...) -> i64
 		// Use types.len() to get correct index (next_type_idx is stale after emit_constructors)
@@ -593,22 +535,22 @@ impl WasmGcEmitter {
 		self.next_func_idx += 1;
 
 		// Store the function index
-		if let Some(fn_def) = self.user_functions.get_mut(name) {
+		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
 			fn_def.func_index = Some(func_idx);
 		}
 
 		// Create function scope with parameters
-		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
+		let saved_scope = std::mem::replace(&mut self.ctx.scope, Scope::new());
 		for (param_name, _default) in user_fn.params.iter() {
-			self.scope.define(param_name.clone(), None, Kind::Int);
+			self.ctx.scope.define(param_name.clone(), None, Kind::Int);
 		}
 
 		// Collect any additional variables in the body
-		collect_variables(&user_fn.body, &mut self.scope);
+		collect_variables(&user_fn.body, &mut self.ctx.scope);
 
 		// Declare locals (parameters are already accounted for)
 		let num_params = user_fn.params.len() as u32;
-		let num_locals = self.scope.local_count();
+		let num_locals = self.ctx.scope.local_count();
 		let extra_locals = num_locals.saturating_sub(num_params);
 
 		let mut func = Function::new(vec![(extra_locals, ValType::I64)]);
@@ -621,7 +563,7 @@ impl WasmGcEmitter {
 		self.code.function(&func);
 
 		// Restore scope
-		self.scope = saved_scope;
+		self.ctx.scope = saved_scope;
 
 		// Export the function
 		self.exports.export(name, ExportKind::Func, func_idx);
@@ -637,7 +579,7 @@ impl WasmGcEmitter {
 
 	/// Emit a call to a user-defined function (returns raw i64)
 	fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let user_fn = match self.user_functions.get(fn_name) {
+		let user_fn = match self.ctx.user_functions.get(fn_name) {
 			Some(f) => f.clone(),
 			None => panic!("Unknown user function: {}", fn_name),
 		};
@@ -678,7 +620,7 @@ impl WasmGcEmitter {
 
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self
+		let (ptr, len) = self.ctx
 			.string_table
 			.get(s)
 			.map(|&offset| (offset, s.len() as u32))
@@ -703,11 +645,11 @@ impl WasmGcEmitter {
 		match node {
 			// Check user_globals for symbols
 			Node::Symbol(name) => {
-				if let Some(&(_, kind)) = self.user_globals.get(name) {
+				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
 					return kind;
 				}
 				// Fall back to scope lookup
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					return local.kind;
 				}
 				Kind::Symbol
@@ -723,7 +665,7 @@ impl WasmGcEmitter {
 				}
 			}
 			// For other nodes, use analyzer's infer_type
-			_ => infer_type(node, &self.scope),
+			_ => infer_type(node, &self.ctx.scope),
 		}
 	}
 
@@ -739,9 +681,9 @@ impl WasmGcEmitter {
 			Node::Number(_) | Node::True | Node::False => true,
 			Node::Symbol(name) => {
 				// Check if symbol is a known numeric variable
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					matches!(local.kind, Kind::Int | Kind::Float)
-				} else if let Some(&(_, kind)) = self.user_globals.get(name) {
+				} else if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
 					matches!(kind, Kind::Int | Kind::Float)
 				} else {
 					false
@@ -801,16 +743,16 @@ impl WasmGcEmitter {
 			Node::Key(key, op, value) => {
 				if *op == Op::Assign {
 					if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
-						self.required_functions.insert("node_set_at");
-						self.required_functions.insert("string_set_char_at");
-						self.required_functions.insert("list_set_at");
+						self.ctx.required_functions.insert("node_set_at");
+						self.ctx.required_functions.insert("string_set_char_at");
+						self.ctx.required_functions.insert("list_set_at");
 						self.analyze_required_functions(key);
 						self.analyze_required_functions(value);
 						return;
 					}
 				}
 				if *op == Op::Pow {
-					self.required_functions.insert("i64_pow");
+					self.ctx.required_functions.insert("i64_pow");
 				} else if *op == Op::Square || *op == Op::Cube {
 					self.analyze_required_functions(key);
 					return;
@@ -819,12 +761,12 @@ impl WasmGcEmitter {
 					return;
 				} else if *op == Op::Hash {
 					if matches!(key.drop_meta(), Node::Empty) {
-						self.required_functions.insert("node_count");
+						self.ctx.required_functions.insert("node_count");
 					} else {
-						self.required_functions.insert("node_index_at");
-						self.required_functions.insert("string_char_at");
-						self.required_functions.insert("list_node_at");
-						self.required_functions.insert("list_at");
+						self.ctx.required_functions.insert("node_index_at");
+						self.ctx.required_functions.insert("string_char_at");
+						self.ctx.required_functions.insert("list_node_at");
+						self.ctx.required_functions.insert("list_at");
 					}
 				} else if *op == Op::Dot {
 					let method_name = match value.drop_meta() {
@@ -840,7 +782,7 @@ impl WasmGcEmitter {
 					};
 					if let Some(method) = method_name {
 						if matches!(method.as_str(), "count" | "number" | "size") {
-							self.required_functions.insert("node_count");
+							self.ctx.required_functions.insert("node_count");
 							return;
 						}
 					}
@@ -853,14 +795,14 @@ impl WasmGcEmitter {
 					return;
 				}
 				if let Node::Symbol(fn_name) = items[0].drop_meta() {
-					if self.ffi_imports.contains_key(fn_name.as_str()) {
+					if self.ctx.ffi_imports.contains_key(fn_name.as_str()) {
 						for item in items.iter().skip(1) {
 							self.analyze_required_functions(item);
 						}
 						return;
 					}
 					if items.len() == 2 && matches!(fn_name.as_str(), "count" | "size") {
-						self.required_functions.insert("node_count");
+						self.ctx.required_functions.insert("node_count");
 						return;
 					}
 				}
@@ -869,14 +811,14 @@ impl WasmGcEmitter {
 				}
 			}
 			Node::Data(_) => {
-				self.required_functions.insert("new_data");
+				self.ctx.required_functions.insert("new_data");
 			}
 			Node::Meta { node, .. } => {
 				self.analyze_required_functions(node);
 			}
 			Node::Type { name, body } => {
-				self.required_functions.insert("new_type");
-				self.type_registry.register_from_node(node);
+				self.ctx.required_functions.insert("new_type");
+				self.ctx.type_registry.register_from_node(node);
 				self.analyze_required_functions(name);
 				self.analyze_required_functions(body);
 			}
@@ -887,7 +829,7 @@ impl WasmGcEmitter {
 	}
 
 	fn should_emit_function(&self, name: &str) -> bool {
-		self.emit_all_functions || self.required_functions.contains(name)
+		self.ctx.emit_all_functions || self.ctx.required_functions.contains(name)
 	}
 
 	/// Generate all type definitions and functions
@@ -907,7 +849,7 @@ impl WasmGcEmitter {
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
-		if self.emit_kind_globals {
+		if self.ctx.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
@@ -917,7 +859,7 @@ impl WasmGcEmitter {
 
 	/// Emit user types from internal type_registry
 	fn emit_registered_user_types(&mut self) {
-		let types: Vec<TypeDef> = self.type_registry.types().to_vec();
+		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
 		for type_def in &types {
 			self.emit_single_user_type(type_def);
 		}
@@ -932,13 +874,13 @@ impl WasmGcEmitter {
 			.collect();
 
 		self.types.ty().struct_(fields);
-		self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
+		self.ctx.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
 		self.next_type_idx += 1;
 	}
 
 	/// Emit constructors for registered user types
 	fn emit_registered_user_type_constructors(&mut self) {
-		let types: Vec<TypeDef> = self.type_registry.types().to_vec();
+		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
 		for type_def in &types {
 			self.emit_user_type_constructor(type_def);
 		}
@@ -973,14 +915,14 @@ impl WasmGcEmitter {
 				&ConstExpr::i64_const(tag as i64),
 			);
 			self.exports.export(name, ExportKind::Global, self.next_global_idx);
-			self.kind_global_indices.insert(tag, self.next_global_idx);
+			self.ctx.kind_global_indices.insert(tag, self.next_global_idx);
 			self.next_global_idx += 1;
 		}
 	}
 
 	/// Emit instruction to get a Kind kind value
 	fn emit_kind(&self, func: &mut Function, tag: Kind) {
-		if let Some(&idx) = self.kind_global_indices.get(&tag) {
+		if let Some(&idx) = self.ctx.kind_global_indices.get(&tag) {
 			func.instruction(&Instruction::GlobalGet(idx));
 		} else {
 			func.instruction(&Instruction::I64Const(tag as i64));
@@ -988,17 +930,17 @@ impl WasmGcEmitter {
 	}
 
 	pub fn emit_for_node(&mut self, node: &Node) {
-		self.emit_all_functions = false;
+		self.ctx.emit_all_functions = false;
 		// Extract FFI imports first (must come before emit() to set up imports)
 		self.extract_ffi_imports(node);
 		// Extract user-defined functions first
 		self.extract_user_functions(node);
 		self.analyze_required_functions(node);
-		let len = self.required_functions.len();
+		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
 			len,
-			self.required_functions
+			self.ctx.required_functions
 		);
 		self.emit();
 		// Compile user functions after builtin infrastructure is set up
@@ -1122,8 +1064,8 @@ impl WasmGcEmitter {
 		}
 
 		for (name, sig) in signatures {
-			self.ffi_imports.insert(name, sig);
-			self.emit_ffi_imports = true;
+			self.ctx.ffi_imports.insert(name, sig);
+			self.ctx.emit_ffi_imports = true;
 		}
 	}
 
@@ -1199,7 +1141,7 @@ impl WasmGcEmitter {
 				.collect();
 
 			self.types.ty().struct_(fields);
-			self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
+			self.ctx.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
 			self.next_type_idx += 1;
 		}
 	}
@@ -1222,7 +1164,7 @@ impl WasmGcEmitter {
 			})),
 			// User-defined types
 			other => {
-				if let Some(&type_idx) = self.user_type_indices.get(other) {
+				if let Some(&type_idx) = self.ctx.user_type_indices.get(other) {
 					Val(Ref(RefType {
 						nullable: true,
 						heap_type: HeapType::Concrete(type_idx),
@@ -1244,7 +1186,7 @@ impl WasmGcEmitter {
 
 	/// Get the WASM type index for a user-defined type
 	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
-		self.user_type_indices.get(name).copied()
+		self.ctx.user_type_indices.get(name).copied()
 	}
 
 	/// Emit with user-defined types from a TypeRegistry
@@ -1267,7 +1209,7 @@ impl WasmGcEmitter {
 		self.emit_user_types(registry);
 
 		// Kind globals
-		if self.emit_kind_globals {
+		if self.ctx.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 
@@ -1287,7 +1229,7 @@ impl WasmGcEmitter {
 
 	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
 	fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
-		let type_idx = match self.user_type_indices.get(&type_def.name) {
+		let type_idx = match self.ctx.user_type_indices.get(&type_def.name) {
 			Some(&idx) => idx,
 			None => return,
 		};
@@ -1340,7 +1282,7 @@ impl WasmGcEmitter {
 				heap_type: HeapType::Concrete(self.node_type),
 			}),
 			other => {
-				if let Some(&type_idx) = self.user_type_indices.get(other) {
+				if let Some(&type_idx) = self.ctx.user_type_indices.get(other) {
 					Ref(RefType {
 						nullable: true,
 						heap_type: HeapType::Concrete(type_idx),
@@ -2101,32 +2043,32 @@ impl WasmGcEmitter {
 
 	/// Allocate a string in linear memory
 	fn allocate_string(&mut self, s: &str) -> (u32, u32) {
-		if let Some(&offset) = self.string_table.get(s) {
+		if let Some(&offset) = self.ctx.string_table.get(s) {
 			return (offset, s.len() as u32);
 		}
-		let offset = self.next_data_offset;
+		let offset = self.ctx.next_data_offset;
 		let bytes = s.as_bytes();
 		self.data
 			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
-		self.string_table.insert(s.to_string(), offset);
-		self.next_data_offset += bytes.len() as u32;
+		self.ctx.string_table.insert(s.to_string(), offset);
+		self.ctx.next_data_offset += bytes.len() as u32;
 		(offset, bytes.len() as u32)
 	}
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
-		let temp_locals = collect_variables(node, &mut self.scope);
+		let temp_locals = collect_variables(node, &mut self.ctx.scope);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
-		let var_count = self.scope.local_count();
-		self.next_temp_local = var_count; // Temp locals start after variables
+		let var_count = self.ctx.scope.local_count();
+		self.ctx.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
 		let func_type = self.types.len();
 		// WASI mode: return i64 directly instead of Node ref
-		if self.emit_wasi_imports {
+		if self.ctx.emit_wasi_imports {
 			self.types.ty().function(vec![], vec![ValType::I64]);
 		} else {
 			self.types.ty().function(vec![], vec![Ref(node_ref)]);
@@ -2138,7 +2080,7 @@ impl WasmGcEmitter {
 		let mut locals: Vec<(u32, ValType)> = Vec::new();
 
 		// Sort locals by position to ensure correct order
-		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
+		let mut sorted_locals: Vec<_> = self.ctx.scope.locals.values().collect();
 		sorted_locals.sort_by_key(|l| l.position);
 
 		for local in sorted_locals {
@@ -2178,7 +2120,7 @@ impl WasmGcEmitter {
 					if let Node::Symbol(var_name) = key.drop_meta() {
 						if let Node::Text(s) = value.drop_meta() {
 							let (ptr, len) = self.allocate_string(s);
-							self.scope.set_local_data(var_name, ptr, len);
+							self.ctx.scope.set_local_data(var_name, ptr, len);
 						}
 					}
 				}
@@ -2202,7 +2144,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
-		self.used_functions.insert(name);
+		self.ctx.used_functions.insert(name);
 		func.instruction(&Instruction::Call(self.func_index(name)));
 	}
 
@@ -2240,7 +2182,7 @@ impl WasmGcEmitter {
 			}
 			Node::Symbol(s) => {
 				// Check if this is a local variable lookup
-				if let Some(local) = self.scope.lookup(s) {
+				if let Some(local) = self.ctx.scope.lookup(s) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						return; // Already a Node reference
@@ -2252,7 +2194,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				// Check if this is a global variable lookup
-				if let Some(&(idx, kind)) = self.user_globals.get(s) {
+				if let Some(&(idx, kind)) = self.ctx.user_globals.get(s) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
 						self.emit_call(func, "new_float");
@@ -2271,13 +2213,13 @@ impl WasmGcEmitter {
 						return;
 					}
 					// Handle fetch URL - call host.fetch and return Text node
-					if kw == "fetch" && self.emit_host_imports {
+					if kw == "fetch" && self.ctx.emit_host_imports {
 						self.emit_fetch_call(func, right);
 						return;
 					}
 				}
 				// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
-				if (*op == Op::Assign || *op == Op::Define) && self.emit_host_imports {
+				if (*op == Op::Assign || *op == Op::Define) && self.ctx.emit_host_imports {
 					if let Node::Symbol(var_name) = left.drop_meta() {
 						if let Node::List(items, _, _) = right.drop_meta() {
 							if items.len() == 2 {
@@ -2286,7 +2228,7 @@ impl WasmGcEmitter {
 										// Emit fetch call - result is a Text node (ref $Node)
 										self.emit_fetch_call(func, &items[1]);
 										// Store in ref-type local variable
-										if let Some(local) = self.scope.lookup(var_name) {
+										if let Some(local) = self.ctx.scope.lookup(var_name) {
 											func.instruction(&Instruction::LocalTee(local.position));
 										}
 										return;
@@ -2299,7 +2241,7 @@ impl WasmGcEmitter {
 				// Skip user function definitions - they're already compiled
 				if *op == Op::Define {
 					if let Node::Symbol(name) = left.drop_meta() {
-						if self.user_functions.contains_key(name) {
+						if self.ctx.user_functions.contains_key(name) {
 							// Function definitions don't produce a value
 							// The caller (statement sequence handler) should skip this
 							return;
@@ -2313,23 +2255,23 @@ impl WasmGcEmitter {
 				// - Compound assignments (+=, -=, etc.)
 				let is_numeric_assign = *op == Op::Assign
 					&& matches!(left.drop_meta(), Node::Symbol(s) if {
-						self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+						self.ctx.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
 					});
 				let is_numeric_define = *op == Op::Define
 					&& matches!(left.drop_meta(), Node::Symbol(s) if {
-						self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
+						self.ctx.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
 					});
 				// Handle ref-type variable assignment (lists, etc.)
 				let is_ref_assign = (*op == Op::Assign || *op == Op::Define)
 					&& matches!(left.drop_meta(), Node::Symbol(s) if {
-						self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
+						self.ctx.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
 					});
 				if is_ref_assign {
 					if let Node::Symbol(name) = left.drop_meta() {
 						// Emit the right side as a Node reference
 						self.emit_node_instructions(func, right);
 						// Store in ref-type local
-						if let Some(local) = self.scope.lookup(name) {
+						if let Some(local) = self.ctx.scope.lookup(name) {
 							func.instruction(&Instruction::LocalTee(local.position));
 						}
 					}
@@ -2428,15 +2370,15 @@ impl WasmGcEmitter {
 							} else {
 								// i64 abs: if x < 0 then -x else x
 								self.emit_numeric_value(func, right);
-								func.instruction(&Instruction::LocalTee(self.next_temp_local));
+								func.instruction(&Instruction::LocalTee(self.ctx.next_temp_local));
 								func.instruction(&Instruction::I64Const(0));
 								func.instruction(&Instruction::I64LtS);
 								func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
 								func.instruction(&Instruction::I64Const(0));
-								func.instruction(&Instruction::LocalGet(self.next_temp_local));
+								func.instruction(&Instruction::LocalGet(self.ctx.next_temp_local));
 								func.instruction(&Instruction::I64Sub);
 								func.instruction(&Instruction::Else);
-								func.instruction(&Instruction::LocalGet(self.next_temp_local));
+								func.instruction(&Instruction::LocalGet(self.ctx.next_temp_local));
 								func.instruction(&Instruction::End);
 								self.emit_call(func, "new_int");
 							}
@@ -2555,7 +2497,7 @@ impl WasmGcEmitter {
 					// Check for zero-argument function call: (funcname)
 					if *bracket == Bracket::Round {
 						if let Node::Symbol(fn_name) = items[0].drop_meta() {
-							if self.user_functions.contains_key(fn_name) {
+							if self.ctx.user_functions.contains_key(fn_name) {
 								self.emit_user_function_call(func, fn_name, &[]);
 								return;
 							}
@@ -2565,7 +2507,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				// Check for fetch call: [Symbol("fetch"), url_node]
-				if items.len() == 2 && self.emit_host_imports {
+				if items.len() == 2 && self.ctx.emit_host_imports {
 					if let Node::Symbol(s) = items[0].drop_meta() {
 						if s == "fetch" {
 							self.emit_fetch_call(func, &items[1]);
@@ -2575,7 +2517,7 @@ impl WasmGcEmitter {
 				}
 				// Check for WASI calls: puts, puti, putl, putf, fd_write
 				// These return raw i32 (WASI mode uses read_bytes_with_wasi which returns i32)
-				if items.len() >= 2 && self.emit_wasi_imports {
+				if items.len() >= 2 && self.ctx.emit_wasi_imports {
 					if let Node::Symbol(s) = items[0].drop_meta() {
 						match s.as_str() {
 							"puts" => {
@@ -2636,7 +2578,7 @@ impl WasmGcEmitter {
 						}
 						// ceil/floor/round: map to WASM built-in f64 instructions
 						// Skip builtin handling if explicitly imported via FFI
-						if !self.ffi_imports.contains_key(fn_name) {
+						if !self.ctx.ffi_imports.contains_key(fn_name) {
 							if fn_name == "ceil" {
 								self.emit_float_value(func, &items[1]);
 								func.instruction(&Instruction::F64Ceil);
@@ -2696,7 +2638,7 @@ impl WasmGcEmitter {
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.user_functions.contains_key(fn_name) {
+						if self.ctx.user_functions.contains_key(fn_name) {
 							// Check if it's a zero-arg call: (funcname Empty)
 							if items.len() == 2 && matches!(items[1].drop_meta(), Node::Empty) {
 								self.emit_user_function_call(func, fn_name, &[]);
@@ -2706,7 +2648,7 @@ impl WasmGcEmitter {
 							return;
 						}
 						// Check for FFI function call
-						if self.ffi_imports.contains_key(fn_name) {
+						if self.ctx.ffi_imports.contains_key(fn_name) {
 							self.emit_ffi_call(func, fn_name, &items[1..], None);
 							return;
 						}
@@ -2764,7 +2706,7 @@ impl WasmGcEmitter {
 								// or name(params...) := body
 								Node::Key(left, Op::Define, _) => {
 									if let Node::Symbol(name) = left.drop_meta() {
-										if self.user_functions.contains_key(name) {
+										if self.ctx.user_functions.contains_key(name) {
 											return false;
 										}
 									}
@@ -2772,7 +2714,7 @@ impl WasmGcEmitter {
 									if let Node::List(items, _, _) = left.drop_meta() {
 										if !items.is_empty() {
 											if let Node::Symbol(name) = items[0].drop_meta() {
-												if self.user_functions.contains_key(name) {
+												if self.ctx.user_functions.contains_key(name) {
 													return false;
 												}
 											}
@@ -2784,7 +2726,7 @@ impl WasmGcEmitter {
 									if let Node::List(items, _, _) = left.drop_meta() {
 										if !items.is_empty() {
 											if let Node::Symbol(name) = items[0].drop_meta() {
-												if self.user_functions.contains_key(name) {
+												if self.ctx.user_functions.contains_key(name) {
 													return false;
 												}
 											}
@@ -2872,7 +2814,7 @@ impl WasmGcEmitter {
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
 			// Check for string assignment in WASI mode - skip emit (tracked in Local)
-			if self.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
+			if self.ctx.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
 				// String data stored in Local's data_pointer/data_length, just emit 0
 				func.instruction(&Instruction::I64Const(0));
 				return;
@@ -2884,7 +2826,7 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, right);
 			}
 			if let Node::Symbol(name) = left.drop_meta() {
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					func.instruction(&Instruction::LocalTee(local.position));
 				} else {
 					panic!("Undefined variable: {}", name);
@@ -2896,7 +2838,7 @@ impl WasmGcEmitter {
 			// i++ → i = i + 1 (returns new value)
 			// i-- → i = i - 1 (returns new value)
 			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self
+				let local_pos = self.ctx
 					.scope
 					.lookup(name)
 					.map(|l| l.position)
@@ -2918,7 +2860,7 @@ impl WasmGcEmitter {
 		} else if op.is_compound_assign() {
 			// x += y → x = x + y
 			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self
+				let local_pos = self.ctx
 					.scope
 					.lookup(name)
 					.map(|l| l.position)
@@ -3193,7 +3135,7 @@ impl WasmGcEmitter {
 		func.instruction(&I32Const(url_len as i32));
 
 		// Get the host_fetch function index
-		if let Some(f) = self.func_registry.get("host_fetch") {
+		if let Some(f) = self.ctx.func_registry.get("host_fetch") {
 			func.instruction(&Instruction::Call(f.call_index as u32));
 		} else {
 			// Fallback: emit empty text if host imports not available
@@ -3328,7 +3270,7 @@ impl WasmGcEmitter {
 
 	/// Emit FFI function call with automatic result handling based on context
 	fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
-		let sig = match self.ffi_imports.get(fn_name) {
+		let sig = match self.ctx.ffi_imports.get(fn_name) {
 			Some(s) => s.clone(),
 			None => return,
 		};
@@ -3344,7 +3286,7 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Text(_) => true,
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					local.data_pointer > 0 // Has string data stored
 				} else {
 					false
@@ -3363,7 +3305,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::I32Const(len as i32));
 			}
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					if local.data_pointer > 0 {
 						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
 						func.instruction(&Instruction::I32Const(local.data_length as i32));
@@ -3400,7 +3342,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::I32Const(ptr as i32));
 			}
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					if local.data_pointer > 0 {
 						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
 					} else {
@@ -3434,7 +3376,7 @@ impl WasmGcEmitter {
 			Node::Text(s) => self.allocate_string(s),
 			Node::Symbol(var_name) => {
 				// Check if this is a string variable with stored data
-				if let Some(local) = self.scope.lookup(var_name) {
+				if let Some(local) = self.ctx.scope.lookup(var_name) {
 					if local.data_pointer > 0 {
 						(local.data_pointer, local.data_length)
 					} else {
@@ -3473,7 +3415,7 @@ impl WasmGcEmitter {
 		func.instruction(&I32Const(1)); // iovs len
 		func.instruction(&I32Const(8)); // nwritten ptr
 
-		if let Some(f) = self.func_registry.get("wasi_fd_write") {
+		if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
 			func.instruction(&Instruction::Call(f.call_index as u32));
 		}
 		// Stack now has i32 (error code), leave it for conversion to Node
@@ -3509,7 +3451,7 @@ impl WasmGcEmitter {
 			func.instruction(&I32Const(1));
 			func.instruction(&I32Const(8));
 
-			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
 				func.instruction(&Instruction::Call(f.call_index as u32));
 				func.instruction(&Instruction::Drop); // Drop return value
 			}
@@ -3544,7 +3486,7 @@ impl WasmGcEmitter {
 			func.instruction(&I32Const(1));
 			func.instruction(&I32Const(8));
 
-			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
 				func.instruction(&Instruction::Call(f.call_index as u32));
 			}
 		} else {
@@ -3563,7 +3505,7 @@ impl WasmGcEmitter {
 			Some(Node::Text(_)) => true,
 			Some(Node::Symbol(s)) => {
 				// Check if symbol refers to a string variable
-				if let Some(local) = self.scope.lookup(s) {
+				if let Some(local) = self.ctx.scope.lookup(s) {
 					local.kind == Kind::Text
 				} else {
 					false
@@ -3583,7 +3525,7 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, arg);
 				func.instruction(&Instruction::I32WrapI64);
 			}
-			if let Some(f) = self.func_registry.get("wasi_fd_write") {
+			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
 				func.instruction(&Instruction::Call(f.call_index as u32));
 				func.instruction(&Instruction::I64ExtendI32S);
 			}
@@ -3643,7 +3585,7 @@ impl WasmGcEmitter {
 		let kind = self.get_type(&value);
 
 		// Check if global already exists (reassignment)
-		if let Some(&(global_idx, existing_kind)) = self.user_globals.get(&name) {
+		if let Some(&(global_idx, existing_kind)) = self.ctx.user_globals.get(&name) {
 			if existing_kind.is_float() {
 				self.emit_float_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
@@ -3678,7 +3620,7 @@ impl WasmGcEmitter {
 
 		let global_idx = self.next_global_idx;
 		self.next_global_idx += 1;
-		self.user_globals.insert(name.clone(), (global_idx, kind));
+		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value computation and store to global
 		if kind.is_float() {
@@ -3710,7 +3652,7 @@ impl WasmGcEmitter {
 		let kind = self.get_type(&value);
 
 		// Check if global already exists (reassignment)
-		if let Some(&(global_idx, existing_kind)) = self.user_globals.get(&name) {
+		if let Some(&(global_idx, existing_kind)) = self.ctx.user_globals.get(&name) {
 			if existing_kind.is_float() {
 				self.emit_float_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
@@ -3743,7 +3685,7 @@ impl WasmGcEmitter {
 
 		let global_idx = self.next_global_idx;
 		self.next_global_idx += 1;
-		self.user_globals.insert(name.clone(), (global_idx, kind));
+		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value, store to global, and return value on stack
 		if kind.is_float() {
@@ -3900,8 +3842,8 @@ impl WasmGcEmitter {
 			other => panic!("Expected while condition, got {:?}", other),
 		};
 
-		let result_local = self.next_temp_local;
-		self.next_temp_local += 1;
+		let result_local = self.ctx.next_temp_local;
+		self.ctx.next_temp_local += 1;
 
 		func.instruction(&Instruction::I64Const(0));
 		func.instruction(&Instruction::LocalSet(result_local));
@@ -4219,7 +4161,7 @@ impl WasmGcEmitter {
 					// Emit value
 					self.emit_numeric_value(func, right);
 					// Duplicate value on stack (tee = set + get)
-					if let Some(local) = self.scope.lookup(name) {
+					if let Some(local) = self.ctx.scope.lookup(name) {
 						func.instruction(&Instruction::LocalTee(local.position));
 					} else {
 						panic!("Undefined variable: {}", name);
@@ -4231,7 +4173,7 @@ impl WasmGcEmitter {
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, _right) if *op == Op::Inc || *op == Op::Dec => {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let local_pos = self
+					let local_pos = self.ctx
 						.scope
 						.lookup(name)
 						.map(|l| l.position)
@@ -4255,7 +4197,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_compound_assign() => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					// Get local position first to avoid borrow issues
-					let local_pos = self
+					let local_pos = self.ctx
 						.scope
 						.lookup(name)
 						.map(|l| l.position)
@@ -4383,7 +4325,7 @@ impl WasmGcEmitter {
 					}
 					Op::Abs => {
 						// |x| = if x < 0 then -x else x
-						let temp = self.next_temp_local;
+						let temp = self.ctx.next_temp_local;
 						self.emit_numeric_value(func, right);
 						func.instruction(&Instruction::LocalTee(temp));
 						func.instruction(&Instruction::I64Const(0));
@@ -4436,9 +4378,9 @@ impl WasmGcEmitter {
 						return;
 					}
 				}
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-				} else if let Some(&(idx, kind)) = self.user_globals.get(name) {
+				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
 						// Convert f64 global to i64 for integer operations
@@ -4453,12 +4395,12 @@ impl WasmGcEmitter {
 				// Check for zero-argument function call: (funcname)
 				if items.len() == 1 && *bracket == Bracket::Round {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.user_functions.contains_key(fn_name) {
+						if self.ctx.user_functions.contains_key(fn_name) {
 							self.emit_user_function_call_numeric(func, fn_name, &[]);
 							return;
 						}
 						// Check for zero-arg FFI function call
-						if self.ffi_imports.contains_key(fn_name) {
+						if self.ctx.ffi_imports.contains_key(fn_name) {
 							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Int));
 							return;
 						}
@@ -4467,7 +4409,7 @@ impl WasmGcEmitter {
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.user_functions.contains_key(fn_name) {
+						if self.ctx.user_functions.contains_key(fn_name) {
 							// Check if it's a zero-arg call: (funcname Empty)
 							if items.len() == 2 && matches!(items[1].drop_meta(), Node::Empty) {
 								self.emit_user_function_call_numeric(func, fn_name, &[]);
@@ -4477,7 +4419,7 @@ impl WasmGcEmitter {
 							return;
 						}
 						// Check for FFI function call
-						if self.ffi_imports.contains_key(fn_name) {
+						if self.ctx.ffi_imports.contains_key(fn_name) {
 							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
 							return;
 						}
@@ -4537,7 +4479,7 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					self.emit_float_value(func, right);
-					if let Some(local) = self.scope.lookup(name) {
+					if let Some(local) = self.ctx.scope.lookup(name) {
 						func.instruction(&Instruction::LocalTee(local.position));
 					} else {
 						panic!("Undefined variable: {}", name);
@@ -4615,13 +4557,13 @@ impl WasmGcEmitter {
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if let Some(local) = self.ctx.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if !local.kind.is_float() {
 						// Convert i64 local to f64
 						func.instruction(&Instruction::F64ConvertI64S);
 					}
-				} else if let Some(&(idx, kind)) = self.user_globals.get(name) {
+				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if !kind.is_float() {
 						// Convert i64 global to f64
@@ -4637,12 +4579,12 @@ impl WasmGcEmitter {
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						// Check for FFI function call
-						if self.ffi_imports.contains_key(fn_name) {
+						if self.ctx.ffi_imports.contains_key(fn_name) {
 							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
 							return;
 						}
 						// Check for user function call
-						if self.user_functions.contains_key(fn_name) {
+						if self.ctx.user_functions.contains_key(fn_name) {
 							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
 							func.instruction(&Instruction::F64ConvertI64S);
 							return;
@@ -4652,7 +4594,7 @@ impl WasmGcEmitter {
 				// Check for zero-arg function call: (funcname)
 				if items.len() == 1 && *bracket == Bracket::Round {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.ffi_imports.contains_key(fn_name) {
+						if self.ctx.ffi_imports.contains_key(fn_name) {
 							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Float));
 							return;
 						}
@@ -4723,7 +4665,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I64Const(bracket_info));
 
 		// Call new_list if available, otherwise inline struct.new
-		if self.func_registry.contains("new_list") {
+		if self.ctx.func_registry.contains("new_list") {
 			self.emit_call(func, "new_list");
 		} else {
 			// Inline: kind = (bracket_info << 8) | List
@@ -4777,7 +4719,7 @@ impl WasmGcEmitter {
 	pub fn finish(mut self) -> Vec<u8> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
 		self.module.section(&self.types);
-		if self.func_registry.import_count() > 0 {
+		if self.ctx.func_registry.import_count() > 0 {
 			self.module.section(&self.imports);
 		}
 		self.module.section(&self.functions);
@@ -4808,7 +4750,7 @@ impl WasmGcEmitter {
 		type_names.append(self.f64_box_type, "f64box");
 		type_names.append(self.node_type, "Node");
 		// User-defined type names
-		for (name, &idx) in &self.user_type_indices {
+		for (name, &idx) in &self.ctx.user_type_indices {
 			type_names.append(idx, name);
 		}
 		self.names.types(&type_names);
@@ -4837,8 +4779,8 @@ impl WasmGcEmitter {
 		type_field_names.append(self.f64_box_type, &f64box_fields);
 
 		// User-defined type fields
-		for type_def in self.type_registry.types() {
-			if let Some(&type_idx) = self.user_type_indices.get(&type_def.name) {
+		for type_def in self.ctx.type_registry.types() {
+			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
 				let mut field_names = NameMap::new();
 				for (i, field) in type_def.fields.iter().enumerate() {
 					field_names.append(i as u32, &field.name);
@@ -4851,7 +4793,7 @@ impl WasmGcEmitter {
 
 		// Function names - sort by index for deterministic output
 		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self
+		let mut sorted: Vec<_> = self.ctx
 			.func_registry
 			.all()
 			.iter()
@@ -4890,16 +4832,16 @@ impl WasmGcEmitter {
 	}
 
 	pub fn get_unused_functions(&self) -> Vec<String> {
-		self.func_registry
+		self.ctx.func_registry
 			.all()
 			.iter()
 			.map(|f| f.name.clone())
-			.filter(|name: &String| !self.used_functions.contains(name.as_str()))
+			.filter(|name: &String| !self.ctx.used_functions.contains(name.as_str()))
 			.collect()
 	}
 
 	pub fn get_used_functions(&self) -> Vec<&'static str> {
-		self.used_functions.iter().copied().collect()
+		self.ctx.used_functions.iter().copied().collect()
 	}
 
 	/// Emit a standalone WASM module that returns a raw GC struct instance.

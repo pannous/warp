@@ -18,6 +18,7 @@ pub mod node;
 pub mod run;
 pub mod type_kinds;
 pub mod gc_traits;
+pub mod emitter_context;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod wasm_optimizer;

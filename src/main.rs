@@ -5,6 +5,7 @@ use extensions::numbers::*;
 use extensions::strings::*;
 use extensions::utils::*;
 pub mod node;
+pub mod emitter_context;
 pub mod wasm_gc_emitter;
 pub mod wasm_gc_reader;
 pub mod wasp_parser;
