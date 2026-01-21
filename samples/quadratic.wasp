@@ -1,2 +1,9 @@
-// Quadratic: x^2 - 5x + 6 at x=3 => 0
-x=3; x*x - 5*x + 6
+// Quadratic formula - solve x^2 - 5x + 6 = 0
+a = 1
+b = -5
+c = 6
+discriminant = b*b - 4*a*c
+x1 = (-b + sqrt(discriminant)) / (2*a)
+x2 = (-b - sqrt(discriminant)) / (2*a)
+
+x1 * x2

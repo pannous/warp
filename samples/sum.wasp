@@ -1,2 +1,4 @@
-// Sum 1..10 = 55
-def sum(n) := n<=0 ? 0 : n + sum(n-1); sum(10)
+// Sum of 1 to n - recursive
+def sum(n) := n <= 0 ? 0 : n + sum(n-1)
+
+sum(10)

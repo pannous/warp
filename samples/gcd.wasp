@@ -1,2 +1,4 @@
-// GCD(48, 18) = 6
-def gcd(a,b) := b==0 ? a : gcd(b, a%b); gcd(48,18)
+// Greatest common divisor - Euclidean algorithm
+def gcd(a, b) := b == 0 ? a : gcd(b, a % b)
+
+gcd(48, 18)
