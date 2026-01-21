@@ -1,0 +1,23 @@
+// Fibonacci sequence
+// Classic recursive and iterative implementations
+
+// Recursive definition using := for pure functions
+def fib := n < 2 ? n : fib(n - 1) + fib(n - 2)
+
+// Iterative version with explicit state
+def fib_iter(n) {
+    a = 0
+    b = 1
+    repeat n {
+        c = a + b
+        a = b
+        b = c
+    }
+    return a
+}
+
+// Generate first 10 fibonacci numbers
+fibs = [0..10].map(fib)
+
+// Expected: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+print fibs

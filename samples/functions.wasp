@@ -1,0 +1,71 @@
+// Functions in wasp
+// Multiple styles for different use cases
+
+// Pure function with := (single expression)
+def square := it * it
+def double := it * 2
+def add := a + b
+
+// Named parameters
+def greet(name) := "Hello, " + name + "!"
+
+// Multi-line function with block
+def factorial(n) {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}
+
+// Higher-order functions
+def map(list, fn) {
+    result = []
+    for item in list {
+        result.push(fn(item))
+    }
+    return result
+}
+
+def filter(list, predicate) {
+    result = []
+    for item in list {
+        if predicate(item) {
+            result.push(item)
+        }
+    }
+    return result
+}
+
+def reduce(list, fn, initial) {
+    acc = initial
+    for item in list {
+        acc = fn(acc, item)
+    }
+    return acc
+}
+
+// Composition and piping
+numbers = [1, 2, 3, 4, 5]
+
+// Method chaining style
+result = numbers
+    .map(square)
+    .filter(x => x > 5)
+    .reduce((a, b) => a + b, 0)
+
+// Pipeline operator style
+result = numbers
+    |> map(square)
+    |> filter(x => x > 5)
+    |> sum
+
+// Partial application
+def add(a, b) := a + b
+increment = add(1, _)  // partial: increment(x) = add(1, x)
+
+// Closures
+def counter(start) {
+    count = start
+    return () => {
+        count = count + 1
+        return count
+    }
+}

@@ -1,0 +1,51 @@
+// Natural language style
+// wasp allows English-like syntax
+
+// Arithmetic with words
+result = one plus two
+total = three times four
+half = ten divided by two
+
+// Boolean logic
+valid = age >= 18 and has_id
+allowed = is_admin or is_owner
+
+// Comparisons
+bigger = a is greater than b
+equal = x equals y
+found = item is in collection
+
+// Conditional statements
+if age is at least 18 {
+    print "Adult"
+}
+
+// unless (negative if)
+unless logged_in {
+    redirect_to_login()
+}
+
+// Iteration with natural phrasing
+for each item in basket {
+    total = total plus item.price
+}
+
+// English-like function calls
+send email to "user@example.com" with subject "Hello"
+
+// Method chaining reads naturally
+result = numbers
+    .keep only positive
+    .sort by size
+    .take first 10
+
+// Named arguments for clarity
+create_user(
+    name: "Alice"
+    email: "alice@example.com"
+    role: admin
+)
+
+// Ranges with words
+countdown = 10 down to 1
+letters = 'a' through 'z'

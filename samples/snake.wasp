@@ -1,0 +1,79 @@
+// Snake Game
+// Classic arcade game
+
+width = 20
+height = 15
+snake = [(10, 7), (9, 7), (8, 7)]
+direction = (1, 0)
+food = (15, 7)
+score = 0
+game_over = false
+
+def spawn_food() {
+    loop {
+        x = random_int(0, width)
+        y = random_int(0, height)
+        if (x, y) not in snake { return (x, y) }
+    }
+}
+
+def update() {
+    if game_over { return }
+
+    head = snake[0]
+    new_head = (head.0 + direction.0, head.1 + direction.1)
+
+    // Wall collision
+    if new_head.0 < 0 or new_head.0 >= width or
+       new_head.1 < 0 or new_head.1 >= height {
+        game_over = true
+        return
+    }
+
+    // Self collision
+    if new_head in snake {
+        game_over = true
+        return
+    }
+
+    snake.insert(0, new_head)
+
+    if new_head == food {
+        score = score + 10
+        food = spawn_food()
+    } else {
+        snake.pop()
+    }
+}
+
+def render() {
+    clear()
+    for y in 0..height {
+        line = ""
+        for x in 0..width {
+            if (x, y) == snake[0] { line = line + "@" }
+            else if (x, y) in snake { line = line + "o" }
+            else if (x, y) == food { line = line + "*" }
+            else { line = line + "." }
+        }
+        print line
+    }
+    print "Score: " + score
+    if game_over { print "GAME OVER" }
+}
+
+on_key(key => {
+    match key {
+        "up" if direction != (0, 1) => direction = (0, -1)
+        "down" if direction != (0, -1) => direction = (0, 1)
+        "left" if direction != (1, 0) => direction = (-1, 0)
+        "right" if direction != (-1, 0) => direction = (1, 0)
+    }
+})
+
+loop {
+    update()
+    render()
+    sleep(150)
+    if game_over { break }
+}

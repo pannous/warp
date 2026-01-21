@@ -1,0 +1,18 @@
+#!/usr/bin/env wasp
+html{
+  body{
+    form{
+      div{ class:"form-group" // free form values need to be quoted
+          input{ type:email id:email } // single values need no quotes
+          label{ for:email "Email address:"} // html text appears as free string (without key:)
+      }
+      div{ class:"form-group"
+            label(for:pwd):"Password"
+            input{ id:pwd type:password}
+      }
+      button{ class:['btn' 'btn-info']      // property with value list
+            'Submit'                        // text quoted with single quote
+      }
+    }
+  }
+}

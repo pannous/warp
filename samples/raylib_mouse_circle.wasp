@@ -1,0 +1,37 @@
+#!/usr/bin/env wasp
+// Raylib FFI Example - Draw persistent trace with mouse
+// Demonstrates using raylib graphics library via FFI with mouse drawing
+
+import raylib
+
+InitWindow(800, 600, "Wasp Raylib - Paint Demo")
+SetTargetFPS(60)
+
+needsClear = 1
+
+while(!WindowShouldClose()){
+    mouseX = GetMouseX()
+    mouseY = GetMouseY()
+
+    BeginDrawing()
+
+    if(needsClear){
+        ClearBackground(0xFFF5F5F5)
+        needsClear = 0
+    }
+
+    if(IsMouseButtonDown(2)==1){
+        ClearBackground(0xFFF5F5F5)
+    }
+
+    if(IsMouseButtonDown(0)==1){
+        DrawCircle(mouseX, mouseY, 8.0, 0xFF2E1990)
+    }
+
+    DrawText("Left click to draw, Right click to clear", 180, 20, 20, 0xFF505050)
+    DrawCircle(mouseX, mouseY, 4.0, 0xFF808080)
+    EndDrawing()
+}
+
+CloseWindow()
+1
