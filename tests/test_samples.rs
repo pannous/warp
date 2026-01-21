@@ -2,6 +2,37 @@ use std::fs;
 use std::path::Path;
 use warp::Node;
 use warp::wasp_parser::WaspParser;
+use warp::is;
+
+#[test]
+fn test_fibonacci() { is!("samples/fibonacci.wasp", 55); }
+
+#[test]
+fn test_factorial() { is!("samples/factorial.wasp", 120); }
+
+#[test]
+fn test_primes() { is!("samples/primes.wasp", 1); }
+
+#[test]
+fn test_gcd() { is!("samples/gcd.wasp", 6); }
+
+#[test]
+fn test_sum() { is!("samples/sum.wasp", 55); }
+
+#[test]
+fn test_power() { is!("samples/power.wasp", 1024); }
+
+#[test]
+fn test_collatz() { is!("samples/collatz.wasp", 8); }
+
+#[test]
+fn test_ackermann() { is!("samples/ackermann.wasp", 7); }
+
+#[test]
+fn test_quadratic() { is!("samples/quadratic.wasp", 0); }
+
+#[test]
+fn test_fizzbuzz() { is!("samples/fizzbuzz.wasp", 0); }
 
 /// Test that all sample .wasp files can be parsed without errors
 #[test]
