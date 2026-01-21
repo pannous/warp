@@ -1,0 +1,66 @@
+// Control flow in wasp
+// Expressions over statements
+
+// Conditional expression (ternary)
+max = a > b ? a : b
+sign = x < 0 ? "negative" : x > 0 ? "positive" : "zero"
+
+// If as expression
+result = if condition {
+    compute_something()
+} else {
+    compute_other()
+}
+
+// Pattern matching
+describe = match value {
+    0 => "zero"
+    1 => "one"
+    n if n < 0 => "negative"
+    n if n > 100 => "large"
+    _ => "other"
+}
+
+// Loops
+for i in 1..10 {
+    print i
+}
+
+for item in collection {
+    process(item)
+}
+
+// While loop
+while condition {
+    do_something()
+}
+
+// Loop with break/continue
+for x in items {
+    if x == target { break }
+    if x < 0 { continue }
+    process(x)
+}
+
+// Infinite loop with break
+loop {
+    event = wait_for_event()
+    if event == quit { break }
+    handle(event)
+}
+
+// Exception handling
+try {
+    risky_operation()
+} catch error {
+    print "Error: " + error.message
+} finally {
+    cleanup()
+}
+
+// Result-based error handling (preferred)
+result = do_something()
+match result {
+    Ok(value) => use(value)
+    Err(e) => handle_error(e)
+}

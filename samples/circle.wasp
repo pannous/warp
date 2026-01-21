@@ -1,0 +1,9 @@
+#!/usr/bin/env wasp
+y=0
+j=0
+width=height=400
+center=height/2
+surface=malloc(height*width)
+while y++<height and x++<width:
+	surface[y+height*x]= norm( (y-center)^2 + (x-center)^2 ) < radius
+paint

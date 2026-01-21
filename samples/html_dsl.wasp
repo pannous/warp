@@ -1,0 +1,50 @@
+// HTML as a domain-specific language
+// wasp's tagged blocks make markup natural
+
+html {
+    head {
+        title: "My Page"
+        meta{ charset: "utf-8" }
+        link{ rel: "stylesheet" href: "style.css" }
+    }
+    body {
+        header {
+            h1: "Welcome"
+            nav {
+                a{ href: "/" } "Home"
+                a{ href: "/about" } "About"
+                a{ href: "/contact" } "Contact"
+            }
+        }
+        main {
+            article {
+                h2: "Hello World"
+                p: "This is a paragraph of text."
+                ul {
+                    li: "First item"
+                    li: "Second item"
+                    li: "Third item"
+                }
+            }
+            aside {
+                h3: "Related"
+                ul {
+                    li{ a{ href: "#" } "Link 1" }
+                    li{ a{ href: "#" } "Link 2" }
+                }
+            }
+        }
+        footer {
+            p: "© 2025 wasp"
+        }
+    }
+}
+
+// Dynamic content with interpolation
+items = ["Apple", "Banana", "Cherry"]
+
+ul {
+    for item in items {
+        li: item
+    }
+}

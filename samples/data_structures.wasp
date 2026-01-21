@@ -1,0 +1,40 @@
+// Data structures in wasp
+// Lists, maps, and nested structures
+
+// Simple list with various separators (all equivalent)
+colors = [red, green, blue]
+numbers = [1, 2, 3, 4, 5]
+mixed = [1 "two" three 4.0]
+
+// Key-value pairs (maps/objects)
+person: {
+    name: "Alice"
+    age: 30
+    email: "alice@example.com"
+}
+
+// Nested structures
+company: {
+    name: "Acme Corp"
+    employees: [
+        {name: "Bob" role: "Engineer"}
+        {name: "Carol" role: "Designer"}
+        {name: "Dave" role: "Manager"}
+    ]
+    address: {
+        street: "123 Main St"
+        city: "Springfield"
+        zip: 12345
+    }
+}
+
+// Access nested values
+ceo_name = company.employees[2].name
+
+// List comprehensions
+squares = [x * x for x in 1..10]
+evens = [x for x in numbers if x % 2 == 0]
+
+// Tuple-like pairs
+point = (x: 10, y: 20)
+range = (min: 0, max: 100)

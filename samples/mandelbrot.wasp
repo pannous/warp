@@ -1,0 +1,51 @@
+// Mandelbrot set visualization
+// Classic fractal computation
+
+def mandelbrot(cx, cy, max_iter) {
+    x = 0.0
+    y = 0.0
+    iter = 0
+    while x*x + y*y <= 4 and iter < max_iter {
+        xtemp = x*x - y*y + cx
+        y = 2*x*y + cy
+        x = xtemp
+        iter = iter + 1
+    }
+    return iter
+}
+
+// ASCII art rendering
+def render(width, height, max_iter) {
+    chars = " .:-=+*#%@"
+    for row in 0..height {
+        cy = (row - height/2) * 4.0 / height
+        line = ""
+        for col in 0..width {
+            cx = (col - width/2) * 4.0 / width
+            iter = mandelbrot(cx, cy, max_iter)
+            idx = iter * chars.length / max_iter
+            line = line + chars[idx]
+        }
+        print line
+    }
+}
+
+render(80, 40, 100)
+
+// Color version for graphics output
+def color_mandelbrot(cx, cy, max_iter) {
+    iter = mandelbrot(cx, cy, max_iter)
+    if iter == max_iter { return black }
+    hue = iter * 360 / max_iter
+    return hsv(hue, 1.0, 1.0)
+}
+
+// Canvas rendering
+canvas(800, 600)
+for y in 0..600 {
+    cy = (y - 300) * 3.0 / 600
+    for x in 0..800 {
+        cx = (x - 500) * 3.0 / 800
+        pixel(x, y, color_mandelbrot(cx, cy, 256))
+    }
+}

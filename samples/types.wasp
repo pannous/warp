@@ -1,0 +1,44 @@
+// Type definitions in wasp
+// Structural typing with optional annotations
+
+// Simple type alias
+type Age = int
+type Name = string
+
+// Record type (struct-like)
+type Person: {
+    name: Name
+    age: Age
+    email: string?  // optional field
+}
+
+// Enum/variant type
+type Color: red | green | blue | rgb(int, int, int)
+
+// Generic type
+type List[T]: {
+    items: [T]
+    length: int
+}
+
+// Function type
+type Predicate[T] = T -> bool
+type BinaryOp[T] = (T, T) -> T
+
+// Union types
+type Result[T, E] = Ok(T) | Err(E)
+type Option[T] = Some(T) | None
+
+// Instantiation
+alice: Person {
+    name: "Alice"
+    age: 30
+}
+
+// Pattern matching on types
+match color {
+    red => print "It's red"
+    green => print "It's green"
+    blue => print "It's blue"
+    rgb(r, g, b) => print "RGB: " + r + ", " + g + ", " + b
+}
