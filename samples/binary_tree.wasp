@@ -1,0 +1,65 @@
+// Binary Search Tree
+// Classic data structure with insert, search, traverse
+
+type Node: {
+    value: int
+    left: Node?
+    right: Node?
+}
+
+def node(value) := Node { value: value, left: None, right: None }
+
+def insert(tree, value) {
+    if tree == None { return node(value) }
+    if value < tree.value {
+        tree.left = insert(tree.left, value)
+    } else if value > tree.value {
+        tree.right = insert(tree.right, value)
+    }
+    return tree
+}
+
+def search(tree, value) {
+    if tree == None { return false }
+    if value == tree.value { return true }
+    if value < tree.value { return search(tree.left, value) }
+    return search(tree.right, value)
+}
+
+def inorder(tree) {
+    if tree == None { return [] }
+    return inorder(tree.left) + [tree.value] + inorder(tree.right)
+}
+
+def preorder(tree) {
+    if tree == None { return [] }
+    return [tree.value] + preorder(tree.left) + preorder(tree.right)
+}
+
+def height(tree) {
+    if tree == None { return 0 }
+    return 1 + max(height(tree.left), height(tree.right))
+}
+
+def print_tree(tree, prefix, is_left) {
+    if tree == None { return }
+    print prefix + (is_left ? "├── " : "└── ") + tree.value
+    new_prefix = prefix + (is_left ? "│   " : "    ")
+    print_tree(tree.left, new_prefix, true)
+    print_tree(tree.right, new_prefix, false)
+}
+
+// Build tree
+values = [50, 30, 70, 20, 40, 60, 80, 15, 25]
+tree = None
+for v in values {
+    tree = insert(tree, v)
+}
+
+print "Tree structure:"
+print_tree(tree, "", false)
+print "Inorder:  " + inorder(tree)
+print "Preorder: " + preorder(tree)
+print "Height:   " + height(tree)
+print "Contains 40? " + search(tree, 40)
+print "Contains 42? " + search(tree, 42)

@@ -1,0 +1,49 @@
+// Quicksort implementation
+// Classic divide-and-conquer sorting
+
+def quicksort(arr) {
+    if arr.length <= 1 { return arr }
+
+    pivot = arr[arr.length / 2]
+    left = arr.filter(x => x < pivot)
+    middle = arr.filter(x => x == pivot)
+    right = arr.filter(x => x > pivot)
+
+    return quicksort(left) + middle + quicksort(right)
+}
+
+// In-place version with partitioning
+def quicksort_inplace(arr, lo, hi) {
+    if lo >= hi { return }
+
+    pivot = arr[hi]
+    i = lo
+    for j in lo..hi {
+        if arr[j] < pivot {
+            swap(arr, i, j)
+            i = i + 1
+        }
+    }
+    swap(arr, i, hi)
+
+    quicksort_inplace(arr, lo, i - 1)
+    quicksort_inplace(arr, i + 1, hi)
+}
+
+def swap(arr, i, j) {
+    temp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = temp
+}
+
+// Test
+numbers = [64, 34, 25, 12, 22, 11, 90, 42, 15, 77]
+print "Original: " + numbers
+print "Sorted:   " + quicksort(numbers)
+
+// Benchmark
+large = [0..10000].map(_ => random(1000))
+start = time()
+quicksort_inplace(large, 0, large.length - 1)
+elapsed = time() - start
+print "Sorted 10000 elements in " + elapsed + "ms"

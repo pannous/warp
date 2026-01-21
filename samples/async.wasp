@@ -1,0 +1,71 @@
+// Async programming in wasp
+// Promises and async/await
+
+// Async function declaration
+async def fetch_data(url) {
+    response = await http.get(url)
+    return response.json()
+}
+
+// Concurrent execution
+async def load_page(id) {
+    // Run in parallel
+    [user, posts, comments] = await all [
+        fetch_user(id)
+        fetch_posts(id)
+        fetch_comments(id)
+    ]
+
+    return {
+        user: user
+        posts: posts
+        comments: comments
+    }
+}
+
+// Race - first to complete wins
+fastest = await race [
+    fetch_from_server_a()
+    fetch_from_server_b()
+    fetch_from_server_c()
+]
+
+// Timeout wrapper
+async def with_timeout(promise, ms) {
+    await race [
+        promise
+        delay(ms).then(() => Err("timeout"))
+    ]
+}
+
+// Stream processing
+async def process_stream(stream) {
+    for await item in stream {
+        await process(item)
+    }
+}
+
+// Channel-based communication
+channel = Channel()
+
+// Producer
+spawn {
+    for i in 1..100 {
+        channel.send(i)
+    }
+    channel.close()
+}
+
+// Consumer
+spawn {
+    for await value in channel {
+        print value
+    }
+}
+
+// Select on multiple channels
+select {
+    msg from inbox => handle_message(msg)
+    tick from timer => update()
+    _ after 1000ms => print "timeout"
+}

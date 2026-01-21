@@ -1,0 +1,2 @@
+// Collatz steps for 27 = 111
+def collatz(n,s) := n==1 ? s : n%2==0 ? collatz(n/2,s+1) : collatz(3*n+1,s+1); collatz(27,0)
