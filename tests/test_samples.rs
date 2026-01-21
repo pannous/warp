@@ -5,37 +5,30 @@ use warp::wasp_parser::WaspParser;
 use warp::is;
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_fibonacci() { is!("samples/fibonacci.wasp", 55); }
 
 #[test]
 fn test_factorial() { is!("samples/factorial.wasp", 120); }
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_primes() { is!("samples/primes.wasp", 1); }
 
 #[test]
 fn test_gcd() { is!("samples/gcd.wasp", 6); }
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_sum() { is!("samples/sum.wasp", 55); }
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_power() { is!("samples/power.wasp", 1024); }
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_collatz() { is!("samples/collatz.wasp", 111); }
 
 #[test]
-#[ignore = "slow recursion"]
 fn test_ackermann() { is!("samples/ackermann.wasp", 61); }
 
 #[test]
-#[ignore = "needs sqrt"]
 fn test_quadratic() { is!("samples/quadratic.wasp", 6); }
 
 #[test]

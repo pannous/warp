@@ -1,4 +1,5 @@
-// Is 97 prime? yes (1)
-def prime(n) := n<2 ? 0 : n==2 ? 1 : n%2==0 ? 0 : prime_check(n,3)
-def prime_check(n,i) := i*i>n ? 1 : n%i==0 ? 0 : prime_check(n,i+2)
-prime(97)
+// Prime check with helper recursion
+def is_prime(n) := n < 2 ? false : check(n, 2)
+def check(n, i) := i*i > n ? true : n % i == 0 ? false : check(n, i+1)
+
+is_prime(97)

@@ -1,2 +1,4 @@
-// Ackermann(3,3) = 61
-def ack(m,n) := m==0 ? n+1 : n==0 ? ack(m-1,1) : ack(m-1,ack(m,n-1)); ack(3,3)
+// Ackermann function - deeply recursive
+def ack(m, n) := m == 0 ? n+1 : n == 0 ? ack(m-1, 1) : ack(m-1, ack(m, n-1))
+
+ack(3, 3)
