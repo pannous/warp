@@ -1,0 +1,61 @@
+// WebAssembly interop
+// wasp compiles to wasm and interoperates seamlessly
+
+// Import from wasm module
+use { memory, table } from "env"
+use { log } from "console"
+
+// Export function for wasm
+export def add(a: i32, b: i32) -> i32 {
+    return a + b
+}
+
+// Export with explicit wasm type
+export def compute(x: f64, y: f64) -> f64 {
+    return sqrt(x * x + y * y)
+}
+
+// Memory operations
+def read_string(ptr: i32, len: i32) -> string {
+    bytes = memory.slice(ptr, ptr + len)
+    return string.from_utf8(bytes)
+}
+
+def write_string(s: string, ptr: i32) {
+    bytes = s.to_utf8()
+    memory.copy(bytes, ptr)
+}
+
+// GC types (wasm-gc)
+type Node: gc struct {
+    tag: i32
+    value: i64
+    left: ref Node?
+    right: ref Node?
+}
+
+// Create GC object
+root = Node {
+    tag: 1
+    value: 42
+    left: None
+    right: None
+}
+
+// Interface types (WIT)
+interface calculator {
+    add: (i32, i32) -> i32
+    sub: (i32, i32) -> i32
+    mul: (i32, i32) -> i32
+    div: (i32, i32) -> Result[i32, string]
+}
+
+// Component model
+component my_component {
+    import host: {
+        print: (string) -> ()
+        time: () -> i64
+    }
+
+    export api: calculator
+}

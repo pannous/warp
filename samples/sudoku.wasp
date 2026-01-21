@@ -1,0 +1,77 @@
+// Sudoku Solver
+// Backtracking algorithm
+
+def parse_grid(s) {
+    grid = Array2D(9, 9, 0)
+    chars = s.replace(".", "0").chars()
+    for i in 0..81 {
+        grid[i % 9, i / 9] = int(chars[i])
+    }
+    return grid
+}
+
+def is_valid(grid, row, col, num) {
+    // Check row
+    for x in 0..9 {
+        if grid[x, row] == num { return false }
+    }
+    // Check column
+    for y in 0..9 {
+        if grid[col, y] == num { return false }
+    }
+    // Check 3x3 box
+    box_x = (col / 3) * 3
+    box_y = (row / 3) * 3
+    for dy in 0..3 {
+        for dx in 0..3 {
+            if grid[box_x + dx, box_y + dy] == num { return false }
+        }
+    }
+    return true
+}
+
+def solve(grid) {
+    // Find empty cell
+    for y in 0..9 {
+        for x in 0..9 {
+            if grid[x, y] == 0 {
+                for num in 1..10 {
+                    if is_valid(grid, y, x, num) {
+                        grid[x, y] = num
+                        if solve(grid) { return true }
+                        grid[x, y] = 0
+                    }
+                }
+                return false
+            }
+        }
+    }
+    return true
+}
+
+def print_grid(grid) {
+    for y in 0..9 {
+        if y % 3 == 0 and y > 0 { print "------+-------+------" }
+        line = ""
+        for x in 0..9 {
+            if x % 3 == 0 and x > 0 { line = line + " | " }
+            line = line + (grid[x, y] == 0 ? "." : grid[x, y]) + " "
+        }
+        print line
+    }
+}
+
+// Example puzzle (. = empty)
+puzzle = "53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79"
+
+grid = parse_grid(puzzle)
+print "Puzzle:"
+print_grid(grid)
+print ""
+
+if solve(grid) {
+    print "Solution:"
+    print_grid(grid)
+} else {
+    print "No solution exists"
+}

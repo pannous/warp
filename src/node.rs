@@ -2243,3 +2243,12 @@ pub fn symbols(xs: Vec<&str>) -> Node {
 		Separator::None,
 	)
 }
+
+pub fn strings(p0: Vec<&str>) -> Node {
+	List(
+		map(p0, |s| Text(s.to_string())),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+

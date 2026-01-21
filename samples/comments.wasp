@@ -1,0 +1,41 @@
+// Comments in wasp
+// This is a single-line comment
+
+/*
+This is a block comment
+spanning multiple lines
+*/
+
+// Comments attach to the next element as metadata
+// This documents the greeting variable
+greeting: "Hello"
+
+/*
+Multi-line documentation
+for the person record
+*/
+person: {
+    // Name of the person
+    name: "Alice"
+
+    /* Age in years */
+    age: 30
+}
+
+// Inline comments work too
+result = compute(a, b)  // process inputs
+
+// Nested block comments are supported
+/*
+outer comment
+/* inner comment */
+still in outer
+*/
+
+// Documentation comments for export (triple slash)
+/// Computes the factorial of n
+/// Returns n! for non-negative integers
+def factorial(n) {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}

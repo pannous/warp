@@ -1,8 +1,8 @@
 use warp::analyzer::analyze;
 use warp::type_kinds::NodeKind;
 use warp::wasp_parser::parse;
-use warp::Node;
 use warp::*;
+use warp::node::strings;
 
 // Array size tests
 #[test]
@@ -34,58 +34,54 @@ fn test_array_operations() {
 	// todo!
 	test_array_size();
 	// todo 'do' notation to modify versus return different list!
-	is!("pixel=[1 2 3];do add 4 to pixel; pixel", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];y=pixel + 4; pixel", Node::ints(vec![1, 2, 3]));
+	is!("pixel=[1 2 3];do add 4 to pixel; pixel", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];y=pixel + 4; pixel", ints(vec![1, 2, 3]));
 
 	//        throws("pixel=[1 2 3];pixel + 4;pixel");// unused non-mutating operation
 	is!("pixels=[1 2 4];pixel#3", 4); // plural!
-	is!("pixel=[1 2 3];pixel + [4]", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel + 4", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel<<4", Node::ints(vec![1, 2, 3, 4]));
-	// is!("pixel=[1 2 3];4>>pixel", Node::ints(vec![4, 1, 2, 3]));
-	is!("pixel=[1 2 3];add(pixel, 4)", Node::ints(vec![1, 2, 3, 4])); // julia style
-	is!("pixel=[1 2 3];add 4 to pixel", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.add 4", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel add 4", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.add(4)", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert 4", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel insert 4", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert(4)", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert(4,-1)", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert 4 at end", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert 4 at -1", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];insert 4 at end of pixel", Node::ints(vec![1, 2, 3, 4]));
-	is!("pixel=[1 2 3];pixel.insert(4,0)", Node::ints(vec![4, 1, 2, 3]));
-	is!("pixel=[1 2 3];pixel.insert 4 at 0", Node::ints(vec![4, 1, 2, 3]));
-	is!("pixel=[1 2 3];pixel.insert 4 at start", Node::ints(vec![4, 1, 2, 3]));
-	is!("pixel=[1 2 3];pixel.insert 4 at head", Node::ints(vec![4, 1, 2, 3]));
-	is!(
-		"pixel=[1 2 3];pixel.insert 4 at beginning",
-		Node::ints(vec![4, 1, 2, 3])
-	);
+	is!("pixel=[1 2 3];pixel + [4]", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel + 4", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel<<4", ints(vec![1, 2, 3, 4]));
+	// is!("pixel=[1 2 3];4>>pixel", ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];add(pixel, 4)", ints(vec![1, 2, 3, 4])); // julia style
+	is!("pixel=[1 2 3];add 4 to pixel", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.add 4", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel add 4", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.add(4)", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert 4", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel insert 4", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert(4)", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert(4,-1)", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert 4 at end", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert 4 at -1", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];insert 4 at end of pixel", ints(vec![1, 2, 3, 4]));
+	is!("pixel=[1 2 3];pixel.insert(4,0)", ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at 0", ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at start", ints(vec![4, 1, 2, 3]));
+	is!("pixel=[1 2 3];pixel.insert 4 at head", ints(vec![4, 1, 2, 3]));
 	is!(
 		"pixels=[1 2 3];insert 4 at start of pixels",
-		Node::ints(vec![4, 1, 2, 3])
+		ints(vec![4, 1, 2, 3])
 	);
-	is!("pixel=[1 2 3];pixel - [3]", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel - 3", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];remove [3] from pixel", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];remove 3 from pixel", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel.remove(3)", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel.remove 3", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel remove(3)", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel remove 3", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel.remove([3])", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel.remove [3]", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel remove([3])", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3];pixel remove [3]", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel.remove([3 4])", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel.remove [3 4]", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel remove([3 4])", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel remove [3 4]", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel remove 3 4", Node::ints(vec![1, 2]));
-	is!("pixel=[1 2 3 4];pixel remove (3 4)", Node::ints(vec![1, 2]));
-	is!("pixels=[1 2 3 4];pixels without (3 4)", Node::ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel - [3]", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel - 3", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];remove [3] from pixel", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];remove 3 from pixel", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel.remove(3)", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel.remove 3", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel remove(3)", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel remove 3", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel.remove([3])", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel.remove [3]", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel remove([3])", ints(vec![1, 2]));
+	is!("pixel=[1 2 3];pixel remove [3]", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel.remove([3 4])", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel.remove [3 4]", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel remove([3 4])", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel remove [3 4]", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel remove 3 4", ints(vec![1, 2]));
+	is!("pixel=[1 2 3 4];pixel remove (3 4)", ints(vec![1, 2]));
+	is!("pixels=[1 2 3 4];pixels without (3 4)", ints(vec![1, 2]));
 }
 
 #[test]
@@ -160,8 +156,8 @@ fn test_array_initialization() {
 	is!("x : int[100]; x.length", 100);
 	//     is!("x : u8 * 100; x.length", 100) // type times size operation!!
 	is!("x : 100 * int; x.length", 100);
-	is!("x : 100 * Node::ints;[ x.length", 100);
-	//     is!("x : 100 Node::ints;[ x.length", 100) // implicit multiplication, no special case!
+	is!("x : 100 * ints;[ x.length", 100);
+	//     is!("x : 100 ints;[ x.length", 100) // implicit multiplication, no special case!
 	is!("x : 100 int; x.length", 100);
 	is!("x : 100 integers; x.length", 100);
 	is!("x : 100 numbers; x.length", 100);
@@ -186,36 +182,36 @@ fn test_array_indices() {
 #[test]
 fn test_root_lists() {
 	// vargs needs to be 0 terminated, otherwise pray!
-	is!("1 2 3", Node::ints(vec![1, 2, 3]));
-	is!("(1 2 3)", Node::ints(vec![1, 2, 3]));
-	is!("(1,2,3)", Node::ints(vec![1, 2, 3]));
-	is!("(1;2;3)", Node::ints(vec![1, 2, 3]));
-	//     is!("1;2;3", Node::ints(vec![1, 2, 3, 0]) //ok
-	is!("1,2,3", Node::ints(vec![1, 2, 3]));
-	is!("[1 2 3]", Node::ints(vec![1, 2, 3]));
-	is!("[1 2 3]", Node::ints(vec![1, 2, 3]));
-	is!("[1,2,3]", Node::ints(vec![1, 2, 3]));
-	is!("[1,2,3]", Node::ints(vec![1, 2, 3]));
-	is!("[1;2;3]", Node::ints(vec![1, 2, 3]));
-	is!("{1 2 3}", Node::ints(vec![1, 2, 3]));
-	is!("{1,2,3}", Node::ints(vec![1, 2, 3]));
-	is!("{1;2;3}", Node::ints(vec![1, 2, 3]));
+	is!("1 2 3", ints(vec![1, 2, 3]));
+	is!("(1 2 3)", ints(vec![1, 2, 3]));
+	is!("(1,2,3)", ints(vec![1, 2, 3]));
+	is!("(1;2;3)", ints(vec![1, 2, 3]));
+	//     is!("1;2;3", ints(vec![1, 2, 3, 0]) //ok
+	is!("1,2,3", ints(vec![1, 2, 3]));
+	is!("[1 2 3]", ints(vec![1, 2, 3]));
+	is!("[1 2 3]", ints(vec![1, 2, 3]));
+	is!("[1,2,3]", ints(vec![1, 2, 3]));
+	is!("[1,2,3]", ints(vec![1, 2, 3]));
+	is!("[1;2;3]", ints(vec![1, 2, 3]));
+	is!("{1 2 3}", ints(vec![1, 2, 3]));
+	is!("{1,2,3}", ints(vec![1, 2, 3]));
+	is!("{1;2;3}", ints(vec![1, 2, 3]));
 }
 
 #[test]
 fn test_root_list_strings() {
-	is!("(a,b,c)", Node::strings(vec!["a", "b", "c"])); // symbols shall match string
-	is!("(a;b;c)", Node::strings(vec!["a", "b", "c"]));
-	is!("a;b;c", Node::strings(vec!["a", "b", "c"]));
-	is!("a,b,c", Node::strings(vec!["a", "b", "c"]));
-	is!("{a b c}", Node::strings(vec!["a", "b", "c"]));
-	is!("{a,b,c}", Node::strings(vec!["a", "b", "c"]));
-	is!("[a,b,c]", Node::strings(vec!["a", "b", "c"]));
-	is!("(a b c)", Node::strings(vec!["a", "b", "c"]));
-	is!("[a;b;c]", Node::strings(vec!["a", "b", "c"]));
-	is!("a b c", Node::strings(vec!["a", "b", "c"]));
-	is!("{a;b;c}", Node::strings(vec!["a", "b", "c"]));
-	is!("[a b c]", Node::strings(vec!["a", "b", "c"]));
+	is!("(a,b,c)", strings(vec!["a", "b", "c"])); // symbols shall match string
+	is!("(a;b;c)", strings(vec!["a", "b", "c"]));
+	is!("a;b;c", strings(vec!["a", "b", "c"]));
+	is!("a,b,c", strings(vec!["a", "b", "c"]));
+	is!("{a b c}", strings(vec!["a", "b", "c"]));
+	is!("{a,b,c}", strings(vec!["a", "b", "c"]));
+	is!("[a,b,c]", strings(vec!["a", "b", "c"]));
+	is!("(a b c)", strings(vec!["a", "b", "c"]));
+	is!("[a;b;c]", strings(vec!["a", "b", "c"]));
+	is!("a b c", strings(vec!["a", "b", "c"]));
+	is!("{a;b;c}", strings(vec!["a", "b", "c"]));
+	is!("[a b c]", strings(vec!["a", "b", "c"]));
 }
 
 #[test]
@@ -257,7 +253,7 @@ fn test_filter() {
 		print!("{} ", i);
 	}
 	// let xs = Node::list(v);
-	let xs = Node::ints(v);
+	let xs = ints(v);
 	for node in xs.filter(|x| x > &2) {
 		print!("{} ", node);
 	}

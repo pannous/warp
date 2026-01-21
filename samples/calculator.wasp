@@ -1,0 +1,104 @@
+// Expression Calculator
+// Parsing and evaluating arithmetic expressions
+
+def calc(input) {
+    pos = 0
+
+    def peek() := pos < input.length ? input[pos] : '\0'
+    def advance() { pos = pos + 1; return input[pos - 1] }
+    def skip_spaces() { while peek() == ' ' { advance() } }
+
+    // Grammar:
+    // expr   = term (('+' | '-') term)*
+    // term   = factor (('*' | '/') factor)*
+    // factor = number | '(' expr ')' | '-' factor | func '(' expr ')'
+
+    def parse_expr() {
+        left = parse_term()
+        while true {
+            skip_spaces()
+            op = peek()
+            if op == '+' { advance(); left = left + parse_term() }
+            else if op == '-' { advance(); left = left - parse_term() }
+            else { break }
+        }
+        return left
+    }
+
+    def parse_term() {
+        left = parse_factor()
+        while true {
+            skip_spaces()
+            op = peek()
+            if op == '*' { advance(); left = left * parse_factor() }
+            else if op == '/' { advance(); left = left / parse_factor() }
+            else if op == '%' { advance(); left = left % parse_factor() }
+            else if op == '^' { advance(); left = pow(left, parse_factor()) }
+            else { break }
+        }
+        return left
+    }
+
+    def parse_factor() {
+        skip_spaces()
+        c = peek()
+
+        if c == '(' {
+            advance()
+            result = parse_expr()
+            skip_spaces()
+            advance()  // skip ')'
+            return result
+        }
+
+        if c == '-' {
+            advance()
+            return -parse_factor()
+        }
+
+        if c.is_alpha() {
+            name = ""
+            while peek().is_alphanumeric() { name = name + advance() }
+            skip_spaces()
+            if peek() == '(' {
+                advance()
+                arg = parse_expr()
+                skip_spaces()
+                advance()  // skip ')'
+                return match name {
+                    "sin" => sin(arg)
+                    "cos" => cos(arg)
+                    "tan" => tan(arg)
+                    "sqrt" => sqrt(arg)
+                    "abs" => abs(arg)
+                    "log" => log(arg)
+                    "exp" => exp(arg)
+                    _ => error("Unknown function: " + name)
+                }
+            }
+            return match name {
+                "pi" => 3.14159265359
+                "e" => 2.71828182846
+                _ => error("Unknown constant: " + name)
+            }
+        }
+
+        return parse_number()
+    }
+
+    def parse_number() {
+        skip_spaces()
+        start = pos
+        while peek().is_digit() or peek() == '.' { advance() }
+        return float(input[start..pos])
+    }
+
+    return parse_expr()
+}
+
+// Tests
+print calc("2 + 3 * 4")           // 14
+print calc("(2 + 3) * 4")         // 20
+print calc("sqrt(16) + 2^3")      // 12
+print calc("sin(pi/2)")           // 1
+print calc("-5 + 10")             // 5

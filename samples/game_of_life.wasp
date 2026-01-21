@@ -1,0 +1,61 @@
+// Conway's Game of Life
+// Cellular automaton simulation
+
+width = 40
+height = 20
+grid = Array2D(width, height, false)
+
+// Initialize with glider
+def spawn_glider(x, y) {
+    grid[x+1, y] = true
+    grid[x+2, y+1] = true
+    grid[x, y+2] = true
+    grid[x+1, y+2] = true
+    grid[x+2, y+2] = true
+}
+
+spawn_glider(2, 2)
+
+def count_neighbors(x, y) {
+    count = 0
+    for dy in -1..2 {
+        for dx in -1..2 {
+            if dx == 0 and dy == 0 { continue }
+            nx = (x + dx + width) % width
+            ny = (y + dy + height) % height
+            if grid[nx, ny] { count = count + 1 }
+        }
+    }
+    return count
+}
+
+def step() {
+    next = Array2D(width, height, false)
+    for y in 0..height {
+        for x in 0..width {
+            n = count_neighbors(x, y)
+            alive = grid[x, y]
+            // Rules: B3/S23
+            next[x, y] = n == 3 or (alive and n == 2)
+        }
+    }
+    grid = next
+}
+
+def render() {
+    clear()
+    for y in 0..height {
+        line = ""
+        for x in 0..width {
+            line = line + (grid[x, y] ? "█" : " ")
+        }
+        print line
+    }
+}
+
+// Main loop
+loop {
+    render()
+    step()
+    sleep(100)
+}

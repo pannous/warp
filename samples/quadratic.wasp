@@ -1,0 +1,2 @@
+// Quadratic: x^2 - 5x + 6 at x=3 => 0
+x=3; x*x - 5*x + 6

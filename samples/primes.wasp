@@ -1,0 +1,4 @@
+// Is 97 prime? yes (1)
+def prime(n) := n<2 ? 0 : n==2 ? 1 : n%2==0 ? 0 : prime_check(n,3)
+def prime_check(n,i) := i*i>n ? 1 : n%i==0 ? 0 : prime_check(n,i+2)
+prime(97)
