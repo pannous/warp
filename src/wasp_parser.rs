@@ -403,7 +403,7 @@ impl WaspParser {
 			'+' => Some((Op::Add, 1)),
 			'-' => Some((Op::Sub, 1)),
 			'*' => Some((Op::Mul, 1)),
-			'/' => Some((Op::Div, 1)),
+			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment
 			'%' => Some((Op::Mod, 1)),
 			'^' => Some((Op::Pow, 1)),
 			'×' | '⋅' => Some((Op::Mul, 1)),
@@ -472,7 +472,7 @@ impl WaspParser {
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
-			';' | '>' => Empty,
+			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => return Empty,
 			// $n parameter reference (e.g., $0 = first param)
 			'$' if self.peek_char(1).is_numeric() => {
@@ -1200,9 +1200,10 @@ impl WaspParser {
 				break;
 			}
 
-			// Check for end condition
+			// Check for end condition (also check for end-of-input to avoid infinite loop)
+			let ch = self.current_char();
 			let at_end = match close {
-				Some(c) => self.current_char() == c,
+				Some(c) => ch == c || ch == '\0',
 				None => self.end_of_input(),
 			};
 			if at_end {
