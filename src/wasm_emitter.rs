@@ -256,6 +256,16 @@ impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
 
 	/// Compile all extracted user functions to WASM
+	/// Pre-allocate strings from user function bodies before compiling
+	fn collect_user_function_strings(&mut self) {
+		let bodies: Vec<Box<Node>> = self.ctx.user_functions.values()
+			.map(|f| f.body.clone())
+			.collect();
+		for body in bodies {
+			self.collect_and_allocate_strings(&body);
+		}
+	}
+
 	fn compile_user_functions(&mut self) {
 		// Clone the function names to avoid borrow issues
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
@@ -268,19 +278,24 @@ impl WasmGcEmitter {
 	/// Compile a single user function to WASM
 	fn compile_user_function(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
+		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
-		// Create function type: (params...) -> i64
-		// Use types.len() to get correct index (next_type_idx is stale after emit_constructors)
+		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.types.len();
 		let param_types: Vec<ValType> = user_fn.params.iter().map(|_| ValType::I64).collect();
-		self.types.ty().function(param_types, vec![ValType::I64]);
+		if returns_node {
+			let node_ref = self.node_ref(false);
+			self.types.ty().function(param_types, vec![Ref(node_ref)]);
+		} else {
+			self.types.ty().function(param_types, vec![ValType::I64]);
+		}
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
 		let func_idx = self.next_func_idx;
 		self.next_func_idx += 1;
 
-		// Store the function index
+		// Store the function index and whether it returns a Node
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
 			fn_def.func_index = Some(func_idx);
 		}
@@ -301,8 +316,12 @@ impl WasmGcEmitter {
 
 		let mut func = Function::new(vec![(extra_locals, ValType::I64)]);
 
-		// Compile the function body
-		self.emit_numeric_value(&mut func, &user_fn.body);
+		// Compile the function body - use node instructions for Node-returning functions
+		if returns_node {
+			self.emit_node_instructions(&mut func, &user_fn.body);
+		} else {
+			self.emit_numeric_value(&mut func, &user_fn.body);
+		}
 		func.instruction(&Instruction::End);
 
 		// Add to code section
@@ -317,22 +336,45 @@ impl WasmGcEmitter {
 
 	/// Emit a call to a user-defined function (returns Node)
 	fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		// Get numeric result
-		self.emit_user_function_call_numeric(func, fn_name, args);
-		// Wrap in new_int for Node return
-		self.emit_call(func, "new_int");
+		let user_fn = match self.ctx.user_functions.get(fn_name) {
+			Some(f) => f.clone(),
+			None => panic!("Unknown user function: {}", fn_name),
+		};
+		let returns_node = user_fn.return_kind.is_ref();
+
+		// Emit arguments and call
+		self.emit_user_function_call_inner(func, &user_fn, args);
+
+		// If function returns i64, wrap in new_int for Node context
+		if !returns_node {
+			self.emit_call(func, "new_int");
+		}
 	}
 
 	/// Emit a call to a user-defined function (returns raw i64)
+	/// Note: For Node-returning functions, this extracts the integer value from the Node
 	fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let user_fn = match self.ctx.user_functions.get(fn_name) {
 			Some(f) => f.clone(),
 			None => panic!("Unknown user function: {}", fn_name),
 		};
+		let returns_node = user_fn.return_kind.is_ref();
 
+		// Emit arguments and call
+		self.emit_user_function_call_inner(func, &user_fn, args);
+
+		// If function returns Node but we need i64, extract the value
+		if returns_node {
+			// Call get_int_value to extract integer from Node
+			self.emit_call(func, "get_int_value");
+		}
+	}
+
+	/// Inner helper for emitting user function calls
+	fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
 		let func_index = match user_fn.func_index {
 			Some(idx) => idx,
-			None => panic!("User function not yet compiled: {}", fn_name),
+			None => panic!("User function not yet compiled: {}", user_fn.name),
 		};
 
 		// Emit arguments, using defaults for missing ones
@@ -344,7 +386,7 @@ impl WasmGcEmitter {
 				// Use default value
 				self.emit_numeric_value(func, default);
 			} else {
-				panic!("Missing argument {} for function {} (no default)", i, fn_name);
+				panic!("Missing argument {} for function {} (no default)", i, user_fn.name);
 			}
 		}
 
@@ -585,6 +627,8 @@ impl WasmGcEmitter {
 			self.ctx.required_functions
 		);
 		self.emit();
+		// Pre-allocate strings from user function bodies before compiling
+		self.collect_user_function_strings();
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
@@ -3179,6 +3223,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit ternary expression: condition ? then_expr : else_expr
+	/// Returns a Node reference, handling mixed-type branches (numbers, strings, etc.)
 	fn emit_ternary(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
 		// Structure: condition ? Key(then, Colon, else)
 		let (then_expr, else_expr) = match then_else.drop_meta() {
@@ -3193,15 +3238,13 @@ impl WasmGcEmitter {
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
 
-		// Then branch
-		self.emit_numeric_value(func, then_expr);
-		self.emit_call(func, "new_int");
+		// Then branch - use emit_node_instructions to handle any type (Text, Number, etc.)
+		self.emit_node_instructions(func, then_expr);
 
 		func.instruction(&Instruction::Else);
 
-		// Else branch
-		self.emit_numeric_value(func, else_expr);
-		self.emit_call(func, "new_int");
+		// Else branch - use emit_node_instructions to handle any type
+		self.emit_node_instructions(func, else_expr);
 
 		func.instruction(&Instruction::End);
 	}
