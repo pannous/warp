@@ -138,6 +138,26 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
 		}
+		// Ternary operator: condition ? then : else
+		Node::Key(_cond, Op::Question, then_else) => {
+			// Extract then and else branches from the Key(then, Colon, else) structure
+			if let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() {
+				let then_kind = infer_type(then_expr, scope);
+				let else_kind = infer_type(else_expr, scope);
+				// If either branch returns a reference type (Text, Symbol, etc.), return Text
+				if then_kind == Kind::Text || else_kind == Kind::Text {
+					Kind::Text
+				} else if then_kind.is_ref() || else_kind.is_ref() {
+					Kind::Text  // Default reference return type
+				} else if then_kind == Kind::Float || else_kind == Kind::Float {
+					Kind::Float
+				} else {
+					Kind::Int
+				}
+			} else {
+				Kind::Int
+			}
+		}
 		// Default to Int for other cases
 		_ => Kind::Int,
 	}
@@ -552,6 +572,16 @@ fn type_name_to_kind(name: &str) -> Kind {
 }
 
 /// Extract user-defined functions from the AST into context
+/// Infer return type of a function body given its parameters
+fn infer_function_return_kind(params: &[(String, Option<Node>)], body: &Node) -> Kind {
+	let mut scope = Scope::new();
+	// Add parameters to scope (all assumed Int for now)
+	for (name, _default) in params {
+		scope.define(name.clone(), None, Kind::Int);
+	}
+	infer_type(body, &scope)
+}
+
 /// Recognizes patterns:
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
@@ -569,11 +599,12 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params: Vec<(String, Option<Node>)> =
 							items.iter().skip(1).filter_map(extract_param).collect();
+						let return_kind = infer_function_return_kind(&params, body);
 						let func_def = UserFunctionDef {
 							name: name.clone(),
 							params,
 							body: body.clone(),
-							return_kind: Kind::Int,
+							return_kind,
 							func_index: None,
 						};
 						ctx.user_functions.insert(name.clone(), func_def);
@@ -592,15 +623,17 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 						let params: Vec<(String, Option<Node>)> =
 							items.iter().skip(1).filter_map(extract_param).collect();
 						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
+							let actual_params = if params.is_empty() {
+								vec![("it".to_string(), None)]
+							} else {
+								params
+							};
+							let return_kind = infer_function_return_kind(&actual_params, body);
 							let func_def = UserFunctionDef {
 								name: name.clone(),
-								params: if params.is_empty() {
-									vec![("it".to_string(), None)]
-								} else {
-									params
-								},
+								params: actual_params,
 								body: body.clone(),
-								return_kind: Kind::Int,
+								return_kind,
 								func_index: None,
 							};
 							ctx.user_functions.insert(name.clone(), func_def);
@@ -612,11 +645,13 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (uses implicit `it` parameter)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) {
+					let params = vec![("it".to_string(), None)];
+					let return_kind = infer_function_return_kind(&params, body);
 					let func_def = UserFunctionDef {
 						name: name.clone(),
-						params: vec![("it".to_string(), None)],
+						params,
 						body: body.clone(),
-						return_kind: Kind::Int,
+						return_kind,
 						func_index: None,
 					};
 					ctx.user_functions.insert(name.clone(), func_def);
@@ -708,11 +743,12 @@ fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
 					let params: Vec<(String, Option<Node>)> =
 						sig_items.iter().skip(1).filter_map(extract_param).collect();
+					let return_kind = infer_function_return_kind(&params, body);
 					return Some(UserFunctionDef {
 						name: name.clone(),
 						params,
 						body: body.clone(),
-						return_kind: Kind::Int,
+						return_kind,
 						func_index: None,
 					});
 				}
@@ -739,11 +775,12 @@ fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 							})
 							.collect();
 						let body = inner_items[1].clone();
+						let return_kind = infer_function_return_kind(&params, &body);
 						return Some(UserFunctionDef {
 							name: name.clone(),
 							params,
 							body: Box::new(body),
-							return_kind: Kind::Int,
+							return_kind,
 							func_index: None,
 						});
 					}
