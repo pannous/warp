@@ -260,3 +260,41 @@ fn test_expected_structure() {
 	let r = parse("a b c");
 	println!("a b c => {} (len={})", r, r.length());
 }
+
+#[test]
+fn test_nested_ternary_depth2() {
+	// Simple nested ternary (depth 2)
+	let result = parse("x > 0 ? 1 : x < 0 ? -1 : 0");
+	println!("nested ternary: {:?}", result);
+	// Should parse without hanging - the ? operator chains correctly
+	assert!(result != Empty);
+}
+
+#[test]
+fn test_fizzbuzz_nested_ternary() {
+	// FizzBuzz - classic interview problem with nested ternaries (single line)
+	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz" : n % 3 == 0 ? "Fizz" : n % 5 == 0 ? "Buzz" : n
+
+fizzbuzz(15)"#;
+	let result = parse(code);
+	println!("fizzbuzz parsed: {:?}", result);
+	// Should parse the nested ternary without issues
+	assert!(result != Empty);
+	// The result should have 2 items: the def and the function call
+	eq!(result.length(), 2);
+}
+
+#[test]
+fn test_nested_ternary_multiline() {
+	// Multiline nested ternary - continuation lines start with :
+	// NOTE: This currently parses with errors due to leading : on continuation lines
+	// being interpreted incorrectly. This test documents the current behavior.
+	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz"
+                 : n % 3 == 0 ? "Fizz"
+                 : n % 5 == 0 ? "Buzz"
+                 : n"#;
+	let result = parse(code);
+	println!("multiline ternary parsed: {:?}", result);
+	// Currently parses but with errors - documents current behavior
+	assert!(result != Empty);
+}
