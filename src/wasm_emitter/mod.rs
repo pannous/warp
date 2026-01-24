@@ -1,3 +1,11 @@
+//! WASM GC code emitter - generates WebAssembly modules with GC support
+
+mod config;
+mod string_table;
+
+pub use config::{EmitterConfig, EmitterConfigBuilder};
+pub use string_table::StringTable;
+
 use crate::analyzer::{analyze_required_functions, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::extensions::numbers::Number;
@@ -40,8 +48,14 @@ pub struct WasmGcEmitter {
 	exports: ExportSection,
 	names: NameSection,
 	memory: MemorySection,
-	data: DataSection,
 	globals: GlobalSection,
+
+	// Configuration
+	config: EmitterConfig,
+
+	// String management
+	string_table: StringTable,
+
 	// Type indices
 	pub(crate) string_type: u32,
 	i64_box_type: u32,
@@ -51,17 +65,10 @@ pub struct WasmGcEmitter {
 	next_func_idx: u32,
 	next_global_idx: u32,
 
-	emit_all_functions: bool,
-	emit_kind_globals: bool,
-	emit_host_imports: bool,
-	emit_wasi_imports: bool,
-	emit_ffi_imports: bool,
-
-	next_data_offset: u32,
 	next_temp_local: u32,
 
 	// Compilation context
-	pub(crate) ctx: Context, // module scope: globals, functions , types, etc.
+	pub(crate) ctx: Context, // module scope: globals, functions, types, etc.
 
 	scope: Scope, // current function scope
 }
@@ -83,8 +90,9 @@ impl WasmGcEmitter {
 			exports: ExportSection::new(),
 			names: NameSection::new(),
 			memory: MemorySection::new(),
-			data: DataSection::new(),
 			globals: GlobalSection::new(),
+			config: EmitterConfig::default(),
+			string_table: StringTable::new(),
 			string_type: 0,
 			i64_box_type: 0,
 			f64_box_type: 0,
@@ -92,37 +100,30 @@ impl WasmGcEmitter {
 			next_type_idx: 0,
 			next_func_idx: 0,
 			next_global_idx: 0,
-			emit_all_functions: true,
-			emit_kind_globals: true,
-			emit_host_imports: false,
-			emit_wasi_imports: false,
-			emit_ffi_imports: false,
-			next_data_offset: 0,
 			next_temp_local: 0,
 			ctx: Context::new(),
-
 			scope: Default::default(),
 		}
 	}
 
 	/// Enable/disable emitting Kind globals for documentation
 	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
-		self.emit_kind_globals = enabled;
+		self.config.emit_kind_globals = enabled;
 	}
 
 	pub fn set_tree_shaking(&mut self, enabled: bool) {
-		self.emit_all_functions = !enabled;
+		self.config.emit_all_functions = !enabled;
 	}
 
 	/// Enable/disable host function imports (fetch, run)
 	pub fn set_host_imports(&mut self, enabled: bool) {
-		self.emit_host_imports = enabled;
+		self.config.emit_host_imports = enabled;
 	}
 
 	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_host_imports(&mut self) {
-		if !self.emit_host_imports {
+		if !self.config.emit_host_imports {
 			return;
 		}
 
@@ -154,13 +155,13 @@ impl WasmGcEmitter {
 
 	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
 	pub fn set_wasi_imports(&mut self, enabled: bool) {
-		self.emit_wasi_imports = enabled;
+		self.config.emit_wasi_imports = enabled;
 	}
 
 	/// Emit WASI imports (fd_write from wasi_snapshot_preview1)
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_wasi_imports(&mut self) {
-		if !self.emit_wasi_imports {
+		if !self.config.emit_wasi_imports {
 			return;
 		}
 
@@ -183,13 +184,13 @@ impl WasmGcEmitter {
 
 	/// Enable/disable FFI imports (libc, libm functions)
 	pub fn set_ffi_imports(&mut self, enabled: bool) {
-		self.emit_ffi_imports = enabled;
+		self.config.emit_ffi_imports = enabled;
 	}
 
 	/// Emit FFI imports for all registered FFI functions
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	fn emit_ffi_imports(&mut self) {
-		if !self.emit_ffi_imports || self.ctx.ffi_imports.is_empty() {
+		if !self.config.emit_ffi_imports || self.ctx.ffi_imports.is_empty() {
 			return;
 		}
 
@@ -408,8 +409,8 @@ impl WasmGcEmitter {
 
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self.ctx
-			.string_table
+		let (ptr, len) = self.string_table
+			.table()
 			.get(s)
 			.map(|&offset| (offset, s.len() as u32))
 			.unwrap_or((0, s.len() as u32));
@@ -510,7 +511,7 @@ impl WasmGcEmitter {
 	}
 
 	fn should_emit_function(&self, name: &str) -> bool {
-		self.emit_all_functions || self.ctx.required_functions.contains(name)
+		self.config.emit_all_functions || self.ctx.required_functions.contains(name)
 	}
 
 	/// Generate all type definitions and functions
@@ -530,7 +531,7 @@ impl WasmGcEmitter {
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
-		if self.emit_kind_globals {
+		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
@@ -611,7 +612,7 @@ impl WasmGcEmitter {
 	}
 
 	pub fn emit_for_node(&mut self, node: &Node) {
-		self.emit_all_functions = false;
+		self.config.emit_all_functions = false;
 		// First pass: register all types (forward reference support)
 		collect_all_types(&mut self.ctx.type_registry, node);
 		// Analyze: Extract FFI imports, user functions, and required functions
@@ -619,7 +620,7 @@ impl WasmGcEmitter {
 		extract_user_functions(&mut self.ctx, node);
 		analyze_required_functions(&mut self.ctx, node);
 		// Set emit flag based on whether any FFI imports were found
-		self.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
+		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -774,7 +775,7 @@ impl WasmGcEmitter {
 		self.emit_user_types(registry);
 
 		// Kind globals
-		if self.emit_kind_globals {
+		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 
@@ -1578,16 +1579,7 @@ impl WasmGcEmitter {
 
 	/// Allocate a string in linear memory
 	fn allocate_string(&mut self, s: &str) -> (u32, u32) {
-		if let Some(&offset) = self.ctx.string_table.get(s) {
-			return (offset, s.len() as u32);
-		}
-		let offset = self.next_data_offset;
-		let bytes = s.as_bytes();
-		self.data
-			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
-		self.ctx.string_table.insert(s.to_string(), offset);
-		self.next_data_offset += bytes.len() as u32;
-		(offset, bytes.len() as u32)
+		self.string_table.allocate(s)
 	}
 
 	/// Emit main function that constructs the node
@@ -1603,7 +1595,7 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(false);
 		let func_type = self.types.len();
 		// WASI mode: return i64 directly instead of Node ref
-		if self.emit_wasi_imports {
+		if self.config.emit_wasi_imports {
 			self.types.ty().function(vec![], vec![ValType::I64]);
 		} else {
 			self.types.ty().function(vec![], vec![Ref(node_ref)]);
@@ -1643,39 +1635,7 @@ impl WasmGcEmitter {
 	}
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
-		let node = node.drop_meta();
-		match node {
-			Node::Text(s) | Node::Symbol(s) => {
-				self.allocate_string(s);
-			}
-			Node::Key(key, op, value) => {
-				// Track string variable assignments: x='hello' or x:='hello'
-				// Store data pointer/length in the Local for later use by WASI puts
-				if matches!(op, Op::Assign | Op::Define) {
-					if let Node::Symbol(var_name) = key.drop_meta() {
-						if let Node::Text(s) = value.drop_meta() {
-							let (ptr, len) = self.allocate_string(s);
-							self.scope.set_local_data(var_name, ptr, len);
-						}
-					}
-				}
-				self.collect_and_allocate_strings(key);
-				self.collect_and_allocate_strings(value);
-			}
-			Node::List(items, _, _) => {
-				for item in items {
-					self.collect_and_allocate_strings(item);
-				}
-			}
-			Node::Data(dada) => {
-				self.allocate_string(&dada.type_name);
-			}
-			Node::Type { name, body } => {
-				self.collect_and_allocate_strings(name);
-				self.collect_and_allocate_strings(body);
-			}
-			_ => {}
-		}
+		self.string_table.collect_from_node(node, &mut self.scope);
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
@@ -1748,13 +1708,13 @@ impl WasmGcEmitter {
 						return;
 					}
 					// Handle fetch URL - call host.fetch and return Text node
-					if kw == "fetch" && self.emit_host_imports {
+					if kw == "fetch" && self.config.emit_host_imports {
 						self.emit_fetch_call(func, right);
 						return;
 					}
 				}
 				// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
-				if (*op == Op::Assign || *op == Op::Define) && self.emit_host_imports {
+				if (*op == Op::Assign || *op == Op::Define) && self.config.emit_host_imports {
 					if let Node::Symbol(var_name) = left.drop_meta() {
 						if let Node::List(items, _, _) = right.drop_meta() {
 							if items.len() == 2 {
@@ -2042,7 +2002,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				// Check for fetch call: [Symbol("fetch"), url_node]
-				if items.len() == 2 && self.emit_host_imports {
+				if items.len() == 2 && self.config.emit_host_imports {
 					if let Node::Symbol(s) = items[0].drop_meta() {
 						if s == "fetch" {
 							self.emit_fetch_call(func, &items[1]);
@@ -2052,7 +2012,7 @@ impl WasmGcEmitter {
 				}
 				// Check for WASI calls: puts, puti, putl, putf, fd_write
 				// These return raw i32 (WASI mode uses read_bytes_with_wasi which returns i32)
-				if items.len() >= 2 && self.emit_wasi_imports {
+				if items.len() >= 2 && self.config.emit_wasi_imports {
 					if let Node::Symbol(s) = items[0].drop_meta() {
 						match s.as_str() {
 							"puts" => {
@@ -2349,7 +2309,7 @@ impl WasmGcEmitter {
 		// Handle variable definition/assignment specially
 		if *op == Op::Define || *op == Op::Assign {
 			// Check for string assignment in WASI mode - skip emit (tracked in Local)
-			if self.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
+			if self.config.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
 				// String data stored in Local's data_pointer/data_length, just emit 0
 				func.instruction(&Instruction::I64Const(0));
 				return;
@@ -4247,7 +4207,8 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.exports);
 		self.module.section(&self.code);
-		self.module.section(&self.data);
+		// Get data section from string table
+		self.module.section(self.string_table.data_section());
 		self.emit_names();
 		self.module.section(&self.names);
 
