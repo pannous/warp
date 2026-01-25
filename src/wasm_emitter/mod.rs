@@ -2090,6 +2090,10 @@ impl WasmGcEmitter {
 				}
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
+					if local.kind.is_float() {
+						// Convert f64 local to i64 for integer operations
+						func.instruction(&Instruction::I64TruncF64S);
+					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
