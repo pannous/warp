@@ -221,13 +221,20 @@ impl WasmGcEmitter {
 		// Clone the function names to avoid borrow issues
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
 
+		// PASS 1: Register all function signatures and indices
+		// This allows forward references (e.g., is_prime can call check before check is compiled)
+		for name in &func_names {
+			self.register_user_function_signature(name);
+		}
+
+		// PASS 2: Compile all function bodies
 		for name in func_names {
-			self.compile_user_function(&name);
+			self.compile_user_function_body(&name);
 		}
 	}
 
-	/// Compile a single user function to WASM
-	fn compile_user_function(&mut self, name: &str) {
+	/// Register a user function's signature and assign it an index (PASS 1)
+	fn register_user_function_signature(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
@@ -250,6 +257,12 @@ impl WasmGcEmitter {
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
 			fn_def.func_index = Some(func_idx);
 		}
+	}
+
+	/// Compile a user function's body (PASS 2)
+	fn compile_user_function_body(&mut self, name: &str) {
+		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
+		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function scope with parameters
 		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
@@ -281,7 +294,8 @@ impl WasmGcEmitter {
 		// Restore scope
 		self.scope = saved_scope;
 
-		// Export the function
+		// Export the function (get func_idx from the stored function definition)
+		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
 		self.exports.export(name, ExportKind::Func, func_idx);
 	}
 
