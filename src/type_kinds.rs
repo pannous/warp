@@ -382,11 +382,11 @@ pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValTy
 		"f32" | "float" => ValType::F32,
 		"Text" | "String" | "string" => Ref(RefType {
 			nullable: true,
-			heap_type: HeapType::Concrete(emitter.string_type),
+			heap_type: HeapType::Concrete(emitter.type_manager.string_type),
 		}),
 		"Node" => Ref(RefType {
 			nullable: true,
-			heap_type: HeapType::Concrete(emitter.node_type),
+			heap_type: HeapType::Concrete(emitter.type_manager.node_type),
 		}),
 		other => {
 			if let Some(&type_idx) = emitter.ctx.user_type_indices.get(other) {

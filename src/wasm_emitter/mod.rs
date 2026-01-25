@@ -1,10 +1,14 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod config;
+mod import_manager;
 mod string_table;
+mod type_manager;
 
 pub use config::{EmitterConfig, EmitterConfigBuilder};
+pub use import_manager::ImportManager;
 pub use string_table::StringTable;
+pub use type_manager::TypeManager;
 
 use crate::analyzer::{analyze_required_functions, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, Scope};
 use crate::context::{Context, UserFunctionDef};
@@ -41,8 +45,6 @@ use ValType::Ref;
 /// ```
 pub struct WasmGcEmitter {
 	module: Module,
-	types: TypeSection,
-	imports: ImportSection,
 	functions: FunctionSection,
 	code: CodeSection,
 	exports: ExportSection,
@@ -53,18 +55,14 @@ pub struct WasmGcEmitter {
 	// Configuration
 	config: EmitterConfig,
 
-	// String management
+	// Managers
+	pub(crate) type_manager: TypeManager,
+	import_manager: ImportManager,
 	string_table: StringTable,
 
-	// Type indices
-	pub(crate) string_type: u32,
-	i64_box_type: u32,
-	f64_box_type: u32,
-	pub(crate) node_type: u32,
-	next_type_idx: u32,
+	// Function and global indices
 	next_func_idx: u32,
 	next_global_idx: u32,
-
 	next_temp_local: u32,
 
 	// Compilation context
@@ -83,8 +81,6 @@ impl WasmGcEmitter {
 	pub fn new() -> Self {
 		WasmGcEmitter {
 			module: Module::new(),
-			types: TypeSection::new(),
-			imports: ImportSection::new(),
 			functions: FunctionSection::new(),
 			code: CodeSection::new(),
 			exports: ExportSection::new(),
@@ -92,12 +88,9 @@ impl WasmGcEmitter {
 			memory: MemorySection::new(),
 			globals: GlobalSection::new(),
 			config: EmitterConfig::default(),
+			type_manager: TypeManager::new(),
+			import_manager: ImportManager::new(),
 			string_table: StringTable::new(),
-			string_type: 0,
-			i64_box_type: 0,
-			f64_box_type: 0,
-			node_type: 0,
-			next_type_idx: 0,
 			next_func_idx: 0,
 			next_global_idx: 0,
 			next_temp_local: 0,
@@ -120,66 +113,9 @@ impl WasmGcEmitter {
 		self.config.emit_host_imports = enabled;
 	}
 
-	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
-	/// Must be called before emit_gc_types() since type indices need to be correct
-	fn emit_host_imports(&mut self) {
-		if !self.config.emit_host_imports {
-			return;
-		}
-
-		// Type for fetch: (i32, i32) -> (i32, i32)
-		// Takes (url_ptr, url_len), returns (result_ptr, result_len)
-		let fetch_type_idx = self.next_type_idx;
-		self.types
-			.ty()
-			.function(vec![ValType::I32, ValType::I32], vec![ValType::I32, ValType::I32]);
-		self.next_type_idx += 1;
-
-		// Type for run: (i32, i32) -> i64
-		// Takes (wasm_ptr, wasm_len), returns result value
-		let run_type_idx = self.next_type_idx;
-		self.types
-			.ty()
-			.function(vec![ValType::I32, ValType::I32], vec![ValType::I64]);
-		self.next_type_idx += 1;
-
-		// Import fetch from "host" module
-		self.imports
-			.import("host", "fetch", EntityType::Function(fetch_type_idx));
-		self.register_import("host_fetch");
-
-		// Import run from "host" module
-		self.imports.import("host", "run", EntityType::Function(run_type_idx));
-		self.register_import("host_run");
-	}
-
 	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
 	pub fn set_wasi_imports(&mut self, enabled: bool) {
 		self.config.emit_wasi_imports = enabled;
-	}
-
-	/// Emit WASI imports (fd_write from wasi_snapshot_preview1)
-	/// Must be called before emit_gc_types() since type indices need to be correct
-	fn emit_wasi_imports(&mut self) {
-		if !self.config.emit_wasi_imports {
-			return;
-		}
-
-		// Type for fd_write: (fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> i32
-		let fd_write_type_idx = self.next_type_idx;
-		self.types.ty().function(
-			vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
-			vec![ValType::I32],
-		);
-		self.next_type_idx += 1;
-
-		// Import fd_write from wasi_snapshot_preview1
-		self.imports.import(
-			"wasi_snapshot_preview1",
-			"fd_write",
-			EntityType::Function(fd_write_type_idx),
-		);
-		self.register_import("wasi_fd_write");
 	}
 
 	/// Enable/disable FFI imports (libc, libm functions)
@@ -187,33 +123,39 @@ impl WasmGcEmitter {
 		self.config.emit_ffi_imports = enabled;
 	}
 
-	/// Emit FFI imports for all registered FFI functions
-	/// Must be called before emit_gc_types() since type indices need to be correct
-	fn emit_ffi_imports(&mut self) {
-		if !self.config.emit_ffi_imports || self.ctx.ffi_imports.is_empty() {
-			return;
-		}
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Type management helpers (delegate to type_manager)
+	// ═══════════════════════════════════════════════════════════════════════════
 
-		// Clone data to avoid borrow conflict - collect (name, library, params, results) tuples
-		let mut imports: Vec<(String, String, Vec<ValType>, Vec<ValType>)> =
-			self.ctx.ffi_imports.iter()
-				.map(|(name, sig)| (name.clone(), sig.library.to_string(), sig.params.clone(), sig.results.clone()))
-				.collect();
-		imports.sort_by(|(a, _, _, _), (b, _, _, _)| a.cmp(b));
+	/// Get a RefType for Node with specified nullability
+	fn node_ref(&self, nullable: bool) -> RefType {
+		self.type_manager.node_ref(nullable)
+	}
 
-		for (name, library, params, results) in imports {
-			let type_idx = self.next_type_idx;
-			self.types.ty().function(params, results);
-			self.next_type_idx += 1;
-
-			// Import from library module (e.g., "m" for libm, "c" for libc)
-			self.imports.import(&library, &name, EntityType::Function(type_idx));
-
-			// Register as an import function - use a leaked string for static lifetime
-			let static_name: &'static str = Box::leak(format!("ffi_{}", name).into_boxed_str());
-			self.register_import(static_name);
+	/// Emit user-defined struct types from TypeRegistry
+	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
+		self.type_manager.emit_user_types(registry);
+		// Sync user type indices back to context
+		for type_def in registry.types() {
+			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
+				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
+			}
 		}
 	}
+
+	/// Get the WASM type index for a user-defined type
+	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
+		self.type_manager.get_user_type_idx(name)
+	}
+
+	/// Emit core GC types (String, Node, i64box, f64box)
+	fn emit_gc_types(&mut self) {
+		self.type_manager.emit_gc_types();
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Import and FFI helpers
+	// ═══════════════════════════════════════════════════════════════════════════
 
 	/// Get FFI function call index by name
 	fn ffi_func_index(&self, name: &str) -> Option<u32> {
@@ -282,13 +224,13 @@ impl WasmGcEmitter {
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
-		let func_type_idx = self.types.len();
+		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().map(|_| ValType::I64).collect();
 		if returns_node {
 			let node_ref = self.node_ref(false);
-			self.types.ty().function(param_types, vec![Ref(node_ref)]);
+			self.type_manager.types_mut().ty().function(param_types, vec![Ref(node_ref)]);
 		} else {
-			self.types.ty().function(param_types, vec![ValType::I64]);
+			self.type_manager.types_mut().ty().function(param_types, vec![ValType::I64]);
 		}
 
 		// Register function in function section
@@ -400,12 +342,6 @@ impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
 
 	/// Create a RefType for node references
-	fn node_ref(&self, nullable: bool) -> RefType {
-		RefType {
-			nullable,
-			heap_type: HeapType::Concrete(self.node_type),
-		}
-	}
 
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
@@ -525,10 +461,10 @@ impl WasmGcEmitter {
 		});
 		self.exports.export("memory", ExportKind::Memory, 0);
 		// Host imports must come before GC types (imports section comes before types in WASM)
-		self.emit_host_imports();
-		self.emit_wasi_imports();
-		self.emit_ffi_imports();
-		self.emit_gc_types();
+		self.import_manager
+			.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
+		self.next_func_idx = self.import_manager.import_count();
+		self.type_manager.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
 		if self.config.emit_kind_globals {
@@ -543,21 +479,12 @@ impl WasmGcEmitter {
 	fn emit_registered_user_types(&mut self) {
 		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
 		for type_def in &types {
-			self.emit_single_user_type(type_def);
+			self.type_manager.emit_single_user_type(type_def);
+			// Update context with type indices
+			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
+				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
+			}
 		}
-	}
-
-	/// Emit a single user-defined struct type
-	fn emit_single_user_type(&mut self, type_def: &TypeDef) {
-		let fields: Vec<FieldType> = type_def
-			.fields
-			.iter()
-			.map(|f| self.field_def_to_wasm_field(f))
-			.collect();
-
-		self.types.ty().struct_(fields);
-		self.ctx.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
-		self.next_type_idx += 1;
 	}
 
 	/// Emit constructors for registered user types
@@ -604,8 +531,8 @@ impl WasmGcEmitter {
 
 	/// Emit instruction to get a Kind kind value
 	fn emit_kind(&self, func: &mut Function, tag: Kind) {
-		if let Some(&idx) = self.ctx.kind_global_indices.get(&tag) {
-			func.instruction(&Instruction::GlobalGet(idx));
+		if let Some(idx) = self.ctx.kind_global_indices.get(&tag) {
+			func.instruction(&Instruction::GlobalGet(*idx));
 		} else {
 			func.instruction(&Instruction::I64Const(tag as i64));
 		}
@@ -636,124 +563,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit the compact 3-field GC types
-	fn emit_gc_types(&mut self) {
-		// Type 0: $String = (struct (field $ptr i32) (field $len i32))
-		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			}, // ptr
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			}, // len
-		]);
-		self.string_type = self.next_type_idx;
-		self.next_type_idx += 1;
-
-		// 1: (struct $Node (field $kind i64) (field $data anyref) (field $value (ref null $Node)))
-		let node_type_idx = self.next_type_idx;
-		self.next_type_idx += 1;
-
-		let node_ref = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(node_type_idx),
-		};
-		let any_ref = RefType {
-			nullable: true,
-			heap_type: any_heap_type(),
-		};
-
-		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I64),
-				mutable: false,
-			}, // kind
-			FieldType {
-				element_type: Val(Ref(any_ref)),
-				mutable: true, // mutable for index assignment
-			}, // data
-			FieldType {
-				element_type: Val(Ref(node_ref)),
-				mutable: false,
-			}, // value
-		]);
-		self.node_type = node_type_idx;
-
-		// Type 2: $i64box = (struct (field i64)) for boxed integers
-		self.types.ty().struct_(vec![FieldType {
-			element_type: Val(ValType::I64),
-			mutable: false,
-		}]);
-		self.i64_box_type = self.next_type_idx;
-		self.next_type_idx += 1;
-
-		// Type 3: $f64box = (struct (field f64)) for boxed floats
-		self.types.ty().struct_(vec![FieldType {
-			element_type: Val(ValType::F64),
-			mutable: false,
-		}]);
-		self.f64_box_type = self.next_type_idx;
-		self.next_type_idx += 1;
-	}
 
 	/// Emit user-defined struct types from TypeRegistry
-	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		for type_def in registry.types() {
-			let fields: Vec<FieldType> = type_def
-				.fields
-				.iter()
-				.map(|f| self.field_def_to_wasm_field(f))
-				.collect();
-
-			self.types.ty().struct_(fields);
-			self.ctx.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
-			self.next_type_idx += 1;
-		}
-	}
 
 	/// Convert a FieldDef to a WASM FieldType
-	fn field_def_to_wasm_field(&self, field: &FieldDef) -> FieldType {
-		let element_type = match field.type_name.as_str() {
-			// Node-mode: map wasp types to WASM types
-			"Int" | "i64" | "long" => Val(ValType::I64),
-			"Float" | "f64" | "double" => Val(ValType::F64),
-			"i32" | "int" => Val(ValType::I32),
-			"f32" | "float" => Val(ValType::F32),
-			"Text" | "String" | "string" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.string_type),
-			})),
-			"Node" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.node_type),
-			})),
-			// User-defined types
-			other => {
-				if let Some(&type_idx) = self.ctx.user_type_indices.get(other) {
-					Val(Ref(RefType {
-						nullable: true,
-						heap_type: HeapType::Concrete(type_idx),
-					}))
-				} else {
-					// Fallback to anyref for unknown types
-					Val(Ref(RefType {
-						nullable: true,
-						heap_type: any_heap_type(),
-					}))
-				}
-			}
-		};
-		FieldType {
-			element_type,
-			mutable: false,
-		}
-	}
 
 	/// Get the WASM type index for a user-defined type
-	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
-		self.ctx.user_type_indices.get(name).copied()
-	}
 
 	/// Emit with user-defined types from a TypeRegistry
 	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
@@ -796,7 +611,7 @@ impl WasmGcEmitter {
 	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
 	fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
 		let type_idx = match self.ctx.user_type_indices.get(&type_def.name) {
-			Some(&idx) => idx,
+			Some(idx) => *idx,
 			None => return,
 		};
 
@@ -809,8 +624,8 @@ impl WasmGcEmitter {
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.types.len();
-		self.types.ty().function(params.clone(), vec![Ref(type_ref)]);
+		let func_type = self.type_manager.types().len();
+		self.type_manager.types_mut().ty().function(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -840,14 +655,14 @@ impl WasmGcEmitter {
 
 		// new_empty() -> (ref $Node)
 		if self.should_emit_function("new_empty") {
-			let func_type = self.types.len();
-			self.types.ty().function(vec![], vec![Ref(node_ref)]);
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Empty);
 			func.instruction(&Instruction::RefNull(any_heap_type()));
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_empty");
@@ -856,16 +671,16 @@ impl WasmGcEmitter {
 
 		// new_int(i64) -> (ref $Node) - box the i64 in $i64box
 		if self.should_emit_function("new_int") {
-			let func_type = self.types.len();
-			self.types.ty().function(vec![ValType::I64], vec![Ref(node_ref)]);
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(vec![ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Int);
 			// Box the i64: create $i64box struct
 			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructNew(self.i64_box_type));
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.i64_box_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_int");
@@ -874,16 +689,16 @@ impl WasmGcEmitter {
 
 		// new_float(f64) -> (ref $Node) - box the f64 in $f64box
 		if self.should_emit_function("new_float") {
-			let func_type = self.types.len();
-			self.types.ty().function(vec![ValType::F64], vec![Ref(node_ref)]);
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(vec![ValType::F64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Float);
 			// Box the f64: create $f64box struct
 			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructNew(self.f64_box_type));
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.f64_box_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_float");
@@ -892,16 +707,16 @@ impl WasmGcEmitter {
 
 		// new_codepoint(i32) -> (ref $Node) - use i31ref for codepoint
 		if self.should_emit_function("new_codepoint") {
-			let func_type = self.types.len();
-			self.types.ty().function(vec![ValType::I32], vec![Ref(node_ref)]);
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(vec![ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
 			let mut func = Function::new(vec![]);
 			self.emit_kind(&mut func, Kind::Codepoint);
 			// Convert i32 to i31ref
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::RefI31);
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_codepoint");
@@ -911,8 +726,8 @@ impl WasmGcEmitter {
 		// new_text(ptr: i32, len: i32) -> (ref $Node)
 		// Use $String struct for string data
 		if self.should_emit_function("new_text") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![ValType::I32, ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
@@ -921,9 +736,9 @@ impl WasmGcEmitter {
 			// Create $String struct with ptr and len
 			func.instruction(&Instruction::LocalGet(0)); // ptr
 			func.instruction(&Instruction::LocalGet(1)); // len
-			func.instruction(&Instruction::StructNew(self.string_type));
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.string_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_text");
@@ -933,8 +748,8 @@ impl WasmGcEmitter {
 		// new_symbol(ptr: i32, len: i32) -> (ref $Node)
 		// Use $String struct for string data
 		if self.should_emit_function("new_symbol") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![ValType::I32, ValType::I32], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
@@ -943,9 +758,9 @@ impl WasmGcEmitter {
 			// Create $String struct with ptr and len
 			func.instruction(&Instruction::LocalGet(0)); // ptr
 			func.instruction(&Instruction::LocalGet(1)); // len
-			func.instruction(&Instruction::StructNew(self.string_type));
-			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.string_type));
+			func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_symbol");
@@ -956,8 +771,8 @@ impl WasmGcEmitter {
 		// data = key node (cast to any), value = value node
 		// kind = (op_info << 8) | Kind::Key
 		if self.should_emit_function("new_key") {
-			let func_type = self.types.len();
-			self.types.ty().function(
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(
 				vec![Ref(node_ref_nullable), Ref(node_ref_nullable), ValType::I64],
 				vec![Ref(node_ref)],
 			);
@@ -971,7 +786,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::I64Or);
 			func.instruction(&Instruction::LocalGet(0)); // key node as data (auto-cast to any)
 			func.instruction(&Instruction::LocalGet(1)); // value node
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_key");
@@ -981,8 +796,8 @@ impl WasmGcEmitter {
 		// new_type(name: ref $Node, body: ref $Node) -> (ref $Node)
 		// data = name node (cast to any), value = body node (fields)
 		if self.should_emit_function("new_type") {
-			let func_type = self.types.len();
-			self.types.ty().function(
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(
 				vec![Ref(node_ref_nullable), Ref(node_ref_nullable)],
 				vec![Ref(node_ref)],
 			);
@@ -991,7 +806,7 @@ impl WasmGcEmitter {
 			self.emit_kind(&mut func, Kind::TypeDef);
 			func.instruction(&Instruction::LocalGet(0)); // name node as data (auto-cast to any)
 			func.instruction(&Instruction::LocalGet(1)); // body node (fields)
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_type");
@@ -1001,8 +816,8 @@ impl WasmGcEmitter {
 		// new_list(first: ref $Node, rest: ref $Node, bracket_info: i64) -> (ref $Node)
 		// kind = List + bracket encoding, data = first, value = rest
 		if self.should_emit_function("new_list") {
-			let func_type = self.types.len();
-			self.types.ty().function(
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(
 				vec![Ref(node_ref_nullable), Ref(node_ref_nullable), ValType::I64],
 				vec![Ref(node_ref)],
 			);
@@ -1016,7 +831,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::I64Or);
 			func.instruction(&Instruction::LocalGet(0)); // first as data
 			func.instruction(&Instruction::LocalGet(1)); // rest as value
-			func.instruction(&Instruction::StructNew(self.node_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
 			let idx = self.register_func("new_list");
@@ -1027,8 +842,8 @@ impl WasmGcEmitter {
 		// Get the numeric value of the element at index (1-based)
 		// Traverses linked list: for index N, follow value pointer N-1 times, return data
 		if self.should_emit_function("list_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
@@ -1053,7 +868,7 @@ impl WasmGcEmitter {
 			// current = current.value (field 2)
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 2,
 			});
 			func.instruction(&Instruction::LocalSet(2));
@@ -1072,20 +887,20 @@ impl WasmGcEmitter {
 			// Get current.data (which is a ref to the element Node, cast from anyref)
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field (anyref holding ref $Node)
 			});
 			// Cast anyref to ref $Node
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
 			// Get the inner node's data field (which holds the i64_box)
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field of the element node
 			});
 			// Cast to ref $i64box and get the i64 value
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.i64_box_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.i64_box_type,
+				struct_type_index: self.type_manager.i64_box_type,
 				field_index: 0,
 			});
 
@@ -1098,8 +913,8 @@ impl WasmGcEmitter {
 		// list_node_at(list: ref $Node, index: i64) -> ref $Node
 		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
 		if self.should_emit_function("list_node_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
@@ -1124,7 +939,7 @@ impl WasmGcEmitter {
 			// current = current.value (field 2)
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 2,
 			});
 			func.instruction(&Instruction::LocalSet(2));
@@ -1143,11 +958,11 @@ impl WasmGcEmitter {
 			// Get current.data (which is a ref to the element Node, cast from anyref)
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field (anyref holding ref $Node)
 			});
 			// Cast anyref to ref $Node and return it directly
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
 
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
@@ -1158,8 +973,8 @@ impl WasmGcEmitter {
 		// node_count(node: ref $Node) -> i64
 		// Count the number of elements in a list/block by traversing the value chain
 		if self.should_emit_function("node_count") {
-			let func_type = self.types.len();
-			self.types.ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
 			self.functions.function(func_type);
 
 			// Locals: 0=node, 1=count, 2=current
@@ -1191,7 +1006,7 @@ impl WasmGcEmitter {
 			// current = current.value (field 2)
 			func.instruction(&Instruction::LocalGet(2));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 2,
 			});
 			func.instruction(&Instruction::LocalSet(2));
@@ -1213,8 +1028,8 @@ impl WasmGcEmitter {
 		// string_char_at(node: ref $Node, index: i64) -> ref $Node
 		// Get the character at index (1-based) from a Text/Symbol node, returns Codepoint node
 		if self.should_emit_function("string_char_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
@@ -1224,15 +1039,15 @@ impl WasmGcEmitter {
 			// Get node.data (which is a ref $String)
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field
 			});
 			// Cast anyref to ref $String
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.string_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
 
 			// Get ptr from $String
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.string_type,
+				struct_type_index: self.type_manager.string_type,
 				field_index: 0, // ptr
 			});
 
@@ -1262,8 +1077,8 @@ impl WasmGcEmitter {
 		// node_index_at(node: ref $Node, index: i64) -> ref $Node
 		// Runtime dispatch: for Text/Symbol call string_char_at, for List/Block call list_node_at
 		if self.should_emit_function("node_index_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 			self.functions.function(func_type);
@@ -1273,7 +1088,7 @@ impl WasmGcEmitter {
 			// Get node.kind
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 0, // kind field
 			});
 
@@ -1290,7 +1105,7 @@ impl WasmGcEmitter {
 			// Check for Symbol
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 0,
 			});
 			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
@@ -1317,8 +1132,8 @@ impl WasmGcEmitter {
 		// list_set_at(list: ref $Node, index: i64, value: i64) -> i64
 		// Set the numeric value at index (1-based) and return the value
 		if self.should_emit_function("list_set_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
@@ -1343,7 +1158,7 @@ impl WasmGcEmitter {
 			// current = current.value (field 2)
 			func.instruction(&Instruction::LocalGet(3));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 2,
 			});
 			func.instruction(&Instruction::LocalSet(3));
@@ -1362,19 +1177,19 @@ impl WasmGcEmitter {
 			// Get current.data (which is the wrapper Node for the element)
 			func.instruction(&Instruction::LocalGet(3));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field
 			});
 			// Cast anyref to ref $Node
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.node_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
 
 			// Create new i64box with the value
 			func.instruction(&Instruction::LocalGet(2)); // value
-			func.instruction(&Instruction::StructNew(self.i64_box_type));
+			func.instruction(&Instruction::StructNew(self.type_manager.i64_box_type));
 
 			// Set the inner node's data field to the new i64box
 			func.instruction(&Instruction::StructSet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field
 			});
 
@@ -1390,8 +1205,8 @@ impl WasmGcEmitter {
 		// string_set_char_at(node: ref $Node, index: i64, value: i64) -> i64
 		// Set the character at index (1-based) in a Text/Symbol node, returns the value
 		if self.should_emit_function("string_set_char_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
@@ -1401,15 +1216,15 @@ impl WasmGcEmitter {
 			// Get node.data (which is a ref $String)
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field
 			});
 			// Cast anyref to ref $String
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.string_type)));
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
 
 			// Get ptr from $String
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.string_type,
+				struct_type_index: self.type_manager.string_type,
 				field_index: 0, // ptr
 			});
 
@@ -1441,8 +1256,8 @@ impl WasmGcEmitter {
 		// node_set_at(node: ref $Node, index: i64, value: i64) -> i64
 		// Runtime dispatch for index assignment: string_set_char_at or list_set_at
 		if self.should_emit_function("node_set_at") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
@@ -1452,7 +1267,7 @@ impl WasmGcEmitter {
 			// Get node.kind
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 0, // kind field
 			});
 
@@ -1469,7 +1284,7 @@ impl WasmGcEmitter {
 			// Check for Symbol
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.node_type,
+				struct_type_index: self.type_manager.node_type,
 				field_index: 0,
 			});
 			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
@@ -1504,13 +1319,13 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(true);
 
 		// get_kind(node: ref $Node) -> i64
-		let func_type = self.types.len();
-		self.types.ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
+		let func_type = self.type_manager.types().len();
+		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
 		self.functions.function(func_type);
 		let mut func = Function::new(vec![]);
 		func.instruction(&Instruction::LocalGet(0));
 		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.node_type,
+			struct_type_index: self.type_manager.node_type,
 			field_index: 0,
 		});
 		func.instruction(&Instruction::End);
@@ -1524,8 +1339,8 @@ impl WasmGcEmitter {
 		// i64_pow(base: i64, exp: i64) -> i64
 		// Computes base^exp using a loop
 		if self.should_emit_function("i64_pow") {
-			let func_type = self.types.len();
-			self.types
+			let func_type = self.type_manager.types().len();
+			self.type_manager.types_mut()
 				.ty()
 				.function(vec![ValType::I64, ValType::I64], vec![ValType::I64]);
 			self.functions.function(func_type);
@@ -1593,12 +1408,12 @@ impl WasmGcEmitter {
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
-		let func_type = self.types.len();
+		let func_type = self.type_manager.types().len();
 		// WASI mode: return i64 directly instead of Node ref
 		if self.config.emit_wasi_imports {
-			self.types.ty().function(vec![], vec![ValType::I64]);
+			self.type_manager.types_mut().ty().function(vec![], vec![ValType::I64]);
 		} else {
-			self.types.ty().function(vec![], vec![Ref(node_ref)]);
+			self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
 		}
 		self.functions.function(func_type);
 
@@ -1644,7 +1459,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_node_null(&self, func: &mut Function) {
-		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.node_type)));
+		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
 	}
 
 	/// Emit instructions to construct a Node
@@ -2539,7 +2354,7 @@ impl WasmGcEmitter {
 	fn emit_truthy_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		let node_ref = RefType {
 			nullable: false,
-			heap_type: HeapType::Concrete(self.node_type),
+			heap_type: HeapType::Concrete(self.type_manager.node_type),
 		};
 
 		// For numeric left operand, extract its value for truthiness check
@@ -4196,9 +4011,9 @@ impl WasmGcEmitter {
 
 	pub fn finish(mut self) -> Vec<u8> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
-		self.module.section(&self.types);
+		self.module.section(self.type_manager.types());
 		if self.ctx.func_registry.import_count() > 0 {
-			self.module.section(&self.imports);
+			self.module.section(self.import_manager.imports());
 		}
 		self.module.section(&self.functions);
 		self.module.section(&self.memory);
@@ -4224,13 +4039,13 @@ impl WasmGcEmitter {
 
 		// Type names
 		let mut type_names = NameMap::new();
-		type_names.append(self.string_type, "String");
-		type_names.append(self.i64_box_type, "i64box");
-		type_names.append(self.f64_box_type, "f64box");
-		type_names.append(self.node_type, "Node");
+		type_names.append(self.type_manager.string_type, "String");
+		type_names.append(self.type_manager.i64_box_type, "i64box");
+		type_names.append(self.type_manager.f64_box_type, "f64box");
+		type_names.append(self.type_manager.node_type, "Node");
 		// User-defined type names
-		for (name, &idx) in &self.ctx.user_type_indices {
-			type_names.append(idx, name);
+		for (name, idx) in &self.ctx.user_type_indices {
+			type_names.append(*idx, name);
 		}
 		self.names.types(&type_names);
 
@@ -4242,20 +4057,20 @@ impl WasmGcEmitter {
 		node_fields.append(0, "kind");
 		node_fields.append(1, "data");
 		node_fields.append(2, "value");
-		type_field_names.append(self.node_type, &node_fields);
+		type_field_names.append(self.type_manager.node_type, &node_fields);
 
 		// $String fields
-		Self::append_string_field_names(&mut type_field_names, self.string_type);
+		Self::append_string_field_names(&mut type_field_names, self.type_manager.string_type);
 
 		// $i64box field
 		let mut i64box_fields = NameMap::new();
 		i64box_fields.append(0, "value");
-		type_field_names.append(self.i64_box_type, &i64box_fields);
+		type_field_names.append(self.type_manager.i64_box_type, &i64box_fields);
 
 		// $f64box field
 		let mut f64box_fields = NameMap::new();
 		f64box_fields.append(0, "value");
-		type_field_names.append(self.f64_box_type, &f64box_fields);
+		type_field_names.append(self.type_manager.f64_box_type, &f64box_fields);
 
 		// User-defined type fields
 		for type_def in self.ctx.type_registry.types() {
