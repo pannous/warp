@@ -87,6 +87,14 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					return Kind::Int;
 				}
 			}
+			// Curly braces {} are code blocks: return type of last expression
+			if *bracket == Bracket::Curly {
+				if let Some(last) = items.last() {
+					return infer_type(last, scope);
+				} else {
+					return Kind::Empty;
+				}
+			}
 			// Data list: all items are pure data → Kind::List
 			if items.iter().all(is_data_node) {
 				return Kind::List;
