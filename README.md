@@ -15,8 +15,8 @@ https://github.com/pannous/angle) which was a python experiment.
 ### as data format
 ```warp
 contact{
-		name: James,
-		age: 33,
+		name: James
+		age: 33
 }
 ```
 That's it. Similar to JSON but no quotes around keys and symbols.
