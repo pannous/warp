@@ -698,6 +698,28 @@ impl WasmGcEmitter {
 		self.code.function(&func);
 		let idx = self.register_func("get_kind");
 		self.exports.export("get_kind", ExportKind::Func, idx);
+
+		// get_int_value(node: ref $Node) -> i64
+		// Extract integer from Node's data field (i64box)
+		let func_type = self.type_manager.types().len();
+		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
+		self.functions.function(func_type);
+		let mut func = Function::new(vec![]);
+		func.instruction(&Instruction::LocalGet(0)); // Node
+		func.instruction(&Instruction::StructGet {
+			struct_type_index: self.type_manager.node_type,
+			field_index: 1, // data field
+		});
+		// Cast to i64box and extract value
+		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
+		func.instruction(&Instruction::StructGet {
+			struct_type_index: self.type_manager.i64_box_type,
+			field_index: 0, // value field in i64box
+		});
+		func.instruction(&Instruction::End);
+		self.code.function(&func);
+		let idx = self.register_func("get_int_value");
+		self.exports.export("get_int_value", ExportKind::Func, idx);
 	}
 
 	/// Emit math helper functions (i64_pow, etc.)
