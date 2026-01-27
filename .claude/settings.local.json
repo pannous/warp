@@ -23,9 +23,7 @@
       "Bash(git commit:*)",
       "Bash(cat:*)",
       "Bash(./test.sh:*)",
-      "Bash(grep:*)",
-      "Bash(git checkout:*)",
-      "Bash(git merge:*)"
+      "Bash(grep:*)"
     ]
   },
   "hooks": {

@@ -212,36 +212,17 @@ impl WaspParser {
 				had_newline = true;
 				continue;
 			}
-			// /* block comment */ with support for nested comments
+			// /* block comment */
 			if c1 == '/' && c2 == '*' {
 				self.advance_by(2);
 				let mut block = String::new();
-				let mut depth = 1; // Track nesting depth
-				while self.current_char() != '\0' && depth > 0 {
-					let curr = self.current_char();
-					let next = self.peek_char(1);
-
-					// Check for nested comment start /*
-					if curr == '/' && next == '*' {
-						depth += 1;
-						block.push(curr);
-						block.push(next);
+				while self.current_char() != '\0' {
+					if self.current_char() == '*' && self.peek_char(1) == '/' {
 						self.advance_by(2);
-						continue;
+						break;
 					}
-					// Check for comment end */
-					if curr == '*' && next == '/' {
-						depth -= 1;
-						if depth > 0 {
-							// Still inside a nested comment, keep the */
-							block.push(curr);
-							block.push(next);
-						}
-						self.advance_by(2);
-						continue;
-					}
-					if curr == '\n' { had_newline = true; }
-					block.push(curr);
+					if self.current_char() == '\n' { had_newline = true; }
+					block.push(self.current_char());
 					self.advance();
 				}
 				let trimmed = block.trim();
