@@ -70,7 +70,9 @@ What happens is that the WASP compiler emits
 )
 ```
 
-Omiting the general universal Data type node:
+### Unstructured Data: Node
+
+The above example or any object can be expressed in the general universal Data type node:
 ```
 (type $Node (struct 
 	(field $kind i64) 
@@ -95,7 +97,8 @@ pub enum Node {
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 }
 ```
-The Key type ist most important Pair e.g. for html{input(type=text)} … and most AST types
+
+The `Key` type is the most important node and used as Pair e.g. for html{input(type=text)} … and most AST types
 Most other are atoms. Type name as node to allow meta info.
 
 ## Develop
@@ -103,5 +106,6 @@ Most other are atoms. Type name as node to allow meta info.
 
 ## Build & Test
 `cargo test --all`
+[tests](https://github.com/pannous/warp/tree/main/tests)
 
 289 passed, 0 failed, 289 total tested
