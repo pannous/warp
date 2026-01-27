@@ -1,1 +1,460 @@
-  1 passed, 0 failed, 1 total tested
+=== Test Results (nextest) ===
+
+PASSED:
+  ✓ (  1/459) warp extensions::strings::tests::test_str_plus
+  ✓ (  2/459) warp ffi::tests::test_map_c_type_to_valtype
+  ✓ (  3/459) warp extensions::strings::tests::test_char_str_eq
+  ✓ (  4/459) warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ (  5/459) warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ (  6/459) warp ffi_parser::tests::test_parse_void_params
+  ✓ (  7/459) warp ffi_parser::tests::test_parse_two_params
+  ✓ (  8/459) warp ffi::tests::test_extract_function_signature_simple
+  ✓ (  9/459) warp ffi_parser::tests::test_parse_simple_function
+  ✓ ( 10/459) warp ffi_parser::tests::test_parse_int32_return
+  ✓ ( 11/459) warp ffi::tests::test_extract_function_signature_pointer
+  ✓ ( 12/459) warp ffi_parser::tests::test_parse_pointer_param
+  ✓ ( 13/459) warp ffi::tests::test_extract_function_signature_void_return
+  ✓ ( 14/459) warp ffi::tests::test_parse_header_file_math
+  ✓ ( 15/459) warp ffi_parser::tests::test_raylib_functions
+  ✓ ( 16/459) warp function::tests::test_arg
+  ✓ ( 17/459) warp function::tests::test_function_builder
+  ✓ ( 18/459) warp function::tests::test_function_locals
+  ✓ ( 19/459) warp function::tests::test_function_host
+  ✓ ( 20/459) warp function::tests::test_function_registry
+  ✓ ( 21/459) warp ffi_parser::tests::test_parse_system_headers
+  ✓ ( 22/459) warp function::tests::test_signature_format
+  ✓ ( 23/459) warp host::tests::test_host_state
+  ✓ ( 24/459) warp normalize::tests::test_style_swap
+  ✓ ( 25/459) warp wisp_parser::tests::test_wisp_basic_atom_types
+  ✓ ( 26/459) warp function::tests::test_signature_builder
+  ✓ ( 27/459) warp function::tests::test_kind_to_valtype
+  ✓ ( 28/459) warp wisp_parser::tests::test_wisp_cons_dotted_pair
+  ✓ ( 29/459) warp normalize::tests::test_hint_mode
+  ✓ ( 30/459) warp wisp_parser::tests::test_wisp_emit_atoms
+  ✓ ( 31/459) warp wisp_parser::tests::test_wisp_call
+  ✓ ( 32/459) warp wisp_parser::tests::test_wisp_emit_compound
+  ✓ ( 33/459) warp wisp_parser::tests::test_wisp_key_pair
+  ✓ ( 34/459) warp wisp_parser::tests::test_wisp_nested
+  ✓ ( 35/459) warp wisp_parser::tests::test_wisp_roundtrip_sexpr
+  ✓ ( 36/459) warp wisp_parser::tests::test_wisp_list
+  ✓ ( 37/459) warp wisp_parser::tests::test_wisp_meta
+  ✓ ( 38/459) warp wisp_parser::tests::test_wisp_roundtrip_compound
+  ✓ ( 39/459) warp wisp_parser::tests::test_wisp_roundtrip_nested
+  ✓ ( 40/459) warp wisp_parser::tests::test_wisp_sexpr_types
+  ✓ ( 41/459) warp wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
+  ✓ ( 42/459) warp wisp_parser::tests::test_wisp_tag
+  ✓ ( 43/459) warp wisp_parser::tests::test_wisp_roundtrip_atoms
+  ✓ ( 44/459) warp wisp_parser::tests::test_wisp_shorthand_operators
+  ✓ ( 45/459) warp::node_values_test test_values_key
+  ✓ ( 46/459) warp::node_values_test test_values_empty
+  ✓ ( 47/459) warp::node_values_test test_values_list
+  ✓ ( 48/459) warp::node_values_test test_values_number
+  ✓ ( 49/459) warp::node_values_test test_values_meta
+  ✓ ( 50/459) warp::node_values_test test_values_nested_key
+  ✓ ( 51/459) warp::probe_def_syntax probe_parse_add_call
+  ✓ ( 52/459) warp::probe_def_syntax probe_def_syntax
+  ✓ ( 53/459) warp::probe_def_syntax probe_multiple_syntaxes
+  ✓ ( 54/459) warp::probe_increment probe_increment
+  ✓ ( 55/459) warp::probe_operators test_assignment_right_assoc
+  ✓ ( 56/459) warp::probe_operators test_arithmetic_precedence
+  ✓ ( 57/459) warp::probe_operators test_arithmetic_basic
+  ✓ ( 58/459) warp::probe_operators test_comparison
+  ✓ ( 59/459) warp::probe_operators test_comparison_eq
+  ✓ ( 60/459) warp::probe_operators test_hash_index
+  ✓ ( 61/459) warp::probe_operators test_logical_and
+  ✓ ( 62/459) warp::probe_operators test_logical_or
+  ✓ ( 63/459) warp::probe_operators test_mixed_prefix_infix
+  ✓ ( 64/459) warp::probe_operators test_power_right_assoc
+  ✓ ( 65/459) warp::probe_operators test_range
+  ✓ ( 66/459) warp::probe_operators test_prefix_neg
+  ✓ ( 67/459) warp::probe_operators test_unicode_le
+  ✓ ( 68/459) warp::probe_operators test_suffix_square
+  ✓ ( 69/459) warp::probe_operators test_unicode_mul
+  ✓ ( 70/459) warp::probe_precedence test_key_operators
+  ✓ ( 71/459) warp::probe_precedence probe_fib_parsing
+  ✓ ( 72/459) warp::probe_precedence test_key_equality
+  ✓ ( 73/459) warp::probe_def_syntax probe_dollar_param
+  ✓ ( 74/459) warp::probe_def_syntax probe_def_block_syntax
+  ✓ ( 75/459) warp::probe_precedence test_precedence
+  ✓ ( 76/459) warp::probe_def_syntax probe_test2_check
+  ✓ ( 77/459) warp::probe_precedence test_type_annotation_block_with_assignment
+  ✓ ( 78/459) warp::probe_precedence test_type_annotation_with_block
+  ✓ ( 79/459) warp::probe_def_syntax probe_def_add
+  ✓ ( 80/459) warp normalize::tests::test_hint_position
+  ✓ ( 81/459) warp::probe_index_loop test_simple_index_assign
+  ✓ ( 82/459) warp::probe_index_loop test_index_assign_return_counter
+  ✓ ( 83/459) warp::probe_increment probe_while_execution
+  ✓ ( 84/459) warp::probe_index_loop test_index_assign_25_elements
+  ✓ ( 85/459) warp::probe_index_loop test_index_assign_with_variable
+  ✓ ( 86/459) warp::probe_index_loop test_index_assign_in_while_with_increment
+  ✓ ( 87/459) warp::test_angle test_smart_types
+  ✓ ( 88/459) warp::test_all_samples test_parse_all_samples
+  ✓ ( 89/459) warp::probe_index_loop test_index_assign_in_while_loop
+  ✓ ( 90/459) warp::probe_type test_type_number
+  ✓ ( 91/459) warp::probe_type test_type_symbol
+  ✓ ( 92/459) warp::test_asts test_ast
+  ✓ ( 93/459) warp::probe_type test_type_variable
+  ✓ ( 94/459) warp::test_blocks test_indent_as_block
+  ✓ ( 95/459) warp::test_blocks test_group_cascade2
+  ✓ ( 96/459) warp::test_blocks test_group_cascade1
+  ✓ ( 97/459) warp::test_blocks test_group_cascade
+  ✓ ( 98/459) warp::probe_type test_type_float
+  ✓ ( 99/459) warp::test_comments test_comment_metadata
+  ✓ (100/459) warp::test_comments test_block_comments
+  ✓ (101/459) warp::test_comments test_comment_with_metadata_accessor
+  ✓ (102/459) warp::test_comments test_comments_in_html_structure
+  ✓ (103/459) warp::test_comments test_inline_comments
+  ✓ (104/459) warp::test_comments test_line_comments
+  ✓ (105/459) warp::test_data test_node_data
+  ✓ (106/459) warp::probe_type test_type_string
+  ✓ (107/459) warp::test_data test_node_data_clone
+  ✓ (108/459) warp::test_data test_node_data_equality
+  ✓ (109/459) warp::test_data test_node_data_metadata
+  ✓ (110/459) warp::test_data test_node_data_type_mismatch
+  ✓ (111/459) warp::test_data test_node_data_various_types
+  ✓ (112/459) warp::test_emitter test_optimizer_graph_generation
+  ✓ (113/459) warp::test_ffi test_c_type_mapping
+  ✓ (114/459) warp::test_emitter test_compact_int
+  ✓ (115/459) warp::test_emitter test_compact_float
+  ✓ (116/459) warp::test_emitter test_tools_available
+  ✓ (117/459) warp::test_ffi test_ffi_cos_works
+  ✓ (118/459) warp::test_ffi test_ffi_curl_discovery
+  ✓ (119/459) warp::test_emitter test_compact_empty
+  ✓ (120/459) warp::test_blocks test_matrix_comma_index
+  ✓ (121/459) warp::test_ffi test_ffi_atof
+  ✓ (122/459) warp::test_ffi test_ffi_fmin_wasp_file
+  ✓ (123/459) warp::probe_operators test_division_type_upgrade
+  ✓ (124/459) warp::test_ffi test_ffi_generic_discovery
+  ✓ (125/459) warp::test_ffi test_ffi_header_parser
+  ✓ (126/459) warp::test_ffi test_ffi_import_pattern
+  ✓ (127/459) warp::test_ffi test_ffi_fabs
+  ✓ (128/459) warp::test_ffi test_ffi_png_discovery
+  ✓ (129/459) warp::test_ffi test_ffi_fabs_from_m
+  ✓ (130/459) warp::test_ffi test_ffi_raylib_discovery
+  ✓ (131/459) warp::test_ffi test_ffi_fmod
+  ✓ (132/459) warp::test_ffi test_ffi_fmax
+  ✓ (133/459) warp::test_ffi test_ffi_sqlite_discovery
+  ✓ (134/459) warp::test_ffi test_ffi_cos
+  ✓ (135/459) warp::test_angle test_call
+  ✓ (136/459) warp::test_ffi test_ffi_sqrt_works
+  ✓ (137/459) warp::test_ffi test_ffi_sin_pi_half
+  ✓ (138/459) warp::test_ffi test_ffi_sin_works
+  ✓ (139/459) warp::test_ffi test_ffi_zlib_discovery
+  ✓ (140/459) warp::test_ffi test_ffi_fmin
+  ✓ (141/459) warp::test_ffi test_ffi_nested_calls
+  ✓ (142/459) warp::test_ffi test_import_from_pattern_parse
+  ✓ (143/459) warp::test_ffi test_ffi_strncmp
+  ✓ (144/459) warp::test_ffi test_ffi_sin
+  ✓ (145/459) warp::test_ffi test_ffi_tan
+  ✓ (146/459) warp::test_functions test_fibonacci_auto_typed
+  ✓ (147/459) warp::test_functions test_fibonacci_typed2
+  ✓ (148/459) warp::test_ffi test_ffi_strlen
+  ✓ (149/459) warp::test_functions test2def
+  ✓ (150/459) warp::test_functions test_fibonacci_auto_param
+  ✓ (151/459) warp::test_functions test_function_declaration_parse
+  ✓ (152/459) warp::test_ffi test_import_from_pattern_emit
+  ✓ (153/459) warp::test_functions test_graph_params
+  ✓ (154/459) warp::test_functions test_params
+  ✓ (155/459) warp::test_functions test_rename_wasm_function
+  ✓ (156/459) warp::test_functions test_float_return_through_main
+  ✓ (157/459) warp::test_gc_struct test_class_instance_raw
+  ✓ (158/459) warp::test_blocks test_matrix_order
+  ✓ (159/459) warp::test_gc_struct test_gc_object_index_access
+  ✓ (160/459) warp::test_gc_struct test_gc_struct_macro
+  ✓ (161/459) warp::test_gc_struct test_raw_person_struct
+  ✓ (162/459) warp::test_functions test_function_definitions
+  ✓ (163/459) warp::test_angle test_if_call_zero
+  ✓ (164/459) warp::test_functions test_variable_reassignment
+  ✓ (165/459) warp::test_globals test_global_reassignment
+  ✓ (166/459) warp::test_globals test_global_int_simple
+  ✓ (167/459) warp::test_globals test_global_int_multiple
+  ✓ (168/459) warp::test_host test_emit_host_imports
+  ✓ (169/459) warp::test_host test_emitter_with_host_imports_valid
+  ✓ (170/459) warp::test_json test_block_node_json
+  ✓ (171/459) warp::test_globals test_global_with_expression
+  ✓ (172/459) warp::test_json test_data_node_json
+  ✓ (173/459) warp::test_json test_complex_node_json
+  ✓ (174/459) warp::test_json test_implicit_html_structure
+  ✓ (175/459) warp::test_json test_nested_node_json
+  ✓ (176/459) warp::test_json test_node_eq_json_curly_lists
+  ✓ (177/459) warp::test_host test_host_run_import
+  ✓ (178/459) warp::test_json test_node_eq_json_keys
+  ✓ (179/459) warp::test_functions test_fibonacci_typed
+  ✓ (180/459) warp::test_json test_node_eq_json_meta
+  ✓ (181/459) warp::test_json test_node_eq_json_lists
+  ✓ (182/459) warp::test_json test_node_eq_json_primitives
+  ✓ (183/459) warp::test_json test_node_from_json
+  ✓ (184/459) warp::test_json test_node_neq_json
+  ✓ (185/459) warp::test_host test_host_fetch_import
+  ✓ (186/459) warp::test_json test_simple_values
+  ✓ (187/459) warp::test_json test_node_to_json_compact
+  ✓ (188/459) warp::test_lists test_filter
+  ✓ (189/459) warp::test_kitchensink test_kitchensink_all_node_types
+  ✓ (190/459) warp::test_kitchensink test_kitchensink_wasmtime_execution
+  ✓ (191/459) warp::test_ffi test_ffi_strcmp
+  ✓ (192/459) warp::test_kitchensink test_kitchensink_complex_tree
+  ✓ (193/459) warp::test_lists test_indexed
+  ✓ (194/459) warp::test_globals test_global_float_with_pi
+  ✓ (195/459) warp::test_functions test_default_params
+  ✓ (196/459) warp::test_angle test_logic_precedence
+  ✓ (197/459) warp::test_lists test_index
+  ✓ (198/459) warp::test_math test_abs_alias
+  ✓ (199/459) warp::test_math test_arithmetic
+  ✓ (200/459) warp::test_math test_harder_arithmetic
+  ✓ (201/459) warp::test_math test_logarithm_in_runtime
+  ✓ (202/459) warp::test_math test_global_with_pi
+  ✓ (203/459) warp::test_math test_power
+  ✓ (204/459) warp::test_lists test_index_offset
+  ✓ (205/459) warp::test_math test_runtime_equality_autocast
+  ✓ (206/459) warp::test_math test_compound_assignment
+  ✓ (207/459) warp::test_math test_modulo
+  ✓ (208/459) warp::test_math test_if_then_else
+  ✓ (209/459) warp::test_math test_ternary_with_comparison
+  ✓ (210/459) warp::test_math test_variable_minus
+  ✓ (211/459) warp::test_meta test_parent
+  ✓ (212/459) warp::test_math test_simple_variables
+  ✓ (213/459) warp::test_module_cache test_module_cache_reuse
+  ✓ (214/459) warp::test_module_cache test_different_modules_not_cached
+  ✓ (215/459) warp::test_node_operators test_chaining
+  ✓ (216/459) warp::test_node test_mark_as_map
+  ✓ (217/459) warp::test_node_operators test_complex_expression
+  ✓ (218/459) warp::test_node_operators test_mixed_types
+  ✓ (219/459) warp::test_node_operators test_node_add_basic
+  ✓ (220/459) warp::test_node_operators test_node_add_booleans
+  ✓ (221/459) warp::test_node_operators test_node_add_empty
+  ✓ (222/459) warp::test_node_operators test_node_div_basic
+  ✓ (223/459) warp::test_node_operators test_node_div_booleans
+  ✓ (224/459) warp::test_node_operators test_node_meta_preservation
+  ✓ (225/459) warp::test_node_operators test_node_mul_basic
+  ✓ (226/459) warp::test_node_operators test_node_mul_booleans
+  ✓ (227/459) warp::test_node_operators test_node_mul_empty
+  ✓ (228/459) warp::test_node_operators test_node_sub_basic
+  ✓ (229/459) warp::test_node_operators test_node_sub_booleans
+  ✓ (230/459) warp::test_node_operators test_operations_with_primitives_mixed
+  ✓ (231/459) warp::test_math test_sqrt_alias
+  ✓ (233/459) warp::test_math test_runtime_equality
+  ✓ (236/459) warp::test_math test_while_loop
+  ✓ (238/459) warp::test_number test_number
+  ✓ (239/459) warp::test_number test_number_mix
+  ✓ (240/459) warp::test_operators test_add_boxed_list_item
+  ✓ (241/459) warp::test_number test_number_floats
+  ✓ (242/459) warp::test_operators test_add_item_list
+  ✓ (243/459) warp::test_operators test_add_lists
+  ✓ (244/459) warp::test_operators test_add_meta_on_right
+  ✓ (245/459) warp::test_operators test_add_list_item_explicit
+  ✓ (246/459) warp::test_operators test_add_with_meta
+  ✓ (247/459) warp::test_operators test_add_text
+  ✓ (248/459) warp::test_operators test_add_numbers
+  ✓ (249/459) warp::test_operators test_for_each
+  ✓ (251/459) warp::test_operators test_while_true_forever
+  ✓ (252/459) warp::test_parser parse_list_via_separator3
+  ✓ (253/459) warp::test_parser parse_list_via_separator
+  ✓ (254/459) warp::test_operators test_key
+  ✓ (255/459) warp::test_parser parse_list_via_separator_semicolon
+  ✓ (256/459) warp::test_parser parse_list_via_separator_space
+  ✓ (257/459) warp::test_parser test_colon_object
+  ✓ (258/459) warp::test_parser test_colon_lists
+  ✓ (259/459) warp::test_parser test_bit_field
+  ✓ (260/459) warp::test_parser test_expected_structure
+  ✓ (261/459) warp::test_parser test_eval3
+  ✓ (262/459) warp::test_parser test_empty
+  ✓ (263/459) warp::test_parser test_cpp
+  ✓ (264/459) warp::test_parser test_fizzbuzz_nested_ternary
+  ✓ (265/459) warp::test_parser test_nested_ternary_depth2
+  ✓ (266/459) warp::test_parser test_nested_ternary_multiline
+  ✓ (267/459) warp::test_parser test_group_cascade0
+  ✓ (268/459) warp::test_parser test_key_object_set
+  ✓ (269/459) warp::test_parser test_parse_function
+  ✓ (270/459) warp::test_parser test_newline_groups
+  ✓ (271/459) warp::test_parser test_parse_complex
+  ✓ (272/459) warp::test_parser test_parse_key_value
+  ✓ (273/459) warp::test_parser test_parse_list
+  ✓ (274/459) warp::test_parser test_parse_multiple_values
+  ✓ (275/459) warp::test_parser test_parse_named_block
+  ✓ (276/459) warp::test_parser test_parse_number
+  ✓ (277/459) warp::test_parser test_parser_serialize
+  ✓ (278/459) warp::test_parser test_parse_symbol
+  ✓ (279/459) warp::test_parser test_parse_string
+  ✓ (280/459) warp::test_parser test_roundtrip
+  ✓ (281/459) warp::test_parser test_sample
+  ✓ (282/459) warp::test_parser test_semicolon_groups
+  ✓ (283/459) warp::test_parser test_use
+  ✓ (284/459) warp::test_parser test_simple_separators
+  ✓ (285/459) warp::test_person_struct test_person_struct_roundtrip
+  ✓ (286/459) warp::test_samples test_gcd
+  ✓ (287/459) warp::test_samples test_ackermann
+  ✓ (288/459) warp::test_samples test_factorial
+  ✓ (289/459) warp::test_samples test_fibonacci
+  ✓ (290/459) warp::test_samples test_collatz
+  ✓ (291/459) warp::test_lists test_root_list_strings
+  ✓ (292/459) warp::test_string test_first_char
+  ✓ (293/459) warp::test_string test_interpolation
+  ✓ (294/459) warp::test_string test_map
+  ✓ (295/459) warp::test_samples test_primes
+  ✓ (296/459) warp::test_math test_if_block_syntax
+  ✓ (297/459) warp::test_samples test_power
+  ✓ (298/459) warp::test_string test_primitive_hello
+  ✓ (299/459) warp::test_samples test_sum
+  ✓ (300/459) warp::test_string test_reverse
+  ✓ (301/459) warp::test_string test_str_string
+  ✓ (302/459) warp::test_string test_primitive_int
+  ✓ (303/459) warp::test_string test_string_at
+  ✓ (304/459) warp::test_string test_primitive_char
+  ✓ (305/459) warp::test_string test_string_from
+  ✓ (306/459) warp::test_string test_string_basics
+  ✓ (307/459) warp::test_string test_primitive_float
+  ✓ (308/459) warp::test_string test_string_set_at
+  ✓ (309/459) warp::test_string test_string_substring
+  ✓ (310/459) warp::test_string test_primitive_string
+  ✓ (311/459) warp::test_string test_string_substring_from
+  ✓ (312/459) warp::test_node_operators test_type_mismatch_div
+  ✓ (313/459) warp::test_node_operators test_type_mismatch_sub
+  ✓ (314/459) warp::test_node_operators test_type_mismatch_add
+  ✓ (315/459) warp::test_string test_string_concatenation
+  ✓ (316/459) warp::test_node_operators test_type_mismatch_mul
+  ✓ (317/459) warp::test_struct_types test_class_instance2
+  ✓ (318/459) warp::test_struct_types test_class_instance_explicit
+  ✓ (319/459) warp::test_struct_types test_class_instance_raw
+  ✓ (320/459) warp::test_struct_types test_class_instance_magic_roundtrip
+  ✓ (321/459) warp::test_struct_types test_magic_object_roundtrip
+  ✓ (322/459) warp::test_samples test_quadratic
+  ✓ (323/459) warp::test_struct_types test_debug_format
+  ✓ (324/459) warp::test_functions test_function_declaration
+  ✓ (325/459) warp::test_struct_types test_class_definition
+  ✓ (326/459) warp::test_struct_types test_symbol
+  ✓ (327/459) warp::test_struct_types test_text
+  ✓ (328/459) warp::test_todo test_lambda_simple
+  ✓ (329/459) warp::test_lists test_root_lists
+  ✓ (330/459) warp::test_todo test_if_then_else
+  ✓ (331/459) warp::test_todo test_param_reference
+  ✓ (332/459) warp::test_todo test_lambda_with_multiply
+  ✓ (333/459) warp::test_todo test_sqrt_arithmetic
+  ✓ (334/459) warp::test_struct_types test_magic_object_mismatch
+  ✓ (335/459) warp::test_todo test_type_annotated
+  ✓ (336/459) warp::test_todo test_lambda_comparison
+  ✓ (337/459) warp::test_todo test_index_assign_in_loop
+  ✓ (338/459) warp::test_type_upgrading test_global_with_float
+  ✓ (339/459) warp::test_todo test_list_index_after_puts
+  ✓ (340/459) warp::test_type_upgrading test_global_with_reference
+  ✓ (341/459) warp::test_type_upgrading test_float_plus_int_type_upgrading
+  ✓ (342/459) warp::test_types test_bad_type
+  ✓ (343/459) warp::test_type_upgrading test_int_plus_pi_type_upgrading
+  ✓ (344/459) warp::test_struct_types test_codepoint
+  ✓ (346/459) warp::test_types test_deep_type
+  ✓ (347/459) warp::test_types test_type_confusion
+  ✓ (348/459) warp::test_types test_type_registry
+  ✓ (349/459) warp::test_types test_type_node
+  ✓ (350/459) warp::test_types test_type_registry_from_node
+  ✓ (351/459) warp::test_todo test_type_equivalence
+  ✓ (352/459) warp::test_types test_type_synonyms
+  ✓ (353/459) warp::test_types test_types_simple
+  ✓ (354/459) warp::test_types test_types_simple2
+  ✓ (355/459) warp::test_types test_user_type_wasm_emission
+  ✓ (356/459) warp::test_number test_hex
+  ✓ (357/459) warp::test_wasi test_wasi_putf
+  ✓ (358/459) warp::test_wasi test_fd_write_raw
+  ✓ (359/459) warp::test_wasi test_fd_write
+  ✓ (360/459) warp::test_wasm test_emitter
+  ✓ (361/459) warp::test_wasm test_logarithm
+  ✓ (362/459) warp::test_wasm test_merge_wabt
+  ✓ (363/459) warp::test_wasm test_dom
+  ✓ (364/459) warp::test_wasm test_const_return
+  ✓ (365/459) warp::test_wasm test_root
+  ✓ (366/459) warp::test_wasm test_old_random_bugs
+  ✓ (368/459) warp::test_wasi test_wasi_puti
+  ✓ (369/459) warp::test_wasm test_wasm_while
+  ✓ (370/459) warp::test_wasm_emitter test_emit_for_node_tree_shaking
+  ✓ (371/459) warp::test_wasm_emitter test_emit_gc_types
+  ✓ (372/459) warp::test_wasm_emitter test_function_usage_tracking
+  ✓ (373/459) warp::test_todo test_type
+  ✓ (374/459) warp::test_wasm_emitter test_generate_wasm
+  ✓ (375/459) warp::test_wasm_emitter test_node_kind_enum_abi
+  ✓ (376/459) warp::test_types test_auto_type
+  ✓ (377/459) warp::test_wasm_reader test_node_serialization_workflow_design
+  ✓ (378/459) warp::test_wasm_reader test_create_wasm_gc_nodes_from_host_concept
+  ✓ (379/459) warp::test_types test_cast_as
+  ✓ (380/459) warp::test_wasp_format test_empty_structures
+  ✓ (381/459) warp::test_wasp_format test_function_syntax
+  ✓ (382/459) warp::test_wasp_format test_list_operations
+  ✓ (383/459) warp::test_wasp_format test_mixed_syntax
+  ✓ (384/459) warp::test_wasp_format test_nested_structures
+  ✓ (385/459) warp::test_wasp_format test_wasp_to_json
+  ✓ (386/459) warp::test_wasp_format test_wasp_roundtrip
+  ✓ (387/459) warp::test_wasm_reader test_wasm_gc_node_reading_concept
+  ✓ (388/459) warp::test_wasp_position test_multiline_structure
+  ✓ (389/459) warp::test_wasp_position test_column_tracking
+  ✓ (390/459) warp::test_wasp_position test_nested_position_tracking
+  ✓ (391/459) warp::test_wasp_position test_position_tracking
+  ✓ (392/459) warp::test_wasp_position test_position_in_json_output
+  ✓ (393/459) warp::test_wasp_position test_position_with_comments
+  ✓ (394/459) warp::test_wit test_timeout_protection
+  ✓ (395/459) warp::test_type_upgrading test_float_operations
+  ✓ (396/459) warp::test_xml test_boolean_attribute
+  ✓ (397/459) warp::test_xml test_cdata
+  ✓ (398/459) warp::test_xml test_complex_xml_document
+  ✓ (399/459) warp::test_xml test_nested_xml
+  ✓ (400/459) warp::test_xml test_doctype
+  ✓ (401/459) warp::test_xml test_real_world_xml
+  ✓ (402/459) warp::test_xml test_self_closing_tag
+  ✓ (403/459) warp::test_xml test_simple_xml_tag
+  ✓ (404/459) warp::test_xml test_to_xml_boolean_attribute
+  ✓ (405/459) warp::test_xml test_to_xml_nested
+  ✓ (406/459) warp::test_xml test_to_xml_self_closing
+  ✓ (407/459) warp::test_xml test_to_xml_simple
+  ✓ (408/459) warp::test_xml test_to_xml_with_attributes
+  ✓ (409/459) warp::test_xml test_xml_comments
+  ✓ (410/459) warp::test_xml test_xml_declaration
+  ✓ (411/459) warp::test_types test_auto_type_nan
+  ✓ (412/459) warp::test_xml test_xml_with_attributes
+  ✓ (413/459) warp::test_xml test_xml_roundtrip
+  ✓ (414/459) warp::test_xml test_xml_to_json
+  ✓ (415/459) warp::wasm_optimizer_test test_no_optimization
+  ✓ (416/459) warp::test_todo test_array_length
+  ✓ (417/459) warp::bin/warp extensions::strings::tests::test_char_str_eq
+  ✓ (418/459) warp::test_wasm test_round_floor_ceiling
+  ✓ (419/459) warp::bin/warp extensions::strings::tests::test_str_plus
+  ✓ (420/459) warp::bin/warp ffi::tests::test_extract_function_signature_multi_param
+  ✓ (421/459) warp::bin/warp ffi::tests::test_extract_function_signature_pointer
+  ✓ (422/459) warp::bin/warp ffi::tests::test_extract_function_signature_simple
+  ✓ (423/459) warp::bin/warp ffi::tests::test_extract_function_signature_void_return
+  ✓ (424/459) warp::bin/warp ffi::tests::test_header_sig_to_ffi_sig
+  ✓ (425/459) warp::bin/warp ffi::tests::test_map_c_type_to_valtype
+  ✓ (426/459) warp::test_wasm_emitter test_wasm_roundtrip
+  ✓ (427/459) warp::bin/warp ffi_parser::tests::test_parse_int32_return
+  ✓ (428/459) warp::bin/warp ffi_parser::tests::test_parse_pointer_param
+  ✓ (429/459) warp::bin/warp ffi::tests::test_parse_header_file_math
+  ✓ (430/459) warp::bin/warp ffi_parser::tests::test_parse_simple_function
+  ✓ (431/459) warp::bin/warp ffi_parser::tests::test_parse_system_headers
+  ✓ (432/459) warp::bin/warp ffi_parser::tests::test_parse_two_params
+  ✓ (433/459) warp::bin/warp ffi_parser::tests::test_parse_void_params
+  ✓ (434/459) warp::bin/warp function::tests::test_arg
+  ✓ (435/459) warp::bin/warp function::tests::test_function_builder
+  ✓ (436/459) warp::bin/warp function::tests::test_function_host
+  ✓ (437/459) warp::bin/warp ffi_parser::tests::test_raylib_functions
+  ✓ (438/459) warp::bin/warp function::tests::test_function_locals
+  ✓ (439/459) warp::bin/warp function::tests::test_function_registry
+  ✓ (440/459) warp::bin/warp function::tests::test_kind_to_valtype
+  ✓ (441/459) warp::bin/warp function::tests::test_signature_format
+  ✓ (442/459) warp::bin/warp function::tests::test_signature_builder
+  ✓ (443/459) warp::bin/warp host::tests::test_host_state
+  ✓ (444/459) warp::test_wasm_emitter test_wasm_roundtrip_via_is
+  ✓ (445/459) warp::bin/warp normalize::tests::test_hint_mode
+  ✓ (446/459) warp::bin/warp normalize::tests::test_style_swap
+  ✓ (447/459) warp::test_types test_constructor_cast
+  ✓ (448/459) warp::bin/warp normalize::tests::test_hint_position
+  ✓ (449/459) warp::test_web test_html_wasp
+  ✓ (450/459) warp::wasm_optimizer_test test_tools_availability
+  ✓ (451/459) warp::wasm_optimizer_test test_library_optimization
+  ✓ (452/459) warp::wasm_optimizer_test test_executable_tree_shaking
+  ✓ (453/459) warp::test_wasm test_range
+  ✓ (454/459) warp::test_string test_string_index
+  ✓ (455/459) warp::test_web test_fetch
+  ✓ (456/459) warp::test_wasm test_square
+  ✓ (457/459) warp::test_types test_emit_cast
+  ✓ (458/459) warp::test_string test_string_index_by_variable
+  ✓ (459/459) warp::test_string test_string_indices
+
+FAILED:
+
+SUMMARY:
+  0 ignored, 452 passed, 0 failed, 452 total tested
