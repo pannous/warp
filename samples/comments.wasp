@@ -21,16 +21,8 @@ person: {
     /* Age in years */
     age: 30
 }
-def compute(x, y) {
-    // Simple addition
-    #return 
-    x + y
-}
-
 
 // Inline comments work too
-a:=1
-b:=2
 result = compute(a, b)  // process inputs
 
 // Nested block comments are supported

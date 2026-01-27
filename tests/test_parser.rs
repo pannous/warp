@@ -289,9 +289,9 @@ fn test_nested_ternary_multiline() {
 	// Multiline nested ternary - continuation lines start with :
 	// NOTE: This currently parses with errors due to leading : on continuation lines
 	// being interpreted incorrectly. This test documents the current behavior.
-	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz" \
-                 : n % 3 == 0 ? "Fizz" \
-                 : n % 5 == 0 ? "Buzz" \
+	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz"
+                 : n % 3 == 0 ? "Fizz"
+                 : n % 5 == 0 ? "Buzz"
                  : n"#;
 	let result = parse(code);
 	println!("multiline ternary parsed: {:?}", result);
