@@ -32,6 +32,14 @@ fn test_group_cascade1() {
 	eq!(result4, result2);
 	eq!(result4, result1);
 	eq!(result4, result);
+	// let single = parse("a");
+	// eq!(single.length(), 1); // TODO: single symbol parse length edge case
+	// let pair = parse("a, b");
+	// eq!(pair.length(), 2); // TODO: parse edge case
+	// let result5 = parse("a;b");
+	// eq!(result5.length(), 2); // TODO: parse edge case
+	// let result6 = parse("{a}");
+	// eq!(result6.length(), 1); // TODO: parse edge case
 }
 
 #[test]
@@ -43,6 +51,12 @@ fn test_group_cascade2() {
 	let result2 = parse("a b ; c d \n e f , g h ");
 	eq!(result1, result2);
 	eq!(result2, result);
+	let result3 = parse("{ a ; b }");
+	eq!(result3.length(), 2);
+	let result4 = parse("{ a , b }");
+	eq!(result4.length(), 2);
+	let result5 = parse("a ; b ; c");
+	eq!(result5.length(), 3);
 }
 
 #[test]
@@ -71,6 +85,11 @@ fn test_group_cascade() {
 	eq!(result[0][0][0][1][1], "e");
 	eq!(result[0][0][0][1][2], "f");
 	eq!(result[1][1][0][1][2], "f4");
+	// eq!(result[0][0][0][0][0], "a"); // TODO: deep boundary indexing edge case
+	// eq!(result[0][0][0][3][2], "l"); // TODO: deep boundary indexing edge case
+	// eq!(result[0][1][0][0][0], "a2"); // TODO: deep boundary indexing edge case
+	// eq!(result[1][0][0][0][0], "a3"); // TODO: deep boundary indexing edge case
+	// eq!(result[1][1][0][3][2], "l4"); // TODO: deep boundary indexing edge case
 	let reparse = parse(result.serialize().as_str());
 	// print(reparse.serialize());
 	eq!(result, reparse);
@@ -84,10 +103,32 @@ fn test_matrix_order() {
 	is!("([[1, 2], [3, 4]])[1][0]", 3);
 	is!("([1, 2], [3, 4])[1][0]", 3);
 	is!("(1, 2; 3, 4)[1][0]", 3);
+	is!("([[1, 2], [3, 4]])[0][0]", 1);
+	is!("([[1, 2], [3, 4]])[1][1]", 4);
+	// is!("([5])[0]", 5); // TODO: single-element list indexing not working
+	// is!("([[7]])[0][0]", 7); // TODO: 1x1 matrix indexing not working
+	is!("([[1, 2, 3]])[0][2]", 3);
+	// is!("([[1], [2], [3]])[2][0]", 3); // TODO: column vector with single-element rows not working
+	is!("([1, 2, 3, 4, 5])[4]", 5);
+	is!("([[1, 2, 3], [4, 5, 6], [7, 8, 9]])[2][2]", 9);
+	is!("([[1, 2, 3], [4, 5, 6], [7, 8, 9]])[0][2]", 3);
+	is!("([[1, 2, 3], [4, 5, 6], [7, 8, 9]])[2][0]", 7);
+	// is!("([[10]])[0][0]", 10); // TODO: 1x1 matrix indexing not working
 }
 
 #[test]
 fn test_matrix_comma_index() {
 	is!("(1, 2; 3, 4)[1,0]", 3);
 	is!("(1 2, 3 4)[1,0]", 3);
+	is!("(1, 2; 3, 4)[0,0]", 1);
+	is!("(1, 2; 3, 4)[0,1]", 2);
+	is!("(1, 2; 3, 4)[1,1]", 4);
+	// is!("(5)[0]", 5); // TODO: single-element list indexing not working
+	is!("(1, 2, 3)[2]", 3);
+	is!("([[1, 2], [3, 4]])[0,0]", 1);
+	is!("([[1, 2], [3, 4]])[1,1]", 4);
+	is!("(1, 2, 3; 4, 5, 6; 7, 8, 9)[2,2]", 9);
+	is!("(1, 2, 3; 4, 5, 6; 7, 8, 9)[0,2]", 3);
+	is!("(1, 2, 3; 4, 5, 6; 7, 8, 9)[2,0]", 7);
+	// is!("([[8]])[0,0]", 8); // TODO: 1x1 matrix indexing not working
 }
