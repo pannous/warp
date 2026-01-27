@@ -119,3 +119,29 @@ fn test_comments2() {
 	assert!(result[0].length() == 4);
 	assert!(result[1].length() == 3);
 }
+
+#[test]
+fn test_nested_block_comments() {
+	let wasp = r#"
+        /* outer comment
+           /* inner comment */
+           still in outer */
+        value: 42
+    "#;
+
+	let node = WaspParser::parse(wasp);
+	println!("Parsed with nested block comment: {:?}", node);
+
+	// Should successfully parse the value after the nested comment
+	if let Node::List(items, _, _) = node {
+		eq!(items.len(), 1);
+		// Verify we got the value node
+		assert!(items[0].to_string().contains("42"));
+		// Verify comment is attached including the nested parts
+		let comment = items[0]["comment"].to_string();
+		println!("Comment: {}", comment);
+		assert!(comment.contains("outer comment"));
+		assert!(comment.contains("inner comment"));
+		assert!(comment.contains("still in outer"));
+	}
+}

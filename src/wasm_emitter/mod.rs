@@ -2120,6 +2120,19 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Check for return statement: [Symbol("return"), value]
+				if items.len() == 2 {
+					if let Node::Symbol(keyword) = items[0].drop_meta() {
+						if keyword == "return" {
+							// Emit the return value
+							self.emit_numeric_value(func, &items[1]);
+							func.instruction(&Instruction::Return);
+							// After return, emit unreachable to satisfy block types
+							func.instruction(&Instruction::I64Const(0));
+							return;
+						}
+					}
+				}
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {

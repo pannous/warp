@@ -40,6 +40,20 @@ impl WasmGcEmitter {
 			}
 		}
 
+		// Check for return statement: return value
+		if items.len() == 2 {
+			if let Node::Symbol(s) = items[0].drop_meta() {
+				if s == "return" {
+					// Emit the return value and return instruction
+					self.emit_node_instructions(func, &items[1]);
+					func.instruction(&Instruction::Return);
+					// Unreachable after return, push dummy value
+					func.instruction(&Instruction::Unreachable);
+					return;
+				}
+			}
+		}
+
 		// Check for WASI calls: puts, puti, putl, putf, fd_write
 		if items.len() >= 2 && self.config.emit_wasi_imports {
 			if let Node::Symbol(s) = items[0].drop_meta() {
