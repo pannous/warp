@@ -1,0 +1,91 @@
+# Claude Conversation (65af17e5)
+
+## 👤 Human
+
+How can I tell my IDE to not format lines which are perfectly beautiful? Not split them into multiple lines? 
+
+    is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
+
+---
+
+## 🤖 Assistant
+
+For Rust, use the `#[rustfmt::skip]` attribute:
+
+```rust
+#[rustfmt::skip]
+is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
+```
+
+Or for a block of statements:
+
+```rust
+#[rustfmt::skip]
+{
+    is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
+    is!("another long line you want to keep", "result");
+}
+```
+
+For RustRover specifically, you can also use formatter control comments:
+
+```rust
+// @formatter:off
+is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
+// @formatter:on
+```
+
+The `#[rustfmt::skip]` approach is preferred since it works with both the IDE and `cargo fmt`.
+
+---
+
+## 👤 Human
+
+No, I mean, how can I put into the settings that this is a good line?
+
+---
+
+## 🤖 Assistant
+
+Create or edit `rustfmt.toml` in your project root:
+
+```toml
+max_width = 120
+```
+
+Or whatever width accommodates your long lines (default is 100).
+
+For RustRover's own formatter: **Settings → Editor → Code Style → Rust → Wrapping and Braces** → set "Hard wrap at" to a higher value.
+
+---
+
+## 👤 Human
+
+set max_width to 120 in rustfmt.toml
+
+---
+
+## 🤖 Assistant
+
+→ `Glob`: `rustfmt.toml`
+
+---
+
+## 🤖 Assistant
+
+→ `Read`: `/Users/me/dev/angles/warp/rustfmt.toml`
+
+---
+
+## 🤖 Assistant
+
+→ `Edit`: `/Users/me/dev/angles/warp/rustfmt.toml`
+
+---
+
+## 🤖 Assistant
+
+Done. Lines up to 120 characters will now be preserved by `cargo fmt`.
+
+---
+

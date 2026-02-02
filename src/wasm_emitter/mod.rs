@@ -40,6 +40,13 @@ use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArithmeticWrap {
+	None,
+	Int,
+	Float,
+}
+
 
 
 /// Compact 3-field Node struct for WASM GC:
@@ -850,6 +857,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
 	}
 
+
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
 		let node = node.drop_meta();
@@ -939,235 +947,301 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// Determine if we need float operations (type upgrading)
-		// Division always uses float to preserve precision: 1/2 = 0.5, not 0
-		let use_float = self.get_type(left).is_float() || self.get_type(right).is_float() || *op == Op::Div;
+		let use_float = self.should_use_float(left, right, op);
 
-		// Handle variable definition/assignment specially
-		if *op == Op::Define || *op == Op::Assign {
-			// Check for string assignment in WASI mode - skip emit (tracked in Local)
-			if self.config.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
-				// String data stored in Local's data_pointer/data_length, just emit 0
-				func.instruction(&Instruction::I64Const(0));
+		if self.emit_assign_or_define(func, left, op, right, use_float) {
+			return;
+		}
+		if self.emit_inc_dec(func, left, op) {
+			return;
+		}
+		if self.emit_compound_assign(func, left, op, right, use_float) {
+			return;
+		}
+
+		let wrap = if use_float {
+			if self.emit_float_truthy_logical(func, left, op, right) {
 				return;
 			}
-			// x:=42 or x=42 → emit value, store to local, return value
+			self.emit_float_binary(func, left, op, right)
+		} else {
+			if self.emit_int_truthy_logical(func, left, op, right) {
+				return;
+			}
+			self.emit_int_binary(func, left, op, right)
+		};
+
+		self.wrap_arithmetic_result(func, wrap);
+	}
+
+	fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
+		// Division always uses float to preserve precision: 1/2 = 0.5, not 0
+		self.get_type(left).is_float() || self.get_type(right).is_float() || *op == Op::Div
+	}
+
+	fn emit_assign_or_define(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+		use_float: bool,
+	) -> bool {
+		if *op != Op::Define && *op != Op::Assign {
+			return false;
+		}
+
+		// Check for string assignment in WASI mode - skip emit (tracked in Local)
+		if self.config.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
+			// String data stored in Local's data_pointer/data_length, just emit 0
+			func.instruction(&Instruction::I64Const(0));
+			return true;
+		}
+
+		// x:=42 or x=42 → emit value, store to local, return value
+		if use_float {
+			self.emit_float_value(func, right);
+		} else {
+			self.emit_numeric_value(func, right);
+		}
+		if let Node::Symbol(name) = left.drop_meta() {
+			if let Some(local) = self.scope.lookup(name) {
+				func.instruction(&Instruction::LocalTee(local.position));
+			} else {
+				panic!("Undefined variable: {}", name);
+			}
+		} else {
+			panic!("Expected symbol in definition, got {:?}", left);
+		}
+		true
+	}
+
+	fn emit_inc_dec(&mut self, func: &mut Function, left: &Node, op: &Op) -> bool {
+		if *op != Op::Inc && *op != Op::Dec {
+			return false;
+		}
+
+		// i++ → i = i + 1 (returns new value)
+		// i-- → i = i - 1 (returns new value)
+		if let Node::Symbol(name) = left.drop_meta() {
+			let local_pos = self.scope
+				.lookup(name)
+				.map(|l| l.position)
+				.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+			// Get current value
+			func.instruction(&Instruction::LocalGet(local_pos));
+			// Add/subtract 1
+			func.instruction(&Instruction::I64Const(1));
+			if *op == Op::Inc {
+				func.instruction(&Instruction::I64Add);
+			} else {
+				func.instruction(&Instruction::I64Sub);
+			}
+			// Store and return new value
+			func.instruction(&Instruction::LocalTee(local_pos));
+			true
+		} else {
+			panic!("Expected symbol for increment/decrement, got {:?}", left);
+		}
+	}
+
+	fn emit_compound_assign(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+		use_float: bool,
+	) -> bool {
+		if !op.is_compound_assign() {
+			return false;
+		}
+
+		// x += y → x = x + y
+		if let Node::Symbol(name) = left.drop_meta() {
+			let local_pos = self.scope
+				.lookup(name)
+				.map(|l| l.position)
+				.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+			let base_op = op.base_op();
+			// Get current value of x
+			func.instruction(&Instruction::LocalGet(local_pos));
+			// Emit y
 			if use_float {
 				self.emit_float_value(func, right);
 			} else {
 				self.emit_numeric_value(func, right);
 			}
-			if let Node::Symbol(name) = left.drop_meta() {
-				if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&Instruction::LocalTee(local.position));
-				} else {
-					panic!("Undefined variable: {}", name);
-				}
+			// Apply base operation
+			if use_float {
+				match base_op {
+					Op::Add => func.instruction(&Instruction::F64Add),
+					Op::Sub => func.instruction(&Instruction::F64Sub),
+					Op::Mul => func.instruction(&Instruction::F64Mul),
+					Op::Div => func.instruction(&Instruction::F64Div),
+					_ => func.instruction(&Instruction::F64Mul), // fallback
+				};
 			} else {
-				panic!("Expected symbol in definition, got {:?}", left);
+				match base_op {
+					Op::Add => func.instruction(&Instruction::I64Add),
+					Op::Sub => func.instruction(&Instruction::I64Sub),
+					Op::Mul => func.instruction(&Instruction::I64Mul),
+					Op::Div => func.instruction(&Instruction::I64DivS),
+					Op::Mod => func.instruction(&Instruction::I64RemS),
+					Op::And => func.instruction(&Instruction::I64And),
+					Op::Or => func.instruction(&Instruction::I64Or),
+					Op::Xor => func.instruction(&Instruction::I64Xor),
+					_ => func.instruction(&Instruction::I64Mul), // fallback
+				};
 			}
-		} else if *op == Op::Inc || *op == Op::Dec {
-			// i++ → i = i + 1 (returns new value)
-			// i-- → i = i - 1 (returns new value)
-			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self.scope
-					.lookup(name)
-					.map(|l| l.position)
-					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
-				// Get current value
-				func.instruction(&Instruction::LocalGet(local_pos));
-				// Add/subtract 1
-				func.instruction(&Instruction::I64Const(1));
-				if *op == Op::Inc {
-					func.instruction(&Instruction::I64Add);
-				} else {
-					func.instruction(&Instruction::I64Sub);
-				}
-				// Store and return new value
-				func.instruction(&Instruction::LocalTee(local_pos));
-			} else {
-				panic!("Expected symbol for increment/decrement, got {:?}", left);
-			}
-		} else if op.is_compound_assign() {
-			// x += y → x = x + y
-			if let Node::Symbol(name) = left.drop_meta() {
-				let local_pos = self.scope
-					.lookup(name)
-					.map(|l| l.position)
-					.unwrap_or_else(|| panic!("Undefined variable: {}", name));
-				let base_op = op.base_op();
-				// Get current value of x
-				func.instruction(&Instruction::LocalGet(local_pos));
-				// Emit y
-				if use_float {
-					self.emit_float_value(func, right);
-				} else {
-					self.emit_numeric_value(func, right);
-				}
-				// Apply base operation
-				if use_float {
-					match base_op {
-						Op::Add => func.instruction(&Instruction::F64Add),
-						Op::Sub => func.instruction(&Instruction::F64Sub),
-						Op::Mul => func.instruction(&Instruction::F64Mul),
-						Op::Div => func.instruction(&Instruction::F64Div),
-						_ => func.instruction(&Instruction::F64Mul), // fallback
-					};
-				} else {
-					match base_op {
-						Op::Add => func.instruction(&Instruction::I64Add),
-						Op::Sub => func.instruction(&Instruction::I64Sub),
-						Op::Mul => func.instruction(&Instruction::I64Mul),
-						Op::Div => func.instruction(&Instruction::I64DivS),
-						Op::Mod => func.instruction(&Instruction::I64RemS),
-						Op::And => func.instruction(&Instruction::I64And),
-						Op::Or => func.instruction(&Instruction::I64Or),
-						Op::Xor => func.instruction(&Instruction::I64Xor),
-						_ => func.instruction(&Instruction::I64Mul), // fallback
-					};
-				}
-				// Store result and leave on stack
-				func.instruction(&Instruction::LocalTee(local_pos));
-			} else {
-				panic!("Expected symbol in compound assignment, got {:?}", left);
-			}
-		} else if use_float {
-			// Float path: emit operands as f64, use F64 instructions
-			// Truthy and/or need special short-circuit handling
-			if *op == Op::And {
-				// Truthy and: if left is 0, return left; else return right
-				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-				func.instruction(&Instruction::F64Eq);
-				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-				self.emit_float_value(func, left); // return left (0.0)
-				func.instruction(&Instruction::Else);
-				self.emit_float_value(func, right); // return right
-				func.instruction(&Instruction::End);
-				self.emit_call(func, "new_float");
-				return;
-			}
-			if *op == Op::Or {
-				// Truthy or: if left is non-0, return left; else return right
-				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-				func.instruction(&Instruction::F64Ne);
-				func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-				self.emit_float_value(func, left); // return left (truthy)
-				func.instruction(&Instruction::Else);
-				self.emit_float_value(func, right); // return right
-				func.instruction(&Instruction::End);
-				self.emit_call(func, "new_float");
-				return;
-			}
-
-			self.emit_float_value(func, left);
-			self.emit_float_value(func, right);
-
-			match op {
-				Op::Add => {
-					func.instruction(&Instruction::F64Add);
-				}
-				Op::Sub => {
-					func.instruction(&Instruction::F64Sub);
-				}
-				Op::Mul => {
-					func.instruction(&Instruction::F64Mul);
-				}
-				Op::Div => {
-					func.instruction(&Instruction::F64Div);
-				}
-				Op::Mod => {
-					// WASM doesn't have F64Rem. Use integer modulo path instead.
-					// Drop the f64 values and re-emit as i64
-					func.instruction(&Instruction::Drop);
-					func.instruction(&Instruction::Drop);
-					self.emit_numeric_value(func, left);
-					self.emit_numeric_value(func, right);
-					func.instruction(&Instruction::I64RemS);
-					self.emit_call(func, "new_int");
-					return;
-				}
-				Op::Pow => {
-					// Drop the f64 values and re-emit as i64 for power
-					func.instruction(&Instruction::Drop);
-					func.instruction(&Instruction::Drop);
-					self.emit_numeric_value(func, left);
-					self.emit_numeric_value(func, right);
-					self.emit_call(func, "i64_pow");
-					self.emit_call(func, "new_int");
-					return;
-				}
-				op if op.is_comparison() => {
-					self.emit_float_comparison(func, op);
-					self.emit_call(func, "new_int");
-					return;
-				}
-				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
-			}
+			// Store result and leave on stack
+			func.instruction(&Instruction::LocalTee(local_pos));
+			true
 		} else {
-			// Integer path: emit operands as i64, use I64 instructions
-			// Truthy and/or use short-circuit evaluation
-			if *op == Op::And {
-				// Truthy and: if left is 0, return 0; else return right
-				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Eqz);
-				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-				func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
-				func.instruction(&Instruction::Else);
-				self.emit_numeric_value(func, right); // return right
-				func.instruction(&Instruction::End);
-				self.emit_call(func, "new_int");
-				return;
-			}
-			if *op == Op::Or {
-				// Truthy or: if left is non-0, return left; else return right
-				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Eqz);
-				func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-				self.emit_numeric_value(func, right); // return right (left was falsy)
-				func.instruction(&Instruction::Else);
-				self.emit_numeric_value(func, left); // return left (truthy)
-				func.instruction(&Instruction::End);
-				self.emit_call(func, "new_int");
-				return;
-			}
+			panic!("Expected symbol in compound assignment, got {:?}", left);
+		}
+	}
 
-			self.emit_numeric_value(func, left);
-			self.emit_numeric_value(func, right);
-
-			match op {
-				Op::Add => {
-					func.instruction(&Instruction::I64Add);
-				}
-				Op::Sub => {
-					func.instruction(&Instruction::I64Sub);
-				}
-				Op::Mul => {
-					func.instruction(&Instruction::I64Mul);
-				}
-				Op::Div => {
-					func.instruction(&Instruction::I64DivS);
-				}
-				Op::Mod => {
-					func.instruction(&Instruction::I64RemS);
-				}
-				Op::Pow => {
-					self.emit_call(func, "i64_pow");
-				}
-				Op::Xor => {
-					func.instruction(&Instruction::I64Xor);
-				}
-				op if op.is_comparison() => self.emit_comparison(func, op),
-				_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
-			}
+	fn emit_float_truthy_logical(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) -> bool {
+		if *op != Op::And && *op != Op::Or {
+			return false;
 		}
 
-		// Wrap result appropriately
-		if use_float {
+		if *op == Op::And {
+			// Truthy and: if left is 0, return left; else return right
+			self.emit_float_value(func, left);
+			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+			func.instruction(&Instruction::F64Eq);
+			func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
+			self.emit_float_value(func, left); // return left (0.0)
+			func.instruction(&Instruction::Else);
+			self.emit_float_value(func, right); // return right
+			func.instruction(&Instruction::End);
 			self.emit_call(func, "new_float");
-		} else {
+			return true;
+		}
+
+		// Op::Or
+		// Truthy or: if left is non-0, return left; else return right
+		self.emit_float_value(func, left);
+		func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
+		func.instruction(&Instruction::F64Ne);
+		func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
+		self.emit_float_value(func, left); // return left (truthy)
+		func.instruction(&Instruction::Else);
+		self.emit_float_value(func, right); // return right
+		func.instruction(&Instruction::End);
+		self.emit_call(func, "new_float");
+		true
+	}
+
+	fn emit_int_truthy_logical(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) -> bool {
+		if *op != Op::And && *op != Op::Or {
+			return false;
+		}
+
+		if *op == Op::And {
+			// Truthy and: if left is 0, return 0; else return right
+			self.emit_numeric_value(func, left);
+			func.instruction(&Instruction::I64Eqz);
+			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+			func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
+			func.instruction(&Instruction::Else);
+			self.emit_numeric_value(func, right); // return right
+			func.instruction(&Instruction::End);
 			self.emit_call(func, "new_int");
+			return true;
+		}
+
+		// Op::Or
+		// Truthy or: if left is non-0, return left; else return right
+		self.emit_numeric_value(func, left);
+		func.instruction(&Instruction::I64Eqz);
+		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
+		self.emit_numeric_value(func, right); // return right (left was falsy)
+		func.instruction(&Instruction::Else);
+		self.emit_numeric_value(func, left); // return left (truthy)
+		func.instruction(&Instruction::End);
+		self.emit_call(func, "new_int");
+		true
+	}
+
+	fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
+		self.emit_float_value(func, left);
+		self.emit_float_value(func, right);
+
+		match op {
+			Op::Add => func.instruction(&Instruction::F64Add),
+			Op::Sub => func.instruction(&Instruction::F64Sub),
+			Op::Mul => func.instruction(&Instruction::F64Mul),
+			Op::Div => func.instruction(&Instruction::F64Div),
+			Op::Mod => {
+				// WASM doesn't have F64Rem. Use integer modulo path instead.
+				// Drop the f64 values and re-emit as i64
+				func.instruction(&Instruction::Drop);
+				func.instruction(&Instruction::Drop);
+				self.emit_numeric_value(func, left);
+				self.emit_numeric_value(func, right);
+				func.instruction(&Instruction::I64RemS);
+				self.emit_call(func, "new_int");
+				return ArithmeticWrap::None;
+			}
+			Op::Pow => {
+				// Drop the f64 values and re-emit as i64 for power
+				func.instruction(&Instruction::Drop);
+				func.instruction(&Instruction::Drop);
+				self.emit_numeric_value(func, left);
+				self.emit_numeric_value(func, right);
+				self.emit_call(func, "i64_pow");
+				self.emit_call(func, "new_int");
+				return ArithmeticWrap::None;
+			}
+			op if op.is_comparison() => {
+				self.emit_float_comparison(func, op);
+				return ArithmeticWrap::Int;
+			}
+			_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
+		}
+
+		ArithmeticWrap::Float
+	}
+
+	fn emit_int_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
+		self.emit_numeric_value(func, left);
+		self.emit_numeric_value(func, right);
+
+		match op {
+			Op::Add => func.instruction(&Instruction::I64Add),
+			Op::Sub => func.instruction(&Instruction::I64Sub),
+			Op::Mul => func.instruction(&Instruction::I64Mul),
+			Op::Div => func.instruction(&Instruction::I64DivS),
+			Op::Mod => func.instruction(&Instruction::I64RemS),
+			Op::Pow => self.emit_call(func, "i64_pow"),
+			Op::Xor => func.instruction(&Instruction::I64Xor),
+			op if op.is_comparison() => self.emit_comparison(func, op),
+			_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
+		}
+
+		ArithmeticWrap::Int
+	}
+
+	fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
+		match wrap {
+			ArithmeticWrap::None => {}
+			ArithmeticWrap::Int => self.emit_call(func, "new_int"),
+			ArithmeticWrap::Float => self.emit_call(func, "new_float"),
 		}
 	}
 

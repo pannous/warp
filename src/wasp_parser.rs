@@ -56,6 +56,11 @@ pub struct WaspParser {
 	options: ParserOptions,
 }
 
+enum ElseParseMode {
+	Atom,
+	Expr,
+}
+
 impl WaspParser {
 	pub fn new(input: String) -> Self {
 		Self::new_with_options(input, ParserOptions::default())
@@ -627,101 +632,19 @@ impl WaspParser {
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	fn parse_expr(&mut self, min_bp: u8) -> Node {
+		const APPLICATION_BP: u8 = 165;
+		const MAX_BP_FOR_APPLICATION: u8 = 130;
+		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
+
 		self.skip_spaces();
 
-		// Step 1: Handle prefix operators
+		// Step 1: Prefix (nud)
 		let mut lhs = if let Some((op, chars)) = self.peek_prefix_operator() {
-			// Check if this is really a prefix (not infix like x - y)
-			// Prefix operators should be at start or after another operator
 			self.advance_by(chars);
 			self.skip_spaces();
 			let (_, r_bp) = op.binding_power();
 			let rhs = self.parse_expr(r_bp);
-
-			// Special handling for `if condition { block } [else { block }]`
-			if op == Op::If {
-				self.skip_spaces();
-				if self.current_char() == '{' {
-					let then_block = self.parse_atom(); // parse { block }
-					self.skip_spaces();
-					if self.matches_keyword("else") {
-						self.advance_by(4); // skip "else"
-						self.skip_spaces();
-						let else_block = self.parse_atom(); // parse { block }
-						// Structure: ((if condition) then then_block) else else_block
-						let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
-						let if_then =
-							Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-						Node::Key(Box::new(if_then), Op::Else, Box::new(else_block))
-					} else {
-						// Just if condition { block } - no else
-						let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
-						Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block))
-					}
-				} else if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
-					// if cond:then - convert colon to then structure
-					self.skip_spaces();
-					if self.matches_keyword("else") {
-						self.advance_by(4); // skip "else"
-						self.skip_spaces();
-						let else_expr = self.parse_expr(0);
-						// Structure: ((if condition) then then_expr) else else_expr
-						let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
-						let if_then =
-							Node::Key(Box::new(if_cond), Op::Then, then_expr.clone());
-						Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
-					} else {
-						// Just if cond:then - no else
-						let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
-						Node::Key(Box::new(if_cond), Op::Then, then_expr.clone())
-					}
-				} else if let Node::List(items, _, _) = rhs.drop_meta() {
-					// Handle implicit application: if cond {block} parsed as List([cond, {block}])
-					if items.len() == 2 {
-						if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
-							let condition = items[0].clone();
-							let then_block = items[1].clone();
-							self.skip_spaces();
-							let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-							let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-							return if self.matches_keyword("else") {
-								self.advance_by(4);
-								self.skip_spaces();
-								Node::Key(Box::new(if_then), Op::Else, Box::new(self.parse_atom()))
-							} else {
-								if_then
-							};
-						}
-					}
-					Node::Key(Box::new(Empty), op, Box::new(rhs))
-				} else {
-					Node::Key(Box::new(Empty), op, Box::new(rhs))
-				}
-			} else if op == Op::While {
-				// Special handling for `while condition { block }` or `while condition do body`
-				self.skip_spaces();
-				if self.current_char() == '{' {
-					let body_block = self.parse_atom(); // parse { block }
-					// Structure: (while condition) do body
-					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
-					Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block))
-				} else if let Node::List(items, _, _) = rhs.drop_meta() {
-					// Handle implicit application: while(cond){block} parsed as List([(cond), {block}])
-					if items.len() == 2 {
-						if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
-							let condition = items[0].clone();
-							let body_block = items[1].clone();
-							let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
-							return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
-						}
-					}
-					Node::Key(Box::new(Empty), op, Box::new(rhs))
-				} else {
-					Node::Key(Box::new(Empty), op, Box::new(rhs))
-				}
-			} else {
-				Node::Key(Box::new(Empty), op, Box::new(rhs))
-			}
+			self.finish_prefix(op, rhs)
 		} else {
 			self.parse_atom()
 		};
@@ -729,48 +652,16 @@ impl WaspParser {
 		loop {
 			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
 
-			// Step 2: Check for suffix operators first (they bind tightest)
-			if let Some((op, chars)) = self.peek_suffix_operator() {
-				let (l_bp, _) = op.binding_power();
-				if l_bp >= min_bp {
-					self.advance_by(chars);
-					lhs = Node::Key(Box::new(lhs), op, Box::new(Empty));
-					continue;
-				}
+			// Step 2: Suffix (led)
+			if let Some(updated) = self.try_parse_suffix(lhs, min_bp) {
+				lhs = updated;
+				continue;
 			}
 
-			// Step 2b: Check for subscript access [index] or [i,j,...] - binds tight like Op::Hash
-			// binding power 170 matches Op::Hash
-			// Comma-index syntax: a[i,j] means a[i][j] (nested indexing)
-			if self.current_char() == '[' && min_bp <= 170 {
-				self.advance(); // skip '['
-				self.skip_whitespace();
-
-				// Collect all comma-separated indices
-				let mut indices = vec![self.parse_expr(0)];
-				self.skip_whitespace();
-
-				while self.current_char() == ',' {
-					self.advance(); // skip ','
-					self.skip_whitespace();
-					indices.push(self.parse_expr(0));
-					self.skip_whitespace();
-				}
-
-				if self.current_char() == ']' {
-					self.advance(); // skip ']'
-					// Chain indexing operations for each index
-					// [i,j] becomes ((lhs#(i+1))#(j+1))
-					for index in indices {
-						let index_unwrapped = index.drop_meta();
-						let adjusted_index = match index_unwrapped {
-							Node::Number(n) => Node::Number(*n + crate::extensions::numbers::Number::Int(1)),
-							_ => Node::Key(Box::new(index), Op::Add, Box::new(Node::Number(crate::extensions::numbers::Number::Int(1)))),
-						};
-						lhs = Node::Key(Box::new(lhs), Op::Hash, Box::new(adjusted_index));
-					}
-					continue;
-				}
+			// Step 2b: Subscript (tight, like Op::Hash)
+			if let Some(updated) = self.try_parse_subscript(lhs, min_bp, SUBSCRIPT_BP) {
+				lhs = updated;
+				continue;
 			}
 
 			// Step 3: Check for infix operator
@@ -788,29 +679,14 @@ impl WaspParser {
 					//   - In assignment (min_bp <= 60): allow ANY argument (including identifiers)
 					//   - In colon/comparison (min_bp > 60): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
-					const APPLICATION_BP: u8 = 165;
-					const MAX_BP_FOR_APPLICATION: u8 = 130;
-					let lhs_is_callable = match lhs.drop_meta() {
-						Node::Symbol(_) => true,
-						Node::List(_, Bracket::None, _) => true, // Function call from implicit application
-						_ => false,
-					};
-					let ch = self.current_char();
-					let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
-					let arg_is_non_identifier = ch.is_numeric() || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{' || ch == '-';
-					let should_apply = in_assignment_context || arg_is_non_identifier;
-					if min_bp > 0 && min_bp <= MAX_BP_FOR_APPLICATION && lhs_is_callable && self.can_start_atom() && should_apply {
-						// Parse argument with high binding power (tighter than application itself)
-						let arg = self.parse_expr(APPLICATION_BP + 1);
-						if arg != Empty {
-							// Create function application as List[func, arg]
-							lhs = Node::List(
-								vec![lhs, arg],
-								Bracket::None,
-								Separator::Space,
-							);
-							continue;
-						}
+					if let Some(updated) = self.try_parse_implicit_application(
+						lhs,
+						min_bp,
+						APPLICATION_BP,
+						MAX_BP_FOR_APPLICATION,
+					) {
+						lhs = updated;
+						continue;
 					}
 					break;
 				}
@@ -835,6 +711,175 @@ impl WaspParser {
 		}
 
 		lhs
+	}
+
+	fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
+		match op {
+			Op::If => self.finish_if_prefix(rhs),
+			Op::While => self.finish_while_prefix(rhs),
+			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
+		}
+	}
+
+	fn finish_if_prefix(&mut self, rhs: Node) -> Node {
+		self.skip_spaces();
+		if self.current_char() == '{' {
+			let then_block = self.parse_atom(); // parse { block }
+			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
+			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+			return self.parse_optional_else(if_then, ElseParseMode::Atom);
+		}
+
+		if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
+			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
+			let if_then = Node::Key(Box::new(if_cond), Op::Then, then_expr.clone());
+			return self.parse_optional_else(if_then, ElseParseMode::Expr);
+		}
+
+		if let Node::List(items, _, _) = rhs.drop_meta() {
+			if items.len() == 2 {
+				if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
+					let condition = items[0].clone();
+					let then_block = items[1].clone();
+					self.skip_spaces();
+					let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
+					let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+					return self.parse_optional_else(if_then, ElseParseMode::Atom);
+				}
+			}
+		}
+
+		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
+	}
+
+	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
+		self.skip_spaces();
+		if self.current_char() == '{' {
+			let body_block = self.parse_atom(); // parse { block }
+			let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
+			return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
+		}
+
+		if let Node::List(items, _, _) = rhs.drop_meta() {
+			if items.len() == 2 {
+				if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
+					let condition = items[0].clone();
+					let body_block = items[1].clone();
+					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
+					return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
+				}
+			}
+		}
+
+		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
+	}
+
+	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
+		self.skip_spaces();
+		if self.matches_keyword("else") {
+			self.advance_by(4);
+			self.skip_spaces();
+			let else_expr = match mode {
+				ElseParseMode::Atom => self.parse_atom(),
+				ElseParseMode::Expr => self.parse_expr(0),
+			};
+			Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
+		} else {
+			if_then
+		}
+	}
+
+	fn try_parse_suffix(&mut self, lhs: Node, min_bp: u8) -> Option<Node> {
+		let (op, chars) = self.peek_suffix_operator()?;
+		let (l_bp, _) = op.binding_power();
+		if l_bp < min_bp {
+			return None;
+		}
+		self.advance_by(chars);
+		Some(Node::Key(Box::new(lhs), op, Box::new(Empty)))
+	}
+
+	fn try_parse_subscript(&mut self, lhs: Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
+		if self.current_char() != '[' || min_bp > subscript_bp {
+			return None;
+		}
+		self.advance(); // skip '['
+		self.skip_whitespace();
+
+		let mut indices = vec![self.parse_expr(0)];
+		self.skip_whitespace();
+
+		while self.current_char() == ',' {
+			self.advance(); // skip ','
+			self.skip_whitespace();
+			indices.push(self.parse_expr(0));
+			self.skip_whitespace();
+		}
+
+		if self.current_char() != ']' {
+			return None;
+		}
+		self.advance(); // skip ']'
+
+		let mut acc = lhs;
+		for index in indices {
+			let index_unwrapped = index.drop_meta();
+			let adjusted_index = match index_unwrapped {
+				Node::Number(n) => {
+					Node::Number(*n + crate::extensions::numbers::Number::Int(1))
+				}
+				_ => Node::Key(
+					Box::new(index),
+					Op::Add,
+					Box::new(Node::Number(crate::extensions::numbers::Number::Int(1))),
+				),
+			};
+			acc = Node::Key(Box::new(acc), Op::Hash, Box::new(adjusted_index));
+		}
+
+		Some(acc)
+	}
+
+	fn try_parse_implicit_application(
+		&mut self,
+		lhs: Node,
+		min_bp: u8,
+		application_bp: u8,
+		max_bp_for_application: u8,
+	) -> Option<Node> {
+		let lhs_is_callable = match lhs.drop_meta() {
+			Node::Symbol(_) => true,
+			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
+			_ => false,
+		};
+		let ch = self.current_char();
+		let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
+		let arg_is_non_identifier = ch.is_numeric()
+			|| ch == '"'
+			|| ch == '\''
+			|| ch == '('
+			|| ch == '['
+			|| ch == '{'
+			|| ch == '-';
+		let should_apply = in_assignment_context || arg_is_non_identifier;
+
+		if min_bp == 0 || min_bp > max_bp_for_application {
+			return None;
+		}
+		if !lhs_is_callable || !self.can_start_atom() || !should_apply {
+			return None;
+		}
+
+		let arg = self.parse_expr(application_bp + 1);
+		if arg == Empty {
+			return None;
+		}
+
+		Some(Node::List(
+			vec![lhs, arg],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
