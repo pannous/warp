@@ -950,12 +950,23 @@ impl WasmGcEmitter {
 		let use_float = self.should_use_float(left, right, op);
 
 		if self.emit_assign_or_define(func, left, op, right, use_float) {
+			if use_float {
+				self.emit_call(func, "new_float");
+			} else {
+				self.emit_call(func, "new_int");
+			}
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
+			self.emit_call(func, "new_int");
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
+			if use_float {
+				self.emit_call(func, "new_float");
+			} else {
+				self.emit_call(func, "new_int");
+			}
 			return;
 		}
 
