@@ -653,13 +653,13 @@ impl WaspParser {
 			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
 
 			// Step 2: Suffix (led)
-			if let Some(updated) = self.try_parse_suffix(lhs, min_bp) {
+			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp) {
 				lhs = updated;
 				continue;
 			}
 
 			// Step 2b: Subscript (tight, like Op::Hash)
-			if let Some(updated) = self.try_parse_subscript(lhs, min_bp, SUBSCRIPT_BP) {
+			if let Some(updated) = self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP) {
 				lhs = updated;
 				continue;
 			}
@@ -680,7 +680,7 @@ impl WaspParser {
 					//   - In colon/comparison (min_bp > 60): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
 					if let Some(updated) = self.try_parse_implicit_application(
-						lhs,
+						&lhs,
 						min_bp,
 						APPLICATION_BP,
 						MAX_BP_FOR_APPLICATION,
@@ -789,17 +789,17 @@ impl WaspParser {
 		}
 	}
 
-	fn try_parse_suffix(&mut self, lhs: Node, min_bp: u8) -> Option<Node> {
+	fn try_parse_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let (op, chars) = self.peek_suffix_operator()?;
 		let (l_bp, _) = op.binding_power();
 		if l_bp < min_bp {
 			return None;
 		}
 		self.advance_by(chars);
-		Some(Node::Key(Box::new(lhs), op, Box::new(Empty)))
+		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(Empty)))
 	}
 
-	fn try_parse_subscript(&mut self, lhs: Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
+	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
 		if self.current_char() != '[' || min_bp > subscript_bp {
 			return None;
 		}
@@ -821,7 +821,7 @@ impl WaspParser {
 		}
 		self.advance(); // skip ']'
 
-		let mut acc = lhs;
+		let mut acc = lhs.clone();
 		for index in indices {
 			let index_unwrapped = index.drop_meta();
 			let adjusted_index = match index_unwrapped {
@@ -842,7 +842,7 @@ impl WaspParser {
 
 	fn try_parse_implicit_application(
 		&mut self,
-		lhs: Node,
+		lhs: &Node,
 		min_bp: u8,
 		application_bp: u8,
 		max_bp_for_application: u8,
@@ -876,7 +876,7 @@ impl WaspParser {
 		}
 
 		Some(Node::List(
-			vec![lhs, arg],
+			vec![lhs.clone(), arg],
 			Bracket::None,
 			Separator::Space,
 		))

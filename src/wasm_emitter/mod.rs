@@ -1183,10 +1183,18 @@ impl WasmGcEmitter {
 		self.emit_float_value(func, right);
 
 		match op {
-			Op::Add => func.instruction(&Instruction::F64Add),
-			Op::Sub => func.instruction(&Instruction::F64Sub),
-			Op::Mul => func.instruction(&Instruction::F64Mul),
-			Op::Div => func.instruction(&Instruction::F64Div),
+			Op::Add => {
+				func.instruction(&Instruction::F64Add);
+			}
+			Op::Sub => {
+				func.instruction(&Instruction::F64Sub);
+			}
+			Op::Mul => {
+				func.instruction(&Instruction::F64Mul);
+			}
+			Op::Div => {
+				func.instruction(&Instruction::F64Div);
+			}
 			Op::Mod => {
 				// WASM doesn't have F64Rem. Use integer modulo path instead.
 				// Drop the f64 values and re-emit as i64
@@ -1223,14 +1231,30 @@ impl WasmGcEmitter {
 		self.emit_numeric_value(func, right);
 
 		match op {
-			Op::Add => func.instruction(&Instruction::I64Add),
-			Op::Sub => func.instruction(&Instruction::I64Sub),
-			Op::Mul => func.instruction(&Instruction::I64Mul),
-			Op::Div => func.instruction(&Instruction::I64DivS),
-			Op::Mod => func.instruction(&Instruction::I64RemS),
-			Op::Pow => self.emit_call(func, "i64_pow"),
-			Op::Xor => func.instruction(&Instruction::I64Xor),
-			op if op.is_comparison() => self.emit_comparison(func, op),
+			Op::Add => {
+				func.instruction(&Instruction::I64Add);
+			}
+			Op::Sub => {
+				func.instruction(&Instruction::I64Sub);
+			}
+			Op::Mul => {
+				func.instruction(&Instruction::I64Mul);
+			}
+			Op::Div => {
+				func.instruction(&Instruction::I64DivS);
+			}
+			Op::Mod => {
+				func.instruction(&Instruction::I64RemS);
+			}
+			Op::Pow => {
+				self.emit_call(func, "i64_pow");
+			}
+			Op::Xor => {
+				func.instruction(&Instruction::I64Xor);
+			}
+			op if op.is_comparison() => {
+				self.emit_comparison(func, op);
+			}
 			_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
 		}
 
