@@ -1049,6 +1049,7 @@ pub mod wasm_name_resolver {
             }
             let module = Arc::new(ParsedModule::parse(bytes, hash)?);
             self.modules.push(module);
+            self.cache.clear(); // new module may shadow previous structural matches
             Ok(())
         }
 
@@ -1081,7 +1082,7 @@ pub mod wasm_name_resolver {
                 return Ok(mapping.clone());
             }
 
-            for module in &self.modules {
+            for module in self.modules.iter().rev() {
                 if let Some(mapping) = module.try_match(struct_type) {
                     let mapping = Arc::new(mapping);
                     self.cache.insert(key.clone(), mapping.clone());
