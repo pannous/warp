@@ -2,6 +2,8 @@
 
 This is **warp**, a rust implementation of **wasp**
 
+Always commit work and progress, even when a task is not fully solved or tests remain failing. Record unresolved failures honestly, and push when progress is at or near the desired goal.
+
 https://github.com/pannous/wasp
 https://wasp.pannous.com/
 
