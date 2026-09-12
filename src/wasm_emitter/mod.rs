@@ -370,8 +370,6 @@ impl WasmGcEmitter {
 	// Helper methods for clean, DRY code
 	// ═══════════════════════════════════════════════════════════════════════════
 
-	/// Create a RefType for node references
-
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
 		let (ptr, len) = self.string_table
@@ -590,14 +588,6 @@ impl WasmGcEmitter {
 		self.compile_user_functions();
 		self.emit_node_main(node);
 	}
-
-	/// Emit the compact 3-field GC types
-
-	/// Emit user-defined struct types from TypeRegistry
-
-	/// Convert a FieldDef to a WASM FieldType
-
-	/// Get the WASM type index for a user-defined type
 
 	/// Emit with user-defined types from a TypeRegistry
 	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
@@ -2893,7 +2883,7 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	use wasmtime::{Linker, Module, Store, Val};
 
 	// Register WASM metadata for field name lookup in Debug output
-	let _ = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes);
+	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
 
 	let engine = gc_engine();
 	let mut store = Store::new(&engine, ());
@@ -2912,7 +2902,9 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	main.call(&mut store, &[], &mut results)
 		.map_err(|e: wasmtime::Error| e.to_string())?;
 
-	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance)).map_err(|e: anyhow::Error| e.to_string())?;
+	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance))
+		.map_err(|e: anyhow::Error| e.to_string())?
+		.with_module(module_id);
 
 	Ok(crate::node::data(gc_obj))
 }

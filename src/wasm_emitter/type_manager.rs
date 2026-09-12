@@ -211,6 +211,10 @@ impl TypeManager {
 		self.types.len()
 	}
 
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
 	/// Get the next type index
 	pub fn next_type_idx(&self) -> u32 {
 		self.next_type_idx

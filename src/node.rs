@@ -1589,19 +1589,13 @@ impl PartialEq<serde_json::Value> for Node {
 			(Char(c), Value::String(json_s)) => &c.to_string() == json_s,
 
 			// List comparison (arrays and objects)
-			(List(items, bracket, _), Value::Array(json_arr)) => {
-				// Non-curly lists map to arrays
-				if !matches!(bracket, Bracket::Curly) {
-					if items.len() != json_arr.len() {
-						return false;
-					}
-					items
+			// Non-curly lists map to arrays
+			(List(items, bracket, _), Value::Array(json_arr)) if !matches!(bracket, Bracket::Curly) => {
+				items.len() == json_arr.len()
+					&& items
 						.iter()
 						.zip(json_arr.iter())
 						.all(|(node, json_val)| node == json_val)
-				} else {
-					false
-				}
 			}
 			(List(items, bracket, _), Value::Object(json_obj)) => {
 				// Curly lists map to objects

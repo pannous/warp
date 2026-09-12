@@ -311,12 +311,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// Pattern: def/fun/fn name(params...): body
-			Node::List(list_items, _, _) => {
-				if list_items.len() >= 2 {
-					if let Node::Symbol(s) = list_items[0].drop_meta() {
-						if is_function_keyword(s) || s == "use" || s == "import" {
-							return true;
-						}
+			Node::List(list_items, _, _) if list_items.len() >= 2 => {
+				if let Node::Symbol(s) = list_items[0].drop_meta() {
+					if is_function_keyword(s) || s == "use" || s == "import" {
+						return true;
 					}
 				}
 			}

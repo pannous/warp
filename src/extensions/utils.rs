@@ -28,11 +28,13 @@ pub fn download(url: &str) -> String {
 #[must_use]
 #[cfg(all(not(target_family = "wasm"), not(test)))]
 pub fn download(url: &str) -> String {
-	ureq::get(url)
-		.call()
-		.ok()
-		.and_then(|mut r| r.body_mut().read_to_string().ok())
-		.unwrap_or_default()
+	match ureq::get(url).call().map_err(anyhow::Error::from).and_then(|mut r| r.body_mut().read_to_string().map_err(anyhow::Error::from)) {
+		Ok(body) => body,
+		Err(e) => {
+			eprintln!("download failed for {url}: {e}");
+			String::new()
+		}
+	}
 }
 
 pub trait FileExtensions {

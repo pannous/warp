@@ -1036,6 +1036,7 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
 }
 
 /// Create FFI wrapper with typed function pointer call
+#[allow(clippy::too_many_arguments)]
 fn create_ffi_wrapper(
     linker: &mut Linker<FfiState>,
     lib_name: &str,

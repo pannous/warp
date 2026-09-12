@@ -162,7 +162,7 @@ impl FieldIndex for usize {
 impl FieldIndex for &str {
     fn to_field_index(&self, struct_ref: &Rooted<StructRef>, store: &Store<()>) -> Result<usize> {
         let struct_type = struct_ref.ty(store)?;
-        wasm_name_resolver::lookup_field_index(&struct_type, self)
+        wasm_name_resolver::lookup_field_index(&struct_type, self, None)
     }
 }
 
@@ -182,6 +182,9 @@ pub struct GcObject {
     inner: Rooted<StructRef>,
     store: Rc<RefCell<Store<()>>>,
     instance: Option<Instance>,
+    /// Module this object originated from; disambiguates structurally identical
+    /// types (e.g. two classes with the same field layout) in the global registry
+    module: Option<u64>,
 }
 
 impl PartialEq for GcObject {
@@ -201,8 +204,8 @@ impl std::fmt::Debug for GcObject {
             };
 
             // Try to get type name and field names from registered metadata
-            let type_name = wasm_name_resolver::type_name(&struct_type).ok().flatten();
-            let field_names = wasm_name_resolver::field_names(&struct_type).ok();
+            let type_name = wasm_name_resolver::type_name(&struct_type, self.module).ok().flatten();
+            let field_names = wasm_name_resolver::field_names(&struct_type, self.module).ok();
             let field_count = struct_type.fields().len();
 
             // Format: GcObject{TypeName{field:value ...}} or GcObject{field:value ...}
@@ -297,7 +300,14 @@ impl GcObject {
             inner,
             store: Rc::new(RefCell::new(store)),
             instance,
+            module: None,
         })
+    }
+
+    /// Tie this object to the module it was produced by (see `register_gc_types_from_wasm`)
+    pub fn with_module(mut self, module: Option<u64>) -> Self {
+        self.module = module;
+        self
     }
 
     /// Create from an existing StructRef, sharing the store with another GcObject
@@ -310,6 +320,7 @@ impl GcObject {
             inner: struct_ref,
             store,
             instance,
+            module: None,
         }
     }
 
@@ -323,6 +334,7 @@ impl GcObject {
             inner: struct_ref,
             store: Rc::new(RefCell::new(store)),
             instance,
+            module: None,
         }
     }
 
@@ -396,7 +408,8 @@ impl GcObject {
             struct_ref,
             self.store.clone(),
             self.instance,
-        ))
+        )
+        .with_module(self.module))
     }
 
     /// Get nested struct as a wrapped type (Person, Point, etc.)
@@ -1001,7 +1014,8 @@ macro_rules! gc_struct {
 }
 
 /// Register a WebAssembly module's GC metadata for field name lookup
-pub fn register_gc_types_from_wasm(bytes: &[u8]) -> Result<()> {
+/// Returns the module id to pass to `GcObject::with_module` for unambiguous name lookup
+pub fn register_gc_types_from_wasm(bytes: &[u8]) -> Result<u64> {
     wasm_name_resolver::register_module(bytes)
 }
 
@@ -1015,74 +1029,81 @@ pub mod wasm_name_resolver {
 	static REGISTRY: Lazy<Mutex<FieldNameRegistry>> =
         Lazy::new(|| Mutex::new(FieldNameRegistry::default()));
 
-    pub fn register_module(bytes: &[u8]) -> Result<()> {
+    pub fn register_module(bytes: &[u8]) -> Result<u64> {
         let mut registry = REGISTRY.lock().expect("registry lock poisoned");
         registry.register_module(bytes)
     }
 
-    pub fn lookup_field_index(struct_type: &StructType, field_name: &str) -> Result<usize> {
+    pub fn lookup_field_index(struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
         let mut registry = REGISTRY.lock().expect("registry lock poisoned");
-        registry.lookup(struct_type, field_name)
+        registry.lookup(struct_type, field_name, module)
     }
 
-    pub fn field_names(struct_type: &StructType) -> Result<Vec<Option<String>>> {
+    pub fn field_names(struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
         let mut registry = REGISTRY.lock().expect("registry lock poisoned");
-        registry.field_names(struct_type)
+        registry.field_names(struct_type, module)
     }
 
-    pub fn type_name(struct_type: &StructType) -> Result<Option<String>> {
+    pub fn type_name(struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
         let mut registry = REGISTRY.lock().expect("registry lock poisoned");
-        registry.type_name(struct_type)
+        registry.type_name(struct_type, module)
     }
 
     #[derive(Default)]
     struct FieldNameRegistry {
         modules: Vec<Arc<ParsedModule>>,
-        cache: HashMap<StructTypeKey, Arc<StructFieldMapping>>,
+        cache: HashMap<(StructTypeKey, Option<u64>), Arc<StructFieldMapping>>,
     }
 
     impl FieldNameRegistry {
-        fn register_module(&mut self, bytes: &[u8]) -> Result<()> {
+        fn register_module(&mut self, bytes: &[u8]) -> Result<u64> {
             let hash = module_hash(bytes);
             if self.modules.iter().any(|m| m.hash == hash) {
-                return Ok(());
+                return Ok(hash);
             }
             let module = Arc::new(ParsedModule::parse(bytes, hash)?);
             self.modules.push(module);
-            self.cache.clear(); // new module may shadow previous structural matches
-            Ok(())
+            Ok(hash)
         }
 
-        fn lookup(&mut self, struct_type: &StructType, field_name: &str) -> Result<usize> {
-            let mapping = self.ensure_mapping(struct_type)?;
+        fn lookup(&mut self, struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
+            let mapping = self.ensure_mapping(struct_type, module)?;
             mapping
                 .index_of(field_name)
                 .ok_or_else(|| unknown_field_error(field_name, &mapping))
         }
 
-        fn field_names(&mut self, struct_type: &StructType) -> Result<Vec<Option<String>>> {
-            let mapping = self.ensure_mapping(struct_type)?;
+        fn field_names(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
+            let mapping = self.ensure_mapping(struct_type, module)?;
             Ok(mapping.names.clone())
         }
 
-        fn type_name(&mut self, struct_type: &StructType) -> Result<Option<String>> {
-            let mapping = self.ensure_mapping(struct_type)?;
+        fn type_name(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
+            let mapping = self.ensure_mapping(struct_type, module)?;
             Ok(mapping.type_name.clone())
         }
 
-        fn ensure_mapping(&mut self, struct_type: &StructType) -> Result<Arc<StructFieldMapping>> {
+        /// Resolve names for a struct type: the owning module when known, otherwise
+        /// the most recently registered structurally matching one.
+        fn ensure_mapping(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Arc<StructFieldMapping>> {
             if self.modules.is_empty() {
                 return Err(anyhow!(
                     "No WASM metadata registered. Call `register_gc_types_from_wasm` before accessing fields by name."
                 ));
             }
 
-            let key = StructTypeKey(struct_type.clone());
+            let key = (StructTypeKey(struct_type.clone()), module);
             if let Some(mapping) = self.cache.get(&key) {
                 return Ok(mapping.clone());
             }
 
-            for module in self.modules.iter().rev() {
+            let owning = module.and_then(|hash| self.modules.iter().find(|m| m.hash == hash));
+            let candidates: Vec<Arc<ParsedModule>> = match owning {
+                Some(module) => vec![module.clone()],
+                None => self.modules.iter().rev().cloned().collect(),
+            };
+
+            for module in candidates {
                 if let Some(mapping) = module.try_match(struct_type) {
                     let mapping = Arc::new(mapping);
                     self.cache.insert(key.clone(), mapping.clone());
@@ -1238,7 +1259,7 @@ pub mod wasm_name_resolver {
 								names.push((field.index, field.name.to_string()));
 							}
 							if !names.is_empty() {
-								field_names.entry(type_index).or_default().extend(names.into_iter());
+								field_names.entry(type_index).or_default().extend(names);
 							}
 						}
 					}

@@ -145,10 +145,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				let then_kind = infer_type(then_expr, scope);
 				let else_kind = infer_type(else_expr, scope);
 				// If either branch returns a reference type (Text, Symbol, etc.), return Text
-				if then_kind == Kind::Text || else_kind == Kind::Text {
+				if then_kind.is_ref() || else_kind.is_ref() {
 					Kind::Text
-				} else if then_kind.is_ref() || else_kind.is_ref() {
-					Kind::Text  // Default reference return type
 				} else if then_kind == Kind::Float || else_kind == Kind::Float {
 					Kind::Float
 				} else {
@@ -205,11 +203,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			if !skip_first_assign && !in_structure {
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
-					Node::Symbol(name) => {
-						if scope.lookup(name).is_none() {
-							let kind = infer_type(right, scope);
-							scope.define(name.clone(), None, kind);
-						}
+					Node::Symbol(name) if scope.lookup(name).is_none() => {
+						let kind = infer_type(right, scope);
+						scope.define(name.clone(), None, kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
@@ -942,13 +938,11 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 							return;
 						}
 					}
-					Node::List(inner_items, _, _) => {
-						if inner_items.len() >= 2 {
-							if let Node::Symbol(inner_first) = inner_items[0].drop_meta() {
-								if inner_first == "use" {
-									let lib = inner_items[1].name();
-									add_ffi_lib(ctx, &lib);
-								}
+					Node::List(inner_items, _, _) if inner_items.len() >= 2 => {
+						if let Node::Symbol(inner_first) = inner_items[0].drop_meta() {
+							if inner_first == "use" {
+								let lib = inner_items[1].name();
+								add_ffi_lib(ctx, &lib);
 							}
 						}
 					}
