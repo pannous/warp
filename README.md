@@ -9,6 +9,7 @@ https://github.com/pannous/angle) and [english-script](https://github.com/pannou
 ## Features
 - **Wasm-first**: Designed to compile to WebAssembly efficiently, as structs.
 -  JS/JSON/XML/YAML (de)serialization built-in
+-  Full [Documentation](https://github.com/pannous/warp/wiki)
 
 ## Example
 
