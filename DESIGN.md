@@ -2,11 +2,18 @@
 
 ## Purpose
 
-Warp is already more than a prospective language design. It has a flexible data/code
-syntax, a recursive-descent parser, basic type analysis, user-defined records and
-functions, direct WebAssembly GC generation, runtime integration, and end-to-end
-round-trip tests. The next step should therefore not be a second compiler or a large
-syntax expansion. It should be a semantic boundary inside the compiler.
+Warp aims to combine a compact, expressive source language with deterministic static
+semantics, inferred types and resource behavior, and direct WebAssembly execution.
+This document evaluates the current implementation against those goals and proposes an
+incremental compiler architecture for reaching them.
+
+The repository already contains a flexible data/code syntax, a recursive-descent
+parser, basic type analysis, user-defined records and functions, direct WebAssembly GC
+generation, runtime integration, and end-to-end round-trip tests. The highest-leverage
+architectural milestone is to add a semantic boundary between the structural parse tree
+and code generation. This boundary allows the compiler to resolve types, effects,
+ownership, overloads, and implicit syntax once, then preserve those decisions in a
+deterministic representation.
 
 The intended direction is:
 
@@ -21,11 +28,11 @@ source text
 `Node` remains the universal data representation and interchange format. It should no
 longer also be the compiler's final semantic representation.
 
-## What already fits the design
+## Existing foundations
 
-### A compact, expressive surface already exists
+### Compact, expressive surface syntax
 
-The parser and operator model already support many of the desired ideas:
+The parser and operator model support many of these language goals:
 
 - concise definitions with `:=`, ordinary assignment with `=`, and typed forms with
   `:`;
@@ -53,7 +60,7 @@ nominal layouts.
 
 ### The compiler has the beginnings of elaboration
 
-`src/analyzer.rs` already performs several early semantic passes:
+`src/analyzer.rs` performs several early semantic passes:
 
 - scoped local collection;
 - coarse expression-kind inference;
@@ -63,16 +70,18 @@ nominal layouts.
 - type and FFI collection;
 - required-runtime-function discovery for tree shaking.
 
-`src/context.rs`, `src/function.rs`, and `src/type_kinds.rs` already contain registries
+`src/context.rs`, `src/function.rs`, and `src/type_kinds.rs` contain registries
 that can seed a real symbol/type environment. The emitter performs forward collection
 of types and function signatures before compiling bodies.
 
 ### WASM-first is an asset, not a constraint to route around
 
-`src/wasm_emitter/` already owns a substantial direct WebAssembly GC backend with named
+`src/wasm_emitter/` contains a substantial direct WebAssembly GC backend with named
 types, constructors, functions, globals, strings, FFI/WASI integration, and runtime
-round trips. Generating Rust first would postpone the most important research question
-and discard information into Rust syntax only to recover it in `rustc`.
+round trips. Making generated Rust the primary intermediate representation would
+postpone the core language-design problem: determining whether concise source can
+elaborate reproducibly into explicit, safe, typed semantics. It would also discard
+semantic information into Rust syntax only to recover part of it in `rustc`.
 
 Keep direct WASM as the initial production backend. If useful, add a tiny IR
 interpreter as an executable specification and differential-test oracle. A Rust
@@ -390,6 +399,6 @@ The safest next changes are structural rather than syntactic:
 - preserve all inferred facts in a deterministic, serializable semantic artifact.
 
 This route keeps the project's existing strengths—the universal data tree, expressive
-surface, direct WASM GC, and round-trip discipline—while creating the place where the
-central research ideas can be implemented and tested instead of remaining backend
-heuristics.
+surface, direct WASM GC, and round-trip discipline—while creating an explicit layer in
+which type, effect, ownership, and cost guarantees can be implemented and tested instead
+of remaining backend heuristics.
