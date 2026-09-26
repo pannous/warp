@@ -19,3 +19,11 @@
 - `'héllo'#2` → 'Ã' (byte index despite wiki promising char-safe `#`).
 - strings mutate through aliases: `x="ab";y=x;y#1="z";x` → 'zb'.
 - `country: NO` → `country:0` (YAML Norway problem) — needs a design decision on `yes`/`no` aliases.
+
+## Inspiration notes ("Solved elsewhere")
+- Research agents write one file per topic group to `probes/footguns/inspiration/<group>.md` (brief: `BRIEF.md`),
+  never Footguns.md directly; `python3 probes/footguns/merge_inspiration.py` appends them under matching headings
+  (idempotent: entries that already have "Solved elsewhere:" are skipped). Diff for deleted lines after merging.
+- Group `injection-time-effects` was sent to the cloud session "footgun.md (cloud)" on 2026-09-26: delivery reported
+  success but the route is one-way and the session stayed idle (likely awaiting approval). Once it pushes
+  `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
