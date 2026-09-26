@@ -70,12 +70,7 @@ impl WasmGcEmitter {
 				struct_type_index: self.type_manager.node_type,
 				field_index: 1, // data field of the element node
 			});
-			// Cast to ref $i64box and get the i64 value
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.i64_box_type,
-				field_index: 0,
-			});
+			self.emit_int_from_payload(&mut func);
 
 			func.instruction(&Instruction::End);
 			self.code.function(&func);
@@ -356,9 +351,7 @@ impl WasmGcEmitter {
 			// Cast anyref to ref $Node
 			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
 
-			// Create new i64box with the value
-			func.instruction(&Instruction::LocalGet(2)); // value
-			func.instruction(&Instruction::StructNew(self.type_manager.i64_box_type));
+			self.emit_int_payload(&mut func, 2);
 
 			// Set the inner node's data field to the new i64box
 			func.instruction(&Instruction::StructSet {

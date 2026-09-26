@@ -208,6 +208,7 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, arg);
 				func.instruction(&Instruction::F64Ceil);
 				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
 				self.emit_call(func, "new_int");
 				true
 			}
@@ -215,6 +216,7 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, arg);
 				func.instruction(&Instruction::F64Floor);
 				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
 				self.emit_call(func, "new_int");
 				true
 			}
@@ -222,6 +224,7 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, arg);
 				func.instruction(&Instruction::F64Nearest);
 				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
 				self.emit_call(func, "new_int");
 				true
 			}

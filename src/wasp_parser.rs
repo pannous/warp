@@ -1018,10 +1018,9 @@ impl WaspParser {
 				.map(Node::float)
 				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str)))
 		} else {
-			num_str
-				.parse::<i64>()
-				.map(Node::int)
-				.unwrap_or_else(|_| error(&format!("Invalid int: {}", num_str)))
+			crate::extensions::numbers::Number::parse_integer(&num_str)
+				.map(Node::Number)
+				.unwrap_or_else(|| error(&format!("Invalid int: {}", num_str)))
 		}
 	}
 

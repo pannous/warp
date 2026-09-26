@@ -199,7 +199,11 @@ pub fn emit_all_constructors(emitter: &mut crate::wasm_emitter::WasmGcEmitter) {
 
 	// Simple constructors
 	emit_constructor!(emitter, "new_empty", Kind::Empty, empty);
-	emit_constructor!(emitter, "new_int", Kind::Int, boxed_i64);
+	if emitter.int_runtime() {
+		emitter.emit_new_unbounded_int();
+	} else {
+		emit_constructor!(emitter, "new_int", Kind::Int, boxed_i64);
+	}
 	emit_constructor!(emitter, "new_float", Kind::Float, boxed_f64);
 	emit_constructor!(emitter, "new_codepoint", Kind::Codepoint, i31ref);
 	emit_constructor!(emitter, "new_text", Kind::Text, string_struct);

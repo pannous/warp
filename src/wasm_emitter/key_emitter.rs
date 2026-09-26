@@ -155,12 +155,14 @@ impl WasmGcEmitter {
 			}
 			self.emit_call(func, "new_float");
 		} else {
+			let range = self.int_range(left);
 			self.emit_numeric_value(func, left);
 			self.emit_numeric_value(func, left);
-			func.instruction(&Instruction::I64Mul);
+			self.emit_int_op(func, &Op::Mul, range, range);
 			if op == Op::Cube {
 				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Mul);
+				let squared = self.int_range(&Node::Key(Box::new(left.clone()), Op::Mul, Box::new(left.clone())));
+				self.emit_int_op(func, &Op::Mul, squared, range);
 			}
 			self.emit_call(func, "new_int");
 		}
@@ -184,9 +186,9 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::F64Sub);
 					self.emit_call(func, "new_float");
 				} else {
-					func.instruction(&Instruction::I64Const(0));
 					self.emit_numeric_value(func, right);
-					func.instruction(&Instruction::I64Sub);
+					let range = self.int_range(right);
+					self.emit_int_neg(func, range);
 					self.emit_call(func, "new_int");
 				}
 			}
@@ -218,18 +220,9 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::F64Abs);
 			self.emit_call(func, "new_float");
 		} else {
-			// i64 abs: if x < 0 then -x else x
 			self.emit_numeric_value(func, right);
-			func.instruction(&Instruction::LocalTee(self.next_temp_local));
-			func.instruction(&Instruction::I64Const(0));
-			func.instruction(&Instruction::I64LtS);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			func.instruction(&Instruction::I64Const(0));
-			func.instruction(&Instruction::LocalGet(self.next_temp_local));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::Else);
-			func.instruction(&Instruction::LocalGet(self.next_temp_local));
-			func.instruction(&Instruction::End);
+			let range = self.int_range(right);
+			self.emit_int_abs(func, range);
 			self.emit_call(func, "new_int");
 		}
 	}

@@ -4,7 +4,9 @@ use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmtime::{Instance, Linker, Module, Store, Val};
+use crate::extensions::numbers::Number;
+use num_bigint::{BigInt, Sign};
+use wasmtime::{AsContextMut, Instance, Linker, Module, Store, Val};
 use wasmtime_wasi::{WasiCtxBuilder, p1};
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
@@ -27,6 +29,23 @@ impl std::fmt::Debug for GcObject {
 pub const FIELD_KIND: usize = 0;
 pub const FIELD_DATA: usize = 1;
 pub const FIELD_VALUE: usize = 2;
+
+/// Int payload: `$i64box(value)` or `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32
+pub fn read_int_payload(mut store: impl AsContextMut, data_val: &Val) -> Result<Number> {
+	let anyref = data_val.unwrap_anyref().ok_or_else(|| anyhow!("Int node without payload"))?;
+	let payload = anyref.unwrap_struct(&store)?;
+	match payload.field(&mut store, 0)? {
+		Val::I64(value) => Ok(Number::Int(value)),
+		Val::I32(negative) => {
+			let limbs_ref = payload.field(&mut store, 1)?;
+			let limbs_array = limbs_ref.unwrap_anyref().ok_or_else(|| anyhow!("BigInt without limbs"))?.unwrap_array(&store)?;
+			let limbs: Vec<u32> = limbs_array.elems(&mut store)?.map(|limb| limb.unwrap_i32() as u32).collect();
+			let sign = if negative != 0 { Sign::Minus } else { Sign::Plus };
+			Ok(Number::from_bigint(BigInt::from_slice(sign, &limbs)))
+		}
+		other => Err(anyhow!("unexpected Int payload {:?}", other)),
+	}
+}
 
 impl GcObject {
 	pub fn new(val: Val, store: Rc<RefCell<Store<()>>>, instance: Instance) -> Self {
@@ -82,17 +101,11 @@ impl GcObject {
 		}
 	}
 
-	/// Read i64 from boxed i64 in data field (for Int nodes)
-	pub fn read_boxed_i64(&self) -> Result<i64> {
+	/// Read the integer payload of an Int node: `$i64box` or `$BigInt` (see wasm_emitter/big_int.rs)
+	pub fn read_int(&self) -> Result<Number> {
 		let data_val = self.data()?;
 		let mut store = self.store.borrow_mut();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				let field_val = structref.field(&mut *store, 0)?;
-				return Ok(field_val.unwrap_i64());
-			}
-		}
-		Err(anyhow!("Cannot read boxed i64"))
+		read_int_payload(&mut *store, &data_val)
 	}
 
 	/// Read f64 from boxed f64 in data field (for Float nodes)
@@ -331,13 +344,7 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 						t if t == Kind::Empty as u8 => Ok(Node::Empty),
 						t if t == Kind::Int as u8 => {
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
-							if let Some(data_anyref) = data_val.unwrap_anyref() {
-								if let Ok(box_struct) = data_anyref.unwrap_struct(&store) {
-									let int_val = box_struct.field(&mut store, 0)?;
-									return Ok(Node::Number(crate::extensions::numbers::Number::Int(int_val.unwrap_i64())));
-								}
-							}
-							Ok(Node::Number(crate::extensions::numbers::Number::Int(0)))
+							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
 						}
 						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 => {
 							// data field contains $String struct (ptr, len)
@@ -490,15 +497,8 @@ pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
 			match tag {
 				t if t == Kind::Empty as u8 => return Ok(Node::Empty),
 				t if t == Kind::Int as u8 => {
-					// data field contains boxed i64
 					let data_val = structref.field(&mut store, FIELD_DATA)?;
-					if let Some(data_any) = data_val.unwrap_anyref() {
-						if let Ok(box_ref) = data_any.unwrap_struct(&store) {
-							let inner = box_ref.field(&mut store, 0)?;
-							return Ok(Node::Number(Number::Int(inner.unwrap_i64())));
-						}
-					}
-					return Ok(Node::Number(Number::Int(0)));
+					return Ok(Node::Number(read_int_payload(&mut store, &data_val)?));
 				}
 				t if t == Kind::Float as u8 => {
 					// data field contains boxed f64

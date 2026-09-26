@@ -274,10 +274,9 @@ impl Node {
 			t if t == Kind::Empty as u8 => Empty,
 
 			t if t == Kind::Int as u8 => {
-				// data field contains boxed i64
-				match obj.read_boxed_i64() {
-					Ok(val) => Node::Number(Number::Int(val)),
-					Err(_) => Node::Number(Number::Int(0)),
+				match obj.read_int() {
+					Ok(number) => Node::Number(number),
+					Err(e) => Node::Error(Box::new(Text(format!("unreadable Int: {}", e)))),
 				}
 			}
 

@@ -1,5 +1,6 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
+mod big_int;
 #[macro_use]
 mod constructors;
 mod config;
@@ -13,6 +14,7 @@ mod string_table;
 mod type_manager;
 mod wasi_emitter;
 
+pub use big_int::{is_fixnum, INT_RUNTIME};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
@@ -84,6 +86,13 @@ pub struct WasmGcEmitter {
 	pub(crate) ctx: Context, // module scope: globals, functions, types, etc.
 
 	scope: Scope, // current function scope
+
+	// Unbounded Int (big_int.rs)
+	int_scratch: u32,      // first of INT_SCRATCH_LOCALS i64 locals in the current function
+	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
+	int_heap_global: u32,  // $BigInts heap that handles index
+	int_count_global: u32, // used slots in that heap
+	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 }
 
 impl Default for WasmGcEmitter {
@@ -111,6 +120,11 @@ impl WasmGcEmitter {
 			next_temp_local: 0,
 			ctx: Context::new(),
 			scope: Default::default(),
+			int_scratch: 0,
+			wrapping_ints: false,
+			int_heap_global: 0,
+			int_count_global: 0,
+			int_remainder_global: 0,
 		}
 	}
 
@@ -285,7 +299,8 @@ impl WasmGcEmitter {
 		let num_locals = self.scope.local_count();
 		let extra_locals = num_locals.saturating_sub(num_params);
 
-		let mut func = Function::new(vec![(extra_locals, ValType::I64)]);
+		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals);
+		let mut func = Function::new(vec![(extra_locals + big_int::INT_SCRATCH_LOCALS, ValType::I64)]);
 
 		// Compile the function body - use node instructions for Node-returning functions
 		if returns_node {
@@ -300,6 +315,7 @@ impl WasmGcEmitter {
 
 		// Restore scope
 		self.scope = saved_scope;
+		self.int_scratch = saved_scratch;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -441,21 +457,6 @@ impl WasmGcEmitter {
 			}
 			_ => false,  // Empty, Text, Char, List, etc. are not numeric
 		}
-	}
-
-	/// Emit comparison operator for i64 (result is i32, extended to i64)
-	fn emit_comparison(&self, func: &mut Function, op: &Op) {
-		let cmp = match op {
-			Op::Eq => Instruction::I64Eq,
-			Op::Ne => Instruction::I64Ne,
-			Op::Lt => Instruction::I64LtS,
-			Op::Gt => Instruction::I64GtS,
-			Op::Le => Instruction::I64LeS,
-			Op::Ge => Instruction::I64GeS,
-			_ => unreachable!("Not a comparison op: {:?}", op),
-		};
-		func.instruction(&cmp);
-		func.instruction(&Instruction::I64ExtendI32U);
 	}
 
 	/// Emit comparison operator for f64 (result is i32, extended to i64)
@@ -690,7 +691,9 @@ impl WasmGcEmitter {
 	/// Emit constructor functions for the compact Node
 	fn emit_constructors(&mut self) {
 		// Emit basic Node constructors using macros
+		self.emit_int_heap_globals();
 		constructors::emit_all_constructors(self);
+		self.emit_int_runtime();
 		// Emit list and string operation functions
 		self.emit_list_ops();
 		// Emit helper functions
@@ -727,12 +730,7 @@ impl WasmGcEmitter {
 			struct_type_index: self.type_manager.node_type,
 			field_index: 1, // data field
 		});
-		// Cast to i64box and extract value
-		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
-		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.type_manager.i64_box_type,
-			field_index: 0, // value field in i64box
-		});
+		self.emit_int_from_payload(&mut func);
 		func.instruction(&Instruction::End);
 		self.code.function(&func);
 		let idx = self.register_func("get_int_value");
@@ -839,6 +837,8 @@ impl WasmGcEmitter {
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
 		}
+		self.int_scratch = var_count + temp_locals;
+		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 
 		let mut func = Function::new(locals);
 		self.emit_node_instructions(&mut func, node);
@@ -872,8 +872,8 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_empty");
 			}
 			Node::Number(num) => match num {
-				Number::Int(i) => {
-					func.instruction(&Instruction::I64Const(*i));
+				Number::Int(_) | Number::BigInt(_) => {
+					self.emit_int_literal(func, &num.to_bigint());
 					self.emit_call(func, "new_int");
 				}
 				Number::Float(f) => {
@@ -1044,15 +1044,7 @@ impl WasmGcEmitter {
 				.lookup(name)
 				.map(|l| l.position)
 				.unwrap_or_else(|| panic!("Undefined variable: {}", name));
-			// Get current value
-			func.instruction(&Instruction::LocalGet(local_pos));
-			// Add/subtract 1
-			func.instruction(&Instruction::I64Const(1));
-			if *op == Op::Inc {
-				func.instruction(&Instruction::I64Add);
-			} else {
-				func.instruction(&Instruction::I64Sub);
-			}
+			self.emit_int_step(func, local_pos, op);
 			// Store and return new value
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
@@ -1098,16 +1090,16 @@ impl WasmGcEmitter {
 					_ => func.instruction(&Instruction::F64Mul), // fallback
 				};
 			} else {
+				let right_range = self.int_range(right);
 				match base_op {
-					Op::Add => func.instruction(&Instruction::I64Add),
-					Op::Sub => func.instruction(&Instruction::I64Sub),
-					Op::Mul => func.instruction(&Instruction::I64Mul),
-					Op::Div => func.instruction(&Instruction::I64DivS),
-					Op::Mod => func.instruction(&Instruction::I64RemS),
-					Op::And => func.instruction(&Instruction::I64And),
-					Op::Or => func.instruction(&Instruction::I64Or),
-					Op::Xor => func.instruction(&Instruction::I64Xor),
-					_ => func.instruction(&Instruction::I64Mul), // fallback
+					Op::And => {
+						func.instruction(&Instruction::I64And);
+					}
+					Op::Or => {
+						func.instruction(&Instruction::I64Or);
+					}
+					Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Xor => self.emit_int_op(func, &base_op, None, right_range),
+					_ => self.emit_int_op(func, &Op::Mul, None, right_range), // fallback
 				};
 			}
 			// Store result and leave on stack
@@ -1216,9 +1208,7 @@ impl WasmGcEmitter {
 				// Drop the f64 values and re-emit as i64
 				func.instruction(&Instruction::Drop);
 				func.instruction(&Instruction::Drop);
-				self.emit_numeric_value(func, left);
-				self.emit_numeric_value(func, right);
-				func.instruction(&Instruction::I64RemS);
+				self.emit_int_operands_op(func, left, op, right);
 				self.emit_call(func, "new_int");
 				return ArithmeticWrap::None;
 			}
@@ -1226,9 +1216,7 @@ impl WasmGcEmitter {
 				// Drop the f64 values and re-emit as i64 for power
 				func.instruction(&Instruction::Drop);
 				func.instruction(&Instruction::Drop);
-				self.emit_numeric_value(func, left);
-				self.emit_numeric_value(func, right);
-				self.emit_call(func, "i64_pow");
+				self.emit_int_operands_op(func, left, op, right);
 				self.emit_call(func, "new_int");
 				return ArithmeticWrap::None;
 			}
@@ -1243,38 +1231,29 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_int_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
+		self.emit_int_operands_op(func, left, op, right);
+		ArithmeticWrap::Int
+	}
+
+	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
+	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		self.emit_numeric_value(func, left);
 		self.emit_numeric_value(func, right);
-
-		match op {
-			Op::Add => {
-				func.instruction(&Instruction::I64Add);
-			}
-			Op::Sub => {
-				func.instruction(&Instruction::I64Sub);
-			}
-			Op::Mul => {
-				func.instruction(&Instruction::I64Mul);
-			}
-			Op::Div => {
-				func.instruction(&Instruction::I64DivS);
-			}
-			Op::Mod => {
-				func.instruction(&Instruction::I64RemS);
-			}
-			Op::Pow => {
-				self.emit_call(func, "i64_pow");
-			}
-			Op::Xor => {
-				func.instruction(&Instruction::I64Xor);
-			}
-			op if op.is_comparison() => {
-				self.emit_comparison(func, op);
-			}
-			_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
+		let (left_range, right_range) = (self.int_range(left), self.int_range(right));
+		if op.is_comparison() {
+			self.emit_int_compare(func, op, left_range, right_range);
+			func.instruction(&Instruction::I64ExtendI32U);
+		} else {
+			self.emit_int_op(func, op, left_range, right_range);
 		}
+	}
 
-		ArithmeticWrap::Int
+	/// `local ± 1` for i++ / i--
+	fn emit_int_step(&mut self, func: &mut Function, local_pos: u32, op: &Op) {
+		func.instruction(&Instruction::LocalGet(local_pos));
+		func.instruction(&Instruction::I64Const(1));
+		let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
+		self.emit_int_op(func, &step, None, Some((1, 1)));
 	}
 
 	fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
@@ -1507,6 +1486,7 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::GlobalSet(global_idx));
 				func.instruction(&Instruction::GlobalGet(global_idx));
 				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
 			} else {
 				self.emit_numeric_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
@@ -1543,6 +1523,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::GlobalGet(global_idx));
 			// Convert to i64 for emit_numeric_value context
 			func.instruction(&Instruction::I64TruncF64S);
+			self.emit_int_from_machine(func);
 		} else {
 			self.emit_numeric_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
@@ -1742,6 +1723,10 @@ impl WasmGcEmitter {
 		let value = value.drop_meta();
 
 		match type_name.as_str() {
+			"i64" | "int64" if !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_)) => {
+				self.emit_wrapping_int(func, value);
+				self.emit_call(func, "new_int");
+			}
 			"int" | "integer" | "i32" | "i64" | "long" => {
 				// Cast to integer
 				match value {
@@ -1768,6 +1753,7 @@ impl WasmGcEmitter {
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
 						func.instruction(&Instruction::I64TruncF64S);
+						self.emit_int_from_machine(func);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible
@@ -1973,7 +1959,10 @@ impl WasmGcEmitter {
 		match node {
 			Node::Number(num) => {
 				match num {
-					Number::Int(n) => func.instruction(&Instruction::I64Const(*n)),
+					Number::Int(_) | Number::BigInt(_) => {
+						self.emit_int_literal(func, &num.to_bigint());
+						func
+					}
 					Number::Float(f) => func.instruction(&Instruction::I64Const(*f as i64)),
 					Number::Quotient(n, d) => func.instruction(&Instruction::I64Const(n / d)),
 					Number::Complex(r, _i) => func.instruction(&Instruction::I64Const(*r as i64)),
@@ -2025,15 +2014,7 @@ impl WasmGcEmitter {
 						.lookup(name)
 						.map(|l| l.position)
 						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
-					// Get current value
-					func.instruction(&Instruction::LocalGet(local_pos));
-					// Add/subtract 1
-					func.instruction(&Instruction::I64Const(1));
-					if *op == Op::Inc {
-						func.instruction(&Instruction::I64Add);
-					} else {
-						func.instruction(&Instruction::I64Sub);
-					}
+					self.emit_int_step(func, local_pos, op);
 					// Store and return new value
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -2055,23 +2036,9 @@ impl WasmGcEmitter {
 					self.emit_numeric_value(func, right);
 					// Apply base operation
 					match base_op {
-						Op::Add => {
-							func.instruction(&Instruction::I64Add);
-						}
-						Op::Sub => {
-							func.instruction(&Instruction::I64Sub);
-						}
-						Op::Mul => {
-							func.instruction(&Instruction::I64Mul);
-						}
-						Op::Div => {
-							func.instruction(&Instruction::I64DivS);
-						}
-						Op::Mod => {
-							func.instruction(&Instruction::I64RemS);
-						}
-						Op::Pow => {
-							self.emit_call(func, "i64_pow");
+						Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
+							let right_range = self.int_range(right);
+							self.emit_int_op(func, &base_op, None, right_range);
 						}
 						Op::And => {
 							func.instruction(&Instruction::I64And);
@@ -2092,29 +2059,7 @@ impl WasmGcEmitter {
 			}
 			// Arithmetic operators
 			Node::Key(left, op, right) if op.is_arithmetic() => {
-				self.emit_numeric_value(func, left);
-				self.emit_numeric_value(func, right);
-				match op {
-					Op::Add => {
-						func.instruction(&Instruction::I64Add);
-					}
-					Op::Sub => {
-						func.instruction(&Instruction::I64Sub);
-					}
-					Op::Mul => {
-						func.instruction(&Instruction::I64Mul);
-					}
-					Op::Div => {
-						func.instruction(&Instruction::I64DivS);
-					}
-					Op::Mod => {
-						func.instruction(&Instruction::I64RemS);
-					}
-					Op::Pow => {
-						self.emit_call(func, "i64_pow");
-					}
-					_ => unreachable!(),
-				}
+				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
@@ -2137,16 +2082,8 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, left);
 				func.instruction(&Instruction::End);
 			}
-			Node::Key(left, Op::Xor, right) => {
-				self.emit_numeric_value(func, left);
-				self.emit_numeric_value(func, right);
-				func.instruction(&Instruction::I64Xor);
-			}
-			// Comparison operators
-			Node::Key(left, op, right) if op.is_comparison() => {
-				self.emit_numeric_value(func, left);
-				self.emit_numeric_value(func, right);
-				self.emit_comparison(func, op);
+			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
+				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
 			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
@@ -2156,12 +2093,12 @@ impl WasmGcEmitter {
 						self.emit_float_value(func, right);
 						func.instruction(&Instruction::F64Sqrt);
 						func.instruction(&Instruction::I64TruncF64S);
+						self.emit_int_from_machine(func);
 					}
 					Op::Neg => {
-						// -x = 0 - x
-						func.instruction(&Instruction::I64Const(0));
 						self.emit_numeric_value(func, right);
-						func.instruction(&Instruction::I64Sub);
+						let range = self.int_range(right);
+						self.emit_int_neg(func, range);
 					}
 					Op::Not => {
 						// !x = x == 0
@@ -2170,19 +2107,9 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::I64ExtendI32U);
 					}
 					Op::Abs => {
-						// |x| = if x < 0 then -x else x
-						let temp = self.next_temp_local;
 						self.emit_numeric_value(func, right);
-						func.instruction(&Instruction::LocalTee(temp));
-						func.instruction(&Instruction::I64Const(0));
-						func.instruction(&Instruction::I64LtS);
-						func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-						func.instruction(&Instruction::I64Const(0));
-						func.instruction(&Instruction::LocalGet(temp));
-						func.instruction(&Instruction::I64Sub);
-						func.instruction(&Instruction::Else);
-						func.instruction(&Instruction::LocalGet(temp));
-						func.instruction(&Instruction::End);
+						let range = self.int_range(right);
+						self.emit_int_abs(func, range);
 					}
 					_ => panic!("Unhandled prefix operator: {:?}", op),
 				}
@@ -2229,12 +2156,14 @@ impl WasmGcEmitter {
 					if local.kind.is_float() {
 						// Convert f64 local to i64 for integer operations
 						func.instruction(&Instruction::I64TruncF64S);
+						self.emit_int_from_machine(func);
 					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
 						// Convert f64 global to i64 for integer operations
 						func.instruction(&Instruction::I64TruncF64S);
+						self.emit_int_from_machine(func);
 					}
 				} else {
 					panic!("Undefined variable: {}", name);
@@ -2314,9 +2243,9 @@ impl WasmGcEmitter {
 		match node {
 			Node::Number(num) => {
 				match num {
-					Number::Int(n) => {
-						// Convert integer to float
-						func.instruction(&Instruction::F64Const(Ieee64::new((*n as f64).to_bits())));
+					Number::Int(_) | Number::BigInt(_) => {
+						let value: f64 = num.clone().into();
+						func.instruction(&Instruction::F64Const(Ieee64::new(value.to_bits())));
 					}
 					Number::Float(f) => {
 						func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
@@ -2372,19 +2301,15 @@ impl WasmGcEmitter {
 						// WASM doesn't have F64Rem. Drop f64 values and use i64 path.
 						func.instruction(&Instruction::Drop);
 						func.instruction(&Instruction::Drop);
-						self.emit_numeric_value(func, left);
-						self.emit_numeric_value(func, right);
-						func.instruction(&Instruction::I64RemS);
-						func.instruction(&Instruction::F64ConvertI64S);
+						self.emit_int_operands_op(func, left, op, right);
+						self.emit_int_to_f64(func, None);
 					}
 					Op::Pow => {
 						// Drop f64 values and use i64_pow
 						func.instruction(&Instruction::Drop);
 						func.instruction(&Instruction::Drop);
-						self.emit_numeric_value(func, left);
-						self.emit_numeric_value(func, right);
-						self.emit_call(func, "i64_pow");
-						func.instruction(&Instruction::F64ConvertI64S);
+						self.emit_int_operands_op(func, left, op, right);
+						self.emit_int_to_f64(func, None);
 					}
 					_ => unreachable!(),
 				}
@@ -2423,14 +2348,12 @@ impl WasmGcEmitter {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if !local.kind.is_float() {
-						// Convert i64 local to f64
-						func.instruction(&Instruction::F64ConvertI64S);
+						self.emit_int_to_f64(func, None);
 					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if !kind.is_float() {
-						// Convert i64 global to f64
-						func.instruction(&Instruction::F64ConvertI64S);
+						self.emit_int_to_f64(func, None);
 					}
 				} else {
 					panic!("Undefined variable: {}", name);
@@ -2449,7 +2372,7 @@ impl WasmGcEmitter {
 						// Check for user function call
 						if self.ctx.user_functions.contains_key(fn_name) {
 							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-							func.instruction(&Instruction::F64ConvertI64S);
+							self.emit_int_to_f64(func, None);
 							return;
 						}
 					}

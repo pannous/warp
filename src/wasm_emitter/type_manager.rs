@@ -23,6 +23,15 @@ pub struct TypeManager {
 	/// Type index for $Node struct
 	pub node_type: u32,
 
+	/// $Limbs = (array (mut i32)): BigInt magnitude, little-endian base 2^32
+	pub limbs_type: u32,
+
+	/// $BigInt = (struct (field $negative i32) (field $limbs (ref null $Limbs)))
+	pub big_int_type: u32,
+
+	/// $BigInts = (array (mut (ref null $BigInt))): heap that Int handles index into
+	pub big_heap_type: u32,
+
 	/// Next available type index
 	next_type_idx: u32,
 
@@ -45,6 +54,9 @@ impl TypeManager {
 			i64_box_type: 0,
 			f64_box_type: 0,
 			node_type: 0,
+			limbs_type: 0,
+			big_int_type: 0,
+			big_heap_type: 0,
 			next_type_idx: 0,
 			user_type_indices: HashMap::new(),
 		}
@@ -109,6 +121,28 @@ impl TypeManager {
 			mutable: false,
 		}]);
 		self.f64_box_type = self.next_type_idx;
+		self.next_type_idx += 1;
+
+		self.emit_big_int_types();
+	}
+
+	/// Types behind unbounded Int, see wasm_emitter/big_int.rs
+	fn emit_big_int_types(&mut self) {
+		self.types.ty().array(&Val(ValType::I32), true);
+		self.limbs_type = self.next_type_idx;
+		self.next_type_idx += 1;
+
+		let limbs_ref = RefType { nullable: true, heap_type: HeapType::Concrete(self.limbs_type) };
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: false }, // negative
+			FieldType { element_type: Val(Ref(limbs_ref)), mutable: false }, // limbs
+		]);
+		self.big_int_type = self.next_type_idx;
+		self.next_type_idx += 1;
+
+		let big_ref = RefType { nullable: true, heap_type: HeapType::Concrete(self.big_int_type) };
+		self.types.ty().array(&Val(Ref(big_ref)), true);
+		self.big_heap_type = self.next_type_idx;
 		self.next_type_idx += 1;
 	}
 

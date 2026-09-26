@@ -793,8 +793,19 @@ fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
-		Node::Empty | Node::Number(_) | Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {}
+		Node::Number(number) => {
+			if number.is_integer() && !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
+				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
+			}
+		}
+		Node::Empty | Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
+			if op.is_arithmetic()
+				|| op.is_compound_assign()
+				|| matches!(op, Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor)
+			{
+				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
+			}
 			if *op == Op::Assign {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
 					ctx.required_functions.insert("node_set_at");
