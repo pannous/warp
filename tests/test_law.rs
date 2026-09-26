@@ -59,8 +59,8 @@ fn test_law_float_parameters_are_tested() {
 fn test_law_lean_export() {
 	let lawful = separate_laws(parse(SQUARE));
 	let source = lean::export(&lawful.functions, &lawful.laws[0], &["grind"]).unwrap();
-	assert!(source.contains("def square (x : Int) : Int := (x * x)"), "{source}");
-	assert!(source.contains("theorem square_law (x : Int) : (square (-x)) = (square x)"), "{source}");
+	assert!(source.contains("def square (x : BitVec 64) : BitVec 64 := (x * x)"), "{source}");
+	assert!(source.contains("theorem square_law (x : BitVec 64) : (square (-x)) = (square x)"), "{source}");
 }
 
 #[test]
@@ -79,8 +79,22 @@ fn test_law_violation_reported_by_verify() {
 }
 
 
+// Warp Int wraps: square(3037000500) == -9223372036709301616, so x*x >= 0 is false
+const OVERFLOWING: &str = "square(x) := x*x\nlaw square(x) >= 0";
+
 #[test]
-fn test_law_nonlinear_needs_mathlib() {
-	let reports = verify("square(x) := x*x\nlaw square(x) >= 0");
-	assert_eq!(reports[0].assurance, Assurance::Proved, "{}", reports[0]);
+fn test_law_overflow_found_by_property_tests() {
+	let lawful = separate_laws(parse(OVERFLOWING));
+	assert_eq!(
+		property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, OVERFLOWING),
+		Verdict::Violated("counterexample x=3037000500".into())
+	);
+}
+
+#[test]
+fn test_law_overflow_found_by_lean() {
+	let lawful = separate_laws(parse(OVERFLOWING));
+	let verdict = lean::prove(&lawful.functions, &lawful.laws[0]);
+	assert!(matches!(&verdict, Verdict::Violated(why) if why.contains("lean counterexample x=")), "{verdict:?}");
+	assert!(verify(OVERFLOWING)[0].failed());
 }
