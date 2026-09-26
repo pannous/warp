@@ -572,9 +572,8 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
-		// Set emit flag based on whether any FFI imports were found
-		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -587,6 +586,27 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
+	}
+
+	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.
+	/// Explicitly enabled imports stay enabled.
+	fn derive_imports_from_effects(&mut self, node: &Node) {
+		use crate::effects::{Capability, EffectReport};
+		let effects = EffectReport::of(node);
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name));
+		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
+		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
+		self.config.emit_host_imports |= effects.needs(Capability::Host);
+	}
+
+	/// Import modules this module declares, known after `emit_for_node`
+	pub fn imports(&self, capability: crate::effects::Capability) -> bool {
+		use crate::effects::Capability::*;
+		match capability {
+			Host => self.config.emit_host_imports,
+			Wasi => self.config.emit_wasi_imports,
+			Ffi => self.config.emit_ffi_imports,
+		}
 	}
 
 	/// Emit with user-defined types from a TypeRegistry
@@ -794,12 +814,7 @@ impl WasmGcEmitter {
 
 		let node_ref = self.node_ref(false);
 		let func_type = self.type_manager.types().len();
-		// WASI mode: return i64 directly instead of Node ref
-		if self.config.emit_wasi_imports {
-			self.type_manager.types_mut().ty().function(vec![], vec![ValType::I64]);
-		} else {
-			self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
-		}
+		self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types
@@ -2909,30 +2924,6 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	Ok(crate::node::data(gc_obj))
 }
 
-/// Check if code uses fetch (needs host imports)
-///  todo get rid of hard-coded logic, see usage
-fn uses_fetch(code: &str) -> bool {
-	code.contains("fetch ")
-}
-
-/// Check if code uses WASI functions (puts, puti, putl, putf, fd_write)
-fn uses_wasi(code: &str) -> bool {
-	code.contains("puts ")
-		|| code.contains("puti ")
-		|| code.contains("putl ")
-		|| code.contains("putf ")
-		|| code.contains("fd_write")
-}
-
-/// Check if code uses FFI imports (import X from Y, use m/c)
-fn uses_ffi(code: &str) -> bool {
-	// Todo: we need to pre-load the libraries in analyzer anyways,
-	// and in that process, we can check if the library is FFI or not.
-	if code.contains("import ") { return true;}
-	if code.contains("use "){ return true; }
-	false
-}
-
 /// Find a struct instantiation anywhere in the AST using TypeRegistry
 /// todo instead of recursing different types individually, we should have one central walker and delegate from there.
 fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
@@ -2988,11 +2979,17 @@ pub fn eval(code: &str) -> Node {
 	eval_parsed(lawful.program, &code)
 }
 
-/// Compile and run an already parsed program; `code` only feeds the import heuristics.
-pub fn eval_parsed(node: Node, code: &str) -> Node {
+/// Compile and run an already parsed program; imports follow its resolved effects.
+pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	use crate::analyzer::collect_all_types;
+	use crate::effects::{without_constraints, Capability, EffectReport};
 	use crate::type_kinds::TypeRegistry;
 	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
+
+	if let Some(answer) = EffectReport::of(&node).answer(&node) {
+		return answer;
+	}
+	let node = without_constraints(node);
 
 	// Pre-scan: collect all type definitions (supports forward references)
 	let mut type_registry = TypeRegistry::new();
@@ -3009,16 +3006,10 @@ pub fn eval_parsed(node: Node, code: &str) -> Node {
 
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
-	let needs_host = uses_fetch(code); // todo iterate over all used functions and check if they are a host import.
-	let needs_wasi = uses_wasi(code);
-	let needs_ffi = uses_ffi(code);
-	if needs_host {
-		emitter.set_host_imports(true);
-	}
-	if needs_wasi {
-		emitter.set_wasi_imports(true);
-	}
 	emitter.emit_for_node(&node);
+	let needs_host = emitter.imports(Capability::Host);
+	let needs_wasi = emitter.imports(Capability::Wasi);
+	let needs_ffi = emitter.imports(Capability::Ffi);
 	let bytes = emitter.finish();
 
 	// Use appropriate linker based on imports needed
@@ -3034,7 +3025,7 @@ pub fn eval_parsed(node: Node, code: &str) -> Node {
 
 	if needs_wasi {
 		match read_bytes_with_wasi(&bytes) {
-			Ok(result) => return Node::Number(Number::Int(result)),
+			Ok(result) => return result,
 			Err(e) => {
 				warn!("WASI eval failed: {}", e);
 				return node;

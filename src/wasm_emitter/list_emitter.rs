@@ -54,30 +54,34 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Check for WASI calls: puts, puti, putl, putf, fd_write
+		// WASI calls: puts, puti, putl, putf, fd_write — their i64 result is boxed like any value
 		if items.len() >= 2 && self.config.emit_wasi_imports {
 			if let Node::Symbol(s) = items[0].drop_meta() {
-				match s.as_str() {
+				let emitted = match s.as_str() {
 					"puts" => {
 						self.emit_wasi_puts(func, &items[1]);
 						func.instruction(&Instruction::I64ExtendI32S);
-						return;
+						true
 					}
 					"puti" | "putl" => {
 						self.emit_wasi_puti(func, &items[1]);
 						self.emit_numeric_value(func, &items[1]);
-						return;
+						true
 					}
 					"putf" => {
 						self.emit_wasi_putf(func, &items[1]);
 						func.instruction(&Instruction::I64ExtendI32S);
-						return;
+						true
 					}
 					"fd_write" if items.len() >= 5 => {
 						self.emit_wasi_fd_write_call(func, &items[1..]);
-						return;
+						true
 					}
-					_ => {}
+					_ => false,
+				};
+				if emitted {
+					self.emit_call(func, "new_int");
+					return;
 				}
 			}
 		}

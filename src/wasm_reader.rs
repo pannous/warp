@@ -309,8 +309,11 @@ pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	let mut results = vec![Val::I32(0)];
 	main.call(&mut store, &[], &mut results)?;
 
-	// Convert result to Node - handle both primitives and GC refs
-	let result = &results[0];
+	val_to_node(&results[0], &mut store, &instance)
+}
+
+/// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
+fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -> Result<Node> {
 	match result {
 		Val::I64(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n as i64))),
@@ -426,7 +429,7 @@ impl WasiState {
 }
 
 /// Load WASM bytes with WASI support (for fd_write, puts, etc.)
-pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<i64> {
+pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
 	let engine = gc_engine();
 	let mut store: Store<WasiState> = Store::new(&engine, WasiState::new());
 
@@ -442,10 +445,9 @@ pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<i64> {
 		.or_else(|| instance.get_func(&mut store, "_start"))
 		.ok_or_else(|| anyhow!("No main or _start function"))?;
 
-	let mut results = vec![Val::I64(0)];
+	let mut results = vec![Val::I32(0)];
 	main.call(&mut store, &[], &mut results)?;
-
-	Ok(results[0].unwrap_i64())
+	val_to_node(&results[0], &mut store, &instance)
 }
 
 /// Load WASM bytes with FFI support (for native function imports)
