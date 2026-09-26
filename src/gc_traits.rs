@@ -1224,9 +1224,8 @@ pub mod wasm_name_resolver {
 		) -> Result<u32> {
 			for group in reader {
 				let group = group?;
-				let entries: Vec<(usize, wp::SubType)> = group.into_types_and_offsets().collect();
 				let group_start = next_index;
-				for (_offset, subtype) in entries.into_iter() {
+				for subtype in group.into_types() {
 					let actual_index = next_index;
 					let info = ParsedTypeInfo::from_subtype(actual_index, subtype, group_start)?;
 					types.push(info);
