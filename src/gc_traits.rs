@@ -87,7 +87,7 @@ impl FromVal for Rooted<StructRef> {
         let anyref = val
             .unwrap_anyref()
             .ok_or_else(|| anyhow!("not an anyref"))?;
-        anyref.unwrap_struct(&*store)
+        Ok(anyref.unwrap_struct(&*store)?)
     }
 }
 
@@ -397,7 +397,7 @@ impl GcObject {
             let anyref = val
                 .unwrap_anyref()
                 .ok_or_else(|| anyhow!("field {} is not an anyref", idx))?;
-            anyref.unwrap_struct(&*store)
+            Ok(anyref.unwrap_struct(&*store)?)
         })
     }
 
@@ -441,7 +441,7 @@ impl GcObject {
         self.with_store(|store| {
             let idx = field.to_field_index(&self.inner, &*store)?;
             let val = value.to_val(&mut *store, self.instance.as_ref())?;
-            self.inner.set_field(&mut *store, idx, val)
+            Ok(self.inner.set_field(&mut *store, idx, val)?)
         })
     }
 

@@ -42,7 +42,7 @@ impl GcObject {
 		let mut store = self.store.borrow_mut();
 		if let Some(anyref) = self.inner.unwrap_anyref() {
 			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				return structref.field(&mut *store, idx);
+				return Ok(structref.field(&mut *store, idx)?);
 			}
 		}
 		Err(anyhow!("Cannot read field at index {}", idx))
