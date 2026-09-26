@@ -34,6 +34,7 @@ pub mod function;
 pub mod normalize;
 pub mod local;
 pub mod law;
+pub mod effects;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================

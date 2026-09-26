@@ -25,6 +25,7 @@ pub mod normalize;
 pub mod run;
 pub mod local;
 pub mod law;
+pub mod effects;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
