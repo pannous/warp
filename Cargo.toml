@@ -95,7 +95,7 @@ parity-wasm = "*" # Low-level WebAssembly format library for serializing, deseri
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]
 # only compiled and included when running tests or examples
-syn = { version = "2.0", features = ["full", "extra-traits"] }
+syn = { version = "3", features = ["full", "extra-traits"] }
 
 
 [profile.dev]
