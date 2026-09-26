@@ -2970,10 +2970,6 @@ fn find_instantiation_recursive(registry: &TypeRegistry, node: &Node) -> Option<
 
 // Re-export eval function for tests
 pub fn eval(code: &str) -> Node {
-	use crate::analyzer::collect_all_types;
-	use crate::type_kinds::TypeRegistry;
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
-
 	// Detect file path and load file content
 	let code = if !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp")) {
 		if let Ok(content) = std::fs::read_to_string(code) {
@@ -2985,7 +2981,18 @@ pub fn eval(code: &str) -> Node {
 		code.to_string()
 	};
 
-	let node = WaspParser::parse(&code);
+	let lawful = crate::law::separate_laws(WaspParser::parse(&code));
+	if let Some(violation) = crate::law::assert_laws(&lawful, &code) {
+		return violation;
+	}
+	eval_parsed(lawful.program, &code)
+}
+
+/// Compile and run an already parsed program; `code` only feeds the import heuristics.
+pub fn eval_parsed(node: Node, code: &str) -> Node {
+	use crate::analyzer::collect_all_types;
+	use crate::type_kinds::TypeRegistry;
+	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
 	// Pre-scan: collect all type definitions (supports forward references)
 	let mut type_registry = TypeRegistry::new();
@@ -3002,9 +3009,9 @@ pub fn eval(code: &str) -> Node {
 
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
-	let needs_host = uses_fetch(&code); // todo iterate over all used functions and check if they are a host import.
-	let needs_wasi = uses_wasi(&code);
-	let needs_ffi = uses_ffi(&code);
+	let needs_host = uses_fetch(code); // todo iterate over all used functions and check if they are a host import.
+	let needs_wasi = uses_wasi(code);
+	let needs_ffi = uses_ffi(code);
 	if needs_host {
 		emitter.set_host_imports(true);
 	}

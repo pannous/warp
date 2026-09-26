@@ -24,6 +24,7 @@ pub mod function;
 pub mod normalize;
 pub mod run;
 pub mod local;
+pub mod law;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
@@ -83,6 +84,11 @@ fn main() {
         }
         #[cfg(not(feature = "WEBAPP"))]
         println!("warp compiled without webview");
+    } else if let Some(target) = arg_string.strip_prefix("verify ") {
+        let code = if file_exists(target) { load_file(target) } else { target.to_string() };
+        let reports = law::verify(&code);
+        reports.iter().for_each(|report| println!("{}", report));
+        std::process::exit(reports.iter().any(|report| report.failed()) as i32);
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
         let warp_code = load_file(&arg_string);
         let result = eval(&warp_code);
@@ -190,6 +196,7 @@ fn usage() {
     println!("  warp <file.warp>     Execute a warp file");
     println!("  warp <file.wasm>     Run a wasm file");
     println!("  warp eval <code>     Evaluate code");
+    println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp repl            Start interactive console");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

@@ -1,0 +1,9 @@
+square(x) := x*x
+law square(-x) == square(x)
+law square(x) >= 0
+add(a,b) := a+b
+law add(a,b) == add(b,a)
+law add(a,add(b,c)) == add(add(a,b),c)
+double(x) := x+x
+law double(x) == 2*x
+square(3)

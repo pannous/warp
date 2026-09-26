@@ -33,6 +33,7 @@ pub mod ffi_parser;
 pub mod function;
 pub mod normalize;
 pub mod local;
+pub mod law;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
