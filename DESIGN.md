@@ -1,6 +1,6 @@
 # Warp semantic architecture
 
-## Purpose
+## @Purpose.md
 
 Warp aims to combine a compact, expressive source language with deterministic static
 semantics, inferred types and resource behavior, and direct WebAssembly execution.
@@ -331,6 +331,79 @@ An agent or IDE may propose a resolution, but acceptance must persist a determin
 choice in a sidecar or the semantic artifact. Builds consume that choice without an
 agent in the loop.
 
+## Beyond the baseline
+
+### Progressive verification: `law`
+
+Progressive disclosure applies to correctness as well as to control. A law states a
+property once; its assurance level rises without changing the source:
+
+```warp
+square(x) := x*x
+law square(-x) == square(x)
+```
+
+1. stated — parsed, type checked, attached to the function in semantic IR;
+2. asserted — checked at runtime in debug builds;
+3. tested — compiled into generated property tests run by the round-trip harness;
+4. proved — exported to an SMT solver or Lean; the proof result is persisted in the
+   semantic artifact.
+
+Laws are specifications agents can check themselves against. They are also the
+prerequisite for lawful lifting: broadcasting over containers is only permitted where
+functor-style laws hold.
+
+### The compiler is a query interface
+
+For agents, the compiler interface matters more than surface syntax. `type of x`,
+`effects of f`, and `cost sort(xs)` are language-level queries with structured answers.
+Every diagnostic carries a span, the resolved facts involved, and a machine-applicable
+fix-it edit where one exists.
+
+### Effects as enforced capabilities
+
+The inferred `EffectSet` selects which WIT imports a module declares. A module without
+a `wasi:filesystem` import cannot perform file IO regardless of type checker bugs, so the
+WebAssembly component model is a sound runtime backstop for the effect system. Neither a
+generated-Rust backend nor a conventional native target offers this.
+
+### The semantic artifact is Wasp data
+
+`Program` is kept out of `Node`, but it serializes to Wasp notation. The language then
+describes its own semantics in its own format, golden tests of typed IR are readable,
+the "explicit systems view" is simply this projection, and agents can diff resolutions.
+
+### Content-addressed resolutions
+
+Persisted disambiguations are keyed by a hash of the normalized subtree plus its
+resolved scope, not by line and column. Edits elsewhere never invalidate them; a
+resolution is re-requested only when its anchor hash changes.
+
+### Exact numbers by default
+
+Numeric representation is inferred like ownership. `1/3` is a rational and
+`0.1+0.2 == 0.3` holds; `f64`, `i64`, or bignum are representation choices the compiler
+infers or the programmer constrains (`@f64`). The existing `Quotient` in
+`src/extensions/numbers.rs` is the starting point.
+
+### Cautions
+
+- Parallelism is inferred only for code proved pure; otherwise it changes the
+  observable order of effects.
+- Ownership and effect inference is not principal across module boundaries. Infer, then
+  freeze the result into the exported interface (WIT) so callee body changes cannot
+  silently break callers.
+- `cost` cannot be derived in general: it is declared in library signatures, composed
+  where possible, and validated by benchmarks.
+- Typed iteration (`for byte in text`) is dispatch on the expected type and requires
+  bidirectional checking in elaboration, never in the emitter.
+
+### Measuring semantic density
+
+`probes/agent_bench/` should hold small tasks solved by agents in Warp, Rust, and
+Python, scoring first-try correctness and tokens to a verified solution. This turns the
+information-theoretic goal of Purpose.md into a tracked number.
+
 ## Minimal vertical slice
 
 The first slice should prove the new boundary without replacing the whole compiler.
@@ -370,10 +443,15 @@ match safe_head([1 2 3]) {
    and GC types.
 6. Differential-test `source -> IR interpreter` against
    `source -> IR -> WASM -> Node`.
-7. Add Option/Result variants and exhaustive match.
-8. Infer effects from resolved host calls.
-9. Add an ownership report, then enforce `borrow`/`move`/`copy`/`@noalloc` constraints.
-10. Retire direct source-`Node` interpretation in the emitter feature by feature.
+7. Serialize `Program` as Wasp from the start, for golden IR tests.
+8. Add Option/Result variants and exhaustive match.
+9. Infer effects from resolved host calls and derive WIT imports from them.
+10. Add `law` declarations: runtime assertions, then generated property tests, then
+    SMT/Lean export.
+11. Add an ownership report, then enforce `borrow`/`move`/`copy`/`@noalloc` constraints.
+12. Add the content-addressed resolution sidecar.
+13. Add lawful lifting once traits and laws exist.
+14. Retire direct source-`Node` interpretation in the emitter feature by feature.
 
 Each migrated construct should have golden tests for:
 
