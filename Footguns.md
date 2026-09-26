@@ -39,7 +39,7 @@ Warp: `9007199254740993` → `9007199254740993`; integers are 64 bit, not double
 
 ### 32 bit overflow
 **Java, C#, C (`int`)**: `2147483647 + 1` → *-2147483648*  
-Warp: `x=2147483647;x+1` → `2147483648`. (64 bit overflow is still NOT YET, see below.) (`test_integers_beyond_double_precision`)
+Warp: `x=2147483647;x+1` → `2147483648`. (64 bit: see Integer overflow below.) (`test_integers_beyond_double_precision`)
 
 ### Power associativity
 **Excel, some calculators**: `=2^3^2` → *64*  
@@ -88,12 +88,30 @@ Warp: `log(x) := puts x⏎square(x) := log(x) ! Pure⏎square(3)` →
 Effects are inferred along the call chain and a module without IO calls has no WASI import at all, so it *cannot* do IO
 ([DESIGN.md → Effects as enforced capabilities](DESIGN.md#effects-as-enforced-capabilities)). (`test_hidden_side_effect_is_rejected`, `tests/test_effects.rs`)
 
-### Overflow that nobody notices
-**C, Rust release builds, Java, Go**: `x*x` for `x = 3037000500` → *-9223372036709301616* and the program continues.  
-Warp: the wrap still happens (NOT YET), but one line of `law` turns it into a loud failure:
-`square(x) := x*x⏎law square(x) >= 0⏎square(3037000500)` → `Error('law (square x)>=0 violated: counterexample x=3037000500')`,
-and `warp verify` finds the counterexample by property testing without being told the input
-([DESIGN.md → Progressive verification](DESIGN.md#progressive-verification-law)). (`test_law_catches_overflow_at_runtime`, `tests/test_law.rs`)
+### Integer overflow
+**C, Java, Go, Rust --release**: `INT64_MAX + 1` → *INT64_MIN*; `x*x` for `x = 3037000500` → *-9223372036709301616*; **Java**: `Math.abs(Long.MIN_VALUE)` → *negative*  
+Warp (since fcbd300b): Int is unbounded, an i64 fast path promotes to BigInt on overflow:
+`square(x) := x*x; square(3037000500)` → `9223372037000250000`, `2^64` → `18446744073709551616`, `abs(-2^63)` → `9223372036854775808`,
+`2^100` → `1267650600228229401496703205376`. Wrapping is an explicit opt-out: `(2^63) as i64` → `-9223372036854775808`
+(🐞 `as i64` inside a function body still panics, `test_explicit_wrap_inside_function`).
+`law square(x) >= 0` now holds at runtime; `law` still turns a false property into a loud failure:
+`dec(x) := x-1⏎law dec(x) >= 0⏎dec(0)` → `Error('law (dec x)>=0 violated: counterexample x=0')`
+([DESIGN.md → Progressive verification](DESIGN.md#progressive-verification-law)).
+(`test_integer_overflow_does_not_wrap`, `test_law_holds_because_integers_do_not_wrap`, `test_law_catches_a_false_property`, `tests/test_unbounded_int.rs`)
+
+Solved elsewhere: **Python**: `2**63, 2**64, abs(-2**63)` → `9223372036854775808 18446744073709551616 9223372036854775808`: `int` is arbitrary precision (small ints fast path, bignum on demand). **Haskell** `2^63 :: Integer` → `9223372036854775808` (and `Integer` is the default type).
+**Swift**: `Int.max + 1` → traps at runtime (verified: process aborts), wrapping only via the explicit `&+` → `-9223372036854775808`, and `addingReportingOverflow`.
+**Rust**: `i64::MAX.checked_add(1)` → `None`, `overflowing_add` → `(-9223372036854775808, true)`: the operation names the policy (`checked_/wrapping_/saturating_/overflowing_`).
+Adopt in Warp: Python/Haskell semantics (Int is ℤ, i64 is an inferred representation that promotes to bignum on overflow, e.g. via an overflow check on the fast path as in [wiki/int60.md](wiki/int60.md)), plus Swift-style explicit wrapping operators or an `@wrap` / `@i64` representation annotation for code that wants modular arithmetic.
+
+### Big literals
+**JS**: `100000000000000000000` → *1e+20* (a double); Warp before fcbd300b: a string of NUL bytes.  
+Warp: `100000000000000000000` → `100000000000000000000`, round-trips exactly.
+
+Solved elsewhere: **Rust**: `let _x: i64 = 100000000000000000000;` → `error: literal out of range for 'i64'` (deny-by-default lint).
+**Go**: `var x int64 = 100000000000000000000` → `cannot use 100000000000000000000 (untyped int constant) as int64 value in variable declaration (overflows)`, with the exact column.
+**JS**: `100000000000000000000n` → `100000000000000000000n`; **Python** `100000000000000000000` → the exact int.
+Adopt in Warp: until bignums exist, any integer literal outside i64 is a compile error with the span (Go/Rust); once Int is unbounded, the literal is simply a bignum (Python). Never a NUL string.
 
 ### Proofs about unbounded integers, run on wrapping ones
 **Lean/Coq/Dafny exports that model `int` as ℤ**: `law square(x) >= 0` → *Proved*, while the program returns `square(3037000500)` → `-9223372036709301616`.  
@@ -102,6 +120,7 @@ Now Int exports as `BitVec 64` with signed order (`BitVec.slt`/`sle`) and `srem`
 `bv_decide` counterexamples become Violated, and property tests start with `i64::MIN`, `i64::MAX` and ±3037000500.
 Lesson: a proof counts only when the Lean model matches the backend's machine semantics. Unbounded Int is tracked in `todo.md`,
 details in `notes/laws.md`. (`tests/test_law.rs`)
+Since fcbd300b the runtime Int is unbounded again, so the `BitVec 64` model is now the wrong one: see NOT YET → Proof model lags the runtime.
 
 ### Date guessing in data
 **Excel**: typing the gene name `SEPT2` → *2-Sep*  
@@ -156,27 +175,11 @@ but the result type of the sum is inferred as Int and truncated on return. (`tes
 Solved elsewhere: **Python**: `Fraction(1,4)+Fraction(1,4)` → `1/2`; **Julia**: `1//4+1//4` → `1//2`; **Haskell** `1%4 + 1%4` → `1 % 2`. The result type of `+` is computed from the operand types (a numeric tower/promotion rule: `Rational + Rational → Rational`), never from a default.
 Adopt in Warp: result types of arithmetic come from a promotion table over the operand types (Int ⊂ Rational ⊂ Real), checked in elaboration; a function's return type is never defaulted to Int ([DESIGN.md](DESIGN.md) "unknown names and unsolved overloads are errors, never `Symbol` or `Int` defaults").
 
-### 64 bit overflow
-**C, Java, Go, Rust --release**: `INT64_MAX + 1` → *INT64_MIN*  
-Warp today: `2^63` → `-9223372036854775808`, `2^64` → `0`, `abs(-2^63)` → `-9223372036854775808`,
-`255^8` via `*` → `-568640725896660991`.  
-Intended ([wiki/overflow.md](wiki/overflow.md)): promote to bignum instead of wrapping; wrapping only as an explicit
-representation choice. `law` already catches it and the Lean export models i64 as `BitVec 64` (see Solved);
-once integers become unbounded, the export must switch back to ℤ with them. (`test_integer_overflow_does_not_wrap`)
-
-Solved elsewhere: **Python**: `2**63, 2**64, abs(-2**63)` → `9223372036854775808 18446744073709551616 9223372036854775808`: `int` is arbitrary precision (small ints fast path, bignum on demand). **Haskell** `2^63 :: Integer` → `9223372036854775808` (and `Integer` is the default type).
-**Swift**: `Int.max + 1` → traps at runtime (verified: process aborts), wrapping only via the explicit `&+` → `-9223372036854775808`, and `addingReportingOverflow`.
-**Rust**: `i64::MAX.checked_add(1)` → `None`, `overflowing_add` → `(-9223372036854775808, true)`: the operation names the policy (`checked_/wrapping_/saturating_/overflowing_`).
-Adopt in Warp: Python/Haskell semantics (Int is ℤ, i64 is an inferred representation that promotes to bignum on overflow, e.g. via an overflow check on the fast path as in [wiki/int60.md](wiki/int60.md)), plus Swift-style explicit wrapping operators or an `@wrap` / `@i64` representation annotation for code that wants modular arithmetic.
-
-### Big literals silently corrupted
-Warp today: `100000000000000000000` → `'\0\0\0\0…'`, a string of NUL bytes, no error.  
-Intended: a bignum, or at least a compile error with the span.
-
-Solved elsewhere: **Rust**: `let _x: i64 = 100000000000000000000;` → `error: literal out of range for 'i64'` (deny-by-default lint).
-**Go**: `var x int64 = 100000000000000000000` → `cannot use 100000000000000000000 (untyped int constant) as int64 value in variable declaration (overflows)`, with the exact column.
-**JS**: `100000000000000000000n` → `100000000000000000000n`; **Python** `100000000000000000000` → the exact int.
-Adopt in Warp: until bignums exist, any integer literal outside i64 is a compile error with the span (Go/Rust); once Int is unbounded, the literal is simply a bignum (Python). Never a NUL string.
+### Proof model lags the runtime
+The mirror image of the solved "Proofs about unbounded integers, run on wrapping ones": the Lean export still models Int as wrapping `BitVec 64`,
+but since fcbd300b Warp Int is unbounded. `warp verify` on `square(x) := x*x⏎law square(x) >= 0` →
+*FAILED lean counterexample x=-4611686018427388111*, while the program computes `square(-4611686018427388111) > 0` → `1`.  
+Intended: export Int as Lean's `Int` again (and `as i64` values as `BitVec 64`), so the proof model follows the representation. (`test_proof_model_matches_unbounded_int`)
 
 ### Scientific notation and digit separators
 **Python/JS/Rust**: `1e3` → `1000.0`, `1_000_000` → `1000000`  

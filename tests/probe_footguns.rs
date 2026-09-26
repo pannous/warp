@@ -65,8 +65,13 @@ fn test_undefined_variable_is_an_error() {
 }
 
 #[test]
-fn test_law_catches_overflow_at_runtime() {
-	fails_with("square(x) := x*x\nlaw square(x) >= 0\nsquare(3037000500)", "violated");
+fn test_law_holds_because_integers_do_not_wrap() {
+	is!("square(x) := x*x\nlaw square(x) >= 0\nsquare(3037000500) > 2^63", true); // i64: -9223372036709301616
+}
+
+#[test]
+fn test_law_catches_a_false_property() {
+	fails_with("dec(x) := x-1\nlaw dec(x) >= 0\ndec(0)", "counterexample x=0");
 }
 
 #[test]
@@ -88,10 +93,16 @@ fn test_sum_of_quotients_is_not_truncated() {
 }
 
 #[test]
-#[ignore = "next"] // wiki/overflow.md: upgrade to bignum instead of wrapping
 fn test_integer_overflow_does_not_wrap() {
-	is!("2^64 > 2^63", true);
-	is!("abs(-2^63) > 0", true);
+	is!("2^64 > 2^63", true); // C, Java, Go, Rust --release: 2^64 wraps to 0
+	is!("abs(-2^63) > 0", true); // Java: Math.abs(Long.MIN_VALUE) < 0
+	is!("100000000000000000000 > 2^64", true); // was a string of NUL bytes
+}
+
+#[test]
+#[ignore = "next"] // `as i64` works at top level but panics inside a function body: Cannot extract numeric value from (x*x)asi64
+fn test_explicit_wrap_inside_function() {
+	is!("f(x) := (x*x) as i64; f(3037000500)", -9223372036709301616i64);
 }
 
 #[test]
@@ -156,4 +167,11 @@ fn test_character_indexing_is_unicode_safe() {
 #[ignore = "next"] // NFC 'é' vs NFD 'e'+U+0301 panics instead of comparing equal
 fn test_unicode_normalization() {
 	is!("'\u{e9}'=='e\u{301}'", true);
+}
+
+#[test]
+#[ignore = "next"] // since fcbd300b Int is unbounded, but Lean still exports BitVec 64: "lean counterexample x=-4611686018427388111"
+fn test_proof_model_matches_unbounded_int() {
+	let reports = warp::law::verify("square(x) := x*x\nlaw square(x) >= 0");
+	assert!(!reports[0].failed(), "{}", reports[0]);
 }
