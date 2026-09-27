@@ -235,6 +235,15 @@ fn test_list_plus_concatenates() {
 }
 
 #[test]
+fn test_const_is_single_assignment() {
+	fails_with("const x=5;x=6;x", "x is const"); // was silently 6
+	fails_with("const x=5;x+=1", "x is const");
+	fails_with("const a=(1 2);a#1=3", "a is const");
+	is!("const x=5;x", 5);
+	is!("a=1;const x=5;x+a", 6);
+}
+
+#[test]
 fn test_index_out_of_bounds_is_an_error() {
 	assert!(matches!(eval("x=[1 2 3]; x[3]"), Node::Error(_)));
 	assert!(matches!(eval("x=(1 2 3);x#0"), Node::Error(_)));

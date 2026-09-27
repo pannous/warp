@@ -259,6 +259,14 @@ Not yet: `pixel + 4` (append a scalar, expected by the ignored `test_array_opera
 Warp before: `a=(1 2);a#1 += 1;a#1` → compiler panic `Expected symbol in compound assignment`.  
 Warp: `2`; `x#i op= v` is `x#i = x#i op v` with the same value semantics as `x#i = v`. (`test_compound_index_assignment`)
 
+### `const` ignored
+Warp before: `const x=5;x=6;x` → `6`.
+Warp: `Error('x is const, cannot assign it again: x=6 at 1:11; fix: use a new name instead of x, or declare it without const')`,
+also for `x+=1`, `x++` and element assignment `a#1=3`; the check runs before emission (`check_constants`), then `const x=v`
+lowers to `x=v`. Not yet: `::=` does not parse (`Unexpected character '='`), and a const is not scoped (a function
+parameter of the same name is not reassigned, so no false positives, but no shadowing rules either).
+(`test_const_is_single_assignment`)
+
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
@@ -393,10 +401,6 @@ Decision needed: a `bool` kind touches the Node boundary (True/False are encoded
 checker and every truthiness rule. Options: (a) `Kind::Bool` with its own payload, arithmetic on it a compile error
 (recommended, as Intended); (b) keep 1/0 at runtime but reject `bool + bool` in the analyzer only; (c) keep as is and
 document it. Not changed here because it overlaps the truthiness and `yes`/`no` decisions owned elsewhere.
-
-### `const` ignored
-Warp today: `const x=5;x=6;x` → `6`.  
-Intended: a constness diagnostic with span and fix-it; `const` and `::=` enforce single assignment.
 
 ## Strings
 

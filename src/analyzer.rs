@@ -634,6 +634,7 @@ fn builtin_type_kind(name: &str) -> Option<Kind> {
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_declared_types(program, &mut HashMap::new())
+		.or_else(|| check_constants(program, &mut HashSet::new()))
 		.or_else(|| check_null_use(program, &mut HashSet::new()))
 		.map(Diagnostic::into_error)
 }
@@ -703,6 +704,41 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 	}
 }
 
+/// `const x=…` binds x once; any later assignment, compound assignment, increment or element assignment is rejected
+fn check_constants(node: &Node, constants: &mut HashSet<String>) -> Option<Diagnostic> {
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			let statements = match items.as_slice() {
+				[keyword, declaration, rest @ ..] if matches!(keyword.drop_meta(), Node::Symbol(s) if s == "const") => {
+					let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() else {
+						return Some(Diagnostic::at(declaration, format!("const needs a value: {}", declaration.serialize())).fix("const x = 5".to_string()));
+					};
+					if let Some(found) = check_constants(value, constants) {
+						return Some(found);
+					}
+					constants.insert(target.name());
+					rest
+				}
+				_ => items.as_slice(),
+			};
+			statements.iter().find_map(|statement| check_constants(statement, constants))
+		}
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => {
+			let place = match target.drop_meta() {
+				Node::Key(name, Op::Hash, _) => name.name(),
+				other => other.name(),
+			};
+			if constants.contains(&place) {
+				let message = format!("{place} is const, cannot assign it again: {}", node.drop_meta().serialize());
+				return Some(Diagnostic::at(node, message).fix(format!("use a new name instead of {place}, or declare it without const")));
+			}
+			check_constants(value, constants)
+		}
+		Node::Key(left, _, right) => check_constants(left, constants).or_else(|| check_constants(right, constants)),
+		_ => None,
+	}
+}
+
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
 fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
@@ -760,6 +796,15 @@ pub fn lower_declarations(node: Node) -> Node {
 			}
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
+		// `const x=v` → `x=v`; check_constants already enforced the single assignment
+		Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "const") => {
+			let mut declaration = items.into_iter().skip(1).map(lower_declarations).collect::<Vec<_>>();
+			if declaration.len() == 1 {
+				declaration.remove(0)
+			} else {
+				Node::List(declaration, bracket, separator)
+			}
+		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
 		other => other,
