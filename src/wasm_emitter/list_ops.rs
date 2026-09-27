@@ -10,6 +10,7 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_list_ops(&mut self) {
 		let node_ref = self.node_ref(false);
 		let node_ref_nullable = self.node_ref(true);
+		self.emit_runtime_errors();
 
 		// list_at(list: ref $Node, index: i64) -> i64
 		// Get the numeric value of the element at index (1-based)
@@ -24,38 +25,7 @@ impl WasmGcEmitter {
 			// Locals: 0=list, 1=index, 2=current (loop variable)
 			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
 
-			// current = list
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalSet(2));
-
-			// Loop while index > 1: current = current.value, index--
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			func.instruction(&Instruction::Loop(BlockType::Empty));
-
-			// if index <= 1, break
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64LeS);
-			func.instruction(&Instruction::BrIf(1)); // break to outer block
-
-			// current = current.value (field 2)
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 2,
-			});
-			func.instruction(&Instruction::LocalSet(2));
-
-			// index = index - 1
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::LocalSet(1));
-
-			// continue loop
-			func.instruction(&Instruction::Br(0));
-			func.instruction(&Instruction::End); // end loop
-			func.instruction(&Instruction::End); // end block
+			self.emit_list_walk(&mut func, 2);
 
 			// Get current.data (which is a ref to the element Node, cast from anyref)
 			func.instruction(&Instruction::LocalGet(2));
@@ -90,38 +60,7 @@ impl WasmGcEmitter {
 			// Locals: 0=list, 1=index, 2=current (loop variable)
 			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
 
-			// current = list
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalSet(2));
-
-			// Loop while index > 1: current = current.value, index--
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			func.instruction(&Instruction::Loop(BlockType::Empty));
-
-			// if index <= 1, break
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64LeS);
-			func.instruction(&Instruction::BrIf(1)); // break to outer block
-
-			// current = current.value (field 2)
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 2,
-			});
-			func.instruction(&Instruction::LocalSet(2));
-
-			// index = index - 1
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::LocalSet(1));
-
-			// continue loop
-			func.instruction(&Instruction::Br(0));
-			func.instruction(&Instruction::End); // end loop
-			func.instruction(&Instruction::End); // end block
+			self.emit_list_walk(&mut func, 2);
 
 			// Get current.data (which is a ref to the element Node, cast from anyref)
 			func.instruction(&Instruction::LocalGet(2));
@@ -203,6 +142,7 @@ impl WasmGcEmitter {
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
+			self.emit_text_index_guard(&mut func);
 
 			// Get node.data (which is a ref $String)
 			func.instruction(&Instruction::LocalGet(0));
@@ -309,38 +249,7 @@ impl WasmGcEmitter {
 			// Locals: 0=list, 1=index, 2=value, 3=current (loop variable)
 			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
 
-			// current = list
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalSet(3));
-
-			// Loop while index > 1: current = current.value, index--
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			func.instruction(&Instruction::Loop(BlockType::Empty));
-
-			// if index <= 1, break
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64LeS);
-			func.instruction(&Instruction::BrIf(1)); // break to outer block
-
-			// current = current.value (field 2)
-			func.instruction(&Instruction::LocalGet(3));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 2,
-			});
-			func.instruction(&Instruction::LocalSet(3));
-
-			// index = index - 1
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::LocalSet(1));
-
-			// continue loop
-			func.instruction(&Instruction::Br(0));
-			func.instruction(&Instruction::End); // end loop
-			func.instruction(&Instruction::End); // end block
+			self.emit_list_walk(&mut func, 3);
 
 			// Get current.data (which is the wrapper Node for the element)
 			func.instruction(&Instruction::LocalGet(3));
@@ -378,6 +287,7 @@ impl WasmGcEmitter {
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
+			self.emit_text_index_guard(&mut func);
 
 			// Get node.data (which is a ref $String)
 			func.instruction(&Instruction::LocalGet(0));
@@ -475,5 +385,81 @@ impl WasmGcEmitter {
 			let idx = self.register_func("node_set_at");
 			self.exports.export("node_set_at", ExportKind::Func, idx);
 		}
+	}
+}
+
+/// Runtime errors trap inside a function of that name; eval reports the name as an error value
+pub const RUNTIME_ERRORS: [&str; 1] = ["index_out_of_range"];
+
+impl WasmGcEmitter {
+	fn needs_indexing(&self) -> bool {
+		["list_at", "list_node_at", "list_set_at", "string_char_at", "string_set_char_at"]
+			.iter()
+			.any(|name| self.should_emit_function(name))
+	}
+
+	fn emit_runtime_errors(&mut self) {
+		if !self.needs_indexing() {
+			return;
+		}
+		for name in RUNTIME_ERRORS {
+			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
+				f.instruction(&Instruction::Unreachable);
+			});
+		}
+	}
+
+	/// Trap when the i32 condition on the stack is true
+	fn emit_fail_if(&mut self, func: &mut Function, error: &'static str) {
+		func.instruction(&Instruction::If(BlockType::Empty));
+		self.emit_call(func, error);
+		func.instruction(&Instruction::End);
+	}
+
+	fn emit_index_below_one(func: &mut Function) {
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64LtS);
+	}
+
+	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range
+	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
+		Self::emit_index_below_one(func);
+		self.emit_fail_if(func, "index_out_of_range");
+		func.instruction(&Instruction::LocalGet(0));
+		func.instruction(&Instruction::LocalSet(current));
+		func.instruction(&Instruction::Block(BlockType::Empty));
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(current));
+		func.instruction(&Instruction::RefIsNull);
+		self.emit_fail_if(func, "index_out_of_range");
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64LeS);
+		func.instruction(&Instruction::BrIf(1));
+		func.instruction(&Instruction::LocalGet(current));
+		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 2 });
+		func.instruction(&Instruction::LocalSet(current));
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64Sub);
+		func.instruction(&Instruction::LocalSet(1));
+		func.instruction(&Instruction::Br(0));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
+	}
+
+	/// Trap unless 1-based index local 1 lies within the text of local 0
+	fn emit_text_index_guard(&mut self, func: &mut Function) {
+		Self::emit_index_below_one(func);
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::LocalGet(0));
+		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 1 });
+		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
+		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.string_type, field_index: 1 });
+		func.instruction(&Instruction::I64ExtendI32U);
+		func.instruction(&Instruction::I64GtS);
+		func.instruction(&Instruction::I32Or);
+		self.emit_fail_if(func, "index_out_of_range");
 	}
 }

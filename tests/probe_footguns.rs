@@ -144,10 +144,16 @@ fn test_mutation_through_alias_is_not_visible() {
 }
 
 #[test]
-#[ignore = "next"] // silently returns the unevaluated program
 fn test_index_out_of_bounds_is_an_error() {
 	assert!(matches!(eval("x=[1 2 3]; x[3]"), Node::Error(_)));
 	assert!(matches!(eval("x=(1 2 3);x#0"), Node::Error(_)));
+}
+
+#[test]
+fn test_negative_index_is_an_error() {
+	fails_with("x=[1 2 3];x[-1]", "index out of range"); // Python: 3, silently wraps
+	fails_with("x=\"ab\";x#3", "index out of range"); // C: reads past the end
+	fails_with("x=(1 2 3);x#4=0", "index out of range");
 }
 
 #[test]

@@ -2930,37 +2930,27 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	let bytes = emitter.finish();
 
 	// Use appropriate linker based on imports needed
-	if needs_ffi {
-		match read_bytes_with_ffi(&bytes) {
-			Ok(result) => return result,
-			Err(e) => {
-				warn!("FFI eval failed: {}", e);
-				return node;
-			}
-		}
-	}
-
-	if needs_wasi {
-		match read_bytes_with_wasi(&bytes) {
-			Ok(result) => return result,
-			Err(e) => {
-				warn!("WASI eval failed: {}", e);
-				return node;
-			}
-		}
-	}
-
-	let result = if needs_host {
+	let result = if needs_ffi {
+		read_bytes_with_ffi(&bytes)
+	} else if needs_wasi {
+		read_bytes_with_wasi(&bytes)
+	} else if needs_host {
 		read_bytes_with_host(&bytes)
 	} else {
 		read_bytes(&bytes)
 	};
+	result.unwrap_or_else(|failure| failed_run(failure, node))
+}
 
-	match result {
-		Ok(result) => result,
-		Err(e) => {
-			warn!("eval failed: {}", e);
-			node // Return parsed node on failure
-		}
+/// A trap is a runtime error of the program and becomes an error value;
+/// any other failure (link, instantiation) falls back to the parsed program
+fn failed_run(failure: anyhow::Error, node: Node) -> Node {
+	if failure.downcast_ref::<wasmtime::Trap>().is_none() {
+		warn!("eval failed: {}", failure);
+		return node;
 	}
+	let trace = format!("{:?}", failure);
+	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name));
+	let message = runtime_error.map_or_else(|| format!("{}", failure), |name| name.replace('_', " "));
+	crate::node::error(&message)
 }

@@ -110,7 +110,15 @@ Warp: `SEPT2` → symbol `SEPT2`; no date or unit guessing when reading data.
 ### Memory-safety classics: use-after-free, double free, dangling pointers
 **C, C++**: `free(p); p->x` → *undefined behaviour*  
 Warp: by construction. Nodes are WASM GC structs and the surface language has no pointers, no `free`, no pointer
-arithmetic; the WASM sandbox traps any access outside linear memory. (Bounds inside a Warp list are NOT YET, see below.)
+arithmetic; the WASM sandbox traps any access outside linear memory, and indexing is bounds checked (next entry).
+
+### Index out of range / negative index
+**C**: `a[3]` on 3 elements → *undefined behaviour*; **JS**: *undefined*; **Python**: `a[-1]` wraps silently  
+Warp before: `x=[1 2 3]; x[3]` → the unevaluated program text `x=[1 2 3]; x#4`; `x#0` → `1`, `x[-1]` → `1`, `"ab"#5` → `''`.  
+Warp: `x=[1 2 3]; x[3]`, `x#0`, `x[-1]`, `"ab"#3` and `x#4=0` → `Error('index out of range')`. Every list and text
+index is checked at runtime; the trap becomes an error value instead of the program text. Not yet: the error carries no
+source span, and `#-1` (last element, only if spelled so) is not implemented, so it is an error too.
+(`test_index_out_of_bounds_is_an_error`, `test_negative_index_is_an_error`)
 
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
@@ -275,13 +283,6 @@ Intended: defaults are values evaluated per call; with value semantics the footg
 **Python, JS `var`, Go < 1.22**: `[lambda: i for i in range(3)]` → all return *2*  
 Warp today: functions do not see outer variables at all: `x=1;f(y):=x+y;f(1)` → `Undefined variable: x`. Unverified.  
 Intended: closures capture values (immutable bindings), so each iteration's `i` is its own.
-
-## Bounds
-
-### Index out of range / negative index
-**C**: `a[3]` on 3 elements → *undefined behaviour*; **JS**: *undefined*; **Python**: `a[-1]` wraps silently  
-Warp today: `x=[1 2 3]; x[3]` → the unevaluated program text `x=[1 2 3]; x#4`; `x#0` → `1`, `x[-1]` → `1`.  
-Intended: out of range is an error value with span; `#0` is an error (1-based), `#-1` means last only if spelled so. (`test_index_out_of_bounds_is_an_error`)
 
 ## Data formats
 

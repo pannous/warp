@@ -507,7 +507,7 @@ impl WasmGcEmitter {
 	// Runtime functions (emitted once, only when the program needs them)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	fn runtime_function(
+	pub(super) fn runtime_function(
 		&mut self,
 		name: &'static str,
 		params: Vec<ValType>,
