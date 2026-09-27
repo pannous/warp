@@ -85,6 +85,15 @@ Warp (since fcbd300b): Int is unbounded, an i64 fast path promotes to BigInt on 
 **JS**: `100000000000000000000` → *1e+20* (a double); Warp before fcbd300b: a string of NUL bytes.  
 Warp: `100000000000000000000` → `100000000000000000000`, round-trips exactly.
 
+### Scientific notation and digit separators
+**Python/JS/Rust**: `1e3` → `1000.0`, `1_000_000` → `1000000`  
+Warp before 9682281d: `1e3` → the list `1 e3`,
+`1_000_000` → the list `1 _000_000`, `.1` → parse error: silently parsed as something else.
+Warp: `1e3` → `1000`, an exact integer like the literal it abbreviates (`1e20 == 100000000000000000000` → `true`);
+`1.5e3` → `1500`, `2E-3` → `0.002` (floats); `1_000_000` → `1000000` (`_` only between digits); `.5+1` → `1.5`, `-.5+1` → `0.5`,
+while `[.1 .2]` stays a two-element list. `2em`, `1e`, `1_` are not numbers.
+(`test_scientific_notation`, `test_scientific_notation_forms`, `test_digit_separators`, `test_leading_dot_literal`)
+
 ### Proofs about unbounded integers, run on wrapping ones
 **Lean/Coq/Dafny exports that model `int` as ℤ**: `law square(x) >= 0` → *Proved*, while the program returns `square(3037000500)` → `-9223372036709301616`.  
 Warp before 1507a3b7 had exactly this bug: the Lean export used unbounded `Int` and reported the law as Proved.
@@ -118,7 +127,7 @@ is designed but not implemented. Each entry names the intended resolution. Entri
 
 ### Decimal fractions
 **Python, JS, Java, C, …**: `0.1 + 0.2 == 0.3` → *false* (`0.30000000000000004`)  
-Warp today: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`, `3 == 3.0000000000000001` → `1`, and `.1` is a parse error.  
+Warp today: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`, `3 == 3.0000000000000001` → `1`.  
 Intended: literals are exact rationals, the existing `Quotient` in `src/extensions/numbers.rs` is the starting point;
 `@f64` opts into IEEE ([DESIGN.md → Exact numbers by default](DESIGN.md#exact-numbers-by-default)). (`test_exact_decimal_arithmetic`)
 
@@ -127,11 +136,6 @@ The mirror image of the solved "Proofs about unbounded integers, run on wrapping
 but since fcbd300b Warp Int is unbounded. `warp verify` on `square(x) := x*x⏎law square(x) >= 0` →
 *FAILED lean counterexample x=-4611686018427388111*, while the program computes `square(-4611686018427388111) > 0` → `1`.  
 Intended: export Int as Lean's `Int` again (and `as i64` values as `BitVec 64`), so the proof model follows the representation. (`test_proof_model_matches_unbounded_int`)
-
-### Scientific notation and digit separators
-**Python/JS/Rust**: `1e3` → `1000.0`, `1_000_000` → `1000000`  
-Warp today: `1e3` → the list `1 e3`, `1_000_000` → the list `1 _000_000`: silently parsed as something else.
-Intended: both are number literals (`test_scientific_notation`).
 
 ### NaN and infinity
 **IEEE 754 everywhere**: `NaN == NaN` → *false*, `1/0` → *Infinity*, `sqrt(-1)` → *NaN*, and NaN poisons all later math quietly.  
