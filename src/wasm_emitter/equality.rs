@@ -53,9 +53,14 @@ impl WasmGcEmitter {
 		if self.is_structured_value(condition) {
 			self.emit_node_instructions(func, condition);
 			self.emit_call(func, IS_TRUTHY);
+		} else if self.get_type(condition).is_float() {
+			self.emit_float_value(func, condition);
+			func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits())));
+			func.instruction(&I::F64Ne);
 		} else {
 			emit_number(self, func, condition);
-			func.instruction(&I::I32WrapI64);
+			func.instruction(&I::I64Const(0));
+			func.instruction(&I::I64Ne); // not I32WrapI64: 2^32 is truthy
 		}
 	}
 

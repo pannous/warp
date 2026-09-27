@@ -528,7 +528,7 @@ impl WaspParser {
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
-			'ø' => return Empty,
+			'ø' => { self.advance(); return Empty }
 			// $n parameter reference (e.g., $0 = first param)
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
