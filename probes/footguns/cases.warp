@@ -257,3 +257,9 @@ country: NO
 version: 1.10
 ---
 zip: 01234
+---
+x=1;f(y):=x+y;x=5;f(1)
+---
+x=0;r=0;i=0;while i<3 { i+=1; x=i; f(y):=x+y; x=100; r+=f(0) }; r
+---
+def f(a=(0 0)){ a#1 = a#1 + 1; a#1 }; f()+f()

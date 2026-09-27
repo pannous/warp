@@ -129,6 +129,28 @@ Warp exports its unbounded Int as Lean `Int`: `law square(x) >= 0` is both true 
 Explicit `as i64` values still wrap and are not exported yet. Details in `notes/laws.md`.
 (`test_proof_model_matches_unbounded_int`, `tests/test_law.rs`)
 
+### Closures capturing loop variables
+**Python, JS `var`, Go < 1.22**: `[lambda: i for i in range(3)]` → all return *2*  
+Warp: functions capture the outer variables they read by value, at the point of definition:
+`x=1;f(y):=x+y;x=5;f(1)` → `2`; a function defined in a loop sees that iteration's value:
+`x=0;r=0;i=0;while i<3 { i+=1; x=i; f(y):=x+y; x=100; r+=f(0) }; r` → `6` (by reference: 300).
+Captured lists and texts work too: `xs=(1 2 3);f(i):=xs#i;f(2)` → `2`.
+(`test_closures_capture_values`, `test_closures_in_loop_capture_each_iteration`)  
+Decision: capture by value at definition time, matching DESIGN.md "immutable local bindings"; a name bound to a function is
+its latest definition (functions are not yet first-class values).
+(alternatives: capture by reference, as wiki/assignment.md sketches for `z := y*y` re-evaluating with the current `y`, which
+reintroduces this footgun; or no capture at all, the old behaviour.)
+Implementation: each captured variable gets a WASM global per function, set where the function is defined.
+
+### Mutable default arguments
+**Python**: `def f(a=[]): a.append(1); return a` → second call returns *[1, 1]*  
+Warp: a default is an expression evaluated at every call that omits the argument, so each call gets a fresh value:
+`def f(a=(0 0)){ a#1 = a#1 + 1; a#1 }; f()+f()` → `2` (shared default: 3). A parameter takes the kind of its default
+(list, text, float), untyped parameters stay Int. (`test_default_argument_is_fresh_per_call`)  
+Decision: defaults are evaluated per call, at the call site (alternatives: evaluate once at definition, Python's choice,
+safe only once value semantics / copy-on-write lands).  
+Still open: `a.add(1)` on a list is a no-op today (`a=();a.add(1);a` panics, `pixel.add(5)` does not grow `pixel`), see the lists tests.
+
 ### Date guessing in data
 **Excel**: typing the gene name `SEPT2` → *2-Sep*  
 Warp: `SEPT2` → symbol `SEPT2`; no date or unit guessing when reading data.
@@ -335,15 +357,6 @@ Warp today: `a=(1 2);b=a;b#1=9;a#1` → `9`, and even strings: `x="ab";y=x;y#1="
 Intended ([DESIGN.md → Ownership](DESIGN.md#ownership-and-resource-inference)): value semantics; mutation needs a unique place,
 otherwise copy-on-write. (`test_mutation_through_alias_is_not_visible`)
 
-### Mutable default arguments
-**Python**: `def f(a=[]): a.append(1); return a` → second call returns *[1, 1]*  
-Warp today: default arguments work for numbers (`tests/test_functions.rs`), `def f(a=()): a.add(1); f(); f()` panics. Unverified.  
-Intended: defaults are values evaluated per call; with value semantics the footgun cannot occur.
-
-### Closures capturing loop variables
-**Python, JS `var`, Go < 1.22**: `[lambda: i for i in range(3)]` → all return *2*  
-Warp today: functions do not see outer variables at all: `x=1;f(y):=x+y;f(1)` → `Undefined variable: x`. Unverified.  
-Intended: closures capture values (immutable bindings), so each iteration's `i` is its own.
 
 ## Errors
 
