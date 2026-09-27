@@ -365,6 +365,43 @@ the lowering pass (`src/injection.rs`) per variable, not by the type system; pip
 (`test_sql_holes_are_parameters_not_text`, `test_sql_from_built_text_is_rejected`, `test_shell_holes_are_whole_arguments`,
 `test_running_queries_and_commands_needs_a_capability`)
 
+### Dates and time zones
+**JS**: `new Date(2024, 1, 31)` → *March 2*; **Java**: `new Date().getYear()` → *124*; everyone: local time jumps at DST  
+Warp before: no date/time type; `2024-01-31` parsed as the subtraction `2024-1-31` → `1992`.  
+Intended: distinct `instant`, `date`, `local time`, `zoned time`; no implicit current zone; months are 1-based; arithmetic on calendar units is explicit about overflow (`Jan 31 + 1 month`).
+
+Decision: four distinct types, modelled on JS Temporal / java.time and TOML's literal rule ([Solved elsewhere → Date guessing](Solved-elsewhere.md)):
+`date` (`2024-01-31`), `local time` (`2024-01-31T10:00`, date + wall clock, no zone), `instant` (`2024-01-31T09:00Z` or
+`…T10:00+01:00`, a point on the UTC line) and `zoned time` (`2024-01-31T10:00[Europe/Berlin]`, RFC 9557).
+Literals are the RFC 3339 / RFC 9557 forms only (4-digit year, 2-digit month and day, no spaces), so `2024-01-31` is a date
+while `2024 - 1 - 31` stays arithmetic and `SEPT2` stays a symbol; `date(y,m,d)` is the constructor.
+Months are 1-based (`2024-02-29.month` → 2); invalid fields are errors, never rolled over (`date(2024,2,30)` → error, JS: March 1).
+No implicit zone: `now` is an `instant`, which has no `year`/`hour` until placed in a zone (`t in "Europe/Berlin"` → zoned time);
+nothing reads the host's zone. Types never convert implicitly: `date < local time` and `local time < instant` are errors.
+Calendar arithmetic rejects overflow by default: `2024-01-31 + 1 month` → error naming `2024-02-31`; clamping is spelled out,
+`add(2024-01-31, 1 month, overflow: clamp)` → `2024-02-29` (Temporal's `overflow: "constrain"`). A nonexistent wall time in a
+DST gap is an error for literals, never a silent shift; `1 day` on a zoned time is a calendar day, `24 hours` is exact.
+`date - date` → days as Int.
+(alternatives: Temporal's default `constrain` for `+` (hides the footgun behind a quiet clamp), JS/`java.util.Date` rollover
+(the footgun itself), a single timestamp type plus zone field (Python naive/aware datetime: mixing them fails only at runtime),
+constructor-only dates with no literal (safe but verbose; the RFC 3339 form is already unambiguous data, as in TOML).)
+Warp: implemented as decided. `2024-02-29.month` → `2`, `date(2024,0,1)` → `Error('month out of range: 0 …')`,
+`date(2024,2,30)` → `Error('day out of range: 2024-02-30')`, `2024-01-31 + 1 month` → `Error('2024-02-31 does not exist: use
+add(…, overflow: clamp) …')`, `add(2024-01-31, 1 month, overflow: clamp) == 2024-02-29` → true (Int 1, as all eval booleans), `2024-03-01 - 2024-02-01` → `29`,
+`now.hour` → `Error('instant has no hour …')`, `(2024-03-31T01:30Z in "Europe/Berlin").hour` → `3`,
+`2024-03-31T02:30[Europe/Berlin]` → `Error('… does not exist in Europe/Berlin …')`, `date < local time` and
+`local time < instant` → errors naming both kinds, `2024-01-31T10:00+01:00 == 2024-01-31T09:00Z` → true; `2024-1-31` is still `1992`.
+How: `parse_number` lexes the strict RFC 3339 / RFC 9557 form into a `TimeLiteral` data node (validated on evaluation, like
+`date(…)`), and an integer followed by a unit word (`year month week day hour minute second`, singular or plural) into a
+`Duration` (months, days, exact nanoseconds). `src/time.rs` evaluates programs that use them at compile time
+(`time::answer`, before emission); the calendar core is `src/time/calendar.rs` (no dependencies).
+Not yet: dates have no WASM GC runtime representation, so a date program is folded at compile time and anything the folder
+does not know (functions, loops, lists of dates) is an error saying so; `now` reads the compiler's clock (needs a host clock
+import and a clock effect); the tz database is an embedded table of ~40 zones with today's EU/US rules only (no historical
+rules, no southern-hemisphere DST): unknown zones are errors, the full IANA database via a host import is future work.
+(`test_months_are_one_based`, `test_calendar_overflow_is_explicit`, `test_no_implicit_time_zone`,
+`test_date_and_time_types_are_distinct`, `test_date_literal_needs_strict_form`)
+
 # NOT YET
 ...
 
@@ -468,33 +505,6 @@ Warp today: law, effect, declared-type and null violations, invalid number text 
 failures are compiler panics (`Cannot extract numeric value …`, `Undefined variable`, pinned by `test_undefined_variable_is_an_error`),
 runtime traps carry no span, and a link/instantiation failure still returns the parsed program (`failed_run`).  
 Intended: `Result<T, E>` as data, every diagnostic with span, resolved facts and fix-it ([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
-
-## Time
-
-### Dates and time zones
-**JS**: `new Date(2024, 1, 31)` → *March 2*; **Java**: `new Date().getYear()` → *124*; everyone: local time jumps at DST  
-Warp today: no date/time type.  
-Intended: distinct `instant`, `date`, `local time`, `zoned time`; no implicit current zone; months are 1-based; arithmetic on calendar units is explicit about overflow (`Jan 31 + 1 month`).
-
-Decision: four distinct types, modelled on JS Temporal / java.time and TOML's literal rule ([Solved elsewhere → Date guessing](Solved-elsewhere.md)):
-`date` (`2024-01-31`), `local time` (`2024-01-31T10:00`, date + wall clock, no zone), `instant` (`2024-01-31T09:00Z` or
-`…T10:00+01:00`, a point on the UTC line) and `zoned time` (`2024-01-31T10:00[Europe/Berlin]`, RFC 9557).
-Literals are the RFC 3339 / RFC 9557 forms only (4-digit year, 2-digit month and day, no spaces), so `2024-01-31` is a date
-while `2024 - 1 - 31` stays arithmetic and `SEPT2` stays a symbol; `date(y,m,d)` is the constructor.
-Months are 1-based (`2024-02-29.month` → 2); invalid fields are errors, never rolled over (`date(2024,2,30)` → error, JS: March 1).
-No implicit zone: `now` is an `instant`, which has no `year`/`hour` until placed in a zone (`t in "Europe/Berlin"` → zoned time);
-nothing reads the host's zone. Types never convert implicitly: `date < local time` and `local time < instant` are errors.
-Calendar arithmetic rejects overflow by default: `2024-01-31 + 1 month` → error naming `2024-02-31`; clamping is spelled out,
-`add(2024-01-31, 1 month, overflow: clamp)` → `2024-02-29` (Temporal's `overflow: "constrain"`). A nonexistent wall time in a
-DST gap is an error for literals, never a silent shift; `1 day` on a zoned time is a calendar day, `24 hours` is exact.
-`date - date` → days as Int.
-(alternatives: Temporal's default `constrain` for `+` (hides the footgun behind a quiet clamp), JS/`java.util.Date` rollover
-(the footgun itself), a single timestamp type plus zone field (Python naive/aware datetime: mixing them fails only at runtime),
-constructor-only dates with no literal (safe but verbose; the RFC 3339 form is already unambiguous data, as in TOML).)
-Spec: `test_months_are_one_based`, `test_calendar_overflow_is_explicit`, `test_no_implicit_time_zone`,
-`test_date_and_time_types_are_distinct` in `tests/probe_footguns.rs` (all `#[ignore = "next"]`).
-Not yet implemented: this run could not build (crates.io blocked by the session's network policy, no vendor/ or cargo cache),
-so the entry stays under NOT YET; unverified compiler changes were not pushed to main.
 
 ## Variance
 **Java**: `Object[] a = new String[1]; a[0] = 1;` → *ArrayStoreException at runtime*  

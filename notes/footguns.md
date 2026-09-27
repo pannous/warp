@@ -151,3 +151,18 @@
   concatenation `"a"+"b"` not implemented (type error); no uniqueness analysis, every element write copies; runtime
   texts are never freed; `::=` does not parse. `while i<=3 {…}` with braces returns a strange list (seen while probing,
   not investigated). `test_float_plus_int_type_upgrading` fails since 2b74cd0f (exact rationals), not this area.
+
+## Work area "dates-time", implementation (2026-09-27)
+- Fixed: all four date specs pass (plus `test_date_literal_needs_strict_form`), validated on CI (branches claude/footguns-dates, claude/footguns-dates-rebased;
+  no local build: crates.io is blocked in the cloud sandbox; `src/time/calendar.rs` has no dependencies and was unit-checked with plain rustc).
+- Answers to the open questions: date literals are lexed at the top of `parse_number` (strict RFC 3339 / RFC 9557 shape only,
+  4-2-2 digits, word boundary after it, so `2024-1-31` stays arithmetic); durations are lexed after an integer followed by a
+  unit word (`1 month`, `24 hours`), months/days counted, hours and below exact; the tz database is an embedded rule table
+  (`calendar::ZONES`, current EU/US DST rules), a host import of the IANA database is future work.
+- Programs that mention a date literal, duration, `now` or `date(…)` are evaluated at compile time by `time::answer`
+  (called first in `eval_parsed`): assignments, `;`/newline sequences, `.field`, `+ - == < …`, `in`, `date()`, `add()`.
+- Left open: no WASM runtime representation of dates (functions/loops over dates are an explicit "not supported yet" error);
+  `now` is the compiler's clock and is not an effect yet; no historical or southern-hemisphere zone rules; the parse-only
+  data path (`data_mode`) does not lex dates or durations yet (it round-trips source text and has no date serialization).
+- Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node.rs has no arm for them), so
+  `is!(…, true)` only works for Int 1/0 results; the time evaluator returns Int 1/0 like the rest of eval.
