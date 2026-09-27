@@ -326,6 +326,28 @@ Warp: `x=ø; x+1` → `Error('x may be ø (null) in x+1 at 1:6; fix: if x { x+1 
 may not be used in arithmetic or member access until checked: `if x {x+1} else {2}` is accepted (flow-sensitive narrowing,
 [wiki/null.md](wiki/null.md)), as is reassignment `x=ø; x=3; x+1`. Not yet: `T?` syntax and running such programs (NOT YET → Null: optional types).
 (`test_null_needs_a_check`)
+### SQL and shell injection
+**Every language with string building**: `"SELECT * FROM t WHERE name='" + name + "'"` with `name = "x' OR '1'='1"` → *all rows*  
+Warp before: no SQL or shell API; building a query was plain text concatenation.  
+Warp: `name="x' OR '1'='1";q=sql "SELECT * FROM t WHERE name = $name"` → `q#1` is `SELECT * FROM t WHERE name = ?` and
+`q#2` is the value `x' OR '1'='1`: the literal is the query, every `$name` / `${expr}` hole is a parameter, so no value can
+change the query's shape. `sh "rm -f $file"` is an argument vector: with `file="a; rm -rf ~"` the hole is one argument
+(`c#3`), nothing parses it as shell. Misuse is a diagnostic with position and fix-it: `sql("…'" + name + "'")` →
+`sql takes a literal template`, a hole inside SQL quotes (`'$name'`) → `a parameter is a value`, `sh "ls | grep x"` →
+`no shell`, `sh "cp --out=$f"` → `a sh hole must be a whole argument`, `execute q` of plain text → `execute takes a sql template`.
+Running is a capability: `execute` (sql) and `exec` (process) are IO externals, so `effects of` shows them and `! Pure`
+rejects them along the call chain, and `eval` grants neither: `execute sql "SELECT 1"` →
+`capability denied: execute needs the sql capability, which eval does not grant` ([DESIGN.md → Effects as enforced capabilities](DESIGN.md#effects-as-enforced-capabilities)).
+Decision: tag-prefixed templates `sql "…"` / `sh "…"` with holes as parameters, `?` placeholders, shell commands as argv
+without a shell, runners gated by the `sql` / `process` capability (alternatives: an escaping function like `quote(name)`
+(opt-in, forgotten once is enough, PHP's `mysql_real_escape_string`); typing every text with its language (`Text<Sql>`,
+heavier, and concatenation would still need rules); JS tagged templates with a user tag function (flexible, but the tag
+sees the pieces at runtime, so the capability cannot be checked statically); running `sh` through `/bin/sh -c` with quoted
+holes (keeps pipes, but one quoting bug is an injection)).
+Not yet: no host grants `sql` or `process`, so nothing actually runs a query or program; the template's language is tracked by
+the lowering pass (`src/injection.rs`) per variable, not by the type system; pipes and redirection have no typed form.
+(`test_sql_holes_are_parameters_not_text`, `test_sql_from_built_text_is_rejected`, `test_shell_holes_are_whole_arguments`,
+`test_running_queries_and_commands_needs_a_capability`)
 
 # NOT YET
 ...
@@ -439,13 +461,6 @@ Warp today: law, effect, declared-type and null violations, invalid number text 
 failures are compiler panics (`Cannot extract numeric value …`, `Undefined variable`, pinned by `test_undefined_variable_is_an_error`),
 runtime traps carry no span, and a link/instantiation failure still returns the parsed program (`failed_run`).  
 Intended: `Result<T, E>` as data, every diagnostic with span, resolved facts and fix-it ([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
-
-## Injection
-
-### SQL and shell injection
-**Every language with string building**: `"SELECT * FROM t WHERE name='" + name + "'"` with `name = "x' OR '1'='1"` → *all rows*  
-Warp today: no SQL or shell API exists yet; string interpolation `` `${…}` `` produces plain text.  
-Intended: interpolation into a query or command is typed (the target language is a type, arguments are parameters, not text); combined with effects, only modules with a `sql`/`process` capability can run them.
 
 ## Time
 

@@ -124,3 +124,15 @@
   bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
 - Other gaps: ratios with parts beyond i64 read back as f64 (Quotient is (i64,i64)); `3 == 3.0000000000000001` still true
   (literal parsed to f64 first); `law`/Lean export still treats `/` as unsupported ("yields a Float" comment in law/lean.rs is stale).
+## Work area "injection" (2026-09-27)
+- Fixed (verified via CI on claude/footguns-injection): `src/injection.rs` lowers `sql "…"` / `sh "…"` before effects and
+  emission. SQL holes (`$name`, `${expr}`, `$$` = `$`) become `?` parameters, the value is `(query param…)`; shell templates
+  become an argv `(program arg…)` where a hole is one whole argument. Diagnostics: non-literal template, hole inside SQL
+  quotes, shell operators/quotes, hole glued into a word, `execute`/`exec` of anything but a template of its language.
+  `execute` (Capability::Sql) and `exec` (Capability::Process) are trusted IO externals; `eval_parsed` refuses modules
+  needing a capability outside `Capability::GRANTED_BY_EVAL`.
+- Decided (recorded in Footguns.md → Solved → SQL and shell injection): tag-prefixed literal templates, `?` placeholders,
+  argv without a shell, runners gated by capability.
+- Left open: no host grants sql/process (nothing really runs); template language is tracked per variable by the lowering
+  pass, not the type system; no typed pipes/redirection. Braceless `execute sql "…"` parses left-nested
+  (`((execute sql) "…")`), the lowering flattens it.

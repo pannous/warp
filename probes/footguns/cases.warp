@@ -297,3 +297,11 @@ a=(1 2);a#1 += 1;a#1
 int("5") + 3
 ---
 a=();a.add(1);a
+---
+name="x' OR '1'='1";q=sql "SELECT * FROM t WHERE name = $name";q#2
+---
+name="x";sql("SELECT * FROM t WHERE name='" + name + "'")
+---
+file="a; rm -rf ~";c=sh "rm -f $file";c#3
+---
+execute sql "SELECT 1"
