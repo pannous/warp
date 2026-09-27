@@ -257,8 +257,7 @@ impl Value {
 			Value::Time(time) => Node::data(time),
 			Value::Duration(duration) => Node::data(duration),
 			Value::Int(n) => Node::Number(Number::Int(n)),
-			Value::Bool(true) => Node::True,
-			Value::Bool(false) => Node::False,
+			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
 			Value::Text(text) => Node::Text(text),
 			Value::Symbol(name) => Node::Symbol(name),
 		}
