@@ -83,18 +83,10 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Handle index assignment: node#index = value → node_set_at(node, index, value)
+		// Handle index assignment: node#index = value
 		if *op == Op::Assign {
 			if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
-				// Emit node (string or list ref)
-				self.emit_node_instructions(func, node_expr);
-				// Emit index (as i64)
-				self.emit_numeric_value(func, index_expr);
-				// Emit value (as i64)
-				self.emit_numeric_value(func, right);
-				// Call node_set_at which dispatches to string_set_char_at or list_set_at
-				self.emit_call(func, "node_set_at");
-				// Wrap result as Node
+				self.emit_index_assignment(func, node_expr, index_expr, right);
 				self.emit_call(func, "new_int");
 				return;
 			}

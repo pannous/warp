@@ -943,9 +943,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 			if *op == Op::Assign {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
-					ctx.required_functions.insert("node_set_at");
-					ctx.required_functions.insert("string_set_char_at");
-					ctx.required_functions.insert("list_set_at");
+					ctx.required_functions.insert("node_with_at");
 					analyze_required_functions(ctx, key);
 					analyze_required_functions(ctx, value);
 					return;

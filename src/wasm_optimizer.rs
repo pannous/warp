@@ -1,4 +1,7 @@
 #![cfg(feature = "optimizer")]
+
+/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts)
+const BINARYEN_FEATURES: [&str; 3] = ["--enable-gc", "--enable-reference-types", "--enable-bulk-memory"];
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
@@ -138,8 +141,7 @@ impl WasmOptimizer {
 			.map_err(|e| format!("Failed to write roots graph: {}", e))?;
 
 		let result = Command::new("wasm-metadce")
-			.arg("--enable-gc")
-			.arg("--enable-reference-types")
+			.args(BINARYEN_FEATURES)
 			.arg(input)
 			.arg("-f")
 			.arg(&graph_path)
@@ -195,8 +197,7 @@ impl WasmOptimizer {
 		};
 
 		let result = Command::new("wasm-opt")
-			.arg("--enable-gc")
-			.arg("--enable-reference-types")
+			.args(BINARYEN_FEATURES)
 			.arg(opt_flag)
 			.arg("--remove-unused-module-elements")
 			.arg(input)

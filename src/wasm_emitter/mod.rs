@@ -96,6 +96,7 @@ pub struct WasmGcEmitter {
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
 	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
+	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
 }
 
 impl Default for WasmGcEmitter {
@@ -128,6 +129,7 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			int_remainder_global: 0,
+			text_heap_global: 0,
 		}
 	}
 
@@ -2010,16 +2012,8 @@ impl WasmGcEmitter {
 			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => {
-				// Handle index assignment: node#index = value → node_set_at returns value as i64
 				if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
-					// Emit node (string or list ref)
-					self.emit_node_instructions(func, node_expr);
-					// Emit index (as i64)
-					self.emit_numeric_value(func, index_expr);
-					// Emit value (as i64)
-					self.emit_numeric_value(func, right);
-					// Call node_set_at which returns the value that was set
-					self.emit_call(func, "node_set_at");
+					self.emit_index_assignment(func, node_expr, index_expr, right);
 					return;
 				}
 				if let Node::Symbol(name) = left.drop_meta() {

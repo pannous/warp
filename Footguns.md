@@ -203,6 +203,16 @@ converts (`int(" -12 ")` → `-12`, `int("2.7")` → `2`, big literals stay exac
 instead of being a recoverable `Result` ([DESIGN.md → Effects](DESIGN.md#effects)), and runtime (non-literal) text is not converted at all.
 (`test_invalid_number_text_is_an_error`)
 
+### Aliasing
+**Python, JS, Java**: `a=[1]; b=a; b[0]=9; a` → *[9]*  
+Warp before: `a=(1 2);b=a;b#1=9;a#1` → `9`, and even strings: `x="ab";y=x;y#1="z";x` → `'zb'`; worse, equal literals
+share one string-table entry, so `x="ab";y="ab";y#1="z";x` → `'zb'` without any alias.  
+Warp: value semantics ([DESIGN.md → Ownership](DESIGN.md#ownership-and-resource-inference)): `y#i=v` stores an updated copy
+in `y` (`node_with_at`: a list copies the cells up to `i` and shares the tail, a text gets fresh bytes), nothing is mutated in
+place, so all three examples leave `x`/`a` unchanged. Not yet: no uniqueness analysis, so every index assignment copies
+(O(i) for lists, O(length) for texts, runtime texts are bump-allocated and never freed).
+(`test_mutation_through_alias_is_not_visible`, `test_equal_literals_are_not_shared`)
+
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
@@ -350,12 +360,6 @@ the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `2
 [DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
 
 ## Mutation and scope
-
-### Aliasing
-**Python, JS, Java**: `a=[1]; b=a; b[0]=9; a` → *[9]*  
-Warp today: `a=(1 2);b=a;b#1=9;a#1` → `9`, and even strings: `x="ab";y=x;y#1="z";x` → `'zb'`.  
-Intended ([DESIGN.md → Ownership](DESIGN.md#ownership-and-resource-inference)): value semantics; mutation needs a unique place,
-otherwise copy-on-write. (`test_mutation_through_alias_is_not_visible`)
 
 
 ## Errors

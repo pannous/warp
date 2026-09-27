@@ -4,6 +4,7 @@ use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction::I32Const;
 use ValType::Ref;
+use crate::type_kinds::Kind;
 
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
@@ -195,154 +196,7 @@ impl WasmGcEmitter {
 			self.exports.export("node_index_at", ExportKind::Func, idx);
 		}
 
-		// list_set_at(list: ref $Node, index: i64, value: i64) -> i64
-		// Set the numeric value at index (1-based) and return the value
-		if self.should_emit_function("list_set_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
-
-			// Locals: 0=list, 1=index, 2=value, 3=current (loop variable)
-			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
-
-			self.emit_list_walk(&mut func, 3);
-
-			// Get current.data (which is the wrapper Node for the element)
-			func.instruction(&Instruction::LocalGet(3));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field
-			});
-			// Cast anyref to ref $Node
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
-
-			self.emit_int_payload(&mut func, 2);
-
-			// Set the inner node's data field to the new i64box
-			func.instruction(&Instruction::StructSet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field
-			});
-
-			// Return the value
-			func.instruction(&Instruction::LocalGet(2));
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("list_set_at");
-			self.exports.export("list_set_at", ExportKind::Func, idx);
-		}
-
-		// string_set_char_at(node: ref $Node, index: i64, value: i64) -> i64
-		// Set the character at index (1-based) in a Text/Symbol node, returns the value
-		if self.should_emit_function("string_set_char_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
-
-			let mut func = Function::new(vec![]);
-			self.emit_text_index_guard(&mut func);
-
-			// Get node.data (which is a ref $String)
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field
-			});
-			// Cast anyref to ref $String
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
-
-			// Get ptr from $String
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.string_type,
-				field_index: 0, // ptr
-			});
-
-			// Calculate address: ptr + (index - 1) for 1-based indexing
-			func.instruction(&Instruction::LocalGet(1)); // index
-			func.instruction(&Instruction::I32WrapI64);
-			func.instruction(&I32Const(1));
-			func.instruction(&Instruction::I32Sub);
-			func.instruction(&Instruction::I32Add); // address = ptr + (index - 1)
-
-			// Store the value as a byte
-			func.instruction(&Instruction::LocalGet(2)); // value
-			func.instruction(&Instruction::I32WrapI64);
-			func.instruction(&Instruction::I32Store8(MemArg {
-				offset: 0,
-				align: 0,
-				memory_index: 0,
-			}));
-
-			// Return the value
-			func.instruction(&Instruction::LocalGet(2));
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("string_set_char_at");
-			self.exports.export("string_set_char_at", ExportKind::Func, idx);
-		}
-
-		// node_set_at(node: ref $Node, index: i64, value: i64) -> i64
-		// Runtime dispatch for index assignment: string_set_char_at or list_set_at
-		if self.should_emit_function("node_set_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64, ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
-
-			let mut func = Function::new(vec![]);
-
-			// Get node.kind
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 0, // kind field
-			});
-
-			// Check if kind is Text (3) or Symbol (5)
-			func.instruction(&Instruction::I64Const(3)); // Kind::Text
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			// It's a Text - call string_set_char_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::LocalGet(2));
-			self.emit_call(&mut func, "string_set_char_at");
-			func.instruction(&Instruction::Else);
-			// Check for Symbol
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 0,
-			});
-			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			// It's a Symbol - call string_set_char_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::LocalGet(2));
-			self.emit_call(&mut func, "string_set_char_at");
-			func.instruction(&Instruction::Else);
-			// Otherwise it's a list - call list_set_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::LocalGet(2));
-			self.emit_call(&mut func, "list_set_at");
-			func.instruction(&Instruction::End); // end inner if
-			func.instruction(&Instruction::End); // end outer if
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("node_set_at");
-			self.exports.export("node_set_at", ExportKind::Func, idx);
-		}
+		self.emit_with_at_functions();
 	}
 
 	/// Locals: 0=node, 1=index, 2=pointer, 3=end, 4=codepoint
@@ -356,7 +210,7 @@ impl WasmGcEmitter {
 			.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 		let mut func = Function::new(vec![(3, ValType::I32)]);
-		Self::emit_index_below_one(&mut func);
+		Self::emit_index_compare(&mut func, Instruction::I64LtS);
 		self.emit_fail_if(&mut func, "index_out_of_range");
 		let string_field = |func: &mut Function, field_index: u32| {
 			func.instruction(&Instruction::LocalGet(0));
@@ -459,7 +313,7 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 2] = ["index_out_of_range", "invalid_number"];
+pub const RUNTIME_ERRORS: [&str; 3] = ["index_out_of_range", "invalid_number", "out_of_memory"];
 
 impl WasmGcEmitter {
 	fn emit_runtime_errors(&mut self) {
@@ -477,21 +331,33 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap when the i32 condition on the stack is true
-	fn emit_fail_if(&mut self, func: &mut Function, error: &'static str) {
+	fn emit_fail_if(&self, func: &mut Function, error: &'static str) {
 		func.instruction(&Instruction::If(BlockType::Empty));
-		self.emit_call(func, error);
+		self.call(func, error);
 		func.instruction(&Instruction::End);
 	}
 
-	fn emit_index_below_one(func: &mut Function) {
+	fn emit_index_compare(func: &mut Function, compare: Instruction) {
 		func.instruction(&Instruction::LocalGet(1));
 		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64LtS);
+		func.instruction(&compare);
+	}
+
+	fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
+		func.instruction(&Instruction::LocalGet(local));
+		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index });
+	}
+
+	/// Push field `field_index` (0 ptr, 1 len) of the $String inside text node `local`
+	fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
+		self.emit_field(func, local, 1);
+		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
+		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.string_type, field_index });
 	}
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range
-	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
-		Self::emit_index_below_one(func);
+	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+		Self::emit_index_compare(func, Instruction::I64LtS);
 		self.emit_fail_if(func, "index_out_of_range");
 		func.instruction(&Instruction::LocalGet(0));
 		func.instruction(&Instruction::LocalSet(current));
@@ -500,16 +366,11 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalGet(current));
 		func.instruction(&Instruction::RefIsNull);
 		self.emit_fail_if(func, "index_out_of_range");
-		func.instruction(&Instruction::LocalGet(1));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64LeS);
+		Self::emit_index_compare(func, Instruction::I64LeS);
 		func.instruction(&Instruction::BrIf(1));
-		func.instruction(&Instruction::LocalGet(current));
-		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 2 });
+		self.emit_field(func, current, 2);
 		func.instruction(&Instruction::LocalSet(current));
-		func.instruction(&Instruction::LocalGet(1));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64Sub);
+		Self::emit_index_compare(func, Instruction::I64Sub);
 		func.instruction(&Instruction::LocalSet(1));
 		func.instruction(&Instruction::Br(0));
 		func.instruction(&Instruction::End);
@@ -517,16 +378,177 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap unless 1-based index local 1 lies within the text of local 0
-	fn emit_text_index_guard(&mut self, func: &mut Function) {
-		Self::emit_index_below_one(func);
+	fn emit_text_index_guard(&self, func: &mut Function) {
+		Self::emit_index_compare(func, Instruction::I64LtS);
 		func.instruction(&Instruction::LocalGet(1));
-		func.instruction(&Instruction::LocalGet(0));
-		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 1 });
-		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
-		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.string_type, field_index: 1 });
+		self.emit_text_field(func, 0, 1);
 		func.instruction(&Instruction::I64ExtendI32U);
 		func.instruction(&Instruction::I64GtS);
 		func.instruction(&Instruction::I32Or);
 		self.emit_fail_if(func, "index_out_of_range");
 	}
+
+	fn emit_text_heap_global(&mut self) {
+		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
+		self.text_heap_global = self.next_global_idx;
+		self.next_global_idx += 1;
+	}
+
+	/// Bump-allocate `length` bytes into local `address`; fresh pages come from memory.grow,
+	/// so runtime texts never overlap the string table at the start of memory
+	fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
+		const PAGE_BITS: i32 = 16;
+		let heap = self.text_heap_global;
+		func.instruction(&Instruction::GlobalGet(heap));
+		func.instruction(&Instruction::I32Eqz);
+		func.instruction(&Instruction::GlobalGet(heap));
+		func.instruction(&Instruction::LocalGet(length));
+		func.instruction(&Instruction::I32Add);
+		func.instruction(&Instruction::MemorySize(0));
+		func.instruction(&I32Const(PAGE_BITS));
+		func.instruction(&Instruction::I32Shl);
+		func.instruction(&Instruction::I32GtU);
+		func.instruction(&Instruction::I32Or);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(length));
+		func.instruction(&I32Const(PAGE_BITS));
+		func.instruction(&Instruction::I32ShrU);
+		func.instruction(&I32Const(1));
+		func.instruction(&Instruction::I32Add);
+		func.instruction(&Instruction::MemoryGrow(0));
+		func.instruction(&Instruction::LocalTee(address));
+		func.instruction(&I32Const(-1));
+		func.instruction(&Instruction::I32Eq);
+		self.emit_fail_if(func, "out_of_memory");
+		func.instruction(&Instruction::LocalGet(address));
+		func.instruction(&I32Const(PAGE_BITS));
+		func.instruction(&Instruction::I32Shl);
+		func.instruction(&Instruction::GlobalSet(heap));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::GlobalGet(heap));
+		func.instruction(&Instruction::LocalTee(address));
+		func.instruction(&Instruction::LocalGet(length));
+		func.instruction(&Instruction::I32Add);
+		func.instruction(&Instruction::GlobalSet(heap));
+	}
+
+	fn emit_is_text(&self, func: &mut Function) {
+		for kind in [Kind::Text, Kind::Symbol] {
+			self.emit_field(func, 0, 0);
+			func.instruction(&Instruction::I64Const(kind as i64));
+			func.instruction(&Instruction::I64Eq);
+		}
+		func.instruction(&Instruction::I32Or);
+	}
+
+	fn emit_forward_arguments(func: &mut Function, callee: u32) {
+		for local in 0..3 {
+			func.instruction(&Instruction::LocalGet(local));
+		}
+		func.instruction(&Instruction::Call(callee));
+	}
+
+	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
+	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &crate::node::Node, index: &crate::node::Node, value: &crate::node::Node) {
+		let assigned = self.scratch(2);
+		self.emit_node_instructions(func, target);
+		self.emit_numeric_value(func, index);
+		self.emit_numeric_value(func, value);
+		func.instruction(&Instruction::LocalTee(assigned));
+		self.emit_call(func, "node_with_at");
+		let variable = match target.drop_meta() {
+			crate::node::Node::Symbol(name) => self.scope.lookup(name).filter(|local| local.kind.is_ref()),
+			_ => None,
+		};
+		match variable {
+			Some(local) => func.instruction(&Instruction::LocalSet(local.position)),
+			None => func.instruction(&Instruction::Drop),
+		};
+		func.instruction(&Instruction::LocalGet(assigned));
+	}
+
+	/// Index assignment builds a new value instead of mutating a shared one (value semantics):
+	/// `y#i=v` stores `node_with_at(y, i, v)` back into `y`, so aliases and deduplicated literals never change.
+	fn emit_with_at_functions(&mut self) {
+		if !self.should_emit_function("node_with_at") {
+			return;
+		}
+		self.emit_text_heap_global();
+		let node_ref = Ref(self.node_ref(false));
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_type = self.type_manager.node_type;
+		let string_type = self.type_manager.string_type;
+		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+
+		// list_with_at(list, index, value): copies the cells up to index, shares the rest
+		let list_with_at = next_index(self);
+		let params = vec![node_ref_nullable, ValType::I64, ValType::I64];
+		self.runtime_function("list_with_at", params, vec![node_ref], vec![], |s, f| {
+			f.instruction(&Instruction::LocalGet(0));
+			f.instruction(&Instruction::RefIsNull);
+			s.emit_fail_if(f, "index_out_of_range");
+			Self::emit_index_compare(f, Instruction::I64LtS);
+			s.emit_fail_if(f, "index_out_of_range");
+			s.emit_field(f, 0, 0);
+			Self::emit_index_compare(f, Instruction::I64Eq);
+			f.instruction(&Instruction::If(BlockType::Result(Ref(RefType::ANYREF))));
+			f.instruction(&Instruction::LocalGet(2));
+			s.call(f, "new_int");
+			f.instruction(&Instruction::Else);
+			s.emit_field(f, 0, 1);
+			f.instruction(&Instruction::End);
+			Self::emit_index_compare(f, Instruction::I64GtS);
+			f.instruction(&Instruction::If(BlockType::Result(node_ref_nullable)));
+			s.emit_field(f, 0, 2);
+			Self::emit_index_compare(f, Instruction::I64Sub);
+			f.instruction(&Instruction::LocalGet(2));
+			f.instruction(&Instruction::Call(list_with_at));
+			f.instruction(&Instruction::Else);
+			s.emit_field(f, 0, 2);
+			f.instruction(&Instruction::End);
+			f.instruction(&Instruction::StructNew(node_type));
+		});
+		assert_eq!(self.func_index("list_with_at"), list_with_at, "recursive call index");
+
+		// text_with_char_at(text, index, value): a fresh copy of the bytes with one byte replaced
+		let text_with_char_at = next_index(self);
+		let params = vec![node_ref, ValType::I64, ValType::I64];
+		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], vec![ValType::I32, ValType::I32], |s, f| {
+			let (length, copy) = (3, 4);
+			s.emit_text_index_guard(f);
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&Instruction::LocalSet(length));
+			s.emit_text_allocation(f, length, copy);
+			f.instruction(&Instruction::LocalGet(copy));
+			s.emit_text_field(f, 0, 0);
+			f.instruction(&Instruction::LocalGet(length));
+			f.instruction(&Instruction::MemoryCopy { src_mem: 0, dst_mem: 0 });
+			f.instruction(&Instruction::LocalGet(copy));
+			f.instruction(&Instruction::LocalGet(1));
+			f.instruction(&Instruction::I32WrapI64);
+			f.instruction(&Instruction::I32Add);
+			f.instruction(&I32Const(1));
+			f.instruction(&Instruction::I32Sub);
+			f.instruction(&Instruction::LocalGet(2));
+			f.instruction(&Instruction::I32WrapI64);
+			f.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));
+			s.emit_field(f, 0, 0);
+			f.instruction(&Instruction::LocalGet(copy));
+			f.instruction(&Instruction::LocalGet(length));
+			f.instruction(&Instruction::StructNew(string_type));
+			f.instruction(&Instruction::RefNull(HeapType::Concrete(node_type)));
+			f.instruction(&Instruction::StructNew(node_type));
+		});
+
+		// node_with_at(node, index, value): texts and symbols by byte, everything else as list
+		self.runtime_function("node_with_at", params, vec![node_ref], vec![], |s, f| {
+			s.emit_is_text(f);
+			f.instruction(&Instruction::If(BlockType::Result(node_ref)));
+			Self::emit_forward_arguments(f, text_with_char_at);
+			f.instruction(&Instruction::Else);
+			Self::emit_forward_arguments(f, list_with_at);
+			f.instruction(&Instruction::End);
+		});
+	}
 }
+

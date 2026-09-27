@@ -200,10 +200,16 @@ fn test_negative_literals_after_power_fix() {
 }
 
 #[test]
-#[ignore = "next"] // DESIGN.md ownership: mutation requires a unique place or copy-on-write
 fn test_mutation_through_alias_is_not_visible() {
 	is!("x=\"ab\";y=x;y#1=\"z\";x", "ab");
 	is!("a=(1 2);b=a;b#1=9;a#1", 1);
+}
+
+#[test]
+fn test_equal_literals_are_not_shared() {
+	is!("x=\"ab\";y=\"ab\";y#1=\"z\";x", "ab"); // the string table deduplicates literals
+	is!("x=\"ab\";y=x;y#1=\"z\";y", "zb");
+	is!("a=(1 2);b=a;b#2=9;b#2", 9);
 }
 
 #[test]

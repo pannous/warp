@@ -110,7 +110,7 @@ impl WasmGcEmitter {
 	// Inline fast paths used by the expression emitter
 	// ═══════════════════════════════════════════════════════════════════════
 
-	fn scratch(&self, index: u32) -> u32 {
+	pub(super) fn scratch(&self, index: u32) -> u32 {
 		self.int_scratch + index
 	}
 
