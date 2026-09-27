@@ -264,7 +264,15 @@ impl Lowering {
 	fn node(&mut self, node: Node) -> Result<Node, Diagnostic> {
 		Ok(match node {
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)?), data },
-			Node::List(items, bracket, separator) => {
+			Node::List(mut items, bracket, separator) => {
+				// braceless application nests to the left: `execute sql "…"` → ((execute sql) "…")
+				if let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) {
+					if items.len() > 1 && inner.last().and_then(tag_of).is_some() {
+						let mut flat = inner.clone();
+						flat.extend(items.drain(1..));
+						items = flat;
+					}
+				}
 				if let [tag, argument] = items.as_slice() {
 					if let Some(language) = tag_of(tag) {
 						return lowered_template(language, tag, argument);
