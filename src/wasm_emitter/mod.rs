@@ -3,6 +3,7 @@
 mod big_int;
 #[macro_use]
 mod constructors;
+mod equality;
 mod config;
 mod ffi_emitter;
 mod import_manager;
@@ -15,6 +16,7 @@ mod type_manager;
 mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
+pub use equality::{IS_TRUTHY, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
@@ -690,6 +692,7 @@ impl WasmGcEmitter {
 		self.emit_int_runtime();
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_equality_ops();
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
@@ -1535,8 +1538,7 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
-		self.emit_numeric_value(func, condition);
-		func.instruction(&Instruction::I32WrapI64);
+		self.emit_condition(func, condition, Self::emit_numeric_value);
 
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
@@ -1561,8 +1563,7 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
-		self.emit_numeric_value(func, condition);
-		func.instruction(&Instruction::I32WrapI64);
+		self.emit_condition(func, condition, Self::emit_numeric_value);
 
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
@@ -1594,8 +1595,7 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition
-		self.emit_numeric_value(func, condition);
-		func.instruction(&Instruction::I32WrapI64);
+		self.emit_condition(func, condition, Self::emit_numeric_value);
 
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
@@ -1634,8 +1634,7 @@ impl WasmGcEmitter {
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
-		self.emit_block_value(func, condition);
-		func.instruction(&Instruction::I32WrapI64);
+		self.emit_condition(func, condition, Self::emit_block_value);
 
 		// if (condition) { then_expr } else { else_expr }
 		func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
@@ -1674,8 +1673,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Block(BlockType::Empty));
 		func.instruction(&Instruction::Loop(BlockType::Empty));
 
-		self.emit_block_value(func, condition);
-		func.instruction(&Instruction::I32WrapI64);
+		self.emit_condition(func, condition, Self::emit_block_value);
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
 
@@ -2071,6 +2069,9 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::Else);
 				self.emit_numeric_value(func, left);
 				func.instruction(&Instruction::End);
+			}
+			Node::Key(left, op, right) if self.compares_structurally(op, left, right) => {
+				self.emit_structural_equality(func, left, op, right);
 			}
 			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
 				self.emit_int_operands_op(func, left, op, right);
@@ -2894,6 +2895,9 @@ pub fn eval(code: &str) -> Node {
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
 pub fn eval_parsed(node: Node, _code: &str) -> Node {
+	if let Some(error) = node.first_error() {
+		return error.clone();
+	}
 	use crate::analyzer::collect_all_types;
 	use crate::effects::{without_constraints, Capability, EffectReport};
 	use crate::type_kinds::TypeRegistry;

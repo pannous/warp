@@ -104,8 +104,7 @@ fn test_explicit_wrap_inside_function() {
 	is!("f(x) := (x*x) as i64; f(3037000500)", -9223372036709301616i64);
 }
 
-#[test]
-#[ignore = "next"] // panics: Cannot extract numeric value from 'abc'
+#[test] // Java: new String("abc") == "abc" is false
 fn test_string_equality_is_by_value() {
 	is!("\"abc\"==\"abc\"", true);
 	is!("x=\"abc\";x==\"abc\"", true);
@@ -238,16 +237,45 @@ fn test_norm_bars_are_brackets() {
 	is!("‖3-5‖*2", 4);
 }
 
-#[test]
-#[ignore = "next"] // wiki/unicode.md: strings are UTF-8, `#` indexes characters
+#[test] // wiki/unicode.md: strings are UTF-8, `#` indexes characters (Go, C: bytes)
 fn test_character_indexing_is_unicode_safe() {
 	is!("'héllo'#2", 'é');
 }
 
-#[test]
-#[ignore = "next"] // NFC 'é' vs NFD 'e'+U+0301 panics instead of comparing equal
+#[test] // NFC 'é' vs NFD 'e'+U+0301 compare equal: source text is normalized to NFC
 fn test_unicode_normalization() {
 	is!("'\u{e9}'=='e\u{301}'", true);
+}
+
+#[test] // Python: `a is b` is identity, true for 256 but not for 257
+fn test_is_compares_by_value() {
+	is!("\"abc\" is \"abc\"", true);
+	is!("\"abc\" is \"abd\"", false);
+	is!("x=257;x is 257", true);
+}
+
+#[test] // JS: 0=="" and [1,2]==[1,2] is false (identity), null==false is false
+fn test_equality_across_kinds_is_structural() {
+	is!("0==\"\"", false);
+	is!("null==false", false);
+	is!("[1 2]==[1 2]", true);
+	is!("[1 2]==[3]", false);
+	is!("\"abc\"!=\"abd\"", true);
+	is!("'héllo'#2=='é'", true);
+}
+
+#[test] // JSON, JS, Python json: {"a":1,"a":2} silently keeps the last value
+fn test_duplicate_keys_are_reported() {
+	fails_with("{a:1 a:2}", "duplicate key 'a'");
+	fails_with("x={a:1, b:2, a:3};x", "duplicate key 'a'");
+	is!("x={a:1 b:2};3", 3);
+}
+
+#[test] // truthiness of empty values awaits a decision (Footguns.md → Empty values), but must not crash
+fn test_empty_condition_does_not_panic() {
+	for code in ["if \"\" {1} else {2}", "if [] {1} else {2}", "x=\"\";if x {1} else {2}"] {
+		assert!(matches!(eval(code), Node::Number(_)), "{code}");
+	}
 }
 
 #[test]

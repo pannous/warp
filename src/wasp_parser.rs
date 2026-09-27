@@ -8,6 +8,7 @@ use crate::normalize::{hints as norm, set_hint_position};
 use crate::*;
 use log::warn;
 use std::fs::read_to_string;
+use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 const MAX_INTEGER_EXPONENT: i64 = 4096;
@@ -26,6 +27,10 @@ impl ParserOptions {
 	pub fn xml() -> Self {
 		ParserOptions { xml_mode: true }
 	}
+}
+
+fn is_identifier_char(c: char) -> bool {
+	c.is_alphanumeric() || c == '_'
 }
 
 /// Read and parse a WASP file
@@ -84,7 +89,9 @@ impl WaspParser {
 		Self::new_with_options(input, ParserOptions::default())
 	}
 
+	/// Source text is normalized to NFC, so equal-looking text and identifiers are equal
 	pub fn new_with_options(input: String, options: ParserOptions) -> Self {
+		let input: String = input.nfc().collect();
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		WaspParser {
@@ -157,7 +164,7 @@ impl WaspParser {
 	/// Check if input at current position matches a keyword (followed by non-alphanumeric)
 	fn matches_keyword(&self, keyword: &str) -> bool {
 		keyword.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
-			&& !self.peek_char(keyword.len()).is_alphanumeric()
+			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
 	fn is_at_line_start(&self) -> bool {
@@ -422,6 +429,7 @@ impl WaspParser {
 		}
 		// Keywords (2-char)
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
+		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
@@ -1439,8 +1447,11 @@ impl WaspParser {
 			}
 		}
 
-		// Use recursive grouping
-		self.group_by_separators(items_with_seps, bracket)
+		let list = self.group_by_separators(items_with_seps, bracket);
+		match list.duplicate_key() {
+			Some(key) => error(&format!("duplicate key '{}'", key)),
+			None => list,
+		}
 	}
 	fn group_by_separators(
 		&self,

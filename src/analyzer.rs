@@ -908,6 +908,12 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			{
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
+			if matches!(op, Op::Eq | Op::Ne) {
+				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
+			}
+			if matches!(op, Op::If | Op::While | Op::Question) {
+				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
+			}
 			if *op == Op::Assign {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
 					ctx.required_functions.insert("node_set_at");

@@ -525,7 +525,7 @@ impl WasmGcEmitter {
 		self.register_func(name);
 	}
 
-	fn call(&self, func: &mut Function, name: &str) {
+	pub(super) fn call(&self, func: &mut Function, name: &str) {
 		func.instruction(&I::Call(self.func_index(name)));
 	}
 

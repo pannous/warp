@@ -5,6 +5,8 @@ use wasm_encoder::*;
 use Instruction::I32Const;
 use ValType::Ref;
 
+const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
+
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
@@ -133,53 +135,9 @@ impl WasmGcEmitter {
 		}
 
 		// string_char_at(node: ref $Node, index: i64) -> ref $Node
-		// Get the character at index (1-based) from a Text/Symbol node, returns Codepoint node
+		// The character at index (1-based) of a Text/Symbol node as Codepoint node, decoding UTF-8
 		if self.should_emit_function("string_char_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
-			self.functions.function(func_type);
-
-			let mut func = Function::new(vec![]);
-			self.emit_text_index_guard(&mut func);
-
-			// Get node.data (which is a ref $String)
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field
-			});
-			// Cast anyref to ref $String
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
-
-			// Get ptr from $String
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.string_type,
-				field_index: 0, // ptr
-			});
-
-			// Add (index - 1) to ptr for 1-based indexing
-			func.instruction(&Instruction::LocalGet(1)); // index
-			func.instruction(&Instruction::I32WrapI64);
-			func.instruction(&I32Const(1));
-			func.instruction(&Instruction::I32Sub);
-			func.instruction(&Instruction::I32Add); // ptr + (index - 1)
-
-			// Load byte from memory at that address
-			func.instruction(&Instruction::I32Load8U(MemArg {
-				offset: 0,
-				align: 0,
-				memory_index: 0,
-			}));
-
-			// Create Codepoint node with this value
-			self.emit_call(&mut func, "new_codepoint");
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("string_char_at");
-			self.exports.export("string_char_at", ExportKind::Func, idx);
+			self.emit_string_char_at();
 		}
 
 		// node_index_at(node: ref $Node, index: i64) -> ref $Node
@@ -385,6 +343,118 @@ impl WasmGcEmitter {
 			let idx = self.register_func("node_set_at");
 			self.exports.export("node_set_at", ExportKind::Func, idx);
 		}
+	}
+
+	/// Locals: 0=node, 1=index, 2=pointer, 3=end, 4=codepoint
+	fn emit_string_char_at(&mut self) {
+		let node_ref = self.node_ref(false);
+		let string_type = self.type_manager.string_type;
+		let (pointer, end, codepoint) = (2, 3, 4);
+		let func_type = self.type_manager.types().len();
+		self.type_manager.types_mut()
+			.ty()
+			.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
+		self.functions.function(func_type);
+		let mut func = Function::new(vec![(3, ValType::I32)]);
+		Self::emit_index_below_one(&mut func);
+		self.emit_fail_if(&mut func, "index_out_of_range");
+		let string_field = |func: &mut Function, field_index: u32| {
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 1 });
+			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(string_type)));
+			func.instruction(&Instruction::StructGet { struct_type_index: string_type, field_index });
+		};
+		string_field(&mut func, 0);
+		func.instruction(&Instruction::LocalTee(pointer));
+		string_field(&mut func, 1);
+		func.instruction(&Instruction::I32Add);
+		func.instruction(&Instruction::LocalSet(end));
+
+		// skip index-1 characters: each is a lead byte followed by continuation bytes
+		func.instruction(&Instruction::Block(BlockType::Empty));
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64LeS);
+		func.instruction(&Instruction::BrIf(1));
+		Self::emit_skip_continuation_bytes(&mut func, pointer, end, None);
+		func.instruction(&Instruction::LocalGet(1));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64Sub);
+		func.instruction(&Instruction::LocalSet(1));
+		func.instruction(&Instruction::Br(0));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
+
+		func.instruction(&Instruction::LocalGet(pointer));
+		func.instruction(&Instruction::LocalGet(end));
+		func.instruction(&Instruction::I32GeU);
+		self.emit_fail_if(&mut func, "index_out_of_range");
+
+		// decode: the lead byte keeps 7, 5, 4 or 3 payload bits, each continuation byte adds 6
+		func.instruction(&Instruction::LocalGet(pointer));
+		func.instruction(&Instruction::I32Load8U(BYTE));
+		func.instruction(&Instruction::LocalTee(codepoint));
+		func.instruction(&I32Const(0x80));
+		func.instruction(&Instruction::I32GeU);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(codepoint));
+		func.instruction(&I32Const(0x07));
+		func.instruction(&I32Const(0x0F));
+		func.instruction(&I32Const(0x1F));
+		func.instruction(&Instruction::LocalGet(codepoint));
+		func.instruction(&I32Const(0xE0));
+		func.instruction(&Instruction::I32GeU);
+		func.instruction(&Instruction::Select);
+		func.instruction(&Instruction::LocalGet(codepoint));
+		func.instruction(&I32Const(0xF0));
+		func.instruction(&Instruction::I32GeU);
+		func.instruction(&Instruction::Select);
+		func.instruction(&Instruction::I32And);
+		func.instruction(&Instruction::LocalSet(codepoint));
+		Self::emit_skip_continuation_bytes(&mut func, pointer, end, Some(codepoint));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::LocalGet(codepoint));
+		self.emit_call(&mut func, "new_codepoint");
+
+		func.instruction(&Instruction::End);
+		self.code.function(&func);
+		let idx = self.register_func("string_char_at");
+		self.exports.export("string_char_at", ExportKind::Func, idx);
+	}
+
+	/// pointer++ past following UTF-8 continuation bytes (10xxxxxx), shifting their 6 bits into `accumulator`
+	fn emit_skip_continuation_bytes(func: &mut Function, pointer: u32, end: u32, accumulator: Option<u32>) {
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(pointer));
+		func.instruction(&I32Const(1));
+		func.instruction(&Instruction::I32Add);
+		func.instruction(&Instruction::LocalTee(pointer));
+		func.instruction(&Instruction::LocalGet(end));
+		func.instruction(&Instruction::I32LtU);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(pointer));
+		func.instruction(&Instruction::I32Load8U(BYTE));
+		func.instruction(&I32Const(0xC0));
+		func.instruction(&Instruction::I32And);
+		func.instruction(&I32Const(0x80));
+		func.instruction(&Instruction::I32Eq);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		if let Some(accumulator) = accumulator {
+			func.instruction(&Instruction::LocalGet(accumulator));
+			func.instruction(&I32Const(6));
+			func.instruction(&Instruction::I32Shl);
+			func.instruction(&Instruction::LocalGet(pointer));
+			func.instruction(&Instruction::I32Load8U(BYTE));
+			func.instruction(&I32Const(0x3F));
+			func.instruction(&Instruction::I32And);
+			func.instruction(&Instruction::I32Or);
+			func.instruction(&Instruction::LocalSet(accumulator));
+		}
+		func.instruction(&Instruction::Br(2));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
 	}
 }
 

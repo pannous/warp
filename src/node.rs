@@ -865,6 +865,31 @@ impl Node {
 		self.len() == 0 || self == &Empty
 	}
 
+	/// The first Error node in the tree, e.g. a parse diagnostic
+	pub fn first_error(&self) -> Option<&Node> {
+		match self {
+			Error(_) => Some(self),
+			Key(left, _, right) => left.first_error().or_else(|| right.first_error()),
+			List(items, _, _) => items.iter().find_map(Node::first_error),
+			Meta { node, .. } => node.first_error(),
+			Type { name, body } => name.first_error().or_else(|| body.first_error()),
+			_ => None,
+		}
+	}
+
+	/// Name of a key given twice in this object `{key: value …}`; code blocks may redefine
+	pub fn duplicate_key(&self) -> Option<String> {
+		let List(items, Bracket::Curly, _) = self.drop_meta() else { return None };
+		let mut seen = std::collections::HashSet::new();
+		items.iter().filter_map(|item| match item.drop_meta() {
+			Key(key, Op::Colon, _) => match key.drop_meta() {
+				Symbol(name) | Text(name) => Some(name.clone()),
+				_ => None,
+			},
+			_ => None,
+		}).find(|name| !seen.insert(name.clone()))
+	}
+
 	pub fn is_falsy(&self) -> bool {
 		match self {
 			Empty => true,

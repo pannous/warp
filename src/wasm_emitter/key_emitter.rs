@@ -101,7 +101,10 @@ impl WasmGcEmitter {
 
 		// For logical ops with non-numeric operands, use Node-returning truthy path
 		let both_numeric = self.is_numeric(left) && self.is_numeric(right);
-		if op.is_logical() && !both_numeric {
+		if self.compares_structurally(op, left, right) {
+			self.emit_structural_equality(func, left, op, right);
+			self.emit_call(func, "new_int");
+		} else if op.is_logical() && !both_numeric {
 			self.emit_truthy_logical(func, left, op, right);
 		} else if op.is_arithmetic()
 			|| op.is_comparison()
