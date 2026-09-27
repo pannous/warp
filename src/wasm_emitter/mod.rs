@@ -3007,6 +3007,9 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 		Ok(node) => node,
 		Err(error) => return error,
 	};
+	if let Some(answer) = crate::time::answer(&node) {
+		return answer;
+	}
 	let effects = EffectReport::of(&node);
 	if let Some(answer) = effects.answer(&node) {
 		return answer;

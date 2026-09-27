@@ -1079,6 +1079,14 @@ impl WaspParser {
 	}
 
 	fn parse_number_value(&mut self) -> Node {
+		// RFC 3339 / RFC 9557 literal: 2024-01-31, 2024-01-31T10:00Z, 2024-01-31T10:00[Europe/Berlin]
+		// Not in data mode yet: the data path round-trips source text and has no date serialization
+		let literal_len = if self.options.data_mode { 0 } else { crate::time::literal_len(&self.chars[self.pos..]) };
+		if literal_len > 0 {
+			let literal: String = self.chars[self.pos..self.pos + literal_len].iter().collect();
+			self.advance_by(literal_len);
+			return Node::data(crate::time::TimeLiteral(literal));
+		}
 		let mut num_str = String::new();
 
 		// todo edge case: leading plus
@@ -1140,8 +1148,26 @@ impl WaspParser {
 				.parse::<f64>()
 				.map(Node::float)
 				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str))),
-			None => self.integer_node(&num_str),
+			None => {
+				let number = self.integer_node(&num_str);
+				self.with_time_unit(number)
+			}
 		}
+	}
+
+	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration
+	fn with_time_unit(&mut self, number: Node) -> Node {
+		let Node::Number(Number::Int(count)) = &number else {
+			return number;
+		};
+		if self.options.data_mode {
+			return number;
+		}
+		let Some((unit, length)) = crate::time::unit_after(&self.chars[self.pos..]) else {
+			return number;
+		};
+		self.advance_by(length);
+		Node::data(unit.times(*count))
 	}
 
 	fn integer_node(&self, digits: &str) -> Node {

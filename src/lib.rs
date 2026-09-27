@@ -37,6 +37,7 @@ pub mod law;
 pub mod effects;
 pub mod injection;
 pub mod diagnostic;
+pub mod time;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================

@@ -369,7 +369,6 @@ fn test_no_array_store_exception() {
 // Literals are RFC 3339 / RFC 9557 only; `+` on calendar units rejects overflow, clamping is spelled out.
 
 #[test]
-#[ignore = "next"] // no date type yet
 fn test_months_are_one_based() {
 	is!("2024-02-29.month", 2); // JS getMonth(): 1, Java Date.getYear(): 124
 	is!("2024-02-29.year", 2024);
@@ -379,7 +378,6 @@ fn test_months_are_one_based() {
 }
 
 #[test]
-#[ignore = "next"] // no date type yet
 fn test_calendar_overflow_is_explicit() {
 	fails_with("2024-01-31 + 1 month", "2024-02-31"); // JS setMonth: March 2, Java plusMonths: Feb 29 silently
 	is!("add(2024-01-31, 1 month, overflow: clamp) == 2024-02-29", true);
@@ -388,7 +386,6 @@ fn test_calendar_overflow_is_explicit() {
 }
 
 #[test]
-#[ignore = "next"] // no date/time types yet
 fn test_no_implicit_time_zone() {
 	fails_with("now.hour", "instant has no hour"); // an instant needs a zone before it has a wall clock
 	is!("(2024-03-31T00:30Z in \"Europe/Berlin\").hour", 1);
@@ -397,7 +394,6 @@ fn test_no_implicit_time_zone() {
 }
 
 #[test]
-#[ignore = "next"] // no date/time types yet
 fn test_date_and_time_types_are_distinct() {
 	fails_with("2024-01-31 < 2024-01-31T10:00", "date"); // date vs local time: no implicit midnight
 	fails_with("2024-01-31T10:00 < 2024-01-31T10:00Z", "local time"); // local time vs instant: no implicit zone
@@ -523,4 +519,14 @@ fn test_running_queries_and_commands_needs_a_capability() {
 	fails_with("c=sh \"ls -l\";exec c", "exec needs the process capability");
 	fails_with("execute sql \"SELECT 1\"", "execute needs the sql capability");
 	fails_with("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\" ! Pure\nlookup(1)", "lookup is declared ! Pure but performs IO");
+}
+
+#[test]
+fn test_date_literal_needs_strict_form() {
+	is!("2024-1-31", 1992); // not RFC 3339: arithmetic
+	is!("2024 - 01 - 31", 1992);
+	is!("x = 2024-02-29; x.month", 2);
+	is!("(2024-01-31T23:30 + 1 hour).day", 1);
+	fails_with("2024-02-29 + 1 year", "2025-02-29");
+	fails_with("2024-02-30", "day out of range");
 }
