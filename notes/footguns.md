@@ -136,3 +136,18 @@
 - Left open: no host grants sql/process (nothing really runs); template language is tracked per variable by the lowering
   pass, not the type system; no typed pipes/redirection. Braceless `execute sql "…"` parses left-nested
   (`((execute sql) "…")`), the lowering flattens it.
+## Work area "conversions-bounds" (2026-09-27)
+- Fixed: index bounds (`index_out_of_range` trap → error value; eval turns any wasm trap into `Error`, other failures
+  still fall back to the program text); `int("12a")`/`float("1.5x")` → `Error('invalid number')` (`number_in_text`);
+  value semantics for `x#i=v` (`node_with_at`: lists copy the prefix and share the tail, texts copied into memory grown
+  past the string table, so deduplicated literals are safe); `x#i op= v`; `"5"+3`, `[1 2 3]*2` → compile-time type error
+  (`arithmetic_kind` → `Kind::Error`, `emitter.type_error()`); `list + list` → `list_concat`; `const` single assignment
+  (`check_constants`); `x.add(v)` → `x = x + [v]`; `[4]` stays a list.
+- Mechanism worth knowing: `emit_call` of a runtime function the analyzer did not require records it and emission reruns
+  once with it required (types are only known during emission). Recursive runtime functions compute their own index
+  as `import_count + code_count` before `runtime_function` registers them.
+- Left open: `x#i='é'` writes one byte (reads are char-safe); errors carry no span; `#-1` from the end not implemented;
+  `()` is ø so `a=();a.add(1)` hits the null-use diagnostic; `pixel + 4` (append scalar) is a type error; text
+  concatenation `"a"+"b"` not implemented (type error); no uniqueness analysis, every element write copies; runtime
+  texts are never freed; `::=` does not parse. `while i<=3 {…}` with braces returns a strange list (seen while probing,
+  not investigated). `test_float_plus_int_type_upgrading` fails since 2b74cd0f (exact rationals), not this area.
