@@ -87,7 +87,6 @@ fn test_exact_decimal_arithmetic() {
 }
 
 #[test]
-#[ignore = "next"] // bug: comparisons see 0.5, but the returned sum is typed Int and truncated to 0
 fn test_sum_of_quotients_is_not_truncated() {
 	is!("1/4+1/4", 0.5);
 }

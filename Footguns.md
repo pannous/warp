@@ -19,6 +19,10 @@ Only entries whose Warp answer was verified are listed here; everything else is 
 **C, Java, Go, Python 2**: `7/2` → *3*  
 Warp: `7/2` → `3.5`. `/` is always division; truncation must be asked for. (`test_division_is_not_truncating`)
 
+### Sum of quotients truncated
+Warp's own bug, fixed: `1/4+1/4` → `0` while `1/4+1/4 == 0.5` → `1`; the sum's result type was inferred as Int and truncated on return.  
+Warp: `1/4+1/4` → `0.5`: type inference knows `/` never yields an Int (`analyzer::arithmetic_kind`). (`test_sum_of_quotients_is_not_truncated`)
+
 ### Octal literals
 **C, Java, sloppy JS**: `010` → *8*  
 Warp: `010` → `10`. A leading zero never switches the base; bases are explicit (`0x10` → `16`). (`test_leading_zero_is_not_octal`)
@@ -117,10 +121,6 @@ is designed but not implemented. Each entry names the intended resolution. Entri
 Warp today: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`, `3 == 3.0000000000000001` → `1`, and `.1` is a parse error.  
 Intended: literals are exact rationals, the existing `Quotient` in `src/extensions/numbers.rs` is the starting point;
 `@f64` opts into IEEE ([DESIGN.md → Exact numbers by default](DESIGN.md#exact-numbers-by-default)). (`test_exact_decimal_arithmetic`)
-
-### 🐞 Sum of quotients truncated
-Warp today: `1/4+1/4` → `0` while `1/4+1/4 == 0.5` → `1` and `1/3` → `0.333…`. The value is right inside the program,
-but the result type of the sum is inferred as Int and truncated on return. (`test_sum_of_quotients_is_not_truncated`)
 
 ### Proof model lags the runtime
 The mirror image of the solved "Proofs about unbounded integers, run on wrapping ones": the Lean export still models Int as wrapping `BitVec 64`,

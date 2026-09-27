@@ -1,11 +1,11 @@
 #!/bin/bash
 # Evaluates every footgun case from footguns.md with the real warp binary.
-# Usage: probes/footguns/footguns.sh [> probes/footguns/results.txt]
+# Usage: probes/footguns/footguns.sh [cases.warp] [> probes/footguns/results.txt]
 # Cases are separated by lines containing only '---' so multi-line programs work.
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WARP="$REPO_ROOT/target/debug/warp"
-CASES="$(dirname "$0")/cases.warp"
+CASES="${1:-$(dirname "$0")/cases.warp}"
 TIMEOUT_SECONDS=60
 
 cargo build --offline --quiet --manifest-path "$REPO_ROOT/Cargo.toml" || exit 1

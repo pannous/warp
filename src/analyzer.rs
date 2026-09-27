@@ -21,6 +21,15 @@ fn is_data_node(node: &Node) -> bool {
 
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
+/// Result kind of `left op right`: division never truncates, so `1/4` is not an Int
+pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
+	if left == Kind::Float || right == Kind::Float || *op == Op::Div {
+		Kind::Float
+	} else {
+		Kind::Int
+	}
+}
+
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
@@ -100,13 +109,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
-			let left_kind = infer_type(left, scope);
-			let right_kind = infer_type(right, scope);
-			if left_kind == Kind::Float || right_kind == Kind::Float {
-				Kind::Float
-			} else {
-				Kind::Int
-			}
+			arithmetic_kind(infer_type(left, scope), op, infer_type(right, scope))
 		}
 		// Assignment/definition: type comes from value
 		Node::Key(_left, Op::Define | Op::Assign, right) => {

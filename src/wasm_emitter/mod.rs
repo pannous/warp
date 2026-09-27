@@ -424,13 +424,7 @@ impl WasmGcEmitter {
 			}
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
-				let left_kind = self.get_type(left);
-				let right_kind = self.get_type(right);
-				if left_kind == Kind::Float || right_kind == Kind::Float {
-					Kind::Float
-				} else {
-					Kind::Int
-				}
+				crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
 			}
 			// For other nodes, use analyzer's infer_type
 			_ => infer_type(node, &self.scope),
