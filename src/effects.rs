@@ -29,6 +29,8 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("putl", Wasi, &[IO]),
 	("putf", Wasi, &[IO]),
 	("fd_write", Wasi, &[IO, Unsafe]),
+	("execute", Sql, &[IO]),
+	("exec", Process, &[IO]),
 ];
 
 /// Closed effect set; `Pure` is the empty `EffectSet`.
@@ -127,6 +129,25 @@ pub enum Capability {
 	Host,
 	Wasi,
 	Ffi,
+	/// Runs typed `sql` templates (`execute`)
+	Sql,
+	/// Runs typed `sh` commands (`exec`)
+	Process,
+}
+
+impl Capability {
+	/// Capabilities `eval` grants; running queries or programs needs a host that grants more
+	pub const GRANTED_BY_EVAL: [Capability; 3] = [Host, Wasi, Ffi];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			Host => "host",
+			Wasi => "wasi",
+			Ffi => "ffi",
+			Sql => "sql",
+			Process => "process",
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,6 +266,12 @@ impl EffectReport {
 	/// Whether the module must import from this capability's module
 	pub fn needs(&self, capability: Capability) -> bool {
 		self.externals.values().any(|external| external.capability == capability)
+	}
+
+	/// First capability the module needs beyond `granted`, with the external that needs it
+	pub fn denied(&self, granted: &[Capability]) -> Option<(String, Capability)> {
+		self.externals.iter().find(|(_, external)| !granted.contains(&external.capability))
+			.map(|(name, external)| (name.clone(), external.capability))
 	}
 
 	pub fn calls_external(&self, name: &str) -> bool {

@@ -466,3 +466,44 @@ fn test_division_by_zero_is_extended_rational() {
 	is!("x=0/0; x==x", true); // IEEE: NaN != NaN
 	is!("0/0 == 1", false);
 }
+
+#[test]
+fn test_sql_holes_are_parameters_not_text() {
+	use warp::injection::{template, Language::Sql};
+	let query = template(Sql, "SELECT * FROM t WHERE name = $name AND age > ${min+1}").unwrap();
+	assert_eq!(query.query(), Some("SELECT * FROM t WHERE name = ? AND age > ?"));
+	assert_eq!(query.holes.len(), 2);
+	assert_eq!(query.holes[0], Node::Symbol("name".into()));
+	assert_eq!(template(Sql, "SELECT '$$5'").unwrap().query(), Some("SELECT '$5'"));
+	// every language with string building: name = "x' OR '1'='1" → all rows
+	let injected = "name=\"x' OR '1'='1\";q=sql \"SELECT * FROM t WHERE name = $name\"";
+	is!(&format!("{injected};q#1"), "SELECT * FROM t WHERE name = ?"); // the query keeps its shape
+	is!(&format!("{injected};q#2"), "x' OR '1'='1"); // the value stays a value
+}
+
+#[test]
+fn test_sql_from_built_text_is_rejected() {
+	fails_with("name=\"x\";sql(\"SELECT * FROM t WHERE name='\" + name + \"'\")", "sql takes a literal template");
+	fails_with("name=\"x\";sql \"SELECT * FROM t WHERE name = '$name'\"", "a parameter is a value");
+	fails_with("q=\"SELECT * FROM users\";execute q", "execute takes a sql template");
+}
+
+#[test]
+fn test_shell_holes_are_whole_arguments() {
+	use warp::injection::{template, Language::Shell};
+	let command = template(Shell, "rm -f $file").unwrap();
+	assert_eq!(command.text, [Some("rm".to_string()), Some("-f".to_string()), None]);
+	assert_eq!(command.holes, [Node::Symbol("file".into())]);
+	is!("file=\"a; rm -rf ~\";c=sh \"rm -f $file\";c#3", "a; rm -rf ~"); // one argument, no shell parses it
+	fails_with("sh \"ls | grep x\"", "no shell");
+	fails_with("f=\"a\";sh \"cp --out=$f b\"", "whole argument");
+	fails_with("exec \"rm -rf /\"", "exec takes a sh template");
+}
+
+#[test]
+fn test_running_queries_and_commands_needs_a_capability() {
+	is!("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup", Node::Symbol("IO".into()));
+	fails_with("c=sh \"ls -l\";exec c", "exec needs the process capability");
+	fails_with("execute sql \"SELECT 1\"", "execute needs the sql capability");
+	fails_with("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\" ! Pure\nlookup(1)", "lookup is declared ! Pure but performs IO");
+}

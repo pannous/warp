@@ -672,6 +672,7 @@ impl WasmGcEmitter {
 			Host => self.config.emit_host_imports,
 			Wasi => self.config.emit_wasi_imports,
 			Ffi => self.config.emit_ffi_imports,
+			Sql | Process => false, // never imported: eval refuses such modules before emission
 		}
 	}
 
@@ -3002,8 +3003,17 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	use crate::type_kinds::TypeRegistry;
 	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
-	if let Some(answer) = EffectReport::of(&node).answer(&node) {
+	let node = match crate::injection::lower_templates(node) {
+		Ok(node) => node,
+		Err(error) => return error,
+	};
+	let effects = EffectReport::of(&node);
+	if let Some(answer) = effects.answer(&node) {
 		return answer;
+	}
+	if let Some((name, capability)) = effects.denied(&Capability::GRANTED_BY_EVAL) {
+		return crate::node::error(&format!(
+			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name()));
 	}
 	let node = without_constraints(node);
 	if let Some(error) = crate::analyzer::diagnose(&node) {
