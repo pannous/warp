@@ -242,10 +242,9 @@ fn test_unicode_normalization() {
 }
 
 #[test]
-#[ignore = "next"] // since fcbd300b Int is unbounded, but Lean still exports BitVec 64: "lean counterexample x=-4611686018427388111"
 fn test_proof_model_matches_unbounded_int() {
 	let reports = warp::law::verify("square(x) := x*x\nlaw square(x) >= 0");
-	assert!(!reports[0].failed(), "{}", reports[0]);
+	assert_eq!(reports[0].assurance, warp::law::Assurance::Proved, "{}", reports[0]);
 }
 
 #[test]

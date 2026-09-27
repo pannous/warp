@@ -19,8 +19,8 @@
 - `country: NO` → `country:0` (YAML Norway problem) — needs a design decision on `yes`/`no` aliases.
 
 - `x as i64` panics inside a function body (`f(x) := (x*x) as i64`), works at top level.
-- Since fcbd300b (unbounded Int) the Lean export's `BitVec 64` model rejects true laws: `law square(x) >= 0` →
-  lean counterexample x=-4611686018427388111 (`test_proof_model_matches_unbounded_int`).
+- Fixed: the Lean exporter now models Warp Int as unbounded `Int`; `law square(x) >= 0` is proved consistently with the runtime
+  (`test_proof_model_matches_unbounded_int`). Explicit `as i64` proof terms remain future work.
 
 ## Inspiration notes ("Solved elsewhere")
 - Research agents write one file per topic group to `probes/footguns/inspiration/<group>.md` (brief: `BRIEF.md`),

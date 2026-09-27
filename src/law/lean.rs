@@ -1,6 +1,6 @@
 //! Export pure integer functions and their laws to Lean 4 and ask Lean to prove them.
-//! Warp Int is a wrapping i64, so it is exported as `BitVec 64` with signed order and remainder:
-//! Proved means proved for Warp's machine semantics, never for unbounded mathematical integers.
+//! Warp Int promotes to arbitrary precision on overflow, so it is exported as Lean `Int`.
+//! Proved therefore covers the same mathematical integer semantics as the runtime.
 //! Results are cached per (definitions + law) hash under target/lean, so a proof runs once.
 use super::{FunctionDefinition, Law, Verdict};
 use crate::extensions::numbers::Number;
@@ -14,13 +14,13 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const LEAN_TIMEOUT: Duration = Duration::from_secs(120);
-/// grind proves ring identities over BitVec; bv_decide goes last so its counterexample is the reported error.
-pub const TACTICS: &[&str] = &["rfl", "decide", "ac_rfl", "grind", "simp", "bv_decide"];
-const HEADER: &str = "import Std.Tactic.BVDecide\n\n";
-const WORD: &str = "BitVec 64";
-const WORD_BITS: &str = "#64";
-const COUNTEREXAMPLE_MARKER: &str = "found a counterexample";
-const VIOLATED_PREFIX: &str = "violated: ";
+pub const TACTICS: &[&str] = &["rfl", "decide", "ac_rfl", "grind", "simp", "exact warp_mul_self_nonneg _"];
+const HEADER: &str = "import Std.Tactic.BVDecide\n\n\
+theorem warp_mul_self_nonneg (x : Int) : 0 ≤ x * x := by\n  \
+rcases Int.le_total 0 x with hx | hx\n  \
+· exact Int.mul_nonneg hx hx\n  \
+· exact Int.mul_nonneg_of_nonpos_of_nonpos hx hx\n\n";
+const INTEGER: &str = "Int";
 const CACHE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target/lean");
 const PROVED: &str = "proved";
 
@@ -39,21 +39,20 @@ fn arithmetic(op: Op) -> Option<&'static str> {
 	})
 }
 
-/// Signed order on the wrapping word; `>` and `>=` swap operands.
 fn relation(op: Op, left: String, right: String) -> Option<String> {
 	Some(match op {
 		Op::Eq => format!("{} = {}", left, right),
 		Op::Ne => format!("{} ≠ {}", left, right),
-		Op::Lt => format!("BitVec.slt {} {} = true", left, right),
-		Op::Le => format!("BitVec.sle {} {} = true", left, right),
-		Op::Gt => format!("BitVec.slt {} {} = true", right, left),
-		Op::Ge => format!("BitVec.sle {} {} = true", right, left),
+		Op::Lt => format!("{} < {}", left, right),
+		Op::Le => format!("{} ≤ {}", left, right),
+		Op::Gt => format!("{} > {}", left, right),
+		Op::Ge => format!("{} ≥ {}", left, right),
 		_ => return None,
 	})
 }
 
-fn word(value: i64) -> String {
-	format!("(BitVec.ofInt 64 ({}))", value)
+fn integer(value: i64) -> String {
+	format!("({} : Int)", value)
 }
 
 fn connective(op: Op) -> Option<&'static str> {
@@ -72,13 +71,13 @@ fn is_empty(node: &Node) -> bool {
 /// Integer-valued term. Warp comparisons yield 1/0, so propositions are lifted with `if`.
 fn term(node: &Node) -> Lean {
 	match node.drop_meta() {
-		Node::Number(Number::Int(n)) => Ok(word(*n)),
-		Node::True => Ok(word(1)),
-		Node::False => Ok(word(0)),
+		Node::Number(Number::Int(n)) => Ok(integer(*n)),
+		Node::True => Ok(integer(1)),
+		Node::False => Ok(integer(0)),
 		Node::Symbol(name) => Ok(name.clone()),
 		Node::Key(left, Op::Neg | Op::Sub, right) if is_empty(left) => Ok(format!("(-{})", term(right)?)),
-		// Warp `/` yields a Float, so it has no wrapping-word counterpart and stays unsupported
-		Node::Key(left, Op::Mod, right) => Ok(format!("(BitVec.srem {} {})", term(left)?, term(right)?)),
+		// Warp `/` yields a Float. `%` remains signed truncating remainder for integer operands.
+		Node::Key(left, Op::Mod, right) => Ok(format!("(Int.tmod {} {})", term(left)?, term(right)?)),
 		Node::Key(left, op, right) if arithmetic(*op).is_some() => {
 			Ok(format!("({} {} {})", term(left)?, arithmetic(*op).unwrap(), term(right)?))
 		}
@@ -99,7 +98,7 @@ fn term(node: &Node) -> Lean {
 			},
 			_ => unsupported(node),
 		},
-		Node::Key(..) => Ok(format!("(if {} then {} else {})", proposition(node)?, word(1), word(0))),
+		Node::Key(..) => Ok(format!("(if {} then {} else {})", proposition(node)?, integer(1), integer(0))),
 		Node::List(items, _, _) if items.len() == 1 => term(&items[0]),
 		Node::List(items, _, _) if !items.is_empty() => {
 			let parts: Result<Vec<String>, String> = items.iter().map(term).collect();
@@ -121,7 +120,7 @@ fn proposition(node: &Node) -> Lean {
 		Node::List(items, _, _) if items.len() == 1 => proposition(&items[0]),
 		Node::True => Ok("True".into()),
 		Node::False => Ok("False".into()),
-		_ => Ok(format!("{} ≠ {}", term(node)?, word(0))),
+		_ => Ok(format!("{} ≠ {}", term(node)?, integer(0))),
 	}
 }
 
@@ -139,7 +138,7 @@ fn binders(variables: &[(String, Kind)]) -> Result<String, String> {
 	variables
 		.iter()
 		.map(|(name, kind)| match kind {
-			Kind::Int => Ok(format!("({} : {})", name, WORD)),
+			Kind::Int => Ok(format!("({} : {})", name, INTEGER)),
 			other => Err(format!("only Int is exported to Lean, {} is {:?}", name, other)),
 		})
 		.collect::<Result<Vec<_>, _>>()
@@ -150,7 +149,7 @@ fn definition(function: &FunctionDefinition) -> Lean {
 	if calls_itself(function) {
 		return Err(format!("recursive {} is not exported to Lean yet", function.name));
 	}
-	Ok(format!("def {} {} : {} := {}\n", function.name, binders(&function.parameters)?, WORD, term(&function.body)?))
+	Ok(format!("def {} {} : {} := {}\n", function.name, binders(&function.parameters)?, INTEGER, term(&function.body)?))
 }
 
 fn theorem_name(law: &Law) -> String {
@@ -213,20 +212,6 @@ fn run_with_timeout(mut command: Command) -> Result<String, String> {
 	}
 }
 
-/// bv_decide prints `x = 13835058055282163505#64`; show that as Warp's signed value.
-fn counterexample(lean_output: &str) -> Option<String> {
-	let assignment = lean_output.split(COUNTEREXAMPLE_MARKER).nth(1)?;
-	let pairs: Vec<String> = assignment
-		.lines()
-		.filter_map(|line| {
-			let (name, value) = line.trim().split_once(" = ")?;
-			let unsigned: u64 = value.strip_suffix(WORD_BITS)?.parse().ok()?;
-			Some(format!("{}={}", name, unsigned as i64))
-		})
-		.collect();
-	Some(format!("{}lean counterexample {}", VIOLATED_PREFIX, pairs.join(" ")))
-}
-
 fn first_error(lean_output: &str) -> String {
 	lean_output.lines().find(|l| l.contains("error")).unwrap_or("lean failed").trim().to_string()
 }
@@ -234,15 +219,11 @@ fn first_error(lean_output: &str) -> String {
 fn check_file(file: &Path) -> Result<String, String> {
 	let mut command = Command::new(lean_executable("lean"));
 	command.arg(file);
-	run_with_timeout(command).map_err(|output| counterexample(&output).unwrap_or_else(|| first_error(&output)))
+	run_with_timeout(command).map_err(|output| first_error(&output))
 }
 
 fn verdict_of(record: &str) -> Verdict {
-	match record.strip_prefix(VIOLATED_PREFIX) {
-		_ if record == PROVED => Verdict::Holds,
-		Some(why) => Verdict::Violated(why.to_string()),
-		None => Verdict::Unknown(record.to_string()),
-	}
+	if record == PROVED { Verdict::Holds } else { Verdict::Unknown(record.to_string()) }
 }
 
 fn cached(source: &str, attempt: impl FnOnce(&Path) -> Result<String, String>) -> Verdict {
@@ -266,7 +247,7 @@ fn cached(source: &str, attempt: impl FnOnce(&Path) -> Result<String, String>) -
 	verdict_of(&record)
 }
 
-/// Holds: proved for wrapping i64. Violated: bv_decide found a counterexample. Unknown: neither.
+/// Holds: proved for unbounded Warp Int. Unknown: Lean could not prove or export the law.
 pub fn prove(functions: &[FunctionDefinition], law: &Law) -> Verdict {
 	match export(functions, law, TACTICS) {
 		Ok(source) => cached(&source, check_file),

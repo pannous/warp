@@ -24,7 +24,7 @@ pub const LAW_KEYWORD: &str = "law";
 pub const PROPERTY_TRIALS: usize = 64;
 const RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 const RANDOM_INT_RANGE: i64 = 1000;
-/// 3037000500² is the first square beyond i64::MAX: Warp Int wraps, so laws must survive overflow.
+/// Keep machine-word boundaries in the generated corpus even though Warp Int promotes on overflow.
 const EDGE_INTS: [i64; 9] = [0, 1, -1, 2, -2, i64::MAX, i64::MIN, 3_037_000_500, -3_037_000_500];
 const EDGE_FLOATS: [f64; 5] = [0.0, 1.0, -1.0, 0.5, -2.5];
 

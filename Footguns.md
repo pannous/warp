@@ -123,14 +123,11 @@ Warp: `1e3` → `1000`, an exact integer like the literal it abbreviates (`1e20 
 while `[.1 .2]` stays a two-element list. `2em`, `1e`, `1_` are not numbers.
 (`test_scientific_notation`, `test_scientific_notation_forms`, `test_digit_separators`, `test_leading_dot_literal`)
 
-### Proofs about unbounded integers, run on wrapping ones
-**Lean/Coq/Dafny exports that model `int` as ℤ**: `law square(x) >= 0` → *Proved*, while the program returns `square(3037000500)` → `-9223372036709301616`.  
-Warp before 1507a3b7 had exactly this bug: the Lean export used unbounded `Int` and reported the law as Proved.
-Now Int exports as `BitVec 64` with signed order (`BitVec.slt`/`sle`) and `srem`; Warp `/` is not exported (it yields a Float);
-`bv_decide` counterexamples become Violated, and property tests start with `i64::MIN`, `i64::MAX` and ±3037000500.
-Lesson: a proof counts only when the Lean model matches the backend's machine semantics. Unbounded Int is tracked in `todo.md`,
-details in `notes/laws.md`. (`tests/test_law.rs`)
-Since fcbd300b the runtime Int is unbounded again, so the `BitVec 64` model is now the wrong one: see NOT YET → Proof model lags the runtime.
+### Proof model matches unbounded integers
+**Lean/Coq/Dafny exports over a mismatched numeric type** can prove statements the runtime violates or reject statements it satisfies.
+Warp exports its unbounded Int as Lean `Int`: `law square(x) >= 0` is both true at runtime for `3037000500` and proved universally.
+Explicit `as i64` values still wrap and are not exported yet. Details in `notes/laws.md`.
+(`test_proof_model_matches_unbounded_int`, `tests/test_law.rs`)
 
 ### Date guessing in data
 **Excel**: typing the gene name `SEPT2` → *2-Sep*  
@@ -167,12 +164,6 @@ is designed but not implemented. Each entry names the intended resolution. Entri
 Warp today: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`, `3 == 3.0000000000000001` → `1`.  
 Intended: literals are exact rationals, the existing `Quotient` in `src/extensions/numbers.rs` is the starting point;
 `@f64` opts into IEEE ([DESIGN.md → Exact numbers by default](DESIGN.md#exact-numbers-by-default)). (`test_exact_decimal_arithmetic`)
-
-### Proof model lags the runtime
-The mirror image of the solved "Proofs about unbounded integers, run on wrapping ones": the Lean export still models Int as wrapping `BitVec 64`,
-but since fcbd300b Warp Int is unbounded. `warp verify` on `square(x) := x*x⏎law square(x) >= 0` →
-*FAILED lean counterexample x=-4611686018427388111*, while the program computes `square(-4611686018427388111) > 0` → `1`.  
-Intended: export Int as Lean's `Int` again (and `as i64` values as `BitVec 64`), so the proof model follows the representation. (`test_proof_model_matches_unbounded_int`)
 
 ### NaN and infinity
 **IEEE 754 everywhere**: `NaN == NaN` → *false*, `1/0` → *Infinity*, `sqrt(-1)` → *NaN*, and NaN poisons all later math quietly.  
@@ -429,7 +420,7 @@ keyed by content hash ([DESIGN.md → Content-addressed resolutions](DESIGN.md#c
 ### Proofs about a model
 A proof is only as good as its model of the runtime: a Lean proof over ℤ says nothing about wrapping i64, and nothing can prove the
 compiler, the WASM engine and the hardware themselves correct from inside the program ("Reflections on Trusting Trust").  
-Warp: the Lean export models Warp's actual integers (`BitVec 64`, see Solved); property tests and runtime assertions check the compiled program, not the model.
+Warp: the Lean export models Warp's actual unbounded integers as Lean `Int` (see Solved); property tests and runtime assertions check the compiled program, not the model.
 
 ### Nondeterministic NaN bits
 The WebAssembly spec allows NaN payload bits to differ between engines (and relaxed SIMD results to differ between CPUs).  
