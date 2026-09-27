@@ -451,8 +451,7 @@ impl WaspParser {
 		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
-		let (c1, c2) = (self.current_char(), self.peek_char(1));
-		match c1 {
+		match self.current_char() {
 			'-' if !self.number_starts_at(1) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
