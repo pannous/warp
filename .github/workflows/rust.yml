@@ -10,6 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
+  LEAN_TOOLCHAIN: leanprover/lean4:v4.34.1
 
 jobs:
   test:
@@ -26,6 +27,14 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions/cache@v4
+      with:
+        path: ~/.elan
+        key: ${{ runner.os }}-elan-${{ env.LEAN_TOOLCHAIN }}
+    - name: Install Lean (law proofs)
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain $LEAN_TOOLCHAIN
+        echo "$HOME/.elan/bin" >> $GITHUB_PATH
     - run: cargo build --verbose
     - run: cargo test --verbose --no-fail-fast
     - run: cargo clippy -- -D warnings
