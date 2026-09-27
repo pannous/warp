@@ -1681,6 +1681,7 @@ dependencies = [
  "libloading",
  "log",
  "num-bigint",
+ "num-integer",
  "num-traits",
  "once_cell",
  "parity-wasm",

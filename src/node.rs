@@ -185,9 +185,8 @@ impl Node {
 			Error(_) => Kind::Error,
 			False | True => Kind::Int,
 			Node::Number(num) => match num {
-				Number::Int(_) => Kind::Int,
-				Number::Float(_) => Kind::Float,
-				_ => Kind::Float, // Quotient, Complex, Nan, Inf → Float
+				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) => Kind::Int, // exact numbers
+				_ => Kind::Float, // Float, Complex, Nan, Inf
 			},
 		}
 	}
@@ -1475,6 +1474,7 @@ impl PartialEq<f64> for Node {
 		match self {
 			Node::Number(Number::Float(f)) => f == other,
 			Node::Number(Number::Int(n)) => *n as f64 == *other,
+			Node::Number(quotient @ Number::Quotient(..)) => f64::from(*quotient) == *other,
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}

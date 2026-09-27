@@ -114,3 +114,13 @@
   (`test_optional_local_runs`, ignored); declared-type check only sees literal values; other emitter panics
   (`Undefined variable`, pinned as should_panic by an existing test); runtime traps have no span; `failed_run` still returns
   the parsed program for link/instantiation failures; `x=0.5;x=0` → WASM validation error (int stored into float local).
+
+## exact-numbers work area (2026-09-27)
+- Fixed: `1/4+1/4` → 0 (analyzer::arithmetic_kind). Exact rationals by default (src/wasm_emitter/exact.rs): an Int handle
+  may point at a `$Ratio{num,den}` of Int payloads in the same heap as `$BigInt`; integer fast paths unchanged, only the
+  slow paths dispatch on `is_ratio`. `0.1+0.2==0.3`, `1/3*3==1`, `2^-2` → 0.25 (used to trap), `1/0` → ∞, `0/0` → NaN (den 0).
+- Decimal literals with ≤ 15 significant digits are exact (`Number::is_exact_decimal`); π, sqrt, FFI floats stay f64.
+- Left open (Decision needed in Footguns.md): negative modulo (existing tests pin C semantics), rounding-mode naming,
+  bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
+- Other gaps: ratios with parts beyond i64 read back as f64 (Quotient is (i64,i64)); `3 == 3.0000000000000001` still true
+  (literal parsed to f64 first); `law`/Lean export still treats `/` as unsupported ("yields a Float" comment in law/lean.rs is stale).

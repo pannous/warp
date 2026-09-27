@@ -1,6 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
+mod exact;
 #[macro_use]
 mod constructors;
 mod equality;
@@ -917,6 +918,10 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
+				Number::Quotient(..) => {
+					self.emit_numeric_value(func, node);
+					self.emit_call(func, "new_int");
+				}
 				_ => {
 					self.emit_call(func, "new_empty");
 				}
@@ -1030,8 +1035,7 @@ impl WasmGcEmitter {
 	}
 
 	fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
-		// Division always uses float to preserve precision: 1/2 = 0.5, not 0
-		self.get_type(left).is_float() || self.get_type(right).is_float() || *op == Op::Div
+		crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right)).is_float()
 	}
 
 	fn emit_assign_or_define(
@@ -1129,23 +1133,31 @@ impl WasmGcEmitter {
 					_ => func.instruction(&Instruction::F64Mul), // fallback
 				};
 			} else {
-				let right_range = self.int_range(right);
-				match base_op {
-					Op::And => {
-						func.instruction(&Instruction::I64And);
-					}
-					Op::Or => {
-						func.instruction(&Instruction::I64Or);
-					}
-					Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Xor => self.emit_int_op(func, &base_op, None, right_range),
-					_ => self.emit_int_op(func, &Op::Mul, None, right_range), // fallback
-				};
+				self.emit_int_compound_op(func, &base_op, right);
 			}
 			// Store result and leave on stack
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
 		} else {
 			panic!("Expected symbol in compound assignment, got {:?}", left);
+		}
+	}
+
+	/// Stack [x, y] → [x op y] for `x op= y` on Ints; `/=` keeps an integer x an integer
+	fn emit_int_compound_op(&mut self, func: &mut Function, op: &Op, right: &Node) {
+		match op {
+			Op::And => {
+				func.instruction(&Instruction::I64And);
+			}
+			Op::Or => {
+				func.instruction(&Instruction::I64Or);
+			}
+			Op::Div => self.emit_call(func, "exact_div_assign"),
+			Op::Add | Op::Sub | Op::Mul | Op::Mod | Op::Pow | Op::Xor => {
+				let right_range = self.int_range(right);
+				self.emit_int_op(func, op, None, right_range);
+			}
+			_ => panic!("Unexpected compound assignment operator: {:?}", op),
 		}
 	}
 
@@ -1791,9 +1803,12 @@ impl WasmGcEmitter {
 						self.emit_int_from_machine(func);
 						self.emit_call(func, "new_int");
 					}
-					// Already int or coercible
+					// Already int or coercible; a ratio is truncated
 					_ => {
 						self.emit_numeric_value(func, value);
+						if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+							self.emit_call(func, "exact_trunc");
+						}
 						self.emit_call(func, "new_int");
 					}
 				}
@@ -1993,8 +2008,14 @@ impl WasmGcEmitter {
 						self.emit_int_literal(func, &num.to_bigint());
 						func
 					}
-					Number::Float(f) => func.instruction(&Instruction::I64Const(*f as i64)),
-					Number::Quotient(n, d) => func.instruction(&Instruction::I64Const(n / d)),
+					Number::Float(f) => {
+						self.emit_decimal_literal(func, *f);
+						func
+					}
+					Number::Quotient(n, d) => {
+						self.emit_exact_literal(func, &(*n).into(), &(*d).into());
+						func
+					}
 					Number::Complex(r, _i) => func.instruction(&Instruction::I64Const(*r as i64)),
 					Number::Nan | Number::Inf | Number::NegInf => {
 						func.instruction(&Instruction::I64Const(0)) // special values → 0
@@ -2056,23 +2077,7 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::LocalGet(local_pos));
 					// Emit y
 					self.emit_numeric_value(func, right);
-					// Apply base operation
-					match base_op {
-						Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
-							let right_range = self.int_range(right);
-							self.emit_int_op(func, &base_op, None, right_range);
-						}
-						Op::And => {
-							func.instruction(&Instruction::I64And);
-						}
-						Op::Or => {
-							func.instruction(&Instruction::I64Or);
-						}
-						Op::Xor => {
-							func.instruction(&Instruction::I64Xor);
-						}
-						_ => panic!("Unexpected base op: {:?}", base_op),
-					}
+					self.emit_int_compound_op(func, &base_op, right);
 					// Store result and leave on stack
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {

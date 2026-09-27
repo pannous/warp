@@ -30,11 +30,23 @@ pub const FIELD_KIND: usize = 0;
 pub const FIELD_DATA: usize = 1;
 pub const FIELD_VALUE: usize = 2;
 
-/// Int payload: `$i64box(value)` or `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32
+/// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
+/// or an exact `$Ratio(numerator, denominator)` of two such payloads (wasm_emitter/exact.rs)
 pub fn read_int_payload(mut store: impl AsContextMut, data_val: &Val) -> Result<Number> {
+	read_payload(&mut store.as_context_mut(), data_val)
+}
+
+fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val) -> Result<Number> {
+	let mut store = store;
 	let anyref = data_val.unwrap_anyref().ok_or_else(|| anyhow!("Int node without payload"))?;
 	let payload = anyref.unwrap_struct(&store)?;
 	match payload.field(&mut store, 0)? {
+		numerator @ Val::AnyRef(_) => {
+			let numerator = read_payload(store, &numerator)?;
+			let denominator = payload.field(&mut store, 1)?;
+			let denominator = read_payload(store, &denominator)?;
+			Ok(Number::ratio(numerator, denominator))
+		}
 		Val::I64(value) => Ok(Number::Int(value)),
 		Val::I32(negative) => {
 			let limbs_ref = payload.field(&mut store, 1)?;

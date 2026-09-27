@@ -29,8 +29,11 @@ pub struct TypeManager {
 	/// $BigInt = (struct (field $negative i32) (field $limbs (ref null $Limbs)))
 	pub big_int_type: u32,
 
-	/// $BigInts = (array (mut (ref null $BigInt))): heap that Int handles index into
+	/// $Numbers = (array (mut (ref null any))): heap of $BigInt and $Ratio that Int handles index into
 	pub big_heap_type: u32,
+
+	/// $Ratio = (struct (field $num anyref) (field $den anyref)): exact non-integer, both Int payloads, see wasm_emitter/exact.rs
+	pub ratio_type: u32,
 
 	/// Next available type index
 	next_type_idx: u32,
@@ -57,6 +60,7 @@ impl TypeManager {
 			limbs_type: 0,
 			big_int_type: 0,
 			big_heap_type: 0,
+			ratio_type: 0,
 			next_type_idx: 0,
 			user_type_indices: HashMap::new(),
 		}
@@ -140,9 +144,16 @@ impl TypeManager {
 		self.big_int_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
-		let big_ref = RefType { nullable: true, heap_type: HeapType::Concrete(self.big_int_type) };
-		self.types.ty().array(&Val(Ref(big_ref)), true);
+		let any_ref = RefType { nullable: true, heap_type: any_heap_type() };
+		self.types.ty().array(&Val(Ref(any_ref)), true);
 		self.big_heap_type = self.next_type_idx;
+		self.next_type_idx += 1;
+
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(Ref(any_ref)), mutable: false }, // numerator payload
+			FieldType { element_type: Val(Ref(any_ref)), mutable: false }, // positive denominator payload
+		]);
+		self.ratio_type = self.next_type_idx;
 		self.next_type_idx += 1;
 	}
 

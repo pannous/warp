@@ -182,7 +182,10 @@ impl WasmGcEmitter {
 	fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		match fn_name {
 			"type" => {
-				let kind = self.get_type(arg);
+				let kind = match arg.drop_meta() {
+					literal @ Node::Number(_) => literal.kind(),
+					_ => self.get_type(arg),
+				};
 				let type_name = kind.to_string();
 				let (ptr, len) = self.allocate_string(&type_name);
 				func.instruction(&Instruction::I32Const(ptr as i32));

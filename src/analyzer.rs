@@ -22,23 +22,32 @@ fn is_data_node(node: &Node) -> bool {
 
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
-/// Result kind of `left op right`: division never truncates, so `1/4` is not an Int
-pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
-	if left == Kind::Float || right == Kind::Float || *op == Op::Div {
+/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
+pub fn arithmetic_kind(left: Kind, _op: &Op, right: Kind) -> Kind {
+	if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
 		Kind::Int
 	}
 }
 
+/// Kind as written: a literal keeps its data kind (`3.14` is a float literal even though its value
+/// computes exactly), anything else is inferred
+pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
+	match node.drop_meta() {
+		literal @ Node::Number(_) => literal.kind(),
+		other => infer_type(other, scope),
+	}
+}
+
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
-		// Float literals and derived types
+		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
 		Node::Number(Number::Float(_)) => Kind::Float,
-		Node::Number(Number::Quotient(_, _)) => Kind::Float,
 		Node::Number(Number::Complex(_, _)) => Kind::Float,
-		// Integer literals
+		// Integer and rational literals
 		Node::Number(_) => Kind::Int,
 		// Text and char
 		Node::Text(_) => Kind::Text,
@@ -138,7 +147,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
-		// Prefix operators (neg, abs, sqrt): inherit type from operand
+		// √x is irrational in general: an f64
+		Node::Key(left, Op::Sqrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
+		// Prefix operators (neg, abs): inherit type from operand
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
 		}
@@ -388,13 +399,8 @@ fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structure: bool) -
 		}
 		Node::Key(left, Op::Define, right) => {
 			if let Node::Symbol(name) = left.drop_meta() {
-				let new_kind = infer_type(right, scope);
-				if let Some(existing) = scope.lookup(name) {
-					if !types_compatible(existing.kind, new_kind) {
-						return Some(type_error(name, existing.kind, new_kind));
-					}
-				} else {
-					scope.define(name.clone(), None, new_kind);
+				if let Some(err) = check_assignment(name, right, scope) {
+					return Some(err);
 				}
 			}
 			check_type_errors_inner(right, scope, in_structure)
@@ -402,13 +408,8 @@ fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structure: bool) -
 		Node::Key(left, Op::Assign, right) => {
 			if !in_structure {
 				if let Node::Symbol(name) = left.drop_meta() {
-					let new_kind = infer_type(right, scope);
-					if let Some(existing) = scope.lookup(name) {
-						if !types_compatible(existing.kind, new_kind) {
-							return Some(type_error(name, existing.kind, new_kind));
-						}
-					} else {
-						scope.define(name.clone(), None, new_kind);
+					if let Some(err) = check_assignment(name, right, scope) {
+						return Some(err);
 					}
 				}
 			}
@@ -429,6 +430,21 @@ fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structure: bool) -
 			None
 		}
 		_ => None,
+	}
+}
+
+/// `name = value` must keep the variable's kind; a new variable takes the value's kind
+fn check_assignment(name: &str, value: &Node, scope: &mut Scope) -> Option<Node> {
+	match scope.lookup(name) {
+		Some(existing) => {
+			let new_kind = written_kind(value, scope);
+			(!types_compatible(existing.kind, new_kind)).then(|| type_error(name, existing.kind, new_kind))
+		}
+		None => {
+			let kind = infer_type(value, scope);
+			scope.define(name.to_string(), None, kind);
+			None
+		}
 	}
 }
 
@@ -985,7 +1001,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
 		Node::Number(number) => {
-			if number.is_integer() && !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
+			if !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
 		}

@@ -23,6 +23,29 @@ Warp: `7/2` → `3.5`. `/` is always division; truncation must be asked for. (`t
 Warp's own bug, fixed: `1/4+1/4` → `0` while `1/4+1/4 == 0.5` → `1`; the sum's result type was inferred as Int and truncated on return.  
 Warp: `1/4+1/4` → `0.5`: type inference knows `/` never yields an Int (`analyzer::arithmetic_kind`). (`test_sum_of_quotients_is_not_truncated`)
 
+### Decimal fractions
+**Python, JS, Java, C, …**: `0.1 + 0.2 == 0.3` → *false* (`0.30000000000000004`), `1/3*3 == 1` → *false* in some cases  
+Warp before this change: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`.  
+Warp: numbers are exact rationals by default ([DESIGN.md → Exact numbers by default](DESIGN.md#exact-numbers-by-default)):
+`0.1+0.2==0.3` → `1`, `0.1+0.2` → `0.3`, `1/3*3==1` → `1`, `1/3` → `1/3` (`Number::Quotient`), `2^-2` → `0.25`.
+An Int handle may point at a `$Ratio` next to the `$BigInt`s, so integers keep the i64 fast path and only the slow paths
+see ratios (`src/wasm_emitter/exact.rs`). A decimal literal with up to 15 significant digits is exact; f64 only comes from
+`sqrt`/FFI float functions, irrational constants (`π`) and `as float`, and an f64 operand makes the result an f64.
+`x /= y` keeps an integer `x` an integer (truncating), `as int` truncates a ratio.
+Still inexact: `3 == 3.0000000000000001` → `1`, the literal is parsed to f64 before it becomes exact.
+Ratios whose parts exceed i64 come back from WASM as an f64 approximation (with a warning) because `Quotient` is `(i64, i64)`.
+(`test_exact_decimal_arithmetic`, `test_exact_rationals_stay_exact`)
+
+### NaN and infinity
+**IEEE 754 everywhere**: `NaN == NaN` → *false*, `1/0` → *Infinity*, `sqrt(-1)` → *NaN*, and NaN poisons all later math quietly.  
+Warp before this change: `x=0.0/0.0; x==x` → `0`, `1/0` → `inf` (an f64).  
+Warp: exact division by zero gives the extended rationals ±∞ = ±1/0 and NaN = 0/0 ([wiki/int60.md](wiki/int60.md) reserves ±∞ and NaN too):
+`1/0` → `∞`, `-1/0` → `-∞`, `1/0 > 10^100` → `1`, `1/(1/0)` → `0`, `1/0 - 1/0` → `NaN`; NaN equals only itself:
+`x=0/0; x==x` → `1`, `0/0 == 1` → `0`. Truncating ∞ or NaN to an integer (`(1/0) as int`) traps.
+Left open: `sqrt(-1)` → `NaN` is still the f64 of the float path (`√-1` could be `i` since `Complex` exists), and
+ordering against NaN is not total (`0/0 < 1` → `0` but `0/0 > 1` → `1`).
+(`test_division_by_zero_is_extended_rational`, `tests/test_types.rs::test_auto_type_nan`)
+
 ### Octal literals
 **C, Java, sloppy JS**: `010` → *8*  
 Warp: `010` → `10`. A leading zero never switches the base; bases are explicit (`0x10` → `16`). (`test_leading_zero_is_not_octal`)
@@ -289,27 +312,31 @@ is designed but not implemented. Each entry names the intended resolution. Entri
 
 ## Numbers
 
-### Decimal fractions
-**Python, JS, Java, C, …**: `0.1 + 0.2 == 0.3` → *false* (`0.30000000000000004`)  
-Warp today: `0.1+0.2==0.3` → `0`, `1/3*3==1` → `0`, `3 == 3.0000000000000001` → `1`.  
-Intended: literals are exact rationals, the existing `Quotient` in `src/extensions/numbers.rs` is the starting point;
-`@f64` opts into IEEE ([DESIGN.md → Exact numbers by default](DESIGN.md#exact-numbers-by-default)). (`test_exact_decimal_arithmetic`)
-
-### NaN and infinity
-**IEEE 754 everywhere**: `NaN == NaN` → *false*, `1/0` → *Infinity*, `sqrt(-1)` → *NaN*, and NaN poisons all later math quietly.  
-Warp today: `x=0.0/0.0; x==x` → `0`, `1/0` → `inf`, `sqrt(-1)` → `NaN`; `nan` is not even a name.  
-Intended: exact numbers make `1/0` an error value (or `∞` of the extended reals, [wiki/int60.md](wiki/int60.md) reserves bits for
-±∞, NaN and overflow); `√-1` can be `i` since `Complex` exists in `src/extensions/numbers.rs`. NaN only under `@f64`, with a law-visible warning.
+### Exact results at the Node boundary
+Since exact numbers, `3.14+2` returns the exact `Number::Quotient(257, 50)` (prints `5.14`), not `Number::Float`.
+`tests/test_type_upgrading.rs::test_float_plus_int_type_upgrading` ("Float + Integer = Float") accepts only Float or Int and now fails.
+Decision needed: (a) the test's helper also accepts `Quotient` (recommended: the value is right and exact, DESIGN.md says `1/3` is a rational);
+(b) convert non-integer results to f64 when leaving WASM (keeps old tests, but silently drops exactness at the API);
+(c) decimal literals stay f64 unless written as fractions (gives up `0.1+0.2==0.3`).
 
 ### Rounding mode
 **Python 3, .NET** `round(2.5)` → *2* surprises users of **JS/Excel** (`3`) and vice versa.  
 Warp today: `round(2.5)` → `2`, `round(0.5)` → `0` (banker's rounding).  
 Intended: keep the IEEE default but name it (`round half even`) and offer `round half up`; document it in the signature.
+Decision needed: the default is already half-even (the Intended default); missing is a name for it and a half-up variant.
+Options: (a) `round` stays half-even, add `round_half_up` (recommended: matches IEEE and Python, no silent change);
+(b) `round` takes a mode argument `round(x, half: up)`; (c) switch `round` to half-up like JS/Excel.
+Note `round` still goes through f64; exact rationals could round exactly (`round(5/2)` → `2` today via f64 2.5).
 
 ### Negative modulo
 **C, JS, Java**: `-5 % 3` → *-2*, **Python**: *1*, both surprise the other camp.  
 Warp today: `-5 % 3` → `-2`.  
 Intended: `%` is the mathematical modulo (sign of the divisor, as in Python), `rem` the truncating remainder; both named.
+Decision needed: the Intended Python semantics contradicts existing tests, which pin C semantics:
+`tests/test_unbounded_int.rs` `is!("-7 % 3", -1)` and `is!("-123456789012345678901234567890 % 1000", -890)`.
+Options: (a) `%` = floored modulo, `rem` = truncating remainder, and update those two tests (recommended, as Intended);
+(b) keep `%` truncating and add `mod`; (c) Euclidean modulo (always ≥ 0). The runtime already has both pieces
+(`int_rem`, and `exact_rem` for ratios: `1.5 % 1` → `0.5`), so either choice is a small change.
 
 ### Booleans are integers
 **Python, C, JS**: `True + True` → *2*  
@@ -317,6 +344,10 @@ Warp today: `true + true` → `2`, `false == 0` → `1` (booleans are encoded as
 Intended: a distinct `bool` kind in semantic IR; arithmetic on booleans is a type error unless explicitly converted.
 
 ## Implicit conversions
+Decision needed: a `bool` kind touches the Node boundary (True/False are encoded as Int 1/0 in WASM), the type
+checker and every truthiness rule. Options: (a) `Kind::Bool` with its own payload, arithmetic on it a compile error
+(recommended, as Intended); (b) keep 1/0 at runtime but reject `bool + bool` in the analyzer only; (c) keep as is and
+document it. Not changed here because it overlaps the truthiness and `yes`/`no` decisions owned elsewhere.
 
 ### String + number
 **JavaScript**: `"5" + 3` → *"53"*, `"5" * 3` → *15*  

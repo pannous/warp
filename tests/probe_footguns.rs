@@ -108,7 +108,6 @@ fn test_data_does_not_execute() {
 }
 
 #[test]
-#[ignore = "next"] // DESIGN.md "Exact numbers by default"
 fn test_exact_decimal_arithmetic() {
 	is!("0.1+0.2==0.3", true);
 	is!("1/3*3==1", true);
@@ -426,4 +425,21 @@ fn test_null_needs_a_check() {
 fn test_optional_local_runs() {
 	is!("x=ø; if x {x+1} else {2}", 2);
 	is!("x=ø; x=3; x+1", 4);
+}
+
+#[test]
+fn test_exact_rationals_stay_exact() {
+	is!("1/3", Node::Number(warp::Number::Quotient(1, 3))); // Python/JS: 0.3333333333333333
+	is!("x=0.1;x*3", 0.3);
+	is!("2^-2", 0.25); // was a wasm trap: negative exponents need rationals
+	is!("1/3 < 0.34", true);
+}
+
+#[test]
+fn test_division_by_zero_is_extended_rational() {
+	is!("1/0 > 10^100", true); // exact infinity = 1/0, not IEEE's float Infinity
+	is!("1/(1/0)", 0);
+	is!("1/0 - 1/0", Node::Number(warp::Number::Nan));
+	is!("x=0/0; x==x", true); // IEEE: NaN != NaN
+	is!("0/0 == 1", false);
 }

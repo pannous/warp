@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigInt;
-use num_traits::{ToPrimitive, Zero};
+use num_integer::Integer;
+use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
 fn deserialize_leaked_bigint<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static BigInt, D::Error> {
 	BigInt::deserialize(deserializer).map(|big| &*Box::leak(Box::new(big)))
@@ -78,6 +79,63 @@ impl Number {
 		}
 	}
 
+	/// Exact numerator/denominator in lowest terms: an integral value is an integer, n/0 is ±∞ or NaN.
+	/// Parts beyond i64 have no `Quotient` form yet and fall back to a (warned) Float approximation.
+	pub fn ratio(numerator: Number, denominator: Number) -> Number {
+		let (numerator, denominator) = (numerator.to_bigint(), denominator.to_bigint());
+		if denominator.is_zero() {
+			return match numerator.signum().to_i64() {
+				Some(1) => Number::Inf,
+				Some(-1) => Number::NegInf,
+				_ => Number::Nan,
+			};
+		}
+		let divisor = numerator.gcd(&denominator) * denominator.signum();
+		let (numerator, denominator) = (numerator / &divisor, denominator / &divisor);
+		if denominator.is_one() {
+			return Number::from_bigint(numerator);
+		}
+		match (numerator.to_i64(), denominator.to_i64()) {
+			(Some(n), Some(d)) => Number::Quotient(n, d),
+			_ => {
+				log::warn!("ratio {numerator}/{denominator} exceeds i64 parts, approximated as Float");
+				Number::Float(numerator.to_f64().unwrap_or(f64::NAN) / denominator.to_f64().unwrap_or(f64::NAN))
+			}
+		}
+	}
+
+	/// `n/d` as an exact decimal when it terminates (denominator 2^a·5^b): 1/8 → "0.125", 1/3 → None
+	fn terminating_decimal(numerator: i64, denominator: i64) -> Option<String> {
+		let divisor = numerator.gcd(&denominator) * denominator.signum();
+		let (numerator, denominator) = (BigInt::from(numerator / divisor), denominator / divisor);
+		let (mut rest, mut digits) = (denominator, 0u32);
+		for factor in [2, 5] {
+			let mut count = 0;
+			while rest % factor == 0 {
+				rest /= factor;
+				count += 1;
+			}
+			digits = digits.max(count);
+		}
+		if rest != 1 {
+			return None;
+		}
+		let scaled = (numerator * BigInt::from(10).pow(digits) / denominator).to_string();
+		let (sign, magnitude) = scaled.strip_prefix('-').map_or(("", scaled.as_str()), |m| ("-", m));
+		let padded = format!("{:0>width$}", magnitude, width = digits as usize + 1);
+		let (whole, fraction) = padded.split_at(padded.len() - digits as usize);
+		Some(format!("{sign}{whole}.{fraction}"))
+	}
+
+	/// A decimal literal is exact when its shortest round-trip form has at most f64's 15 guaranteed
+	/// significant digits: `0.1` is 1/10, while `π` (3.141592653589793) stays an f64 approximation
+	pub fn is_exact_decimal(value: f64) -> bool {
+		const F64_DECIMAL_DIGITS: usize = f64::DIGITS as usize;
+		let scientific = format!("{:e}", value);
+		let mantissa = scientific.split('e').next().unwrap_or_default();
+		value.is_finite() && mantissa.chars().filter(char::is_ascii_digit).count() <= F64_DECIMAL_DIGITS
+	}
+
 	/// Integer literal of any size: 123456789012345678901234567890
 	pub fn parse_integer(digits: &str) -> Option<Number> {
 		digits.parse::<BigInt>().ok().map(Number::from_bigint)
@@ -99,7 +157,10 @@ impl Display for Number {
 			Number::Int(i) => write!(f, "{}", i),
 			Number::BigInt(b) => write!(f, "{}", b),
 			Number::Float(fl) => write!(f, "{}", fl),
-			Number::Quotient(numer, denom) => write!(f, "{}/{}", numer, denom),
+			Number::Quotient(numer, denom) => match Number::terminating_decimal(*numer, *denom) {
+				Some(decimal) => write!(f, "{}", decimal),
+				None => write!(f, "{}/{}", numer, denom),
+			},
 			Number::Complex(real, imag) => write!(f, "{} + {}i", real, imag),
 			Number::Nan => write!(f, "NaN"),
 			Number::Inf => write!(f, "∞"),
@@ -258,6 +319,10 @@ impl PartialEq for Number {
 			// (Number::Float(f1), Number::Float(f2)) => *f1 == *f2,
 			// (Number::Float(f1), Number::Float(f2)) => f1 == f2,
 			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => n1 * d2 == n2 * d1,
+			(Number::Quotient(n, d), Number::Int(i)) | (Number::Int(i), Number::Quotient(n, d)) => *n == i * d,
+			(quotient @ Number::Quotient(..), Number::Float(f)) | (Number::Float(f), quotient @ Number::Quotient(..)) => {
+				f64::from(*quotient) as f32 == *f as f32
+			}
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
 			// Special values: semantic equality (not IEEE 754)
 			(Number::Nan, Number::Nan) => true,
