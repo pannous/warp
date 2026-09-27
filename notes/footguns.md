@@ -78,3 +78,14 @@
   grapheme-level `#`/`size`/`length`; `x#i='é'` still writes a single byte (string_set_char_at); duplicate-key error has no span.
 - test.sh parsing: WASI tests print to stdout, which sometimes interleaves with `test … ok` lines, so e.g.
   `test_wasi_putf` can go missing from test_results.txt although it passes.
+
+## Work area "data-formats" (2026-09-27)
+- Fixed: Norway problem, numbers-that-are-not-numbers, data that executes (tests test_norway_problem_in_data,
+  test_data_keeps_number_literals, test_data_does_not_execute).
+- Mechanism: `ParserOptions::data()` / `parse_data` / CLI `warp data <file>`; in data mode only `true`/`false`/`null`
+  are word literals, and lossy number literals keep their source text as Meta key `literal` (serialize prints it).
+  `eval_untrusted` refuses any program whose EffectReport resolves an external (empty capability set).
+- Decided: code keeps `yes`/`no` aliases (so `warp eval 'country: NO'` is still `country:0`); cases.warp shows code-mode output.
+- Side fix: space-separated lists serialized with double spaces (`[a  b]`).
+- Left open: code-mode `NO`; literal preservation only in data mode (code-mode Meta would ride into the analyzer);
+  `warp data` has no JSON output option.

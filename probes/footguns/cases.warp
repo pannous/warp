@@ -251,3 +251,9 @@ null==false
 if "" {1} else {2}
 ---
 if [] {1} else {2}
+---
+country: NO
+---
+version: 1.10
+---
+zip: 01234

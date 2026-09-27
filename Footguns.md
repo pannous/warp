@@ -133,6 +133,33 @@ Explicit `as i64` values still wrap and are not exported yet. Details in `notes/
 **Excel**: typing the gene name `SEPT2` → *2-Sep*  
 Warp: `SEPT2` → symbol `SEPT2`; no date or unit guessing when reading data.
 
+### The Norway problem
+**YAML 1.1**: `country: NO` → *country: false*  
+Warp: `warp data` / `parse_data("country: NO")` → `country:NO`; `answer: yes` → `answer:yes`; `[de gb no]` stays three symbols.
+In data only JSON's words `true`, `false`, `null` (and glyphs like `✔`, `⊥`, `ø`) are literals. (`test_norway_problem_in_data`)  
+Decision: code and data differ, as in wiki Todo.md "norway-problem" solution 1 (symbol vs expression context): in code
+`yes`/`no` stay the documented boolean aliases (`warp 'country: NO'` → `country:0`, quote `'NO'` there); in data (the
+parse-only path) every English word except `true`/`false`/`null` is a symbol, so aliases `yes`, `no`, `on`, `none`, `pi`
+never change foreign data. (alternatives: drop `yes`/`no` everywhere (breaks the documented alias, `peq!("no",Empty)`);
+case-sensitive aliases only (still turns lowercase `no` into false); a `%w[de gb no]`-style symbol list syntax.)
+
+### Numbers that are not numbers
+**YAML, Excel, CSV importers**: `version: 1.10` → *1.1*, `zip: 01234` → *1234*  
+Warp: `parse_data("version: 1.10").serialize()` → `version:1.10`, `zip: 01234` → `zip:01234`, `0xFF` and `1_000` too:
+a number whose value prints differently keeps its source text in `Meta` (`Node::source_literal`), and serialization prints it.
+The value is still the number 1234. (`test_data_keeps_number_literals`)  
+Decision: the literal stays a number with its spelling kept in `Meta` (DESIGN.md: metadata rides along, the value stays
+exact); code keeps evaluating `010` → 10 (Octal literals above). (alternatives: leading-zero / trailing-zero literals
+become text unless a numeric type is expected (breaks `010` → 10 and makes the type depend on spelling); require quoting.)
+
+### Data that executes
+**Early JS `eval(json)`, YAML `!!python/object`, pickle**: loading data runs code  
+Warp: `warp data <file>` and `warp::parse_data` read `.wasp` data without evaluating it (`secret = fetch …` comes back as
+the text of the call). Evaluating foreign data goes through `wasm_emitter::eval_untrusted`, which runs with an empty
+capability set: a program resolving any host, WASI or FFI call (`puts`, `fetch`, `use m;floor`) is an error before it is
+compiled; pure code (`x:=3;x*x` → 9) runs. Plain `eval` still grants the capabilities the program's effects need
+(`tests/test_effects.rs::test_imports_follow_effects`). (`test_data_does_not_execute`)
+
 ### Memory-safety classics: use-after-free, double free, dangling pointers
 **C, C++**: `free(p); p->x` → *undefined behaviour*  
 Warp: by construction. Nodes are WASM GC structs and the surface language has no pointers, no `free`, no pointer
@@ -317,25 +344,6 @@ Intended: defaults are values evaluated per call; with value semantics the footg
 **Python, JS `var`, Go < 1.22**: `[lambda: i for i in range(3)]` → all return *2*  
 Warp today: functions do not see outer variables at all: `x=1;f(y):=x+y;f(1)` → `Undefined variable: x`. Unverified.  
 Intended: closures capture values (immutable bindings), so each iteration's `i` is its own.
-
-## Data formats
-
-### The Norway problem
-**YAML 1.1**: `country: NO` → *country: false*  
-Warp today: `country: NO` → `country:0`, `yes` → `1`.  
-Intended: only `true`/`false` (and `✔`/`✖`?) are boolean literals in data; `NO`, `no`, `yes`, `on` stay symbols. Needs a decision since `yes` is a documented alias.
-
-### Numbers that are not numbers
-**YAML, Excel, CSV importers**: `version: 1.10` → *1.1*, `zip: 01234` → *1234*  
-Warp today: `version: 1.10` → `version:1.1`, `zip: 01234` → `zip:1234`.  
-Intended: serialization round-trips the literal (keep the source text in `Meta`), a leading zero or trailing zero after
-the point keeps the value text-like unless a numeric type is expected.
-
-### Data that executes
-**Early JS `eval(json)`, YAML `!!python/object`, pickle**: loading data runs code  
-Warp today: `WaspParser::parse` is data only; `eval` of an untrusted `.wasp` file runs it, but only with the capabilities
-its imports declare (`tests/test_effects.rs::test_imports_follow_effects`).  
-Intended: a CLI/data loading path that parses without evaluating, and evaluation of foreign data only with an empty capability set.
 
 ## Errors
 
