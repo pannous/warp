@@ -1700,6 +1700,14 @@ impl WasmGcEmitter {
 		self.emit_while_loop_impl(func, left, body, false);
 	}
 
+	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
+	fn emit_text_cast(&mut self, func: &mut Function, text: &str, target_type: &Node) {
+		match crate::wasp_parser::number_in_text(text) {
+			Some(number) => self.emit_cast(func, &Node::Number(number), target_type),
+			None => self.emit_runtime_error(func, "invalid_number"),
+		}
+	}
+
 	/// Emit type cast: value as type
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
@@ -1729,14 +1737,7 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::I64Const(*f as i64));
 						self.emit_call(func, "new_int");
 					}
-					// Compile-time: string literal to int (parse, truncate if float)
-					Node::Text(s) => {
-						let n: i64 = s
-							.parse::<i64>()
-							.unwrap_or_else(|_| s.parse::<f64>().map(|f| f as i64).unwrap_or(0));
-						func.instruction(&Instruction::I64Const(n));
-						self.emit_call(func, "new_int");
-					}
+					Node::Text(s) => self.emit_text_cast(func, s, target_type),
 					// Compile-time: char literal to int (parse digit)
 					Node::Char(c) => {
 						let n: i64 = c.to_string().parse().unwrap_or(*c as i64);
@@ -1760,12 +1761,7 @@ impl WasmGcEmitter {
 			"float" | "real" | "double" | "f32" | "f64" => {
 				// Cast to float
 				match value {
-					// Compile-time: string literal to float
-					Node::Text(s) => {
-						let f: f64 = s.parse().unwrap_or(0.0);
-						func.instruction(&Instruction::F64Const(f.into()));
-						self.emit_call(func, "new_float");
-					}
+					Node::Text(s) => self.emit_text_cast(func, s, target_type),
 					// Compile-time: char literal to float (parse digit)
 					Node::Char(c) => {
 						let f: f64 = c.to_string().parse().unwrap_or(*c as i64 as f64);

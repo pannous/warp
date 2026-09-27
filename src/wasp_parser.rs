@@ -43,6 +43,19 @@ pub fn parse(input: &str) -> Node {
 	WaspParser::parse(input)
 }
 
+/// The number a text spells if the whole text is one number literal, so `int "12a"` never guesses
+pub fn number_in_text(text: &str) -> Option<Number> {
+	let text = text.trim();
+	let spells_number = !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || "+-._eE".contains(c));
+	if !spells_number {
+		return None;
+	}
+	match WaspParser::parse(text).drop_meta() {
+		Node::Number(number) => Some(*number),
+		_ => None,
+	}
+}
+
 pub fn parse_xml(input: &str) -> Node {
 	WaspParser::parse_with_options(input, ParserOptions::xml())
 }

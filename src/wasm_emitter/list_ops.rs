@@ -389,24 +389,21 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 1] = ["index_out_of_range"];
+pub const RUNTIME_ERRORS: [&str; 2] = ["index_out_of_range", "invalid_number"];
 
 impl WasmGcEmitter {
-	fn needs_indexing(&self) -> bool {
-		["list_at", "list_node_at", "list_set_at", "string_char_at", "string_set_char_at"]
-			.iter()
-			.any(|name| self.should_emit_function(name))
-	}
-
 	fn emit_runtime_errors(&mut self) {
-		if !self.needs_indexing() {
-			return;
-		}
 		for name in RUNTIME_ERRORS {
 			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
 				f.instruction(&Instruction::Unreachable);
 			});
 		}
+	}
+
+	/// Unconditional runtime error; the stack after it is unreachable, so it fits any expected type
+	pub(super) fn emit_runtime_error(&mut self, func: &mut Function, error: &'static str) {
+		self.emit_call(func, error);
+		func.instruction(&Instruction::Unreachable);
 	}
 
 	/// Trap when the i32 condition on the stack is true

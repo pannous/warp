@@ -146,6 +146,14 @@ index is checked at runtime; the trap becomes an error value instead of the prog
 source span, and `#-1` (last element, only if spelled so) is not implemented, so it is an error too.
 (`test_index_out_of_bounds_is_an_error`, `test_negative_index_is_an_error`)
 
+### Parsing numbers from text
+**C `atoi`, PHP**: `atoi("12a")` → *12*, `(int)"abc"` → *0*  
+Warp before: `int("12a")` → `0`, `float("1.5x")` → `0.0`, `int("123456789012345678901234567890")` → a truncated double.  
+Warp: `int("12a")`, `float("1.5x")`, `int("")` → `Error('invalid number')`; only a text that is one whole number literal
+converts (`int(" -12 ")` → `-12`, `int("2.7")` → `2`, big literals stay exact). Not yet: the error aborts the program
+instead of being a recoverable `Result` ([DESIGN.md → Effects](DESIGN.md#effects)), and runtime (non-literal) text is not converted at all.
+(`test_invalid_number_text_is_an_error`)
+
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
@@ -194,11 +202,6 @@ Warp today, worse: `"5"+3` → `56`, `"5"*3` → `159`, `"a"+1` → `98`, `3 + "
 converted to their code point (C's `'5' + 3`).  
 Intended ([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness)): no silent coercion. `"5"+3` is a type error
 with a fix-it (`"5" + str 3` or `int "5" + 3`); codepoint arithmetic only on values typed `char`.
-
-### Parsing numbers from text
-**C `atoi`, PHP**: `atoi("12a")` → *12*, `(int)"abc"` → *0*  
-Warp today: `int("12a")` → `0`.  
-Intended: `int "12a"` returns an error value (`Result`, [DESIGN.md → Effects](DESIGN.md#effects)), never a plausible number.
 
 ### Type annotations not enforced loudly
 Warp today: `x:int=5;x="five";x` → compiler panic `Cannot extract numeric value from 'five'` (rejected, but as a crash);

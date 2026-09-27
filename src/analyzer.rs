@@ -801,7 +801,12 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
 		}
-		Node::Empty | Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {}
+		Node::Text(text) => {
+			if let Some(number) = crate::wasp_parser::number_in_text(text) {
+				analyze_required_functions(ctx, &Node::Number(number));
+			}
+		}
+		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			if op.is_arithmetic()
 				|| op.is_compound_assign()

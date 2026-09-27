@@ -193,6 +193,15 @@ fn test_negative_index_is_an_error() {
 }
 
 #[test]
+fn test_invalid_number_text_is_an_error() {
+	fails_with("int(\"12a\")", "invalid number"); // C atoi: 12, PHP (int)"abc": 0
+	fails_with("float(\"1.5x\")", "invalid number");
+	fails_with("int(\"\")", "invalid number");
+	is!("int(\" -12 \")", -12);
+	is!("int(\"2.7\")", 2);
+}
+
+#[test]
 fn test_scientific_notation() {
 	is!("1e3", 1000);
 }
