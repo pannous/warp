@@ -195,31 +195,18 @@ fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
 	}
 }
 
-fn visit<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node)) {
-	let node = node.drop_meta();
-	action(node);
-	match node {
-		Node::Key(left, _, right) => {
-			visit(left, action);
-			visit(right, action);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| visit(item, action)),
-		_ => {}
-	}
-}
-
 fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
 	let mut function = String::new();
 	let mut variables: Vec<(String, Kind)> = vec![];
-	visit(statement, &mut |node| {
+	statement.visit(&mut |node| {
 		if let Some((name, args)) = call_parts(node) {
 			if let Some(definition) = known(name) {
 				if function.is_empty() {
 					function = name.to_string();
 				}
 				for (arg, (_, kind)) in args.iter().zip(&definition.parameters) {
-					visit(arg, &mut |inner| {
+					arg.visit(&mut |inner| {
 						if let Node::Symbol(var) = inner {
 							if known(var).is_none() && !variables.iter().any(|(v, _)| v == var) {
 								variables.push((var.clone(), *kind));
@@ -230,7 +217,7 @@ fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
 			}
 		}
 	});
-	visit(statement, &mut |node| {
+	statement.visit(&mut |node| {
 		if let Node::Symbol(var) = node {
 			if known(var).is_none() && !variables.iter().any(|(v, _)| v == var) {
 				variables.push((var.clone(), Kind::Int));
@@ -278,7 +265,7 @@ fn describe(bindings: &HashMap<String, Node>) -> String {
 
 fn is_closed(node: &Node, functions: &[FunctionDefinition]) -> bool {
 	let mut closed = true;
-	visit(node, &mut |inner| {
+	node.visit(&mut |inner| {
 		if let Node::Symbol(name) = inner {
 			if !functions.iter().any(|f| &f.name == name) {
 				closed = false;
@@ -291,7 +278,7 @@ fn is_closed(node: &Node, functions: &[FunctionDefinition]) -> bool {
 /// Bind law variables by matching law calls `f(x, y)` against concrete program calls `f(3, 4)`.
 fn observed_bindings(lawful: &Lawful, law: &Law) -> Vec<HashMap<String, Node>> {
 	let mut patterns: Vec<(&str, Vec<String>)> = vec![];
-	visit(&law.statement, &mut |node| {
+	law.statement.visit(&mut |node| {
 		if let Some((name, args)) = call_parts(node) {
 			let names: Vec<String> = args.iter().filter_map(|a| match a.drop_meta() {
 				Node::Symbol(var) if law.variables.iter().any(|(v, _)| v == var) => Some(var.clone()),
@@ -303,7 +290,7 @@ fn observed_bindings(lawful: &Lawful, law: &Law) -> Vec<HashMap<String, Node>> {
 		}
 	});
 	let mut bindings = vec![];
-	visit(&lawful.program, &mut |node| {
+	lawful.program.visit(&mut |node| {
 		if let Some((name, args)) = call_parts(node) {
 			for (pattern, vars) in &patterns {
 				let covers_all = law.variables.iter().all(|(v, _)| vars.contains(v));

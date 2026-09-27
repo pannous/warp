@@ -126,7 +126,7 @@ fn proposition(node: &Node) -> Lean {
 
 fn calls_itself(function: &FunctionDefinition) -> bool {
 	let mut recursive = false;
-	super::visit(&function.body, &mut |node| {
+	function.body.visit(&mut |node| {
 		if let Some((name, _)) = super::call_parts(node) {
 			recursive |= name == function.name;
 		}

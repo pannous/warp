@@ -728,6 +728,20 @@ impl Node {
 		}
 	}
 
+	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
+	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
+		let node = self.drop_meta();
+		action(node);
+		match node {
+			Key(left, _, right) => {
+				left.visit(action);
+				right.visit(action);
+			}
+			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
+			_ => {}
+		}
+	}
+
 	// get_meta data directly or Empty
 	pub fn get_meta(&self) -> &Node {
 		match self {
