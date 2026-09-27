@@ -255,3 +255,42 @@ fn test_no_array_store_exception() {
 	is!("a=(\"x\" \"y\");a#1=1;a#1", 1);
 	is!("a=(\"x\" \"y\");a#1=1;a#2", "y");
 }
+
+// Dates and time zones: spec for the Decision in Footguns.md (NOT YET → Dates and time zones).
+// Literals are RFC 3339 / RFC 9557 only; `+` on calendar units rejects overflow, clamping is spelled out.
+
+#[test]
+#[ignore = "next"] // no date type yet
+fn test_months_are_one_based() {
+	is!("2024-02-29.month", 2); // JS getMonth(): 1, Java Date.getYear(): 124
+	is!("2024-02-29.year", 2024);
+	is!("date(2024,2,29).day", 29);
+	fails_with("date(2024,0,1)", "month out of range"); // JS: Dec 1 2023
+	fails_with("date(2024,2,30)", "day out of range"); // JS new Date(2024,1,30): March 1
+}
+
+#[test]
+#[ignore = "next"] // no date type yet
+fn test_calendar_overflow_is_explicit() {
+	fails_with("2024-01-31 + 1 month", "2024-02-31"); // JS setMonth: March 2, Java plusMonths: Feb 29 silently
+	is!("add(2024-01-31, 1 month, overflow: clamp) == 2024-02-29", true);
+	is!("2024-01-15 + 1 month == 2024-02-15", true);
+	is!("2024-03-01 - 2024-02-01", 29); // date - date → days
+}
+
+#[test]
+#[ignore = "next"] // no date/time types yet
+fn test_no_implicit_time_zone() {
+	fails_with("now.hour", "instant has no hour"); // an instant needs a zone before it has a wall clock
+	is!("(2024-03-31T00:30Z in \"Europe/Berlin\").hour", 1);
+	is!("(2024-03-31T01:30Z in \"Europe/Berlin\").hour", 3); // DST: 02:00-03:00 does not exist
+	fails_with("2024-03-31T02:30[Europe/Berlin]", "does not exist"); // gap, no silent shift
+}
+
+#[test]
+#[ignore = "next"] // no date/time types yet
+fn test_date_and_time_types_are_distinct() {
+	fails_with("2024-01-31 < 2024-01-31T10:00", "date"); // date vs local time: no implicit midnight
+	fails_with("2024-01-31T10:00 < 2024-01-31T10:00Z", "local time"); // local time vs instant: no implicit zone
+	is!("2024-01-31T10:00+01:00 == 2024-01-31T09:00Z", true); // offsets denote instants
+}

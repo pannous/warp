@@ -350,6 +350,26 @@ Intended: interpolation into a query or command is typed (the target language is
 Warp today: no date/time type.  
 Intended: distinct `instant`, `date`, `local time`, `zoned time`; no implicit current zone; months are 1-based; arithmetic on calendar units is explicit about overflow (`Jan 31 + 1 month`).
 
+Decision: four distinct types, modelled on JS Temporal / java.time and TOML's literal rule ([Solved elsewhere → Date guessing](Solved-elsewhere.md)):
+`date` (`2024-01-31`), `local time` (`2024-01-31T10:00`, date + wall clock, no zone), `instant` (`2024-01-31T09:00Z` or
+`…T10:00+01:00`, a point on the UTC line) and `zoned time` (`2024-01-31T10:00[Europe/Berlin]`, RFC 9557).
+Literals are the RFC 3339 / RFC 9557 forms only (4-digit year, 2-digit month and day, no spaces), so `2024-01-31` is a date
+while `2024 - 1 - 31` stays arithmetic and `SEPT2` stays a symbol; `date(y,m,d)` is the constructor.
+Months are 1-based (`2024-02-29.month` → 2); invalid fields are errors, never rolled over (`date(2024,2,30)` → error, JS: March 1).
+No implicit zone: `now` is an `instant`, which has no `year`/`hour` until placed in a zone (`t in "Europe/Berlin"` → zoned time);
+nothing reads the host's zone. Types never convert implicitly: `date < local time` and `local time < instant` are errors.
+Calendar arithmetic rejects overflow by default: `2024-01-31 + 1 month` → error naming `2024-02-31`; clamping is spelled out,
+`add(2024-01-31, 1 month, overflow: clamp)` → `2024-02-29` (Temporal's `overflow: "constrain"`). A nonexistent wall time in a
+DST gap is an error for literals, never a silent shift; `1 day` on a zoned time is a calendar day, `24 hours` is exact.
+`date - date` → days as Int.
+(alternatives: Temporal's default `constrain` for `+` (hides the footgun behind a quiet clamp), JS/`java.util.Date` rollover
+(the footgun itself), a single timestamp type plus zone field (Python naive/aware datetime: mixing them fails only at runtime),
+constructor-only dates with no literal (safe but verbose; the RFC 3339 form is already unambiguous data, as in TOML).)
+Spec: `test_months_are_one_based`, `test_calendar_overflow_is_explicit`, `test_no_implicit_time_zone`,
+`test_date_and_time_types_are_distinct` in `tests/probe_footguns.rs` (all `#[ignore = "next"]`).
+Not yet implemented: this run could not build (crates.io blocked by the session's network policy, no vendor/ or cargo cache),
+so the entry stays under NOT YET; unverified compiler changes were not pushed to main.
+
 ## Variance
 **Java**: `Object[] a = new String[1]; a[0] = 1;` → *ArrayStoreException at runtime*  
 Warp today: no generic/subtyping rules exist to be unsound. Lists are heterogeneous (every element is a `Node`), so
