@@ -63,6 +63,35 @@ Warp: `if "0" {1} else {2}` → `1`; only the number `0` is falsy: `if 0 {1} els
 **JavaScript**: `a + 1` → *NaN*; `a = 1` in sloppy mode silently creates a global; **Perl/PHP**: *0*/warning  
 Warp: `a+1` → compile error `Undefined variable: a`. (`test_undefined_variable_is_an_error`; the error is a panic, not yet a structured diagnostic)
 
+### Unary minus and power
+**Excel, bash**: `=-2^2` → *4*  
+Warp: `-2^2` → `-4`, as in mathematics and Python; unary minus binds weaker than `^` but tighter than `*`
+(`-2*3` → `-6`, `(-2)^2` → `4`). (`test_negative_power_precedence`, `test_negative_literals_after_power_fix`)
+
+### `not` vs comparison
+**C**: `!1 == 2` → *0* (`(!1) == 2`)  
+Warp: `not 1==2` → `true`, also `!1==1` → `false`: `not` binds weaker than comparisons, tighter than `and`/`or`
+(`not 1==2 and 2==2` → `true`). (`test_not_binds_weaker_than_comparison`; `&` see NOT YET)
+
+### Chained comparison
+**C, JS**: `3 > 2 > 1` → *false* (`true > 1`)  
+Warp: `3>2>1` → `true`, `1<3<2` → `false`: mathematical chaining as in Python, `a<b<c` means `a<b and b<c`; all comparisons
+share one precedence level so `1<2==2` → `true` chains too. Explicit grouping does not chain: `(3>2)>1` → `false`. (`test_chained_comparison`)
+
+### Assignment in a condition
+**C, JS**: `if (x = 2)` → *always true, x overwritten*  
+Warp: `x=1;if x=2 {3} else {4}` → `4` and `x` stays `1`; `if 1=2 {3} else {4}` → `4`. Inside an `if`/`while` condition
+`=` is comparison ([wiki/Bad.md](wiki/Bad.md) "assignment, declaration, comparison"); a `{block}` or the `:` branch
+inside the condition assigns again. (`test_equals_in_condition_compares`)
+
+### Increment
+**C**: `i++ + i++` → *undefined behaviour*  
+Warp: `x=1;x++;x` → `2`, `i=1;++i` → `2`, `i=3;--i;i` → `2`. As [wiki/equality.md](wiki/equality.md) says, `++` is immediate,
+so `i++` and `++i` are the same. (`test_increment_changes_variable`, `test_prefix_increment`)
+
+### Braceless call as operand
+Warp: `f := it*10; 1 + f 3` → `31`: a braceless call is a valid operand of `+ - * /` (`2 * f 3` → `60`). (`test_braceless_call_as_operand`)
+
 ### Hidden side effects / "pure" functions that are not
 **Every mainstream language**: a helper deep in the call tree prints, logs or phones home and nothing says so.  
 Warp: `log(x) := puts x⏎square(x) := log(x) ! Pure⏎square(3)` →
@@ -237,34 +266,30 @@ Intended ([wiki/null.md](wiki/null.md)): typed null, `T?` optional types, flow-s
 
 ## Syntax and precedence
 
-### Unary minus and power
-**Excel, bash**: `=-2^2` → *4*  
-Warp today: `-2^2` → `4`. Mathematics and Python say `-4`. (`test_negative_power_precedence`)
+### `&` and `|` vs comparison
+**C**: `3 & 4 == 4` → *1* (`&` binds weaker than `==`)  
+Warp today: `3 & 4 == 4` → `1`, C's answer; `3 & 4` → `4`. Python says `False`. Also `3 | 4` → `3` (`|` is pipe, not bitwise or).
+(`not` is solved, see above.) (`test_logic_binds_weaker_than_comparison`)  
+Decision needed: the test expects `false`, which only `(3 & 4) == 4` with a bitwise `&` gives (`3&4` is `0`). But in Warp `&` is
+an alias of logical `and` ([wiki/&.md](wiki/&.md): "1 & 1 == 1 and 1 == true"), and the intended rule "`&`, `|` bind weaker
+than comparisons" yields `3 and (4==4)` → `true`. Options:
+1. `&` stays logical `and`, weaker than `==` (today): answer `true`; the test's `false` must change.
+2. `&` becomes bitwise and, tighter than `==` (Python): answer `false`; breaks wiki/&.md and `square & print` composition.
+3. Mixing `&`/`|` with a comparison without grouping is a diagnostic ([wiki/precedence.md](wiki/precedence.md) calls such mixes
+   ambiguous): neither C's nor Python's reading can be silently picked.
 
-### `not` and bitwise operators vs comparison
-**C**: `!1 == 2` → *0*, `3 & 4 == 4` → *1* (`&` binds weaker than `==`)  
-Warp today: `not 1==2` → `0`, `3 & 4 == 4` → `1`, both C's answers. Python says `True` and `False`. Also `3 | 4` → `3` (`|` is pipe, not bitwise or).  
-Intended: `not`, `&`, `|` bind weaker than comparisons; mixing bitwise and comparison without grouping is a diagnostic
-([wiki/precedence.md](wiki/precedence.md)). (`test_logic_binds_weaker_than_comparison`)
-
-### Chained comparison
-**C, JS**: `3 > 2 > 1` → *false* (`true > 1`)  
-Warp today: `3>2>1` → `0` (`1<2<3` → `1` only by luck). Intended: mathematical chaining as in Python, `3>2>1` → `true`.
-
-### Assignment in a condition
-**C, JS**: `if (x = 2)` → *always true, x overwritten*  
-Warp today: `x=1;if x=2 {3} else {4}` → `3`; even `if 1=2 {3} else {4}` → `3`.  
-Intended ([wiki/Bad.md](wiki/Bad.md) "assignment, declaration, comparison"): `=` in a condition is comparison or a
-diagnostic, never assignment; persisted resolution if ambiguous ([DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions)).
-
-### 🐞 Increment
-**C**: `i++ + i++` → *undefined behaviour*  
-Warp today: `x=1;x++;x` → `1` (the increment is lost), `++i` is a parse error; [wiki/equality.md](wiki/equality.md) says
-`++` is immediate, so `i++` and `++i` are the same. (`test_increment_changes_variable`)
+Recommendation: 3 for the mixed form, keeping `&` = `and` for booleans and `bitand` as a named bitwise operator; then the test
+should assert an error instead of `false`.
 
 ### Braceless calls
-Warp today: `f := it*10; 1 + f 3` → `3` 🐞 (should be `31`), and the recursive case from [wiki/Bad.md](wiki/Bad.md)
-`fib := it<2 ? it : fib it-1 + fib it-2` fails with `Undefined variable: it`. (`test_braceless_call_as_operand`)
+Warp today: `1 + f 3` → `31` is solved (see above), but as an operand the call only takes the next atom:
+`f := it*10; 1 + f 3-1` → `30` (`1 + f(3) - 1`) while at statement level `f 3-1` → `20` (`f(3-1)`). The recursive case from
+[wiki/Bad.md](wiki/Bad.md) `fib := it<2 ? it : fib it-1 + fib it-2` still fails with `Undefined variable: it`
+(an identifier argument is only applied in assignment context).  
+Decision needed: [wiki/precedence.md](wiki/precedence.md) calls `square 3 + square 3` ambiguous. Options: (1) argument extends to
+the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `21`; (2) argument is one atom (today, Haskell);
+(3) diagnostic when an operator follows a braceless argument. Recommendation: 3, with the persisted resolution of
+[DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
 
 ## Mutation and scope
 

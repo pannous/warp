@@ -37,3 +37,15 @@
 - `‖x‖`: the closing bar used to be re-read as a new prefix Abs with an empty operand ("Unexpected character"); now
   `parse_norm_bars` parses a full expression up to the closing `‖` (like parentheses). `‖3‖-1` → 2 (was the list `3 1`).
 - Left open: nested bars without spaces (`‖‖x‖‖`) are ambiguous; `1e`, `1_`, `2em` still parse as lists (not numbers).
+
+
+- Fixed: `-2^2` → -4 (prefix `-` is always `Op::Neg` at bp 155, folded into a literal via `impl Neg for Number`);
+  `not` bp (0,105): weaker than comparisons, tighter than and/or; chained comparisons (all comparisons one level 120,
+  parse_expr rewrites `a<b<c` → `a<b and b<c`, the middle operand is duplicated, so side effects in it run twice);
+  `=` inside `if`/`while` conditions parses as `==` (`WaspParser::equals_compares`, off again inside `{}` and after `:`);
+  `x++` as a statement was emitted as data (key_emitter skipped Inc/Dec), `++i`/`--i` parse as `i++`/`i--`;
+  braceless call as operand of `+ - * /` (MAX_BP_FOR_APPLICATION 130 → 151).
+- `warp parse <code>` prints the parse tree as s-expressions: `(op left right)`, lists as `(items`.
+- Left open, Decision needed in Footguns.md: `3 & 4 == 4` (test wants Python's bitwise `false`, wiki says `&` is `and`);
+  braceless call argument extent (`1 + f 3-1` → 30 vs statement-level `f 3-1` → 20) and the recursive `fib it-1` case.
+- Unrelated, noticed: `2^-2` returns the unevaluated program (negative exponent, exact-numbers area).
