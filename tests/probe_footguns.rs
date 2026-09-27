@@ -393,3 +393,37 @@ fn test_default_argument_is_fresh_per_call() {
 	is!("def f(a=(0 0)){ a#1 = a#1 + 1; a#1 }; f()+f()", 2); // shared default: 1+2=3
 	is!("f(a=(0 0)) := { a#1 = a#1 + 1; a#1 }; f(); f()", 1);
 }
+
+#[test]
+fn test_empty_values_are_falsy() {
+	is!("if \"\" {1} else {2}", 2); // Python: falsy, JS: falsy; was a compiler panic
+	is!("if [] {1} else {2}", 2); // Python: falsy, JS: truthy
+	is!("if ø {1} else {2}", 2);
+	is!("if 0.5 {1} else {2}", 1); // was truncated to 0
+	is!("x=0.5;if x {1} else {2}", 1);
+	is!("if 2^32 {1} else {2}", 1); // was wrapped to i32 0
+}
+
+#[test]
+fn test_and_or_ternary_is_linted() {
+	let warnings = warp::analyzer::lint(&warp::parse("1 and 0 or 2"));
+	assert_eq!(warnings[0].fix.as_deref(), Some("if 1 then 0 else 2"), "{warnings:?}");
+	is!("1 and 0 or 2", 2); // Python, Lua: y when x is falsy; well defined, so only a warning
+	assert!(warp::analyzer::lint(&warp::parse("if 1 then 0 else 2")).is_empty());
+}
+
+#[test]
+fn test_null_needs_a_check() {
+	fails_with("x=ø; x+1", "x may be ø"); // Java NPE, JS TypeError; was a compiler panic
+	fails_with("x=ø; x.size", "fix: if x {");
+	let accepted = |code: &str| warp::analyzer::diagnose(&warp::parse(code)).is_none();
+	assert!(accepted("x=ø; if x {x+1} else {2}")); // checked: narrowed inside the branch
+	assert!(accepted("x=ø; x=3; x+1"));
+}
+
+#[test]
+#[ignore = "next"] // a local first assigned ø has no runtime representation yet: Cannot extract numeric value from ø
+fn test_optional_local_runs() {
+	is!("x=ø; if x {x+1} else {2}", 2);
+	is!("x=ø; x=3; x+1", 4);
+}

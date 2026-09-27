@@ -7,7 +7,7 @@ use crate::node::{Bracket, Node};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Check if a node is pure data (not a statement/function call)
 fn is_data_node(node: &Node) -> bool {
@@ -598,7 +598,74 @@ fn builtin_type_kind(name: &str) -> Option<Kind> {
 
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
-	check_declared_types(program, &mut HashMap::new()).map(Diagnostic::into_error)
+	check_declared_types(program, &mut HashMap::new())
+		.or_else(|| check_null_use(program, &mut HashSet::new()))
+		.map(Diagnostic::into_error)
+}
+
+/// Warnings that do not stop compilation: well-defined code that likely does not mean what it says
+pub fn lint(program: &Node) -> Vec<Diagnostic> {
+	let mut warnings = vec![];
+	lint_into(program, &mut warnings);
+	warnings
+}
+
+fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => {
+			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
+				let (condition, then, otherwise) = (condition.serialize(), then.serialize(), right.serialize());
+				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
+					.fix(format!("if {condition} then {then} else {otherwise}")));
+			}
+			lint_into(left, warnings);
+			lint_into(right, warnings);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
+		_ => {}
+	}
+}
+
+/// `x=ø` makes x possibly null: arithmetic or member access on it needs an `if x {…}` check first (wiki/null.md)
+fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnostic> {
+	let possibly_null = |operand: &Node, nullable: &HashSet<String>| match operand.drop_meta() {
+		Node::Symbol(name) if nullable.contains(name) => Some(name.clone()),
+		_ => None,
+	};
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			let found = check_null_use(value, nullable);
+			if let Node::Symbol(name) = target.drop_meta() {
+				if matches!(value.drop_meta(), Node::Empty) {
+					nullable.insert(name.clone());
+				} else {
+					nullable.remove(name);
+				}
+			}
+			found
+		}
+		Node::Key(if_condition, Op::Then, then) => {
+			let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
+				return check_null_use(if_condition, nullable).or_else(|| check_null_use(then, nullable));
+			};
+			let mut narrowed = nullable.clone();
+			if let Some(name) = possibly_null(condition, nullable) {
+				narrowed.remove(&name);
+			}
+			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
+		}
+		Node::Key(left, op, right) if op.is_arithmetic() || *op == Op::Dot => {
+			let operand = possibly_null(left, nullable).or_else(|| if *op == Op::Dot { None } else { possibly_null(right, nullable) });
+			if let Some(name) = operand {
+				let expression = node.drop_meta().serialize();
+				return Some(Diagnostic::at(node, format!("{name} may be ø (null) in {expression}")).fix(format!("if {name} {{ {expression} }}")));
+			}
+			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
+		}
+		Node::Key(left, _, right) => check_null_use(left, nullable).or_else(|| check_null_use(right, nullable)),
+		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable)),
+		_ => None,
+	}
 }
 
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
