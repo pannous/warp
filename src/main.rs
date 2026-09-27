@@ -136,7 +136,9 @@ fn main() {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         let result = eval(code);
         println!("» {}", result.serialize());
-    } else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
+    } else if let Some(code) = arg_string.strip_prefix("parse ") {
+        println!("{}", structure(&wasp_parser::parse(code)));
+    } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
         console();
     } else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
         #[cfg(feature = "GRAFIX")]
@@ -192,11 +194,24 @@ fn main() {
     }
 }
 
+/// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
+fn structure(node: &Node) -> String {
+    match node.drop_meta() {
+        Node::Key(left, op, right) => format!("({} {} {})", op, structure(left), structure(right)),
+        Node::List(items, bracket, _) => {
+            let inner: Vec<String> = items.iter().map(structure).collect();
+            format!("{}{}", bracket.opening(), inner.join(" "))
+        }
+        other => other.serialize(),
+    }
+}
+
 fn usage() {
     // println!("Usage: warp [options] [file]");
     println!("  warp <file.warp>     Execute a warp file");
     println!("  warp <file.wasm>     Run a wasm file");
     println!("  warp eval <code>     Evaluate code");
+    println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp repl            Start interactive console");
     println!("  warp test            Run tests");

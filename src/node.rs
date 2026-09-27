@@ -1177,7 +1177,7 @@ pub enum Bracket {
 }
 
 impl Bracket {
-	fn opening(&self) -> char {
+	pub fn opening(&self) -> char {
 		match self {
 			Bracket::None => ' ',
 			Bracket::Curly => '{',
