@@ -23,8 +23,12 @@ fn is_data_node(node: &Node) -> bool {
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
-pub fn arithmetic_kind(left: Kind, _op: &Op, right: Kind) -> Kind {
-	if left == Kind::Float || right == Kind::Float {
+pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
+	if left == Kind::List && right == Kind::List && *op == Op::Add {
+		Kind::List // concatenation
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
+	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
 		Kind::Int
@@ -82,6 +86,17 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					}
 				}
 			}
+			// Type constructor: int("5"), float("1.5"), str(3)
+			if items.len() == 2 {
+				if let Node::Symbol(s) = items[0].drop_meta() {
+					match s.as_str() {
+						"int" | "integer" => return Kind::Int,
+						"float" | "real" => return Kind::Float,
+						"str" | "string" | "text" => return Kind::Text,
+						_ => {}
+					}
+				}
+			}
 			// Function call with parentheses: assume Int result
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(_) = items[0].drop_meta() {
@@ -105,6 +120,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					// Assume zero-arg user function returns Int
 					return Kind::Int;
 				}
+			}
+			// Grouping: (x) has the type of x
+			if *bracket == Bracket::Round && items.len() == 1 {
+				return infer_type(&items[0], scope);
 			}
 			// Data list: all items are pure data → Kind::List
 			if items.iter().all(is_data_node) {
@@ -1024,7 +1043,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::If | Op::While | Op::Question) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
-			if *op == Op::Assign {
+			if *op == Op::Assign || op.is_compound_assign() {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
 					ctx.required_functions.insert("node_with_at");
 					analyze_required_functions(ctx, key);

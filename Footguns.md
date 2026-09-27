@@ -236,6 +236,29 @@ place, so all three examples leave `x`/`a` unchanged. Not yet: no uniqueness ana
 (O(i) for lists, O(length) for texts, runtime texts are bump-allocated and never freed).
 (`test_mutation_through_alias_is_not_visible`, `test_equal_literals_are_not_shared`)
 
+### String + number
+**JavaScript**: `"5" + 3` → *"53"*, `"5" * 3` → *15*  
+Warp before: `"5"+3` → `56`, `"5"*3` → `159`, `"a"+1` → `98`, `3 + "4"` → `55` (one-character strings became code points, C's `'5' + 3`),
+`"ab"+3` → compiler panic.  
+Warp: all of them → `Error('type error: codepoint + int: no implicit conversion, convert explicitly, e.g. int("5") + 3')`
+([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness)); `int("5") + 3` → `8`. Arithmetic on a text,
+character or list operand is a compile-time type error (`arithmetic_kind` → `Kind::Error`), reported before the module runs.
+Not yet: no source span; text concatenation (`"a" + "b"`) is not implemented, so it is a type error too.
+(`test_text_plus_number_is_a_type_error`)
+
+### Lists and arithmetic
+**Python**: `[1,2,3]*2` → *[1,2,3,1,2,3]*; **NumPy**: *[2,4,6]*; **JS**: `[1,2]+[3]` → *"1,23"*  
+Warp before: `[1 2]+[3]` → `5`, `[1 2 3]*2` → `6` (the list was evaluated as a statement sequence: its last item).  
+Warp: `[1 2]+[3]` → `[1 2 3]` (`list_concat` copies the left cells and shares the right list, `a+b` leaves `a` unchanged);
+`[1 2 3]*2` → `Error('type error: list * int: lists only concatenate with lists (+), element-wise arithmetic needs an explicit map')`,
+element-wise lifting only through a law-governed rule ([wiki/broadcasting.md](wiki/broadcasting.md)).
+Not yet: `pixel + 4` (append a scalar, expected by the ignored `test_array_operations`) is a type error.
+(`test_list_plus_concatenates`)
+
+### Compound assignment to an element
+Warp before: `a=(1 2);a#1 += 1;a#1` → compiler panic `Expected symbol in compound assignment`.  
+Warp: `2`; `x#i op= v` is `x#i = x#i op v` with the same value semantics as `x#i = v`. (`test_compound_index_assignment`)
+
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
@@ -349,22 +372,9 @@ checker and every truthiness rule. Options: (a) `Kind::Bool` with its own payloa
 (recommended, as Intended); (b) keep 1/0 at runtime but reject `bool + bool` in the analyzer only; (c) keep as is and
 document it. Not changed here because it overlaps the truthiness and `yes`/`no` decisions owned elsewhere.
 
-### String + number
-**JavaScript**: `"5" + 3` → *"53"*, `"5" * 3` → *15*  
-Warp today, worse: `"5"+3` → `56`, `"5"*3` → `159`, `"a"+1` → `98`, `3 + "4"` → `55`: one-character strings are
-converted to their code point (C's `'5' + 3`).  
-Intended ([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness)): no silent coercion. `"5"+3` is a type error
-with a fix-it (`"5" + str 3` or `int "5" + 3`); codepoint arithmetic only on values typed `char`.
-
 ### `const` ignored
 Warp today: `const x=5;x=6;x` → `6`.  
 Intended: a constness diagnostic with span and fix-it; `const` and `::=` enforce single assignment.
-
-### Lists and arithmetic
-**Python**: `[1,2,3]*2` → *[1,2,3,1,2,3]*; **NumPy**: *[2,4,6]*; **JS**: `[1,2]+[3]` → *"1,23"*  
-Warp today: `[1 2]+[3]` → `5`, `[1 2 3]*2` → `6` (the list is summed first).  
-Intended: `+` on lists is concatenation (as `tests/test_lists.rs` already expects); element-wise lifting only through
-a law-governed rule ([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness), [wiki/broadcasting.md](wiki/broadcasting.md)).
 
 ## Strings
 
@@ -411,6 +421,14 @@ the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `2
 
 ## Mutation and scope
 
+### Methods that should update a list
+Warp today: `a=();a.add(1);a` → compiler panic `Cannot extract numeric value from ø`; `pixel=(1 2);pixel.add(5);pixel` → `(1 2)`
+(the call is evaluated and dropped). Found by the closures agent.
+Intended: with value semantics a mutating method is sugar for rebinding, `pixel.add(5)` ≡ `pixel = pixel + (5)`, and `()` is an empty list, not ø.
+
+### Index assignment of a multi-byte character
+Warp today: `x="ab";x#1='é';x` writes one byte (reading `#` is character-safe since 91122fec, writing is byte-wise). Found by the strings agent.
+Intended: `text_with_char_at` re-encodes the character as UTF-8 and splices it at the character index (the copy already allocates).
 
 ## Errors
 

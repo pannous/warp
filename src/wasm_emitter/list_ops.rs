@@ -5,6 +5,7 @@ use wasm_encoder::*;
 use Instruction::I32Const;
 use ValType::Ref;
 use crate::type_kinds::Kind;
+use crate::node::Node;
 
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
@@ -197,6 +198,7 @@ impl WasmGcEmitter {
 		}
 
 		self.emit_with_at_functions();
+		self.emit_list_concat();
 	}
 
 	/// Locals: 0=node, 1=index, 2=pointer, 3=end, 4=codepoint
@@ -449,7 +451,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
-	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &crate::node::Node, index: &crate::node::Node, value: &crate::node::Node) {
+	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
 		let assigned = self.scratch(2);
 		self.emit_node_instructions(func, target);
 		self.emit_numeric_value(func, index);
@@ -457,7 +459,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalTee(assigned));
 		self.emit_call(func, "node_with_at");
 		let variable = match target.drop_meta() {
-			crate::node::Node::Symbol(name) => self.scope.lookup(name).filter(|local| local.kind.is_ref()),
+			Node::Symbol(name) => self.scope.lookup(name).filter(|local| local.kind.is_ref()),
 			_ => None,
 		};
 		match variable {
@@ -465,6 +467,76 @@ impl WasmGcEmitter {
 			None => func.instruction(&Instruction::Drop),
 		};
 		func.instruction(&Instruction::LocalGet(assigned));
+	}
+
+	/// Arithmetic without an implicit conversion: `"5"+3` and `[1 2]*2` are type errors, `list + list` concatenates.
+	/// Returns true when it emitted the whole expression (a Node, or a trap after a recorded type error).
+	pub(super) fn emit_typed_arithmetic(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node) -> bool {
+		match self.arithmetic_type(left, op, right) {
+			Kind::List => {
+				self.emit_node_instructions(func, left);
+				self.emit_node_instructions(func, right);
+				self.emit_call(func, "list_concat");
+				func.instruction(&Instruction::RefAsNonNull);
+				true
+			}
+			kind => self.emit_arithmetic_type_error(func, left, op, right, kind),
+		}
+	}
+
+	/// In a numeric context any collection or text operand is a type error
+	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
+		if !matches!(kind, Kind::Error | Kind::List) {
+			return false;
+		}
+		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
+		let fix = if left_kind == Kind::List || right_kind == Kind::List {
+			"lists only concatenate with lists (+), element-wise arithmetic needs an explicit map"
+		} else {
+			"no implicit conversion, convert explicitly, e.g. int(\"5\") + 3"
+		};
+		self.emit_type_error(func, format!("type error: {left_kind} {op} {right_kind}: {fix}"));
+		true
+	}
+
+	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
+		crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
+	}
+
+	/// list_concat(a, b): copies the cells of a in front of b, which is shared
+	fn emit_list_concat(&mut self) {
+		if !self.should_emit_function("list_concat") {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_type = self.type_manager.node_type;
+		let list_concat = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
+		let params = vec![node_ref_nullable, node_ref_nullable];
+		self.runtime_function("list_concat", params, vec![node_ref_nullable], vec![], |s, f| {
+			f.instruction(&Instruction::LocalGet(0));
+			f.instruction(&Instruction::RefIsNull);
+			f.instruction(&Instruction::If(BlockType::Result(node_ref_nullable)));
+			f.instruction(&Instruction::LocalGet(1));
+			f.instruction(&Instruction::Else);
+			s.emit_field(f, 0, 0);
+			s.emit_field(f, 0, 1);
+			s.emit_field(f, 0, 2);
+			f.instruction(&Instruction::LocalGet(1));
+			f.instruction(&Instruction::Call(list_concat));
+			f.instruction(&Instruction::StructNew(node_type));
+			f.instruction(&Instruction::End);
+		});
+		assert_eq!(self.func_index("list_concat"), list_concat, "recursive call index");
+	}
+
+	/// `x#i += v` → `x#i = x#i + v`, leaving the assigned value (i64) on the stack
+	pub(super) fn emit_compound_index_assignment(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node) -> bool {
+		let Node::Key(target, crate::operators::Op::Hash, index) = left.drop_meta() else {
+			return false;
+		};
+		let updated = Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone()));
+		self.emit_index_assignment(func, target, index, &updated);
+		true
 	}
 
 	/// Index assignment builds a new value instead of mutating a shared one (value semantics):

@@ -212,6 +212,29 @@ fn test_equal_literals_are_not_shared() {
 }
 
 #[test]
+fn test_compound_index_assignment() {
+	is!("a=(1 2);a#1 += 1;a#1", 2);
+	is!("a=(1 2);b=a;a#2 *= 5;b#2", 2);
+}
+
+#[test]
+fn test_text_plus_number_is_a_type_error() {
+	fails_with("\"5\"+3", "type error"); // JS: "53", C: '5'+3 = 56
+	fails_with("\"5\"*3", "type error"); // JS: 15
+	fails_with("3 + \"4\"", "type error");
+	fails_with("\"ab\"+3", "type error");
+	is!("int(\"5\") + 3", 8);
+}
+
+#[test]
+fn test_list_plus_concatenates() {
+	is!("[1 2]+[3]", warp::ints(vec![1, 2, 3])); // JS: "1,23"
+	is!("a=(1 2);b=(3 4);c=a+b;#c", 4);
+	is!("a=(1 2);b=(3 4);c=a+b;a#2", 2);
+	fails_with("[1 2 3]*2", "type error"); // Python: repeats, NumPy: scales
+}
+
+#[test]
 fn test_index_out_of_bounds_is_an_error() {
 	assert!(matches!(eval("x=[1 2 3]; x[3]"), Node::Error(_)));
 	assert!(matches!(eval("x=(1 2 3);x#0"), Node::Error(_)));

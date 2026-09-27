@@ -98,6 +98,9 @@ pub struct WasmGcEmitter {
 	int_count_global: u32, // used slots in that heap
 	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
+	// Runtime functions the analyzer could not foresee (they depend on inferred types); emission reruns with them
+	missing_functions: std::collections::HashSet<&'static str>,
+	type_errors: Vec<String>,
 }
 
 impl Default for WasmGcEmitter {
@@ -131,6 +134,8 @@ impl WasmGcEmitter {
 			int_count_global: 0,
 			int_remainder_global: 0,
 			text_heap_global: 0,
+			missing_functions: Default::default(),
+			type_errors: Vec::new(),
 		}
 	}
 
@@ -464,6 +469,11 @@ impl WasmGcEmitter {
 				}
 				Kind::Symbol
 			}
+			// Call of a user function, also braceless: `f 3`
+			Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) => {
+				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
+				self.ctx.user_functions[name].return_kind
+			}
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
@@ -611,6 +621,7 @@ impl WasmGcEmitter {
 		extract_user_functions(&mut self.ctx, node);
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
+		self.ctx.required_functions.extend(self.missing_functions.iter());
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -624,6 +635,23 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
+		if !self.missing_functions.iter().all(|name| self.ctx.required_functions.contains(name)) {
+			let mut rerun = Self::new();
+			rerun.config = self.config.clone();
+			rerun.missing_functions = std::mem::take(&mut self.missing_functions);
+			rerun.emit_for_node(node);
+			*self = rerun;
+		}
+	}
+
+	/// The first type error found while emitting; the module must not run then
+	pub fn type_error(&self) -> Option<Node> {
+		self.type_errors.first().map(|message| crate::node::error(message))
+	}
+
+	fn emit_type_error(&mut self, func: &mut Function, message: String) {
+		self.type_errors.push(message);
+		func.instruction(&Instruction::Unreachable);
 	}
 
 	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.
@@ -892,6 +920,12 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
+		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
+			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
+			self.missing_functions.insert(name);
+			func.instruction(&Instruction::Unreachable);
+			return;
+		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&Instruction::Call(self.func_index(name)));
 	}
@@ -996,6 +1030,9 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
+			return;
+		}
 		let use_float = self.should_use_float(left, right, op);
 
 		if self.emit_assign_or_define(func, left, op, right, use_float) {
@@ -1108,6 +1145,9 @@ impl WasmGcEmitter {
 			return false;
 		}
 
+		if self.emit_compound_index_assignment(func, left, op, right) {
+			return true;
+		}
 		// x += y → x = x + y
 		if let Node::Symbol(name) = left.drop_meta() {
 			let local_pos = self.scope
@@ -2066,6 +2106,9 @@ impl WasmGcEmitter {
 			}
 			// Compound assignment: x += y → x = x + y
 			Node::Key(left, op, right) if op.is_compound_assign() => {
+				if self.emit_compound_index_assignment(func, left, op, right) {
+					return;
+				}
 				if let Node::Symbol(name) = left.drop_meta() {
 					// Get local position first to avoid borrow issues
 					let local_pos = self.scope
@@ -2086,6 +2129,10 @@ impl WasmGcEmitter {
 			}
 			// Arithmetic operators
 			Node::Key(left, op, right) if op.is_arithmetic() => {
+				let kind = self.arithmetic_type(left, op, right);
+				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
+					return;
+				}
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
@@ -2228,6 +2275,12 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Integer conversion: int("5") + 3
+				if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "int" || s == "integer") {
+					self.emit_cast(func, &items[1], &items[0]);
+					self.emit_call(func, "get_int_value");
+					return;
+				}
 				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -2305,6 +2358,10 @@ impl WasmGcEmitter {
 			}
 			// Arithmetic operators with float
 			Node::Key(left, op, right) if op.is_arithmetic() => {
+				let kind = self.arithmetic_type(left, op, right);
+				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
+					return;
+				}
 				self.emit_float_value(func, left);
 				self.emit_float_value(func, right);
 				match op {
@@ -2971,6 +3028,9 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	// Fallback to standard Node encoding
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit_for_node(&node);
+	if let Some(type_error) = emitter.type_error() {
+		return type_error;
+	}
 	let needs_host = emitter.imports(Capability::Host);
 	let needs_wasi = emitter.imports(Capability::Wasi);
 	let needs_ffi = emitter.imports(Capability::Ffi);
