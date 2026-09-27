@@ -247,3 +247,11 @@ fn test_proof_model_matches_unbounded_int() {
 	let reports = warp::law::verify("square(x) := x*x\nlaw square(x) >= 0");
 	assert!(!reports[0].failed(), "{}", reports[0]);
 }
+
+#[test]
+#[ignore = "next"] // unverified: written while the build was blocked; lists are heterogeneous, no static element type
+fn test_no_array_store_exception() {
+	// Java: Object[] a = new String[1]; a[0] = 1; → ArrayStoreException at runtime
+	is!("a=(\"x\" \"y\");a#1=1;a#1", 1);
+	is!("a=(\"x\" \"y\");a#1=1;a#2", "y");
+}

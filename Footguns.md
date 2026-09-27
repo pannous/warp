@@ -352,7 +352,18 @@ Intended: distinct `instant`, `date`, `local time`, `zoned time`; no implicit cu
 
 ## Variance
 **Java**: `Object[] a = new String[1]; a[0] = 1;` → *ArrayStoreException at runtime*  
-Warp today: no generic/subtyping rules exist to be unsound. Intended: immutable collections may be covariant, mutable ones are invariant.
+Warp today: no generic/subtyping rules exist to be unsound. Lists are heterogeneous (every element is a `Node`), so
+`a=("x" "y");a#1=1` has no static element type to violate; the Java scenario cannot even be written, there is no
+`String[]` to upcast to `Object[]`. Expected `a#1` → `1`, not yet verified (`test_no_array_store_exception`, ignored:
+the build was blocked by the session's network policy).  
+Decision: variance is inferred, never annotated: an immutable collection (no mutation reachable through it, same analysis
+as ownership/effects) is covariant, `[Text]` may be used as `[Any]`; a collection that is mutated through the widened
+view is invariant, so `a:[Text]=…; f(b:[Any]) := b#1=1; f(a)` must be a type error, not a runtime trap. Value semantics
+(copy-on-write, see Aliasing) makes the widened copy a new list, which is the other sound way out.
+(alternatives: Java/C# covariant arrays with a runtime store check; Kotlin/Scala declaration-site `out`/`in`/`+T`/`-T`
+annotations; Java/C# use-site wildcards `? extends T`; everything invariant like Rust/Go generics.)
+Why: DESIGN.md prefers inference with optional constraints over mandatory annotations and requires unsound or lossy
+operations to be explicit; inferred mutability is the same fact the ownership and effect analyses already compute.
 
 # "Impossible"
 ... Really?

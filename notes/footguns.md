@@ -49,3 +49,10 @@
 - Left open, Decision needed in Footguns.md: `3 & 4 == 4` (test wants Python's bitwise `false`, wiki says `&` is `and`);
   braceless call argument extent (`1 + f 3-1` → 30 vs statement-level `f 3-1` → 20) and the recursive `fib it-1` case.
 - Unrelated, noticed: `2^-2` returns the unevaluated program (negative exponent, exact-numbers area).
+
+## Work area "variance" (2026-09-27)
+- Decided (recorded under Footguns.md NOT YET → Variance): variance is inferred, not annotated; immutable collections
+  covariant, collections mutated through a widened view invariant (type error, never a runtime store check).
+- No subtyping exists yet, so nothing to implement. Added `test_no_array_store_exception` (ignored, unverified).
+- Left open: could not build or run tests in this session (crates.io blocked by the network policy, `vendor/` absent),
+  so the entry stays in NOT YET until the test is run and passes; then move it to Solved.
