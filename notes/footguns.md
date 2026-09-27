@@ -56,3 +56,14 @@
 - No subtyping exists yet, so nothing to implement. Added `test_no_array_store_exception` (ignored, unverified).
 - Left open: could not build or run tests in this session (crates.io blocked by the network policy, `vendor/` absent),
   so the entry stays in NOT YET until the test is run and passes; then move it to Solved.
+
+## Work area "dates-time" (2026-09-27)
+- Decided (recorded under Footguns.md NOT YET → Dates and time zones): distinct `date`, `local time`, `instant`, `zoned time`;
+  RFC 3339 / RFC 9557 literals only; 1-based months; no implicit zone (`now` is an instant, `in "Zone"` places it);
+  `+ 1 month` rejects overflow, `add(…, overflow: clamp)` clamps.
+- Spec tests added (`#[ignore = "next"]`): test_months_are_one_based, test_calendar_overflow_is_explicit,
+  test_no_implicit_time_zone, test_date_and_time_types_are_distinct.
+- Left open: the implementation. The session could not build: index.crates.io is denied by the environment's network
+  policy and there is no vendor/ or ~/.cargo cache, so no compiler code was pushed. Open questions for the implementer:
+  date literal lexing in `parse_number` (`2024-01-31` currently parses as `2024-1-31`), duration units (`1 month`, `24 hours`),
+  and where the tz database lives (host import vs embedded table).
