@@ -2947,6 +2947,7 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return error;
 	}
+	crate::analyzer::lint(&node).iter().for_each(|warning| eprintln!("warning: {warning}"));
 	let node = crate::analyzer::lower_declarations(node);
 
 	// Pre-scan: collect all type definitions (supports forward references)
