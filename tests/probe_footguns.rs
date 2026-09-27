@@ -112,13 +112,11 @@ fn test_string_equality_is_by_value() {
 }
 
 #[test]
-#[ignore = "next"] // wiki/equality.md: increment is immediate
 fn test_increment_changes_variable() {
 	is!("x=1;x++;x", 2);
 }
 
 #[test]
-#[ignore = "next"] // unary minus binds weaker than power in maths and Python
 fn test_negative_power_precedence() {
 	is!("-2^2", -4);
 }
@@ -131,9 +129,47 @@ fn test_logic_binds_weaker_than_comparison() {
 }
 
 #[test]
-#[ignore = "next"] // bug: returns 3
 fn test_braceless_call_as_operand() {
 	is!("f := it*10; 1 + f 3", 31);
+}
+
+#[test]
+fn test_not_binds_weaker_than_comparison() {
+	is!("not 1==2", true); // C: !1 == 2 → 0
+	is!("!1==1", false);
+	is!("not 1==2 and 2==2", true);
+}
+
+#[test]
+fn test_chained_comparison() {
+	is!("3>2>1", true); // C, JS: (3>2)>1 → false
+	is!("1<3<2", false);
+	is!("1<2<3", true);
+	is!("1<2==2", true);
+	is!("(3>2)>1", false); // explicit grouping does not chain
+}
+
+#[test]
+fn test_equals_in_condition_compares() {
+	is!("x=1;if x=2 {3} else {4}", 4); // C, JS: assigns, always true
+	is!("x=2;if x=2 {3} else {4}", 3);
+	is!("x=1;if x=2 {3};x", 1);
+	is!("if 1=2 {3} else {4}", 4);
+}
+
+#[test]
+fn test_prefix_increment() {
+	is!("i=1;++i;i", 2);
+	is!("i=1;++i", 2);
+	is!("i=3;--i;i", 2);
+}
+
+#[test]
+fn test_negative_literals_after_power_fix() {
+	is!("-2*3", -6);
+	is!("x=-1;x", -1);
+	is!("3 - -2", 5);
+	is!("(-2)^2", 4);
 }
 
 #[test]

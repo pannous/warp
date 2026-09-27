@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
 
@@ -125,6 +125,23 @@ impl Add for Number {
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 + n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 + n2 as f64),
 			_ => panic!("unsupported types"),
+		}
+	}
+}
+
+impl Neg for Number {
+	type Output = Self;
+
+	fn neg(self) -> Self::Output {
+		match self {
+			Number::Int(n) => n.checked_neg().map(Number::Int).unwrap_or_else(|| Number::from_bigint(-BigInt::from(n))),
+			Number::BigInt(big) => Number::from_bigint(-big.clone()),
+			Number::Float(f) => Number::Float(-f),
+			Number::Quotient(n, d) => Number::Quotient(-n, d),
+			Number::Complex(r, i) => Number::Complex(-r, -i),
+			Number::Inf => Number::NegInf,
+			Number::NegInf => Number::Inf,
+			Number::Nan => Number::Nan,
 		}
 	}
 }

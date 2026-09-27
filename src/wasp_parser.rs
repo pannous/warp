@@ -57,6 +57,8 @@ pub struct WaspParser {
 	pub current_line: String,
 	base_indent: usize,
 	options: ParserOptions,
+	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
+	equals_compares: bool,
 }
 
 enum ElseParseMode {
@@ -82,6 +84,7 @@ impl WaspParser {
 			current_line,
 			base_indent: 0,
 			options,
+			equals_compares: false,
 		}
 	}
 
@@ -413,6 +416,7 @@ impl WaspParser {
 		// 1-char operators
 		match c1 {
 			':' => Some((Op::Colon, 1)),
+			'=' if self.equals_compares => Some((Op::Eq, 1)),
 			'=' => Some((Op::Assign, 1)),
 			// `a .5` is a list of two values, `a.5` a member access
 			'.' if !(self.prev_char().is_whitespace() && self.number_starts_at(0)) => Some((Op::Dot, 1)),
@@ -451,8 +455,12 @@ impl WaspParser {
 		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 
-		match self.current_char() {
-			'-' if !self.number_starts_at(1) => Some((Op::Neg, 1)),
+		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
+		let variable_follows = c3.is_alphabetic() || c3 == '_';
+		match c1 {
+			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
+			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
+			'-' => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
@@ -643,7 +651,7 @@ impl WaspParser {
 	/// Handles prefix, infix, and suffix operators
 	fn parse_expr(&mut self, min_bp: u8) -> Node {
 		const APPLICATION_BP: u8 = 165;
-		const MAX_BP_FOR_APPLICATION: u8 = 130;
+		const MAX_BP_FOR_APPLICATION: u8 = 151; // operand of + - * / takes a braceless call: 1 + f 3
 		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
 
 		self.skip_spaces();
@@ -652,17 +660,18 @@ impl WaspParser {
 		let mut lhs = if let Some((op, chars)) = self.peek_prefix_operator() {
 			self.advance_by(chars);
 			self.skip_spaces();
-			let (_, r_bp) = op.binding_power();
 			if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
-				let rhs = self.parse_expr(r_bp);
+				let rhs = self.parse_prefix_operand(op);
 				self.finish_prefix(op, rhs)
 			}
 		} else {
 			self.parse_atom()
 		};
 
+		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
+		let mut previous_comparand: Option<Node> = None;
 		loop {
 			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
 
@@ -718,10 +727,22 @@ impl WaspParser {
 			self.skip_whitespace();
 
 			// Parse right-hand side with appropriate binding power
-			let rhs = self.parse_expr(r_bp);
+			let rhs = if op == Op::Colon {
+				self.with_equals_comparing(false, |parser| parser.parse_expr(r_bp))
+			} else {
+				self.parse_expr(r_bp)
+			};
 
-			// Build the Key node
-			lhs = Node::Key(Box::new(lhs), op, Box::new(rhs));
+			lhs = match previous_comparand.take() {
+				Some(middle) if op.is_comparison() => {
+					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
+					Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
+				}
+				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
+			};
+			if op.is_comparison() {
+				previous_comparand = Some(rhs);
+			}
 		}
 
 		lhs
@@ -738,10 +759,29 @@ impl WaspParser {
 		self.finish_prefix(Op::Abs, inner)
 	}
 
-	fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
+	/// Operand of a prefix operator; `++i` binds like `i++`, conditions compare with `=`
+	fn parse_prefix_operand(&mut self, op: Op) -> Node {
+		let (left_bp, right_bp) = op.binding_power();
 		match op {
-			Op::If => self.finish_if_prefix(rhs),
-			Op::While => self.finish_while_prefix(rhs),
+			Op::Inc | Op::Dec => self.parse_expr(left_bp),
+			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
+			_ => self.parse_expr(right_bp),
+		}
+	}
+
+	fn with_equals_comparing(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> Node) -> Node {
+		let outer = std::mem::replace(&mut self.equals_compares, compares);
+		let node = parse(self);
+		self.equals_compares = outer;
+		node
+	}
+
+	fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
+		match (op, rhs.drop_meta()) {
+			(Op::If, _) => self.finish_if_prefix(rhs),
+			(Op::While, _) => self.finish_while_prefix(rhs),
+			(Op::Neg, Node::Number(number)) => Node::Number(-*number),
+			(Op::Inc | Op::Dec, _) => Node::Key(Box::new(rhs), op, Box::new(Empty)), // ++i is i++: increment is immediate
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
 	}
@@ -1125,7 +1165,8 @@ impl WaspParser {
 			_ => panic!("Invalid bracket: {}", open),
 		};
 		self.advance(); // skip opening bracket
-		self.parse_list_with_separators(Some(close), bracket_type)
+		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
+		self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type))
 	}
 
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />

@@ -109,6 +109,7 @@ impl WasmGcEmitter {
 			|| is_numeric_define
 			|| is_numeric_assign
 			|| op.is_compound_assign()
+			|| matches!(op, Op::Inc | Op::Dec)
 		{
 			self.emit_arithmetic(func, left, op, right);
 		} else if *op == Op::Square || *op == Op::Cube {

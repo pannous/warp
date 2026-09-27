@@ -136,9 +136,11 @@ impl Op {
 			// Type cast (binds tighter than comparison: 1.5 as int == 1)
 			Op::As => (125, 126),
 
-			// Comparison (left-assoc, no chaining)
-			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
-			Op::Eq | Op::Ne => (115, 116),
+			// Comparison: one level, the parser chains them: a<b<c → a<b and b<c
+			Op::Lt | Op::Gt | Op::Le | Op::Ge | Op::Eq | Op::Ne => (120, 121),
+
+			// Logical not binds weaker than comparison: not a==b → not (a==b)
+			Op::Not => (0, 105),
 
 			// Logical (left-assoc with and > or)
 			Op::And => (100, 101),
@@ -170,7 +172,9 @@ impl Op {
 			Op::XorAssign => (60, 59),
 
 			// Prefix operators (no left operand, binds to right)
-			Op::Neg | Op::Not | Op::Sqrt | Op::Abs => (0, 190),
+			Op::Sqrt | Op::Abs => (0, 190),
+			// Unary minus binds weaker than power: -2^2 → -(2^2)
+			Op::Neg => (0, 155),
 
 			Op::None => (0, 0),
 		}
