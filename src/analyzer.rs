@@ -3,7 +3,7 @@ use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
 use crate::local::Local;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
@@ -24,7 +24,7 @@ fn is_data_node(node: &Node) -> bool {
 /// Returns Int, Float, Text, etc. based on the expression's result type
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
-	if left == Kind::List && right == Kind::List && *op == Op::Add {
+	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
@@ -795,6 +795,11 @@ pub fn lower_declarations(node: Node) -> Node {
 				_ => Node::Key(target, op, value),
 			}
 		}
+		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
+			let element = lower_declarations(appended_element(&list, &call).expect("guarded").clone());
+			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
+			Node::Key(list, Op::Assign, Box::new(appended))
+		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment
 		Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "const") => {
@@ -808,6 +813,18 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
 		other => other,
+	}
+}
+
+/// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
+const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+
+/// The element of `x.add(v)` when x is a variable
+fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
+	let Node::Symbol(_) = list.drop_meta() else { return None };
+	match call.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) => Some(&items[1]),
+		_ => None,
 	}
 }
 

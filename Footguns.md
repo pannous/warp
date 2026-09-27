@@ -267,6 +267,14 @@ lowers to `x=v`. Not yet: `::=` does not parse (`Unexpected character '='`), and
 parameter of the same name is not reassigned, so no false positives, but no shadowing rules either).
 (`test_const_is_single_assignment`)
 
+### Methods that should update a list
+Warp before: `pixel=(1 2);pixel.add(5);pixel` → `(1 2)` (the call was evaluated and dropped), `a=();a.add(1);a` → compiler panic
+`Cannot extract numeric value from ø`, `[4]#1` → trap (a one-element `[…]` was emitted as its element).
+Warp: `x.add(v)` (also `append`, `push`) on a variable is sugar for `x = x + [v]`, so `pixel` → `(1 2 5)` and an alias keeps
+its value; `[4]` stays a list. Not yet: `()` parses as ø, so `a=();a.add(1)` is now the null-use diagnostic
+`a may be ø (null) in a.(add 1)` instead of a panic; making `()` the empty list is the null/truthiness owners' call.
+(`test_append_method_rebinds_the_list`)
+
 ### Data races
 **C, C++, Go, Java**: two threads incrementing a shared counter → *lost updates*  
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
@@ -446,11 +454,6 @@ the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `2
 [DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
 
 ## Mutation and scope
-
-### Methods that should update a list
-Warp today: `a=();a.add(1);a` → compiler panic `Cannot extract numeric value from ø`; `pixel=(1 2);pixel.add(5);pixel` → `(1 2)`
-(the call is evaluated and dropped). Found by the closures agent.
-Intended: with value semantics a mutating method is sugar for rebinding, `pixel.add(5)` ≡ `pixel = pixel + (5)`, and `()` is an empty list, not ø.
 
 ### Index assignment of a multi-byte character
 Warp today: `x="ab";x#1='é';x` writes one byte (reading `#` is character-safe since 91122fec, writing is byte-wise). Found by the strings agent.

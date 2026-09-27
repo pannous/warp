@@ -503,6 +503,22 @@ impl WasmGcEmitter {
 		crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
 	}
 
+	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
+	fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
+		func.instruction(&Instruction::LocalGet(list));
+		func.instruction(&Instruction::RefIsNull);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::Else);
+		self.emit_field(func, list, 0);
+		func.instruction(&Instruction::I64Const(Kind::Empty as i64));
+		func.instruction(&Instruction::I64Eq);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&Instruction::LocalSet(list));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
+	}
+
 	/// list_concat(a, b): copies the cells of a in front of b, which is shared
 	fn emit_list_concat(&mut self) {
 		if !self.should_emit_function("list_concat") {
@@ -513,6 +529,9 @@ impl WasmGcEmitter {
 		let list_concat = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, node_ref_nullable];
 		self.runtime_function("list_concat", params, vec![node_ref_nullable], vec![], |s, f| {
+			for list in 0..2 {
+				s.emit_empty_as_null(f, list);
+			}
 			f.instruction(&Instruction::LocalGet(0));
 			f.instruction(&Instruction::RefIsNull);
 			f.instruction(&Instruction::If(BlockType::Result(node_ref_nullable)));

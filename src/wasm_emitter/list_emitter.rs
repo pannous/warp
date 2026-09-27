@@ -16,7 +16,7 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		if items.len() == 1 {
+		if items.len() == 1 && *bracket != Bracket::Square {
 			// Check for zero-argument function call: (funcname)
 			if *bracket == Bracket::Round {
 				if let Node::Symbol(fn_name) = items[0].drop_meta() {

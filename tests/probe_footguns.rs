@@ -235,6 +235,14 @@ fn test_list_plus_concatenates() {
 }
 
 #[test]
+fn test_append_method_rebinds_the_list() {
+	is!("pixel=(1 2);pixel.add(5);pixel", warp::ints(vec![1, 2, 5])); // was unchanged
+	is!("pixel=[1 2 3];pixel.add(4);pixel#4", 4);
+	is!("a=(1 2);b=a;a.add(3);#b", 2); // value semantics: b keeps its value
+	is!("x=[4];x#1", 4); // a one-element list stays a list
+}
+
+#[test]
 fn test_const_is_single_assignment() {
 	fails_with("const x=5;x=6;x", "x is const"); // was silently 6
 	fails_with("const x=5;x+=1", "x is const");
