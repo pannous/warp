@@ -15,6 +15,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
+/// libm f64 functions linked by link_ffi_functions, with their arity.
+/// Fallback when system headers declare them via macros (glibc __MATHCALL).
+pub const LIBM_F64_FUNCTIONS: [(&str, usize); 15] = [
+    ("fmin", 2), ("fmax", 2), ("fabs", 1), ("floor", 1), ("ceil", 1), ("round", 1), ("sqrt", 1),
+    ("sin", 1), ("cos", 1), ("tan", 1), ("fmod", 2), ("pow", 2), ("exp", 1), ("log", 1), ("log10", 1),
+];
+
 /// FFI function signature descriptor
 /// Uses wasm_encoder::ValType for consistency with emitter
 #[derive(Clone, Debug)]
@@ -456,6 +463,10 @@ pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
             results: vec![ValType::F64],
         },
     );
+    for (name, arity) in LIBM_F64_FUNCTIONS {
+        sigs.entry(name.to_string())
+            .or_insert_with(|| FfiSignature::new(name, "m", vec![ValType::F64; arity], vec![ValType::F64]));
+    }
     sigs.insert(
         "rand".to_string(),
         FfiSignature {

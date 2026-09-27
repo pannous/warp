@@ -1004,7 +1004,7 @@ fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 fn add_ffi_lib(ctx: &mut Context, lib: &str) {
 	let lib_alias = crate::ffi::resolve_library_alias(lib);
 	if lib_alias == "m" {
-		for name in ["fmin", "fmax", "fabs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "fmod", "pow", "exp", "log", "log10"] {
+		for (name, _) in crate::ffi::LIBM_F64_FUNCTIONS {
 			add_ffi_import(ctx, name, "m");
 		}
 	} else if lib_alias == "c" {
