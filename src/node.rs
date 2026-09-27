@@ -19,6 +19,9 @@ use crate::node::Node::*;
 use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
 
+/// Meta key holding the source text of a literal (see `with_source_literal`)
+const SOURCE_LITERAL: &str = "literal";
+
 
 
 // use warp::Node;
@@ -692,6 +695,24 @@ impl Node {
 		}
 	}
 
+	/// Keep the source text of a literal whose value would print differently (`01234`, `1.10`)
+	pub fn with_source_literal(self, literal: &str) -> Self {
+		Meta {
+			node: Box::new(self),
+			data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))),
+		}
+	}
+
+	pub fn source_literal(&self) -> Option<&str> {
+		match self {
+			Meta { node, data } => match &data[SOURCE_LITERAL] {
+				Text(literal) => Some(literal),
+				_ => node.source_literal(),
+			},
+			_ => None,
+		}
+	}
+
 	pub fn with_comment(self, comment: String) -> Self {
 		let comment = Node::key("comment", Node::text(&comment));
 		Meta {
@@ -817,12 +838,9 @@ impl Node {
 					format!("{}{}{}", bracket, nodes[0].serialize(), close)
 				} else {
 					let items: Vec<String> = nodes.iter().map(|n| n.serialize()).collect();
-					format!(
-						"{}{}{}",
-						bracket,
-						items.join(&*(separator.to_string() + " ")),
-						close
-					)
+					let separator = separator.to_string();
+					let joint = if separator.ends_with(char::is_whitespace) { separator } else { separator + " " };
+					format!("{}{}{}", bracket, items.join(&joint), close)
 				}
 			}
 			Key(k, op, v) => format!("{}{}{}", k, op, v.serialize_recurse(meta)),
@@ -831,6 +849,9 @@ impl Node {
 			True => "true".to_string(),
 			False => "false".to_string(),
 			Meta { node, data } => {
+				if let Some(literal) = self.source_literal() {
+					return literal.to_string();
+				}
 				let inner = node.serialize_recurse(meta);
 				if meta {
 					format!("{} {}", inner, data.meta_string())

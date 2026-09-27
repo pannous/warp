@@ -19,13 +19,19 @@ const MAX_INTEGER_EXPONENT: i64 = 4096;
 pub struct ParserOptions {
 	/// XML mode: treat <tag> as XML tags, not C++ generics
 	pub xml_mode: bool,
-	// Future: other format-specific options can be added here
+	/// Data mode (untrusted or foreign data, never evaluated): English words stay symbols
+	/// (`NO` is Norway, not false) and numbers keep their source literal (`01234`, `1.10`)
+	pub data_mode: bool,
 }
 
 
 impl ParserOptions {
 	pub fn xml() -> Self {
-		ParserOptions { xml_mode: true }
+		ParserOptions { xml_mode: true, ..Default::default() }
+	}
+
+	pub fn data() -> Self {
+		ParserOptions { data_mode: true, ..Default::default() }
 	}
 }
 
@@ -59,6 +65,11 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 		Node::Number(number) => Some(*number),
 		_ => None,
 	}
+}
+
+/// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
+pub fn parse_data(input: &str) -> Node {
+	WaspParser::parse_with_options(input, ParserOptions::data())
 }
 
 pub fn parse_xml(input: &str) -> Node {
@@ -584,7 +595,7 @@ impl WaspParser {
 			return Node::Text(url);
 		}
 
-		if let Some(constant) = check_constants(&symbol) {
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode) {
 			return constant; // if true {} fall through :?
 		}
 
@@ -1051,6 +1062,23 @@ impl WaspParser {
 	}
 
 	fn parse_number(&mut self) -> Node {
+		let start = self.pos;
+		let number = self.parse_number_value();
+		let literal: String = self.chars[start..self.pos].iter().collect();
+		self.keep_source_literal(number, &literal)
+	}
+
+	/// Data round-trips its literals: `zip: 01234` stays `01234`, `version: 1.10` stays `1.10`
+	fn keep_source_literal(&self, number: Node, literal: &str) -> Node {
+		let is_lossy = matches!(number, Node::Number(_)) && number.serialize() != literal;
+		if self.options.data_mode && is_lossy {
+			number.with_source_literal(literal)
+		} else {
+			number
+		}
+	}
+
+	fn parse_number_value(&mut self) -> Node {
 		let mut num_str = String::new();
 
 		// todo edge case: leading plus
@@ -1583,7 +1611,14 @@ impl WaspParser {
 	}
 }
 
-fn check_constants(s: &str) -> Option<Node> {
+/// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
+const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
+
+fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
+	let is_word = s.chars().all(|c| c.is_ascii_alphabetic());
+	if data_mode && is_word && !DATA_WORD_LITERALS.contains(&s) {
+		return None;
+	}
 	match s.to_lowercase().as_str() {
 		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
 		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False),

@@ -2893,6 +2893,16 @@ pub fn eval(code: &str) -> Node {
 	eval_parsed(lawful.program, &code)
 }
 
+/// Evaluate foreign data with an empty capability set: a program that would call any host, WASI or FFI
+/// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
+pub fn eval_untrusted(code: &str) -> Node {
+	let program = WaspParser::parse(code);
+	match crate::effects::EffectReport::of(&program).externals.keys().next() {
+		Some(external) => crate::node::error(&format!("untrusted code has no capabilities, refusing to call {external}")),
+		None => eval_parsed(program, code),
+	}
+}
+
 /// Compile and run an already parsed program; imports follow its resolved effects.
 pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	if let Some(error) = node.first_error() {

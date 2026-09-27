@@ -91,6 +91,9 @@ fn main() {
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+    } else if let Some(target) = arg_string.strip_prefix("data ") {
+        let text = if file_exists(target) { load_file(target) } else { target.to_string() };
+        println!("{}", wasp_parser::parse_data(&text).serialize());
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
         let warp_code = load_file(&arg_string);
         let result = eval(&warp_code);
@@ -214,6 +217,7 @@ fn usage() {
     println!("  warp eval <code>     Evaluate code");
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
+    println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp repl            Start interactive console");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

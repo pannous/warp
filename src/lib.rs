@@ -47,7 +47,7 @@ pub use node::{block, codepoint, error, error_node, float, floats, data, int, in
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use wasp_parser::{parse, parse_file, parse_xml, WaspParser};
+pub use wasp_parser::{parse, parse_data, parse_file, parse_xml, WaspParser};
 pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};
