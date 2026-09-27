@@ -1,4 +1,5 @@
 use crate::context::{Context, UserFunctionDef};
+use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
 use crate::local::Local;
@@ -207,8 +208,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
 					Node::Symbol(name) if scope.lookup(name).is_none() => {
-						let kind = infer_type(right, scope);
-						scope.define(name.clone(), None, kind);
+						let declared = declared_type(left);
+						let kind = declared.and_then(|type_name| builtin_type_kind(&type_name.name())).unwrap_or_else(|| infer_type(right, scope));
+						scope.define(name.clone(), declared.map(|type_name| Box::new(type_name.clone())), kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
@@ -560,13 +562,105 @@ fn parse_param(param: &Node) -> (String, Kind) {
 
 /// Convert type name string to Kind
 fn type_name_to_kind(name: &str) -> Kind {
-	match name.to_lowercase().as_str() {
+	builtin_type_kind(name).unwrap_or(Kind::Int)
+}
+
+fn builtin_type_kind(name: &str) -> Option<Kind> {
+	Some(match name.to_lowercase().as_str() {
 		"int" | "i32" | "i64" | "integer" | "long" => Kind::Int,
 		"float" | "f32" | "f64" | "double" | "real" | "number" => Kind::Float,
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
-		_ => Kind::Int, // Default to Int
+		_ => return None,
+	})
+}
+
+/// Semantic checks run before emission; the first violation comes back as an error value
+pub fn diagnose(program: &Node) -> Option<Node> {
+	check_declared_types(program, &mut HashMap::new()).map(Diagnostic::into_error)
+}
+
+/// `x:int=…` declares x's type; every value assigned to x later must fit it
+fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			let declaration = match target.drop_meta() {
+				Node::Key(name, Op::Colon, type_name) => match (name.drop_meta(), type_name.drop_meta()) {
+					(Node::Symbol(name), Node::Symbol(type_name)) => {
+						declared.insert(name.clone(), type_name.clone());
+						Some((name, type_name))
+					}
+					_ => None,
+				},
+				Node::Symbol(name) => declared.get_key_value(name),
+				_ => None,
+			};
+			if let Some((name, type_name)) = declaration {
+				if let Some(mismatch) = assignment_mismatch(node, name, type_name, value) {
+					return Some(mismatch);
+				}
+			}
+			check_declared_types(value, declared)
+		}
+		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
+		Node::List(items, _, _) => items.iter().find_map(|item| check_declared_types(item, declared)),
+		_ => None,
+	}
+}
+
+fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
+	let expected = builtin_type_kind(type_name)?;
+	let actual = literal_kind(value)?;
+	if expected == actual || (expected == Kind::Float && actual == Kind::Int) {
+		return None;
+	}
+	let value_text = value.serialize();
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
+	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
+}
+
+/// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
+/// the widening of an Int literal assigned to a float becomes an explicit Float literal
+pub fn lower_declarations(node: Node) -> Node {
+	match node {
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
+			let value = Box::new(lower_declarations(*value));
+			match target.drop_meta() {
+				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
+					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
+						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float(number.clone().into()))),
+						_ => value,
+					};
+					Node::Key(Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())), op, value)
+				}
+				_ => Node::Key(target, op, value),
+			}
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
+		other => other,
+	}
+}
+
+/// The type a lowered declaration `x:T = v` attached to its target x
+fn declared_type(target: &Node) -> Option<&Node> {
+	match target {
+		Node::Meta { data, .. } if matches!(data.as_ref(), Node::Symbol(_)) => Some(data),
+		_ => None,
+	}
+}
+
+/// Kind of a value known before running the program
+fn literal_kind(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::Number(Number::Int(_) | Number::BigInt(_)) | Node::True | Node::False => Some(Kind::Int),
+		Node::Number(_) => Some(Kind::Float),
+		Node::Text(_) => Some(Kind::Text),
+		Node::Char(_) => Some(Kind::Codepoint),
+		Node::Key(nothing, Op::Neg, operand) if matches!(nothing.drop_meta(), Node::Empty) => literal_kind(operand),
+		_ => None,
 	}
 }
 

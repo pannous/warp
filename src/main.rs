@@ -26,6 +26,7 @@ pub mod run;
 pub mod local;
 pub mod law;
 pub mod effects;
+pub mod diagnostic;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};

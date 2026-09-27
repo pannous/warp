@@ -2903,6 +2903,10 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 		return answer;
 	}
 	let node = without_constraints(node);
+	if let Some(error) = crate::analyzer::diagnose(&node) {
+		return error;
+	}
+	let node = crate::analyzer::lower_declarations(node);
 
 	// Pre-scan: collect all type definitions (supports forward references)
 	let mut type_registry = TypeRegistry::new();
