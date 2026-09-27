@@ -67,3 +67,14 @@
   policy and there is no vendor/ or ~/.cargo cache, so no compiler code was pushed. Open questions for the implementer:
   date literal lexing in `parse_number` (`2024-01-31` currently parses as `2024-1-31`), duration units (`1 month`, `24 hours`),
   and where the tz database lives (host import vs embedded table).
+
+## strings-equality work area (2026-09-27)
+- Fixed: `==`/`!=`/`is` compare by value at runtime (`src/wasm_emitter/equality.rs`: `values_equal`, used when either
+  operand is text, list, ø, an indexed element or a ref-typed variable); `is` parses as `==`; conditions on text/list/ø
+  use `is_truthy` (same rule as `Node::is_falsy`) instead of panicking; parser normalizes source to NFC; `#` on text
+  decodes UTF-8 code points (bounds checked); `{a:1 a:2}` is a parse error (curly objects only; code may redefine).
+- Found on the way: `matches_keyword` treated `_` as a word boundary, so `is_prime` would have lexed as `is` + `_prime`.
+- Left open: truthiness of empty values (Decision needed in Footguns.md, recommendation: only bool is a condition);
+  grapheme-level `#`/`size`/`length`; `x#i='é'` still writes a single byte (string_set_char_at); duplicate-key error has no span.
+- test.sh parsing: WASI tests print to stdout, which sometimes interleaves with `test … ok` lines, so e.g.
+  `test_wasi_putf` can go missing from test_results.txt although it passes.

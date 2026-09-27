@@ -159,6 +159,33 @@ instead of being a recoverable `Result` ([DESIGN.md → Effects](DESIGN.md#effec
 Warp: currently vacuous: generated modules are single threaded and share no memory. The plan keeps it that way: parallelism
 is only inferred for code proved pure ([DESIGN.md → Cautions](DESIGN.md#cautions)).
 
+### String comparison
+**Java**: `new String("abc") == "abc"` → *false*; **Python**: `a is b` works for `256` but not `257`; **JS**: `[1,2]==[1,2]` → *false*  
+Warp before: `"abc"=="abc"` → compiler panic `Cannot extract numeric value from 'abc'`; `"abc" is "abc"` unevaluated;
+`0==""` and `null==false` panicked.  
+Warp: `"abc"=="abc"` → `1`, `x="abc";x=="abc"` → `1`, `"abc" is "abc"` → `1`, `x=257;x is 257` → `1`, `[1 2]==[1 2]` → `1`,
+`0==""` → `0`, `null==false` → `0`, `3==3.0` → `1`. `==`, `!=` and `is` compare by value ([wiki/equality.md](wiki/equality.md)):
+kinds must be compatible (Int and Float are), texts byte by byte, lists and keys recursively; there is no identity operator.
+(`test_string_equality_is_by_value`, `test_is_compares_by_value`, `test_equality_across_kinds_is_structural`)
+
+### Unicode normalization
+**Almost every language**: `"é" == "é"` (NFC U+00E9 vs NFD e+U+0301) → *false*  
+Warp before: NFC vs NFD → compiler panic.  
+Warp: `'\u{e9}'=='e\u{301}'` → `1`. Source text is normalized to NFC when parsed, so equal-looking texts and
+identifiers are equal. (`test_unicode_normalization`)
+
+### Duplicate keys
+**JSON (RFC 8259 leaves it open), JS, Python `json`**: `{"a":1,"a":2}` → *silently {"a":2}*  
+Warp before: `{a:1 a:2}` accepted without complaint.  
+Warp: `{a:1 a:2}` → `Error('duplicate key 'a'')` at parse time. Code blocks without braces may still redefine
+(`global x=5; global x=10; x` → `10`). Not yet: the error has no source span. (`test_duplicate_keys_are_reported`)
+
+### Character indexing
+**C, Go**: `"héllo"[1]` → *a byte, half of `é`*  
+Warp before: `'héllo'#2` → `'Ã'`.  
+Warp: `'héllo'#2` → `'é'`, `'a👍c'#3` → `'c'`, `'héllo'#6` → `Error('index out of range')`. `#` on text decodes UTF-8 and
+counts code points (graphemes: see NOT YET → Bytes vs graphemes). (`test_character_indexing_is_unicode_safe`)
+
 # NOT YET
 ...
 
@@ -214,39 +241,27 @@ Warp today: `[1 2]+[3]` → `5`, `[1 2 3]*2` → `6` (the list is summed first).
 Intended: `+` on lists is concatenation (as `tests/test_lists.rs` already expects); element-wise lifting only through
 a law-governed rule ([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness), [wiki/broadcasting.md](wiki/broadcasting.md)).
 
-## Equality and identity
-
-### 🐞 String comparison
-**Java**: `new String("abc") == "abc"` → *false*; **Python**: `a is b` works for `256` but not `257`  
-Warp today: `"abc"=="abc"` → compiler panic `Cannot extract numeric value from 'abc'`; `"abc" is "abc"` stays unevaluated;
-`0==""` and `null==false` panic.  
-Intended ([wiki/equality.md](wiki/equality.md)): `==` and `is` compare values structurally, there is no identity operator in
-the surface language. (`test_string_equality_is_by_value`)
-
-### Unicode normalization
-**Almost every language**: `"é" == "é"` (NFC U+00E9 vs NFD e+U+0301) → *false*  
-Warp today: identical encodings → `1`, NFC vs NFD → compiler panic.  
-Intended: text is normalized to NFC when parsed, so equal-looking strings are equal. (`test_unicode_normalization`)
-
-### Duplicate keys
-**JSON (RFC 8259 leaves it open), JS, Python `json`**: `{"a":1,"a":2}` → *silently {"a":2}*  
-Warp today: `{a:1 a:2}` is accepted without complaint (field access on objects does not evaluate yet: `x={a:1 b:2};x.a` → unevaluated).  
-Intended: duplicate keys are a parse diagnostic in data, an explicit override in code.
-
 ## Strings
 
-### Bytes vs characters vs graphemes
+### Bytes vs graphemes
 **Python 2, C, Go, JS**: `len("👍🏽")` → *8* bytes (Go), *4* UTF-16 units (JS), *2* codepoints (Python 3); users mean *1*  
-Warp today: `size "👍🏽"` → `8`, `'héllo'#2` → `'Ã'` (half of the UTF-8 `é`), though [wiki/indexing.md](wiki/indexing.md) promises `#` is character-safe; `'héllo'.length` is not evaluated.  
-Intended: `#` and default iteration are by character (grapheme), `[]` by byte; the unit is part of the type
-(`for byte in text`, [DESIGN.md → Cautions](DESIGN.md#cautions)). (`test_character_indexing_is_unicode_safe`)
+Warp today: `#` indexes code points (see Solved → Character indexing), but `size "👍🏽"` → `8` and `'héllo'.length` is not
+evaluated; `'👍🏽'#1` is the thumb without its skin tone modifier.  
+Intended: `#` and default iteration are by grapheme, `[]` by byte; the unit is part of the type
+(`for byte in text`, [DESIGN.md → Cautions](DESIGN.md#cautions)).
 
 ## Truthiness and null
 
 ### Empty values
 **Python/JS disagree**: `[]` is falsy in Python, truthy in JS; `if ("")` / `if ({})` differ too.  
-Warp today: `if "" {1} else {2}` and `if [] {1} else {2}` → compiler panic.  
-Intended: uniform rule of [wiki/truthiness.md](wiki/truthiness.md) (all empty values falsy)
+Warp before: `if "" {1} else {2}` and `if [] {1} else {2}` → compiler panic.  
+Warp today: no panic; conditions on text, lists and `ø` use the rule `Node::is_falsy` already applied to `and`/`or`
+(`if "" …` → else branch, `if [] …` → else branch, `if "0" …` → then branch). (`test_empty_condition_does_not_panic`)  
+Intended: uniform rule of [wiki/truthiness.md](wiki/truthiness.md) (all empty values falsy)  
+Decision needed: (a) keep "empty is falsy" as implemented (Python-like, matches the wiki); (b) only `bool` is a condition,
+`if ""` is a type error with fix-it `if not empty ""` (Rust, Swift, Go); (c) empty is truthy except `ø`/`false` (Ruby, Lua).
+Recommendation: (b) for code (no implicit truthiness, one of DESIGN.md's dangerous implicitnesses), with `and`/`or`
+defined on `bool` only; data queries can use explicit `empty`/`exists`.
 
 ### `and`/`or` as ternary
 **Python, Lua**: `cond and x or y` → *y* when `x` is falsy  
