@@ -155,7 +155,7 @@ impl WasmGcEmitter {
 		let is_statement_sequence = self.is_statement_sequence(items);
 
 		if is_statement_sequence {
-			self.emit_statement_sequence(func, items);
+			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
 			// Check for pure numeric expressions
 			let has_arithmetic = items.iter().any(|item| {
@@ -268,65 +268,53 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit a statement sequence (filter out functions, execute in order, return last)
-	fn emit_statement_sequence(&mut self, func: &mut Function, items: &[Node]) {
-		let non_func_items: Vec<_> = items
-			.iter()
-			.filter(|item| !self.is_function_definition(item))
-			.collect();
-
-		for (i, item) in non_func_items.iter().enumerate() {
-			self.emit_node_instructions(func, item);
-			// Drop intermediate results, keep last
-			if i < non_func_items.len() - 1 {
+	/// Emit a statement sequence: execute in order, keep the last value.
+	/// Function definitions leave no value; they snapshot the variables they capture.
+	pub(super) fn emit_statement_sequence(&mut self, func: &mut Function, items: &[Node], emit: fn(&mut Self, &mut Function, &Node)) {
+		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
+		for (i, item) in items.iter().enumerate() {
+			if self.is_definition(item) {
+				if let Some(name) = self.defined_function_name(item) {
+					self.emit_closure_capture(func, &name);
+				}
+				continue;
+			}
+			emit(self, func, item);
+			if Some(i) != last_statement {
 				func.instruction(&Instruction::Drop);
 			}
 		}
 	}
 
-	/// Check if item is a function definition that should be filtered from statement sequences
-	fn is_function_definition(&self, item: &Node) -> bool {
-		match item.drop_meta() {
-			// Pattern: name := body
-			Node::Key(left, Op::Define, _) => {
-				if let Node::Symbol(name) = left.drop_meta() {
-					if self.ctx.user_functions.contains_key(name) {
-						return true;
-					}
-				}
-				// Pattern: name(params...) := body
-				if let Node::List(items, _, _) = left.drop_meta() {
-					if !items.is_empty() {
-						if let Node::Symbol(name) = items[0].drop_meta() {
-							if self.ctx.user_functions.contains_key(name) {
-								return true;
-							}
-						}
-					}
-				}
-			}
-			// Pattern: name(params...) = body
-			Node::Key(left, Op::Assign, _) => {
-				if let Node::List(items, _, _) = left.drop_meta() {
-					if !items.is_empty() {
-						if let Node::Symbol(name) = items[0].drop_meta() {
-							if self.ctx.user_functions.contains_key(name) {
-								return true;
-							}
-						}
-					}
-				}
-			}
-			// Pattern: def/fun/fn name(params...): body
+	/// Function definitions and imports: compiled ahead, no runtime value
+	fn is_definition(&self, item: &Node) -> bool {
+		self.defined_function_name(item).is_some() || match item.drop_meta() {
 			Node::List(list_items, _, _) if list_items.len() >= 2 => {
-				if let Node::Symbol(s) = list_items[0].drop_meta() {
-					if is_function_keyword(s) || s == "use" || s == "import" {
-						return true;
-					}
-				}
+				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || s == "use" || s == "import")
 			}
-			_ => {}
+			_ => false,
 		}
-		false
+	}
+
+	/// Name of the user function this item defines: `f := …`, `f(x…) := …`, `f(x…) = …`, `def f(x…): …`
+	pub(super) fn defined_function_name(&self, item: &Node) -> Option<String> {
+		let name = match item.drop_meta() {
+			Node::Key(left, op @ (Op::Define | Op::Assign), _) => match left.drop_meta() {
+				Node::Symbol(name) if *op == Op::Define => Some(name.clone()),
+				Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
+					Some(Node::Symbol(name)) => Some(name.clone()),
+					_ => None,
+				},
+				_ => None,
+			},
+			Node::List(items, _, _) if items.len() >= 2 => match items[0].drop_meta() {
+				Node::Symbol(keyword) if is_function_keyword(keyword) => {
+					crate::analyzer::extract_def_function(&items[1..]).map(|function| function.name)
+				}
+				_ => None,
+			},
+			_ => None,
+		};
+		name.filter(|name| self.ctx.user_functions.contains_key(name))
 	}
 }

@@ -49,6 +49,7 @@ impl WasmGcEmitter {
 			if let Node::Symbol(name) = left.drop_meta() {
 				if self.ctx.user_functions.contains_key(name) {
 					// Function definitions don't produce a value
+					self.emit_closure_capture(func, name);
 					return;
 				}
 			}

@@ -250,6 +250,26 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 	}
 }
 
+/// Outer variables a function body reads: bound in `outer`, not a parameter or local of the body.
+/// Functions capture these by value when they are defined (DESIGN.md: immutable local bindings).
+pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(String, Kind)> {
+	let mut own = Scope::new();
+	for (name, _default) in &function.params {
+		own.define(name.clone(), None, Kind::Int);
+	}
+	collect_variables(&function.body, &mut own);
+	let mut captured: Vec<(String, Kind)> = vec![];
+	function.body.visit(&mut |node| {
+		if let Node::Symbol(name) = node {
+			let is_new = own.lookup(name).is_none() && !captured.iter().any(|(seen, _)| seen == name);
+			if let Some(local) = outer.lookup(name).filter(|_| is_new) {
+				captured.push((name.clone(), local.kind));
+			}
+		}
+	});
+	captured
+}
+
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
@@ -668,11 +688,18 @@ fn literal_kind(value: &Node) -> Option<Kind> {
 /// Infer return type of a function body given its parameters
 fn infer_function_return_kind(params: &[(String, Option<Node>)], body: &Node) -> Kind {
 	let mut scope = Scope::new();
-	// Add parameters to scope (all assumed Int for now)
-	for (name, _default) in params {
-		scope.define(name.clone(), None, Kind::Int);
+	for (name, default) in params {
+		scope.define(name.clone(), None, param_kind(default));
 	}
 	infer_type(body, &scope)
+}
+
+/// A parameter takes the kind of its default value (a fresh value per call); untyped parameters are Int
+pub fn param_kind(default: &Option<Node>) -> Kind {
+	match default.as_ref().map(|value| infer_type(value, &Scope::new())) {
+		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
+		_ => Kind::Int,
+	}
 }
 
 /// Recognizes patterns:
@@ -823,7 +850,7 @@ fn uses_dollar_param(node: &Node) -> bool {
 }
 
 /// Extract function from def/fun/fn syntax
-fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
+pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 	if items.is_empty() {
 		return None;
 	}

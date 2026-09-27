@@ -366,3 +366,24 @@ fn test_type_annotation_is_enforced() {
 	fails_with("x:int=5\nx=2.5", "at 2:1"); // a lossy conversion is never inserted silently
 	is!("x:float=5;x", 5.0); // widening is fine
 }
+
+#[test]
+fn test_closures_capture_values() {
+	is!("x=1;f(y):=x+y;f(1)", 2);
+	is!("x=1;f(y):=x+y;x=5;f(1)", 2); // captured at definition; by reference (JS, Python): 6
+	is!("xs=(1 2 3);f(i):=xs#i;f(2)", 2);
+}
+
+#[test]
+fn test_closures_in_loop_capture_each_iteration() {
+	// Python `[lambda: i for i in range(3)]`, JS `var`, Go < 1.22: every closure sees the last value
+	is!("x=0;r=0;i=0;while i<3 { i+=1; x=i; f(y):=x+y; x=100; r+=f(0) }; r", 6); // by reference: 300
+	is!("i=0;while i<3 { i+=1; f(y):=i*y }; i=10; f(1)", 3); // by reference: 10
+}
+
+#[test]
+fn test_default_argument_is_fresh_per_call() {
+	// Python `def f(a=[])` shares one list across calls: the second call sees the first call's mutation
+	is!("def f(a=(0 0)){ a#1 = a#1 + 1; a#1 }; f()+f()", 2); // shared default: 1+2=3
+	is!("f(a=(0 0)) := { a#1 = a#1 + 1; a#1 }; f(); f()", 1);
+}

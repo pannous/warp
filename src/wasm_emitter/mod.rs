@@ -22,8 +22,9 @@ pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
 
-use crate::analyzer::{analyze_required_functions, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, Scope};
+use crate::analyzer::{analyze_required_functions, captured_variables, param_kind, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, Scope};
 use crate::context::{Context, UserFunctionDef};
+use crate::local::Local;
 use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
@@ -240,6 +241,35 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Give every outer variable a function reads a global, set from the variable where the function is defined
+	fn allocate_closure_captures(&mut self, program: &Node) {
+		let mut outer = Scope::new();
+		collect_variables(program, &mut outer);
+		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
+		for function in functions {
+			let captured: Vec<(String, Kind)> = captured_variables(&function, &outer)
+				.into_iter()
+				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
+				.collect();
+			let captures = captured.into_iter()
+				.map(|(name, kind)| (name, (self.declare_mutable_global(kind), kind)))
+				.collect();
+			self.ctx.captures.insert(function.name, captures);
+		}
+	}
+
+	/// At a function definition: snapshot the captured variables, so later reassignment is not seen by the function
+	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
+		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
+		for (name, (global, kind)) in captures {
+			let stored_alike = |local: &&Local| self.storage_type(local.kind) == self.storage_type(kind);
+			if let Some(local) = self.scope.lookup(&name).filter(stored_alike) {
+				func.instruction(&Instruction::LocalGet(local.position));
+				func.instruction(&Instruction::GlobalSet(global));
+			}
+		}
+	}
+
 	fn compile_user_functions(&mut self) {
 		// Clone the function names to avoid borrow issues
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
@@ -263,7 +293,7 @@ impl WasmGcEmitter {
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
-		let param_types: Vec<ValType> = user_fn.params.iter().map(|_| ValType::I64).collect();
+		let param_types: Vec<ValType> = user_fn.params.iter().map(|(_, default)| self.storage_type(param_kind(default))).collect();
 		if returns_node {
 			let node_ref = self.node_ref(false);
 			self.type_manager.types_mut().ty().function(param_types, vec![Ref(node_ref)]);
@@ -289,8 +319,8 @@ impl WasmGcEmitter {
 
 		// Create function scope with parameters
 		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
-		for (param_name, _default) in user_fn.params.iter() {
-			self.scope.define(param_name.clone(), None, Kind::Int);
+		for (param_name, default) in user_fn.params.iter() {
+			self.scope.define(param_name.clone(), None, param_kind(default));
 		}
 
 		// Collect any additional variables in the body
@@ -304,6 +334,12 @@ impl WasmGcEmitter {
 		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals);
 		let mut func = Function::new(vec![(extra_locals + big_int::INT_SCRATCH_LOCALS, ValType::I64)]);
 
+		// Captured variables read their definition-time globals
+		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
+		let shadowed: Vec<_> = captures.iter()
+			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
+			.collect();
+
 		// Compile the function body - use node instructions for Node-returning functions
 		if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
@@ -311,6 +347,13 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(&mut func, &user_fn.body);
 		}
 		func.instruction(&Instruction::End);
+
+		for (variable, global) in shadowed {
+			match global {
+				Some(global) => self.ctx.user_globals.insert(variable, global),
+				None => self.ctx.user_globals.remove(&variable),
+			};
+		}
 
 		// Add to code section
 		self.code.function(&func);
@@ -367,17 +410,11 @@ impl WasmGcEmitter {
 			None => panic!("User function not yet compiled: {}", user_fn.name),
 		};
 
-		// Emit arguments, using defaults for missing ones
+		// Emit arguments; a missing argument evaluates its default anew at every call
 		for (i, (_param_name, default_value)) in user_fn.params.iter().enumerate() {
-			if i < args.len() {
-				// Use provided argument
-				self.emit_numeric_value(func, &args[i]);
-			} else if let Some(default) = default_value {
-				// Use default value
-				self.emit_numeric_value(func, default);
-			} else {
-				panic!("Missing argument {} for function {} (no default)", i, user_fn.name);
-			}
+			let argument = args.get(i).or(default_value.as_ref())
+				.unwrap_or_else(|| panic!("Missing argument {} for function {} (no default)", i, user_fn.name));
+			self.emit_value_of_kind(func, argument, param_kind(default_value));
 		}
 
 		// Call the function
@@ -580,6 +617,7 @@ impl WasmGcEmitter {
 		self.emit();
 		// Pre-allocate strings from user function bodies before compiling
 		self.collect_user_function_strings();
+		self.allocate_closure_captures(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
@@ -904,7 +942,9 @@ impl WasmGcEmitter {
 				// Check if this is a global variable lookup
 				if let Some(&(idx, kind)) = self.ctx.user_globals.get(s) {
 					func.instruction(&Instruction::GlobalGet(idx));
-					if kind.is_float() {
+					if kind.is_ref() {
+						func.instruction(&Instruction::RefAsNonNull);
+					} else if kind.is_float() {
 						self.emit_call(func, "new_float");
 					} else {
 						self.emit_call(func, "new_int");
@@ -1425,26 +1465,7 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
-
-		// Create mutable global with default initial value
-		let init_expr = if kind.is_float() {
-			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
-		} else {
-			ConstExpr::i64_const(0)
-		};
-
-		self.globals.global(
-			GlobalType {
-				val_type: wasm_val_type,
-				mutable: true,
-				shared: false,
-			},
-			&init_expr,
-		);
-
-		let global_idx = self.next_global_idx;
-		self.next_global_idx += 1;
+		let global_idx = self.declare_mutable_global(kind);
 		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value computation and store to global
@@ -1459,6 +1480,43 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::GlobalGet(global_idx));
 			self.emit_call(func, "new_int");
 		}
+	}
+
+	/// How a value of `kind` is stored in locals, parameters and globals
+	fn storage_type(&self, kind: Kind) -> ValType {
+		if kind.is_ref() {
+			Ref(self.node_ref(false))
+		} else if kind.is_float() {
+			ValType::F64
+		} else {
+			ValType::I64
+		}
+	}
+
+	/// Emit `node` in the representation `storage_type(kind)` expects
+	fn emit_value_of_kind(&mut self, func: &mut Function, node: &Node, kind: Kind) {
+		if kind.is_ref() {
+			self.emit_node_instructions(func, node);
+		} else if kind.is_float() {
+			self.emit_float_value(func, node);
+		} else {
+			self.emit_numeric_value(func, node);
+		}
+	}
+
+	/// Declare a zero/null-initialized mutable global holding a value of `kind`
+	fn declare_mutable_global(&mut self, kind: Kind) -> u32 {
+		let init_expr = if kind.is_ref() {
+			ConstExpr::ref_null(HeapType::Concrete(self.type_manager.node_type))
+		} else if kind.is_float() {
+			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
+		} else {
+			ConstExpr::i64_const(0)
+		};
+		let val_type = if kind.is_ref() { Ref(self.node_ref(true)) } else { self.storage_type(kind) };
+		self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &init_expr);
+		self.next_global_idx += 1;
+		self.next_global_idx - 1
 	}
 
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
@@ -1492,25 +1550,7 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		let wasm_val_type = if kind.is_float() { ValType::F64 } else { ValType::I64 };
-
-		let init_expr = if kind.is_float() {
-			ConstExpr::f64_const(Ieee64::new(0.0f64.to_bits()))
-		} else {
-			ConstExpr::i64_const(0)
-		};
-
-		self.globals.global(
-			GlobalType {
-				val_type: wasm_val_type,
-				mutable: true,
-				shared: false,
-			},
-			&init_expr,
-		);
-
-		let global_idx = self.next_global_idx;
-		self.next_global_idx += 1;
+		let global_idx = self.declare_mutable_global(kind);
 		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
 
 		// Emit value, store to global, and return value on stack
@@ -2208,14 +2248,7 @@ impl WasmGcEmitter {
 						}
 					}
 				}
-				// Otherwise treat as statement sequence: execute all, return last
-				for (i, item) in items.iter().enumerate() {
-					self.emit_numeric_value(func, item);
-					// Drop all values except the last
-					if i < items.len() - 1 {
-						func.instruction(&Instruction::Drop);
-					}
-				}
+				self.emit_statement_sequence(func, items, Self::emit_numeric_value);
 			}
 			// While loop: emit loop and get numeric result
 			Node::Key(left, Op::Do, right) => {
