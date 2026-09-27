@@ -101,3 +101,16 @@
 - Left open: functions are not first-class, so "a list of closures from a loop" is not expressible; a name is its latest
   definition. Functions still only see main-level variables (no nested functions capturing a function's locals);
   a call before the definition reads zero/null globals. `a.add(1)` on a list does not mutate it (lists area).
+
+## Work area "truthiness-null-errors" (2026-09-27)
+- Fixed: declared types enforced (`x:int=5;x="five"` → Error with position and fix-it; `x:float=5` widens), null-use check
+  (`x=ø; x+1` → Error, narrowed inside `if x {…}`), `a and b or c` lint (stderr warning + `analyzer::lint`), float and
+  >32-bit conditions (`if 0.5`, `if 2^32` were falsy), parser now consumes `ø` in `parse_atom` (`if ø {…}` was garbage).
+- Mechanism: `src/diagnostic.rs` (`Diagnostic::at(node,…).fix(…)` → "msg at line:col; fix: …"), `analyzer::diagnose` runs
+  before emission in `eval_parsed`, `analyzer::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
+  Truthiness rides on the strings-equality agent's `emit_condition`/`is_truthy`; I added the float/i64 != 0 branch.
+- Decided: empty values falsy, uniformly (Footguns.md → Empty values, with alternatives).
+- Left open: `T?` syntax (`x:int?=ø` parse error) and locals first assigned `ø` panic in the emitter
+  (`test_optional_local_runs`, ignored); declared-type check only sees literal values; other emitter panics
+  (`Undefined variable`, pinned as should_panic by an existing test); runtime traps have no span; `failed_run` still returns
+  the parsed program for link/instantiation failures; `x=0.5;x=0` → WASM validation error (int stored into float local).

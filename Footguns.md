@@ -245,6 +245,42 @@ Warp before: `'héllo'#2` → `'Ã'`.
 Warp: `'héllo'#2` → `'é'`, `'a👍c'#3` → `'c'`, `'héllo'#6` → `Error('index out of range')`. `#` on text decodes UTF-8 and
 counts code points (graphemes: see NOT YET → Bytes vs graphemes). (`test_character_indexing_is_unicode_safe`)
 
+### Type annotations not enforced loudly
+**Python** (hints are not checked), **TypeScript** (`as any`): `x: int = 5; x = "five"` → *accepted*  
+Warp before: `x:int=5;x="five";x` → compiler panic `Cannot extract numeric value from 'five'`; `x:int="five"` → `0`; `x:float=5;x` → `0`.  
+Warp: `x:int=5;x="five";x` → `Error('type mismatch: x is declared int, cannot assign text 'five' at 1:9; fix: x=int('five') or declare x:text')`;
+`x:int=5⏎x=2.5` is rejected (no silent lossy conversion), `x:float=5;x` → `5.0` (widening), `x:int=42;type(x)` → `int`.
+Declarations are checked before emission (`analyzer::diagnose`) and lowered to a typed local (`lower_declarations`).
+Not yet: only literal values are checked against the declaration; `const` (see NOT YET). (`test_type_annotation_is_enforced`)
+
+### Empty values
+**Python/JS disagree**: `[]` is falsy in Python, truthy in JS; `if ("")` / `if ({})` differ too; **C**: `if (0.5)` is true, but a truncating cast makes it false  
+Warp before: `if "" {1} else {2}` and `if [] {1} else {2}` → compiler panic; `if 0.5 {1} else {2}` → `2`, `if 2^32 {1} else {2}` → `2` (condition truncated to i32).  
+Warp: `if "" …`, `if [] …`, `if ø …`, `x="";if x …` → else branch; `if "0" …`, `if 0.5 …`, `if 2^32 …` → then branch. One rule
+([wiki/truthiness.md](wiki/truthiness.md)): `false`, `0`, `0.0`, `ø` and empty text/lists are falsy, everything else is truthy; it is defined
+once (`Node::is_falsy`, the `is_truthy` runtime) and used by `if`, `while`, `?:`, `and`, `or`.
+(`test_empty_condition_does_not_panic`, `test_empty_values_are_falsy`)  
+Decision: keep "empty is falsy", uniformly (alternatives: (b) only `bool` is a condition, `if ""` a type error with fix-it
+`if not empty ""` (Rust, Swift, Go); (c) empty is truthy except `ø`/`false` (Ruby, Lua)). Reasons: the wiki specifies it and
+[wiki/null.md](wiki/null.md) builds optional narrowing on `if x {…}`; the Solved entry `"0" is falsy` pins `if "0"` → then branch,
+which (b) would turn into an error; DESIGN.md's "arbitrary truthiness" objection targets per-type emitter heuristics, which one
+rule defined in one place is not. The ambiguous `a and b or c` idiom is linted instead (next entry). Revisit with (b) if a
+`bool` kind is introduced (NOT YET → Booleans are integers).
+
+### `and`/`or` as ternary
+**Python, Lua**: `cond and x or y` → *y* when `x` is falsy  
+Warp: `1 and 0 or 2` → `2` (well defined, as in [wiki/truthiness.md](wiki/truthiness.md)), but it prints the warning
+``warning: `1 and 0 or 2` yields 2 whenever 0 is falsy at 1:1; fix: if 1 then 0 else 2``; `if 1 then 0 else 2` → `0`.
+`analyzer::lint` returns the warnings as `Diagnostic`s. (`test_and_or_ternary_is_linted`)
+
+### Null
+**Java, C#, JS**: `obj.field` on null → *NullPointerException* / *TypeError at runtime*  
+Warp before: `x=ø; x+1` → compiler panic.  
+Warp: `x=ø; x+1` → `Error('x may be ø (null) in x+1 at 1:6; fix: if x { x+1 }')`, likewise `x=ø; x.size`. A variable assigned `ø`
+may not be used in arithmetic or member access until checked: `if x {x+1} else {2}` is accepted (flow-sensitive narrowing,
+[wiki/null.md](wiki/null.md)), as is reassignment `x=ø; x=3; x+1`. Not yet: `T?` syntax and running such programs (NOT YET → Null: optional types).
+(`test_null_needs_a_check`)
+
 # NOT YET
 ...
 
@@ -289,10 +325,9 @@ converted to their code point (C's `'5' + 3`).
 Intended ([DESIGN.md → Dangerous implicitness](DESIGN.md#dangerous-implicitness)): no silent coercion. `"5"+3` is a type error
 with a fix-it (`"5" + str 3` or `int "5" + 3`); codepoint arithmetic only on values typed `char`.
 
-### Type annotations not enforced loudly
-Warp today: `x:int=5;x="five";x` → compiler panic `Cannot extract numeric value from 'five'` (rejected, but as a crash);
-`const x=5;x=6;x` → `6` (`const` is ignored).  
-Intended: a type/constness diagnostic with span and fix-it; `const` and `::=` enforce single assignment.
+### `const` ignored
+Warp today: `const x=5;x=6;x` → `6`.  
+Intended: a constness diagnostic with span and fix-it; `const` and `::=` enforce single assignment.
 
 ### Lists and arithmetic
 **Python**: `[1,2,3]*2` → *[1,2,3,1,2,3]*; **NumPy**: *[2,4,6]*; **JS**: `[1,2]+[3]` → *"1,23"*  
@@ -311,26 +346,10 @@ Intended: `#` and default iteration are by grapheme, `[]` by byte; the unit is p
 
 ## Truthiness and null
 
-### Empty values
-**Python/JS disagree**: `[]` is falsy in Python, truthy in JS; `if ("")` / `if ({})` differ too.  
-Warp before: `if "" {1} else {2}` and `if [] {1} else {2}` → compiler panic.  
-Warp today: no panic; conditions on text, lists and `ø` use the rule `Node::is_falsy` already applied to `and`/`or`
-(`if "" …` → else branch, `if [] …` → else branch, `if "0" …` → then branch). (`test_empty_condition_does_not_panic`)  
-Intended: uniform rule of [wiki/truthiness.md](wiki/truthiness.md) (all empty values falsy)  
-Decision needed: (a) keep "empty is falsy" as implemented (Python-like, matches the wiki); (b) only `bool` is a condition,
-`if ""` is a type error with fix-it `if not empty ""` (Rust, Swift, Go); (c) empty is truthy except `ø`/`false` (Ruby, Lua).
-Recommendation: (b) for code (no implicit truthiness, one of DESIGN.md's dangerous implicitnesses), with `and`/`or`
-defined on `bool` only; data queries can use explicit `empty`/`exists`.
-
-### `and`/`or` as ternary
-**Python, Lua**: `cond and x or y` → *y* when `x` is falsy  
-Warp today: `1 and 0 or 2` → `2` while `if 1 then 0 else 2` → `0` (documented in [wiki/truthiness.md](wiki/truthiness.md)).  
-Intended: lint `a and b or c` with a fix-it to `if a then b else c`.
-
-### Null
-**Java, C#, JS**: `obj.field` on null → *NullPointerException* / *TypeError at runtime*  
-Warp today: `x=ø; x+1` → compiler panic (loud, but not a diagnostic).  
-Intended ([wiki/null.md](wiki/null.md)): typed null, `T?` optional types, flow-sensitive `if x {…}` narrowing; no member access on `T?` without a check.
+### Null: optional types
+Warp today: the null check exists (Solved → Null), but `T?` is not parsed (`x:int?=ø` → `Unexpected character '='`),
+and a local first assigned `ø` cannot be emitted (`x=ø; if x {x+1} else {2}` → compiler panic `Cannot extract numeric value from ø`).  
+Intended ([wiki/null.md](wiki/null.md)): `T?` declarations, `x!` unwrap, typed null (`Person.null`) as a runtime value. (`test_optional_local_runs`)
 
 ## Syntax and precedence
 
@@ -366,8 +385,10 @@ the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `2
 
 ### Swallowed errors
 **Go**: `v, _ := f()`; **Java**: `catch (Exception e) {}`; **JS**: unhandled promise rejection → *silent*  
-Warp today: law and effect violations come back as `Error` values (verified above), but many failures are compiler panics
-(`Cannot extract numeric value …`) or silent wrong values (`int("12a")` → `0`, `x[3]`).  
+Warp today: law, effect, declared-type and null violations, invalid number text and index errors come back as `Error` values;
+`src/diagnostic.rs` gives compile-time ones a position and fix-it (`… at 1:9; fix: …`). Still left: other emitter
+failures are compiler panics (`Cannot extract numeric value …`, `Undefined variable`, pinned by `test_undefined_variable_is_an_error`),
+runtime traps carry no span, and a link/instantiation failure still returns the parsed program (`failed_run`).  
 Intended: `Result<T, E>` as data, every diagnostic with span, resolved facts and fix-it ([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
 
 ## Injection
