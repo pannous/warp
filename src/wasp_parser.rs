@@ -9,6 +9,9 @@ use crate::*;
 use log::warn;
 use std::fs::read_to_string;
 
+/// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
+const MAX_INTEGER_EXPONENT: i64 = 4096;
+
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[derive(Default)]
@@ -336,6 +339,13 @@ impl WaspParser {
 	fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
 		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
+			|| self.number_starts_at(0)
+	}
+
+	/// A digit, or a leading-dot decimal like `.5`
+	fn number_starts_at(&self, offset: usize) -> bool {
+		let ch = self.peek_char(offset);
+		ch.is_ascii_digit() || (ch == '.' && self.peek_char(offset + 1).is_ascii_digit())
 	}
 
 	/// Check if character terminates a URL
@@ -404,7 +414,8 @@ impl WaspParser {
 		match c1 {
 			':' => Some((Op::Colon, 1)),
 			'=' => Some((Op::Assign, 1)),
-			'.' => Some((Op::Dot, 1)),
+			// `a .5` is a list of two values, `a.5` a member access
+			'.' if !(self.prev_char().is_whitespace() && self.number_starts_at(0)) => Some((Op::Dot, 1)),
 			'+' => Some((Op::Add, 1)),
 			'-' => Some((Op::Sub, 1)),
 			'*' => Some((Op::Mul, 1)),
@@ -442,7 +453,7 @@ impl WaspParser {
 
 		let (c1, c2) = (self.current_char(), self.peek_char(1));
 		match c1 {
-			'-' if !c2.is_ascii_digit() => Some((Op::Neg, 1)),
+			'-' if !self.number_starts_at(1) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
@@ -489,7 +500,7 @@ impl WaspParser {
 				}
 				Node::Symbol(format!("${}", num_str))
 			}
-			ch if ch.is_numeric() || (ch == '-' && self.peek_char(1).is_numeric()) => {
+			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
@@ -643,8 +654,12 @@ impl WaspParser {
 			self.advance_by(chars);
 			self.skip_spaces();
 			let (_, r_bp) = op.binding_power();
-			let rhs = self.parse_expr(r_bp);
-			self.finish_prefix(op, rhs)
+			if chars == 1 && op == Op::Abs {
+				self.parse_norm_bars()
+			} else {
+				let rhs = self.parse_expr(r_bp);
+				self.finish_prefix(op, rhs)
+			}
 		} else {
 			self.parse_atom()
 		};
@@ -711,6 +726,17 @@ impl WaspParser {
 		}
 
 		lhs
+	}
+
+	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
+	fn parse_norm_bars(&mut self) -> Node {
+		let inner = self.parse_expr(0);
+		self.skip_spaces();
+		if self.current_char() != '‖' {
+			return error("Missing closing ‖");
+		}
+		self.advance();
+		self.finish_prefix(Op::Abs, inner)
 	}
 
 	fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
@@ -855,6 +881,7 @@ impl WaspParser {
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
 		let arg_is_non_identifier = ch.is_numeric()
+			|| self.number_starts_at(0)
 			|| ch == '"'
 			|| ch == '\''
 			|| ch == '('
@@ -965,7 +992,6 @@ impl WaspParser {
 
 	fn parse_number(&mut self) -> Node {
 		let mut num_str = String::new();
-		let mut has_dot = false;
 
 		// todo edge case: leading plus
 		if self.current_char() == '-' {
@@ -995,6 +1021,49 @@ impl WaspParser {
 			}
 		}
 
+		self.push_digits(&mut num_str);
+		let mut is_float = false;
+		// Only consume . as decimal if NOT followed by another . (range operator)
+		if self.current_char() == '.' && self.peek_char(1) != '.' {
+			is_float = true;
+			num_str.push('.');
+			self.advance();
+			self.push_digits(&mut num_str);
+		}
+		let exponent = match self.parse_exponent() {
+			Ok(exponent) => exponent,
+			Err(e) => return error(&e),
+		};
+
+		match exponent {
+			// 1e3 is the exact integer 1000, like the literal it abbreviates
+			Some(exp) if !is_float && exp >= 0 => {
+				if exp > MAX_INTEGER_EXPONENT {
+					return error(&format!("Exponent too large: {}e{}", num_str, exp));
+				}
+				num_str.push_str(&"0".repeat(exp as usize));
+				self.integer_node(&num_str)
+			}
+			Some(exp) => format!("{}e{}", num_str, exp)
+				.parse::<f64>()
+				.map(Node::float)
+				.unwrap_or_else(|_| error(&format!("Invalid float: {}e{}", num_str, exp))),
+			None if is_float => num_str
+				.parse::<f64>()
+				.map(Node::float)
+				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str))),
+			None => self.integer_node(&num_str),
+		}
+	}
+
+	fn integer_node(&self, digits: &str) -> Node {
+		crate::extensions::numbers::Number::parse_integer(digits)
+			.map(Node::Number)
+			.unwrap_or_else(|| error(&format!("Invalid int: {}", digits)))
+	}
+
+	/// Digits with `_` separators between them: 1_000_000
+	fn push_digits(&mut self, num_str: &mut String) {
 		loop {
 			let ch = self.current_char();
 			// '三'.is_numeric() is true but not ASCII
@@ -1002,26 +1071,29 @@ impl WaspParser {
 			if ch.is_numeric() && ch != '²' && ch != '³' {
 				num_str.push(ch);
 				self.advance();
-			} else if ch == '.' && !has_dot && self.peek_char(1) != '.' {
-				// Only consume . as decimal if NOT followed by another . (range operator)
-				has_dot = true;
-				num_str.push(ch);
+			} else if ch == '_' && self.prev_char().is_ascii_digit() && self.peek_char(1).is_ascii_digit() {
 				self.advance();
 			} else {
 				break;
 			}
 		}
+	}
 
-		if has_dot {
-			num_str
-				.parse::<f64>()
-				.map(Node::float)
-				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str)))
-		} else {
-			crate::extensions::numbers::Number::parse_integer(&num_str)
-				.map(Node::Number)
-				.unwrap_or_else(|| error(&format!("Invalid int: {}", num_str)))
+	/// Scientific notation suffix: e3, E-3, e+03 (only when digits follow, so `2em` stays a unit)
+	fn parse_exponent(&mut self) -> Result<Option<i64>, String> {
+		let (e, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
+		let signed = (c2 == '+' || c2 == '-') && c3.is_ascii_digit();
+		if !(e == 'e' || e == 'E') || !(c2.is_ascii_digit() || signed) {
+			return Ok(None);
 		}
+		self.advance();
+		let mut exponent = String::new();
+		if signed {
+			exponent.push(self.current_char());
+			self.advance();
+		}
+		self.push_digits(&mut exponent);
+		exponent.parse::<i64>().map(Some).map_err(|_| format!("Invalid exponent: e{}", exponent))
 	}
 
 	fn parse_symbol(&mut self) -> Result<String, String> {

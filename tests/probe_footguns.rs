@@ -152,9 +152,40 @@ fn test_index_out_of_bounds_is_an_error() {
 }
 
 #[test]
-#[ignore = "next"] // parsed as the list `1 e3`
 fn test_scientific_notation() {
 	is!("1e3", 1000);
+}
+
+#[test]
+fn test_scientific_notation_forms() {
+	is!("1e3+1", 1001);
+	is!("1.5e3", 1500.0);
+	is!("2E-3", 0.002);
+	is!("1e+2", 100);
+	is!("1e20 == 100000000000000000000", true);
+}
+
+#[test]
+fn test_digit_separators() {
+	is!("1_000_000", 1000000);
+	is!("1_000.000_5", 1000.0005);
+	is!("x=1_000;x+1", 1001);
+}
+
+#[test]
+fn test_leading_dot_literal() {
+	is!(".5", 0.5);
+	is!(".5+1", 1.5);
+	is!("-.5+1", 0.5);
+	is!("i=3.5;.5+i", 4.0);
+}
+
+#[test]
+fn test_norm_bars_are_brackets() {
+	is!("‖-5‖", 5);
+	is!("x=-5;‖x‖", 5);
+	is!("‖-5‖+1", 6);
+	is!("‖3-5‖*2", 4);
 }
 
 #[test]
