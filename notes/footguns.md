@@ -445,3 +445,47 @@ Warp: solved. `fetch "http://127.0.0.1:9/"` → Error "fetch http://127.0.0.1:9/
 `x = fetch …; x + "!"` → diagnostic "x may be an error (fetch can fail)", fix `if x { x + "!" }`; errors are falsy so
 `if x {x} else {"offline"}` → "offline"; default timeout `FETCH_TIMEOUT` (10 s), `fetch URL timeout 0.5` → Error
 "timeout after 500 ms". Tests: test_failed_fetch_is_an_error_value, test_fetch_result_needs_a_check, test_fetch_times_out_loudly.
+
+## Work area "function equality" (2026-09-28)
+- Implemented (src/function_equality.rs, runs in `eval_parsed` before analysis): `f == g` / `f != g` on two named
+  top-level functions is decided in fragments, in this order:
+  1. structure up to renaming: parameters become positions, self-reference becomes `$self`, the content hash of the
+     normalized body plus parameter domains is compared (Unison). `f(x):=x+1; g(y):=y+1; f==g` → true, also recursive
+     `fib`/`fibo`.
+  2. polynomials over exact numbers: a small sparse normal form (exponent vector → BigInt ratio, expanded and collected;
+     `+ - * ^ ² ³`, unary minus, division by a constant). `(x+1)^2` vs `x^2+2*x+1` → true (was a compiler panic),
+     `x*x` vs `x+x` → false.
+  3. finite domains: all parameters `:bool` (≤ 10) are enumerated through the law machinery (`law::check_instance`).
+  4. everything else: `Error("undecidable: f == g (…)")`; a quick property test (`law::property_test`, 16 inputs) adds
+     `they differ: counterexample x=…` when it finds one.
+- Decision: different arity or different declared parameter types → false, the domains differ (alternatives: an error,
+  or compare on the common domain).
+- Decision: float parameters never use the polynomial normal form, IEEE arithmetic is not a ring; they fall to 4
+  (alternatives: normalize anyway and call it "equal as real functions").
+- Decision: a counterexample found in step 4 still yields the undecidable error (as specified), not `false`
+  (alternative: `false`, since a reproducible counterexample proves inequality; recommended as a follow-up once
+  evaluation of both sides is known to be total and deterministic).
+- Left open: no polynomial code from the "exact pi, e and roots" run had landed on main, so the normalizer here is
+  kept small; merge it into that sparse-polynomial normal form once it lands (one normal form, not two). Rational
+  functions (`x/x`), `%`, conditionals, calls to helper functions and lambdas are outside the decided fragments.
+  Finite domains are only `bool`, not enums or small integer ranges. Comparisons of anonymous lambdas or functions
+  defined in nested blocks are not rewritten (top-level definitions only). Tests: test_function_equality_up_to_renaming,
+  test_polynomial_function_equality, test_finite_domain_function_equality,
+  test_undecidable_function_equality_is_an_error.
+
+## For wiki/Footguns.md
+
+### Function equality
+Truly impossible in general (Rice's theorem: extensional equality of arbitrary functions is undecidable), but decidable
+in useful fragments, and Warp answers only there: never a guess, never a panic.
+- **Solved elsewhere:** Unison compares definitions by the hash of their normalized AST; computer algebra systems
+  (Mathematica `Expand`, SymPy `simplify(f-g)==0`) compare polynomials by normal form; Lean/Coq need a proof
+  (`funext`). JavaScript/Python/Java compare function *identity* (`f == g` is false for two identical lambdas).
+- **Warp:** `f == g` on named functions is decided by (1) structure up to renaming (content hash):
+  `f(x):=x+1; g(y):=y+1; f==g` → true; (2) polynomial normal form over exact numbers:
+  `f(x):=(x+1)^2; g(x):=x^2+2*x+1; f==g` → true, `x*x` vs `x+x` → false; (3) enumeration of finite (bool) domains:
+  De Morgan holds; different arity or parameter types → false. (4) Otherwise an error
+  `undecidable: f == g …`, with `they differ: counterexample x=2` when a quick property test finds one
+  (`f(x):=x%2; g(x):=x%3`). For more, state a `law` or prove it in Lean.
+- Tests: test_function_equality_up_to_renaming, test_polynomial_function_equality,
+  test_finite_domain_function_equality, test_undecidable_function_equality_is_an_error (tests/probe_footguns.rs).
