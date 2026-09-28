@@ -3,11 +3,17 @@
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction::I32Const;
+use Instruction as I;
 use ValType::Ref;
 use crate::type_kinds::Kind;
 use crate::node::Node;
+use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
+
+/// Runtime functions that read text by one of its units (byte, code point, grapheme)
+const TEXT_UNIT_USERS: [&str; 7] =
+	["node_count", "node_size", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
@@ -15,6 +21,9 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(false);
 		let node_ref_nullable = self.node_ref(true);
 		self.emit_runtime_errors();
+		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
+			self.emit_text_units();
+		}
 
 		// list_at(list: ref $Node, index: i64) -> i64
 		// Get the numeric value of the element at index (1-based)
@@ -91,6 +100,14 @@ impl WasmGcEmitter {
 			// Locals: 0=node, 1=count, 2=current
 			let mut func = Function::new(vec![(1, ValType::I64), (1, Ref(node_ref_nullable))]);
 
+			// a text counts its user-perceived characters (grapheme clusters)
+			self.emit_is_text(&mut func);
+			func.instruction(&Instruction::If(BlockType::Empty));
+			func.instruction(&Instruction::LocalGet(0));
+			self.call(&mut func, "text_grapheme_count");
+			func.instruction(&Instruction::Return);
+			func.instruction(&Instruction::End);
+
 			// count = 0
 			func.instruction(&Instruction::I64Const(0));
 			func.instruction(&Instruction::LocalSet(1));
@@ -134,6 +151,20 @@ impl WasmGcEmitter {
 			self.code.function(&func);
 			let idx = self.register_func("node_count");
 			self.exports.export("node_count", ExportKind::Func, idx);
+		}
+
+		// node_size(node) -> i64: the bytes of a text, 8 bytes per element otherwise
+		if self.should_emit_function("node_size") {
+			self.runtime_function("node_size", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
+				s.emit_is_text(f);
+				f.instruction(&I::If(BlockType::Result(ValType::I64)));
+				f.instruction(&I::LocalGet(0));
+				s.call(f, "text_byte_count");
+				f.instruction(&I::Else);
+				f.instruction(&I::LocalGet(0));
+				s.call(f, "node_count");
+				Self::emit_list(f, &[I::I64Const(8), I::I64Mul, I::End]);
+			});
 		}
 
 		// string_char_at(node: ref $Node, index: i64) -> ref $Node
@@ -201,82 +232,184 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 	}
 
-	/// Locals: 0=node, 1=index, 2=pointer, 3=end, 4=codepoint
+	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
+	/// else the cluster as Text sharing the bytes (`'👍🏽'#1` keeps its skin tone modifier)
 	fn emit_string_char_at(&mut self) {
-		let node_ref = self.node_ref(false);
-		let string_type = self.type_manager.string_type;
-		let (pointer, end, codepoint) = (2, 3, 4);
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut()
-			.ty()
-			.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
-		self.functions.function(func_type);
-		let mut func = Function::new(vec![(3, ValType::I32)]);
-		Self::emit_index_compare(&mut func, Instruction::I64LtS);
-		self.emit_fail_if(&mut func, "index_out_of_range");
-		let string_field = |func: &mut Function, field_index: u32| {
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 1 });
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(string_type)));
-			func.instruction(&Instruction::StructGet { struct_type_index: string_type, field_index });
-		};
-		string_field(&mut func, 0);
-		func.instruction(&Instruction::LocalTee(pointer));
-		string_field(&mut func, 1);
-		func.instruction(&Instruction::I32Add);
-		func.instruction(&Instruction::LocalSet(end));
+		let node_ref = Ref(self.node_ref(false));
+		let params = vec![node_ref, ValType::I64];
+		self.runtime_function("string_char_at", params, vec![node_ref], vec![ValType::I32; 3], |s, f| {
+			let (start, end, stop) = (2, 3, 4);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "text_grapheme_offset");
+			f.instruction(&I::LocalSet(start));
+			s.emit_text_bounds(f, stop, end);
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "grapheme_end");
+			f.instruction(&I::LocalSet(stop));
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "utf8_next");
+			Self::emit_list(f, &[I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref)), I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "utf8_decode");
+			s.call(f, "new_codepoint");
+			Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+			s.call(f, "new_text");
+			f.instruction(&I::End);
+		});
+	}
 
-		// skip index-1 characters: each is a lead byte followed by continuation bytes
-		func.instruction(&Instruction::Block(BlockType::Empty));
-		func.instruction(&Instruction::Loop(BlockType::Empty));
-		func.instruction(&Instruction::LocalGet(1));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64LeS);
-		func.instruction(&Instruction::BrIf(1));
-		Self::emit_skip_continuation_bytes(&mut func, pointer, end, None);
-		func.instruction(&Instruction::LocalGet(1));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64Sub);
-		func.instruction(&Instruction::LocalSet(1));
-		func.instruction(&Instruction::Br(0));
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::End);
+	/// Text is UTF-8 and is read by one of three units: `size` and `.bytes` count bytes, `.chars` code points,
+	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
+	fn emit_text_units(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let (int, long) = (ValType::I32, ValType::I64);
 
-		func.instruction(&Instruction::LocalGet(pointer));
-		func.instruction(&Instruction::LocalGet(end));
-		func.instruction(&Instruction::I32GeU);
-		self.emit_fail_if(&mut func, "index_out_of_range");
+		// utf8_next(pointer, end): past the code point at pointer, never past end
+		self.runtime_function("utf8_next", vec![int, int], vec![int], vec![int], |_, f| {
+			let next = 2;
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::LocalGet(0), I::I32Load8U(BYTE), I::LocalSet(next),
+				I32Const(1), I32Const(2), I32Const(3), I32Const(4),
+				I::LocalGet(next), I32Const(0xF0), I::I32LtU, I::Select,
+				I::LocalGet(next), I32Const(0xE0), I::I32LtU, I::Select,
+				I::LocalGet(next), I32Const(0x80), I::I32LtU, I::Select,
+				I::I32Add, I::LocalTee(next),
+				I::LocalGet(1), I::LocalGet(next), I::LocalGet(1), I::I32LtU, I::Select,
+			]);
+		});
 
-		// decode: the lead byte keeps 7, 5, 4 or 3 payload bits, each continuation byte adds 6
-		func.instruction(&Instruction::LocalGet(pointer));
-		func.instruction(&Instruction::I32Load8U(BYTE));
-		func.instruction(&Instruction::LocalTee(codepoint));
-		func.instruction(&I32Const(0x80));
-		func.instruction(&Instruction::I32GeU);
-		func.instruction(&Instruction::If(BlockType::Empty));
-		func.instruction(&Instruction::LocalGet(codepoint));
-		func.instruction(&I32Const(0x07));
-		func.instruction(&I32Const(0x0F));
-		func.instruction(&I32Const(0x1F));
-		func.instruction(&Instruction::LocalGet(codepoint));
-		func.instruction(&I32Const(0xE0));
-		func.instruction(&Instruction::I32GeU);
-		func.instruction(&Instruction::Select);
-		func.instruction(&Instruction::LocalGet(codepoint));
-		func.instruction(&I32Const(0xF0));
-		func.instruction(&Instruction::I32GeU);
-		func.instruction(&Instruction::Select);
-		func.instruction(&Instruction::I32And);
-		func.instruction(&Instruction::LocalSet(codepoint));
-		Self::emit_skip_continuation_bytes(&mut func, pointer, end, Some(codepoint));
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::LocalGet(codepoint));
-		self.emit_call(&mut func, "new_codepoint");
+		// utf8_decode(pointer, end): the lead byte keeps 7, 5, 4 or 3 payload bits, each continuation byte adds 6
+		self.runtime_function("utf8_decode", vec![int, int], vec![int], vec![int], |_, f| {
+			let codepoint = 2;
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::I32Load8U(BYTE), I::LocalTee(codepoint), I32Const(0x80), I::I32GeU, I::If(BlockType::Empty),
+				I::LocalGet(codepoint), I32Const(0x07), I32Const(0x0F), I32Const(0x1F),
+				I::LocalGet(codepoint), I32Const(0xE0), I::I32GeU, I::Select,
+				I::LocalGet(codepoint), I32Const(0xF0), I::I32GeU, I::Select,
+				I::I32And, I::LocalSet(codepoint),
+			]);
+			Self::emit_skip_continuation_bytes(f, 0, 1, Some(codepoint));
+			Self::emit_list(f, &[I::End, I::LocalGet(codepoint)]);
+		});
 
-		func.instruction(&Instruction::End);
-		self.code.function(&func);
-		let idx = self.register_func("string_char_at");
-		self.exports.export("string_char_at", ExportKind::Func, idx);
+		// grapheme_end(pointer, end): past the grapheme cluster starting at pointer, like strings::grapheme_clusters
+		self.runtime_function("grapheme_end", vec![int, int], vec![int], vec![int; 3], |s, f| {
+			let (previous, next, unpaired) = (2, 3, 4);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "utf8_decode");
+			Self::emit_list(f, &[I::LocalSet(previous), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "utf8_next");
+			f.instruction(&I::LocalSet(0));
+			// CR LF stays together, any other control ends the cluster
+			Self::emit_list(f, &[
+				I::LocalGet(previous), I32Const(0x0D), I::I32Eq, I::LocalGet(0), I::LocalGet(1), I::I32LtU, I::I32And,
+				I::If(BlockType::Empty),
+				I::LocalGet(0), I::I32Load8U(BYTE), I32Const(0x0A), I::I32Eq,
+				I::If(BlockType::Empty), I::LocalGet(0), I32Const(1), I::I32Add, I::Return, I::End,
+				I::End,
+			]);
+			Self::emit_in_ranges(f, previous, &[(0x00, 0x1F), (0x7F, 0x9F)]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
+			Self::emit_in_ranges(f, previous, &[REGIONAL_INDICATORS]);
+			Self::emit_list(f, &[
+				I::LocalSet(unpaired),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(0), I::LocalGet(1), I::I32GeU, I::BrIf(1),
+				I::LocalGet(0), I::LocalGet(1),
+			]);
+			s.call(f, "utf8_decode");
+			f.instruction(&I::LocalSet(next));
+			// joins: an extending mark, a pictograph after ZWJ, the second regional indicator of a flag
+			Self::emit_in_ranges(f, next, &GRAPHEME_EXTEND);
+			Self::emit_list(f, &[I::LocalGet(previous), I32Const(ZERO_WIDTH_JOINER as i32), I::I32Eq]);
+			Self::emit_in_ranges(f, next, &GRAPHEME_PICTOGRAPHIC);
+			Self::emit_list(f, &[I::I32And, I::I32Or, I::LocalGet(unpaired)]);
+			Self::emit_in_ranges(f, next, &[REGIONAL_INDICATORS]);
+			Self::emit_list(f, &[
+				I::I32And, I::I32Or, I::I32Eqz, I::BrIf(1),
+				I32Const(0), I::LocalSet(unpaired),
+				I::LocalGet(next), I::LocalSet(previous),
+				I::LocalGet(0), I::LocalGet(1),
+			]);
+			s.call(f, "utf8_next");
+			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End, I::LocalGet(0)]);
+		});
+
+		// text_grapheme_offset(text, index): address of the grapheme at the 1-based index, trapping out of range
+		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], vec![int; 2], |s, f| {
+			let (pointer, end) = (2, 3);
+			Self::emit_index_compare(f, I::I64LtS);
+			s.emit_fail_if(f, "index_out_of_range");
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU,
+			]);
+			s.emit_fail_if(f, "index_out_of_range");
+			Self::emit_index_compare(f, I::I64LeS);
+			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::LocalGet(end)]);
+			s.call(f, "grapheme_end");
+			f.instruction(&I::LocalSet(pointer));
+			Self::emit_index_compare(f, I::I64Sub);
+			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End, I::LocalGet(pointer)]);
+		});
+
+		// text_grapheme_count(text) -> i64
+		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			let (pointer, end, count) = (1, 2, 3);
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+				I::LocalGet(pointer), I::LocalGet(end),
+			]);
+			s.call(f, "grapheme_end");
+			Self::emit_list(f, &[
+				I::LocalSet(pointer),
+				I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count),
+				I::Br(0), I::End, I::End, I::LocalGet(count),
+			]);
+		});
+
+		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point
+		self.runtime_function("text_codepoint_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			let (pointer, end, count) = (1, 2, 3);
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+				I::LocalGet(count),
+				I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const(0xC0), I::I32And, I32Const(0x80), I::I32Ne,
+				I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
+				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer),
+				I::Br(0), I::End, I::End, I::LocalGet(count),
+			]);
+		});
+
+		// text_byte_count(text) -> i64
+		self.runtime_function("text_byte_count", vec![node_ref], vec![long], vec![], |s, f| {
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::I64ExtendI32U);
+		});
+	}
+
+	/// Push whether code point `local` lies in one of the inclusive `ranges` (i32 0/1)
+	fn emit_in_ranges(func: &mut Function, local: u32, ranges: &[(u32, u32)]) {
+		for (i, &(low, high)) in ranges.iter().enumerate() {
+			Self::emit_list(func, &[
+				I::LocalGet(local), I32Const(low as i32), I::I32Sub, I32Const((high - low + 1) as i32), I::I32LtU,
+			]);
+			if i > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
+	}
+
+	/// Locals `pointer` and `end` span the bytes of text node local 0
+	fn emit_text_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
+		self.emit_text_field(func, 0, 0);
+		func.instruction(&I::LocalTee(pointer));
+		self.emit_text_field(func, 0, 1);
+		Self::emit_list(func, &[I::I32Add, I::LocalSet(end)]);
 	}
 
 	/// pointer++ past following UTF-8 continuation bytes (10xxxxxx), shifting their 6 bits into `accumulator`
@@ -377,17 +510,6 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Br(0));
 		func.instruction(&Instruction::End);
 		func.instruction(&Instruction::End);
-	}
-
-	/// Trap unless 1-based index local 1 lies within the text of local 0
-	fn emit_text_index_guard(&self, func: &mut Function) {
-		Self::emit_index_compare(func, Instruction::I64LtS);
-		func.instruction(&Instruction::LocalGet(1));
-		self.emit_text_field(func, 0, 1);
-		func.instruction(&Instruction::I64ExtendI32U);
-		func.instruction(&Instruction::I64GtS);
-		func.instruction(&Instruction::I32Or);
-		self.emit_fail_if(func, "index_out_of_range");
 	}
 
 	fn emit_text_heap_global(&mut self) {
@@ -601,37 +723,67 @@ impl WasmGcEmitter {
 		});
 		assert_eq!(self.func_index("list_with_at"), list_with_at, "recursive call index");
 
-		// text_with_char_at(text, index, value): a fresh copy of the bytes with one byte replaced
+		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);
 		let params = vec![node_ref, ValType::I64, ValType::I64];
-		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], vec![ValType::I32, ValType::I32], |s, f| {
-			let (length, copy) = (3, 4);
-			s.emit_text_index_guard(f);
-			s.emit_text_field(f, 0, 1);
-			f.instruction(&Instruction::LocalSet(length));
+		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], vec![ValType::I32; 8], |s, f| {
+			let (start, stop, pointer, end, width, length, copy, codepoint) = (3, 4, 5, 6, 7, 8, 9, 10);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "text_grapheme_offset");
+			f.instruction(&I::LocalSet(start));
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "grapheme_end");
+			Self::emit_list(f, &[
+				I::LocalSet(stop),
+				I::LocalGet(2), I::I32WrapI64, I::LocalTee(codepoint), I32Const(0x10FFFF), I::I32GtU,
+			]);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &[
+				// UTF-8 width of the code point: 1 to 4 bytes
+				I32Const(1), I32Const(2), I32Const(3), I32Const(4),
+				I::LocalGet(codepoint), I32Const(0x10000), I::I32LtU, I::Select,
+				I::LocalGet(codepoint), I32Const(0x800), I::I32LtU, I::Select,
+				I::LocalGet(codepoint), I32Const(0x80), I::I32LtU, I::Select,
+				I::LocalSet(width),
+				// length = bytes - replaced grapheme + width
+				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
+				I::LocalGet(stop), I::LocalGet(start), I::I32Sub, I::I32Sub,
+				I::LocalGet(width), I::I32Add, I::LocalSet(length),
+			]);
 			s.emit_text_allocation(f, length, copy);
-			f.instruction(&Instruction::LocalGet(copy));
-			s.emit_text_field(f, 0, 0);
-			f.instruction(&Instruction::LocalGet(length));
-			f.instruction(&Instruction::MemoryCopy { src_mem: 0, dst_mem: 0 });
-			f.instruction(&Instruction::LocalGet(copy));
-			f.instruction(&Instruction::LocalGet(1));
-			f.instruction(&Instruction::I32WrapI64);
-			f.instruction(&Instruction::I32Add);
-			f.instruction(&I32Const(1));
-			f.instruction(&Instruction::I32Sub);
-			f.instruction(&Instruction::LocalGet(2));
-			f.instruction(&Instruction::I32WrapI64);
-			f.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));
+			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+			Self::emit_list(f, &[
+				// bytes before the grapheme
+				I::LocalGet(copy), I::LocalGet(pointer), I::LocalGet(start), I::LocalGet(pointer), I::I32Sub, copy_bytes.clone(),
+				// start becomes the destination of the new character, the rest follows it
+				I::LocalGet(copy), I::LocalGet(start), I::I32Add, I::LocalGet(pointer), I::I32Sub, I::LocalTee(start),
+				I::LocalGet(width), I::I32Add,
+				I::LocalGet(stop), I::LocalGet(end), I::LocalGet(stop), I::I32Sub, copy_bytes,
+				// lead byte marker by width, stored in stop
+				I32Const(0), I32Const(0xC0), I32Const(0xE0), I32Const(0xF0),
+				I::LocalGet(width), I32Const(3), I::I32Eq, I::Select,
+				I::LocalGet(width), I32Const(2), I::I32Eq, I::Select,
+				I::LocalGet(width), I32Const(1), I::I32Eq, I::Select,
+				I::LocalSet(stop),
+				// continuation bytes from the last one back, 6 bits each
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(width), I32Const(1), I::I32LeU, I::BrIf(1),
+				I::LocalGet(width), I32Const(1), I::I32Sub, I::LocalTee(width), I::LocalGet(start), I::I32Add,
+				I::LocalGet(codepoint), I32Const(0x3F), I::I32And, I32Const(0x80), I::I32Or, I::I32Store8(BYTE),
+				I::LocalGet(codepoint), I32Const(6), I::I32ShrU, I::LocalSet(codepoint),
+				I::Br(0), I::End, I::End,
+				I::LocalGet(start), I::LocalGet(codepoint), I::LocalGet(stop), I::I32Or, I::I32Store8(BYTE),
+			]);
 			s.emit_field(f, 0, 0);
-			f.instruction(&Instruction::LocalGet(copy));
-			f.instruction(&Instruction::LocalGet(length));
-			f.instruction(&Instruction::StructNew(string_type));
-			f.instruction(&Instruction::RefNull(HeapType::Concrete(node_type)));
-			f.instruction(&Instruction::StructNew(node_type));
+			f.instruction(&I::LocalGet(copy));
+			f.instruction(&I::LocalGet(length));
+			f.instruction(&I::StructNew(string_type));
+			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
+			f.instruction(&I::StructNew(node_type));
 		});
 
-		// node_with_at(node, index, value): texts and symbols by byte, everything else as list
+		// node_with_at(node, index, value): texts and symbols by grapheme, everything else as list
 		self.runtime_function("node_with_at", params, vec![node_ref], vec![], |s, f| {
 			s.emit_is_text(f);
 			f.instruction(&Instruction::If(BlockType::Result(node_ref)));

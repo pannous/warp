@@ -177,9 +177,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit introspection functions: type, count, size, ceil, floor, round
+	/// Emit introspection functions: type, count, length, size, ceil, floor, round
 	/// Returns true if the function was handled
 	fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
+		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
+			// count, length: elements, or graphemes of a text; size: bytes
+			self.emit_node_instructions(func, arg);
+			self.emit_call(func, counter);
+			self.emit_call(func, "new_int");
+			return true;
+		}
 		match fn_name {
 			"type" => {
 				let kind = match arg.drop_meta() {
@@ -191,20 +198,6 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::I32Const(ptr as i32));
 				func.instruction(&Instruction::I32Const(len as i32));
 				self.emit_call(func, "new_symbol");
-				true
-			}
-			"count" => {
-				self.emit_node_instructions(func, arg);
-				self.emit_call(func, "node_count");
-				self.emit_call(func, "new_int");
-				true
-			}
-			"size" => {
-				self.emit_node_instructions(func, arg);
-				self.emit_call(func, "node_count");
-				func.instruction(&Instruction::I64Const(8));
-				func.instruction(&Instruction::I64Mul);
-				self.emit_call(func, "new_int");
 				true
 			}
 			"ceil" if !self.ctx.ffi_imports.contains_key(fn_name) => {

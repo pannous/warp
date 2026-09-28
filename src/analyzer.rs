@@ -1099,6 +1099,37 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 	None
 }
 
+/// `count x`, `length x`, `size x`: the runtime function counting x in its unit. A text counts graphemes
+/// (user-perceived characters) except for `size`, which counts bytes; a user function of that name wins.
+pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
+	if ctx.user_functions.contains_key(name) {
+		return None;
+	}
+	match name {
+		"count" | "length" => Some("node_count"),
+		"size" => Some("node_size"),
+		_ => None,
+	}
+}
+
+/// `x.count`, `x.length`, `x.size`, and the explicit text units `x.bytes`, `x.chars` (code points), `x.graphemes`
+pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
+	match name {
+		"number" => Some("node_count"),
+		"bytes" => Some("text_byte_count"),
+		"chars" | "codepoints" => Some("text_codepoint_count"),
+		"graphemes" => Some("text_grapheme_count"),
+		_ => counting_function(name, ctx),
+	}
+}
+
+fn require_counter(ctx: &mut Context, counter: &'static str) {
+	if counter == "node_size" {
+		ctx.required_functions.insert("node_count");
+	}
+	ctx.required_functions.insert(counter);
+}
+
 /// Analyze node tree for non-default required functions.
 /// Default functions (new_empty, new_int, new_float, new_text, new_symbol, new_codepoint, new_key, new_list)
 /// are always included and don't need to be inserted here.
@@ -1166,11 +1197,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					}
 					_ => None,
 				};
-				if let Some(method) = method_name {
-					if matches!(method.as_str(), "count" | "number" | "size") {
-						ctx.required_functions.insert("node_count");
-						return;
-					}
+				if let Some(counter) = method_name.and_then(|method| counting_method(&method, ctx)) {
+					require_counter(ctx, counter);
+					return;
 				}
 			}
 			analyze_required_functions(ctx, key);
@@ -1187,9 +1216,11 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					}
 					return;
 				}
-				if items.len() == 2 && matches!(fn_name.as_str(), "count" | "size") {
-					ctx.required_functions.insert("node_count");
-					return;
+				if items.len() == 2 {
+					if let Some(counter) = counting_function(fn_name, ctx) {
+						require_counter(ctx, counter);
+						return;
+					}
 				}
 			}
 			for item in items {

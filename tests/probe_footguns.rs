@@ -315,6 +315,37 @@ fn test_character_indexing_is_unicode_safe() {
 	is!("'héllo'#2", 'é');
 }
 
+#[test] // Go: len("👍🏽") is 8 bytes, JS: 4 UTF-16 units, Python: 2 code points; a reader sees 1
+fn test_text_is_indexed_by_grapheme() {
+	is!("'👍🏽'#1", "👍🏽"); // the skin tone modifier stays with its thumb
+	is!("x='a👍🏽b';x#3", 'b');
+	is!("x=\"👍🏽\";#x", 1);
+	is!("count \"🇩🇪🇫🇷\"", 2); // a flag is a pair of regional indicators
+	is!("x=\"héllo\";x.length", 5);
+	is!("x=\"q\u{301}\";x.length", 1); // no precomposed q́: one grapheme, two code points
+	fails_with("x=\"👍🏽\";x#2", "index out of range");
+	assert_eq!(warp::grapheme_clusters("e\u{301}👨\u{200d}👩\u{200d}👧🇩🇪\r\n"), ["e\u{301}", "👨\u{200d}👩\u{200d}👧", "🇩🇪", "\r\n"]);
+}
+
+#[test] // the unit is explicit: size counts bytes (memory), .bytes .chars .graphemes name the unit
+fn test_text_units_are_explicit() {
+	is!("size \"👍🏽\"", 8);
+	is!("x=\"👍🏽\";x.size", 8);
+	is!("x=\"👍🏽\";x.bytes", 8);
+	is!("x=\"👍🏽\";x.chars", 2);
+	is!("x=\"👍🏽\";x.graphemes", 1);
+	is!("pixels=(1,2,3);size(pixels)", 24); // lists keep 8 bytes per element
+}
+
+#[test] // index assignment writes the character's UTF-8, not one byte of it
+fn test_index_assignment_of_multi_byte_character() {
+	is!("x=\"ab\";x#1='é';x", "éb");
+	is!("x=\"héllo\";x#2='e';x", "hello");
+	is!("x=\"a👍🏽c\";x#2='b';x", "abc"); // replaces the whole grapheme
+	is!("x=\"ab\";x#2='👍';x#2", '👍');
+	is!("x=\"ab\";x#2='€';x.bytes", 4);
+}
+
 #[test] // NFC 'é' vs NFD 'e'+U+0301 compare equal: source text is normalized to NFC
 fn test_unicode_normalization() {
 	is!("'\u{e9}'=='e\u{301}'", true);

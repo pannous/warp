@@ -270,24 +270,12 @@ impl WasmGcEmitter {
 		};
 
 		if let Some(ref method) = method_name {
-			match method.as_str() {
-				"count" | "number" => {
-					// obj.count() or obj.count returns element count
-					self.emit_node_instructions(func, left);
-					self.emit_call(func, "node_count");
-					self.emit_call(func, "new_int");
-					return;
-				}
-				"size" => {
-					// obj.size() returns byte count (elements * 8)
-					self.emit_node_instructions(func, left);
-					self.emit_call(func, "node_count");
-					func.instruction(&Instruction::I64Const(8));
-					func.instruction(&Instruction::I64Mul);
-					self.emit_call(func, "new_int");
-					return;
-				}
-				_ => {}
+			if let Some(counter) = crate::analyzer::counting_method(method, &self.ctx) {
+				// obj.count, obj.length: elements, or graphemes of a text; obj.size: bytes; obj.bytes/chars/graphemes
+				self.emit_node_instructions(func, left);
+				self.emit_call(func, counter);
+				self.emit_call(func, "new_int");
+				return;
 			}
 		}
 
