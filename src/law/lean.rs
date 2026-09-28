@@ -76,8 +76,9 @@ fn term(node: &Node) -> Lean {
 		Node::False => Ok(integer(0)),
 		Node::Symbol(name) => Ok(name.clone()),
 		Node::Key(left, Op::Neg | Op::Sub, right) if is_empty(left) => Ok(format!("(-{})", term(right)?)),
-		// Warp `/` yields a Float. `%` remains signed truncating remainder for integer operands.
-		Node::Key(left, Op::Mod, right) => Ok(format!("(Int.tmod {} {})", term(left)?, term(right)?)),
+		// Warp `%` is Euclidean (0 ≤ r < |b|) like Lean's Int.emod; `rem` is the truncated Int.tmod
+		Node::Key(left, Op::Mod, right) => Ok(format!("(Int.emod {} {})", term(left)?, term(right)?)),
+		Node::Key(left, Op::Rem, right) => Ok(format!("(Int.tmod {} {})", term(left)?, term(right)?)),
 		Node::Key(left, op, right) if arithmetic(*op).is_some() => {
 			Ok(format!("({} {} {})", term(left)?, arithmetic(*op).unwrap(), term(right)?))
 		}

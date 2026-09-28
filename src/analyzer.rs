@@ -672,11 +672,43 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
 					.fix(format!("if {condition} then {then} else {otherwise}")));
 			}
+			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
+				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right)));
+			}
 			lint_into(left, warnings);
 			lint_into(right, warnings);
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// A negative literal or a negation: `-7`, `-x`, `(-7)`
+fn is_negative(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(Number::Int(n)) => *n < 0,
+		Node::Number(Number::Float(f)) => *f < 0.0,
+		Node::Number(Number::Quotient(numerator, _)) => *numerator < 0,
+		Node::Number(Number::BigInt(big)) => big.sign() == num_bigint::Sign::Minus,
+		Node::Key(left, Op::Neg | Op::Sub, _) => matches!(left.drop_meta(), Node::Empty),
+		Node::List(items, _, _) if items.len() == 1 => is_negative(&items[0]),
+		_ => false,
+	}
+}
+
+/// `%` is Euclidean (0 ≤ r < |b|); C, Java, JS and Rust truncate, Python floors
+fn negative_modulo_warning(left: &Node, right: &Node) -> String {
+	let (a, b) = (left.serialize(), right.serialize());
+	let (a, b) = (a.trim(), b.trim());
+	let values = match (left.drop_meta(), right.drop_meta()) {
+		(Node::Number(Number::Int(x)), Node::Number(Number::Int(y))) => x.checked_rem_euclid(*y).zip(x.checked_rem(*y)),
+		_ => None,
+	};
+	match values {
+		Some((euclidean, truncated)) if euclidean != truncated => format!(
+			"`{a} % {b}` is {euclidean}: % is Euclidean as in mathematics; C/Java/JS give {truncated}; use `rem` for the truncated remainder"
+		),
+		_ => format!("`{a} % {b}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"),
 	}
 }
 

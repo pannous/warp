@@ -36,13 +36,6 @@ impl ParserOptions {
 	}
 }
 
-/// `a mod b` → `(a % b + b) % b`: the remainder takes the sign of the divisor (-7 mod 3 → 2, 7 mod -3 → -2)
-fn floored_modulo(dividend: Node, divisor: Node) -> Node {
-	let remainder = Node::Key(Box::new(dividend), Op::Mod, Box::new(divisor.clone()));
-	let shifted = Node::Key(Box::new(remainder), Op::Add, Box::new(divisor.clone()));
-	Node::Key(Box::new(shifted), Op::Mod, Box::new(divisor))
-}
-
 fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_'
 }
@@ -739,16 +732,17 @@ impl WaspParser {
 				continue;
 			}
 
-			// Step 3a: `a mod b` is the floored modulo (sign of the divisor, as in Python), `%` the truncating remainder
-			if self.matches_keyword("mod") {
-				let (l_bp, r_bp) = Op::Mod.binding_power();
+			// Step 3a: `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
+			let keyword_op = if self.matches_keyword("mod") { Some(Op::Mod) } else if self.matches_keyword("rem") { Some(Op::Rem) } else { None };
+			if let Some(op) = keyword_op {
+				let (l_bp, r_bp) = op.binding_power();
 				if l_bp < min_bp {
 					break;
 				}
 				self.advance_by(3);
 				self.skip_whitespace();
 				let divisor = self.parse_expr(r_bp);
-				lhs = floored_modulo(lhs, divisor);
+				lhs = Node::Key(Box::new(lhs), op, Box::new(divisor));
 				previous_comparand = None;
 				continue;
 			}

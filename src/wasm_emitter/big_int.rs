@@ -56,6 +56,20 @@ fn combine(left: IntRange, right: IntRange, op: impl Fn(i128, i128) -> Option<i1
 	Some((*corners.iter().min()?, *corners.iter().max()?))
 }
 
+/// Euclidean `a % b` on machine i64s in locals a, b (r is scratch): `r = a rem_s b; r + ((r >> 63) & |b|)`,
+/// so 0 ≤ r < |b| as in mathematics (-7 % 3 → 2, 7 % -3 → 1); `rem` keeps the truncated i64.rem_s
+fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
+	let sign_mask = |local| [I::LocalGet(local), I::I64Const(63), I::I64ShrS];
+	let mut code = vec![I::LocalGet(a), I::LocalGet(b), I::I64RemS, I::LocalTee(r)];
+	code.extend(sign_mask(r));
+	code.push(I::LocalGet(b));
+	code.extend(sign_mask(b));
+	code.push(I::I64Xor);
+	code.extend(sign_mask(b));
+	code.extend([I::I64Sub, I::I64And, I::I64Add]);
+	code
+}
+
 /// Scratch locals every function reserves for the inline checks (a, b, result)
 pub const INT_SCRATCH_LOCALS: u32 = 3;
 
@@ -96,7 +110,8 @@ impl WasmGcEmitter {
 					Op::Sub => combine(l, r, i128::checked_sub),
 					Op::Mul => combine(l, r, i128::checked_mul),
 					// the dividend must be a proven integer: a ratio % n is a ratio
-					Op::Mod => l.and(r).map(|(low, high)| {
+					Op::Mod => l.and(r).map(|(low, high)| (0, (low.abs().max(high.abs()) - 1).max(0))),
+					Op::Rem => l.and(r).map(|(low, high)| {
 						let bound = low.abs().max(high.abs()) - 1;
 						(-bound, bound)
 					}),
@@ -184,6 +199,11 @@ impl WasmGcEmitter {
 			Op::Mod => {
 				let unproven = self.unproven(&[(a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
+				self.emit_fast_or_slow(func, &euclidean_remainder(a, b, r), "exact_mod");
+			}
+			Op::Rem => {
+				let unproven = self.unproven(&[(a, left), (b, right)]);
+				self.emit_fixnum_test(func, &unproven);
 				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64RemS], "exact_rem");
 			}
 			_ => unreachable!("not an Int operator: {:?}", op),
@@ -232,7 +252,13 @@ impl WasmGcEmitter {
 			Op::Sub => func.instruction(&I::I64Sub),
 			Op::Mul => func.instruction(&I::I64Mul),
 			Op::Div => func.instruction(&I::I64DivS),
-			Op::Mod => func.instruction(&I::I64RemS),
+			Op::Mod => {
+				let (a, b, r) = (self.scratch(0), self.scratch(1), self.scratch(2));
+				Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
+				Self::emit_list(func, &euclidean_remainder(a, b, r));
+				func
+			}
+			Op::Rem => func.instruction(&I::I64RemS),
 			Op::Xor => func.instruction(&I::I64Xor),
 			Op::Pow => {
 				self.emit_call(func, "i64_pow");

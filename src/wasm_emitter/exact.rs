@@ -318,15 +318,29 @@ impl WasmGcEmitter {
 			s.call(f, "exact_sub");
 		}, "int_rem_slow");
 
-		// x /= y: an integer x stays an integer (truncated), a ratio x divides exactly
+		// exact_mod(a, b): Euclidean remainder, 0 ≤ r < |b|: the truncated remainder plus |b| when negative; locals: r
+		self.runtime_function("exact_mod", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_rem");
+			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(0)]);
+			s.call(f, "exact_cmp");
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)), I::LocalGet(2), I::LocalGet(1)]);
+			s.call(f, "exact_abs");
+			s.call(f, "exact_add");
+			Self::emit_list(f, &[I::Else, I::LocalGet(2), I::End]);
+		});
+
+		// x /= y: an integer x stays an integer, the Euclidean quotient (x - x % y) / y matching %; a ratio x divides exactly
 		self.runtime_function("exact_div_assign", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
 			f.instruction(&I::LocalGet(0));
 			s.call(f, "is_ratio");
 			Self::emit_list(f, &[I::If(BlockType::Result(i64t)), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "exact_div");
-			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_mod");
+			s.call(f, "exact_sub");
+			f.instruction(&I::LocalGet(1));
 			s.call(f, "exact_div");
-			s.call(f, "exact_trunc");
 			f.instruction(&I::End);
 		});
 

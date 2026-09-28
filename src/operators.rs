@@ -41,7 +41,8 @@ pub enum Op {
 	Sub,  // -
 	Mul,  // *  ×  ⋅
 	Div,  // /  ÷
-	Mod,  // %
+	Mod,  // %  mod  Euclidean: 0 ≤ a % b < |b|
+	Rem,  // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
 	Pow,  // ^  **
 
 	// Compound assignment operators (x op= y → x = x op y)
@@ -125,7 +126,7 @@ impl Op {
 			Op::Pow => (160, 159),
 
 			// Multiplicative (left-assoc)
-			Op::Mul | Op::Div | Op::Mod => (150, 151),
+			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
 
 			// Additive (left-assoc)
 			Op::Add | Op::Sub => (140, 141),
@@ -198,6 +199,7 @@ impl Op {
 			Op::Mul => "*",
 			Op::Div => "/",
 			Op::Mod => "%",
+			Op::Rem => "rem",
 			Op::Pow => "^",
 
 			// Compound assignment
@@ -276,7 +278,7 @@ impl Op {
 
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
-		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow)
+		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
 	}
 
 	/// Check if this is a comparison operator

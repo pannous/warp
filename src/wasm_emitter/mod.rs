@@ -1301,7 +1301,7 @@ impl WasmGcEmitter {
 			Op::Div => {
 				func.instruction(&Instruction::F64Div);
 			}
-			Op::Mod => {
+			Op::Mod | Op::Rem => {
 				// WASM doesn't have F64Rem. Use integer modulo path instead.
 				// Drop the f64 values and re-emit as i64
 				func.instruction(&Instruction::Drop);
@@ -2387,7 +2387,7 @@ impl WasmGcEmitter {
 					Op::Div => {
 						func.instruction(&Instruction::F64Div);
 					}
-					Op::Mod => {
+					Op::Mod | Op::Rem => {
 						// WASM doesn't have F64Rem. Drop f64 values and use i64 path.
 						func.instruction(&Instruction::Drop);
 						func.instruction(&Instruction::Drop);
