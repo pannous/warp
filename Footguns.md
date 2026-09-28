@@ -367,8 +367,37 @@ Warp: `1 and 0 or 2` → `2` (well defined, as in [wiki/truthiness.md](wiki/trut
 Warp before: `x=ø; x+1` → compiler panic.  
 Warp: `x=ø; x+1` → `Error('x may be ø (null) in x+1 at 1:6; fix: if x { x+1 }')`, likewise `x=ø; x.size`. A variable assigned `ø`
 may not be used in arithmetic or member access until checked: `if x {x+1} else {2}` is accepted (flow-sensitive narrowing,
-[wiki/null.md](wiki/null.md)), as is reassignment `x=ø; x=3; x+1`. Not yet: `T?` syntax and running such programs (NOT YET → Null: optional types).
+[wiki/null.md](wiki/null.md)), as is reassignment `x=ø; x=3; x+1`; such programs run (next entry).
 (`test_null_needs_a_check`)
+
+### Null: optional types
+**Java, C, Go**: every reference may be null, the type does not say so; **Swift, Kotlin**: `Int?` (solved there)  
+Warp before: `x:int?=ø` → `Unexpected character '='`; `x=ø; if x {x+1} else {2}` → compiler panic `Cannot extract numeric value from ø`.  
+Warp: `x=ø; if x {x+1} else {2}` → `2`, `x=ø; x=3; x+1` → `4`, `x:int?=ø; if x {x+1} else {2}` → `2`, `x:int?=ø; x=4; x+1` → `5`,
+`x:int?=ø; x+1` → `Error('x may be ø …')`, `x:int=ø` → `Error('type mismatch: x is declared int, cannot assign ø at 1:1; fix: declare x:int? to allow ø')`.
+A variable declared `T?` or first bound to `ø` is held as a Node (ø until assigned) and read as a number only where the null
+check allows it. `()` is ø and ø is the empty list: `a=();a.add(1)` → `[1]`, `a=();a.add(1);a.add(2);a` → `[1 2]`.
+(`test_optional_local_runs`, `test_optional_type_declaration`, `test_empty_parens_is_the_empty_list`)  
+Decision: `()` stays ø, which doubles as the empty list for list operations (append, `+` with a list) (alternatives:
+(b) `()` a distinct empty-list value ≠ ø; (c) `()` a type error outside calls). Reasons: wiki/SPECIFICATION.md "normally `()`
+is just the empty object ø", wiki/bool.md `{} == () == ø`, wiki/truthiness.md `()==false`; `parse("()") == ø` is pinned
+by tests/test_parser.rs; (b) would make `()` and `ø` two empty values with different behaviour, which the wiki rejects
+("one keyword always captures all destitute cases", wiki/null.md). Other member access on ø (`x.size`) still needs a check.
+Decision: `T?` is written as a suffix on the type name (`x:int?`), as in wiki/null.md and Swift/Kotlin (alternatives: `?x:int`
+prefix, `maybe int` keyword; wiki/optional.md lists both as sketches); a plain `T` refuses ø.
+Not yet: `x!` unwrap, typed null (`Person.null`), optional floats read back through the Int path (`x:float?=0.5; x+1`).
+
+### Swallowed errors
+**Go**: `v, _ := f()`; **Java**: `catch (Exception e) {}`; **JS**: unhandled promise rejection → *silent*  
+Warp before: a value that has no number (`1+(a:2)`, `2*class P{a:int}`) → compiler panic `Cannot extract numeric value …`;
+a link or instantiation failure returned the unevaluated parsed program as if it were the result.  
+Warp: law, effect, declared-type and null violations, invalid number text and index errors come back as `Error` values;
+`1+(a:2)` → `Error('cannot extract a numeric value from a:2 at 1:4')`, with the source position; a failed link or
+instantiation → `Error('could not run the program: …')`, never the parsed program. `x=0.5;x=0` → `0` (was a WASM validation
+error). (`test_compiler_failures_are_error_values`)  
+Not yet: `Undefined variable` is still a panic (pinned by `test_undefined_variable_is_an_error`), runtime traps carry no
+source span (wasm code offsets are not mapped back to source yet), `Result<T, E>` as data
+([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
 ### SQL and shell injection
 **Every language with string building**: `"SELECT * FROM t WHERE name='" + name + "'"` with `name = "x' OR '1'='1"` → *all rows*  
 Warp before: no SQL or shell API; building a query was plain text concatenation.  
@@ -489,13 +518,6 @@ type yet); `false == 0` → `1` still compares across kinds.
 Footguns Warp still has (verified with the probes above: the Warp answer shown is today's output), or where the fix
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
 
-## Truthiness and null
-
-### Null: optional types
-Warp today: the null check exists (Solved → Null), but `T?` is not parsed (`x:int?=ø` → `Unexpected character '='`),
-and a local first assigned `ø` cannot be emitted (`x=ø; if x {x+1} else {2}` → compiler panic `Cannot extract numeric value from ø`).  
-Intended ([wiki/null.md](wiki/null.md)): `T?` declarations, `x!` unwrap, typed null (`Person.null`) as a runtime value. (`test_optional_local_runs`)
-
 ## Syntax and precedence
 
 ### `&` and `|` vs comparison
@@ -523,15 +545,6 @@ the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `2
 (3) diagnostic when an operator follows a braceless argument. Recommendation: 3, with the persisted resolution of
 [DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
 
-## Errors
-
-### Swallowed errors
-**Go**: `v, _ := f()`; **Java**: `catch (Exception e) {}`; **JS**: unhandled promise rejection → *silent*  
-Warp today: law, effect, declared-type and null violations, invalid number text and index errors come back as `Error` values;
-`src/diagnostic.rs` gives compile-time ones a position and fix-it (`… at 1:9; fix: …`). Still left: other emitter
-failures are compiler panics (`Cannot extract numeric value …`, `Undefined variable`, pinned by `test_undefined_variable_is_an_error`),
-runtime traps carry no span, and a link/instantiation failure still returns the parsed program (`failed_run`).  
-Intended: `Result<T, E>` as data, every diagnostic with span, resolved facts and fix-it ([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
 
 # "Impossible"
 ... Really?

@@ -184,3 +184,15 @@
 - Decided: graphemes by default, `size` = bytes (wiki/string.md, wiki/char.md, wiki/ABI.md); alternatives recorded in Footguns.md.
 - Left open: `[]` as byte access (it is `#` shifted by one), typed iteration `for byte in text`, `count bytes of x` phrasing,
   full UAX #29 (Hangul jamo, Indic conjuncts, Prepend), assigning a multi-code-point grapheme (`x#1='👍🏽'`).
+
+## Work area "optionals and errors" (2026-09-28)
+- Fixed (verified via CI on claude/footguns-errors): a local first bound to `ø` or declared `T?` is held as a Node and read
+  as a number through `get_int_value` (`x=ø; if x {x+1} else {2}` → 2); `T?` parses as a suffix on a type name
+  (`x:int?=ø`); `x:int=ø` is a declared-type error with fix-it; `a=();a.add(1)` → `[1]` (the null check lets append and
+  list `+` through, since ø is the empty list). Emitter "Cannot extract numeric/float value" panics are now `Error` values
+  with a source position (`emit_not_a_number`); `failed_run` returns an `Error` for link/instantiation failures instead of
+  the parsed program. `x=0.5;x=0` already worked after exact decimals; pinned.
+- Decided: `()` stays ø and ø is the empty list; `T?` suffix syntax (Footguns.md → Null: optional types).
+- Left open: `Undefined variable` panic (pinned by an existing should_panic test), spans on runtime traps (needs a
+  code-offset → source map), `x!` unwrap, typed null, optional floats (read through the Int path), literal `ø+[1]` is
+  still a type error (infer_type(ø) defaults to Int).
