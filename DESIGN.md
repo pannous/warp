@@ -255,8 +255,13 @@ Effects belong in function types and call sites, not in backend feature switches
 Begin with a small closed set:
 
 ```text
-Pure, State, Allocation, IO, FFI, Async, Unsafe
+Pure, State, Allocation, IO, FFI, Async, Unsafe, Div
 ```
+
+`Div` (Koka's `div`) marks code that may not terminate: a `while` loop, recursion that does
+not shrink one parameter by a positive literal toward a literal guard (`n<2 ? n : f(n-1)`),
+and mutual recursion. The check is conservative, so `! Pure` is a termination proof for
+the accepted shapes. At runtime every run has a fuel budget (`util::DEFAULT_FUEL`).
 
 An `EffectSet` is inferred as the union of subexpression effects. Host and FFI
 declarations supply trusted effect signatures; callers acquire those effects. Functions

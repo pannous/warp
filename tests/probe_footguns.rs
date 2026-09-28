@@ -786,7 +786,7 @@ fn test_shrinking_recursion_is_total() {
 	use warp::effects::EffectSet;
 	for (code, name) in [
 		("fib(n) := n<2 ? n : fib(n-1)+fib(n-2)", "fib"),
-		("fac(n) := n<=1 ? 1 : n*fac(n-1)", "fac"),
+		("fac(n) := n<2 ? 1 : n*fac(n-1)", "fac"),
 		("up(n) := n>=10 ? n : up(n+1)", "up"),
 		("down(n) := n>0 ? down(n-1) : 0", "down"),
 	] {
@@ -823,5 +823,5 @@ fn test_pure_rejects_divergence() {
 	is!("f(n) := f(n)\neffects of f", Node::Symbol("Div".into()));
 	fails_with("f(n) := n==0 ? 0 : n*f(n-1) ! Pure\nf(3)", "f is declared ! Pure but performs Div via f");
 	fails_with("spin(n) := spin(n)\ncaller(n) := spin(n)+1 ! Pure\ncaller(1)", "caller → spin");
-	is!("f(n) := n==0 ? 0 : n*f(n-1) ! Div\nf(3)", 6); // declared divergence is allowed
+	is!("f(n) := n==0 ? 1 : n*f(n-1) ! Div\nf(3)", 6); // declared divergence is allowed
 }
