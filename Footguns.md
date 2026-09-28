@@ -421,43 +421,46 @@ annotations; Java/C# use-site wildcards `? extends T`; everything invariant like
 Why: DESIGN.md prefers inference with optional constraints over mandatory annotations and requires unsound or lossy
 operations to be explicit; inferred mutability is the same fact the ownership and effect analyses already compute.
 
+### Rounding mode
+**Python 3, .NET** `round(2.5)` → *2* surprises users of **JS/Excel** (`3`) and vice versa.  
+Warp before: `round(2.5)` → `2` (banker's rounding), with no name for the rule and no alternative.  
+Warp: `round` is round half even (IEEE 754 default, Python 3, .NET): `round(2.5)` → `2`, `round(3.5)` → `4`; `round_half_even`
+names it; `round_half_up(2.5)` → `3`, `round_half_up(-2.5)` → `-2` (ties toward +∞, like JS `Math.round`), `round_half_up(5/2)` → `3`.  
+Decision: `round` stays half even, `round_half_up` and `round_half_even` are explicit (alternatives: a mode argument
+`round(x, half: up)`; switching `round` to half up like JS/Excel, a silent change).
+Not yet: rounding goes through f64 (exact rationals could round exactly); no half-away-from-zero (Excel for negatives).
+(`test_rounding_mode_is_named`)
+
+### Negative modulo
+**C, JS, Java**: `-5 % 3` → *-2*, **Python**: *1*, both surprise the other camp.  
+Warp before: only `%`, the truncating remainder: `-7 % 3` → `-1`.  
+Warp: `%` is the truncating remainder (sign of the dividend, as C/JS/Java/Rust): `-7 % 3` → `-1`; `mod` is the floored modulo
+(sign of the divisor, as Python `%`, Haskell `mod`): `-7 mod 3` → `2`, `7 mod -3` → `-2`, `-123456789012345678901234567890 mod 1000` → `110`.
+`mod` binds like `%` (`1 + -7 mod 3` → `3`) and works for unbounded integers and exact ratios.  
+Decision: keep `%` truncating and add `mod` (alternatives: `%` floored and `rem` truncating, which contradicts
+`tests/test_unbounded_int.rs` `is!("-7 % 3", -1)`; Euclidean modulo, always ≥ 0).
+Not yet: `a mod b` is lowered in the parser to `(a % b + b) % b`, so the divisor is evaluated three times
+(harmless for pure divisors, wrong for a divisor with side effects); no `mod=`.
+(`test_modulo_and_remainder_are_both_named`)
+
+### Booleans are integers
+**Python, C, JS**: `True + True` → *2*  
+Warp before: `true + true` → `2` (booleans are encoded as Int 1/0).  
+Warp: arithmetic on a boolean is a compile error with a fix-it: `true + true` → `Error('arithmetic on a boolean: true+true at 1:1; fix: int(true) + int(true)')`,
+likewise `(1<2) + 1` and `(not 1) + 2`. Booleans are still used as conditions (`x = 1 < 2; if x {1} else {2}`).  
+Decision: reject arithmetic on booleans in the analyzer, keep the Int 1/0 runtime encoding (alternatives: a distinct
+`Kind::Bool` with its own payload, which DESIGN.md's `Bool` semantic type calls for, but True/False are Int 1/0 at the
+Node boundary, pinned by `tests/test_node_operators.rs` (`&True + &True == 2`) and by every boolean-returning `is!` test;
+keep and document).
+Not yet: the check sees boolean literals, comparisons and `not`, not variables holding booleans (no semantic `Bool`
+type yet); `false == 0` → `1` still compares across kinds.
+(`test_booleans_are_not_numbers`)
+
 # NOT YET
 ...
 
 Footguns Warp still has (verified with the probes above: the Warp answer shown is today's output), or where the fix
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
-
-## Numbers
-
-### Rounding mode
-**Python 3, .NET** `round(2.5)` → *2* surprises users of **JS/Excel** (`3`) and vice versa.  
-Warp today: `round(2.5)` → `2`, `round(0.5)` → `0` (banker's rounding).  
-Intended: keep the IEEE default but name it (`round half even`) and offer `round half up`; document it in the signature.
-Decision needed: the default is already half-even (the Intended default); missing is a name for it and a half-up variant.
-Options: (a) `round` stays half-even, add `round_half_up` (recommended: matches IEEE and Python, no silent change);
-(b) `round` takes a mode argument `round(x, half: up)`; (c) switch `round` to half-up like JS/Excel.
-Note `round` still goes through f64; exact rationals could round exactly (`round(5/2)` → `2` today via f64 2.5).
-
-### Negative modulo
-**C, JS, Java**: `-5 % 3` → *-2*, **Python**: *1*, both surprise the other camp.  
-Warp today: `-5 % 3` → `-2`.  
-Intended: `%` is the mathematical modulo (sign of the divisor, as in Python), `rem` the truncating remainder; both named.
-Decision needed: the Intended Python semantics contradicts existing tests, which pin C semantics:
-`tests/test_unbounded_int.rs` `is!("-7 % 3", -1)` and `is!("-123456789012345678901234567890 % 1000", -890)`.
-Options: (a) `%` = floored modulo, `rem` = truncating remainder, and update those two tests (recommended, as Intended);
-(b) keep `%` truncating and add `mod`; (c) Euclidean modulo (always ≥ 0). The runtime already has both pieces
-(`int_rem`, and `exact_rem` for ratios: `1.5 % 1` → `0.5`), so either choice is a small change.
-
-### Booleans are integers
-**Python, C, JS**: `True + True` → *2*  
-Warp today: `true + true` → `2`, `false == 0` → `1` (booleans are encoded as Int 1/0).  
-Intended: a distinct `bool` kind in semantic IR; arithmetic on booleans is a type error unless explicitly converted.
-
-## Implicit conversions
-Decision needed: a `bool` kind touches the Node boundary (True/False are encoded as Int 1/0 in WASM), the type
-checker and every truthiness rule. Options: (a) `Kind::Bool` with its own payload, arithmetic on it a compile error
-(recommended, as Intended); (b) keep 1/0 at runtime but reject `bool + bool` in the analyzer only; (c) keep as is and
-document it. Not changed here because it overlaps the truthiness and `yes`/`no` decisions owned elsewhere.
 
 ## Strings
 

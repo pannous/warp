@@ -166,3 +166,13 @@
   data path (`data_mode`) does not lex dates or durations yet (it round-trips source text and has no date serialization).
 - Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node.rs has no arm for them), so
   `is!(…, true)` only works for Int 1/0 results; the time evaluator returns Int 1/0 like the rest of eval.
+
+## Work area "number decisions" (2026-09-28)
+- Fixed/decided: Negative modulo (`%` stays truncating, pinned by tests/test_unbounded_int.rs; new infix `mod` is floored,
+  lowered in the parser to `(a % b + b) % b`); Rounding mode (`round` = half even, `round_half_even`, `round_half_up`
+  in list_emitter, half up = floor(x) + (frac ≥ ½) via a scratch local holding the f64 bits); Booleans are integers
+  (analyzer `check_boolean_arithmetic` in `diagnose`: arithmetic on true/false, comparisons or prefix `not` is an error with
+  an `int(…)` fix-it). Validated on CI (branch claude/footguns-numbers2; no local build, crates.io blocked).
+- Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/test_node_operators.rs);
+  the boolean check does not follow variables; `false == 0` still true; `mod` evaluates its divisor three times;
+  rounding is via f64, no half-away-from-zero; no `mod=`.
