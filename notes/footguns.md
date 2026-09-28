@@ -384,3 +384,38 @@ read back under rules where the offset changed, it is an Error naming both versi
 Still impossible: knowing tomorrow's politics. Warp only notices when the rules changed.
 Tests: test_repeated_local_time_needs_disambiguation, test_skipped_local_time_can_be_chosen_explicitly,
 test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_calendar_day_is_not_24_hours.
+
+## Work area "string length" (2026-09-28)
+- Implemented: `number of X in t` for the text units `byte(s)`, `char(s)`, `codepoint(s)`, `grapheme(s)` (singular or
+  plural, `count of`/`length of` too), and the unit views `#(byte in t)`, `#(t as bytes)`; on literals and variables.
+  `number of chars in "héllo"` → 5, `number of graphemes in "👍🏽"` → 1, `number of bytes in "héllo"` → 6,
+  `number of codepoints in "👍🏽"` → 2. Lowered in `analyzer::lower_declarations` (`counting_phrase`, `unit_count`) onto
+  the existing `t.bytes`/`t.chars`/`t.graphemes` methods; `number of pixels` keeps lowering to `count pixels`.
+  The parser no longer takes `#(` at line start as a shell comment (`#x` already counted after a statement).
+- Decided: a `char` is a code point (as `x.chars`, the `char` type, Rust's `chars()`); the user-perceived character is a
+  grapheme. Bare `#t`, `count`, `length`, `number of t` count graphemes, consistent with grapheme indexing `t#i`;
+  `size`/`size of t` counts bytes (memory).
+- Decided: case mapping is locale-independent, Unicode default (`"i".upper` → "I", `"İ".lower` → "i̇", `"straße".upper`
+  → "STRASSE"), as JS `toUpperCase` and Rust `to_uppercase`. Locale-aware mapping (Turkish/Azeri dotted İ/ı, Lithuanian)
+  is left open: no locale syntax exists yet.
+- Tests: probe_footguns.rs test_number_of_chars_in_text, test_number_of_graphemes_in_text, test_number_of_bytes_in_text,
+  test_number_of_codepoints_in_text, test_count_of_text_without_unit, test_case_mapping_is_locale_independent.
+- Left open: locales for case mapping and collation; `number of words/lines in t`; `number of X in list` (count matches).
+
+## For wiki/Footguns.md
+
+### String length: bytes, code points or graphemes?
+`"👍🏽"` is 8 bytes (Go `len`), 4 UTF-16 units (JS `.length`), 2 code points (Python `len`), 1 grapheme (Swift `.count`).
+**Warp (solved):** the unit is named when it matters. `#t`, `count t`, `length t`, `number of t` count graphemes, the same
+unit `t#i` indexes by; `size t` counts bytes. Explicit units: `number of bytes in t` / `#(byte in t)` / `#(t as bytes)` /
+`t.bytes`; `number of chars in t` = `number of codepoints in t` = `t.chars`; `number of graphemes in t` = `t.graphemes`.
+`number of chars in "héllo"` → 5, `number of bytes in "héllo"` → 6, `number of codepoints in "👍🏽"` → 2,
+`number of graphemes in "👍🏽"` → 1. A `char` is a code point; a user-perceived character is a grapheme.
+Tests: probe_footguns.rs test_number_of_{chars,graphemes,bytes,codepoints}_in_text, test_count_of_text_without_unit.
+
+### Case mapping and the Turkish İ
+`"i".toUpperCase()` in a Turkish locale is "İ" in Java (default locale), breaking identifiers and keyword matching.
+**Warp (decided):** case mapping is locale-independent Unicode default mapping, as JS `toUpperCase` and Rust
+`to_uppercase`: `"i".upper` → "I", `"ı".upper` → "I", `"İ".lower` → "i̇" (i + combining dot), `"straße".upper` → "STRASSE".
+Test: test_case_mapping_is_locale_independent.
+**Open:** locale-aware mapping (Turkish/Azeri, Lithuanian) and collation need a way to name a locale; not designed yet.
