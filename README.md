@@ -1,14 +1,14 @@
 # 🌀Warp
 
-<!-- 🌀 𖦹 𓏲 w 𓍢 𐀸 we ꩜ CHAM PUNCTUATION SPIRAL -->
+<!-- 🌀 𖦹 𓏲 w 𓍢 𐀸 we ꩜ -->
 
 𖦹 **Warp** is a new **data format** and **programming language** that is wasm-first and written in Rust.  
-It's a rewrite of [Wasp](https://github.com/pannous/wasp) which was written in c⁺⁺ [Angle](
+Warp is a rewrite of [Wasp](https://github.com/pannous/wasp) which was written in c⁺⁺ [Angle](
 https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script) which were python experiments.  
 
 ## Features
-- [[Perfect]] Programming language for both humans and agents.
-- Free of [[Footguns]]
+- [Perfect](wiki/Perfect) Programming language for both humans and agents.
+- [Goal](/wiki/): Free of [footguns](wiki/Footguns)
 - **Wasm-first**: Designed to compile to WebAssembly efficiently, as structs.
 -  JS/JSON/XML/YAML (de)serialization built-in
 -  Full [Documentation](https://github.com/pannous/warp/wiki)
