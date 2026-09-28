@@ -98,6 +98,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
+	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
+	functions_with_parameters: std::collections::HashSet<String>,
 }
 
 enum ElseParseMode {
@@ -127,6 +129,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			functions: Default::default(),
+			functions_with_parameters: Default::default(),
 		}
 	}
 
@@ -792,6 +795,9 @@ impl WaspParser {
 			self.skip_whitespace();
 			if op == Op::Define {
 				if let Some(name) = defined_function_name(&lhs) {
+					if matches!(lhs.drop_meta(), Node::List(..)) {
+						self.functions_with_parameters.insert(name.clone());
+					}
 					self.functions.insert(name);
 				}
 			}
@@ -1012,7 +1018,10 @@ impl WaspParser {
 			|| ch == '-';
 		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function;
 
-		if min_bp == 0 || min_bp > max_bp_for_application {
+		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
+		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
+		let takes_one_argument = lhs_is_defined_function && !self.functions_with_parameters.contains(&lhs.name());
+		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application {
 			return None;
 		}
 		if !lhs_is_callable || !self.can_start_atom() || !should_apply {

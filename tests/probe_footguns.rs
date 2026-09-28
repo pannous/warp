@@ -182,7 +182,7 @@ fn test_braceless_call_in_argument_is_ambiguous() {
 
 #[test]
 fn test_braceless_recursive_call_takes_identifier_argument() {
-	is!("fac := it<=1 ? 1 : it * fac it-1; fac 5", 120);
+	is!("fac := it<2 ? 1 : it * fac it-1; fac 5", 120);
 }
 
 #[test]
