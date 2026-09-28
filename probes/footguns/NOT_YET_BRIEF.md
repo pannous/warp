@@ -18,6 +18,7 @@ Footguns.md, notes/footguns.md first. Each agent owns one work area (below); sta
    first or report it instead of pushing. Without a local cargo (cloud sandboxes cannot reach crates.io), test on a
    `claude/<area>` branch: its CI job always ends green so it mails nobody, and the real outcome is the line
    `AGENT_CI_RESULT build=… tests=…` in the job log and summary. Only `tests=success` counts.
+   No pull requests: merge into main yourself, then delete your `claude/<area>` branch (`git push origin --delete …`).
 7. Small conventional commits (`fix:`, `feature(minor):`), no AI attribution lines, stage files by explicit path
    (never `git add -A`; note the file is `Footguns.md` with capital F), `git pull --rebase` before every push, push to main.
    Several agents push to main concurrently: rebase and resolve conflicts, never force-push.
