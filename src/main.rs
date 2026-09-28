@@ -29,6 +29,7 @@ pub mod effects;
 pub mod diagnostic;
 pub mod injection;
 pub mod time;
+pub mod real;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};

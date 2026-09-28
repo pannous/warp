@@ -1,7 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
-mod exact;
+pub(crate) mod exact;
 #[macro_use]
 mod constructors;
 mod equality;
@@ -613,6 +613,13 @@ impl WasmGcEmitter {
 	}
 
 	pub fn emit_for_node(&mut self, node: &Node) {
+		let lowered;
+		let node = if crate::real::mentions_real(node) {
+			lowered = crate::real::lower(node.clone());
+			&lowered
+		} else {
+			node
+		};
 		self.config.emit_all_functions = false;
 		// First pass: register all types (forward reference support)
 		collect_all_types(&mut self.ctx.type_registry, node);
@@ -2101,6 +2108,8 @@ impl WasmGcEmitter {
 						func
 					}
 					Number::Complex(r, _i) => func.instruction(&Instruction::I64Const(*r as i64)),
+					// lowered to Float before emission (real.rs), kept total for safety
+					Number::Real(r) => func.instruction(&Instruction::I64Const(r.to_f64() as i64)),
 					Number::Nan | Number::Inf | Number::NegInf => {
 						func.instruction(&Instruction::I64Const(0)) // special values → 0
 					}
@@ -2378,6 +2387,9 @@ impl WasmGcEmitter {
 					}
 					Number::Complex(r, _i) => {
 						func.instruction(&Instruction::F64Const(Ieee64::new(r.to_bits())));
+					}
+					Number::Real(r) => {
+						func.instruction(&Instruction::F64Const(Ieee64::new(r.to_f64().to_bits())));
 					}
 					Number::Nan => {
 						func.instruction(&Instruction::F64Const(Ieee64::new(f64::NAN.to_bits())));
@@ -3066,6 +3078,13 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	};
 	if let Some(answer) = crate::time::answer(&node) {
 		return answer;
+	}
+	if let Some(answer) = crate::real::answer(&node) {
+		return answer;
+	}
+	let node = crate::real::lower(node);
+	if let Some(error) = node.first_error() {
+		return error.clone();
 	}
 	let effects = EffectReport::of(&node);
 	if let Some(answer) = effects.answer(&node) {

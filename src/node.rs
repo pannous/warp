@@ -1440,6 +1440,7 @@ impl PartialEq<i64> for Node {
 		match self {
 			Node::Number(Number::Int(n)) => n == other,
 			Node::Number(Number::Float(f)) => *f == *other as f64,
+			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
@@ -1476,6 +1477,8 @@ impl PartialEq<f64> for Node {
 			Node::Number(Number::Float(f)) => f == other,
 			Node::Number(Number::Int(n)) => *n as f64 == *other,
 			Node::Number(quotient @ Number::Quotient(..)) => f64::from(*quotient) == *other,
+			// an exact real equals the f64 nearest to it, up to the rounding of evaluating it in f64
+			Node::Number(Number::Real(r)) => (r.to_f64() - other).abs() <= other.abs() * 4.0 * f64::EPSILON,
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
@@ -2152,6 +2155,7 @@ impl fmt::Display for Node {
 		match self {
 			Node::Number(Number::Int(n)) => write!(f, "{}", n),
 			Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
+			Node::Number(Number::Real(real)) => write!(f, "{}", real),
 			Node::Number(n) => write!(f, "{:?}", n),
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),

@@ -251,6 +251,28 @@
 - Word operators serialize with spaces (`0.1 as float`, was `0.1asfloat`).
 - /usr/local/bin/warp is a symlink to target/debug/warp: every cargo build/test updates it.
 
+## Work area "exact reals" (2026-09-28)
+User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube roots now; ε/ω (hyperreals) later.
+- One mechanism: `src/extensions/reals.rs` `Exact` = sparse polynomial, rational (BigInt) coefficients × monomials over
+  `Generator {Pi, Euler, Imaginary, SquareRoot(r), CubeRoot(r)}`, normal form by construction (√a·√b = √(ab) reduced,
+  ⅈ² = -1, π/ℯ any integer exponent). Mirrors ~/dev/script/lean4/hyper `HyperGeneral`. `Real = Exact | Approx(f64)`,
+  carried as `Number::Real(&'static Real)` (leaked like BigInt to keep Number Copy). Rationals never take this form.
+- `src/real.rs` evaluates constant programs that mention a generator (π, pi, τ, ℯ, euler, ⅈ, √, sqrt, ∛, cbrt,
+  sin/cos/tan/ln/exp) at compile time, like time.rs does for dates. Anything else it does not understand (functions, loops,
+  imports, `global`) falls back to the WASM path, where exact reals are lowered to f64 exactly as before (π was always
+  float(PI) in the parser). So `f(x):=x*x; f(√2)` is still f64: a WASM GC representation of `Exact` is the next step.
+- sin/cos/tan exact at multiples of π/12 (sin(π/12) = (√6-√2)/4); exp(n + qⅈπ) exact for integer n, q·12 integer;
+  ln(ℯ^n) = n; x^(k/2), x^(k/3) via roots. Everything else is `Approx`, printed `≈…`.
+- `<`/`>`: interval arithmetic in BigInt fixed point (Machin for π, series for ℯ, isqrt/icbrt for roots), 64 → 4096 bits;
+  still straddling zero → Error('undecidable …'). `==` on normal forms; with an approximation only a clear difference
+  decides, else the same Error.
+- Radicands are reduced by trial division up to 10^4 plus a perfect-power test: exact for radicands below 10^12 (square)
+  / 10^16 (cube); larger radicands with big repeated prime factors may not be fully reduced (then == could miss).
+- Left open: rationalizing sums in denominators (1/(1+√2) is approximated), general algebraic roots, runtime `Exact`
+  in WASM, ⅈ outside constant expressions (lowering reports an error), `log` (base ambiguous, not taken).
+- Next: a Lean reference model of the same normal form (extend `HyperGeneral` with named generators) as a
+  differential-testing oracle for `Exact` arithmetic and printing.
+
 ## Work area "termination-determinism" (2026-09-28)
 - Implemented: canonical NaNs. `util::deterministic_config()` (GC, function references,
   `cranelift_nan_canonicalization`) is the one Config of the project's engines: `gc_engine`, `run_wat`, `run_wasm`.
@@ -282,6 +304,26 @@
   parse (`Unexpected character '='`, see "syntax decisions" above).
 
 ## For wiki/Footguns.md
+
+### Exact real numbers
+(keep the user's lines of the entry verbatim; as of the last copy in this repo, f3fe42a^:Footguns.md, they were:)
+**Richardson's theorem**: equality of real expressions built from `π`, `exp`, `sin`, … is undecidable, so `√2 * √2 == 2` cannot hold for every real computation.  
+Warp: rationals are exact, algebraic numbers, π,e etc could be kept symbolic! 
+see Hyperreal numbers for pragmatic extensions of Q (Also needed for law proofs )
+beyond that the result is an approximation and its type says so.
+
+(append:)
+Warp now (2026-09-28): `√2*√2 == 2`, `sqrt(8) == 2*√2`, `∛27 == 3`, `sin(π/6) == 1/2`, `cos(π) == -1`, `ℯ^(ⅈ*π) == -1`,
+`ln(ℯ) == 1`, `π > 3.14`, `π < 355/113`; `π+ℯ`, `√2+√3`, `π/2`, `2√2` print symbolically; `sin(1)` prints `≈0.8414709848078965`;
+`π as float` is 3.141592653589793. A bare `e` or `i` stays a free name; the constants are `ℯ`/`euler` and `ⅈ`.
+Constant expressions are evaluated exactly at compile time; inside functions and loops exact reals are still f64 (next: WASM GC form).
+Tests: tests/probe_footguns.rs test_square_roots_multiply_exactly … test_euler_identity.  
+Decision: an exact real is a sparse polynomial with rational coefficients over named generators (π, ℯ, ⅈ, √r, ∛r) in a
+normal form; ε and ω join later as generators ordered by lowest ε power.  
+Decision: π and ℯ are treated as algebraically independent (Schanuel's conjecture, unproven), so equal normal forms ⇔ equal values.  
+Decision: `==` compares normal forms, `<`/`>` use interval arithmetic up to 4096 bits; what cannot be decided is a loud
+Error('undecidable …'), never a guess (`sin(1) == sin(1)` is such an error).  
+Decision: a value that is only an approximation prints with `≈`; `as float`/`as fast` converts an exact value to f64 explicitly.
 
 ### Nondeterministic NaN bits
 Solved in Warp. Every engine the compiler creates canonicalizes NaNs (`cranelift_nan_canonicalization`), so a NaN

@@ -50,7 +50,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
 		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
 		Node::Number(Number::Float(_)) => Kind::Float,
-		Node::Number(Number::Complex(_, _)) => Kind::Float,
+		Node::Number(Number::Complex(_, _) | Number::Real(_)) => Kind::Float,
 		// Integer and rational literals
 		Node::Number(_) => Kind::Int,
 		// Text and char

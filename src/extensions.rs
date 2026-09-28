@@ -12,6 +12,7 @@ use crate::wasp_parser::parse;
 
 pub mod lists;
 pub mod numbers;
+pub mod reals;
 pub mod strings; // ⚠️ reexport still needs explicit import:
 pub mod utils;
 // use extensions::Numbers::*;

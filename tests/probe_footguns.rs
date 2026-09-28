@@ -735,6 +735,76 @@ fn test_number_declaration_spellings_agree() {
 	}
 }
 
+// Exact real numbers: user decision 2026-09-28, a sparse polynomial with rational coefficients over π, ℯ, ⅈ and roots
+
+#[test]
+fn test_square_roots_multiply_exactly() {
+	is!("√2*√2 == 2", true); // IEEE: 2.0000000000000004
+	is!("√2*√2", 2);
+}
+
+#[test]
+fn test_square_roots_are_reduced() {
+	is!("sqrt(8) == 2*√2", true);
+	assert_eq!(eval("√8").serialize(), "2√2");
+}
+
+#[test]
+fn test_cube_roots_are_exact() {
+	is!("∛27 == 3", true); // IEEE: 27^(1/3) = 3.0000000000000004
+	is!("∛27", 3);
+	assert_eq!(eval("∛16").serialize(), "2∛2");
+}
+
+#[test]
+fn test_sine_at_rational_multiple_of_pi() {
+	is!("sin(π/6) == 1/2", true); // IEEE: 0.49999999999999994
+}
+
+#[test]
+fn test_cosine_of_pi() {
+	is!("cos(π) == -1", true);
+}
+
+#[test]
+fn test_pi_compares_by_interval_arithmetic() {
+	is!("π > 3.14", true);
+	is!("π < 3.15", true);
+	is!("π < 355/113", true); // agree to 7 digits, decided with more precision
+}
+
+#[test]
+fn test_pi_plus_euler_prints_symbolically() {
+	assert_eq!(eval("π+ℯ").serialize(), "π+ℯ");
+	assert_eq!(eval("pi/2").serialize(), "π/2");
+	assert_eq!(eval("3+√2").serialize(), "3+√2");
+}
+
+#[test]
+fn test_sum_of_different_roots_stays_exact() {
+	assert_eq!(eval("sqrt(2)+sqrt(3)").serialize(), "√2+√3");
+	is!("(sqrt(2)+sqrt(3))^2 == 5+2*√6", true);
+}
+
+#[test]
+fn test_approximation_is_marked() {
+	assert_eq!(eval("sin(1)").serialize(), "≈0.8414709848078965");
+	fails_with("sin(1) == sin(1)", "undecidable");
+}
+
+#[test]
+fn test_as_float_converts_exact_values() {
+	let pi = eval("π as float");
+	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.141592653589793), "{pi:?}");
+}
+
+#[test]
+fn test_euler_identity() {
+	is!("ℯ^(ⅈ*π) == -1", true);
+	is!("ln(ℯ) == 1", true);
+	is!("ln(1)", 0);
+	is!("exp(0)", 1);
+
 // ── Termination and determinism (work area 'termination-determinism') ──────────────────────────
 
 /// Bits of `a / b` computed by WASM on this CPU through the project's engine
