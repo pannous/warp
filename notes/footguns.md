@@ -250,3 +250,51 @@
   `0.1:float`, `1.5:int` and the C/Java/C# suffixes `0.1f`/`F`, `0.1d`/`D` (double) → float, `0.1l`/`L` (long double) → exact.
 - Word operators serialize with spaces (`0.1 as float`, was `0.1asfloat`).
 - /usr/local/bin/warp is a symlink to target/debug/warp: every cargo build/test updates it.
+
+## Work area "termination-determinism" (2026-09-28)
+- Implemented: canonical NaNs. `util::deterministic_config()` (GC, function references,
+  `cranelift_nan_canonicalization`) is the one Config of the project's engines: `gc_engine`, `run_wat`, `run_wasm`.
+  Test helpers under tests/ that build their own Config were left unchanged. Test: test_nan_bits_are_canonical (0/0 is 0x7ff8… on x86 too).
+- Implemented: fuel. `gc_engine` consumes fuel; every store comes from `util::fueled_store`, with the budget
+  `util::DEFAULT_FUEL` = 10^10 steps, overridable by `WARP_FUEL=<steps>`, `warp --fuel <steps>` or `util::with_fuel` (per thread).
+  Running out is the error `out of fuel after N steps: the program may not terminate …` (`failed_run`, also `run_wat`).
+  `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
+  is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
+  took about as long as before (5m07s, the same as the preceding green runs).
+- Implemented: `Div` effect (src/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
+  false), if it recurses through another function (mutual recursion), or if its self-recursion has no measure: a parameter
+  that each recursive call moves by a positive literal toward a literal bound known from its guard (`n<2 ? n : f(n-1)`,
+  `n>0 ? f(n-1) : 0`, `n>=10 ? n : f(n+1)`), and that the body never assigns. Div propagates to callers; `f ! Pure` then
+  fails with "performs Div via f" and a reason; `effects of f` answers `Div`. Tests: test_shrinking_recursion_is_total,
+  test_unproven_recursion_may_diverge, test_while_loop_may_diverge, test_pure_rejects_divergence.
+- Decision: the default budget is 10^10 steps (several seconds), not 10^9 (alternatives: 10^9, which ends a hang in about
+  a second but cuts off legitimate long runs such as fib(35); no default, i.e. unlimited unless asked). A budget per thread
+  lets tests use small budgets while running in parallel.
+- Decision: the measure check assumes finite numbers. A float NaN or ∞ argument can still make `n<2 ? n : f(n-1)` recurse
+  forever; the fuel budget catches it at runtime (alternatives: Div for every function whose parameter may be a float,
+  which would make most numeric code Div; excluding NaN via the type once parameters have inferred types).
+- Decision: trusted externals (puts, fetch, FFI) do not carry Div, although a host call can block (alternatives: Div on
+  every IO/FFI signature, which makes Div indistinguishable from IO). A `for` loop is not emitted yet; once it is, a loop
+  over a range or list is total by construction.
+- Left open: `while` loops with a provably shrinking counter (`while i<n { i++ }`) are still Div; lexicographic measures
+  (Ackermann) and measures that shrink a list are Div; recursion through a function value passed as an argument is not
+  tracked (a function symbol used as a value counts as unknown only for self-recursion); `n<=1` in a guard still does not
+  parse (`Unexpected character '='`, see "syntax decisions" above).
+
+## For wiki/Footguns.md
+
+### Nondeterministic NaN bits
+Solved in Warp. Every engine the compiler creates canonicalizes NaNs (`cranelift_nan_canonicalization`), so a NaN
+produced by arithmetic is always 0x7ff8000000000000 on x86 and ARM and float results are bit-identical across CPUs.
+Test: test_nan_bits_are_canonical.
+
+### Termination (halting problem)
+Truly impossible to decide in general; Warp handles both sides without a proof assistant.
+Runtime: every run has a fuel budget (default 10^10 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
+with `Error('out of fuel after N steps: the program may not terminate …')` instead of hanging.
+Compile time: the effect system has Koka's `Div`. Recursion that moves one parameter by a positive literal toward a guarded
+literal bound (`fib(n) := n<2 ? n : fib(n-1)+fib(n-2)`) is total; `while`, unguarded or unbounded recursion
+(`f(n) := n==0 ? 1 : n*f(n-1)` diverges for n<0) and mutual recursion are Div. `f ! Pure` rejects a function that may
+diverge, `effects of f` reports `Div`. Conservative: when unsure, Div.
+Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised, test_shrinking_recursion_is_total,
+test_unproven_recursion_may_diverge, test_while_loop_may_diverge, test_pure_rejects_divergence.

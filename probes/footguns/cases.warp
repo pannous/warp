@@ -371,3 +371,12 @@ fast a=0.1; fast b=0.2; fast c=0.3; (a+b)+c == a+(b+c)
 0.1 as float + 0.2 as float
 ---
 real x=3.3; x
+---
+fib(n) := n<2 ? n : fib(n-1)+fib(n-2) ! Pure
+fib(10)
+---
+f(n) := n==0 ? 1 : n*f(n-1)
+effects of f
+---
+f(n) := n==0 ? 1 : n*f(n-1) ! Pure
+f(3)
