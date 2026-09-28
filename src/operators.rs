@@ -75,6 +75,7 @@ pub enum Op {
 	// Prefix operators (unary)
 	Neg,  // - (unary minus)
 	Sqrt, // √
+	Cbrt, // ∛
 	Abs,  // ‖...‖
 
 	// Suffix operators
@@ -181,7 +182,7 @@ impl Op {
 			Op::XorAssign => (60, 59),
 
 			// Prefix operators (no left operand, binds to right)
-			Op::Sqrt | Op::Abs => (0, 190),
+			Op::Sqrt | Op::Cbrt | Op::Abs => (0, 190),
 			// Unary minus binds weaker than power: -2^2 → -(2^2)
 			Op::Neg => (0, 155),
 
@@ -238,6 +239,7 @@ impl Op {
 			// Prefix
 			Op::Neg => "-",
 			Op::Sqrt => "√",
+			Op::Cbrt => "∛",
 			Op::Abs => "‖",
 
 			// Suffix
@@ -270,7 +272,7 @@ impl Op {
 
 	/// Check if this is a prefix-only operator
 	pub fn is_prefix(&self) -> bool {
-		matches!(self, Op::Neg | Op::Not | Op::Sqrt | Op::Abs)
+		matches!(self, Op::Neg | Op::Not | Op::Sqrt | Op::Cbrt | Op::Abs)
 	}
 
 	/// Check if this is a suffix-only operator

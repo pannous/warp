@@ -3,7 +3,8 @@ use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
-use crate::node::{error, float, key_ops, Bracket, Node, Separator};
+use crate::extensions::reals::{Exact, Rational, Real};
+use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::normalize::{hints as norm, set_hint_position};
 use crate::*;
@@ -494,6 +495,7 @@ impl WaspParser {
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
 		if self.matches_keyword("sqrt") { return Some((Op::Sqrt, 4)); }
+		if self.matches_keyword("cbrt") { return Some((Op::Cbrt, 4)); }
 		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
 		if self.matches_keyword("abs") { return Some((Op::Abs, 3)); }
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
@@ -506,6 +508,7 @@ impl WaspParser {
 			'-' => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
+			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length
 			_ => None,
@@ -1735,6 +1738,10 @@ impl WaspParser {
 /// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
 const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
 
+fn real(exact: Exact) -> Node {
+	Node::Number(Number::real(Real::Exact(exact)))
+}
+
 fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 	let is_word = s.chars().all(|c| c.is_ascii_alphabetic());
 	if data_mode && is_word && !DATA_WORD_LITERALS.contains(&s) {
@@ -1744,9 +1751,11 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
 		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False),
 		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing" | "empty" | "void" => Some(Empty),
-		"π" | "pi" => Some(float(std::f64::consts::PI)),
-		"τ" | "tau" => Some(float(std::f64::consts::TAU)),
-		"euler" | "ℯ" => Some(float(std::f64::consts::E)),
+		// exact generators (extensions/reals.rs); a bare `e` or `i` stays a free name
+		"π" | "pi" => Some(real(Exact::pi())),
+		"τ" | "tau" => Some(real(Exact::pi().scale(&Rational::integer(2)))),
+		"euler" | "ℯ" => Some(real(Exact::euler())),
+		"ⅈ" => Some(real(Exact::imaginary())),
 		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}

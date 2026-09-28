@@ -2,8 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigInt;
+use super::reals::Real;
 use num_integer::Integer;
 use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
+
+fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
+	Real::deserialize(deserializer).map(|real| &*Box::leak(Box::new(real)))
+}
 
 fn deserialize_leaked_bigint<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static BigInt, D::Error> {
 	BigInt::deserialize(deserializer).map(|big| &*Box::leak(Box::new(big)))
@@ -29,6 +34,9 @@ pub enum Number {
 	/// Integer beyond i64: always normalized, a value that fits i64 is `Int`.
 	/// Leaked to keep Number Copy: every distinct big value costs its memory for the process lifetime.
 	BigInt(#[serde(deserialize_with = "deserialize_leaked_bigint")] &'static BigInt),
+	/// Exact real beyond Q (2√2, π/2, 3+√2) or a marked approximation (≈0.841…), see reals.rs.
+	/// Rationals never take this form. Leaked like BigInt to keep Number Copy.
+	Real(#[serde(deserialize_with = "deserialize_leaked_real")] &'static Real),
 	// use num_traits::{One, Zero};
 	// Number::BigNum(_) => unimplemented!(),
 	// Hyper(Vec<Pair<f64,f64>>)
@@ -44,6 +52,7 @@ impl Number {
 			Number::Quotient(n, _d) => *n == 0,
 			Number::Complex(r, i) => *r == 0.0 && *i == 0.0,
 			Number::Float(f) => *f == 0.0,
+			Number::Real(r) => r.is_zero(),
 			Number::Nan | Number::Inf | Number::NegInf => false,
 		}
 	}
@@ -54,6 +63,7 @@ impl Number {
 			Number::Quotient(n, d) => (*n as f64 / *d as f64).abs(),
 			Number::Complex(r, i) => (r * r + i * i).sqrt(),
 			Number::Float(f) => f.abs(),
+			Number::Real(r) => r.to_f64().abs(),
 			Number::Nan => f64::NAN,
 			Number::Inf => f64::INFINITY,
 			Number::NegInf => f64::NEG_INFINITY,
@@ -65,6 +75,10 @@ impl Number {
 	/// Normalize: an integer that fits i64 is always `Int`, only larger ones are `BigInt`
 	pub fn from_bigint(big: BigInt) -> Number {
 		big.to_i64().map(Number::Int).unwrap_or_else(|| Number::BigInt(Box::leak(Box::new(big))))
+	}
+
+	pub fn real(real: Real) -> Number {
+		Number::Real(Box::leak(Box::new(real)))
 	}
 
 	pub fn is_integer(&self) -> bool {
@@ -162,6 +176,7 @@ impl Display for Number {
 				None => write!(f, "{}/{}", numer, denom),
 			},
 			Number::Complex(real, imag) => write!(f, "{} + {}i", real, imag),
+			Number::Real(real) => write!(f, "{}", real),
 			Number::Nan => write!(f, "NaN"),
 			Number::Inf => write!(f, "∞"),
 			Number::NegInf => write!(f, "-∞"),
@@ -200,6 +215,7 @@ impl Neg for Number {
 			Number::Float(f) => Number::Float(-f),
 			Number::Quotient(n, d) => Number::Quotient(-n, d),
 			Number::Complex(r, i) => Number::Complex(-r, -i),
+			Number::Real(r) => Number::real(r.neg()),
 			Number::Inf => Number::NegInf,
 			Number::NegInf => Number::Inf,
 			Number::Nan => Number::Nan,
@@ -291,6 +307,7 @@ impl From<Number> for f64 {
 			Number::Float(f) => f,
 			Number::Quotient(numer, denom) => numer as f64 / denom as f64,
 			Number::Complex(_, _) => unimplemented!(),
+			Number::Real(r) => r.to_f64(),
 			Number::Nan => f64::NAN,
 			Number::Inf => f64::INFINITY,
 			Number::NegInf => f64::NEG_INFINITY,
@@ -324,6 +341,8 @@ impl PartialEq for Number {
 				f64::from(*quotient) as f32 == *f as f32
 			}
 			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => r1 == r2 && i1 == i2,
+			(Number::Real(a), Number::Real(b)) => a == b,
+			(Number::Real(r), Number::Float(f)) | (Number::Float(f), Number::Real(r)) => r.to_f64() as f32 == *f as f32,
 			// Special values: semantic equality (not IEEE 754)
 			(Number::Nan, Number::Nan) => true,
 			(Number::Inf, Number::Inf) => true,
@@ -386,6 +405,7 @@ impl PartialEq<f32> for Number {
 			Number::Float(f) => *f as f32 == *other,
 			Number::Quotient(n, d) => *n as f32 / *d as f32 == *other,
 			Number::Complex(r, i) => *r as f32 == *other && *i == 0.0,
+			Number::Real(r) => r.to_f64() as f32 == *other,
 			Number::Nan => other.is_nan(),
 			Number::Inf => *other == f32::INFINITY,
 			Number::NegInf => *other == f32::NEG_INFINITY,
