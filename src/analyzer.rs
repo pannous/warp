@@ -225,7 +225,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			if !skip_first_assign {
 				if let Node::Symbol(name) = left.drop_meta() {
 					if scope.lookup(name).is_none() {
-						let kind = infer_type(right, scope);
+						let kind = binding_kind(right, scope);
 						scope.define(name.clone(), None, kind);
 					}
 				}
@@ -239,7 +239,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				match left.drop_meta() {
 					Node::Symbol(name) if scope.lookup(name).is_none() => {
 						let declared = declared_type(left);
-						let kind = declared.and_then(|type_name| builtin_type_kind(&type_name.name())).unwrap_or_else(|| infer_type(right, scope));
+						let kind = declared.and_then(|type_name| declared_kind(&type_name.name())).unwrap_or_else(|| binding_kind(right, scope));
 						scope.define(name.clone(), declared.map(|type_name| Box::new(type_name.clone())), kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
@@ -248,7 +248,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 							if scope.lookup(name).is_none() {
 								// Get kind from type annotation
 								let type_str = type_node.drop_meta().to_string();
-								let kind = type_name_to_kind(&type_str);
+								let kind = declared_kind(&type_str).unwrap_or(Kind::Int);
 								scope.define(name.clone(), Some(type_node.clone()), kind);
 							}
 						}
@@ -277,6 +277,22 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}
 		_ => 0,
+	}
+}
+
+/// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
+fn binding_kind(value: &Node, scope: &Scope) -> Kind {
+	match value.drop_meta() {
+		Node::Empty => Kind::Empty,
+		_ => infer_type(value, scope),
+	}
+}
+
+/// Kind of a variable declared `x:T`; an optional `T?` may hold ø, so it is held as a Node
+fn declared_kind(type_name: &str) -> Option<Kind> {
+	match type_name.strip_suffix('?') {
+		Some(_) => Some(Kind::Empty),
+		None => builtin_type_kind(type_name),
 	}
 }
 
@@ -695,6 +711,10 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let found = check_null_use(value, nullable);
+			let target = match target.drop_meta() {
+				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø
+				other => other,
+			};
 			if let Node::Symbol(name) = target.drop_meta() {
 				if matches!(value.drop_meta(), Node::Empty) {
 					nullable.insert(name.clone());
@@ -713,6 +733,15 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 				narrowed.remove(&name);
 			}
 			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
+		}
+		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`)
+		Node::Key(list, Op::Dot, call) if appended_element(list, call).is_some() => {
+			let found = check_null_use(call, nullable);
+			nullable.remove(&list.name()); // no longer empty
+			found
+		}
+		Node::Key(left, Op::Add, right) if [left, right].iter().any(|side| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))) => {
+			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
 		}
 		Node::Key(left, op, right) if op.is_arithmetic() || *op == Op::Dot => {
 			let operand = possibly_null(left, nullable).or_else(|| if *op == Op::Dot { None } else { possibly_null(right, nullable) });
@@ -792,6 +821,16 @@ fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> 
 }
 
 fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
+	if let Some(base) = type_name.strip_suffix('?') {
+		return match value.drop_meta() {
+			Node::Empty => None,
+			_ => assignment_mismatch(assignment, name, base, value),
+		};
+	}
+	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
+		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
+	}
 	let expected = builtin_type_kind(type_name)?;
 	let actual = literal_kind(value)?;
 	if expected == actual || (expected == Kind::Float && actual == Kind::Int) {

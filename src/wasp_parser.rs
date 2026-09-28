@@ -606,6 +606,12 @@ impl WaspParser {
 			return constant; // if true {} fall through :?
 		}
 
+		// Optional type: `x:int?=ø`, `f(x:int?)` (wiki/null.md); a ternary `?` is followed by its branch instead
+		if self.current_char() == '?' && self.ends_optional_type(self.peek_char(1), self.peek_char(2)) {
+			self.advance();
+			return Symbol(format!("{symbol}?"));
+		}
+
 		// Handle "global" keyword: global name = value
 		if symbol == "global" {
 			self.skip_whitespace();
@@ -1229,6 +1235,11 @@ impl WaspParser {
 		}
 		self.push_digits(&mut exponent);
 		exponent.parse::<i64>().map(Some).map_err(|_| format!("Invalid exponent: e{}", exponent))
+	}
+
+	/// `?` directly after a type name, then `=` (not `==`) or a closing bracket or separator
+	fn ends_optional_type(&self, next: char, after: char) -> bool {
+		matches!(next, ')' | ']' | '}' | ',' | ';') || (next == '=' && after != '=')
 	}
 
 	fn parse_symbol(&mut self) -> Result<String, String> {

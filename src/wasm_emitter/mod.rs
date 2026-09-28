@@ -649,6 +649,12 @@ impl WasmGcEmitter {
 		self.type_errors.first().map(|message| crate::node::error(message))
 	}
 
+	/// A value used as a number that has none (ø, a list, a type…): an error value at its source position, not a panic
+	fn emit_not_a_number(&mut self, func: &mut Function, located: &Node, value: &Node) {
+		let diagnostic = crate::diagnostic::Diagnostic::at(located, format!("cannot extract a numeric value from {}", value.serialize()));
+		self.emit_type_error(func, diagnostic.to_string());
+	}
+
 	fn emit_type_error(&mut self, func: &mut Function, message: String) {
 		self.type_errors.push(message);
 		func.instruction(&Instruction::Unreachable);
@@ -2031,6 +2037,7 @@ impl WasmGcEmitter {
 
 	/// Emit the numeric value of a node onto the stack (as i64)
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		let located = node;
 		let node = node.drop_meta();
 		// Handle global declaration: global:Key(name, =, value)
 		if let Node::Key(left, Op::Colon, right) = node {
@@ -2231,7 +2238,10 @@ impl WasmGcEmitter {
 				}
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if local.kind.is_float() {
+					if local.kind.is_ref() {
+						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
+						self.emit_call(func, "get_int_value");
+					} else if local.kind.is_float() {
 						// Convert f64 local to i64 for integer operations
 						func.instruction(&Instruction::I64TruncF64S);
 						self.emit_int_from_machine(func);
@@ -2307,15 +2317,14 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Do, right) => {
 				self.emit_while_loop_value(func, left, right);
 			}
-			other => {
-				panic!("Cannot extract numeric value from {:?}", other)
-			}
+			other => self.emit_not_a_number(func, located, other),
 		}
 	}
 
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		let located = node;
 		let node = node.drop_meta();
 		match node {
 			Node::Number(num) => {
@@ -2428,7 +2437,10 @@ impl WasmGcEmitter {
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if !local.kind.is_float() {
+					if local.kind.is_ref() {
+						self.emit_call(func, "get_int_value");
+						self.emit_int_to_f64(func, None);
+					} else if !local.kind.is_float() {
 						self.emit_int_to_f64(func, None);
 					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
@@ -2479,7 +2491,7 @@ impl WasmGcEmitter {
 					}
 				}
 			}
-			_ => panic!("Cannot extract float value from {:?}", node),
+			other => self.emit_not_a_number(func, located, other),
 		}
 	}
 
@@ -3059,15 +3071,14 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	} else {
 		read_bytes(&bytes)
 	};
-	result.unwrap_or_else(|failure| failed_run(failure, node))
+	result.unwrap_or_else(failed_run)
 }
 
-/// A trap is a runtime error of the program and becomes an error value;
-/// any other failure (link, instantiation) falls back to the parsed program
-fn failed_run(failure: anyhow::Error, node: Node) -> Node {
+/// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
+/// of the compiler or the environment. Both become error values, never the unevaluated program.
+fn failed_run(failure: anyhow::Error) -> Node {
 	if failure.downcast_ref::<wasmtime::Trap>().is_none() {
-		warn!("eval failed: {}", failure);
-		return node;
+		return crate::node::error(&format!("could not run the program: {failure:#}"));
 	}
 	let trace = format!("{:?}", failure);
 	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name));
