@@ -176,3 +176,11 @@
 - Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/test_node_operators.rs);
   the boolean check does not follow variables; `false == 0` still true; `mod` evaluates its divisor three times;
   rounding is via f64, no half-away-from-zero; no `mod=`.
+
+## Graphemes agent (bytes vs graphemes, multi-byte index assignment)
+- Fixed: `#`, `count`, `length` on text count grapheme clusters (`'👍🏽'#1` → "👍🏽", `count "🇩🇪🇫🇷"` → 2); `size` counts
+  bytes; `.bytes`, `.chars`, `.graphemes` name the unit; `x#i='é'` splices the UTF-8 of the character over the grapheme.
+  One table (`strings::GRAPHEME_EXTEND`) drives the Rust `grapheme_clusters` and the emitted `grapheme_end` runtime; no new crate.
+- Decided: graphemes by default, `size` = bytes (wiki/string.md, wiki/char.md, wiki/ABI.md); alternatives recorded in Footguns.md.
+- Left open: `[]` as byte access (it is `#` shifted by one), typed iteration `for byte in text`, `count bytes of x` phrasing,
+  full UAX #29 (Hangul jamo, Indic conjuncts, Prepend), assigning a multi-code-point grapheme (`x#1='👍🏽'`).

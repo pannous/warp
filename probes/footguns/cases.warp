@@ -329,3 +329,13 @@ round(2.5)
 round_half_up(2.5)
 ---
 true + true
+---
+'👍🏽'#1
+---
+x="👍🏽";#x
+---
+size "👍🏽"
+---
+x="👍🏽";x.chars
+---
+x="ab";x#1='é';x

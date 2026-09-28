@@ -305,7 +305,34 @@ Warp: `{a:1 a:2}` → `Error('duplicate key 'a'')` at parse time. Code blocks wi
 **C, Go**: `"héllo"[1]` → *a byte, half of `é`*  
 Warp before: `'héllo'#2` → `'Ã'`.  
 Warp: `'héllo'#2` → `'é'`, `'a👍c'#3` → `'c'`, `'héllo'#6` → `Error('index out of range')`. `#` on text decodes UTF-8 and
-counts code points (graphemes: see NOT YET → Bytes vs graphemes). (`test_character_indexing_is_unicode_safe`)
+counts user-perceived characters (see Bytes vs graphemes below). (`test_character_indexing_is_unicode_safe`)
+
+### Bytes vs graphemes
+**Python 2, C, Go, JS**: `len("👍🏽")` → *8* bytes (Go), *4* UTF-16 units (JS), *2* codepoints (Python 3); users mean *1*  
+Warp before: `size "👍🏽"` → `8` (by accident: one node × 8), `#x` of a text → `1` whatever the text, `'héllo'.length` not
+evaluated, `'👍🏽'#1` → the thumb without its skin tone modifier.  
+Warp: `'👍🏽'#1` → `"👍🏽"`, `x='a👍🏽b';x#3` → `'b'`, `#x`, `count x`, `x.length` of `"👍🏽"` → `1`, `count "🇩🇪🇫🇷"` → `2`,
+`"q\u{301}".length` → `1`; `size "👍🏽"` → `8`. Explicit units: `x.bytes` → `8`, `x.chars` → `2` (code points), `x.graphemes` → `1`.
+A grapheme of one code point is a `Codepoint` (`'héllo'#2` → `'é'`), a longer cluster is `Text` sharing the bytes.
+Segmentation is UAX #29 abridged (combining marks of common scripts, variation selectors, skin tone modifiers, tags, ZWJ
+emoji sequences, flag pairs, CR LF): one table, `strings::GRAPHEME_EXTEND`, drives both `grapheme_clusters` in Rust and the
+emitted `grapheme_end` runtime, no new crate. (`test_text_is_indexed_by_grapheme`, `test_text_units_are_explicit`)  
+Decision: `#`, `count` and `length` count graphemes, `size` counts bytes (alternatives: (a) everything by code point, like
+Python 3 and Warp before, wrong for `👍🏽` and flags; (b) `size` by grapheme too, making all three synonyms as wiki/length.md
+says; (c) no default unit, `#` on text a type error until the unit is named, like Swift's views). Reasons:
+[wiki/string.md](https://github.com/pannous/wasp/wiki/string) specifies "size defaults to byte length, length defaults to
+codepoint (todo: graphemes)", wiki/char.md asks for `count graphemes` and wiki/ABI.md calls "UTF-8 + iterator of grapheme
+clusters" ideal; Footguns' intent "`#` by grapheme" keeps `x#(#x)` the last visible character. `size` stays memory
+(lists: 8 bytes per element, `size(pixels)` → `24`). Not yet: `[]` is still `#` shifted by one, not the byte access
+wiki/indexing.md describes; typed iteration (`for byte in text`) and the wiki's `count bytes of x` phrasing; Hangul jamo,
+Indic conjuncts and Prepend marks beyond the table.
+
+### Index assignment of a multi-byte character
+Warp before: `x="ab";x#1='é';x` wrote one byte, `0xE9`, an invalid UTF-8 text.  
+Warp: `x="ab";x#1='é';x` → `"éb"`, `x="héllo";x#2='e';x` → `"hello"`, `x="a👍🏽c";x#2='b';x` → `"abc"` (the whole grapheme
+is replaced), `x="ab";x#2='€';x.bytes` → `4`. `text_with_char_at` encodes the code point as UTF-8 (1–4 bytes) into the copy
+it already allocates; values beyond U+10FFFF are `invalid_number`. Not yet: assigning a multi-code-point grapheme
+(`x#1='👍🏽'`), since the assigned value is lowered to one code point. (`test_index_assignment_of_multi_byte_character`)
 
 ### Type annotations not enforced loudly
 **Python** (hints are not checked), **TypeScript** (`as any`): `x: int = 5; x = "five"` → *accepted*  
@@ -462,15 +489,6 @@ type yet); `false == 0` → `1` still compares across kinds.
 Footguns Warp still has (verified with the probes above: the Warp answer shown is today's output), or where the fix
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
 
-## Strings
-
-### Bytes vs graphemes
-**Python 2, C, Go, JS**: `len("👍🏽")` → *8* bytes (Go), *4* UTF-16 units (JS), *2* codepoints (Python 3); users mean *1*  
-Warp today: `#` indexes code points (see Solved → Character indexing), but `size "👍🏽"` → `8` and `'héllo'.length` is not
-evaluated; `'👍🏽'#1` is the thumb without its skin tone modifier.  
-Intended: `#` and default iteration are by grapheme, `[]` by byte; the unit is part of the type
-(`for byte in text`, [DESIGN.md → Cautions](DESIGN.md#cautions)).
-
 ## Truthiness and null
 
 ### Null: optional types
@@ -504,12 +522,6 @@ Decision needed: [wiki/precedence.md](wiki/precedence.md) calls `square 3 + squa
 the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `21`; (2) argument is one atom (today, Haskell);
 (3) diagnostic when an operator follows a braceless argument. Recommendation: 3, with the persisted resolution of
 [DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
-
-## Mutation and scope
-
-### Index assignment of a multi-byte character
-Warp today: `x="ab";x#1='é';x` writes one byte (reading `#` is character-safe since 91122fec, writing is byte-wise). Found by the strings agent.
-Intended: `text_with_char_at` re-encodes the character as UTF-8 and splices it at the character index (the copy already allocates).
 
 ## Errors
 
