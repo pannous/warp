@@ -221,3 +221,8 @@
   probe_footguns.rs test_modulo_and_remainder_are_both_named. Validated on CI (branch claude/footguns-euclid).
 - Left open: float `%=` falls back to multiplication in the compound-assign float path (pre-existing, `_ => F64Mul`);
   float `%` goes through the integer path. No `rem=`.
+
+## Equality does not chain (user decision 2026-09-28)
+- Only `< <= > >=` chain (`3>2>1` → true). `==`/`!=` bind weaker (115 vs 120) and compare results: `1<2 == 2<3` → true.
+- An ungrouped `a==b==c` / `a==b!=c` is a diagnostic with fix-it (as in Rust), grouped `(1==1)==1` is allowed.
+- Footguns.md "Chained comparison" still says `1<2==2` chains: update it when the user's edit of that file is committed.

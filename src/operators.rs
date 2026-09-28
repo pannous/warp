@@ -137,8 +137,11 @@ impl Op {
 			// Type cast (binds tighter than comparison: 1.5 as int == 1)
 			Op::As => (125, 126),
 
-			// Comparison: one level, the parser chains them: a<b<c → a<b and b<c
-			Op::Lt | Op::Gt | Op::Le | Op::Ge | Op::Eq | Op::Ne => (120, 121),
+			// Ordering: one level, the parser chains them: a<b<c → a<b and b<c
+			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
+
+			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
+			Op::Eq | Op::Ne => (115, 116),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -284,6 +287,15 @@ impl Op {
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
 		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+	}
+
+	/// Ordering comparisons chain (a<b<c), equality does not
+	pub fn is_ordering(&self) -> bool {
+		matches!(self, Op::Lt | Op::Gt | Op::Le | Op::Ge)
+	}
+
+	pub fn is_equality(&self) -> bool {
+		matches!(self, Op::Eq | Op::Ne)
 	}
 
 	/// Check if this is a logical operator (and, or, xor)

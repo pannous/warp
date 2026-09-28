@@ -202,8 +202,17 @@ fn test_chained_comparison() {
 	is!("3>2>1", true); // C, JS: (3>2)>1 → false
 	is!("1<3<2", false);
 	is!("1<2<3", true);
-	is!("1<2==2", true);
 	is!("(3>2)>1", false); // explicit grouping does not chain
+}
+
+#[test]
+fn test_equality_does_not_chain() {
+	// user decision 2026-09-28: only < <= > >= chain; == and != bind weaker and compare the results
+	is!("1<2 == 2<3", true);
+	is!("1<2 == 3<2", false);
+	is!("1+1 == 2", true);
+	fails_with("1==1==1", "ambiguous"); // Python: chained (true); C: (1==1)==1 (true by accident)
+	fails_with("2==2!=3", "ambiguous");
 }
 
 #[test]

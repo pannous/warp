@@ -815,14 +815,20 @@ impl WaspParser {
 				}
 			}
 
+			if op.is_equality() && ungrouped_equality(&lhs) {
+				lhs = Diagnostic { line: op_line, column: op_column, ..chained_equality(&lhs, op, &rhs) }.into_error();
+				previous_comparand = None;
+				continue;
+			}
+
 			lhs = match previous_comparand.take() {
-				Some(middle) if op.is_comparison() => {
+				Some(middle) if op.is_ordering() => {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
 					Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 				}
 				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
 			};
-			if op.is_comparison() {
+			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}
 		}
@@ -1735,6 +1741,27 @@ fn mentions(node: &Node, name: &str) -> bool {
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
 		Node::List(items, _, _) => items.iter().any(|item| mentions(item, name)),
 		_ => false,
+	}
+}
+
+/// `a==b` built in the same expression, not grouped by parentheses (a group is parsed as its own node)
+fn ungrouped_equality(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if op.is_equality())
+}
+
+/// `1==1==1` chains in Python (true) but is `(1==1)==1` in C: ambiguous, like in Rust
+fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
+	let (left, right) = (lhs.serialize(), rhs.serialize());
+	let middle = match lhs {
+		Node::Key(_, _, middle) => middle.serialize(),
+		_ => left.clone(),
+	};
+	let symbol = op.as_str();
+	Diagnostic {
+		message: format!("ambiguous: equality does not chain in {left} {symbol} {right}"),
+		line: 0,
+		column: 0,
+		fix: Some(format!("{left} and {middle} {symbol} {right} or ({left}) {symbol} {right}")),
 	}
 }
 
