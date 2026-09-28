@@ -226,3 +226,17 @@
 - Only `< <= > >=` chain (`3>2>1` → true). `==`/`!=` bind weaker (115 vs 120) and compare results: `1<2 == 2<3` → true.
 - An ungrouped `a==b==c` / `a==b!=c` is a diagnostic with fix-it (as in Rust), grouped `(1==1)==1` is allowed.
 - Footguns.md "Chained comparison" still says `1<2==2` chains: update it when the user's edit of that file is committed.
+
+## Work area "fast and lawful floats" (2026-09-28)
+- Decided by the maintainer: literals stay exact, IEEE floats are opt-in. One alias table, `type_kinds::canonical_type_name`:
+  `real`→`exact` (Kind::Int, which may hold a ratio), `fast`/`f64`/`double`→`float`; `builtin_type_kind`, casts and the
+  Lean kind map all go through it. `T x=v` (T a number type) lowers to `x:T=v` in `lower_declarations`, both parse shapes
+  (`(T x)=v` and the statement pair `T`, `x=v`); `double(x) := …` stays a function definition.
+- Fixed: `as` now binds (152,153), tighter than `* +`, weaker than unary minus; `v as T` works as an operand
+  (`infer_type`, `emit_numeric_value`, `emit_float_value`): `0.1 as float + 0.2 as float` → 0.30000000000000004,
+  `x=3.3 as float; x` → 3.3. Behaviour change: `2 * 1.5 as int` is now 2, `'2.1' as real` is the ratio 21/10.
+- Tests: test_addition_is_associative_by_default, test_fast_floats_are_not_associative, test_as_binds_tighter_than_arithmetic,
+  test_number_declaration_spellings_agree. Validated on CI (branch claude/float-decl).
+- Left open: `as exact` of a runtime f64 is a type error (no f64→ratio conversion yet); `'2.5' as float` inside arithmetic
+  is not a number (text casts only at top level); `int x=…`/`string x=…` prefix declarations are not lowered (only number
+  types); `real` excludes irrationals until a symbolic/constructive real exists.
