@@ -1,5 +1,10 @@
 # Brief for agents fixing Footguns.md "NOT YET" entries
 
+> **The catalogue moved (2026-09-28):** `Footguns.md` now lives in the wiki repo `github.com/pannous/warp.wiki`
+> (locally `wiki/Footguns.md`, not part of this repo). Do not recreate it here. Instead, write the new or changed entry
+> text under the heading `## For wiki/Footguns.md` at the end of `notes/footguns.md` (one `### <entry title>` block each,
+> ready to paste); the maintainer's session transfers it to the wiki. The Footguns.md steps below mean that block.
+
 Repo: github.com/pannous/warp (Rust compiler for the Wasp/Warp language, emits WASM GC). Read CLAUDE.md, DESIGN.md,
 Footguns.md, notes/footguns.md first. Each agent owns one work area (below); stay inside it.
 
