@@ -210,3 +210,14 @@
 - Left open: `fac := it<=1 ? …` fails to parse (`Unexpected character '='`), `it<2` works; probably `it<` read as a generic,
   not investigated. `print 1 + f 3` is also reported as ambiguous. Multi-parameter functions at statement level keep the
   list form `add 3 4`, so `add 3 4 > 5` still passes the comparison as the last argument.
+
+## Work area "Euclidean modulo" (2026-09-28)
+- Decided by the maintainer: `%` is Euclidean as in mathematics (`0 ≤ r < |b|`): `-7 % 3` → 2, `7 % -3` → 1. Built on the
+  "number decisions" run (floored `mod`, merged in 1bc4d2b8): `mod` is now a plain alias of `%` (no parser rewrite, divisor
+  evaluated once), `rem` (new Op::Rem) is the truncated remainder. Fixnum fast path adds `|b|` to a negative `i64.rem_s`,
+  the BigInt/ratio slow path is `exact_mod`; integer `x /= y` is the matching quotient `(x - x % y) / y`, `x %= y` follows `%`.
+  Lean exports `%` as `Int.emod`, `rem` as `Int.tmod`. The analyzer lints `%` with a negative literal or negated operand.
+- Tests changed with maintainer authorization: test_unbounded_int.rs (`-7 % 3` → 2, big `% 1000` → 110) and
+  probe_footguns.rs test_modulo_and_remainder_are_both_named. Validated on CI (branch claude/footguns-euclid).
+- Left open: float `%=` falls back to multiplication in the compound-assign float path (pre-existing, `_ => F64Mul`);
+  float `%` goes through the integer path. No `rem=`.
