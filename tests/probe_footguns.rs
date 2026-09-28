@@ -463,6 +463,71 @@ fn test_no_implicit_time_zone() {
 	fails_with("2024-03-31T02:30[Europe/Berlin]", "does not exist"); // gap, no silent shift
 }
 
+// Future civil time (Footguns.md → Truly impossible): wall times a transition repeats or skips need an explicit choice,
+// modelled on JavaScript Temporal's `disambiguation`; the value is the wall time plus zone, the instant is derived.
+
+#[test]
+fn test_repeated_local_time_needs_disambiguation() {
+	// Python: datetime(2030,10,27,2,30,tzinfo=ZoneInfo("Europe/Berlin")) silently takes fold=0; JS Date takes one silently
+	fails_with("2030-10-27T02:30[Europe/Berlin]", "occurs twice");
+	fails_with("2030-10-27T02:30[Europe/Berlin]", "2030-10-27T02:30+02:00[Europe/Berlin] (earlier)"); // fix-its name both instants
+	fails_with("2030-10-27T02:30[Europe/Berlin]", "2030-10-27T02:30+01:00[Europe/Berlin] (later)");
+	is!("t=2030-10-27T02:30+02:00[Europe/Berlin]; t.offset", 7200); // the RFC 9557 offset picks one
+	is!("t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: earlier); t.offset", 7200);
+	is!("t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: later); t.offset", 3600);
+	fails_with("zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: reject)", "occurs twice");
+}
+
+#[test]
+fn test_skipped_local_time_can_be_chosen_explicitly() {
+	fails_with("2030-03-31T02:30[Europe/Berlin]", "skipped by a daylight saving transition"); // Python: silently 01:30 UTC
+	is!("t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: earlier); t.hour", 1); // Temporal: 01:30+01:00
+	is!("t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: later); t.hour", 3); // Temporal: 03:30+02:00
+}
+
+#[test]
+fn test_zoned_time_records_its_rules_version() {
+	is!("t=2030-07-01T10:00[Europe/Berlin]; t.tzdata", "warp-2026a");
+	is!("t=2030-07-01T10:00+02:00[Europe/Berlin][_tzdata=warp-2026a]; t.hour", 10); // RFC 9557 suffix round-trips
+}
+
+static BERLIN_WITHOUT_DST: [warp::time::Zone; 1] =
+	[warp::time::calendar::zone("Europe/Berlin", 3600, warp::time::calendar::Dst::None)];
+/// Simulated rule change: the EU abolishes daylight saving before 2030
+static RULES_WITHOUT_DST: warp::time::TzRules = warp::time::TzRules {
+	version: "sim-2031a",
+	published: warp::time::calendar::Date { year: 2031, month: 1, day: 1 },
+	zones: &BERLIN_WITHOUT_DST,
+};
+
+#[test]
+fn test_rule_change_is_not_silent() {
+	let saved = "2030-07-01T10:00+02:00[Europe/Berlin][_tzdata=warp-2026a]"; // written under the built-in rules
+	warp::time::with_rules(&RULES_WITHOUT_DST, || {
+		fails_with(saved, "warp-2026a"); // names both versions
+		fails_with(saved, "sim-2031a");
+		fails_with(saved, "keep the wall time → 2030-07-01T10:00+01:00[Europe/Berlin]");
+		fails_with(saved, "keep the instant → 2030-07-01T09:00+01:00[Europe/Berlin]");
+		// without an offset the wall time is the value: re-resolved with the new rules
+		is!("t=2030-07-01T10:00[Europe/Berlin][_tzdata=warp-2026a]; t.offset", 3600);
+		is!("t=2030-07-01T10:00[Europe/Berlin]; t.tzdata", "sim-2031a");
+	});
+	is!("t=2030-07-01T10:00[Europe/Berlin]; t.tzdata", "warp-2026a"); // rules restored
+}
+
+#[test]
+fn test_calendar_day_is_not_24_hours() {
+	// Temporal: add({days:1}) keeps the wall time, add({hours:24}) the elapsed time; moment.js add(1,'day') likewise
+	is!("t=2030-03-30T12:00[Europe/Berlin] + 1 day; t.hour", 12);
+	is!("t=2030-03-30T12:00[Europe/Berlin] + 24 hours; t.hour", 13);
+	is!("(2030-03-30T12:00[Europe/Berlin] + 1 day) - 2030-03-30T12:00[Europe/Berlin] == 23 hours", true);
+	fails_with("1 day == 24 hours", "equal on some dates and not on others");
+	is!("1 hour == 60 minutes", true);
+	is!("1 day == 2 days", false);
+	fails_with("2030-10-26T02:30[Europe/Berlin] + 1 day", "occurs twice"); // lands in the repeated hour
+	is!("t=add(2030-10-26T02:30[Europe/Berlin], 1 day, disambiguation: later); t.offset", 3600);
+}
+
 #[test]
 fn test_date_and_time_types_are_distinct() {
 	fails_with("2024-01-31 < 2024-01-31T10:00", "date"); // date vs local time: no implicit midnight

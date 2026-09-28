@@ -4,7 +4,7 @@
 
 pub mod calendar;
 
-pub use calendar::{Duration, Overflow, Time};
+pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use crate::extensions::numbers::Number;
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
@@ -107,6 +107,7 @@ fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) ->
 		[time, keyword, zone] if is_symbol(keyword, "in") => place_in_zone(time, zone, scope),
 		[head, args @ ..] if separator == Separator::None && is_symbol(head, "date") => construct_date(args, scope),
 		[head, args @ ..] if separator == Separator::None && is_symbol(head, "add") => add(args, scope),
+		[head, args @ ..] if separator == Separator::None && is_symbol(head, "zoned") => zoned(args, scope),
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
 			let mut last = Err(unsupported(node));
 			for statement in items {
@@ -147,29 +148,61 @@ fn construct_date(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	Ok(Value::Time(Time::Date(date)))
 }
 
-/// `add(2024-01-31, 1 month, overflow: clamp)`: calendar overflow spelled out
-fn add(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
-	let (time, duration, options) = match args {
-		[time, duration, options @ ..] => (evaluate(time, scope)?, evaluate(duration, scope)?, options),
-		_ => return Err("add(time, duration, overflow: clamp) takes a time and a duration".to_string()),
-	};
-	let mut overflow = Overflow::Reject;
+/// Options of `add` and `zoned`: `overflow: clamp`, `disambiguation: earlier`; both reject by default
+fn options(function: &str, options: &[Node], scope: &mut Scope) -> Result<(Overflow, Disambiguation), String> {
+	let (mut overflow, mut choice) = (Overflow::Reject, Disambiguation::Reject);
 	for option in options {
 		let Node::Key(name, Op::Colon, value) = option.drop_meta() else {
 			return Err(unsupported(option));
 		};
-		if !is_symbol(name, "overflow") {
-			return Err(format!("add has no option {name}"));
-		}
-		overflow = match evaluate(value, scope)? {
-			Value::Symbol(mode) | Value::Text(mode) if mode == "clamp" || mode == "constrain" => Overflow::Clamp,
-			Value::Symbol(mode) | Value::Text(mode) if mode == "reject" => Overflow::Reject,
-			other => return Err(format!("overflow is clamp or reject, got {other:?}")),
+		let mode = match evaluate(value, scope)? {
+			Value::Symbol(mode) | Value::Text(mode) => mode,
+			other => return Err(format!("{name} takes a word like reject, got {}", other.kind())),
 		};
+		match (name.drop_meta(), mode.as_str()) {
+			(Node::Symbol(name), "clamp" | "constrain") if name == "overflow" && function == "add" => overflow = Overflow::Clamp,
+			(Node::Symbol(name), "reject") if name == "overflow" && function == "add" => overflow = Overflow::Reject,
+			(Node::Symbol(name), _) if name == "overflow" && function == "add" => return Err(format!("overflow is clamp or reject, got {mode}")),
+			(Node::Symbol(name), "earlier") if name == "disambiguation" => choice = Disambiguation::Earlier,
+			(Node::Symbol(name), "later") if name == "disambiguation" => choice = Disambiguation::Later,
+			(Node::Symbol(name), "reject") if name == "disambiguation" => choice = Disambiguation::Reject,
+			(Node::Symbol(name), _) if name == "disambiguation" => {
+				return Err(format!("disambiguation is earlier, later or reject, got {mode}"))
+			}
+			_ => return Err(format!("{function} has no option {name}")),
+		}
 	}
+	Ok((overflow, choice))
+}
+
+/// `add(2024-01-31, 1 month, overflow: clamp)`: calendar overflow spelled out,
+/// `add(t, 1 day, disambiguation: later)` when the day lands on a repeated or skipped wall time
+fn add(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
+	let (time, duration, rest) = match args {
+		[time, duration, rest @ ..] => (evaluate(time, scope)?, evaluate(duration, scope)?, rest),
+		_ => return Err("add(time, duration, overflow: clamp) takes a time and a duration".to_string()),
+	};
+	let (overflow, choice) = options("add", rest, scope)?;
 	match (time, duration) {
-		(Value::Time(time), Value::Duration(duration)) => time.add(duration, overflow).map(Value::Time),
+		(Value::Time(time), Value::Duration(duration)) => time.add(duration, overflow, choice).map(Value::Time),
 		(time, duration) => Err(format!("add needs a time and a duration, got {} and {}", time.kind(), duration.kind())),
+	}
+}
+
+/// `zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: earlier)`: a local time in a zone, the choice spelled out
+fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
+	let [time, zone, rest @ ..] = args else {
+		return Err("zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string());
+	};
+	let zone = match evaluate(zone, scope)? {
+		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name)?,
+		other => return Err(format!("zoned needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
+	};
+	let (_, choice) = options("zoned", rest, scope)?;
+	match evaluate(time, scope)? {
+		Value::Time(Time::Local(date, clock)) => zone.resolve(date, clock, choice).map(|zoned| Value::Time(Time::Zoned(zoned))),
+		Value::Time(time) => time.in_zone(zone).map(Value::Time),
+		other => Err(format!("zoned needs a local time, got {}", other.kind())),
 	}
 }
 
@@ -188,6 +221,8 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 				return Err(unsupported(right));
 			};
 			match evaluate(left, scope)? {
+				// The time zone rules version a zoned time was resolved with
+				Value::Time(Time::Zoned(zoned)) if field == "tzdata" => Ok(Value::Text(zoned.rules.version.to_string())),
 				Value::Time(time) => time.field(field).map(Value::Int),
 				Value::Duration(duration) => duration.field(field).map(Value::Int),
 				other => Err(format!("{} has no field {field}", other.kind())),
@@ -215,9 +250,11 @@ fn compared(op: Op, ordering: Ordering) -> bool {
 fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 	match (left, op, right) {
 		(Value::Time(time), Op::Add, Value::Duration(duration)) | (Value::Duration(duration), Op::Add, Value::Time(time)) => {
-			time.add(duration, Overflow::Reject).map(Value::Time)
+			time.add(duration, Overflow::Reject, Disambiguation::Reject).map(Value::Time)
 		}
-		(Value::Time(time), Op::Sub, Value::Duration(duration)) => time.add(duration.times(-1), Overflow::Reject).map(Value::Time),
+		(Value::Time(time), Op::Sub, Value::Duration(duration)) => {
+			time.add(duration.times(-1), Overflow::Reject, Disambiguation::Reject).map(Value::Time)
+		}
 		(Value::Time(later), Op::Sub, Value::Time(earlier)) => Ok(match later.since(earlier)? {
 			Ok(days) => Value::Int(days),
 			Err(duration) => Value::Duration(duration),
@@ -226,8 +263,8 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Duration(a), Op::Add, Value::Duration(b)) => Ok(Value::Duration(a.plus(b))),
 		(Value::Duration(a), Op::Sub, Value::Duration(b)) => Ok(Value::Duration(a.plus(b.times(-1)))),
 		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => Ok(Value::Duration(duration.times(n))),
-		(Value::Duration(a), Op::Eq, Value::Duration(b)) => Ok(Value::Bool(a == b)),
-		(Value::Duration(a), Op::Ne, Value::Duration(b)) => Ok(Value::Bool(a != b)),
+		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
+		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
 		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(compared(op, a.cmp(&b)))),
 		(Value::Int(a), Op::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
 		(Value::Int(a), Op::Sub, Value::Int(b)) => Ok(Value::Int(a - b)),

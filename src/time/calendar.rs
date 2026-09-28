@@ -34,8 +34,31 @@ pub enum Time {
 	Local(Date, Clock),
 	/// `2024-01-31T09:00Z`: a point on the UTC line, no calendar fields until placed in a zone
 	Instant(Instant),
-	/// `2024-01-31T10:00[Europe/Berlin]`: an instant seen through a zone's rules
-	Zoned(Instant, &'static Zone),
+	/// `2024-01-31T10:00+01:00[Europe/Berlin]`: a wall time in a zone, the instant is derived
+	Zoned(Zoned),
+}
+
+/// The value of a zoned time is its wall time and zone. The offset is the one chosen when it was resolved,
+/// under the rules version it was resolved with; the instant is derived from them. Future rule changes are
+/// politics: a program cannot know them, it can only notice when rules it was resolved with have changed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Zoned {
+	pub date: Date,
+	pub clock: Clock,
+	pub offset: i64, // seconds east of UTC, one of the zone's offsets at this wall time
+	pub zone: &'static Zone,
+	pub rules: &'static TzRules,
+}
+
+/// Which instant a wall time means when a transition skips it or repeats it (JavaScript Temporal's `disambiguation`)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Disambiguation {
+	/// The default: a skipped or repeated wall time is an error listing both instants
+	Reject,
+	/// The first of two repeated instants; in a gap, the wall time shifted back by the gap
+	Earlier,
+	/// The second of two repeated instants; in a gap, the wall time shifted forward by the gap
+	Later,
 }
 
 /// Calendar months and days are counted, exact time is measured: `1 day` on a zoned time is a calendar day, `24 hours` is not
@@ -71,7 +94,43 @@ pub struct Zone {
 	pub dst: Dst,
 }
 
-const fn zone(name: &'static str, standard: i64, dst: Dst) -> Zone {
+/// A version of the time zone rules: times after `published` are predictions that a later version may revise
+#[derive(Debug, PartialEq)]
+pub struct TzRules {
+	pub version: &'static str,
+	pub published: Date,
+	pub zones: &'static [Zone],
+}
+
+/// The rules compiled into warp
+pub static BUILTIN_RULES: TzRules = TzRules {
+	version: "warp-2026a",
+	published: Date { year: 2026, month: 9, day: 28 },
+	zones: ZONES,
+};
+
+thread_local! {
+	static CURRENT_RULES: std::cell::Cell<&'static TzRules> = const { std::cell::Cell::new(&BUILTIN_RULES) };
+}
+
+/// The rules times are resolved with now
+pub fn rules() -> &'static TzRules {
+	CURRENT_RULES.with(|current| current.get())
+}
+
+/// Resolve times with other rules while `body` runs, e.g. to simulate a rule change in a test
+pub fn with_rules<R>(rules: &'static TzRules, body: impl FnOnce() -> R) -> R {
+	struct Restore(&'static TzRules);
+	impl Drop for Restore {
+		fn drop(&mut self) {
+			CURRENT_RULES.with(|current| current.set(self.0));
+		}
+	}
+	let _restore = Restore(CURRENT_RULES.with(|current| current.replace(rules)));
+	body()
+}
+
+pub const fn zone(name: &'static str, standard: i64, dst: Dst) -> Zone {
 	Zone { name, standard, dst }
 }
 
@@ -121,8 +180,9 @@ pub static ZONES: &[Zone] = &[
 ];
 
 pub fn zone_named(name: &str) -> Result<&'static Zone, String> {
-	ZONES.iter().find(|zone| zone.name == name).ok_or_else(|| {
-		format!("unknown time zone {name:?}: not in the embedded zone table (src/time/calendar.rs)")
+	let rules = rules();
+	rules.zones.iter().find(|zone| zone.name == name).ok_or_else(|| {
+		format!("unknown time zone {name:?}: not in the time zone rules {} (src/time/calendar.rs)", rules.version)
 	})
 }
 
@@ -287,23 +347,61 @@ impl Zone {
 		}
 	}
 
-	/// A wall time skipped by a transition is an error, never a silent shift; a repeated one takes the earlier instant
-	pub fn resolve(&'static self, date: Date, clock: Clock) -> Result<Instant, String> {
+	/// A wall time skipped or repeated by a transition is an error unless the choice is spelled out, never a silent shift
+	pub fn resolve(&'static self, date: Date, clock: Clock, choice: Disambiguation) -> Result<Zoned, String> {
 		let offsets = [self.standard + HOUR, self.standard];
 		let offsets = if self.dst == Dst::None { &offsets[1..] } else { &offsets[..] };
-		offsets
-			.iter()
-			.map(|offset| (instant_of(date, clock, *offset), *offset))
-			.filter(|(instant, offset)| self.offset_at(*instant) == *offset)
-			.map(|(instant, _)| instant)
-			.min()
-			.ok_or_else(|| {
-				format!(
-					"{} does not exist in {}: skipped by a daylight saving transition",
-					Time::Local(date, clock),
-					self.name
-				)
-			})
+		let valid: Vec<i64> = offsets.iter().copied().filter(|offset| self.offset_at(instant_of(date, clock, *offset)) == *offset).collect();
+		if let [offset] = valid[..] {
+			return Ok(Zoned { date, clock, offset, zone: self, rules: rules() });
+		}
+		// Both offsets give the two candidates: the repeated instants, or the wall time shifted across the gap
+		let instants = offsets.iter().map(|offset| instant_of(date, clock, *offset));
+		let earlier = Zoned::at(instants.clone().min().unwrap_or_default(), self);
+		let later = Zoned::at(instants.max().unwrap_or_default(), self);
+		let wall = Time::Local(date, clock);
+		match choice {
+			Disambiguation::Earlier => Ok(earlier),
+			Disambiguation::Later => Ok(later),
+			Disambiguation::Reject if valid.is_empty() => Err(format!(
+				"{wall} does not exist in {}: skipped by a daylight saving transition. Choose disambiguation: earlier → {} or later → {}",
+				self.name,
+				earlier.plain(),
+				later.plain()
+			)),
+			Disambiguation::Reject => Err(format!(
+				"{wall} is ambiguous in {}: it occurs twice, the clocks are set back by a daylight saving transition. Write {} (earlier) or {} (later), or choose disambiguation: earlier or later",
+				self.name,
+				earlier.plain(),
+				later.plain()
+			)),
+		}
+	}
+}
+
+impl Zoned {
+	/// The wall time of an instant in a zone, under the current rules
+	pub fn at(instant: Instant, zone: &'static Zone) -> Zoned {
+		let offset = zone.offset_at(instant);
+		let (date, clock) = local_at(instant, offset);
+		Zoned { date, clock, offset, zone, rules: rules() }
+	}
+
+	pub fn instant(self) -> Instant {
+		instant_of(self.date, self.clock, self.offset)
+	}
+
+	/// Later than the publication of its rules: the offset is a prediction
+	pub fn is_prediction(self) -> bool {
+		self.instant() >= self.rules.published.days() as i128 * DAY
+	}
+
+	/// RFC 9557 form without the rules version: `2030-10-27T02:30+01:00[Europe/Berlin]`
+	pub fn plain(self) -> String {
+		let mut text = Time::Local(self.date, self.clock).to_string();
+		let (sign, offset) = if self.offset < 0 { ('-', -self.offset) } else { ('+', self.offset) };
+		text += &format!("{sign}{:02}:{:02}[{}]", offset / 3600, offset / 60 % 60, self.zone.name);
+		text
 	}
 }
 
@@ -332,14 +430,14 @@ pub fn literal_len(chars: &[char]) -> usize {
 		} else if (is(end, '+') || is(end, '-')) && digits(end + 1, 2) && is(end + 3, ':') && digits(end + 4, 2) {
 			end += 6;
 		}
-		if is(end, '[') {
-			let close = (end + 1..chars.len()).find(|&i| chars[i] == ']');
-			if let Some(close) = close {
-				let name = &chars[end + 1..close];
-				if !name.is_empty() && name.iter().all(|c| c.is_ascii_alphanumeric() || "/_+-".contains(*c)) {
-					end = close + 1;
-				}
+		// RFC 9557 suffixes: `[Europe/Berlin]`, then `[key=value]` like `[_tzdata=warp-2026a]`
+		while is(end, '[') {
+			let Some(close) = (end + 1..chars.len()).find(|&i| chars[i] == ']') else { break };
+			let name = &chars[end + 1..close];
+			if name.is_empty() || !name.iter().all(|c| c.is_ascii_alphanumeric() || "/_+-=.!".contains(*c)) {
+				break;
 			}
+			end = close + 1;
 		}
 	}
 	let at_boundary = chars.get(end).is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
@@ -393,21 +491,47 @@ pub fn parse_literal(text: &str) -> Result<Time, String> {
 		}
 		_ => None,
 	};
-	let zone = match bytes.get(i) {
-		Some(b'[') => Some(zone_named(&text[i + 1..text.len() - 1])?),
-		_ => None,
-	};
+	let (mut zone, mut resolved_with) = (None, None);
+	for suffix in text[i..].split_terminator(']') {
+		let suffix = suffix.strip_prefix('[').unwrap_or(suffix);
+		match suffix.split_once('=') {
+			Some(("_tzdata", version)) => resolved_with = Some(version),
+			Some(_) => return Err(format!("unsupported suffix [{suffix}] in {text}: only [_tzdata=version] is known")),
+			None if zone.is_none() => zone = Some(zone_named(suffix)?),
+			None => return Err(format!("{text} names two zones")),
+		}
+	}
+	if resolved_with.is_some() && zone.is_none() {
+		return Err(format!("{text}: only a zoned time records the time zone rules it was resolved with"));
+	}
 	match (offset, zone) {
 		(None, None) => Ok(Time::Local(date, clock)),
 		(Some(offset), None) => Ok(Time::Instant(instant_of(date, clock, offset))),
-		(None, Some(zone)) => Ok(Time::Zoned(zone.resolve(date, clock)?, zone)),
+		// The wall time is the value: resolving it with newer rules is what the writer meant
+		(None, Some(zone)) => Ok(Time::Zoned(zone.resolve(date, clock, Disambiguation::Reject)?)),
+		// RFC 9557: `Z[zone]` names only the instant
+		(Some(_), Some(zone)) if universal => Ok(Time::Zoned(Zoned::at(instant_of(date, clock, 0), zone))),
 		(Some(offset), Some(zone)) => {
 			let instant = instant_of(date, clock, offset);
-			// RFC 9557: `Z[zone]` names only the instant, a numeric offset must agree with the zone
-			if !universal && zone.offset_at(instant) != offset {
-				return Err(format!("offset in {text} does not match {}", zone.name));
+			if zone.offset_at(instant) == offset {
+				return Ok(Time::Zoned(Zoned { date, clock, offset, zone, rules: rules() }));
 			}
-			Ok(Time::Zoned(instant, zone))
+			// The numeric offset disagrees with the zone: never pick the wall time or the instant silently
+			let keep_wall = match zone.resolve(date, clock, Disambiguation::Reject) {
+				Ok(zoned) => zoned.plain(),
+				Err(message) => format!("none ({message})"),
+			};
+			let keep_instant = Zoned::at(instant, zone).plain();
+			let current = rules().version;
+			let reason = match resolved_with {
+				Some(version) if version != current => format!(
+					"was resolved with time zone rules {version}, under {current} the offset of {} at {} is different",
+					zone.name,
+					Time::Local(date, clock)
+				),
+				_ => format!("offset does not match {}", zone.name),
+			};
+			Err(format!("{text} {reason}: keep the wall time → {keep_wall}, or keep the instant → {keep_instant}"))
 		}
 	}
 }
@@ -444,7 +568,19 @@ impl Duration {
 		Duration { months: self.months + other.months, days: self.days + other.days, nanos: self.nanos + other.nanos }
 	}
 
-	fn is_exact(self) -> bool {
+	/// `1 day == 24 hours` depends on the day: equal fields are equal, one differing field is unequal, more is an error
+	pub fn equals(self, other: Duration) -> Result<bool, String> {
+		let differing = [self.months != other.months, self.days != other.days, self.nanos != other.nanos];
+		match differing.iter().filter(|differs| **differs).count() {
+			0 => Ok(true),
+			1 => Ok(false),
+			_ => Err(format!(
+				"{self} and {other} are equal on some dates and not on others (a day is 23 to 25 hours across daylight saving, a month 28 to 31 days): compare the times they lead to"
+			)),
+		}
+	}
+
+	pub fn is_exact(self) -> bool {
 		self.months == 0 && self.days == 0
 	}
 
@@ -482,8 +618,9 @@ impl Time {
 	/// `t in "Europe/Berlin"`: an instant gets a wall clock, a local time gets an instant
 	pub fn in_zone(self, zone: &'static Zone) -> Result<Time, String> {
 		match self {
-			Time::Instant(instant) | Time::Zoned(instant, _) => Ok(Time::Zoned(instant, zone)),
-			Time::Local(date, clock) => Ok(Time::Zoned(zone.resolve(date, clock)?, zone)),
+			Time::Instant(instant) => Ok(Time::Zoned(Zoned::at(instant, zone))),
+			Time::Zoned(zoned) => Ok(Time::Zoned(Zoned::at(zoned.instant(), zone))),
+			Time::Local(date, clock) => Ok(Time::Zoned(zone.resolve(date, clock, Disambiguation::Reject)?)),
 			Time::Date(date) => Err(format!("a date has no time of day: give {date} a clock before placing it in {}", zone.name)),
 		}
 	}
@@ -492,10 +629,7 @@ impl Time {
 		match self {
 			Time::Date(date) => Some((date, None)),
 			Time::Local(date, clock) => Some((date, Some(clock))),
-			Time::Zoned(instant, zone) => {
-				let (date, clock) = local_at(instant, zone.offset_at(instant));
-				Some((date, Some(clock)))
-			}
+			Time::Zoned(zoned) => Some((zoned.date, Some(zoned.clock))),
 			Time::Instant(_) => None,
 		}
 	}
@@ -520,15 +654,16 @@ impl Time {
 			"minute" => clock_field(|clock| clock.minute),
 			"second" => clock_field(|clock| clock.second),
 			"offset" => match self {
-				Time::Zoned(instant, zone) => Ok(zone.offset_at(instant)),
+				Time::Zoned(zoned) => Ok(zoned.offset),
 				_ => Err(format!("{kind} has no offset")),
 			},
 			_ => Err(format!("{kind} has no field {name}")),
 		}
 	}
 
-	/// `2024-01-31 + 1 month` is an error unless the overflow is spelled out
-	pub fn add(self, duration: Duration, overflow: Overflow) -> Result<Time, String> {
+	/// `2024-01-31 + 1 month` is an error unless the overflow is spelled out.
+	/// On a zoned time calendar units keep the wall time (`+ 1 day`), exact units keep the elapsed time (`+ 24 hours`)
+	pub fn add(self, duration: Duration, overflow: Overflow, choice: Disambiguation) -> Result<Time, String> {
 		let Duration { months, days, nanos } = duration;
 		match self {
 			Time::Date(_) if nanos != 0 => Err(format!("a date has no time of day: add {duration} to a local time")),
@@ -542,14 +677,13 @@ impl Time {
 				"an instant has no calendar: place it in a zone before adding {duration}"
 			)),
 			Time::Instant(instant) => Ok(Time::Instant(instant + nanos)),
-			Time::Zoned(instant, zone) => {
-				let instant = if duration.is_exact() {
-					instant
+			Time::Zoned(zoned) => {
+				let zoned = if duration.is_exact() {
+					zoned
 				} else {
-					let (date, clock) = local_at(instant, zone.offset_at(instant));
-					zone.resolve(date.shift(months, days, overflow)?, clock)?
+					zoned.zone.resolve(zoned.date.shift(months, days, overflow)?, zoned.clock, choice)?
 				};
-				Ok(Time::Zoned(instant + nanos, zone))
+				Ok(Time::Zoned(if nanos == 0 { zoned } else { Zoned::at(zoned.instant() + nanos, zoned.zone) }))
 			}
 		}
 	}
@@ -558,7 +692,8 @@ impl Time {
 		match self {
 			Time::Date(date) => date.days() as i128,
 			Time::Local(date, clock) => wall_nanos(date, clock),
-			Time::Instant(instant) | Time::Zoned(instant, _) => instant,
+			Time::Instant(instant) => instant,
+			Time::Zoned(zoned) => zoned.instant(),
 		}
 	}
 
@@ -623,14 +758,9 @@ impl fmt::Display for Time {
 				write_clock(f, clock)?;
 				write!(f, "Z")
 			}
-			Time::Zoned(instant, zone) => {
-				let offset = zone.offset_at(instant);
-				let (date, clock) = local_at(instant, offset);
-				write!(f, "{date}")?;
-				write_clock(f, clock)?;
-				let sign = if offset < 0 { '-' } else { '+' };
-				write!(f, "{sign}{:02}:{:02}[{}]", offset.abs() / 3600, offset.abs() / 60 % 60, zone.name)
-			}
+			// A prediction records the rules it was resolved with, so a reader with other rules can tell
+			Time::Zoned(zoned) if zoned.is_prediction() => write!(f, "{}[_tzdata={}]", zoned.plain(), zoned.rules.version),
+			Time::Zoned(zoned) => write!(f, "{}", zoned.plain()),
 		}
 	}
 }
