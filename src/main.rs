@@ -25,6 +25,7 @@ pub mod normalize;
 pub mod run;
 pub mod local;
 pub mod law;
+pub mod function_equality;
 pub mod effects;
 pub mod diagnostic;
 pub mod injection;
