@@ -1778,8 +1778,10 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
 
-		self.emit_block_value(func, body);
-		func.instruction(&Instruction::LocalSet(result_local));
+		if !matches!(body.drop_meta(), Node::Empty) { // `while c {}` only spins: nothing to evaluate
+			self.emit_block_value(func, body);
+			func.instruction(&Instruction::LocalSet(result_local));
+		}
 		func.instruction(&Instruction::Br(0));
 
 		func.instruction(&Instruction::End);
@@ -2954,13 +2956,13 @@ impl WasmGcEmitter {
 
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
-	use wasmtime::{Linker, Module, Store, Val};
+	use wasmtime::{Linker, Module, Val};
 
 	// Register WASM metadata for field name lookup in Debug output
 	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
 
 	let engine = gc_engine();
-	let mut store = Store::new(&engine, ());
+	let mut store = crate::util::fueled_store(&engine, ());
 	let module = Module::new(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
 	let linker = Linker::new(&engine);
@@ -3117,11 +3119,20 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	result.unwrap_or_else(failed_run)
 }
 
+/// The run used up its fuel: it probably does not terminate, or needs a larger budget
+pub fn out_of_fuel(steps: u64) -> Node {
+	crate::node::error(&format!(
+		"out of fuel after {steps} steps: the program may not terminate (raise the budget with {}=<steps> or --fuel <steps>)",
+		crate::util::FUEL_VARIABLE))
+}
+
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
 fn failed_run(failure: anyhow::Error) -> Node {
-	if failure.downcast_ref::<wasmtime::Trap>().is_none() {
-		return crate::node::error(&format!("could not run the program: {failure:#}"));
+	match failure.downcast_ref::<wasmtime::Trap>() {
+		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
+		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
+		Some(_) => {}
 	}
 	let trace = format!("{:?}", failure);
 	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name));

@@ -6,7 +6,7 @@ use crate::node::Node;
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
-use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Store, Val};
+use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};
 
 /// Memory allocator state for host functions
 pub struct HostState {
@@ -71,7 +71,7 @@ fn write_string_to_caller(
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	let engine = gc_engine();
-	let mut store = Store::new(&engine, ());
+	let mut store = crate::util::fueled_store(&engine, ());
 	let module = Module::new(&engine, bytes)?;
 	let linker = Linker::new(&engine);
 	let instance = linker.instantiate(&mut store, &module)?;

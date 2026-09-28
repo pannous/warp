@@ -5,7 +5,7 @@ use std::path::Path;
 use wasmtime::*;
 
 pub fn run_wasm(path: &str) -> Result<i32> {
-	let engine = Engine::default();
+	let engine = Engine::new(&crate::util::deterministic_config())?;
 	let _wat = r#" (module
             (import "host" "host_func" (func $host_hello (param i32)))
             (func (export "main") i32.const 42) ) "#;
@@ -54,11 +54,8 @@ pub fn run_wat(wat_code: &str) -> Node {
 	use crate::ffi::{link_ffi_functions, link_module_libraries, FfiState};
 	use crate::type_kinds::Kind;
 
-	// Create engine with GC support
-	let mut config = Config::new();
-	config.wasm_gc(true);
-	config.wasm_function_references(true);
-	let engine = Engine::new(&config).expect("Failed to create engine");
+	// Create engine with GC support, canonical NaNs and fuel
+	let engine = crate::util::gc_engine();
 
 	// Compile WAT to module (wasmtime handles text → binary conversion)
 	let module = match Module::new(&engine, wat_code) {
@@ -70,7 +67,7 @@ pub fn run_wat(wat_code: &str) -> Node {
 	};
 
 	// Create store with FFI state
-	let mut store: Store<FfiState> = Store::new(&engine, FfiState::new());
+	let mut store: Store<FfiState> = crate::util::fueled_store(&engine, FfiState::new());
 
 	// Create linker with FFI functions
 	let mut linker: Linker<FfiState> = Linker::new(&engine);
@@ -106,6 +103,9 @@ pub fn run_wat(wat_code: &str) -> Node {
 	// Call main and get result - use AnyRef for GC struct results
 	let mut results = vec![Val::null_any_ref()];
 	if let Err(e) = main.call(&mut store, &[], &mut results) {
+		if matches!(e.downcast_ref::<Trap>(), Some(Trap::OutOfFuel)) {
+			return crate::wasm_emitter::out_of_fuel(crate::util::fuel_budget());
+		}
 		eprintln!("Execution error: {}", e);
 		return Node::Empty;
 	}

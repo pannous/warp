@@ -48,8 +48,19 @@ fn node_to_i32(node: &Node) -> i32 {
 
 #[cfg(not(test))]
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut args: Vec<String> = env::args().collect();
     let _executable_path = &args[0];
+    // `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
+    if let Some(flag) = args.iter().position(|arg| arg == "--fuel") {
+        match args.get(flag + 1).and_then(|steps| steps.replace('_', "").parse::<u64>().ok()) {
+            Some(steps) => util::set_fuel_budget(steps),
+            None => {
+                eprintln!("--fuel needs a number of steps, e.g. --fuel 100000000000");
+                std::process::exit(2);
+            }
+        }
+        args.drain(flag..flag + 2);
+    }
 
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
@@ -221,6 +232,7 @@ fn usage() {
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp repl            Start interactive console");
+    println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

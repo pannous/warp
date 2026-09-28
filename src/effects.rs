@@ -3,6 +3,8 @@
 //! A function's effects are the union of the trusted signatures of everything it calls,
 //! resolved to a fixpoint so recursion terminates. The resolved external calls also decide
 //! which WASM imports a module declares: no IO call, no WASI import.
+//! `Div` (as in Koka) marks code that may not terminate: a `while` loop, recursion that does not
+//! demonstrably shrink a parameter toward a guarded base case, or mutual recursion. When unsure, Div.
 //! Later the `EffectSet` moves onto semantic `Expr`/`FunctionDecl`; the report stays the query API.
 
 use crate::analyzer::{extract_ffi_imports, extract_user_functions};
@@ -42,10 +44,12 @@ pub enum Effect {
 	FFI,
 	Async,
 	Unsafe,
+	/// May diverge: not provably terminating (Koka's `div`)
+	Div,
 }
 
 impl Effect {
-	pub const ALL: [Effect; 6] = [State, Allocation, IO, FFI, Async, Unsafe];
+	pub const ALL: [Effect; 7] = [State, Allocation, IO, FFI, Async, Unsafe, Div];
 
 	fn bit(self) -> u8 {
 		1 << self as u8
@@ -160,6 +164,8 @@ pub struct External {
 pub struct FunctionEffects {
 	/// Inferred: union over everything this function calls, transitively
 	pub effects: EffectSet,
+	/// Performed by the body itself, not via a call: `global` state, a `while` loop, non-shrinking recursion
+	pub own: EffectSet,
 	/// Directly resolved callees (user functions and externals)
 	pub calls: BTreeSet<String>,
 	pub declared: Option<Constraint>,
@@ -185,7 +191,11 @@ impl fmt::Display for EffectViolation {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "effect violation at {}:{}: {} is declared ! {} but performs {} via {}",
 			self.constraint.line, self.constraint.column, self.function,
-			self.constraint.allowed, self.excess, self.chain.join(" → "))
+			self.constraint.allowed, self.excess, self.chain.join(" → "))?;
+		if self.excess.contains(Div) {
+			write!(f, " (Div: may not terminate: a while loop, or recursion without a parameter that shrinks toward a guarded base case)")?;
+		}
+		Ok(())
 	}
 }
 
@@ -209,9 +219,15 @@ impl EffectReport {
 
 		let mut report = EffectReport::default();
 		for (name, definition) in &context.user_functions {
-			report.functions.insert(name.clone(), resolver.function(&definition.body));
+			let mut function = resolver.function(&definition.body);
+			let parameters: Vec<&str> = definition.params.iter().map(|(parameter, _)| parameter.as_str()).collect();
+			if function.calls.contains(name) && !recursion_shrinks(name, &parameters, &definition.body) {
+				function.perform(Div);
+			}
+			report.functions.insert(name.clone(), function);
 		}
 		report.functions.insert(ENTRY.into(), resolver.function(program));
+		report.mark_mutual_recursion();
 		for (name, constraint) in constraints(program) {
 			match report.functions.get_mut(&name) {
 				Some(function) if name != ENTRY => function.declared = Some(constraint),
@@ -224,6 +240,31 @@ impl EffectReport {
 		report.infer_to_fixpoint();
 		report.violations = report.check_constraints();
 		report
+	}
+
+	/// A cycle through another function has no measure we can check: Div
+	fn mark_mutual_recursion(&mut self) {
+		let cyclic: Vec<String> = self.functions.iter()
+			.filter(|(name, function)| function.calls.iter().any(|callee| callee != *name && self.reaches(callee, name)))
+			.map(|(name, _)| name.clone()).collect();
+		for name in cyclic {
+			self.functions.get_mut(&name).expect("known function").perform(Div);
+		}
+	}
+
+	/// Whether `to` is reachable from `from` over resolved user-function calls
+	fn reaches(&self, from: &str, to: &str) -> bool {
+		let mut seen = BTreeSet::new();
+		let mut queue = VecDeque::from([from.to_string()]);
+		while let Some(current) = queue.pop_front() {
+			if current == to {
+				return true;
+			}
+			if seen.insert(current.clone()) {
+				queue.extend(self.functions.get(&current).into_iter().flat_map(|f| f.calls.iter().cloned()));
+			}
+		}
+		false
 	}
 
 	fn infer_to_fixpoint(&mut self) {
@@ -278,12 +319,14 @@ impl EffectReport {
 		self.externals.contains_key(name)
 	}
 
-	/// Shortest call path from `from` to the external that introduces `effect`
+	/// Shortest call path from `from` to the external or function body that introduces `effect`
 	pub fn call_chain(&self, from: &str, effect: Effect) -> Vec<String> {
 		let mut predecessor: BTreeMap<String, String> = BTreeMap::new();
 		let mut queue = VecDeque::from([from.to_string()]);
 		while let Some(current) = queue.pop_front() {
-			if self.externals.get(&current).is_some_and(|external| external.effects.contains(effect)) {
+			let introduces = self.externals.get(&current).is_some_and(|external| external.effects.contains(effect))
+				|| self.functions.get(&current).is_some_and(|function| function.own.contains(effect));
+			if introduces {
 				let mut chain = vec![current.clone()];
 				while let Some(previous) = predecessor.get(chain.last().expect("non-empty")) {
 					chain.push(previous.clone());
@@ -361,12 +404,15 @@ impl Resolver<'_> {
 			return;
 		}
 		match node.drop_meta() {
-			Node::Symbol(name) if name == STATE_KEYWORD => function.effects = function.effects.union(EffectSet::of(&[State])),
+			Node::Symbol(name) if name == STATE_KEYWORD => function.perform(State),
 			Node::Symbol(name) if self.resolves(name) => {
 				function.calls.insert(name.clone());
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| self.collect(item, function)),
-			Node::Key(left, _, right) => {
+			Node::Key(left, op, right) => {
+				if *op == Op::While && !never_true(right) {
+					function.perform(Div);
+				}
 				self.collect(left, function);
 				self.collect(right, function);
 			}
@@ -377,6 +423,189 @@ impl Resolver<'_> {
 
 	fn is_definition(&self, node: &Node) -> bool {
 		defined_name(node).is_some_and(|name| self.context.user_functions.contains_key(&name))
+	}
+}
+
+impl FunctionEffects {
+	fn perform(&mut self, effect: Effect) {
+		let effect = EffectSet::of(&[effect]);
+		self.own = self.own.union(effect);
+		self.effects = self.effects.union(effect);
+	}
+}
+
+/// `while 0 {…}` / `while false {…}` never runs its body
+fn never_true(condition: &Node) -> bool {
+	match condition.drop_meta() {
+		Node::Number(crate::extensions::numbers::Number::Int(0)) => true,
+		Node::Symbol(word) => word == "false" || word == "False",
+		Node::List(items, _, _) if items.len() == 1 => never_true(&items[0]),
+		_ => false,
+	}
+}
+
+// ── Termination of self-recursion ────────────────────────────────────────────────────────────────
+// Total if one parameter p is a measure: every recursive call sits in a branch whose guard bounds p
+// by a number literal (`p<2 ? … : f(p-1)` bounds p ≥ 2 below) and passes `p - k` (or `p + k` toward
+// an upper bound) at p's position, k a positive literal. p then moves by at least k per call and the
+// call is only reached inside the bound, so every call chain is finite. p must not be assigned in the body.
+// Assumes finite numbers: a float NaN or ∞ argument can still run away (exact numbers are the default).
+
+/// Which side of a literal a guard confines a parameter to
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Bound {
+	/// p ≥ c or p > c: shrinking `p - k` terminates
+	Lower,
+	/// p ≤ c or p < c: growing `p + k` terminates
+	Upper,
+}
+
+type Facts = Vec<(String, Bound)>;
+
+fn recursion_shrinks(name: &str, parameters: &[&str], body: &Node) -> bool {
+	let measures = parameters.iter().enumerate().filter(|(_, parameter)| !assigns(body, parameter));
+	measures.flat_map(|(index, parameter)| [(index, *parameter, Bound::Lower), (index, *parameter, Bound::Upper)])
+		.any(|(index, parameter, bound)| calls_shrink(body, name, index, parameter, bound, &mut vec![]))
+}
+
+/// Every occurrence of `name` in `node` is a call that moves argument `index` toward the known `bound` of `parameter`
+fn calls_shrink(node: &Node, name: &str, index: usize, parameter: &str, bound: Bound, facts: &mut Facts) -> bool {
+	let in_branch = |branch: &Node, guard: &Node, holds: bool, facts: &mut Facts| {
+		let before = facts.len();
+		facts.extend(guard_bounds(guard, holds));
+		let shrinks = calls_shrink(branch, name, index, parameter, bound, facts);
+		facts.truncate(before);
+		shrinks
+	};
+	if let Some((guard, then, otherwise)) = conditional(node) {
+		return calls_shrink(guard, name, index, parameter, bound, facts)
+			&& in_branch(then, guard, true, facts)
+			&& otherwise.is_none_or(|otherwise| in_branch(otherwise, guard, false, facts));
+	}
+	match node.drop_meta() {
+		Node::Symbol(symbol) => symbol != name, // the function used as a value: unknown calls
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(callee)) if callee == name) => {
+			let arguments = call_arguments(&items[1..]);
+			let bounded = facts.iter().any(|(known, known_bound)| known == parameter && *known_bound == bound);
+			bounded && arguments.get(index).is_some_and(|argument| moves_toward(argument, parameter, bound))
+				&& arguments.iter().all(|argument| calls_shrink(argument, name, index, parameter, bound, facts))
+		}
+		Node::List(items, _, _) => items.iter().all(|item| calls_shrink(item, name, index, parameter, bound, facts)),
+		Node::Key(left, _, right) => calls_shrink(left, name, index, parameter, bound, facts)
+			&& calls_shrink(right, name, index, parameter, bound, facts),
+		Node::Error(inner) => calls_shrink(inner, name, index, parameter, bound, facts),
+		_ => true,
+	}
+}
+
+/// `f(a, b)` and `f a b` both list their arguments after the name; `f((a))` unwraps one group
+fn call_arguments(arguments: &[Node]) -> Vec<&Node> {
+	match arguments {
+		[single] => match single.drop_meta() {
+			Node::List(items, crate::node::Bracket::Round, _) if !items.is_empty() => items.iter().collect(),
+			Node::Empty => vec![],
+			_ => vec![single],
+		},
+		_ => arguments.iter().collect(),
+	}
+}
+
+/// (guard, then, else) of `c ? a : b`, `if c then a else b`, `if c {a}`
+fn conditional(node: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
+	match node.drop_meta() {
+		Node::Key(guard, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(then, Op::Colon, otherwise) => Some((&**guard, &**then, Some(&**otherwise))),
+			_ => Some((&**guard, &**branches, None)),
+		},
+		Node::Key(if_then, Op::Else, otherwise) => {
+			let (guard, then, _) = if_then_parts(if_then)?;
+			Some((guard, then, Some(&**otherwise)))
+		}
+		_ => if_then_parts(node),
+	}
+}
+
+fn if_then_parts(node: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
+	let Node::Key(if_guard, Op::Then, then) = node.drop_meta() else { return None };
+	match if_guard.drop_meta() {
+		Node::Key(_, Op::If, guard) => Some((&**guard, &**then, None)),
+		_ => None,
+	}
+}
+
+/// Bounds on parameters known when `guard` evaluates to `holds`
+fn guard_bounds(guard: &Node, holds: bool) -> Facts {
+	match guard.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => guard_bounds(&items[0], holds),
+		Node::Key(left, Op::And, right) if holds => [guard_bounds(left, true), guard_bounds(right, true)].concat(),
+		Node::Key(left, Op::Or, right) if !holds => [guard_bounds(left, false), guard_bounds(right, false)].concat(),
+		Node::Key(left, op @ (Op::Lt | Op::Le | Op::Gt | Op::Ge), right) => {
+			let (parameter, below_literal) = match (left.drop_meta(), right.drop_meta()) {
+				(Node::Symbol(parameter), Node::Number(limit)) if is_finite(limit) => (parameter, matches!(op, Op::Lt | Op::Le)),
+				(Node::Number(limit), Node::Symbol(parameter)) if is_finite(limit) => (parameter, matches!(op, Op::Gt | Op::Ge)),
+				_ => return vec![],
+			};
+			let bound = if below_literal == holds { Bound::Upper } else { Bound::Lower };
+			vec![(parameter.clone(), bound)]
+		}
+		_ => vec![],
+	}
+}
+
+/// `p - k` toward a lower bound, `p + k` toward an upper bound, k a positive literal
+fn moves_toward(argument: &Node, parameter: &str, bound: Bound) -> bool {
+	match argument.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => moves_toward(&items[0], parameter, bound),
+		Node::Key(left, op @ (Op::Sub | Op::Add), step) => {
+			let Node::Number(step) = step.drop_meta() else { return false };
+			let Node::Symbol(moved) = left.drop_meta() else { return false };
+			let direction = if *op == Op::Sub { -sign(step) } else { sign(step) };
+			moved == parameter && direction == if bound == Bound::Lower { -1 } else { 1 }
+		}
+		_ => false,
+	}
+}
+
+fn is_finite(number: &crate::extensions::numbers::Number) -> bool {
+	use crate::extensions::numbers::Number;
+	match number {
+		Number::Int(_) | Number::Quotient(..) | Number::BigInt(_) => true,
+		Number::Float(value) => value.is_finite(),
+		_ => false,
+	}
+}
+
+/// Sign of a finite real literal, 0 when unknown
+fn sign(number: &crate::extensions::numbers::Number) -> i8 {
+	use crate::extensions::numbers::Number;
+	let positive = match number {
+		Number::Int(value) => *value > 0,
+		Number::Float(value) => value.is_finite() && *value > 0.0,
+		Number::Quotient(numerator, denominator) => (*numerator > 0) == (*denominator > 0) && *numerator != 0,
+		_ => return 0,
+	};
+	let negative = match number {
+		Number::Int(value) => *value < 0,
+		Number::Float(value) => value.is_finite() && *value < 0.0,
+		Number::Quotient(numerator, denominator) => (*numerator > 0) != (*denominator > 0) && *numerator != 0,
+		_ => false,
+	};
+	if positive { 1 } else if negative { -1 } else { 0 }
+}
+
+/// The body writes `parameter` (`p = …`, `p += …`, `p++`): its value at a call is no longer the guarded one
+fn assigns(node: &Node, parameter: &str) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => {
+			let writes = matches!(op, Op::Assign | Op::Define | Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign
+				| Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign | Op::XorAssign | Op::Inc | Op::Dec);
+			(writes && matches!(left.drop_meta(), Node::Symbol(name) if name == parameter))
+				|| (matches!(op, Op::Inc | Op::Dec) && matches!(right.drop_meta(), Node::Symbol(name) if name == parameter))
+				|| assigns(left, parameter) || assigns(right, parameter)
+		}
+		Node::List(items, _, _) => items.iter().any(|item| assigns(item, parameter)),
+		Node::Error(inner) => assigns(inner, parameter),
+		_ => false,
 	}
 }
 

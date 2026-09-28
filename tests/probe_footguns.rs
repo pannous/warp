@@ -734,3 +734,94 @@ fn test_number_declaration_spellings_agree() {
 		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.3), "{code} → {result:?}");
 	}
 }
+
+// ── Termination and determinism (work area 'termination-determinism') ──────────────────────────
+
+/// Bits of `a / b` computed by WASM on this CPU through the project's engine
+fn wasm_divide_bits(a: f64, b: f64) -> u64 {
+	use wasmtime::{Instance, Module};
+	let engine = warp::util::gc_engine();
+	let module = Module::new(&engine, r#"(module (func (export "div") (param f64 f64) (result f64) local.get 0 local.get 1 f64.div))"#)
+		.expect("valid module");
+	let mut store = warp::util::fueled_store(&engine, ());
+	let instance = Instance::new(&mut store, &module, &[]).expect("instantiates");
+	let divide = instance.get_typed_func::<(f64, f64), f64>(&mut store, "div").expect("exported");
+	divide.call(&mut store, (a, b)).expect("runs").to_bits()
+}
+
+#[test] // x86 produces the negative NaN 0xfff8…, ARM the positive one: results differ by CPU unless canonicalized
+fn test_nan_bits_are_canonical() {
+	const CANONICAL_NAN: u64 = 0x7ff8_0000_0000_0000;
+	assert_eq!(wasm_divide_bits(0.0, 0.0), CANONICAL_NAN);
+	assert_eq!(wasm_divide_bits(-0.0, 0.0), CANONICAL_NAN);
+	assert_eq!(wasm_divide_bits(f64::from_bits(0xfff8_0000_0000_0001), 1.0), CANONICAL_NAN, "NaN payloads do not leak");
+	assert_eq!(wasm_divide_bits(1.0, 4.0), 0.25f64.to_bits(), "ordinary results are untouched");
+}
+
+#[test] // Truly impossible to decide (halting problem); at runtime a fuel budget turns a hang into a loud error
+fn test_infinite_loop_runs_out_of_fuel() {
+	match warp::util::with_fuel(1_000_000, || eval("while 1 {}")) {
+		Node::Error(message) => assert!(format!("{message}").contains("out of fuel after 1000000 steps"), "{message}"),
+		other => panic!("expected out of fuel, got {other:?}"),
+	}
+}
+
+#[test] // the budget is a limit, not a guess: a long but finite run passes once it is raised
+fn test_fuel_budget_can_be_raised() {
+	let counting = "i=0; while i<1000 { i++ }; i";
+	match warp::util::with_fuel(100, || eval(counting)) {
+		Node::Error(message) => assert!(format!("{message}").contains("out of fuel after 100 steps"), "{message}"),
+		other => panic!("expected out of fuel, got {other:?}"),
+	}
+	assert_eq!(eval(counting), 1000);
+	assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous");
+}
+
+fn effects(code: &str, function: &str) -> warp::effects::EffectSet {
+	warp::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
+}
+
+#[test] // Koka's div: recursion that shrinks a parameter toward a guarded base case is total
+fn test_shrinking_recursion_is_total() {
+	use warp::effects::EffectSet;
+	for (code, name) in [
+		("fib(n) := n<2 ? n : fib(n-1)+fib(n-2)", "fib"),
+		("fac(n) := n<=1 ? 1 : n*fac(n-1)", "fac"),
+		("up(n) := n>=10 ? n : up(n+1)", "up"),
+		("down(n) := n>0 ? down(n-1) : 0", "down"),
+	] {
+		assert_eq!(effects(code, name), EffectSet::PURE, "{code} parsed as {:?}", warp::parse(code));
+	}
+	is!("fib(n) := n<2 ? n : fib(n-1)+fib(n-2) ! Pure\nfib(10)", 55);
+}
+
+#[test] // when unsure, Div: unguarded, unbounded (fac(-1)), wrong-way and mutual recursion may diverge
+fn test_unproven_recursion_may_diverge() {
+	use warp::effects::Effect::Div;
+	for (code, name) in [
+		("f(n) := f(n)", "f"),
+		("f(n) := n==0 ? 0 : n*f(n-1)", "f"),
+		("f(n) := n<2 ? n : f(n+1)", "f"),
+		("f(n) := n<2 ? n : f(n)", "f"),
+		("f(n) := n<2 ? n : f(n-0)", "f"),
+		("even(n) := n<1 ? 1 : odd(n-1)\nodd(n) := n<1 ? 0 : even(n-1)", "even"),
+		("spin(n) := spin(n)\ncaller(n) := spin(n)+1", "caller"),
+	] {
+		assert!(effects(code, name).contains(Div), "{code}: {}", effects(code, name));
+	}
+}
+
+#[test] // a while loop has an unknown condition in general: Div
+fn test_while_loop_may_diverge() {
+	use warp::effects::Effect::Div;
+	assert!(effects("i=0; while i<3 { i++ }; i", "main").contains(Div));
+	assert!(!effects("x=3; x*2", "main").contains(Div));
+}
+
+#[test] // `effects of f` reports Div and `f ! Pure` rejects a function that may diverge
+fn test_pure_rejects_divergence() {
+	is!("f(n) := f(n)\neffects of f", Node::Symbol("Div".into()));
+	fails_with("f(n) := n==0 ? 0 : n*f(n-1) ! Pure\nf(3)", "f is declared ! Pure but performs Div via f");
+	fails_with("spin(n) := spin(n)\ncaller(n) := spin(n)+1 ! Pure\ncaller(1)", "caller → spin");
+	is!("f(n) := n==0 ? 0 : n*f(n-1) ! Div\nf(3)", 6); // declared divergence is allowed
+}

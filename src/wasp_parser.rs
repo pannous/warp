@@ -919,7 +919,7 @@ impl WaspParser {
 
 		if let Node::List(items, _, _) = rhs.drop_meta() {
 			if items.len() == 2 {
-				if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
+				if let Node::List(_, Bracket::Curly, _) | Empty = items[1].drop_meta() { // `{}` parses as ø
 					let condition = items[0].clone();
 					let body_block = items[1].clone();
 					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));

@@ -248,7 +248,7 @@ impl FromVal for GcObject {
 /// Load a WASM module with GC support and return root GcObject
 pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 	let engine = gc_engine();
-	let store = Store::new(&engine, ());
+	let store = crate::util::fueled_store(&engine, ());
 	let store_rc = Rc::new(RefCell::new(store));
 
 	let wasm_bytes = std::fs::read(path)?;
@@ -284,7 +284,7 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
 /// Load WASM bytes and return GcObject
 pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 	let engine = gc_engine();
-	let store = Store::new(&engine, ());
+	let store = crate::util::fueled_store(&engine, ());
 	let store_rc = Rc::new(RefCell::new(store));
 
 	let module = Module::new(&engine, bytes)?;
@@ -317,7 +317,7 @@ pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	use crate::host::{HostState, link_host_functions};
 
 	let engine = gc_engine();
-	let mut store: Store<HostState> = Store::new(&engine, HostState::new());
+	let mut store: Store<HostState> = crate::util::fueled_store(&engine, HostState::new());
 
 	let module = Module::new(&engine, bytes)?;
 
@@ -450,7 +450,7 @@ impl WasiState {
 /// Load WASM bytes with WASI support (for fd_write, puts, etc.)
 pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
 	let engine = gc_engine();
-	let mut store: Store<WasiState> = Store::new(&engine, WasiState::new());
+	let mut store: Store<WasiState> = crate::util::fueled_store(&engine, WasiState::new());
 
 	let module = Module::new(&engine, bytes)?;
 
@@ -477,7 +477,7 @@ pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
 	use crate::type_kinds::Kind;
 
 	let engine = gc_engine();
-	let mut store: Store<FfiState> = Store::new(&engine, FfiState::new());
+	let mut store: Store<FfiState> = crate::util::fueled_store(&engine, FfiState::new());
 
 	let module = Module::new(&engine, bytes)?;
 
