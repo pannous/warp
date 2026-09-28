@@ -928,10 +928,11 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal
 pub fn lower_declarations(node: Node) -> Node {
 	match node {
-		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`
-		Node::Key(target, op @ (Op::Assign | Op::Define), value) if number_type_prefix(&target).is_some() => {
+		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
+		// `double(x) := x+x` and `double x := x+x` stay function definitions
+		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
 			let (type_name, name) = number_type_prefix(&target).expect("guarded");
-			lower_declarations(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), op, value))
+			lower_declarations(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if items.windows(2).any(|pair| prefixed_declaration(&pair[0], &pair[1]).is_some()) => {
 			let mut lowered = Vec::with_capacity(items.len());
@@ -1013,7 +1014,7 @@ fn is_number_type(node: &Node) -> bool {
 /// `(fast x)` as the target of `fast x=v`: the type and the name
 fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 	match target.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && is_number_type(&items[0]) && matches!(items[1].drop_meta(), Node::Symbol(_)) => {
+		Node::List(items, bracket, _) if *bracket != Bracket::Round && items.len() == 2 && is_number_type(&items[0]) && matches!(items[1].drop_meta(), Node::Symbol(_)) => {
 			Some((items[0].drop_meta().clone(), items[1].drop_meta().clone()))
 		}
 		_ => None,
