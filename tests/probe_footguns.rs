@@ -804,6 +804,7 @@ fn test_euler_identity() {
 	is!("ln(ℯ) == 1", true);
 	is!("ln(1)", 0);
 	is!("exp(0)", 1);
+}
 
 // ── Termination and determinism (work area 'termination-determinism') ──────────────────────────
 
