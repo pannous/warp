@@ -179,10 +179,7 @@ fn declared_parameter_kinds(item: &Node) -> HashMap<String, Kind> {
 }
 
 fn kind_of_type_name(name: &str) -> Kind {
-	match name.to_lowercase().as_str() {
-		"float" | "f32" | "f64" | "double" | "real" | "number" => Kind::Float,
-		_ => Kind::Int,
-	}
+	crate::analyzer::builtin_type_kind(name).filter(|kind| kind.is_float()).unwrap_or(Kind::Int)
 }
 
 fn call_parts(node: &Node) -> Option<(&str, &[Node])> {

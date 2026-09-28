@@ -679,3 +679,37 @@ fn test_booleans_are_not_numbers() {
 	assert!(accepted("int(true) + int(true)"));
 	assert!(accepted("x = 1 < 2; if x {1} else {2}"));
 }
+
+#[test] // IEEE 754: (0.1+0.2)+0.3 != 0.1+(0.2+0.3); number literals are exact by default
+fn test_addition_is_associative_by_default() {
+	is!("(0.1+0.2)+0.3 == 0.1+(0.2+0.3)", true);
+}
+
+#[test] // IEEE floats are the explicit opt-in, and then the law is weaker
+fn test_fast_floats_are_not_associative() {
+	is!("fast a=0.1; fast b=0.2; fast c=0.3; (a+b)+c == a+(b+c)", false);
+	is!("a=0.1 as float; b=0.2 as float; c=0.3 as float; (a+b)+c == a+(b+c)", false);
+}
+
+#[test] // `as` binds tighter than + and weaker than a literal
+fn test_as_binds_tighter_than_arithmetic() {
+	let sum = eval("0.1 as float + 0.2 as float");
+	assert!(matches!(sum.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 0.30000000000000004), "{sum:?}");
+	is!("0.1 as float + 0.2 as float == 0.3", false);
+	is!("x=3.3 as float; x", 3.3);
+	is!("2 * 1.5 as int", 2); // 2 * (1.5 as int)
+}
+
+#[test] // real/exact and float/fast/f64 are aliases, prefix and suffix declarations mean the same
+fn test_number_declaration_spellings_agree() {
+	let exact = ["x=3.3;x", "real x=3.3;x", "exact x=3.3;x", "x:real=3.3;x", "x:exact=3.3;x", "x=3.3 as real;x", "x=3.3 as exact;x"];
+	for code in exact {
+		let result = eval(code);
+		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Quotient(33, 10))), "{code} → {result:?}");
+	}
+	let fast = ["fast x=3.3;x", "float x=3.3;x", "x:float=3.3;x", "x:fast=3.3;x", "x=3.3 as float;x", "x=3.3 as fast;x", "x:f64=3.3;x"];
+	for code in fast {
+		let result = eval(code);
+		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.3), "{code} → {result:?}");
+	}
+}

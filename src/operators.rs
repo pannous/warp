@@ -125,6 +125,10 @@ impl Op {
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
 
+			// Type cast binds tighter than arithmetic, weaker than unary minus (as Rust):
+			// 0.1 as float + 0.2 as float → (0.1 as float) + (0.2 as float), -1.5 as int → (-1.5) as int
+			Op::As => (152, 153),
+
 			// Multiplicative (left-assoc)
 			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
 
@@ -133,9 +137,6 @@ impl Op {
 
 			// Range
 			Op::Range | Op::To => (130, 131),
-
-			// Type cast (binds tighter than comparison: 1.5 as int == 1)
-			Op::As => (125, 126),
 
 			// Ordering: one level, the parser chains them: a<b<c → a<b and b<c
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),

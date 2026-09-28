@@ -6,7 +6,7 @@ use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, Op};
-use crate::type_kinds::Kind;
+use crate::type_kinds::{canonical_type_name, Kind};
 use std::collections::{HashMap, HashSet};
 
 /// Check if a node is pure data (not a statement/function call)
@@ -91,7 +91,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if let Node::Symbol(s) = items[0].drop_meta() {
 					match s.as_str() {
 						"int" | "integer" => return Kind::Int,
-						"float" | "real" => return Kind::Float,
+						"float" => return Kind::Float,
 						"str" | "string" | "text" => return Kind::Text,
 						_ => {}
 					}
@@ -164,6 +164,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Tag structures like html:body are Key
 			Kind::Key
 		}
+		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
+		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64
@@ -636,10 +638,11 @@ fn type_name_to_kind(name: &str) -> Kind {
 	builtin_type_kind(name).unwrap_or(Kind::Int)
 }
 
-fn builtin_type_kind(name: &str) -> Option<Kind> {
-	Some(match name.to_lowercase().as_str() {
-		"int" | "i32" | "i64" | "integer" | "long" => Kind::Int,
-		"float" | "f32" | "f64" | "double" | "real" | "number" => Kind::Float,
+/// Kind of a built-in type name; an exact number (`exact`, `real`) is an Int that may hold a ratio (wasm_emitter/exact.rs)
+pub fn builtin_type_kind(name: &str) -> Option<Kind> {
+	Some(match canonical_type_name(&name.to_lowercase()) {
+		"int" | "i32" | "i64" | "integer" | "long" | "exact" => Kind::Int,
+		"float" | "f32" | "number" => Kind::Float,
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
@@ -912,7 +915,8 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 	}
 	let expected = builtin_type_kind(type_name)?;
 	let actual = literal_kind(value)?;
-	if expected == actual || (expected == Kind::Float && actual == Kind::Int) {
+	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal {
 		return None;
 	}
 	let value_text = value.serialize();
@@ -924,6 +928,29 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal
 pub fn lower_declarations(node: Node) -> Node {
 	match node {
+		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) if number_type_prefix(&target).is_some() => {
+			let (type_name, name) = number_type_prefix(&target).expect("guarded");
+			lower_declarations(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), op, value))
+		}
+		Node::List(items, bracket, separator) if items.windows(2).any(|pair| prefixed_declaration(&pair[0], &pair[1]).is_some()) => {
+			let mut lowered = Vec::with_capacity(items.len());
+			let mut items = items.into_iter().peekable();
+			while let Some(item) = items.next() {
+				match items.peek().and_then(|next| prefixed_declaration(&item, next)) {
+					Some(declaration) => {
+						items.next();
+						lowered.push(lower_declarations(declaration));
+					}
+					None => lowered.push(lower_declarations(item)),
+				}
+			}
+			if lowered.len() == 1 {
+				lowered.remove(0)
+			} else {
+				Node::List(lowered, bracket, separator)
+			}
+		}
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 			let value = Box::new(lower_declarations(*value));
 			match target.drop_meta() {
@@ -974,6 +1001,32 @@ fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 fn declared_type(target: &Node) -> Option<&Node> {
 	match target {
 		Node::Meta { data, .. } if matches!(data.as_ref(), Node::Symbol(_)) => Some(data),
+		_ => None,
+	}
+}
+
+/// A number type written before a declaration: `real`, `exact`, `float`, `fast` … (see `canonical_type_name`)
+fn is_number_type(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if matches!(canonical_type_name(name), "exact" | "float"))
+}
+
+/// `(fast x)` as the target of `fast x=v`: the type and the name
+fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
+	match target.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && is_number_type(&items[0]) && matches!(items[1].drop_meta(), Node::Symbol(_)) => {
+			Some((items[0].drop_meta().clone(), items[1].drop_meta().clone()))
+		}
+		_ => None,
+	}
+}
+
+/// The statement pair `fast`, `x=v` as the declaration `x:fast=v`
+fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
+	match next.drop_meta() {
+		Node::Key(name, op @ (Op::Assign | Op::Define), value) if is_number_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) => {
+			let target = Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(type_name.drop_meta().clone()));
+			Some(Node::Key(Box::new(target), *op, value.clone()))
+		}
 		_ => None,
 	}
 }

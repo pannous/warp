@@ -1807,6 +1807,30 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// An f64 has no exact value yet: `x as exact` of a runtime float is refused instead of rounded silently
+	fn emit_inexact_to_exact(&mut self, func: &mut Function, value: &Node) {
+		let message = format!("{} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start", value.serialize());
+		self.emit_type_error(func, message);
+	}
+
+	/// `v as T` as a raw Int: `as float` truncates like a float variable does, `as exact` keeps the exact value
+	fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+		let exact_value = !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
+		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
+			"float" => {
+				self.emit_float_value(func, value);
+				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
+			}
+			"exact" if exact_value => self.emit_numeric_value(func, value),
+			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
+				self.emit_cast(func, value, target);
+				self.emit_call(func, "get_int_value");
+			}
+			_ => self.emit_not_a_number(func, located, located.drop_meta()),
+		}
+	}
+
 	/// Emit type cast: value as type
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
@@ -1823,7 +1847,7 @@ impl WasmGcEmitter {
 
 		let value = value.drop_meta();
 
-		match type_name.as_str() {
+		match crate::type_kinds::canonical_type_name(&type_name) {
 			"i64" | "int64" if !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_)) => {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
@@ -1860,7 +1884,17 @@ impl WasmGcEmitter {
 					}
 				}
 			}
-			"float" | "real" | "double" | "f32" | "f64" => {
+			"exact" => match value {
+				Node::Text(s) => self.emit_text_cast(func, s, target_type),
+				Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
+				_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
+				_ => {
+					// already exact: decimal literals are ratios (exact.rs)
+					self.emit_numeric_value(func, value);
+					self.emit_call(func, "new_int");
+				}
+			},
+			"float" | "f32" => {
 				// Cast to float
 				match value {
 					Node::Text(s) => self.emit_text_cast(func, s, target_type),
@@ -2317,6 +2351,7 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Do, right) => {
 				self.emit_while_loop_value(func, left, right);
 			}
+			Node::Key(value, Op::As, target) => self.emit_numeric_cast(func, located, value, target),
 			other => self.emit_not_a_number(func, located, other),
 		}
 	}
@@ -2432,6 +2467,14 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
 				self.emit_float_value(func, right);
 				func.instruction(&Instruction::F64Abs);
+			}
+			// `v as float` is v's f64; any other cast's exact value converted
+			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
+				self.emit_float_value(func, value);
+			}
+			Node::Key(_, Op::As, _) => {
+				self.emit_numeric_value(func, node);
+				self.emit_int_to_f64(func, None);
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => {
