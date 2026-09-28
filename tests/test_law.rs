@@ -67,10 +67,10 @@ fn test_law_lean_export() {
 fn test_law_lean_export_modulo_is_euclidean() {
 	let lawful = separate_laws(parse("m(x) := x % 3\nlaw m(x) >= 0"));
 	let source = lean::export(&lawful.functions, &lawful.laws[0], &["grind"]).unwrap();
-	assert!(source.contains("(Int.emod x 3)"), "{source}");
+	assert!(source.contains("(Int.emod x (3 : Int))"), "{source}");
 	let lawful = separate_laws(parse("t(x) := x rem 3\nlaw t(x) <= 2"));
 	let source = lean::export(&lawful.functions, &lawful.laws[0], &["grind"]).unwrap();
-	assert!(source.contains("(Int.tmod x 3)"), "{source}");
+	assert!(source.contains("(Int.tmod x (3 : Int))"), "{source}");
 }
 
 #[test]
