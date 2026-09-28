@@ -1076,7 +1076,7 @@ fn test_polynomial_function_equality() {
 	is!("f(x):=(x+1)^2; g(x):=x^2+2*x+1; f==g", true); // panicked the compiler
 	is!("f(x):=x*x; g(x):=x+x; f==g", false);
 	is!("f(x):=x*x; g(x):=x+x; f!=g", true);
-	is!("f(x,y):=(x-y)*(x+y); g(a,b):=a^2-b^2; f==g", true);
+	is!("f(x,y):=(x - y)*(x+y); g(a,b):=a^2-b^2; f==g", true);
 	is!("f(x):=x/2+x/2; g(x):=x; f==g", true); // exact division
 }
 
