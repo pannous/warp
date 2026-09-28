@@ -486,11 +486,30 @@ fn test_null_needs_a_check() {
 	assert!(accepted("x=ø; x=3; x+1"));
 }
 
-#[test]
-#[ignore = "next"] // a local first assigned ø has no runtime representation yet: Cannot extract numeric value from ø
+#[test] // a local first assigned ø is held as a Node until checked; was a compiler panic: Cannot extract numeric value from ø
 fn test_optional_local_runs() {
 	is!("x=ø; if x {x+1} else {2}", 2);
 	is!("x=ø; x=3; x+1", 4);
+}
+
+#[test] // Swift/Kotlin `Int?`: T? declares an optional, a plain T refuses ø
+fn test_optional_type_declaration() {
+	is!("x:int?=ø; if x {x+1} else {2}", 2); // was a parse error: Unexpected character '='
+	is!("x:int?=ø; x=4; x+1", 5);
+	fails_with("x:int?=ø; x+1", "x may be ø");
+	fails_with("x:int=ø", "declare x:int? to allow ø");
+}
+
+#[test] // Decision: `()` is ø and ø is the empty list (Footguns.md → Null: optional types)
+fn test_empty_parens_is_the_empty_list() {
+	is!("a=();a.add(1)", warp::ints(vec![1]));
+	is!("a=();a.add(1);a.add(2);a", warp::ints(vec![1, 2]));
+}
+
+#[test] // Go `v, _ := f()`, Java `catch {}`: compiler failures come back as error values with a position
+fn test_compiler_failures_are_error_values() {
+	fails_with("1+(a:2)", "cannot extract a numeric value from a:2 at 1:4"); // was a compiler panic
+	is!("x=0.5;x=0", 0); // was a WASM validation error
 }
 
 #[test]
