@@ -86,7 +86,7 @@ impl Rational {
 		}
 	}
 
-	pub fn cmp(&self, other: &Rational) -> Ordering {
+	pub fn compare(&self, other: &Rational) -> Ordering {
 		(&self.numerator * &other.denominator).cmp(&(&other.numerator * &self.denominator))
 	}
 }
