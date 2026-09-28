@@ -90,14 +90,20 @@ PASSED:
   ✓ test_auto_type
   ✓ test_auto_type_nan
   ✓ test_bad_type
+  ✓ test_big_division_and_remainder
+  ✓ test_big_int_to_float
+  ✓ test_big_literal_round_trip
   ✓ test_bit_field
   ✓ test_block_comments
   ✓ test_block_node_json
   ✓ test_boolean_attribute
+  ✓ test_braceless_call_as_operand
+  ✓ test_braceless_call_takes_whole_argument
   ✓ test_c_type_mapping
   ✓ test_call
   ✓ test_cast_as
   ✓ test_cdata
+  ✓ test_chained_comparison
   ✓ test_chaining
   ✓ test_class_definition
   ✓ test_class_instance_explicit
@@ -118,22 +124,32 @@ PASSED:
   ✓ test_compact_int
   ✓ test_comparison
   ✓ test_comparison_eq
+  ✓ test_comparisons_across_small_and_big
   ✓ test_complex_expression
   ✓ test_complex_node_json
   ✓ test_complex_xml_document
   ✓ test_compound_assignment
   ✓ test_const_return
+  ✓ test_constraint_on_non_function_is_loud
   ✓ test_constructor_cast
   ✓ test_cpp
   ✓ test_create_wasm_gc_nodes_from_host_concept
   ✓ test_data_node_json
   ✓ test_debug_format
+  ✓ test_declared_constraint_holds
+  ✓ test_declared_constraint_violation_names_span_and_chain
   ✓ test_deep_type
   ✓ test_default_params
   ✓ test_different_modules_not_cached
+  ✓ test_digit_separators
+  ✓ test_division_is_not_truncating
   ✓ test_division_type_upgrade
   ✓ test_doctype
   ✓ test_dom
+  ✓ test_effect_set_names
+  ✓ test_effects_are_inferred_from_calls
+  ✓ test_effects_of_query
+  ✓ test_effects_propagate_through_callers_and_recursion
   ✓ test_emit_cast
   ✓ test_emit_for_node_tree_shaking
   ✓ test_emit_gc_types
@@ -142,10 +158,13 @@ PASSED:
   ✓ test_emitter_with_host_imports_valid
   ✓ test_empty
   ✓ test_empty_structures
+  ✓ test_equals_in_condition_compares
   ✓ test_eval3
   ✓ test_expected_structure
   ✓ test_factorial
-  ✓ test_fd_write
+  ✓ test_factorial_and_fib_stay_exact
+  ✓ test_fd_write_raw
+  ✓ test_fetch
   ✓ test_ffi_atof
   ✓ test_ffi_cos
   ✓ test_ffi_cos_works
@@ -209,9 +228,11 @@ PASSED:
   ✓ test_harder_arithmetic
   ✓ test_hash_index
   ✓ test_hex
+  ✓ test_hidden_side_effect_is_rejected
   ✓ test_host_fetch_import
   ✓ test_host_run_import
   ✓ test_html_wasp
+  ✓ test_i64_opt_out_wraps
   ✓ test_if
   ✓ test_if_block_syntax
   ✓ test_if_call_zero
@@ -223,6 +244,8 @@ PASSED:
   ✓ test_implicit_html_structure
   ✓ test_import_from_pattern_emit
   ✓ test_import_from_pattern_parse
+  ✓ test_imports_follow_effects
+  ✓ test_increment_changes_variable
   ✓ test_indent_as_block
   ✓ test_index
   ✓ test_index_assign_25_elements
@@ -232,10 +255,12 @@ PASSED:
   ✓ test_index_assign_return_counter
   ✓ test_index_assign_with_variable
   ✓ test_index_offset
-  ✓ test_index_offset_advanced
+  ✓ test_index_out_of_bounds_is_an_error
   ✓ test_indexed
   ✓ test_inline_comments
   ✓ test_int_plus_pi_type_upgrading
+  ✓ test_integer_overflow_does_not_wrap
+  ✓ test_integers_beyond_double_precision
   ✓ test_interpolation
   ✓ test_key
   ✓ test_key_equality
@@ -247,8 +272,21 @@ PASSED:
   ✓ test_lambda_comparison
   ✓ test_lambda_simple
   ✓ test_lambda_with_multiply
+  ✓ test_law_asserted_at_call_sites
+  ✓ test_law_catches_a_false_property
+  ✓ test_law_does_not_change_program_result
+  ✓ test_law_float_parameter_kinds
+  ✓ test_law_holds_because_integers_do_not_wrap
+  ✓ test_law_lean_export
+  ✓ test_law_overflow_promotion_holds_in_property_tests
+  ✓ test_law_overflow_promotion_proved_by_lean
+  ✓ test_law_proved_by_lean
+  ✓ test_law_stated
+  ✓ test_law_tested_with_generated_inputs
+  ✓ test_law_violation_reported_by_verify
+  ✓ test_leading_dot_literal
+  ✓ test_leading_zero_is_not_octal
   ✓ test_line_comments
-  ✓ test_list_index_after_puts
   ✓ test_list_operations
   ✓ test_logarithm
   ✓ test_logarithm_in_runtime
@@ -268,13 +306,18 @@ PASSED:
   ✓ test_module_cache_reuse
   ✓ test_modulo
   ✓ test_multiline_structure
+  ✓ test_negative_index_is_an_error
+  ✓ test_negative_literals_after_power_fix
+  ✓ test_negative_power_precedence
   ✓ test_nested_node_json
   ✓ test_nested_position_tracking
   ✓ test_nested_structures
   ✓ test_nested_ternary_depth2
   ✓ test_nested_ternary_multiline
   ✓ test_nested_xml
+  ✓ test_newline_ends_statement
   ✓ test_newline_groups
+  ✓ test_no_loose_equality
   ✓ test_no_optimization
   ✓ test_node_add_basic
   ✓ test_node_add_booleans
@@ -303,13 +346,20 @@ PASSED:
   ✓ test_node_sub_basic
   ✓ test_node_sub_booleans
   ✓ test_node_to_json_compact
+  ✓ test_norm_bars_are_brackets
+  ✓ test_not_binds_weaker_than_comparison
   ✓ test_number
   ✓ test_number_floats
   ✓ test_number_mix
   ✓ test_old_random_bugs
   ✓ test_operations_with_primitives_mixed
   ✓ test_optimizer_graph_generation
+  ✓ test_overflow_promotes_add_sub
+  ✓ test_overflow_promotes_mul
+  ✓ test_overflow_promotes_neg_abs
+  ✓ test_overflow_promotes_pow
   ✓ test_param_reference
+  ✓ test_parameter_shadows_outer_variable
   ✓ test_params
   ✓ test_parent
   ✓ test_parse_all_samples
@@ -329,8 +379,10 @@ PASSED:
   ✓ test_position_with_comments
   ✓ test_power
   ✓ test_power
+  ✓ test_power_is_right_associative
   ✓ test_power_right_assoc
   ✓ test_precedence
+  ✓ test_prefix_increment
   ✓ test_prefix_neg
   ✓ test_primes
   ✓ test_primitive_char
@@ -338,6 +390,7 @@ PASSED:
   ✓ test_primitive_hello
   ✓ test_primitive_int
   ✓ test_primitive_string
+  ✓ test_proof_model_matches_unbounded_int
   ✓ test_quadratic
   ✓ test_range
   ✓ test_range
@@ -353,6 +406,8 @@ PASSED:
   ✓ test_runtime_equality
   ✓ test_runtime_equality_autocast
   ✓ test_sample
+  ✓ test_scientific_notation
+  ✓ test_scientific_notation_forms
   ✓ test_self_closing_tag
   ✓ test_semicolon_groups
   ✓ test_simple_index_assign
@@ -360,6 +415,7 @@ PASSED:
   ✓ test_simple_values
   ✓ test_simple_variables
   ✓ test_simple_xml_tag
+  ✓ test_small_arithmetic_unchanged
   ✓ test_smart_types
   ✓ test_sqrt_alias
   ✓ test_sqrt_arithmetic
@@ -377,6 +433,7 @@ PASSED:
   ✓ test_string_substring_from
   ✓ test_suffix_square
   ✓ test_sum
+  ✓ test_sum_of_quotients_is_not_truncated
   ✓ test_symbol
   ✓ test_ternary_with_comparison
   ✓ test_text
@@ -410,6 +467,7 @@ PASSED:
   ✓ test_type_variable
   ✓ test_types_simple
   ✓ test_types_simple2
+  ✓ test_undefined_variable_is_an_error - should panic
   ✓ test_unicode_le
   ✓ test_unicode_mul
   ✓ test_use
@@ -423,6 +481,7 @@ PASSED:
   ✓ test_variable_minus
   ✓ test_variable_reassignment
   ✓ test_variables
+  ✓ test_wasi_putf
   ✓ test_wasm_gc_node_reading_concept
   ✓ test_wasm_roundtrip
   ✓ test_wasm_roundtrip_via_is
@@ -436,6 +495,7 @@ PASSED:
   ✓ test_xml_roundtrip
   ✓ test_xml_to_json
   ✓ test_xml_with_attributes
+  ✓ test_zero_string_is_truthy
   ✓ test2def
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
@@ -457,8 +517,7 @@ PASSED:
 
 FAILED:
   ✗ test_executable_tree_shaking
-  ✗ test_fetch
   ✗ test_library_optimization
 
 SUMMARY:
-132 ignored, 453 passed, 3 failed, 456 total tested
+132 ignored, 513 passed, 2 failed, 515 total tested

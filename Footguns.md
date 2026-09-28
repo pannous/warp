@@ -18,6 +18,7 @@ Only entries whose Warp answer was verified are listed here; everything else is 
 ### Integer division
 **C, Java, Go, Python 2**: `7/2` → *3*  
 Warp: `7/2` → `3.5`. `/` is always division; truncation must be asked for. (`test_division_is_not_truncating`)
+Todo 7⨸2 = 3 "round division" python  7∕∕2  7//2 vs comment? // comment only with space ! see #
 
 ### Sum of quotients truncated
 Warp's own bug, fixed: `1/4+1/4` → `0` while `1/4+1/4 == 0.5` → `1`; the sum's result type was inferred as Int and truncated on return.  
@@ -159,7 +160,7 @@ Warp (since fcbd300b): Int is unbounded, an i64 fast path promotes to BigInt on 
 (`test_integer_overflow_does_not_wrap`, `test_law_holds_because_integers_do_not_wrap`, `test_law_catches_a_false_property`, `tests/test_unbounded_int.rs`)
 
 ### Big literals
-**JS**: `100000000000000000000` → *1e+20* (a double); Warp before fcbd300b: a string of NUL bytes.  
+**JS**: `100000000000000000000` → *1e+20* (a double); 
 Warp: `100000000000000000000` → `100000000000000000000`, round-trips exactly.
 
 ### Scientific notation and digit separators
@@ -545,19 +546,31 @@ Footguns Warp still has (verified with the probes above: the Warp answer shown i
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
 
 # "Impossible"
+Solvable:
+
+### "The" length of a string
+There is no single right answer (bytes, UTF-16 units, codepoints, grapheme clusters), segmentation changes with Unicode versions,
+and case mapping is locale dependent (Turkish `i` ↔ `İ`).  
+Warp: make the unit explicit (`byte`, `char`, `grapheme`) instead of choosing silently.
+
+
+### Exact real numbers
+**Richardson's theorem**: equality of real expressions built from `π`, `exp`, `sin`, … is undecidable, so `√2 * √2 == 2` cannot hold for every real computation.  
+Warp: rationals are exact, algebraic numbers, π,e etc could be kept symbolic! 
+see Hyperreal numbers for pragmatic extensions of Q (Also needed for law proofs )
+beyond that the result is an approximation and its type says so.
+
+
+# "Truely Impossible"
 ... Really?
 
-Footguns no language can remove in general, because the limit is mathematical or physical. Warp's answer is to make the
-limit visible instead of pretending it is gone.
+Footguns no language can remove in general, because the limit is mathematical or physical. Warp's answer is to make the limit visible instead of pretending it is gone.
 
 ### Deciding termination and exact behaviour
 **Halting problem, Rice's theorem**: no compiler can tell for every program whether it terminates, which effects it really performs or what it costs.  
 Warp: effects are over-approximated (the union of everything reachable, `tests/test_effects.rs`), costs are declared in
 signatures and checked by benchmarks, never derived in general ([DESIGN.md → Cautions](DESIGN.md#cautions)).
 
-### Exact real numbers
-**Richardson's theorem**: equality of real expressions built from `π`, `exp`, `sin`, … is undecidable, so `√2 * √2 == 2` cannot hold for every real computation.  
-Warp: rationals are exact, algebraic numbers could be kept symbolic; beyond that the result is an approximation and its type says so.
 
 ### Fast *and* lawful floats
 **IEEE 754**: `(0.1+0.2)+0.3 == 0.1+(0.2+0.3)` → *false*; hardware floats are not associative.  
@@ -566,11 +579,6 @@ Warp today: `0`. Under `@f64` this stays true forever; the choice is exact numbe
 ### Function equality
 `f == g` for arbitrary functions is undecidable.  
 Warp: laws state the properties that matter and are tested or proved per function.
-
-### "The" length of a string
-There is no single right answer (bytes, UTF-16 units, codepoints, grapheme clusters), segmentation changes with Unicode versions,
-and case mapping is locale dependent (Turkish `i` ↔ `İ`).  
-Warp: make the unit explicit (`byte`, `char`, `grapheme`) instead of choosing silently.
 
 ### Future civil time
 What UTC instant is `2030-03-31 02:30 Europe/Berlin`? Time zone rules change by political decision after the code is written.  
