@@ -13,12 +13,17 @@ Footguns.md, notes/footguns.md first. Each agent owns one work area (below); sta
 4. Remove `#[ignore]` only when the test passes; run the full suite; no previously passing test may fail.
 5. Move the entry in Footguns.md from NOT YET to Solved: keep its "Solved elsewhere" notes, state the verified Warp answer
    and the test name. Add the case to `probes/footguns/cases.warp`.
-6. Small conventional commits (`fix:`, `feature(minor):`), no AI attribution lines, stage files by explicit path
+6. Push to main only when the full suite passes with **zero** failures on the exact commit you push (after the rebase),
+   no "pre-existing failure" exemptions: every red push to main mails the maintainer. If main is already red, fix it
+   first or report it instead of pushing. Without a local cargo (cloud sandboxes cannot reach crates.io), test on a
+   `claude/<area>` branch: its CI job always ends green so it mails nobody, and the real outcome is the line
+   `AGENT_CI_RESULT build=… tests=…` in the job log and summary. Only `tests=success` counts.
+7. Small conventional commits (`fix:`, `feature(minor):`), no AI attribution lines, stage files by explicit path
    (never `git add -A`; note the file is `Footguns.md` with capital F), `git pull --rebase` before every push, push to main.
    Several agents push to main concurrently: rebase and resolve conflicts, never force-push.
-7. If an entry needs a language design decision (not just a fix), do not decide it: write the options with a
+8. If an entry needs a language design decision (not just a fix), do not decide it: write the options with a
    recommendation under the entry in Footguns.md, marked `Decision needed:`.
-8. When done, append a short summary (fixed / left open / why) to notes/footguns.md.
+9. When done, append a short summary (fixed / left open / why) to notes/footguns.md.
 
 ## Work areas
 - **literals**: `.1` leading-dot literal, `1e3` scientific notation, `1_000_000` digit separators, `‖x‖` norm/abs parse
