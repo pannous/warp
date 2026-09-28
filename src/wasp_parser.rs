@@ -13,6 +13,10 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 const MAX_INTEGER_EXPONENT: i64 = 4096;
+/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
+const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
+/// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
+const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1125,7 +1129,33 @@ impl WaspParser {
 		let start = self.pos;
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
-		self.keep_source_literal(number, &literal)
+		let number = self.keep_source_literal(number, &literal);
+		match self.literal_type_suffix() {
+			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
+			None => number,
+		}
+	}
+
+	/// Tight conversion written on the literal: `0.1f` → float, `0.1l` → exact, `0.1:float` / `1.5:int` → that type.
+	/// Code only: in data `version: 1.10` and `n:int` stay key/value.
+	fn literal_type_suffix(&mut self) -> Option<String> {
+		if self.options.data_mode {
+			return None;
+		}
+		let suffix = LITERAL_SUFFIXES.iter().find(|(letter, _)| *letter == self.current_char());
+		if let Some((_, number_type)) = suffix.filter(|_| !is_identifier_char(self.peek_char(1))) {
+			self.advance();
+			return Some(number_type.to_string());
+		}
+		if self.current_char() != ':' {
+			return None;
+		}
+		let name: String = self.chars[self.pos + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
+		if !LITERAL_NUMBER_TYPES.contains(&name.as_str()) {
+			return None;
+		}
+		self.advance_by(1 + name.chars().count());
+		Some(name)
 	}
 
 	/// Data round-trips its literals: `zip: 01234` stays `01234`, `version: 1.10` stays `1.10`

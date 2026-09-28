@@ -240,3 +240,13 @@
 - Left open: `as exact` of a runtime f64 is a type error (no f64→ratio conversion yet); `'2.5' as float` inside arithmetic
   is not a number (text casts only at top level); `int x=…`/`string x=…` prefix declarations are not lowered (only number
   types); `real` excludes irrationals until a symbolic/constructive real exists.
+
+## `as` is loose, typed literals are tight (user decision 2026-09-28)
+- The float-syntax run had put `as` at bp 152 (tighter than `*`, like Rust/Kotlin) on my instruction "tighter than +":
+  `2 * 1.5 as int` → 2. Now `as` is (125, TYPE_OPERAND_BP=250): it converts the whole arithmetic expression to its left
+  (C#, TypeScript), `2 * 1.5 as int` → 3, and its target type is one atom. An ungrouped mix is linted:
+  fix `(2*1.5) as int or 2 * 1.5:int`.
+- Tight conversion is written on the literal (`literal_type_suffix` in wasp_parser.rs, code only, not data mode):
+  `0.1:float`, `1.5:int` and the C/Java/C# suffixes `0.1f`/`F`, `0.1d`/`D` (double) → float, `0.1l`/`L` (long double) → exact.
+- Word operators serialize with spaces (`0.1 as float`, was `0.1asfloat`).
+- /usr/local/bin/warp is a symlink to target/debug/warp: every cargo build/test updates it.

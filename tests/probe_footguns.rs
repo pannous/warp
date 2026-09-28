@@ -691,13 +691,34 @@ fn test_fast_floats_are_not_associative() {
 	is!("a=0.1 as float; b=0.2 as float; c=0.3 as float; (a+b)+c == a+(b+c)", false);
 }
 
-#[test] // `as` binds tighter than + and weaker than a literal
-fn test_as_binds_tighter_than_arithmetic() {
+#[test] // user decision 2026-09-28: `as` converts the whole arithmetic expression to its left (C#, TypeScript), not
+// just the nearest operand (Rust, Kotlin); an ungrouped mix gets a warning with both readings as fix-it
+fn test_as_converts_the_whole_expression() {
+	is!("2 * 1.5 as int", 3); // Rust: 2 * (1.5 as i32) → 2
+	is!("2 * (1.5 as int)", 2);
+	is!("x=3.3 as float; x", 3.3);
 	let sum = eval("0.1 as float + 0.2 as float");
 	assert!(matches!(sum.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 0.30000000000000004), "{sum:?}");
-	is!("0.1 as float + 0.2 as float == 0.3", false);
-	is!("x=3.3 as float; x", 3.3);
-	is!("2 * 1.5 as int", 2); // 2 * (1.5 as int)
+	let warnings = warp::analyzer::lint(&warp::parse("2 * 1.5 as int"));
+	assert!(warnings.iter().any(|w| w.fix.as_deref() == Some("(2*1.5) as int or 2 * 1.5:int")), "{warnings:?}");
+	assert!(warp::analyzer::lint(&warp::parse("(2 * 1.5) as int")).is_empty());
+	assert!(warp::analyzer::lint(&warp::parse("x=3.3 as float")).is_empty());
+}
+
+#[test] // user decision 2026-09-28: a tight conversion is written on the literal itself, `0.1:float` or C's `0.1f`
+fn test_typed_literals_bind_tightly() {
+	is!("0.1 + 0.2 == 0.3", true); // exact by default
+	is!("0.1:float + 0.2:float == 0.3", false);
+	is!("0.1f + 0.2f == 0.3", false);
+	is!(".1f + .2f == .3", false);
+	is!("x=0.1f; x+0.2 == 0.3", false);
+	is!("3f", 3.0);
+	is!("0.1F + 0.2F == 0.3", false);
+	is!("0.1d + 0.2D == 0.3", false); // Java, C#: double
+	is!("0.1l + 0.2l == 0.3", true); // C's long double suffix: exact, as without suffix
+	is!(".1L + .2L == .3", true);
+	is!("2 * 1.5:int", 2);
+	assert!(warp::analyzer::lint(&warp::parse("2 * 1.5:int")).is_empty(), "typed literals are not ambiguous");
 }
 
 #[test] // real/exact and float/fast/f64 are aliases, prefix and suffix declarations mean the same

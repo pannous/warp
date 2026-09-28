@@ -856,6 +856,7 @@ impl Node {
 					format!("{}{}{}", bracket, items.join(&joint), close)
 				}
 			}
+			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
 			Key(k, op, v) => format!("{}{}{}", k, op, v.serialize_recurse(meta)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),

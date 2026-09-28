@@ -675,6 +675,9 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
 					.fix(format!("if {condition} then {then} else {otherwise}")));
 			}
+			if *op == Op::As && is_arithmetic(left) {
+				warnings.push(Diagnostic::at(node, conversion_of_arithmetic_warning(left, right)).fix(conversion_readings(left, right)));
+			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
 				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right)));
 			}
@@ -683,6 +686,30 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// An ungrouped binary arithmetic expression: `2 * 1.5`, not `(2 * 1.5)`
+fn is_arithmetic(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow))
+}
+
+fn conversion_of_arithmetic_warning(left: &Node, right: &Node) -> String {
+	format!("`{} as {}` converts the whole `{}`, not only its last operand", left.serialize(), right.serialize(), left.serialize())
+}
+
+/// Both readings of `a * b as T`: the whole expression, or the nearest operand
+fn conversion_readings(left: &Node, right: &Node) -> String {
+	let (whole, target) = (left.serialize(), right.serialize());
+	match left {
+		Node::Key(first, op, last) => {
+			let tight = match last.drop_meta() {
+				Node::Number(_) => format!("{}:{target}", last.serialize()),
+				_ => format!("({} as {target})", last.serialize()),
+			};
+			format!("({whole}) as {target} or {} {} {tight}", first.serialize(), op.as_str())
+		}
+		_ => format!("({whole}) as {target}"),
 	}
 }
 

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 /// Keywords that introduce function definitions
 pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "function"];
+/// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
+pub const TYPE_OPERAND_BP: u8 = 250;
 
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
@@ -125,9 +127,6 @@ impl Op {
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
 
-			// Type cast binds tighter than arithmetic, weaker than unary minus (as Rust):
-			// 0.1 as float + 0.2 as float → (0.1 as float) + (0.2 as float), -1.5 as int → (-1.5) as int
-			Op::As => (152, 153),
 
 			// Multiplicative (left-assoc)
 			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
@@ -137,6 +136,11 @@ impl Op {
 
 			// Range
 			Op::Range | Op::To => (130, 131),
+
+			// Type conversion converts the whole arithmetic expression to its left (C#, TypeScript), not the nearest
+			// operand (Rust, Kotlin): 2 * 1.5 as int → (2*1.5) as int → 3, 1.5 as int == 1; ungrouped mixes are linted
+			// the target type is one atom: 0.1 as float + 0.2 → (0.1 as float) + 0.2, never 0.1 as (float + 0.2)
+			Op::As => (125, TYPE_OPERAND_BP),
 
 			// Ordering: one level, the parser chains them: a<b<c → a<b and b<c
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
