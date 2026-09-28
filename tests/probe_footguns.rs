@@ -613,14 +613,39 @@ fn test_date_literal_needs_strict_form() {
 
 #[test]
 fn test_modulo_and_remainder_are_both_named() {
-	is!("-7 % 3", -1); // % is the truncating remainder, sign of the dividend (C, JS, Java)
-	is!("-7 mod 3", 2); // mod is the floored modulo, sign of the divisor (Python, Haskell `mod`)
-	is!("7 mod -3", -2);
-	is!("-5 mod 3", 1);
-	is!("6 mod 3", 0);
+	// % is Euclidean as in mathematics: a == b*q + r with 0 ≤ r < |b| (C/JS/Java truncate, Python floors)
+	is!("-7 % 3", 2); // C, JS, Java: -1
+	is!("7 % -3", 1); // Python: -2
+	is!("-7 % -3", 2);
+	is!("7 % 3", 1);
+	is!("-6 % 3", 0);
+	is!("x=-7; x % 3", 2);
+	is!("x=-7; x %= 3; x", 2);
+	is!("x=-7; x /= 3; x", -3); // integer /= is the Euclidean quotient: -7 == 3*-3 + 2
+	is!("x=7; x /= -3; x", -2); // 7 == -3*-2 + 1
+	is!("-123456789012345678901234567890 % 1000", 110);
+	is!("(-7/2 % 3) * 2", 5); // exact ratios too: -3.5 % 3 == 2.5
+	// mod is the same operation as %
+	is!("-7 mod 3", 2);
+	is!("7 mod -3", 1);
 	is!("x=-7; x mod 3", 2);
 	is!("1 + -7 mod 3", 3); // binds like %
 	is!("-123456789012345678901234567890 mod 1000", 110);
+	// rem is the truncated remainder, sign of the dividend (C, JS, Java, Rust %)
+	is!("-7 rem 3", -1);
+	is!("7 rem -3", 1);
+	is!("x=-7; x rem 3", -1);
+	is!("-123456789012345678901234567890 rem 1000", -890);
+}
+
+#[test]
+fn test_negative_modulo_is_linted() {
+	let warnings = warp::analyzer::lint(&warp::parse("-7 % 3"));
+	let message = &warnings.first().expect("a warning for a negative % operand").message;
+	assert!(message.contains("`-7 % 3` is 2") && message.contains("give -1") && message.contains("rem"), "{message}");
+	assert!(!warp::analyzer::lint(&warp::parse("x=5; y=-x % 3")).is_empty());
+	assert!(warp::analyzer::lint(&warp::parse("7 % 3")).is_empty());
+	assert!(warp::analyzer::lint(&warp::parse("-7 rem 3")).is_empty());
 }
 
 #[test]

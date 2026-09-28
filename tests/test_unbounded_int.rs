@@ -51,7 +51,7 @@ fn test_overflow_promotes_neg_abs() {
 #[test]
 fn test_big_division_and_remainder() {
 	is!("123456789012345678901234567890 % 1000000007", 197434842);
-	is!("-123456789012345678901234567890 % 1000", -890);
+	is!("-123456789012345678901234567890 % 1000", 110); // Euclidean: 0 ≤ r < |b|
 	is!("123456789012345678901234567890 % 98765432109876543210", int("60185185207253086410"));
 	is!("x=123456789012345678901234567890; x /= 1000000000000; x", int("123456789012345678"));
 }
@@ -92,7 +92,7 @@ fn test_i64_opt_out_wraps() {
 fn test_small_arithmetic_unchanged() {
 	is!("3+3", 6);
 	is!("7*6-2", 40);
-	is!("-7 % 3", -1);
+	is!("-7 % 3", 2); // Euclidean, as in mathematics
 	is!("x=5; x*=3; x", 15);
 	let result = eval("i=0; s=0; while i<1000 { s+=i; i++ }; s");
 	assert_eq!(result, 499500);
