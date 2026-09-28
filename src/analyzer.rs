@@ -653,6 +653,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_constants(program, &mut HashSet::new()))
 		.or_else(|| check_null_use(program, &mut HashSet::new()))
 		.or_else(|| check_boolean_arithmetic(program))
+		.or_else(|| check_ambiguous_calls(program))
 		.map(Diagnostic::into_error)
 }
 
@@ -676,6 +677,52 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// A braceless argument takes arithmetic (`f 3-1` is `f(3-1)`, also in `1 + f 3-1`), so a second braceless call inside it
+/// is ambiguous (wiki/precedence.md): `square 3 + square 3` reads as `square(3 + square 3)` or `square(3) + square(3)`.
+/// Bad.md's recursive `fib it-1 + fib it-2` would silently mean `fib(it-1 + fib(it-2))`, so it is rejected with both readings.
+fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
+	const KEYWORDS: [&str; 10] = ["return", "const", "let", "var", "def", "fun", "fn", "use", "import", "include"];
+	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
+		match node.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => match items[0].drop_meta() {
+				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+	fn holds_call(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Key(left, op, right) if op.is_arithmetic() => holds_call(left) || holds_call(right),
+			other => braceless_call(other).is_some(),
+		}
+	}
+	fn explicit(node: &Node) -> String {
+		if let Some((head, argument)) = braceless_call(node) {
+			return format!("{head}({})", explicit(argument));
+		}
+		match node.drop_meta() {
+			Node::Key(left, op, right) if op.is_arithmetic() => format!("{} {} {}", explicit(left), op.as_str(), explicit(right)),
+			other => other.serialize(),
+		}
+	}
+	if let Some((head, argument)) = braceless_call(node) {
+		if let Node::Key(left, op, right) = argument.drop_meta() {
+			if op.is_arithmetic() && holds_call(argument) {
+				let whole = format!("{head}({})", explicit(argument));
+				let first = format!("{head}({}) {} {}", explicit(left), op.as_str(), explicit(right));
+				return Some(Diagnostic::at(node, format!("ambiguous braceless call: {head} {}", argument.drop_meta().serialize()))
+					.fix(format!("{first} or {whole}")));
+			}
+		}
+	}
+	match node.drop_meta() {
+		Node::Key(left, _, right) => check_ambiguous_calls(left).or_else(|| check_ambiguous_calls(right)),
+		Node::List(items, _, _) => items.iter().find_map(check_ambiguous_calls),
+		_ => None,
 	}
 }
 

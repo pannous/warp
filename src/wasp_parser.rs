@@ -1,3 +1,4 @@
+use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
@@ -95,6 +96,8 @@ pub struct WaspParser {
 	options: ParserOptions,
 	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
 	equals_compares: bool,
+	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
+	functions: std::collections::HashSet<String>,
 }
 
 enum ElseParseMode {
@@ -123,6 +126,7 @@ impl WaspParser {
 			base_indent: 0,
 			options,
 			equals_compares: false,
+			functions: Default::default(),
 		}
 	}
 
@@ -695,7 +699,7 @@ impl WaspParser {
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	fn parse_expr(&mut self, min_bp: u8) -> Node {
-		const APPLICATION_BP: u8 = 165;
+		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
 		const MAX_BP_FOR_APPLICATION: u8 = 151; // operand of + - * / takes a braceless call: 1 + f 3
 		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
 
@@ -764,7 +768,7 @@ impl WaspParser {
 					if let Some(updated) = self.try_parse_implicit_application(
 						&lhs,
 						min_bp,
-						APPLICATION_BP,
+						ARGUMENT_BP,
 						MAX_BP_FOR_APPLICATION,
 					) {
 						lhs = updated;
@@ -782,8 +786,15 @@ impl WaspParser {
 			}
 
 			// Consume the operator
+			let (op_line, op_column) = self.get_position();
+			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			self.advance_by(chars);
 			self.skip_whitespace();
+			if op == Op::Define {
+				if let Some(name) = defined_function_name(&lhs) {
+					self.functions.insert(name);
+				}
+			}
 
 			// Parse right-hand side with appropriate binding power
 			let rhs = if op == Op::Colon {
@@ -791,6 +802,18 @@ impl WaspParser {
 			} else {
 				self.parse_expr(r_bp)
 			};
+
+			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
+				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
+			}
+
+			if let Some(symbol) = bare_symbol {
+				if let Some(diagnostic) = logic_mixed_with_comparison(&lhs, symbol, &rhs) {
+					lhs = Diagnostic { line: op_line, column: op_column, ..diagnostic }.into_error();
+					previous_comparand = None;
+					continue;
+				}
+			}
 
 			lhs = match previous_comparand.take() {
 				Some(middle) if op.is_comparison() => {
@@ -968,7 +991,7 @@ impl WaspParser {
 		&mut self,
 		lhs: &Node,
 		min_bp: u8,
-		application_bp: u8,
+		argument_bp: u8,
 		max_bp_for_application: u8,
 	) -> Option<Node> {
 		let lhs_is_callable = match lhs.drop_meta() {
@@ -976,6 +999,7 @@ impl WaspParser {
 			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
 			_ => false,
 		};
+		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60; // Assignment r_bp is 59
 		let arg_is_non_identifier = ch.is_numeric()
@@ -986,7 +1010,7 @@ impl WaspParser {
 			|| ch == '['
 			|| ch == '{'
 			|| ch == '-';
-		let should_apply = in_assignment_context || arg_is_non_identifier;
+		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function;
 
 		if min_bp == 0 || min_bp > max_bp_for_application {
 			return None;
@@ -995,7 +1019,7 @@ impl WaspParser {
 			return None;
 		}
 
-		let arg = self.parse_expr(application_bp + 1);
+		let arg = self.parse_expr(argument_bp);
 		if arg == Empty {
 			return None;
 		}
@@ -1689,3 +1713,47 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 	}
 }
 // Tests moved to tests/test_parser.rs
+
+/// `f := …`, `f x := …`, `f(x) := …` define f
+fn defined_function_name(target: &Node) -> Option<String> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
+			Some(Node::Symbol(name)) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn mentions(node: &Node, name: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(symbol) => symbol == name,
+		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
+		Node::List(items, _, _) => items.iter().any(|item| mentions(item, name)),
+		_ => false,
+	}
+}
+
+/// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
+/// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
+fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<Diagnostic> {
+	let comparison = |node: &Node| match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_comparison() => Some((left.serialize(), op.as_str(), right.serialize())),
+		_ => None,
+	};
+	let (left, right) = (lhs.serialize(), rhs.serialize());
+	let fix = match (comparison(lhs), comparison(rhs)) {
+		(None, Some((a, op, b))) => format!("{left} {symbol} ({a} {op} {b}) or ({left} {symbol} {a}) {op} {b}"),
+		(Some((a, op, b)), None) => format!("({a} {op} {b}) {symbol} {right} or {a} {op} ({b} {symbol} {right})"),
+		(Some(_), Some(_)) => format!("({left}) {symbol} ({right})"),
+		(None, None) => return None,
+	};
+	let word = if symbol == '&' { "and" } else { "or" };
+	Some(Diagnostic {
+		message: format!("ambiguous: `{symbol}` mixed with a comparison in {left} {symbol} {right}; group it or write `{word}`"),
+		line: 0,
+		column: 0,
+		fix: Some(fix),
+	})
+}

@@ -148,10 +148,41 @@ fn test_negative_power_precedence() {
 }
 
 #[test]
-#[ignore = "next"] // C precedence footguns: `not`/`&` must bind weaker than comparisons
 fn test_logic_binds_weaker_than_comparison() {
 	is!("not 1==2", true);
-	is!("3 & 4 == 4", false);
+	// C reads (3 & (4==4)), Python ((3&4)==4): `&` stays logical `and` (wiki/&.md) and the ungrouped mix is rejected
+	fails_with("3 & 4 == 4", "ambiguous");
+}
+
+#[test]
+fn test_symbolic_logic_next_to_comparison_needs_grouping() {
+	fails_with("1==1 | 2==3", "ambiguous");
+	fails_with("2==3 & 1", "ambiguous");
+	is!("(1==1) | (2==3)", true);
+	is!("1==1 and 2==2", true); // the word forms read unambiguously
+	is!("1==2 or 2==2", true);
+}
+
+#[test]
+fn test_braceless_argument_extent_is_consistent() {
+	is!("f := it*10; f 3-1", 20);
+	is!("f := it*10; 1 + f 3-1", 21); // was 30: (1 + f 3) - 1
+	is!("f := it*10; 2 * f 3-1", 40);
+	is!("f := it*10; f 3-1 > 15", true); // the argument stops at a comparison
+}
+
+#[test]
+fn test_braceless_call_in_argument_is_ambiguous() {
+	// wiki/precedence.md: square(3 + square 3) or (square 3) + square 3
+	fails_with("square := it*it; square 3 + square 3", "ambiguous");
+	// wiki/Bad.md: would silently be fib(it-1 + fib(it-2)); was `Undefined variable: it`
+	fails_with("fib := it<2 ? it : fib it-1 + fib it-2; fib 10", "fib(it - 1) + fib(it - 2)");
+	is!("fib := it<2 ? it : fib(it-1) + fib(it-2); fib 10", 55);
+}
+
+#[test]
+fn test_braceless_recursive_call_takes_identifier_argument() {
+	is!("fac := it<=1 ? 1 : it * fac it-1; fac 5", 120);
 }
 
 #[test]
