@@ -30,13 +30,11 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check for fetch call: [Symbol("fetch"), url_node]
-		if items.len() == 2 && self.config.emit_host_imports {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				if s == "fetch" {
-					self.emit_fetch_call(func, &items[1]);
-					return;
-				}
+		// Check for fetch call: [Symbol("fetch"), url_node], optionally `… timeout SECONDS`
+		if self.config.emit_host_imports {
+			if let Some((url, timeout)) = crate::host::fetch_call(&Node::List(items.to_vec(), Bracket::None, Separator::Space)) {
+				self.emit_fetch_call(func, &url, timeout);
+				return;
 			}
 		}
 

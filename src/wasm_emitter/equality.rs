@@ -2,7 +2,7 @@
 //!
 //! `values_equal(a, b)` compares by value, never by identity (wiki/equality.md): Nodes by kind and payload,
 //! texts byte by byte (source text is NFC normalized), Int and Float numerically, lists and keys recursively.
-//! `is_truthy(x)` applies the rule `Node::is_falsy` already uses for `and`/`or`: empty values are falsy.
+//! `is_truthy(x)` applies the rule `Node::is_falsy` already uses for `and`/`or`: empty values and errors are falsy.
 
 use super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
@@ -294,10 +294,14 @@ impl WasmGcEmitter {
 			f.instruction(&I::I64Const(KIND_MASK));
 			f.instruction(&I::I64And);
 			f.instruction(&I::LocalSet(1));
-			// ø is falsy
+			// ø and errors are falsy: `if x {…}` is the check of a result that may have failed (fetch)
 			f.instruction(&I::LocalGet(1));
 			f.instruction(&I::I64Const(Kind::Empty as i64));
 			f.instruction(&I::I64Eq);
+			f.instruction(&I::LocalGet(1));
+			f.instruction(&I::I64Const(Kind::Error as i64));
+			f.instruction(&I::I64Eq);
+			f.instruction(&I::I32Or);
 			Self::return_if(f, 0);
 			// lists and blocks are truthy when they have a first element
 			f.instruction(&I::LocalGet(1));

@@ -61,7 +61,7 @@ impl ImportManager {
 	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
 	fn emit_host_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Type for fetch: (i32, i32) -> (i32, i32)
-		// Takes (url_ptr, url_len), returns (result_ptr, result_len)
+		// Takes (url_ptr, url_len), returns (result_ptr, result_len); a negative length marks a failure reason
 		let fetch_type_idx = type_manager.add_function_type(
 			vec![ValType::I32, ValType::I32],
 			vec![ValType::I32, ValType::I32],
@@ -78,6 +78,15 @@ impl ImportManager {
 		self.imports
 			.import("host", "fetch", EntityType::Function(fetch_type_idx));
 		Self::register_import(ctx, "host_fetch");
+
+		// fetch_within: (url_ptr, url_len, timeout_ms: i64) -> (result_ptr, result_len), for an explicit timeout
+		let fetch_within_type_idx = type_manager.add_function_type(
+			vec![ValType::I32, ValType::I32, ValType::I64],
+			vec![ValType::I32, ValType::I32],
+		);
+		self.imports
+			.import("host", "fetch_within", EntityType::Function(fetch_within_type_idx));
+		Self::register_import(ctx, "host_fetch_within");
 
 		// Import run from "host" module
 		self.imports

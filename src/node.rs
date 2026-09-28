@@ -935,6 +935,7 @@ impl Node {
 			List(items, _, _) => items.is_empty(),
 			Key(a, _, b) => a.is_falsy() && b.is_falsy(),
 			Meta { node, .. } => node.is_falsy(), // metadata doesn't affect truthiness
+			Error(_) => true, // a failed result: `if x {…}` checks it (wiki/null.md, DESIGN.md "Effects")
 			// Data(d) if d.data_type == DataType::None => true,
 			_ => false,
 		}

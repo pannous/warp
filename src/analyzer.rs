@@ -66,6 +66,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// List handling: distinguish data lists from statement sequences and function calls
 		Node::List(items, bracket, _) if !items.is_empty() => {
+			if crate::host::fetch_call(node).is_some() {
+				return Kind::Text; // or an Error value, see check_unchecked_use
+			}
 			// Check for function calls: (funcname args...) where first item is a symbol
 			if items.len() >= 2 {
 				if let Node::Symbol(s) = items[0].drop_meta() {
@@ -654,7 +657,7 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_declared_types(program, &mut HashMap::new())
 		.or_else(|| check_constants(program, &mut HashSet::new()))
-		.or_else(|| check_null_use(program, &mut HashSet::new()))
+		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.map(Diagnostic::into_error)
@@ -811,10 +814,39 @@ fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
 	}
 }
 
-/// `x=ø` makes x possibly null: arithmetic or member access on it needs an `if x {…}` check first (wiki/null.md)
-fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnostic> {
-	let possibly_null = |operand: &Node, nullable: &HashSet<String>| match operand.drop_meta() {
-		Node::Symbol(name) if nullable.contains(name) => Some(name.clone()),
+/// Why a variable cannot be used as a plain value before an `if x {…}` check
+#[derive(Clone, Copy, PartialEq)]
+enum Unchecked {
+	Null,  // `x=ø` (wiki/null.md)
+	Error, // `x=fetch …`: a remote call may fail (DESIGN.md "Effects": Error as Result<T, E>)
+}
+
+impl Unchecked {
+	fn of(value: &Node) -> Option<Unchecked> {
+		match value.drop_meta() {
+			Node::Empty => Some(Unchecked::Null),
+			_ if crate::host::fetch_call(value).is_some() => Some(Unchecked::Error),
+			_ => None,
+		}
+	}
+
+	fn describe(self, name: &str) -> String {
+		match self {
+			Unchecked::Null => format!("{name} may be ø (null)"),
+			Unchecked::Error => format!("{name} may be an error (fetch can fail)"),
+		}
+	}
+}
+
+/// `x=ø` makes x possibly null, `x=fetch …` possibly an error: arithmetic or member access on it needs an
+/// `if x {…}` check first (ø and errors are falsy). A fetch used directly as an operand is never checked.
+fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Option<Diagnostic> {
+	let possibly_null = |operand: &Node, nullable: &HashMap<String, Unchecked>| match operand.drop_meta() {
+		Node::Symbol(name) => nullable.get(name).map(|reason| (name.clone(), reason.describe(name), None)),
+		fetched if crate::host::fetch_call(fetched).is_some() => {
+			let call = fetched.serialize();
+			Some(("result".to_string(), format!("{call} may be an error (fetch can fail)"), Some(call)))
+		}
 		_ => None,
 	};
 	match node.drop_meta() {
@@ -825,11 +857,10 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 				other => other,
 			};
 			if let Node::Symbol(name) = target.drop_meta() {
-				if matches!(value.drop_meta(), Node::Empty) {
-					nullable.insert(name.clone());
-				} else {
-					nullable.remove(name);
-				}
+				match Unchecked::of(value) {
+					Some(reason) => nullable.insert(name.clone(), reason),
+					None => nullable.remove(name),
+				};
 			}
 			found
 		}
@@ -838,13 +869,13 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 				return check_null_use(if_condition, nullable).or_else(|| check_null_use(then, nullable));
 			};
 			let mut narrowed = nullable.clone();
-			if let Some(name) = possibly_null(condition, nullable) {
-				narrowed.remove(&name);
+			if let Node::Symbol(name) = condition.drop_meta() {
+				narrowed.remove(name);
 			}
 			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
 		}
 		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`)
-		Node::Key(list, Op::Dot, call) if appended_element(list, call).is_some() => {
+		Node::Key(list, Op::Dot, call) if appended_element(list, call).is_some() && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
 			let found = check_null_use(call, nullable);
 			nullable.remove(&list.name()); // no longer empty
 			found
@@ -854,9 +885,13 @@ fn check_null_use(node: &Node, nullable: &mut HashSet<String>) -> Option<Diagnos
 		}
 		Node::Key(left, op, right) if op.is_arithmetic() || *op == Op::Dot => {
 			let operand = possibly_null(left, nullable).or_else(|| if *op == Op::Dot { None } else { possibly_null(right, nullable) });
-			if let Some(name) = operand {
+			if let Some((name, reason, call)) = operand {
 				let expression = node.drop_meta().serialize();
-				return Some(Diagnostic::at(node, format!("{name} may be ø (null) in {expression}")).fix(format!("if {name} {{ {expression} }}")));
+				let fix = match call {
+					Some(call) => format!("{name} = {call}; if {name} {{ {} }}", expression.replace(&call, &name)),
+					None => format!("if {name} {{ {expression} }}"),
+				};
+				return Some(Diagnostic::at(node, format!("{reason} in {expression}")).fix(fix));
 			}
 			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
 		}

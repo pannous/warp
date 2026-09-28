@@ -358,7 +358,13 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
 						}
-						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 => {
+						// an Error from a host call (fetch) carries its reason as text
+						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 || t == Kind::Error as u8 => {
+							let textual = |s: String| match tag {
+								t if t == Kind::Text as u8 => Node::Text(s),
+								t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(s))),
+								_ => Node::Symbol(s),
+							};
 							// data field contains $String struct (ptr, len)
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							if let Some(data_anyref) = data_val.unwrap_anyref() {
@@ -374,21 +380,13 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 										if ptr + len <= data.len() {
 											let string_bytes = &data[ptr..ptr + len];
 											if let Ok(s) = std::str::from_utf8(string_bytes) {
-												if tag == Kind::Text as u8 {
-													return Ok(Node::Text(s.to_string()));
-												} else {
-													return Ok(Node::Symbol(s.to_string()));
-												}
+												return Ok(textual(s.to_string()));
 											}
 										}
 									}
 								}
 							}
-							if tag == Kind::Text as u8 {
-								Ok(Node::Text(String::new()))
-							} else {
-								Ok(Node::Symbol(String::new()))
-							}
+							Ok(textual(String::new()))
 						}
 						_ => Ok(Node::Empty),
 					}

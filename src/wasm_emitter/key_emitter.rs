@@ -18,28 +18,22 @@ impl WasmGcEmitter {
 			}
 			// Handle fetch URL - call host.fetch and return Text node
 			if kw == "fetch" && self.config.emit_host_imports {
-				self.emit_fetch_call(func, right);
+				self.emit_fetch_call(func, right, None);
 				return;
 			}
 		}
 
-		// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL])
+		// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL]), optionally `… timeout SECONDS`
 		if (*op == Op::Assign || *op == Op::Define) && self.config.emit_host_imports {
 			if let Node::Symbol(var_name) = left.drop_meta() {
-				if let Node::List(items, _, _) = right.drop_meta() {
-					if items.len() == 2 {
-						if let Node::Symbol(s) = items[0].drop_meta() {
-							if s == "fetch" {
-								// Emit fetch call - result is a Text node (ref $Node)
-								self.emit_fetch_call(func, &items[1]);
-								// Store in ref-type local variable
-								if let Some(local) = self.scope.lookup(var_name) {
-									func.instruction(&Instruction::LocalTee(local.position));
-								}
-								return;
-							}
-						}
+				if let Some((url, timeout)) = crate::host::fetch_call(right) {
+					// Emit fetch call - result is a Text or Error node (ref $Node)
+					self.emit_fetch_call(func, &url, timeout);
+					// Store in ref-type local variable
+					if let Some(local) = self.scope.lookup(var_name) {
+						func.instruction(&Instruction::LocalTee(local.position));
 					}
+					return;
 				}
 			}
 		}

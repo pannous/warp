@@ -37,6 +37,31 @@ pub fn download(url: &str) -> String {
 	}
 }
 
+/// Like `download`, but a failure is a reason instead of an empty string: DNS, connection, timeout, HTTP status >= 400
+#[cfg(target_family = "wasm")]
+pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<String, String> {
+	Ok(download(url))
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<String, String> {
+	Ok(download(url))
+}
+
+#[cfg(all(not(target_family = "wasm"), not(test)))]
+pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
+	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into();
+	let reason = |error: ureq::Error| match error {
+		ureq::Error::StatusCode(status) => format!("HTTP status {status}"),
+		ureq::Error::Timeout(_) => format!("timeout after {} ms", timeout.as_millis()),
+		ureq::Error::Io(io) if matches!(io.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) => format!("timeout after {} ms", timeout.as_millis()),
+		ureq::Error::HostNotFound => "DNS: host not found".to_string(),
+		other => other.to_string(),
+	};
+	let mut response = agent.get(url).call().map_err(reason)?;
+	response.body_mut().read_to_string().map_err(reason)
+}
+
 pub trait FileExtensions {
 	// std::fs::File does not directly expose the file name.
 	fn name(&self) -> String;

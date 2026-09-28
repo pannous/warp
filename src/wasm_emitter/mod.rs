@@ -1437,31 +1437,57 @@ impl WasmGcEmitter {
 
 
 
-	/// Emit a fetch call using host.fetch import
-	/// Takes a URL node, calls host.fetch, returns a Text node with the content
-	fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node) {
-		// Extract URL string from node tree
+	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
+	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
+	pub(super) fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node, timeout: Option<std::time::Duration>) {
 		let url = self.extract_url_string(url_node);
-
-		// Store URL in data section
 		let (url_ptr, url_len) = self.allocate_string(&url);
-
-		// Call host.fetch(url_ptr, url_len) -> (result_ptr, result_len)
 		func.instruction(&I32Const(url_ptr as i32));
 		func.instruction(&I32Const(url_len as i32));
-
-		// Get the host_fetch function index
-		if let Some(f) = self.ctx.func_registry.get("host_fetch") {
+		let import = match timeout {
+			Some(timeout) => {
+				func.instruction(&Instruction::I64Const(timeout.as_millis().min(i64::MAX as u128) as i64));
+				"host_fetch_within"
+			}
+			None => "host_fetch",
+		};
+		if let Some(f) = self.ctx.func_registry.get(import) {
 			func.instruction(&Instruction::Call(f.call_index as u32));
 		} else {
-			// Fallback: emit empty text if host imports not available
-			func.instruction(&I32Const(0));
-			func.instruction(&I32Const(0));
+			if timeout.is_some() {
+				func.instruction(&Instruction::Drop);
+			}
+			let reason = format!("fetch {url} failed: host imports are not available");
+			let (ptr, len) = self.allocate_string(&reason);
+			func.instruction(&I32Const(ptr as i32));
+			func.instruction(&I32Const(-(len as i32)));
 		}
-
-		// Stack now has (result_ptr: i32, result_len: i32)
-		// Call new_text to create a Text node from the result
-		self.emit_call(func, "new_text");
+		// (ptr, len) → Node{kind: len < 0 ? Error : Text, data: $String(ptr, |len|)}
+		let (len, ptr) = (self.scratch(0), self.scratch(1));
+		func.instruction(&Instruction::I64ExtendI32S);
+		func.instruction(&Instruction::LocalSet(len));
+		func.instruction(&Instruction::I64ExtendI32U);
+		func.instruction(&Instruction::LocalSet(ptr));
+		func.instruction(&Instruction::I64Const(Kind::Error as i64));
+		func.instruction(&Instruction::I64Const(Kind::Text as i64));
+		func.instruction(&Instruction::LocalGet(len));
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::I64LtS);
+		func.instruction(&Instruction::Select);
+		func.instruction(&Instruction::LocalGet(ptr));
+		func.instruction(&Instruction::I32WrapI64);
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::LocalGet(len));
+		func.instruction(&Instruction::I64Sub);
+		func.instruction(&Instruction::LocalGet(len));
+		func.instruction(&Instruction::LocalGet(len));
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::I64LtS);
+		func.instruction(&Instruction::Select);
+		func.instruction(&Instruction::I32WrapI64);
+		func.instruction(&Instruction::StructNew(self.type_manager.string_type));
+		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&Instruction::StructNew(self.type_manager.node_type));
 	}
 
 

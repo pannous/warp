@@ -1012,3 +1012,52 @@ fn test_pure_rejects_divergence() {
 	fails_with("spin(n) := spin(n)\ncaller(n) := spin(n)+1 ! Pure\ncaller(1)", "caller → spin");
 	is!("f(n) := n==0 ? 1 : n*f(n-1) ! Div\nf(3)", 6); // declared divergence is allowed
 }
+
+/// Local HTTP stub answering every request with `status` and `body`: the fetch tests need no network
+fn serve(status: &'static str, body: &'static str) -> String {
+	use std::io::{Read, Write};
+	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+	let address = listener.local_addr().unwrap();
+	std::thread::spawn(move || {
+		for mut stream in listener.incoming().flatten() {
+			let mut request = [0u8; 4096];
+			let _ = stream.read(&mut request);
+			let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+			let _ = stream.write_all(response.as_bytes());
+		}
+	});
+	format!("http://{address}/data")
+}
+
+const UNREACHABLE: &str = "http://127.0.0.1:9/"; // discard port, nothing listens: connection refused
+
+#[test] // JS wrappers resolve to "", Go drops err, PHP file_get_contents returns false: a failed fetch is an Error value
+fn test_failed_fetch_is_an_error_value() {
+	fails_with(&format!("fetch \"{UNREACHABLE}\""), "fetch http://127.0.0.1:9/ failed");
+	let missing = serve("404 Not Found", "no such page");
+	fails_with(&format!("fetch \"{missing}\""), "HTTP status 404");
+	fails_with(&format!("x = fetch \"{missing}\"; x"), "HTTP status 404");
+	is!(&format!("fetch \"{}\"", serve("200 OK", "hello")), "hello\n");
+}
+
+#[test] // Java/Python/JS: a fetch result is used like a local value; Rust/Swift: the Result must be unwrapped first
+fn test_fetch_result_needs_a_check() {
+	let code = format!("x = fetch \"{UNREACHABLE}\"; x + \"!\"");
+	fails_with(&code, "x may be an error");
+	fails_with(&code, "fix: if x {");
+	fails_with(&format!("x = fetch \"{UNREACHABLE}\"; x.size"), "x may be an error");
+	fails_with(&format!("1 + fetch \"{UNREACHABLE}\""), "may be an error"); // the fix binds it: result = fetch …; if result {…}
+	is!(&format!("x = fetch \"{UNREACHABLE}\"; if x {{x}} else {{\"offline\"}}"), "offline"); // an error is falsy
+	let ok = serve("200 OK", "hello");
+	is!(&format!("x = fetch \"{ok}\"; if x {{x}} else {{\"offline\"}}"), "hello\n");
+}
+
+#[test] // browsers, curl, Python requests: no timeout by default, a stalled server hangs the caller forever
+fn test_fetch_times_out_loudly() {
+	assert!(warp::host::FETCH_TIMEOUT <= std::time::Duration::from_secs(30), "default timeout");
+	let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); // the kernel accepts, nobody ever answers
+	let url = format!("http://{}/", silent.local_addr().unwrap());
+	fails_with(&format!("fetch \"{url}\" timeout 0.5"), "timeout after 500 ms");
+	fails_with(&format!("x = fetch \"{url}\" timeout 0.5; x"), "timeout after 500 ms");
+	drop(silent);
+}

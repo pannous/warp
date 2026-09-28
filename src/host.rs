@@ -1,8 +1,17 @@
 //! Host functions for WASM modules
-//! Provides `fetch(url) -> string` and `run(wasm_bytes) -> Node`
+//! Provides `fetch(url) -> text or error` and `run(wasm_bytes) -> Node`
+//!
+//! A remote call can fail, so `fetch` returns either the body or an Error value carrying the reason
+//! (DNS, connection, timeout, HTTP status >= 400), never a silent empty string (DESIGN.md "Effects": Result<T, E>).
 
-use crate::extensions::utils::download;
-use crate::node::Node;
+use std::time::Duration;
+
+/// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
+pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+
+use crate::extensions::utils::download_within;
+use crate::extensions::numbers::Number;
+use crate::node::{Bracket, Node, Separator};
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
@@ -90,48 +99,100 @@ fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	}
 }
 
+/// Body of `url`, or the reason it could not be fetched
+pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
+	let mut content = download_within(url, timeout).map_err(|reason| format!("fetch {url} failed: {reason}"))?;
+	if !content.ends_with('\n') {
+		content.push('\n'); // wasp convention
+	}
+	Ok(content)
+}
+
+/// Fetch the URL in WASM memory and write the result back: (ptr, len) of the body, (ptr, -len) of the failure reason
+fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout: Duration) -> (i32, i32) {
+	let memory = match caller.get_export("memory") {
+		Some(Extern::Memory(m)) => m,
+		_ => {
+			trace!("host.fetch: no memory export");
+			return (0, 0);
+		}
+	};
+	let (text, failed) = match read_string_from_memory(&memory, &*caller, url_ptr as u32, url_len as u32) {
+		Ok(url) => {
+			trace!("host.fetch: fetching {} (timeout {:?})", url, timeout);
+			match fetch(&url, timeout) {
+				Ok(body) => (body, false),
+				Err(reason) => (reason, true),
+			}
+		}
+		Err(e) => (format!("fetch failed: unreadable URL: {e}"), true),
+	};
+	match write_string_to_caller(&memory, caller, &text) {
+		Ok((ptr, len)) if failed => (ptr as i32, -(len as i32)),
+		Ok((ptr, len)) => (ptr as i32, len as i32),
+		Err(e) => {
+			trace!("host.fetch: failed to write result: {}", e);
+			(0, 0)
+		}
+	}
+}
+
+/// `fetch URL` or `fetch URL timeout SECONDS`, whether parsed as a flat list or as nested implicit applications:
+/// the URL node and the explicit timeout, if any
+pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
+	// `x = fetch u timeout 2` applies implicitly from the left: ((fetch u) timeout) 2, or (fetch u) (timeout 2)
+	fn parts(node: &Node) -> Vec<Node> {
+		match node.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space | Separator::None) if !items.is_empty() => {
+				let mut parts = parts(&items[0]);
+				for item in &items[1..] {
+					match item.drop_meta() {
+						Node::List(inner, Bracket::None, Separator::Space | Separator::None) if matches!(inner.first().map(Node::drop_meta), Some(Node::Symbol(k)) if k == "timeout") => {
+							parts.extend(inner.iter().map(|part| part.drop_meta().clone()))
+						}
+						other => parts.push(other.clone()),
+					}
+				}
+				parts
+			}
+			other => vec![other.clone()],
+		}
+	}
+	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, _)) {
+		return None;
+	}
+	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == "fetch");
+	match parts(node).as_slice() {
+		[head, url] if is_fetch(head) => Some((url.clone(), None)),
+		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
+			let seconds = match seconds {
+				Number::Complex(..) => return None,
+				real => f64::from(real.clone()),
+			};
+			(seconds > 0.0 && seconds.is_finite()).then(|| (url.clone(), Some(Duration::from_secs_f64(seconds))))
+		}
+		_ => None,
+	}
+}
+
 /// Link host functions into a wasmtime Linker
 pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> Result<()> {
 	// host.fetch(url_ptr: i32, url_len: i32) -> (result_ptr: i32, result_len: i32)
-	// Returns string result via two i32 values (multivalue return)
+	// Returns the body via two i32 values (multivalue return); a negative length marks the text as the failure reason
 	linker.func_wrap(
 		"host",
 		"fetch",
 		|mut caller: Caller<'_, HostState>, url_ptr: i32, url_len: i32| -> (i32, i32) {
-			let memory = match caller.get_export("memory") {
-				Some(Extern::Memory(m)) => m,
-				_ => {
-					trace!("host.fetch: no memory export");
-					return (0, 0);
-				}
-			};
+			fetch_into_memory(&mut caller, url_ptr, url_len, FETCH_TIMEOUT)
+		},
+	)?;
 
-			// Read URL from WASM memory
-			let url = match read_string_from_memory(&memory, &caller, url_ptr as u32, url_len as u32) {
-				Ok(s) => s,
-				Err(e) => {
-					trace!("host.fetch: failed to read URL: {}", e);
-					return (0, 0);
-				}
-			};
-
-			trace!("host.fetch: fetching {}", url);
-
-			// Fetch the URL content
-			let mut content = download(&url);
-			// Add trailing newline if not present (wasp convention)
-			if !content.ends_with('\n') {
-				content.push('\n');
-			}
-
-			// Write result back to WASM memory
-			match write_string_to_caller(&memory, &mut caller, &content) {
-				Ok((ptr, len)) => (ptr as i32, len as i32),
-				Err(e) => {
-					trace!("host.fetch: failed to write result: {}", e);
-					(0, 0)
-				}
-			}
+	// host.fetch_within(url_ptr: i32, url_len: i32, timeout_ms: i64) -> (result_ptr: i32, result_len: i32)
+	linker.func_wrap(
+		"host",
+		"fetch_within",
+		|mut caller: Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout_ms: i64| -> (i32, i32) {
+			fetch_into_memory(&mut caller, url_ptr, url_len, Duration::from_millis(timeout_ms.max(1) as u64))
 		},
 	)?;
 
