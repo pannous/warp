@@ -332,6 +332,10 @@ now.hour
 ---
 -7 mod 3
 ---
+7 % -3
+---
+-7 rem 3
+---
 round(2.5)
 ---
 round_half_up(2.5)

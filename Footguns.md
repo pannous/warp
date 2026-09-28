@@ -513,16 +513,17 @@ Not yet: rounding goes through f64 (exact rationals could round exactly); no hal
 (`test_rounding_mode_is_named`)
 
 ### Negative modulo
-**C, JS, Java**: `-5 % 3` → *-2*, **Python**: *1*, both surprise the other camp.  
-Warp before: only `%`, the truncating remainder: `-7 % 3` → `-1`.  
-Warp: `%` is the truncating remainder (sign of the dividend, as C/JS/Java/Rust): `-7 % 3` → `-1`; `mod` is the floored modulo
-(sign of the divisor, as Python `%`, Haskell `mod`): `-7 mod 3` → `2`, `7 mod -3` → `-2`, `-123456789012345678901234567890 mod 1000` → `110`.
-`mod` binds like `%` (`1 + -7 mod 3` → `3`) and works for unbounded integers and exact ratios.  
-Decision: keep `%` truncating and add `mod` (alternatives: `%` floored and `rem` truncating, which contradicts
-`tests/test_unbounded_int.rs` `is!("-7 % 3", -1)`; Euclidean modulo, always ≥ 0).
-Not yet: `a mod b` is lowered in the parser to `(a % b + b) % b`, so the divisor is evaluated three times
-(harmless for pure divisors, wrong for a divisor with side effects); no `mod=`.
-(`test_modulo_and_remainder_are_both_named`)
+**C, JS, Java, Rust**: `-7 % 3` → *-1* (truncated, sign of the dividend), **Python**: *2*, but `7 % -3` → *-2* (floored, sign of the divisor): each camp surprises the other.  
+Warp before: only `%`, the truncating remainder: `-7 % 3` → `-1`; then `mod` was added as the floored modulo.  
+Warp: `%` follows mathematics, Euclidean division `a == b*q + r` with `0 ≤ r < |b|`, so the remainder is never negative:
+`-7 % 3` → `2`, `7 % -3` → `1`, `-7 % -3` → `2`, `7 % 3` → `1`, `-123456789012345678901234567890 % 1000` → `110`, `-7/2 % 3` → `5/2`.
+`mod` is the same operator (`-7 mod 3` → `2`); `rem` is the truncated remainder under its own name (`-7 rem 3` → `-1`, `7 rem -3` → `1`).
+`x %= y` is Euclidean and an integer `x /= y` is the matching quotient `(x - x % y) / y` (`x=-7; x /= 3` → `-3`).
+Lean exports `%` as `Int.emod` (Euclidean) and `rem` as `Int.tmod`.
+A `%` with a negative literal or negated operand is linted: "`-7 % 3` is 2: % is Euclidean as in mathematics; C/Java/JS give -1; use `rem` for the truncated remainder".  
+Decision (maintainer, 2026-09-28): `%` is Euclidean as in mathematics. Alternatives: truncated like C/Java/JS/Rust
+(`-7 % 3` → `-1`, the previous behavior), floored like Python/Haskell `mod` (`7 % -3` → `-2`).
+(`test_modulo_and_remainder_are_both_named`, `test_negative_modulo_is_linted`, `test_law_lean_export_modulo_is_euclidean`)
 
 ### Booleans are integers
 **Python, C, JS**: `True + True` → *2*  
