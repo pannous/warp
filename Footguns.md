@@ -402,6 +402,25 @@ rules, no southern-hemisphere DST): unknown zones are errors, the full IANA data
 (`test_months_are_one_based`, `test_calendar_overflow_is_explicit`, `test_no_implicit_time_zone`,
 `test_date_and_time_types_are_distinct`, `test_date_literal_needs_strict_form`)
 
+### Exact results at the Node boundary
+Since exact rationals, `3.14+2` returns the exact `Number::Quotient(257, 50)` (prints `5.14`), not `Number::Float`.
+Decision (user, 2026-09-28): results stay exact at the API; `tests/test_type_upgrading.rs`'s helper also accepts `Quotient` and compares it as f64 (8c8a18bb).
+(alternatives: convert non-integer results to f64 when leaving WASM, silently dropping exactness; decimal literals stay f64, giving up `0.1+0.2==0.3`.)
+
+### Variance
+**Java**: `Object[] a = new String[1]; a[0] = 1;` → *ArrayStoreException at runtime*  
+Warp today: no generic/subtyping rules exist to be unsound. Lists are heterogeneous (every element is a `Node`), so
+`a=("x" "y");a#1=1` has no static element type to violate; the Java scenario cannot even be written, there is no
+`String[]` to upcast to `Object[]`. `a#1` → `1`, verified (`test_no_array_store_exception`). The inferred-invariance rule below applies once typed collections exist.  
+Decision: variance is inferred, never annotated: an immutable collection (no mutation reachable through it, same analysis
+as ownership/effects) is covariant, `[Text]` may be used as `[Any]`; a collection that is mutated through the widened
+view is invariant, so `a:[Text]=…; f(b:[Any]) := b#1=1; f(a)` must be a type error, not a runtime trap. Value semantics
+(copy-on-write, see Aliasing) makes the widened copy a new list, which is the other sound way out.
+(alternatives: Java/C# covariant arrays with a runtime store check; Kotlin/Scala declaration-site `out`/`in`/`+T`/`-T`
+annotations; Java/C# use-site wildcards `? extends T`; everything invariant like Rust/Go generics.)
+Why: DESIGN.md prefers inference with optional constraints over mandatory annotations and requires unsound or lossy
+operations to be explicit; inferred mutability is the same fact the ownership and effect analyses already compute.
+
 # NOT YET
 ...
 
@@ -409,13 +428,6 @@ Footguns Warp still has (verified with the probes above: the Warp answer shown i
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
 
 ## Numbers
-
-### Exact results at the Node boundary
-Since exact numbers, `3.14+2` returns the exact `Number::Quotient(257, 50)` (prints `5.14`), not `Number::Float`.
-`tests/test_type_upgrading.rs::test_float_plus_int_type_upgrading` ("Float + Integer = Float") accepts only Float or Int and now fails.
-Decision needed: (a) the test's helper also accepts `Quotient` (recommended: the value is right and exact, DESIGN.md says `1/3` is a rational);
-(b) convert non-integer results to f64 when leaving WASM (keeps old tests, but silently drops exactness at the API);
-(c) decimal literals stay f64 unless written as fractions (gives up `0.1+0.2==0.3`).
 
 ### Rounding mode
 **Python 3, .NET** `round(2.5)` → *2* surprises users of **JS/Excel** (`3`) and vice versa.  
@@ -505,21 +517,6 @@ Warp today: law, effect, declared-type and null violations, invalid number text 
 failures are compiler panics (`Cannot extract numeric value …`, `Undefined variable`, pinned by `test_undefined_variable_is_an_error`),
 runtime traps carry no span, and a link/instantiation failure still returns the parsed program (`failed_run`).  
 Intended: `Result<T, E>` as data, every diagnostic with span, resolved facts and fix-it ([DESIGN.md → The compiler is a query interface](DESIGN.md#the-compiler-is-a-query-interface)).
-
-## Variance
-**Java**: `Object[] a = new String[1]; a[0] = 1;` → *ArrayStoreException at runtime*  
-Warp today: no generic/subtyping rules exist to be unsound. Lists are heterogeneous (every element is a `Node`), so
-`a=("x" "y");a#1=1` has no static element type to violate; the Java scenario cannot even be written, there is no
-`String[]` to upcast to `Object[]`. Expected `a#1` → `1`, not yet verified (`test_no_array_store_exception`, ignored:
-the build was blocked by the session's network policy).  
-Decision: variance is inferred, never annotated: an immutable collection (no mutation reachable through it, same analysis
-as ownership/effects) is covariant, `[Text]` may be used as `[Any]`; a collection that is mutated through the widened
-view is invariant, so `a:[Text]=…; f(b:[Any]) := b#1=1; f(a)` must be a type error, not a runtime trap. Value semantics
-(copy-on-write, see Aliasing) makes the widened copy a new list, which is the other sound way out.
-(alternatives: Java/C# covariant arrays with a runtime store check; Kotlin/Scala declaration-site `out`/`in`/`+T`/`-T`
-annotations; Java/C# use-site wildcards `? extends T`; everything invariant like Rust/Go generics.)
-Why: DESIGN.md prefers inference with optional constraints over mandatory annotations and requires unsound or lossy
-operations to be explicit; inferred mutability is the same fact the ownership and effect analyses already compute.
 
 # "Impossible"
 ... Really?
