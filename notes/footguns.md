@@ -419,3 +419,29 @@ Tests: probe_footguns.rs test_number_of_{chars,graphemes,bytes,codepoints}_in_te
 `to_uppercase`: `"i".upper` → "I", `"ı".upper` → "I", `"İ".lower` → "i̇" (i + combining dot), `"straße".upper` → "STRASSE".
 Test: test_case_mapping_is_locale_independent.
 **Open:** locale-aware mapping (Turkish/Azeri, Lithuanian) and collation need a way to name a locale; not designed yet.
+
+## Work area "remote calls" (2026-09-28)
+- Implemented: `fetch` yields the body as Text or an Error node carrying the reason (DNS/connection, timeout, HTTP status
+  >= 400), never "". The host marks a failure by a negative length, the emitter picks the Error or Text kind from it.
+  Errors are falsy (`Node::is_falsy`, wasm `is_truthy`), so `if x {…}` is the check.
+- Using `x = fetch …` unchecked in arithmetic or member access, or `fetch …` directly as an operand, is a diagnostic
+  with fix-it (`check_null_use`, generalized to an `Unchecked::{Null, Error}` reason).
+- Default timeout `host::FETCH_TIMEOUT` (10 s); `fetch URL timeout SECONDS` overrides it (host.fetch_within) and a
+  timeout is an Error "timeout after N ms".
+- Runtime `if … else` with a text/list/error branch now yields a Node (was numeric only: `if x {x} else {"offline"}`
+  failed with "cannot extract a numeric value").
+- Tests (no external network: `http://127.0.0.1:9` and a local stub): test_failed_fetch_is_an_error_value,
+  test_fetch_result_needs_a_check, test_fetch_times_out_loudly. Validated on CI (branch claude/remote-calls).
+- Decided: the checked form is `if x {…}` (same as ø), not a new `try`/`?` syntax; the timeout is per call by keyword.
+- Left open: no retry policy; no access to the HTTP status or headers of a successful response; a fetch result passed to
+  a function parameter is not tracked by the check; the error kind is only in the message text (no structured reason).
+
+## For wiki/Footguns.md
+
+### Remote call failures are silent values
+JS wrappers resolve to "", Go drops `err`, PHP `file_get_contents` returns `false`, browsers/curl/Python requests have no
+default timeout. Solved elsewhere: Rust/Swift force unwrapping a Result.
+Warp: solved. `fetch "http://127.0.0.1:9/"` → Error "fetch http://127.0.0.1:9/ failed: …"; HTTP 404 → Error "HTTP status 404";
+`x = fetch …; x + "!"` → diagnostic "x may be an error (fetch can fail)", fix `if x { x + "!" }`; errors are falsy so
+`if x {x} else {"offline"}` → "offline"; default timeout `FETCH_TIMEOUT` (10 s), `fetch URL timeout 0.5` → Error
+"timeout after 500 ms". Tests: test_failed_fetch_is_an_error_value, test_fetch_result_needs_a_check, test_fetch_times_out_loudly.

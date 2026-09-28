@@ -1767,6 +1767,24 @@ impl WasmGcEmitter {
 			other => panic!("Expected if-then structure, got {:?}", other),
 		};
 
+		// A branch yielding a text, list or error (`if x {x} else {"offline"}`): both branches are Node values
+		let branch_value = |branch: &Node| match branch.drop_meta() {
+			Node::List(items, Bracket::Curly, _) if items.len() == 1 => items[0].clone(),
+			other => other.clone(),
+		};
+		let then_value = branch_value(then_expr);
+		let else_value = else_expr.map(branch_value);
+		let is_node_valued = |emitter: &Self, value: &Node| !matches!(value.drop_meta(), Node::Empty) && emitter.is_structured_value(value);
+		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
+			self.emit_condition(func, condition, Self::emit_block_value);
+			func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(true))))); // a local holds a nullable ref
+			self.emit_node_instructions(func, &then_value);
+			func.instruction(&Instruction::Else);
+			self.emit_node_instructions(func, else_value.as_ref().unwrap_or(&Node::Empty));
+			func.instruction(&Instruction::End);
+			return;
+		}
+
 		// Evaluate condition and convert to i32 for if instruction
 		self.emit_condition(func, condition, Self::emit_block_value);
 

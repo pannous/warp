@@ -426,3 +426,9 @@ number of codepoints in "👍🏽"
 #("héllo" as bytes)
 ---
 t="héllo";number of bytes in t
+---
+fetch "http://127.0.0.1:9/"
+---
+x = fetch "http://127.0.0.1:9/"; x + "!"
+---
+x = fetch "http://127.0.0.1:9/"; if x {x} else {"offline"}

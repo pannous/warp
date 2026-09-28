@@ -167,7 +167,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
 			let seconds = match seconds {
 				Number::Complex(..) => return None,
-				real => f64::from(real.clone()),
+				real => f64::from(*real),
 			};
 			(seconds > 0.0 && seconds.is_finite()).then(|| (url.clone(), Some(Duration::from_secs_f64(seconds))))
 		}
