@@ -108,6 +108,14 @@ f := it*10; 1 + f 3
 ---
 f := it*10; 1 + f 3-1
 ---
+1==1 | 2==3
+---
+square := it*it; square 3 + square 3
+---
+fib := it<2 ? it : fib it-1 + fib it-2; fib 10
+---
+fac := it<2 ? 1 : it * fac it-1; fac 5
+---
 fib := it<2 ? it : fib it-1 + fib it-2; fib 10
 ---
 x=1;if x=2 {3} else {4}

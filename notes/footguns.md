@@ -196,3 +196,17 @@
 - Left open: `Undefined variable` panic (pinned by an existing should_panic test), spans on runtime traps (needs a
   code-offset → source map), `x!` unwrap, typed null, optional floats (read through the Int path), literal `ø+[1]` is
   still a type error (infer_type(ø) defaults to Int).
+
+## Work area "syntax decisions" (2026-09-28)
+- Decided and fixed: `&`/`|` vs comparison. `&`/`|` stay logical and/or (wiki/&.md); the parser turns a single-char `&`/`|`
+  next to an ungrouped comparison into an error value with both groupings as fix-it (`logic_mixed_with_comparison` in
+  src/wasp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
+- Decided and fixed: braceless calls. The argument takes arithmetic and stops at ranges/comparisons (ARGUMENT_BP 140), in operand
+  position and, for functions of the implicit `it`, at statement level: `1 + f 3-1` → 21, `f 3-1 > 15` → true. This matches the
+  legacy wasp tests (`3 + id 3+3` → 9, test_wasm.rs, ignored). A braceless call inside a braceless argument is rejected by
+  `check_ambiguous_calls` (analyzer `diagnose`) with both readings (wiki/precedence.md), which turns Bad.md's
+  `fib it-1 + fib it-2` from `Undefined variable: it` into a fix-it. Functions defined with `:=` take identifier arguments in any
+  position (`it * fac it-1`). Validated on CI (branch claude/footguns-syntax2; no local build, crates.io blocked).
+- Left open: `fac := it<=1 ? …` fails to parse (`Unexpected character '='`), `it<2` works; probably `it<` read as a generic,
+  not investigated. `print 1 + f 3` is also reported as ambiguous. Multi-parameter functions at statement level keep the
+  list form `add 3 4`, so `add 3 4 > 5` still passes the comparison as the last argument.

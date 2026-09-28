@@ -72,7 +72,7 @@ Warp: `x=1⏎-1⏎x` → `1`. A newline ends the statement. (`test_newline_ends_
 
 ### Braceless call grabbing too little
 **Ruby, Haskell-style juxtaposition** ([wiki/Bad.md](wiki/Bad.md) feared it): `fibonacci number-1` read as *(fibonacci number)-1* → infinite recursion  
-Warp: `f := it*10; f 3-1` → `20`, the call takes the whole argument expression `f(3-1)`. (`test_braceless_call_takes_whole_argument`; but see NOT YET → Braceless calls)
+Warp: `f := it*10; f 3-1` → `20`, the call takes the whole argument expression `f(3-1)`. (`test_braceless_call_takes_whole_argument`)
 
 ### Parameter shadowing
 **Many languages** accidentally read the outer variable when a parameter has the same name.  
@@ -94,7 +94,16 @@ Warp: `-2^2` → `-4`, as in mathematics and Python; unary minus binds weaker th
 ### `not` vs comparison
 **C**: `!1 == 2` → *0* (`(!1) == 2`)  
 Warp: `not 1==2` → `true`, also `!1==1` → `false`: `not` binds weaker than comparisons, tighter than `and`/`or`
-(`not 1==2 and 2==2` → `true`). (`test_not_binds_weaker_than_comparison`; `&` see NOT YET)
+(`not 1==2 and 2==2` → `true`). (`test_not_binds_weaker_than_comparison`)
+
+### `&` and `|` vs comparison
+**C**: `3 & 4 == 4` → *1* (`3 & (4==4)`); **Python**: *False* (`(3&4)==4`)  
+Warp: `&` and `|` stay the logical `and`/`or` ([wiki/&.md](wiki/&.md)), and a symbol form next to an ungrouped comparison is
+an error, neither C's nor Python's reading is picked silently: `3 & 4 == 4` → ``ambiguous: `&` mixed with a comparison …; fix: 3 & (4 == 4)
+or (3 & 4) == 4``, also `1==1 | 2==3`. Grouped `(1==1) | (2==3)` and the word forms `1==1 and 2==2`, `1==2 or 2==2` → `true`.
+(`test_logic_binds_weaker_than_comparison`, `test_symbolic_logic_next_to_comparison_needs_grouping`)  
+Decision: diagnostic for the ungrouped mix, `&` stays logical and (alternatives: `&` logical and weaker than `==`, answer `true` silently
+as in C; `&` bitwise and tighter than `==`, answer `false` as in Python, breaks wiki/&.md and `square & print` composition).
 
 ### Chained comparison
 **C, JS**: `3 > 2 > 1` → *false* (`true > 1`)  
@@ -114,6 +123,22 @@ so `i++` and `++i` are the same. (`test_increment_changes_variable`, `test_prefi
 
 ### Braceless call as operand
 Warp: `f := it*10; 1 + f 3` → `31`: a braceless call is a valid operand of `+ - * /` (`2 * f 3` → `60`). (`test_braceless_call_as_operand`)
+
+### Braceless argument extent
+**Ruby**: `square 3 + square 3` → *square(3 + square(3))*; **Haskell**: `f 3-1` → *(f 3)-1*  
+Warp: a braceless argument takes arithmetic and stops at ranges, comparisons and logic, as operand the same as at statement level:
+`f := it*10; 1 + f 3-1` → `21` (was `30`, `(1 + f 3) - 1`), `2 * f 3-1` → `40`, `f 3-1 > 15` → `true`. A second braceless call inside
+the argument is an error with both readings as fix-it ([wiki/precedence.md](wiki/precedence.md) "Ambiguous mixing of function and operator"):
+`square 3 + square 3` → `ambiguous braceless call …; fix: square(3) + square(3) or square(3 + square(3))`. The recursive case of
+[wiki/Bad.md](wiki/Bad.md) `fib := it<2 ? it : fib it-1 + fib it-2` (was `Undefined variable: it`) → `fix: fib(it - 1) + fib(it - 2) or
+fib(it - 1 + fib(it - 2))`; a function defined with `:=` takes an identifier argument in any position: `fac := it<2 ? 1 : it * fac it-1; fac 5` → `120`.
+(`test_braceless_argument_extent_is_consistent`, `test_braceless_call_in_argument_is_ambiguous`, `test_braceless_recursive_call_takes_identifier_argument`)  
+Decision: the argument extends over arithmetic and a nested braceless call in it is a diagnostic; this is the reading of the
+wasp test suite (`3 + id 3+3` → 9, `1+2 + square 3+4` → 52) and the only one that keeps `f 3-1` the same in every position
+(alternatives: argument is one atom (Haskell, the old operand behavior, contradicts statement level); diagnostic for any operator
+after a braceless argument (rejects the solved `f 3-1`); whitespace-sensitive extent `f it - 1` vs `f it-1` (wiki/Bad.md warns
+against significant whitespace)). Not yet: multi-parameter functions at statement level keep the list form, `add 3 4 > 5` passes
+the comparison as last argument.
 
 ### Hidden side effects / "pure" functions that are not
 **Every mainstream language**: a helper deep in the call tree prints, logs or phones home and nothing says so.  
@@ -517,34 +542,6 @@ type yet); `false == 0` → `1` still compares across kinds.
 
 Footguns Warp still has (verified with the probes above: the Warp answer shown is today's output), or where the fix
 is designed but not implemented. Each entry names the intended resolution. Entries marked 🐞 are plain bugs, not design questions.
-
-## Syntax and precedence
-
-### `&` and `|` vs comparison
-**C**: `3 & 4 == 4` → *1* (`&` binds weaker than `==`)  
-Warp today: `3 & 4 == 4` → `1`, C's answer; `3 & 4` → `4`. Python says `False`. Also `3 | 4` → `3` (`|` is pipe, not bitwise or).
-(`not` is solved, see above.) (`test_logic_binds_weaker_than_comparison`)  
-Decision needed: the test expects `false`, which only `(3 & 4) == 4` with a bitwise `&` gives (`3&4` is `0`). But in Warp `&` is
-an alias of logical `and` ([wiki/&.md](wiki/&.md): "1 & 1 == 1 and 1 == true"), and the intended rule "`&`, `|` bind weaker
-than comparisons" yields `3 and (4==4)` → `true`. Options:
-1. `&` stays logical `and`, weaker than `==` (today): answer `true`; the test's `false` must change.
-2. `&` becomes bitwise and, tighter than `==` (Python): answer `false`; breaks wiki/&.md and `square & print` composition.
-3. Mixing `&`/`|` with a comparison without grouping is a diagnostic ([wiki/precedence.md](wiki/precedence.md) calls such mixes
-   ambiguous): neither C's nor Python's reading can be silently picked.
-
-Recommendation: 3 for the mixed form, keeping `&` = `and` for booleans and `bitand` as a named bitwise operator; then the test
-should assert an error instead of `false`.
-
-### Braceless calls
-Warp today: `1 + f 3` → `31` is solved (see above), but as an operand the call only takes the next atom:
-`f := it*10; 1 + f 3-1` → `30` (`1 + f(3) - 1`) while at statement level `f 3-1` → `20` (`f(3-1)`). The recursive case from
-[wiki/Bad.md](wiki/Bad.md) `fib := it<2 ? it : fib it-1 + fib it-2` still fails with `Undefined variable: it`
-(an identifier argument is only applied in assignment context).  
-Decision needed: [wiki/precedence.md](wiki/precedence.md) calls `square 3 + square 3` ambiguous. Options: (1) argument extends to
-the end of the enclosing operator's operand, `1 + f 3-1` → `1 + f(3-1)` → `21`; (2) argument is one atom (today, Haskell);
-(3) diagnostic when an operator follows a braceless argument. Recommendation: 3, with the persisted resolution of
-[DESIGN.md → Content-addressed resolutions](DESIGN.md#content-addressed-resolutions).
-
 
 # "Impossible"
 ... Really?
