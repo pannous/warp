@@ -955,6 +955,12 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal
 pub fn lower_declarations(node: Node) -> Node {
 	match node {
+		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
+			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
+		}
+		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
+			lower_declarations(unit_count(&counted).expect("guarded"))
+		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
@@ -1320,6 +1326,62 @@ pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
 	}
+}
+
+/// The counting method of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
+/// A char is a code point, as `x.chars` and the `char` type; the user-perceived character is a grapheme.
+fn text_unit(word: &str) -> Option<&'static str> {
+	match word {
+		"byte" | "bytes" => Some("bytes"),
+		"char" | "chars" | "codepoint" | "codepoints" => Some("codepoints"),
+		"grapheme" | "graphemes" => Some("graphemes"),
+		_ => None,
+	}
+}
+
+fn is_word(node: &Node, word: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(s) if s == word)
+}
+
+/// The items after the first `skip` as one node: the item itself, or the list of them
+fn rest_of(items: &[Node], skip: usize, bracket: &Bracket, separator: &Separator) -> Node {
+	match &items[skip..] {
+		[single] => single.clone(),
+		rest => Node::List(rest.to_vec(), bracket.clone(), separator.clone()),
+	}
+}
+
+/// A text seen in one unit, `byte in t` or `t as bytes`: counting it counts that unit, `t.bytes`
+fn unit_count(node: &Node) -> Option<Node> {
+	let count_of = |text: Node, unit: &Node| {
+		let Node::Symbol(word) = unit.drop_meta() else { return None };
+		Some(Node::Key(Box::new(text), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
+	};
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
+		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[1], "in") => {
+			count_of(rest_of(items, 2, bracket, separator), &items[0])
+		}
+		Node::Key(text, Op::As, unit) => count_of(text.as_ref().clone(), unit),
+		_ => None,
+	}
+}
+
+/// `number of x`, `count of x`, `length of x` → `count x`; `size of x` → `size x`;
+/// of a text unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`)
+fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let [word, of, _, ..] = items else { return None };
+	let Node::Symbol(word) = word.drop_meta() else { return None };
+	let counter = match word.as_str() {
+		"number" | "count" | "length" => "count",
+		"size" => "size",
+		_ => return None,
+	};
+	if !is_word(of, "of") {
+		return None;
+	}
+	let counted = rest_of(items, 2, bracket, separator);
+	Some(unit_count(&counted).unwrap_or_else(|| Node::List(vec![Node::Symbol(counter.to_string()), counted], bracket.clone(), separator.clone())))
 }
 
 fn require_counter(ctx: &mut Context, counter: &'static str) {

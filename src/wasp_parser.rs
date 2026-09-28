@@ -250,8 +250,8 @@ impl WaspParser {
 
 			let (c1, c2) = (self.current_char(), self.peek_char(1));
 
-			// # line comment (shell-style) - only at line start
-			if c1 == '#' && self.is_at_line_start() {
+			// # line comment (shell-style) - only at line start; `#(…)` counts, as `#x` does after a statement
+			if c1 == '#' && c2 != '(' && self.is_at_line_start() {
 				self.advance();
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() { comments.push(text); }

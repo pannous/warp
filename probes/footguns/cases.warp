@@ -412,3 +412,17 @@ t=2030-07-01T10:00[Europe/Berlin]; t.tzdata
 1 day == 24 hours
 ---
 t=2030-03-30T12:00[Europe/Berlin] + 1 day; t.hour
+---
+number of chars in "héllo"
+---
+number of graphemes in "👍🏽"
+---
+number of bytes in "héllo"
+---
+number of codepoints in "👍🏽"
+---
+#(byte in "héllo")
+---
+#("héllo" as bytes)
+---
+t="héllo";number of bytes in t

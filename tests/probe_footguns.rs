@@ -377,6 +377,57 @@ fn test_text_units_are_explicit() {
 	is!("pixels=(1,2,3);size(pixels)", 24); // lists keep 8 bytes per element
 }
 
+#[test] // Swift: s.unicodeScalars.count; a char is a code point, as x.chars and Rust's chars()
+fn test_number_of_chars_in_text() {
+	is!("number of chars in \"héllo\"", 5);
+	is!("number of chars in \"👍🏽\"", 2);
+	is!("t=\"héllo\";number of chars in t", 5);
+	is!("#(char in \"héllo\")", 5);
+}
+
+#[test] // Swift: s.count; the user-perceived character, the unit of # and count
+fn test_number_of_graphemes_in_text() {
+	is!("number of graphemes in \"👍🏽\"", 1);
+	is!("t=\"👍🏽\";number of graphemes in t", 1);
+	is!("t=\"🇩🇪🇫🇷\";#(t as graphemes)", 2);
+}
+
+#[test] // Go: len(s); Swift: s.utf8.count
+fn test_number_of_bytes_in_text() {
+	is!("number of bytes in \"héllo\"", 6);
+	is!("#(byte in \"héllo\")", 6);
+	is!("#(\"héllo\" as bytes)", 6);
+	is!("t=\"héllo\";number of bytes in t", 6);
+	is!("t=\"héllo\";#(byte in t)", 6);
+	is!("t=\"héllo\";#(t as bytes)", 6);
+	is!("count of bytes in \"👍🏽\"", 8);
+}
+
+#[test] // Python 3: len(s)
+fn test_number_of_codepoints_in_text() {
+	is!("number of codepoints in \"👍🏽\"", 2);
+	is!("t=\"q\u{301}\";number of codepoints in t", 2);
+	is!("#(\"👍🏽\" as codepoints)", 2);
+}
+
+#[test] // without a unit: number/count/length of a text count graphemes, size counts bytes, as #x and size x
+fn test_count_of_text_without_unit() {
+	is!("count of \"👍🏽\"", 1);
+	is!("t=\"héllo\";number of t", 5);
+	is!("t=\"héllo\";length of t", 5);
+	is!("t=\"héllo\";size of t", 6);
+	is!("pixels=[1 2 4];number of pixels", 3);
+}
+
+#[test] // JS: "i".toUpperCase() → "I" everywhere, only toLocaleUpperCase("tr") → "İ": no locale unless one is given
+fn test_case_mapping_is_locale_independent() {
+	use warp::StringExtensions;
+	assert_eq!("i".upper(), "I");
+	assert_eq!("ı".upper(), "I");
+	assert_eq!("İ".to_lowercase(), "i\u{307}"); // Unicode's default mapping keeps the dot as a combining mark
+	assert_eq!("straße".upper(), "STRASSE");
+}
+
 #[test] // index assignment writes the character's UTF-8, not one byte of it
 fn test_index_assignment_of_multi_byte_character() {
 	is!("x=\"ab\";x#1='é';x", "éb");
