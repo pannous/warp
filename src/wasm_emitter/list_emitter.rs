@@ -223,6 +223,38 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				true
 			}
+			// round half up (JS Math.round, Excel for x ≥ 0): floor(x) + (x - floor(x) ≥ ½), x kept as bits in a scratch local
+			"round_half_up" => {
+				let bits = self.scratch(0);
+				self.emit_float_value(func, arg);
+				func.instruction(&Instruction::I64ReinterpretF64);
+				func.instruction(&Instruction::LocalTee(bits));
+				func.instruction(&Instruction::F64ReinterpretI64);
+				func.instruction(&Instruction::F64Floor);
+				func.instruction(&Instruction::LocalGet(bits));
+				func.instruction(&Instruction::F64ReinterpretI64);
+				func.instruction(&Instruction::LocalGet(bits));
+				func.instruction(&Instruction::F64ReinterpretI64);
+				func.instruction(&Instruction::F64Floor);
+				func.instruction(&Instruction::F64Sub);
+				func.instruction(&Instruction::F64Const(0.5f64.into()));
+				func.instruction(&Instruction::F64Ge);
+				func.instruction(&Instruction::F64ConvertI32U);
+				func.instruction(&Instruction::F64Add);
+				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
+				self.emit_call(func, "new_int");
+				true
+			}
+			// round = round half even (IEEE 754 default, Python 3, .NET): 2.5 → 2, 3.5 → 4
+			"round_half_even" => {
+				self.emit_float_value(func, arg);
+				func.instruction(&Instruction::F64Nearest);
+				func.instruction(&Instruction::I64TruncF64S);
+				self.emit_int_from_machine(func);
+				self.emit_call(func, "new_int");
+				true
+			}
 			"round" if !self.ctx.ffi_imports.contains_key(fn_name) => {
 				self.emit_float_value(func, arg);
 				func.instruction(&Instruction::F64Nearest);

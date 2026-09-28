@@ -636,6 +636,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 	check_declared_types(program, &mut HashMap::new())
 		.or_else(|| check_constants(program, &mut HashSet::new()))
 		.or_else(|| check_null_use(program, &mut HashSet::new()))
+		.or_else(|| check_boolean_arithmetic(program))
 		.map(Diagnostic::into_error)
 }
 
@@ -659,6 +660,29 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// Booleans are not numbers: `true + true` is rejected, not 2 (the runtime still encodes them as Int 1/0)
+fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
+	fn is_boolean(operand: &Node) -> bool {
+		match operand.drop_meta() {
+			Node::True | Node::False => true,
+			Node::Key(left, op, _) => op.is_comparison() || (*op == Op::Not && matches!(left.drop_meta(), Node::Empty)),
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => is_boolean(&items[0]),
+			_ => false,
+		}
+	}
+	match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_arithmetic() && (is_boolean(left) || is_boolean(right)) => {
+			let expression = node.drop_meta().serialize();
+			let converted = |operand: &Node| if is_boolean(operand) { format!("int({})", operand.serialize()) } else { operand.serialize() };
+			Some(Diagnostic::at(node, format!("arithmetic on a boolean: {expression}"))
+				.fix(format!("{} {} {}", converted(left), op.as_str(), converted(right))))
+		}
+		Node::Key(left, _, right) => check_boolean_arithmetic(left).or_else(|| check_boolean_arithmetic(right)),
+		Node::List(items, _, _) => items.iter().find_map(check_boolean_arithmetic),
+		_ => None,
 	}
 }
 

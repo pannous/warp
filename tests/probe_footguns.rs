@@ -529,3 +529,38 @@ fn test_date_literal_needs_strict_form() {
 	fails_with("2024-02-29 + 1 year", "2025-02-29");
 	fails_with("2024-02-30", "day out of range");
 }
+
+#[test]
+fn test_modulo_and_remainder_are_both_named() {
+	is!("-7 % 3", -1); // % is the truncating remainder, sign of the dividend (C, JS, Java)
+	is!("-7 mod 3", 2); // mod is the floored modulo, sign of the divisor (Python, Haskell `mod`)
+	is!("7 mod -3", -2);
+	is!("-5 mod 3", 1);
+	is!("6 mod 3", 0);
+	is!("x=-7; x mod 3", 2);
+	is!("1 + -7 mod 3", 3); // binds like %
+	is!("-123456789012345678901234567890 mod 1000", 110);
+}
+
+#[test]
+fn test_rounding_mode_is_named() {
+	is!("round(2.5)", 2); // round is round half even (IEEE 754, Python 3, .NET)
+	is!("round(3.5)", 4);
+	is!("round_half_even(2.5)", 2);
+	is!("round_half_up(2.5)", 3); // JS Math.round, Excel
+	is!("round_half_up(0.5)", 1);
+	is!("round_half_up(-2.5)", -2); // up means toward +∞, like Math.round
+	is!("round_half_up(2.4)", 2);
+	is!("round_half_up(5/2)", 3);
+}
+
+#[test]
+fn test_booleans_are_not_numbers() {
+	fails_with("true + true", "arithmetic on a boolean"); // Python True + True → 2
+	fails_with("false * 3", "fix: int(false) * 3");
+	fails_with("(1<2) + 1", "arithmetic on a boolean");
+	fails_with("(not 1) + 2", "arithmetic on a boolean");
+	let accepted = |code: &str| warp::analyzer::diagnose(&warp::parse(code)).is_none();
+	assert!(accepted("int(true) + int(true)"));
+	assert!(accepted("x = 1 < 2; if x {1} else {2}"));
+}
