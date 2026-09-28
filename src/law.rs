@@ -104,7 +104,7 @@ fn law_statement(node: &Node) -> Option<&Node> {
 	}
 }
 
-fn top_level_items(node: &Node) -> Vec<Node> {
+pub(crate) fn top_level_items(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.clone(),
 		_ => vec![node.clone()],
@@ -142,7 +142,7 @@ pub fn extract_laws(parsed: &Node) -> Vec<Law> {
 }
 
 /// Reuses the analyzer's recognizers, then reads parameter kinds from the declaration.
-fn function_definition(item: &Node) -> Option<FunctionDefinition> {
+pub(crate) fn function_definition(item: &Node) -> Option<FunctionDefinition> {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, item);
 	if let Some(def) = context.user_functions.into_values().next() {
@@ -165,17 +165,22 @@ fn function_definition(item: &Node) -> Option<FunctionDefinition> {
 }
 
 fn declared_parameter_kinds(item: &Node) -> HashMap<String, Kind> {
-	let mut kinds = HashMap::new();
+	declared_parameter_types(item).into_iter().map(|(name, type_name)| (name, kind_of_type_name(&type_name))).collect()
+}
+
+/// Parameter name → declared type name, for parameters written `name:type`.
+pub(crate) fn declared_parameter_types(item: &Node) -> HashMap<String, String> {
+	let mut types = HashMap::new();
 	if let Node::Key(signature, Op::Assign | Op::Define, _) = item.drop_meta() {
 		if let Node::List(params, _, _) = signature.drop_meta() {
 			for param in params.iter().skip(1) {
 				if let Node::Key(name, Op::Colon, type_name) = param.drop_meta() {
-					kinds.insert(name.name(), kind_of_type_name(&type_name.name()));
+					types.insert(name.name(), type_name.name());
 				}
 			}
 		}
 	}
-	kinds
+	types
 }
 
 fn kind_of_type_name(name: &str) -> Kind {
@@ -239,7 +244,7 @@ pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {
 }
 
 /// Evaluate one instance of a law through the full parse → wasm → Node machinery.
-fn check_instance(lawful: &Lawful, law: &Law, bindings: &HashMap<String, Node>, code: &str) -> Verdict {
+pub(crate) fn check_instance(lawful: &Lawful, law: &Law, bindings: &HashMap<String, Node>, code: &str) -> Verdict {
 	let mut items: Vec<Node> = lawful.functions.iter().map(|f| f.source.clone()).collect();
 	items.push(substitute(&law.statement, bindings));
 	let instance = Node::List(items, Bracket::None, Separator::Semicolon);

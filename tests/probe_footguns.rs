@@ -1061,3 +1061,34 @@ fn test_fetch_times_out_loudly() {
 	fails_with(&format!("x = fetch \"{url}\" timeout 0.5; x"), "timeout after 500 ms");
 	drop(silent);
 }
+
+#[test] // Unison: definitions are named by the hash of their normalized AST, parameter names do not count
+fn test_function_equality_up_to_renaming() {
+	is!("f(x):=x+1; g(y):=y+1; f==g", true);
+	is!("f(x):=x+1; g(y):=y+1; f!=g", false);
+	is!("f(x):=x+1; f==f", true);
+	is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fibo(m) = m < 2 ? m : fibo(m - 1) + fibo(m - 2); fib==fibo", true);
+	is!("f(x):=x+1; g(x,y):=x+1; f==g", false); // different arity, different domain
+}
+
+#[test] // polynomials over exact numbers have a normal form: expand and collect
+fn test_polynomial_function_equality() {
+	is!("f(x):=(x+1)^2; g(x):=x^2+2*x+1; f==g", true); // panicked the compiler
+	is!("f(x):=x*x; g(x):=x+x; f==g", false);
+	is!("f(x):=x*x; g(x):=x+x; f!=g", true);
+	is!("f(x,y):=(x-y)*(x+y); g(a,b):=a^2-b^2; f==g", true);
+	is!("f(x):=x/2+x/2; g(x):=x; f==g", true); // exact division
+}
+
+#[test] // a finite domain is compared input by input
+fn test_finite_domain_function_equality() {
+	is!("f(a:bool,b:bool):=not (a or b); g(a:bool,b:bool):=(not a) and (not b); f==g", true); // De Morgan
+	is!("f(a:bool,b:bool):=a and b; g(a:bool,b:bool):=a or b; f==g", false);
+}
+
+#[test] // Rice: equality of arbitrary functions is undecidable, so it is an error, never a guess
+fn test_undecidable_function_equality_is_an_error() {
+	fails_with("f(x):=x%2; g(x):=x%3; f==g", "undecidable: f == g");
+	fails_with("f(x):=x%2; g(x):=x%3; f==g", "counterexample x=");
+	fails_with("f(x):=x%2; g(x):=(x*3)%2; f==g", "undecidable: f == g");
+}

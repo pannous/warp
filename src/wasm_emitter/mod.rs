@@ -3121,6 +3121,10 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 		Ok(node) => node,
 		Err(error) => return error,
 	};
+	let node = crate::function_equality::decide_comparisons(node);
+	if let Node::Error(_) = node {
+		return node;
+	}
 	if let Some(answer) = crate::time::answer(&node) {
 		return answer;
 	}

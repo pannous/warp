@@ -432,3 +432,7 @@ fetch "http://127.0.0.1:9/"
 x = fetch "http://127.0.0.1:9/"; x + "!"
 ---
 x = fetch "http://127.0.0.1:9/"; if x {x} else {"offline"}
+---
+f(x):=(x+1)^2; g(x):=x^2+2*x+1; f==g
+---
+f(x):=x%2; g(x):=x%3; f==g
