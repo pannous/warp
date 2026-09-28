@@ -402,3 +402,13 @@ effects of f
 ---
 f(n) := n==0 ? 1 : n*f(n-1) ! Pure
 f(3)
+---
+2030-10-27T02:30[Europe/Berlin]
+---
+t=zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: later); t.offset
+---
+t=2030-07-01T10:00[Europe/Berlin]; t.tzdata
+---
+1 day == 24 hours
+---
+t=2030-03-30T12:00[Europe/Berlin] + 1 day; t.hour

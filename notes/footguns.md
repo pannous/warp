@@ -340,3 +340,47 @@ literal bound (`fib(n) := n<2 ? n : fib(n-1)+fib(n-2)`) is total; `while`, ungua
 diverge, `effects of f` reports `Div`. Conservative: when unsure, Div.
 Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised, test_shrinking_recursion_is_total,
 test_unproven_recursion_may_diverge, test_while_loop_may_diverge, test_pure_rejects_divergence.
+
+## Work area "civil-time" (2026-09-28)
+- Implemented: repeated wall times (`2030-10-27T02:30[Europe/Berlin]`) are an error listing both instants as RFC 9557
+  fix-its; skipped ones keep their error and now list both candidates. `zoned(local, "Zone", disambiguation: earlier|later|reject)`
+  and `add(t, 1 day, disambiguation: …)` spell the choice. A zoned time is `Zoned {date, clock, offset, zone, rules}`
+  (src/time/calendar.rs): wall time plus zone, instant derived. The rules are a `TzRules {version, published, zones}`,
+  built-in `warp-2026a`, swappable per thread with `time::with_rules` (tests simulate a rule change). `t.tzdata` names the
+  version; times after the rules' publication print `[_tzdata=version]`. `1 day == 24 hours` is an error, not false.
+  Tests: test_repeated_local_time_needs_disambiguation, test_skipped_local_time_can_be_chosen_explicitly,
+  test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_calendar_day_is_not_24_hours.
+- Decision: `reject` is the default for literals, `zoned(…)` and `add` (alternatives: Temporal's `compatible`, which takes
+  the earlier instant in an overlap and shifts forward in a gap; `earlier` like Python fold=0). `compatible` is not offered:
+  it resolves silently.
+- Decision: the rules version is recorded as the RFC 9557 elective suffix `[_tzdata=…]`, printed only for predictions
+  (instant after the rules' publication date) (alternatives: always print it; a separate field outside the literal; no record).
+- Decision: an offset that disagrees with the zone is an error with both fix-its, "keep the wall time" and "keep the instant",
+  naming both versions when the literal carries an older `_tzdata` (alternatives: warning and keep the wall time, which is
+  Temporal's `offset: 'prefer'`/`'ignore'`; keep the instant). No warning channel exists for compile-time evaluation.
+  An agreeing offset under newer rules is accepted silently: the value did not change.
+- Decision: durations are equal if all fields are, unequal if exactly one field differs, otherwise an error
+  (`1 day` vs `24 hours`, `1 month` vs `30 days`) (alternatives: structural `false`, Temporal's 24-hour days without relativeTo).
+- Left open: `Zoned - Zoned` is always an exact duration (no `until(…, largest: days)`); the embedded rule table only models
+  current rules (no historical transitions, no real IANA versions); no WASM representation; `_tzdata` is not critical
+  (`[!_tzdata=…]` is not parsed); `in` has no options (use `zoned`).
+
+## For wiki/Footguns.md
+
+### Future civil time
+What UTC instant is `2030-03-31 02:30 Europe/Berlin`? Time zone rules change by political decision after the code is written,
+and each autumn one wall hour happens twice.  
+Python: `datetime(2030,3,31,2,30,tzinfo=ZoneInfo("Europe/Berlin"))` silently becomes 01:30 UTC; the repeated 02:30 in October
+silently takes `fold=0`. JavaScript Temporal: `disambiguation: 'compatible' | 'earlier' | 'later' | 'reject'`.  
+Warp: a zoned time is its wall time plus zone; the offset and instant are derived under a recorded rules version.
+`2030-03-31T02:30[Europe/Berlin]` → Error "does not exist … skipped by a daylight saving transition", listing
+`01:30+01:00` (earlier) and `03:30+02:00` (later); `2030-10-27T02:30[Europe/Berlin]` → Error "occurs twice", fix-its
+`2030-10-27T02:30+02:00[Europe/Berlin] (earlier)` / `+01:00 (later)`. The choice is spelled out:
+`zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: later)`, `add(t, 1 day, disambiguation: earlier)`; reject is the default.
+Future times print the rules they were resolved with, `2030-07-01T10:00+02:00[Europe/Berlin][_tzdata=warp-2026a]` (`t.tzdata`);
+read back under rules where the offset changed, it is an Error naming both versions, with fix-its "keep the wall time" and
+"keep the instant". `+ 1 day` keeps the wall time, `+ 24 hours` the elapsed time (23 hours apart across the March switch), and
+`1 day == 24 hours` is an Error, not false.  
+Still impossible: knowing tomorrow's politics. Warp only notices when the rules changed.
+Tests: test_repeated_local_time_needs_disambiguation, test_skipped_local_time_can_be_chosen_explicitly,
+test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_calendar_day_is_not_24_hours.
