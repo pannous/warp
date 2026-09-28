@@ -1782,6 +1782,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::Else);
 			self.emit_node_instructions(func, else_value.as_ref().unwrap_or(&Node::Empty));
 			func.instruction(&Instruction::End);
+			func.instruction(&Instruction::RefAsNonNull);
 			return;
 		}
 
