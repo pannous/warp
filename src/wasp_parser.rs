@@ -1338,14 +1338,26 @@ impl WaspParser {
 	/// `2x` is 2*x, `3(4)` is 3*(4), `3x²` is 3*(x²): a number directly followed by a symbol or `(` multiplies.
 	/// Code only: data keeps `size: 3px`. Ordinals `1st` `2nd` `3rd` `4th` are no products.
 	fn with_juxtaposed_factor(&mut self, number: Node) -> Node {
-		let next = self.current_char();
-		let starts_factor = next.is_alphabetic() || next == '_' || next == '(';
-		if self.options.data_mode || !starts_factor || matches!(number, Node::Error(_)) || self.at_ordinal_suffix() {
+		if self.options.data_mode || matches!(number, Node::Error(_)) {
 			return number;
 		}
+		let next = self.current_char();
+		let tight = (next.is_alphabetic() || next == '_' || next == '(') && !self.at_ordinal_suffix();
+		if !tight && !self.at_spaced_unit() {
+			return number;
+		}
+		self.skip_spaces();
 		let factor = self.parse_atom();
 		let factor = self.try_parse_superscript_power(&factor, 0).unwrap_or(factor);
 		Node::Key(Box::new(number), Op::Mul, Box::new(factor))
+	}
+
+	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`
+	fn at_spaced_unit(&self) -> bool {
+		let rest = &self.chars[self.pos..];
+		let spaces = rest.iter().take_while(|c| **c == ' ').count();
+		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
+		spaces > 0 && crate::units::is_unit(&word)
 	}
 
 	fn at_ordinal_suffix(&self) -> bool {

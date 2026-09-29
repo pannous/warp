@@ -35,6 +35,10 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 	UNITS.iter().find(|unit| unit.name == name)
 }
 
+pub fn is_unit(name: &str) -> bool {
+	unit_named(name).is_some()
+}
+
 /// An integer amount of a unit; a quantity equals the bare number of its own unit: `3km+10m == 3010`
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quantity {

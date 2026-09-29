@@ -63,7 +63,6 @@ const PI: f64 = std::f64::consts::PI;
 // const E: f64 = std::f64::consts::E;
 
 #[test]
-#[ignore]
 fn test_implicit_multiplication() {
 	is!("x=3;2x", 6);
 	is!("2π", 2.0 * PI);
