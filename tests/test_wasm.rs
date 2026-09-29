@@ -1193,7 +1193,6 @@ fn test_wasm_mutable_global() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_mutable_global2() {
 	is!("export k=7", 7); //  all exports are globals, naturally.
 	is!("export k=7", 7); //  all exports are globals, naturally.

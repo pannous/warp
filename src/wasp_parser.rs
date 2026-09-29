@@ -18,8 +18,8 @@ const MAX_INTEGER_EXPONENT: i64 = 4096;
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
-/// Words that may precede the name of a global: `global const int k=7`, `global export k=7`
-const DECLARATION_MODIFIERS: [&str; 12] = ["export", "const", "mutable", "mut", "long", "int", "integer", "float", "double", "short", "i32", "i64"];
+/// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
+const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
 const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
@@ -694,12 +694,10 @@ impl WaspParser {
 			}
 		}
 
-		if symbol == "global" {
-			self.skip_whitespace();
-			self.skip_declaration_modifiers();
-			// Parse the rest as an expression (should be name=value or name:=value)
-			let decl = self.parse_expr(0);
-			return Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(decl));
+		if symbol == "global" || symbol == "export" {
+			if let Some(declaration) = self.try_parse_global_declaration(&symbol) {
+				return declaration;
+			}
 		}
 
 		// Handle "class"/"struct"/"type" keyword: class Name { fields }
@@ -1002,16 +1000,36 @@ impl WaspParser {
 		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
 	}
 
-	/// Modifier and type words between `global` and the name (`global const int k=7`): the global holds the value, the words are dropped
+	/// `global [modifiers] name[=value]` and the same after `export`: a variable declared at module level.
+	/// `export` without a name after it, and `export f:=it*2`, a function, stay ordinary code.
+	fn try_parse_global_declaration(&mut self, keyword: &str) -> Option<Node> {
+		let before_declaration = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.skip_whitespace();
+		self.skip_declaration_modifiers();
+		if keyword == "export" && !self.at_identifier_start() {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_declaration;
+			return None;
+		}
+		let declaration = self.parse_expr(0); // name, name=value or name:=value
+		let defines_function = matches!(declaration.drop_meta(), Node::Key(name, Op::Define, _) if self.functions.contains(&name.name()));
+		if keyword == "export" && defines_function {
+			return Some(declaration);
+		}
+		Some(Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(declaration)))
+	}
+
+	fn at_identifier_start(&self) -> bool {
+		self.current_char().is_alphabetic() || self.current_char() == '_'
+	}
+
+	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
 	fn skip_declaration_modifiers(&mut self) {
 		loop {
 			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
-			let is_modifier = DECLARATION_MODIFIERS.iter().any(|word| self.matches_keyword(word));
-			if !is_modifier || self.parse_symbol().is_err() {
-				return;
-			}
+			let word = self.parse_symbol().unwrap_or_default();
+			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
-			if !(self.current_char().is_alphabetic() || self.current_char() == '_') {
+			if !is_modifier || !self.at_identifier_start() {
 				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
 				return;
 			}
