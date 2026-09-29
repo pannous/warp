@@ -750,19 +750,18 @@ impl Node {
 		}
 	}
 
+	/// The annotation this very Meta layer carries, if it is one
+	fn own_attribute(&self) -> Option<(&str, &Node)> {
+		let Meta { data, .. } = self else { return None };
+		let Key(key, _, value) = data.as_ref() else { return None };
+		let Symbol(key_name) = key.as_ref() else { return None };
+		key_name.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref()))
+	}
+
 	/// All `@name(value)` annotations of this node, outermost first
 	pub fn attributes(&self) -> Vec<(&str, &Node)> {
 		match self {
-			Meta { node, data } => {
-				let own = match data.as_ref() {
-					Key(key, _, value) => match key.as_ref() {
-						Symbol(key_name) => key_name.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref())),
-						_ => None,
-					},
-					_ => None,
-				};
-				own.into_iter().chain(node.attributes()).collect()
-			}
+			Meta { node, .. } => self.own_attribute().into_iter().chain(node.attributes()).collect(),
 			_ => Vec::new(),
 		}
 	}
@@ -920,6 +919,27 @@ impl Node {
 	}
 
 	pub fn serialize_recurse(&self, meta: bool) -> String {
+		self.serialize_with(meta, true)
+	}
+
+	fn attribute_source((name, value): (&str, &Node)) -> String {
+		match value {
+			True => format!("{ATTRIBUTE_MARK}{name} "),
+			_ => format!("{ATTRIBUTE_MARK}{name}({}) ", value.serialize()),
+		}
+	}
+
+	/// `@name(value)` annotations in front of the node, outermost first, each followed by a space
+	fn attribute_prefix(&self) -> String {
+		self.attributes().into_iter().map(Self::attribute_source).collect()
+	}
+
+	fn own_attribute_prefix(&self) -> String {
+		self.own_attribute().map(Self::attribute_source).unwrap_or_default()
+	}
+
+	/// A key prints the annotations of its value in front of itself: `tee{@unit(cm) a:1}`
+	fn serialize_with(&self, meta: bool, attributes: bool) -> String {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
@@ -939,8 +959,8 @@ impl Node {
 				}
 			}
 			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
-			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}", k, v.serialize_recurse(meta)), // tee{a:1}
-			Key(k, op, v) => format!("{}{}{}", k, op, v.serialize_recurse(meta)),
+			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}{}", v.attribute_prefix(), k, v.serialize_with(meta, false)), // tee{a:1}
+			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
@@ -949,7 +969,8 @@ impl Node {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();
 				}
-				let inner = node.serialize_recurse(meta);
+				let own_prefix = if attributes { self.own_attribute_prefix() } else { String::new() };
+				let inner = format!("{own_prefix}{}", node.serialize_with(meta, attributes));
 				if meta {
 					format!("{} {}", inner, data.meta_string())
 				} else {

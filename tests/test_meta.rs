@@ -6,7 +6,6 @@ use warp::wasp_parser::parse;
 use warp::{eq, exists, skip};
 
 #[test]
-#[ignore]
 fn test_meta_field() {
 	let mut tee = parse("tee{a:1}");
 	tee["a"]["@attrib"] = 42.into();
@@ -24,7 +23,6 @@ fn test_meta_field() {
 }
 
 #[test]
-#[ignore]
 fn test_meta() {
 	let mut tee = parse("tee{a:1}");
 	tee["@attrib"] = 42.into();
