@@ -18,6 +18,15 @@ mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
 
+/// Something emission found it must have that the analysis pass did not request
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Need {
+	/// A runtime function, by registry name
+	Function(&'static str),
+	/// A libm import, keyed like ffi_imports (`m.pow`) so it never shadows a user function
+	MathImport(&'static str),
+}
+
 /// Builtins that round a float to an exact Int
 const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up", "round_half_even"];
 
@@ -110,10 +119,8 @@ pub struct WasmGcEmitter {
 	int_count_global: u32, // used slots in that heap
 	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
-	// Runtime functions the analyzer could not foresee (they depend on inferred types); emission reruns with them
-	missing_functions: std::collections::HashSet<&'static str>,
-	// libm functions the emitted operators need, keyed like ffi_imports (`m.pow`) so they never shadow a user function
-	missing_math_imports: std::collections::HashSet<&'static str>,
+	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
+	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
 }
 
@@ -148,8 +155,7 @@ impl WasmGcEmitter {
 			int_count_global: 0,
 			int_remainder_global: 0,
 			text_heap_global: 0,
-			missing_functions: Default::default(),
-			missing_math_imports: Default::default(),
+			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
 		}
 	}
@@ -662,7 +668,10 @@ impl WasmGcEmitter {
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
-		self.ctx.required_functions.extend(self.missing_functions.iter());
+		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
+			Need::Function(name) => Some(*name),
+			Need::MathImport(_) => None,
+		}));
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -676,14 +685,19 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
-		let missing_import = self.missing_math_imports.iter().any(|key| !self.ctx.ffi_imports.contains_key(*key));
-		if missing_import || !self.missing_functions.iter().all(|name| self.ctx.required_functions.contains(name)) {
+		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
-			rerun.missing_functions = std::mem::take(&mut self.missing_functions);
-			rerun.missing_math_imports = std::mem::take(&mut self.missing_math_imports);
+			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
 			rerun.emit_for_node(node);
 			*self = rerun;
+		}
+	}
+
+	fn is_provided(&self, need: &Need) -> bool {
+		match need {
+			Need::Function(name) => self.ctx.required_functions.contains(name),
+			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 		}
 	}
 
@@ -709,9 +723,11 @@ impl WasmGcEmitter {
 		use crate::effects::{Capability, EffectReport};
 		let effects = EffectReport::of(node);
 		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name));
-		for key in &self.missing_math_imports {
-			let function = key.trim_start_matches("m.");
-			self.ctx.ffi_imports.extend(crate::ffi::get_ffi_signature(function).map(|signature| (key.to_string(), signature)));
+		for need in &self.discovered_needs {
+			if let Need::MathImport(key) = need {
+				let function = key.trim_start_matches("m.");
+				self.ctx.ffi_imports.extend(crate::ffi::get_ffi_signature(function).map(|signature| (key.to_string(), signature)));
+			}
 		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
@@ -996,7 +1012,7 @@ impl WasmGcEmitter {
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
 		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
 			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
-			self.missing_functions.insert(name);
+			self.discovered_needs.insert(Need::Function(name));
 			func.instruction(&Instruction::Unreachable);
 			return;
 		}
@@ -1430,7 +1446,7 @@ impl WasmGcEmitter {
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	fn emit_float_power(&mut self, func: &mut Function) {
 		let Some(pow) = self.ffi_func_index(LIBM_POW) else {
-			self.missing_math_imports.insert(LIBM_POW);
+			self.discovered_needs.insert(Need::MathImport(LIBM_POW));
 			func.instruction(&Instruction::Unreachable);
 			return;
 		};
