@@ -1978,13 +1978,13 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, message);
 	}
 
-	/// `v as T` as a raw Int: `as float` truncates like a float variable does, `as exact` keeps the exact value
+	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
 	fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
 		let exact_value = !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
 		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
 			"float" => {
-				self.emit_float_value(func, value);
-				self.emit_truncated_float(func);
+				let message = format!("{} is a float where an exact Int is expected: `as float` promotes, `as int` truncates", located.serialize());
+				self.emit_type_error(func, message);
 			}
 			"exact" if exact_value => self.emit_numeric_value(func, value),
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
