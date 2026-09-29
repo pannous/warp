@@ -1276,7 +1276,7 @@ fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>) -> Nod
 	match node {
 		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
 			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions)));
-			Node::List(vec![*function, negated], Bracket::None, Separator::Space)
+			Node::List(vec![*function, negated], Bracket::Round, Separator::None)
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions)), op, Box::new(negate_calls(*right, functions))),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions)).collect(), bracket, separator),
