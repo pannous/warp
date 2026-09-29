@@ -1,6 +1,6 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
-use crate::analyzer::is_unbracketed_block;
+use crate::analyzer::{is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
@@ -99,16 +99,13 @@ impl WasmGcEmitter {
 			if let Node::Symbol(type_name) = items[0].drop_meta() {
 				let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 				if !is_typed_decl {
-					match type_name.as_str() {
-						"int" | "float" | "str" | "string" | "String" | "char" | "bool" | "number" => {
-							norm::type_constructor(type_name, &items[1].to_string());
-							if type_name == "str" || type_name == "String" {
-								norm::string_type(type_name);
-							}
-							self.emit_cast(func, &items[1], &items[0]);
-							return;
+					if type_word_kind(&type_name.to_lowercase()).is_some() {
+						norm::type_constructor(type_name, &items[1].to_string());
+						if type_name == "str" || type_name == "String" {
+							norm::string_type(type_name);
 						}
-						_ => {}
+						self.emit_cast(func, &items[1], &items[0]);
+						return;
 					}
 				}
 			}

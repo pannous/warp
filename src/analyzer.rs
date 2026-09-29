@@ -115,14 +115,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					}
 				}
 			}
-			// Type constructor: int("5"), float("1.5"), str(3)
+			// Type constructor: int("5"), float("1.5"), str(3), double 2
 			if items.len() == 2 {
 				if let Node::Symbol(s) = items[0].drop_meta() {
-					match s.as_str() {
-						"int" | "integer" => return Kind::Int,
-						"float" => return Kind::Float,
-						"str" | "string" | "text" => return Kind::Text,
-						_ => {}
+					if let Some(kind) = type_word_kind(s) {
+						return kind;
 					}
 				}
 			}
@@ -1199,9 +1196,14 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
-	match type_node.name().as_str() {
+	type_word_kind(&type_node.name())
+}
+
+/// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
+pub fn type_word_kind(type_name: &str) -> Option<Kind> {
+	match type_name {
 		"number" => Some(Kind::Int),
-		type_name => builtin_type_kind(type_name),
+		_ => builtin_type_kind(type_name),
 	}
 }
 
@@ -1341,7 +1343,22 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 
 /// The parameters after the function name in a signature list
 fn extract_params(signature: &[Node]) -> Vec<Param> {
-	signature.iter().skip(1).filter_map(extract_param).collect()
+	let mut items = signature.iter().skip(1).peekable();
+	let mut params = vec![];
+	while let Some(item) = items.next() {
+		let type_first_name = match (item.drop_meta(), items.peek().map(|next| next.drop_meta())) {
+			(Node::Symbol(type_name), Some(Node::Symbol(name))) if type_word_kind(type_name).is_some() => Some(name),
+			_ => None,
+		};
+		match type_first_name {
+			Some(name) => {
+				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None });
+				items.next();
+			}
+			None => params.extend(extract_param(item)),
+		}
+	}
+	params
 }
 
 /// Extract parameter name, annotated kind and optional default value from a parameter node

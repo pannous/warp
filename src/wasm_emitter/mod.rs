@@ -29,7 +29,7 @@ pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
 
-use crate::analyzer::{analyze_required_functions, captured_variables, param_kind, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, Scope};
+use crate::analyzer::{analyze_required_functions, captured_variables, param_kind, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, type_word_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::local::Local;
 use crate::extensions::numbers::Number;
@@ -2467,7 +2467,7 @@ impl WasmGcEmitter {
 					}
 				}
 				// Integer conversion: int("5") + 3
-				if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "int" || s == "integer") {
+				if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if type_word_kind(s) == Some(Kind::Int)) {
 					self.emit_cast(func, &items[1], &items[0]);
 					self.emit_call(func, "get_int_value");
 					return;
