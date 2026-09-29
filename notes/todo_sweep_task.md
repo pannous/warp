@@ -10,16 +10,16 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | assigned warp-numeric |
 | A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | open |
 | A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | open |
-| B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | open |
+| B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | assigned warp-parser |
 
 ## Medium
 | id | task | status |
 |---|---|---|
-| B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | assigned warp-parser |
+| B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
 | B2 | tests/test_angle.rs:35 function application without parens precedence | open |
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | open |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | open |
-| C1 | src/main.rs:208 compile-only CLI path writing the .wasm | assigned warp-library |
+| C1 | src/main.rs:208 compile-only CLI path writing the .wasm | review bc52e71c: test uncommitted, eval/compile duplication, struct path skipped |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | open |
 
 ## Low
