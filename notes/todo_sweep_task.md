@@ -18,7 +18,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
 | B2 | tests/test_angle.rs:35 function application without parens precedence | done 872063f4 (already worked) |
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
-| A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | assigned warp-numeric |
+| A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
 | A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | open, user decision |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
@@ -26,7 +26,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: user allowed `mut` in test_remove/test_remove2 → queued for warp-library after L1 |
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: user allowed `mut` in test_remove/test_remove2 → assigned warp-numeric |
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → done ff9b2d62 b2f931d1 |
 | B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | assigned warp-parser |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
