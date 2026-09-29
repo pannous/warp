@@ -39,8 +39,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
-| A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | open, larger parser change |
-| A11 | triage remaining ignored test_math tests (units, sin, primitive types) | assigned warp-numeric |
+| A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | survey → warp-numeric |
+| A11 | triage remaining ignored test_math tests (units, sin, primitive types) | f2cda334 (type words double/long, typed params); rest needs design: units+±+ranges, data-as-scope kebab keys, test_sin exact float eq (test defect), C-style decl blocks, use <file> modules |
 | C7 | triage ignored test_wit (nested separator groups) and test_wast tests | assigned warp-library |
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | open |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
