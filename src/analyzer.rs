@@ -14,18 +14,16 @@ fn is_data_node(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 		Node::Symbol(s) => !is_function_keyword(s),
-		Node::List(items, bracket, separator) => !is_semicolon_sequence(items, bracket, separator) && items.iter().all(is_data_node),
+		Node::List(items, bracket, separator) => !is_top_level_block(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
 		_ => false,
 	}
 }
 
-/// Unbracketed `a;b;c` of plain atoms is a data list (`a;b;c` → strings), but once an item is itself a bracketed group
-/// it reads as statements: run them in order and yield the last one (`'hello';(1 2 3 4);10` → 10).
-/// Inside brackets the semicolon always separates data, `(1;2;3)` and `(1,2; 3,4)` are lists.
-pub fn is_semicolon_sequence(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-	*separator == Separator::Semicolon && *bracket == Bracket::None
-		&& items.iter().any(|item| matches!(item.drop_meta(), Node::List(_, Bracket::Round | Bracket::Square | Bracket::Curly, _)))
+/// The top level is a block: its `;` and newline items run in order and the last one is the value
+/// (`1;2;3` → 3, `'hello';(1 2 3 4);10` → 10). `{…}` is a block literal and `(…)`, `[…]` are lists: they keep all items.
+pub fn is_top_level_block(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+	matches!(separator, Separator::Semicolon | Separator::Newline) && *bracket == Bracket::None && items.len() > 1
 }
 
 /// Infer the Kind for an expression
@@ -142,7 +140,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return infer_type(&items[0], scope);
 			}
 			// Data list: all items are pure data → Kind::List
-			if !is_semicolon_sequence(items, bracket, separator) && items.iter().all(is_data_node) {
+			if !is_top_level_block(items, bracket, separator) && items.iter().all(is_data_node) {
 				return Kind::List;
 			}
 			// Statement sequence: return type of last item
@@ -1157,6 +1155,7 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
+	collect_variables(body, &mut scope);
 	match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),

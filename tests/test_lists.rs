@@ -202,7 +202,7 @@ fn test_root_lists() {
 fn test_root_list_strings() {
 	is!("(a,b,c)", strings(vec!["a", "b", "c"])); // symbols shall match string
 	is!("(a;b;c)", strings(vec!["a", "b", "c"]));
-	is!("a;b;c", strings(vec!["a", "b", "c"]));
+	is!("a;b;c", "c");
 	is!("a,b,c", strings(vec!["a", "b", "c"]));
 	is!("{a b c}", strings(vec!["a", "b", "c"]));
 	is!("{a,b,c}", strings(vec!["a", "b", "c"]));

@@ -74,6 +74,7 @@ PASSED:
   ✓ probe_parse_add_call
   ✓ probe_test2_check
   ✓ probe_while_execution
+  ✓ ratio
   ✓ test_abs_alias
   ✓ test_ackermann
   ✓ test_add_boxed_list_item
@@ -203,11 +204,12 @@ PASSED:
   ✓ test_exact_rationals_stay_exact
   ✓ test_executable_tree_shaking
   ✓ test_expected_structure
+  ✓ test_explicit_wrap_inside_function
   ✓ test_factorial
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write
+  ✓ test_fd_write_raw
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -518,6 +520,8 @@ PASSED:
   ✓ test_sqrt_alias
   ✓ test_sqrt_arithmetic
   ✓ test_square
+  ✓ test_square_brackets_keep_all_newline_items
+  ✓ test_square_brackets_keep_all_semicolon_items
   ✓ test_square_roots_are_reduced
   ✓ test_square_roots_multiply_exactly
   ✓ test_statement_sequence_with_grouped_list_in_the_middle
@@ -552,6 +556,8 @@ PASSED:
   ✓ test_to_xml_with_attributes
   ✓ test_tools_availability
   ✓ test_tools_available
+  ✓ test_top_level_newlines_yield_the_last_item
+  ✓ test_top_level_semicolons_yield_the_last_item
   ✓ test_truthy_and
   ✓ test_type
   ✓ test_type_annotated
@@ -634,4 +640,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-132 ignored, 629 passed, 0 failed, 629 total tested
+132 ignored, 635 passed, 0 failed, 635 total tested
