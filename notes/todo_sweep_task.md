@@ -8,7 +8,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | id | task | status |
 |---|---|---|
 | A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | done 768e8a87 (bundled into C2's commit by mistake)
-| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | assigned warp-numeric |
+| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | assigned warp-numeric (resent) |
 | A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | open |
 | B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | done 872063f4 0b795bf9 (stale, already fixed; duplicate tests sent back) |
 
@@ -25,9 +25,9 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | assigned warp-library |
-| B5 | semicolon binds loosest: a block (top level, {}) yields its last ;/newline item; (), [] and data keep all items (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | assigned warp-parser (survey first) |
-| C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | open |
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: needs `mut` in existing test → user decision |
+| B5 | semicolon binds loosest: a block (top level, {}) yields its last ;/newline item; (), [] and data keep all items (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | survey done (notes/semicolon_survey.md), waiting for user: 3 conflicting tests, {a:1⏎b:2} |
+| C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | assigned warp-library |
 | C5 | src/meta.rs:9 conditional compilation | open |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | open |
 | L2 | test_types.rs ignored type-system/generics tests | parked (large design work) |
