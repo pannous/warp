@@ -32,12 +32,14 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → done ff9b2d62 b2f931d1 |
 | B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | done 7e2e746c 417f3fed |
 | B7 | test_angle.rs test_switch / test_switch_evaluation: object key lookup {a:1 b:2}[a] | done 82bd757f 72c51ed5 |
-| A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | assigned warp-numeric |
+| A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | done d184af4f |
 | C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @ attributes 74383853 553b398c, IndexMut 1e82fd43; tag form tee{a:1} (0 tests affected) + meta serialization → warp-library, IndexMut meta, meta serialization → warp-library |
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
 | B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); part 2 assigned warp-parser |
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | queued warp-parser |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
+| A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | assigned warp-numeric |
+| A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | open, larger parser change |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
