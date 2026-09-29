@@ -986,10 +986,7 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => match d.downcast_ref::<crate::units::Quantity>() {
-				Some(quantity) => quantity.to_string(),
-				None => format!("Data({:?})", d),
-			},
+			Data(d) => crate::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
 			// _ => format!("{:?}", self),
 		}
 	}
@@ -2287,8 +2284,8 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
-			Data(data) => match data.downcast_ref::<crate::units::Quantity>() {
-				Some(quantity) => write!(f, "{}", quantity),
+			Data(data) => match crate::units::describe(data) {
+				Some(text) => write!(f, "{}", text),
 				None => write!(f, "{:?}", self),
 			},
 			_ => write!(f, "{:?}", self),

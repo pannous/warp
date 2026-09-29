@@ -509,6 +509,7 @@ impl WaspParser {
 			('+', '+') => return Some((Op::Inc, 2)),
 			('-', '-') => return Some((Op::Dec, 2)),
 			('.', '.') => return Some((Op::Range, 2)),
+			('+', '-') if c3.is_whitespace() && self.prev_char().is_whitespace() => return Some((Op::PlusMinus, 2)),
 			('&', '&') => { self.set_hint_pos(); norm::and_operator("&&"); return Some((Op::And, 2)); }
 			('|', '|') => { self.set_hint_pos(); norm::or_operator("||"); return Some((Op::Or, 2)); }
 			_ => {}
@@ -528,6 +529,7 @@ impl WaspParser {
 			// `a .5` is a list of two values, `a.5` a member access
 			'.' if !(self.prev_char().is_whitespace() && self.number_starts_at(0)) => Some((Op::Dot, 1)),
 			'+' => Some((Op::Add, 1)),
+			'±' => Some((Op::PlusMinus, 1)),
 			'-' => Some((Op::Sub, 1)),
 			'*' => Some((Op::Mul, 1)),
 			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment

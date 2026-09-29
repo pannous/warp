@@ -104,6 +104,8 @@ pub enum Op {
 	// Type conversion
 	As, // as  (type cast)
 
+	PlusMinus, // ±  +-  a value with tolerance
+
 	// User(Node), allow user defined operators, name==symbol
 
 	None, // implicit/unknown
@@ -133,7 +135,7 @@ impl Op {
 			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
 
 			// Additive (left-assoc)
-			Op::Add | Op::Sub => (140, 141),
+			Op::Add | Op::Sub | Op::PlusMinus => (140, 141),
 
 			// Range
 			Op::Range | Op::To => (130, 131),
@@ -205,6 +207,7 @@ impl Op {
 			// Arithmetic
 			Op::Add => "+",
 			Op::Sub => "-",
+			Op::PlusMinus => "±",
 			Op::Mul => "*",
 			Op::Div => "/",
 			Op::Mod => "%",
