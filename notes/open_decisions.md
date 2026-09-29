@@ -31,6 +31,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 14b. test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
 
