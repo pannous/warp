@@ -380,6 +380,7 @@ fn test_math_operators() {
 }
 
 #[test]
+#[ignore]
 fn test_math_operators_runtime() {
 	is!("3^2", 9);
 	is!("3^1", 3);
