@@ -54,9 +54,8 @@ fn test_zero_string_is_truthy() {
 }
 
 #[test]
-#[should_panic(expected = "Undefined variable")]
 fn test_undefined_variable_is_an_error() {
-	eval("a+1"); // JS: NaN (or an implicit global on assignment)
+	fails_with("a+1", "undefined variable: a"); // JS: NaN (or an implicit global on assignment)
 }
 
 #[test]

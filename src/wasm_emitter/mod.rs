@@ -725,6 +725,19 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Unreachable);
 	}
 
+	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
+		self.emit_type_error(func, format!("undefined variable: {name}"));
+	}
+
+	/// The local slot of a defined variable; an undefined one is an error value at the use
+	fn defined_local_position(&mut self, func: &mut Function, name: &str) -> Option<u32> {
+		let position = self.scope.lookup(name).map(|local| local.position);
+		if position.is_none() {
+			self.emit_undefined_variable(func, name);
+		}
+		position
+	}
+
 	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.
 	/// Explicitly enabled imports stay enabled.
 	fn derive_imports_from_effects(&mut self, node: &Node) {
@@ -1226,7 +1239,7 @@ impl WasmGcEmitter {
 			if let Some(local) = self.scope.lookup(name) {
 				func.instruction(&Instruction::LocalTee(local.position));
 			} else {
-				panic!("Undefined variable: {}", name);
+				self.emit_undefined_variable(func, name);
 			}
 		} else {
 			panic!("Expected symbol in definition, got {:?}", left);
@@ -1242,10 +1255,7 @@ impl WasmGcEmitter {
 		// i++ → i = i + 1 (returns new value)
 		// i-- → i = i - 1 (returns new value)
 		if let Node::Symbol(name) = left.drop_meta() {
-			let local_pos = self.scope
-				.lookup(name)
-				.map(|l| l.position)
-				.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			self.emit_int_step(func, local_pos, op);
 			// Store and return new value
 			func.instruction(&Instruction::LocalTee(local_pos));
@@ -1272,10 +1282,7 @@ impl WasmGcEmitter {
 		}
 		// x += y → x = x + y
 		if let Node::Symbol(name) = left.drop_meta() {
-			let local_pos = self.scope
-				.lookup(name)
-				.map(|l| l.position)
-				.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			let base_op = op.base_op();
 			// Get current value of x
 			func.instruction(&Instruction::LocalGet(local_pos));
@@ -2364,7 +2371,7 @@ impl WasmGcEmitter {
 							self.emit_float_in_exact_context(func, name);
 						}
 					} else {
-						panic!("Undefined variable: {}", name);
+						self.emit_undefined_variable(func, name);
 					}
 				} else {
 					panic!("Expected symbol in definition, got {:?}", left);
@@ -2377,10 +2384,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				if let Node::Symbol(name) = left.drop_meta() {
-					let local_pos = self.scope
-						.lookup(name)
-						.map(|l| l.position)
-						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+					let Some(local_pos) = self.defined_local_position(func, name) else { return };
 					self.emit_int_step(func, local_pos, op);
 					// Store and return new value
 					func.instruction(&Instruction::LocalTee(local_pos));
@@ -2399,10 +2403,7 @@ impl WasmGcEmitter {
 				}
 				if let Node::Symbol(name) = left.drop_meta() {
 					// Get local position first to avoid borrow issues
-					let local_pos = self.scope
-						.lookup(name)
-						.map(|l| l.position)
-						.unwrap_or_else(|| panic!("Undefined variable: {}", name));
+					let Some(local_pos) = self.defined_local_position(func, name) else { return };
 					let base_op = op.base_op();
 					// Get current value of x
 					func.instruction(&Instruction::LocalGet(local_pos));
@@ -2533,7 +2534,7 @@ impl WasmGcEmitter {
 						self.emit_float_in_exact_context(func, name);
 					}
 				} else {
-					panic!("Undefined variable: {}", name);
+					self.emit_undefined_variable(func, name);
 				}
 			}
 			// Statement sequence or function call
@@ -2664,7 +2665,8 @@ impl WasmGcEmitter {
 							self.emit_int_to_f64(func, None);
 						}
 					} else {
-						panic!("Undefined variable: {}", name);
+						self.emit_float_value(func, right);
+						self.emit_undefined_variable(func, name);
 					}
 				} else {
 					panic!("Expected symbol in definition, got {:?}", left);
@@ -2733,7 +2735,7 @@ impl WasmGcEmitter {
 						self.emit_int_to_f64(func, None);
 					}
 				} else {
-					panic!("Undefined variable: {}", name);
+					self.emit_undefined_variable(func, name);
 				}
 			}
 			// Function calls and statement sequences
