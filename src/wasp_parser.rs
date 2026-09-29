@@ -967,6 +967,11 @@ impl WaspParser {
 		if let Node::List(items, _, _) = rhs.drop_meta() {
 			if items.len() == 2 {
 				if let Node::List(_, Bracket::Curly, _) | Empty = items[1].drop_meta() { // `{}` parses as ø
+	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
+	fn at_body_start(&self) -> bool {
+		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
+	}
+
 					let condition = items[0].clone();
 					let body_block = items[1].clone();
 					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
@@ -980,6 +985,12 @@ impl WaspParser {
 
 	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
 		self.skip_spaces();
+		if matches!(rhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1) && self.at_body_start() {
+			let body = self.parse_expr(0); // `while (i<9) i++`
+			let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
+			return Node::Key(Box::new(while_cond), Op::Do, Box::new(body));
+		}
+
 		if self.matches_keyword("else") {
 			self.advance_by(4);
 			self.skip_spaces();

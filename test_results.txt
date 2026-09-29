@@ -3,6 +3,7 @@
 PASSED:
   ✓ assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ attribute_names_may_be_kebab_case
+  ✓ attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ compile_command_emits_the_same_struct_module_as_eval
   ✓ compile_command_writes_wasm_without_running
   ✓ extensions::strings::tests::test_char_str_eq
@@ -66,6 +67,7 @@ PASSED:
   ✓ parse_list_via_separator_semicolon
   ✓ parse_list_via_separator_space
   ✓ parse_list_via_separator3
+  ✓ probe
   ✓ probe_def_add
   ✓ probe_def_block_syntax
   ✓ probe_def_syntax
@@ -98,6 +100,7 @@ PASSED:
   ✓ test_array_length
   ✓ test_as_converts_the_whole_expression
   ✓ test_as_float_converts_exact_values
+  ✓ test_as_float_promotes_and_never_truncates
   ✓ test_assignment_right_assoc
   ✓ test_ast
   ✓ test_auto_smarty
@@ -182,6 +185,7 @@ PASSED:
   ✓ test_debug_format
   ✓ test_declared_constraint_holds
   ✓ test_declared_constraint_violation_names_span_and_chain
+  ✓ test_decrement_inside_a_loop_body
   ✓ test_deep_type
   ✓ test_default_argument_is_fresh_per_call
   ✓ test_default_params
@@ -219,6 +223,7 @@ PASSED:
   ✓ test_exact_rationals_stay_exact
   ✓ test_executable_tree_shaking
   ✓ test_expected_structure
+  ✓ test_explicit_cast_truncates_a_float
   ✓ test_explicit_wrap_inside_function
   ✓ test_factorial
   ✓ test_factorial_and_fib_stay_exact
@@ -276,10 +281,11 @@ PASSED:
   ✓ test_float_parameter_keeps_fraction
   ✓ test_float_plus_int_type_upgrading
   ✓ test_float_power_keeps_fraction
+  ✓ test_float_read_in_exact_context_is_refused_loudly
   ✓ test_float_return_through_main
   ✓ test_for_each
   ✓ test_fraction_multiplication
-  ✓ test_fractional_float_power_is_refused_loudly
+  ✓ test_fractional_exponent_uses_libm_pow
   ✓ test_fuel_budget_can_be_raised
   ✓ test_function_body_block_yields_its_last_item
   ✓ test_function_declaration
@@ -312,6 +318,7 @@ PASSED:
   ✓ test_host_fetch_import
   ✓ test_host_run_import
   ✓ test_html_wasp
+  ✓ test_hyphen_between_words_stays_kebab_case
   ✓ test_i64_opt_out_wraps
   ✓ test_if
   ✓ test_if_block_syntax
@@ -397,7 +404,10 @@ PASSED:
   ✓ test_matrix_comma_index
   ✓ test_matrix_order
   ✓ test_merge_wabt
+  ✓ test_meta
+  ✓ test_meta_at
   ✓ test_meta_at2
+  ✓ test_meta_field
   ✓ test_missing_key_is_an_error
   ✓ test_mixed_prefix_infix
   ✓ test_mixed_syntax
@@ -559,6 +569,7 @@ PASSED:
   ✓ test_sqrt_alias
   ✓ test_sqrt_arithmetic
   ✓ test_square
+  ✓ test_square_and_cube_inside_arithmetic
   ✓ test_square_brackets_keep_all_newline_items
   ✓ test_square_brackets_keep_all_semicolon_items
   ✓ test_square_roots_are_reduced
@@ -601,6 +612,7 @@ PASSED:
   ✓ test_tools_available
   ✓ test_top_level_newlines_yield_the_last_item
   ✓ test_top_level_semicolons_yield_the_last_item
+  ✓ test_trailing_decrement_is_not_part_of_the_name
   ✓ test_truthy_and
   ✓ test_type
   ✓ test_type_annotated
@@ -608,7 +620,9 @@ PASSED:
   ✓ test_type_annotation_is_enforced
   ✓ test_type_annotation_with_block
   ✓ test_type_confusion
+  ✓ test_type_constructor_words
   ✓ test_type_equivalence
+  ✓ test_type_first_parameter
   ✓ test_type_float
   ✓ test_type_mismatch_add - should panic
   ✓ test_type_mismatch_div - should panic
@@ -627,12 +641,16 @@ PASSED:
   ✓ test_types_simple
   ✓ test_types_simple2
   ✓ test_undecidable_function_equality_is_an_error
-  ✓ test_undefined_variable_is_an_error - should panic
+  ✓ test_undefined_float_power_is_refused_loudly
+  ✓ test_undefined_variable_compound_assignment_is_an_error_value
+  ✓ test_undefined_variable_increment_is_an_error_value
+  ✓ test_undefined_variable_use_is_an_error_value
   ✓ test_unicode_le
   ✓ test_unicode_mul
   ✓ test_unicode_normalization
   ✓ test_unknown_parameter_type_is_reported
   ✓ test_unproven_recursion_may_diverge
+  ✓ test_unsupported_array_phrase_names_the_undefined_variable
   ✓ test_use
   ✓ test_user_function_shadows_ffi_name
   ✓ test_user_type_wasm_emission
@@ -651,10 +669,13 @@ PASSED:
   ✓ test_wasm_roundtrip
   ✓ test_wasm_roundtrip_via_is
   ✓ test_wasm_while
+  ✓ test_wasm_while2
   ✓ test_wasp_roundtrip
   ✓ test_wasp_to_json
   ✓ test_while_loop
   ✓ test_while_loop_may_diverge
+  ✓ test_while_parenthesized_condition_takes_a_bare_body
+  ✓ test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ test_while_true_forever
   ✓ test_xml_comments
   ✓ test_xml_declaration
@@ -684,6 +705,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ test_undefined_variable_is_an_error - should panic
 
 SUMMARY:
-117 ignored, 681 passed, 0 failed, 681 total tested
+113 ignored, 702 passed, 1 failed, 703 total tested

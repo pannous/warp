@@ -780,7 +780,6 @@ fn test_wasm_while() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_while2() {
 	is!("i=1;while i<9:i++;i+1", 10);
 	is!("i=1;while(i<9){i++};i+1", 10);
