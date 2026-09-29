@@ -82,8 +82,20 @@ impl Node {
 			},
 		}
 	}
-	pub fn remove(&self, from: i32, to: i32) {
-		todo!("remove from {} to {}", from, to)
+	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
+	/// A negative `to` means up to the end, `to` is clamped to the last child.
+	pub fn remove(&mut self, from: i32, to: i32) {
+		match self {
+			List(items, _, _) => {
+				let last = items.len() as i32 - 1;
+				let to = if to < 0 { last } else { to.max(from).min(last) };
+				if from >= 0 && from <= to {
+					items.drain(from as usize..=to as usize);
+				}
+			}
+			Meta { node, .. } => node.remove(from, to),
+			_ => panic!("can't remove without children: {self:?}"),
+		}
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
 		List(
