@@ -190,7 +190,6 @@ fn test_units() {
 }
 
 #[test]
-#[ignore]
 fn test_eval() {
 	is!("√4", 2);
 }
