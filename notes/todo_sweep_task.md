@@ -19,8 +19,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B2 | tests/test_angle.rs:35 function application without parens precedence | done 872063f4 (already worked) |
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | assigned warp-parser |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | open |
-| C1 | src/main.rs:208 compile-only CLI path writing the .wasm | review bc52e71c: test uncommitted, eval/compile duplication, struct path skipped |
-| C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | open |
+| C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
+| C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | assigned warp-library |
 
 ## Low
 | id | task | status |
