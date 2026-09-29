@@ -3090,11 +3090,19 @@ pub fn eval(code: &str) -> Node {
 		code.to_string()
 	};
 
-	let lawful = crate::law::separate_laws(WaspParser::parse(&code));
-	if let Some(violation) = crate::law::assert_laws(&lawful, &code) {
-		return violation;
+	match lawful_program(&code) {
+		Ok(program) => eval_parsed(program, &code),
+		Err(violation) => violation,
 	}
-	eval_parsed(lawful.program, &code)
+}
+
+/// Parse the source and check its laws; `Err` is the violation.
+fn lawful_program(code: &str) -> Result<Node, Node> {
+	let lawful = crate::law::separate_laws(WaspParser::parse(code));
+	match crate::law::assert_laws(&lawful, code) {
+		Some(violation) => Err(violation),
+		None => Ok(lawful.program),
+	}
 }
 
 /// Evaluate foreign data with an empty capability set: a program that would call any host, WASI or FFI
@@ -3170,17 +3178,26 @@ fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
-	let lawful = crate::law::separate_laws(WaspParser::parse(code));
-	if let Some(violation) = crate::law::assert_laws(&lawful, code) {
-		return Err(violation);
+	choose_module(&lower_for_emission(lawful_program(code)?)?)
+}
+
+/// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
+fn raw_struct_module(node: &Node) -> Option<Vec<u8>> {
+	let mut type_registry = crate::type_kinds::TypeRegistry::new();
+	crate::analyzer::collect_all_types(&mut type_registry, node);
+	let (type_def, field_values) = find_struct_instantiation(&type_registry, node)?;
+	Some(WasmGcEmitter::emit_raw_struct(&type_def, &field_values))
+}
+
+fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
+	match raw_struct_module(node) {
+		Some(bytes) => Ok(CompiledModule { bytes, needs_host: false, needs_wasi: false, needs_ffi: false }),
+		None => emit_module(node),
 	}
-	emit_module(&lower_for_emission(lawful.program)?)
 }
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
 pub fn eval_parsed(node: Node, _code: &str) -> Node {
-	use crate::analyzer::collect_all_types;
-	use crate::type_kinds::TypeRegistry;
 	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
 	let node = match lower_for_emission(node) {
@@ -3188,13 +3205,7 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 		Err(final_value) => return final_value,
 	};
 
-	// Pre-scan: collect all type definitions (supports forward references)
-	let mut type_registry = TypeRegistry::new();
-	collect_all_types(&mut type_registry, &node);
-
-	// Check for struct instantiation: TypeName:{field:value, ...}
-	if let Some((type_def, field_values)) = find_struct_instantiation(&type_registry, &node) {
-		let wasm_bytes = WasmGcEmitter::emit_raw_struct(&type_def, &field_values);
+	if let Some(wasm_bytes) = raw_struct_module(&node) {
 		match run_raw_struct(&wasm_bytes) {
 			Ok(result) => return result,
 			Err(e) => warn!("raw struct eval failed: {}", e),
