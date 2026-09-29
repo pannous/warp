@@ -122,6 +122,8 @@ pub struct WaspParser {
 	options: ParserOptions,
 	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
 	equals_compares: bool,
+	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
+	stops_at_else: bool,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -154,6 +156,7 @@ impl WaspParser {
 			base_indent: 0,
 			options,
 			equals_compares: false,
+			stops_at_else: false,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}
@@ -682,6 +685,12 @@ impl WaspParser {
 		}
 
 		// Handle "global" keyword: global name = value
+		if symbol == "for" {
+			if let Some(loop_node) = self.try_parse_for_in() {
+				return loop_node;
+			}
+		}
+
 		if symbol == "global" {
 			self.skip_whitespace();
 			// Parse the rest as an expression (should be name=value or name:=value)
@@ -767,10 +776,6 @@ impl WaspParser {
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	fn parse_expr(&mut self, min_bp: u8) -> Node {
-		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
-		const MAX_BP_FOR_APPLICATION: u8 = 151; // operand of + - * / takes a braceless call: 1 + f 3
-		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
-
 		self.skip_spaces();
 
 		// Step 1: Prefix (nud)
@@ -787,6 +792,14 @@ impl WaspParser {
 			self.parse_atom()
 		};
 
+		self.continue_expr(lhs, min_bp)
+	}
+
+	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
+	fn continue_expr(&mut self, mut lhs: Node, min_bp: u8) -> Node {
+		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
+		const MAX_BP_FOR_APPLICATION: u8 = 151; // operand of + - * / takes a braceless call: 1 + f 3
+		const SUBSCRIPT_BP: u8 = 170; // Matches Op::Hash
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
 		loop {
@@ -850,7 +863,7 @@ impl WaspParser {
 			let (l_bp, r_bp) = op.binding_power();
 
 			// Stop if operator binds less tightly than our minimum
-			if l_bp < min_bp {
+			if l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 
@@ -869,11 +882,10 @@ impl WaspParser {
 			}
 
 			// Parse right-hand side with appropriate binding power
-			let rhs = if op == Op::Colon {
-				self.with_equals_comparing(false, |parser| parser.parse_expr(r_bp))
-			} else {
-				self.parse_expr(r_bp)
-			};
+			if op == Op::Colon {
+				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
+			}
+			let rhs = self.parse_expr(r_bp);
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -957,7 +969,11 @@ impl WaspParser {
 
 		if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, then_expr.clone());
+			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
+			let outer = std::mem::replace(&mut self.stops_at_else, true);
+			let then_expr = self.continue_expr(then_expr.as_ref().clone(), 0);
+			self.stops_at_else = outer;
+			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
@@ -983,6 +999,36 @@ impl WaspParser {
 	}
 
 	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
+	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement
+	fn try_parse_for_in(&mut self) -> Option<Node> {
+		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.skip_spaces();
+		let variable = self.parse_symbol().ok().map(Symbol);
+		self.skip_spaces();
+		let Some(variable) = variable.filter(|_| self.matches_keyword("in")) else {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+			return None;
+		};
+		self.advance_by("in".len());
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		let (iterable, block) = match iterable.drop_meta() {
+			Node::List(applied, Bracket::None, Separator::Space) if applied.len() == 2 && matches!(applied[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+				(applied[0].clone(), Some(applied[1].clone())) // `for x in xs {…}` reads as the call `xs {…}`
+			}
+			_ => (iterable, None),
+		};
+		self.skip_spaces();
+		let body = match block {
+			Some(block) => block,
+			None if self.current_char() == ':' => {
+				self.advance();
+				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+			}
+			None => self.parse_atom(),
+		};
+		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
 		self.skip_spaces();
 		if self.current_char() == '{' {
 			let body_block = self.parse_atom(); // parse { block }
@@ -990,7 +1036,8 @@ impl WaspParser {
 		}
 
 		if let Node::Key(condition, Op::Colon, body) = &rhs {
-			return while_do(condition.as_ref().clone(), body.as_ref().clone());
+			let body = self.continue_expr(body.as_ref().clone(), 0); // `while c: i+=2`
+			return while_do(condition.as_ref().clone(), body);
 		}
 
 		if matches!(rhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1) && self.at_body_start() {

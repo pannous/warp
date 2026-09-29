@@ -70,18 +70,6 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	Some(block(vec![init.clone(), while_do(test.clone(), block(statements, Bracket::Curly))], Bracket::None))
 }
 
-/// `iterable: body`; a body starting with an assignment reads `(iterable:target) += value`, as `:` binds tighter than `+=`
-fn colon_split(node: &Node) -> Option<(Node, Node)> {
-	match node.drop_meta() {
-		Node::Key(iterable, Op::Colon, body) => Some((iterable.as_ref().clone(), body.as_ref().clone())),
-		Node::Key(head, op, value) if op.binding_power().0 < Op::Colon.binding_power().0 => {
-			let (iterable, target) = colon_split(head)?;
-			Some((iterable, key(target, *op, value.as_ref().clone())))
-		}
-		_ => None,
-	}
-}
-
 /// `for x in iterable {body}` and `for x in iterable: body`
 fn for_in(items: &[Node]) -> Option<Node> {
 	let [keyword, variable, in_word, rest @ ..] = items else { return None };
@@ -90,7 +78,10 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	}
 	let (iterable, body) = match rest {
 		[iterable, body] => (iterable.clone(), body.clone()),
-		[colon] => colon_split(colon)?,
+		[colon] => match colon.drop_meta() {
+			Node::Key(iterable, Op::Colon, body) => (iterable.as_ref().clone(), body.as_ref().clone()),
+			_ => return None,
+		},
 		_ => return None,
 	};
 	let body = block_items(&body);
