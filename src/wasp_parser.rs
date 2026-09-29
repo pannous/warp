@@ -998,7 +998,6 @@ impl WaspParser {
 		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
 	}
 
-	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
@@ -1029,6 +1028,7 @@ impl WaspParser {
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
 	}
 
+	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
 		self.skip_spaces();
 		if self.current_char() == '{' {
 			let body_block = self.parse_atom(); // parse { block }
