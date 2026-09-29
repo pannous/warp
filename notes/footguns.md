@@ -8,7 +8,7 @@
   When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
 
-## Plain bugs found while probing (2026-09-26), good agent tasks
+## Plain bugs found while probing (2026-09-26), all fixed — each entry names its regression test
 - `1/4+1/4` → 0: fixed, pinned by `test_sum_of_quotients_is_not_truncated` (tests/probe_footguns.rs).
 - `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare: fixed, pinned by `test_string_equality_is_by_value`,
   `test_equality_across_kinds_is_structural`, `test_empty_values_are_falsy`, `test_unicode_normalization` (tests/probe_footguns.rs).
