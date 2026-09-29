@@ -448,7 +448,7 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 4] = ["index_out_of_range", "invalid_number", "out_of_memory", "key_not_found"];
+pub const RUNTIME_ERRORS: [&str; 5] = ["index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range"];
 
 impl WasmGcEmitter {
 	fn emit_runtime_errors(&mut self) {

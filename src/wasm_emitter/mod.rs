@@ -18,6 +18,9 @@ mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
 
+/// 2^63: floats with a magnitude at or beyond it do not fit an i64
+const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
+
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
 
@@ -915,8 +918,21 @@ impl WasmGcEmitter {
 		self.string_table.allocate(s)
 	}
 
-	/// f64 on the stack → exact Int, truncated toward zero: only the explicit casts `as int` and `int(x)` mean this
+	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
+	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
 	fn emit_truncating_cast(&mut self, func: &mut Function) {
+		let value_bits = self.scratch(0);
+		func.instruction(&Instruction::I64ReinterpretF64);
+		func.instruction(&Instruction::LocalSet(value_bits));
+		func.instruction(&Instruction::LocalGet(value_bits));
+		func.instruction(&Instruction::F64ReinterpretI64);
+		func.instruction(&Instruction::F64Abs);
+		func.instruction(&Instruction::F64Const(I64_RANGE_LIMIT.into()));
+		func.instruction(&Instruction::F64Lt);
+		func.instruction(&Instruction::I32Eqz);
+		self.emit_fail_if(func, "float_out_of_int_range");
+		func.instruction(&Instruction::LocalGet(value_bits));
+		func.instruction(&Instruction::F64ReinterpretI64);
 		func.instruction(&Instruction::I64TruncF64S);
 		self.emit_int_from_machine(func);
 	}
