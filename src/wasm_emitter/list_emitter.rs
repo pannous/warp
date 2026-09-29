@@ -231,7 +231,10 @@ impl WasmGcEmitter {
 					literal @ Node::Number(_) => literal.kind(),
 					_ => self.get_type(arg),
 				};
-				let type_name = kind.to_string();
+				let type_name = match kind {
+					crate::type_kinds::Kind::List => crate::analyzer::list_type_name(arg, &self.scope),
+					_ => kind.to_string(),
+				};
 				let (ptr, len) = self.allocate_string(&type_name);
 				func.instruction(&Instruction::I32Const(ptr as i32));
 				func.instruction(&Instruction::I32Const(len as i32));

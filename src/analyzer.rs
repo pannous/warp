@@ -278,7 +278,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 						let declared = declared_type(left);
 						let kind = declared.and_then(|type_name| declared_kind(&type_name.name())).unwrap_or_else(|| binding_kind(right, scope));
-						scope.define(name.clone(), declared.map(|type_name| Box::new(type_name.clone())), kind);
+						let list_type = || Box::new(Node::Symbol(list_type_name(right, scope)));
+						let type_node = declared.map(|type_name| Box::new(type_name.clone())).or_else(|| (kind == Kind::List).then(list_type));
+						scope.define(name.clone(), type_node, kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
@@ -700,6 +702,38 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 		"char" | "codepoint" => Kind::Codepoint,
 		_ => return None,
 	})
+}
+
+/// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
+pub fn plural_element_type(word: &str) -> Option<&str> {
+	let singular = word.strip_suffix('s')?;
+	type_word_kind(singular).map(|_| singular)
+}
+
+/// The type name of a list: `list of int` when all items share a kind (or the variable is declared `ints`), else `list`
+pub fn list_type_name(list: &Node, scope: &Scope) -> String {
+	const PLAIN: &str = "list";
+	match list.drop_meta() {
+		Node::Symbol(name) => {
+			let type_name = scope.lookup(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
+			match type_name {
+				Some(word) => match plural_element_type(&word) {
+					Some(element) => format!("{PLAIN} of {element}"),
+					None if word.starts_with(PLAIN) => word,
+					None => PLAIN.to_string(),
+				},
+				None => PLAIN.to_string(),
+			}
+		}
+		Node::List(items, _, _) => {
+			let mut kinds = items.iter().map(|item| infer_type(item, scope));
+			match kinds.next() {
+				Some(first) if kinds.all(|kind| kind == first) => format!("{PLAIN} of {first}"),
+				_ => PLAIN.to_string(),
+			}
+		}
+		_ => PLAIN.to_string(),
+	}
 }
 
 /// Semantic checks run before emission; the first violation comes back as an error value
