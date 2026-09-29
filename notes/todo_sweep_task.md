@@ -45,10 +45,11 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | assigned warp-f6 |
 | C8 | empty {} blocks dropped (`x i {}` loses the block) | done 207e4dfd, $main eval test 16594fbd |
 | A13 | triage ignored test_operators (1), test_todo (4) | done: all design-blocked (notes/open_decisions.md) |
-| A14 | triage ignored test_wasm.rs, in slices | slice 1: a84384e0 (16 un-ignored) 7cccd61f (global x); slice 2: globals 8e726057+cd0aebda (named_data_sections: exit(0) in test, decision); slice 3 → warp-numeric; (a) global modifiers 12a70b5d (warp-parser); B13 export declarations → warp-parser |
+| A14 | triage ignored test_wasm.rs, in slices | slice 1: a84384e0 (16 un-ignored) 7cccd61f (global x); slice 2: globals 8e726057+cd0aebda (named_data_sections: exit(0) in test, decision); slice 3 2c39f1a3 (test_globals, math_operators_runtime) — closed; rest blocked (design/host/test defects/B9(2)); (a) global modifiers 12a70b5d (warp-parser); B13 export declarations → warp-parser |
 | B12 | colon body parsed at `:` precedence: `while c: i+=2`, `if c: x+=1` crash; remove for_loop re-attach workaround | done d9989daf (+ repairs 4add7843 e027886f) |
 | C9 | `foo:=it#1;foo [1 2 3]` traps: `it` holding a list can't be indexed | done de780e15 (param kind from body indexing) |
 | C10 | untyped param silently coerces a list to Int (`foo(x):=x;foo([1 2 3])` → 3) → loud error / argument kind | part 1 08b3f97b; part 2 (all call sites agree else loud) → warp-library |
+| A16 | regression: `download https://…` returns unevaluated list (worked at A14 slice 1) — bisect | assigned warp-numeric |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
