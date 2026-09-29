@@ -784,13 +784,6 @@ fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	Some((name, value.drop_meta()))
 }
 
-fn statements(program: &Node) -> &[Node] {
-	match program.drop_meta() {
-		Node::List(items, _, _) => items,
-		_ => std::slice::from_ref(program),
-	}
-}
-
 fn assigned_names(program: &Node) -> HashSet<&str> {
 	let mut names = HashSet::new();
 	program.visit(&mut |node| {
@@ -806,34 +799,55 @@ fn assigned_names(program: &Node) -> HashSet<&str> {
 /// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
 fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
 	let variables = assigned_names(program);
-	statements(program).iter().filter_map(|item| {
-		let (name, _) = data_binding(item)?;
+	let mut warnings = vec![];
+	program.visit(&mut |item| {
+		let Some((name, _)) = data_binding(item) else { return };
 		let parts: Vec<&str> = name.split('-').collect();
 		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(part)) {
-			return None;
+			return;
 		}
 		let message = format!("`{name}` is a data key here, but {} are also variables: `{}` would subtract", parts.join(" and "), parts.join(" - "));
-		Some(Diagnostic::at(item, message).fix(format!("write {} for the subtraction", parts.join(" - "))))
-	}).collect()
+		warnings.push(Diagnostic::at(item, message).fix(format!("write {} for the subtraction", parts.join(" - "))));
+	});
+	warnings
 }
 
 /// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
 	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
-	let Node::List(items, bracket, separator) = program else { return program };
-	let mut keys: HashMap<String, Node> = HashMap::new();
-	let mut resolved = Vec::with_capacity(items.len());
-	for item in items {
-		let item = substitute_keys(item, &keys);
-		if let Some((name, value)) = data_binding(&item) {
-			if !variables.contains(name) {
-				keys.insert(name.to_string(), value.clone());
+	resolve_blocks(program, &variables)
+}
+
+fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut keys: HashMap<String, Node> = HashMap::new();
+			let mut resolved = Vec::with_capacity(items.len());
+			let mut ends_in_lookup = false;
+			for item in items {
+				let item = resolve_blocks(item, variables);
+				ends_in_lookup = matches!(item.drop_meta(), Node::Symbol(name) if keys.contains_key(name));
+				let item = substitute_keys(item, &keys);
+				if let Some((name, value)) = data_binding(&item) {
+					if !variables.contains(name) {
+						keys.insert(name.to_string(), value.clone());
+					}
+				}
+				resolved.push(item);
+			}
+			match resolved.pop() {
+				Some(value) if ends_in_lookup => value,
+				Some(last) => {
+					resolved.push(last);
+					Node::List(resolved, bracket, separator)
+				}
+				None => Node::List(resolved, bracket, separator),
 			}
 		}
-		resolved.push(item);
+		Node::Meta { node, data } => Node::Meta { node: Box::new(resolve_blocks(*node, variables)), data },
+		other => other,
 	}
-	Node::List(resolved, bracket, separator)
 }
 
 fn substitute_keys(node: Node, keys: &HashMap<String, Node>) -> Node {
@@ -1168,6 +1182,9 @@ pub fn lower_declarations(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
 			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
+		}
+		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
+			lower_declarations(hashed_unit_count(&items).expect("guarded"))
 		}
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
 			lower_declarations(unit_count(&counted).expect("guarded"))
@@ -1723,6 +1740,18 @@ fn unit_count(node: &Node) -> Option<Node> {
 		Node::Key(text, Op::As, unit) => count_of(text.as_ref().clone(), unit),
 		_ => None,
 	}
+}
+
+/// `#bytes in t`, parsed as the items `#bytes`, `in`, `t`: the count of that unit, `t.bytes`
+fn hashed_unit_count(items: &[Node]) -> Option<Node> {
+	let [hashed, keyword, _, ..] = items else { return None };
+	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else { return None };
+	if !matches!(empty.drop_meta(), Node::Empty) || !is_word(keyword, "in") {
+		return None;
+	}
+	let Node::Symbol(word) = unit.drop_meta() else { return None };
+	let counted = rest_of(items, 2, &Bracket::None, &Separator::Space);
+	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 }
 
 /// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;

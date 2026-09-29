@@ -4,12 +4,12 @@ use warp::*;
 fn test_type_of_list_names_its_element_type() {
 	is!("type([1 2 3])", "list of int");
 	is!("pixels=(1,2,3);type(pixels)", "list of int");
-	is!("type([\"a\" \"b\"])", "list of text");
+	is!("type([\"ab\" \"cd\"])", "list of text");
 }
 
 #[test]
 fn test_type_of_mixed_list_is_plain_list() {
-	is!("type([1 \"a\"])", "list");
+	is!("type([1 \"ab\"])", "list");
 }
 
 #[test]
