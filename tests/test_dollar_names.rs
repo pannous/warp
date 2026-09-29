@@ -12,3 +12,8 @@ fn dollar_names_keep_their_sigil() {
 fn dollar_digit_stays_a_parameter_reference() {
 	assert_eq!(parse("$0"), Symbol("$0".to_string()));
 }
+
+#[test]
+fn dollar_names_survive_eval() {
+	assert_eq!(warp::wasm_emitter::eval("$main"), Symbol("$main".to_string()));
+}
