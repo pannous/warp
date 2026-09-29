@@ -575,6 +575,7 @@ impl WaspParser {
 		let node = node.with_meta_data(LineInfo {
 			line_nr,
 			column,
+			#[cfg(debug_assertions)]
 			line: self.current_line.clone(),
 		});
 		if let Some(c) = comment {
@@ -1074,6 +1075,7 @@ impl WaspParser {
 		let node = node.with_meta_data(LineInfo {
 			line_nr,
 			column,
+			#[cfg(debug_assertions)]
 			line: self.current_line.s(),
 		});
 		// Attach preceding comment as metadata

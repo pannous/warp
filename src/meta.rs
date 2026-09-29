@@ -6,9 +6,10 @@ use log::trace;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct LineInfo {
-	// #cfg(DEBUG!)]{  TODO conditional compilation
+	// #cfg(DEBUG!)]{  DONE conditional compilation
 	pub line_nr: usize,
 	pub column: usize,
+	#[cfg(debug_assertions)]
 	pub line: String, // debug! expensive but useful
 }
 
