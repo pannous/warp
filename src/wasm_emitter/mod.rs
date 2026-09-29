@@ -915,10 +915,16 @@ impl WasmGcEmitter {
 		self.string_table.allocate(s)
 	}
 
-	/// f64 on the stack → exact Int, truncated toward zero: what a float variable read in an exact context means
-	fn emit_truncated_float(&mut self, func: &mut Function) {
+	/// f64 on the stack → exact Int, truncated toward zero: only the explicit casts `as int` and `int(x)` mean this
+	fn emit_truncating_cast(&mut self, func: &mut Function) {
 		func.instruction(&Instruction::I64TruncF64S);
 		self.emit_int_from_machine(func);
+	}
+
+	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
+	fn emit_float_in_exact_context(&mut self, func: &mut Function, what: &str) {
+		let message = format!("{what} is a float where an exact Int is expected: use it in float arithmetic or truncate with `as int`");
+		self.emit_type_error(func, message);
 	}
 
 	/// Declarations of the scope's locals in position order, skipping the first `skipped` (the parameters)
@@ -1721,7 +1727,7 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
 				func.instruction(&Instruction::GlobalGet(global_idx));
-				self.emit_truncated_float(func);
+				self.emit_float_in_exact_context(func, &name);
 			} else {
 				self.emit_numeric_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
@@ -1738,8 +1744,7 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
 			func.instruction(&Instruction::GlobalGet(global_idx));
-			// Convert to i64 for emit_numeric_value context
-			self.emit_truncated_float(func);
+			self.emit_float_in_exact_context(func, &name);
 		} else {
 			self.emit_numeric_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
@@ -2008,7 +2013,7 @@ impl WasmGcEmitter {
 					// Runtime: float expression to int
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
-						self.emit_truncated_float(func);
+						self.emit_truncating_cast(func);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible; a ratio is truncated
@@ -2350,10 +2355,9 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 				match op {
 					Op::Sqrt => {
-						// √x = sqrt(x), need f64 for sqrt then convert back to i64
 						self.emit_float_value(func, right);
 						func.instruction(&Instruction::F64Sqrt);
-						self.emit_truncated_float(func);
+						self.emit_float_in_exact_context(func, &located.serialize());
 					}
 					Op::Neg => {
 						self.emit_numeric_value(func, right);
@@ -2422,14 +2426,12 @@ impl WasmGcEmitter {
 						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
 						self.emit_call(func, "get_int_value");
 					} else if local.kind.is_float() {
-						// Convert f64 local to i64 for integer operations
-						self.emit_truncated_float(func);
+						self.emit_float_in_exact_context(func, name);
 					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
-						// Convert f64 global to i64 for integer operations
-						self.emit_truncated_float(func);
+						self.emit_float_in_exact_context(func, name);
 					}
 				} else {
 					panic!("Undefined variable: {}", name);
