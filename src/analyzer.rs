@@ -1260,7 +1260,58 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
+	infer_parameters_from_calls(ctx, node);
 	refine_return_kinds(ctx);
+}
+
+/// `a List`, `an Int`
+pub fn kind_with_article(kind: Kind) -> String {
+	let name = format!("{kind:?}");
+	let article = if name.starts_with(|first: char| "AEIOU".contains(first)) { "an" } else { "a" };
+	format!("{article} {name}")
+}
+
+/// The kind a call argument certainly has, judged from the literal alone
+fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+	match argument.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
+		_ => None,
+	}
+}
+
+/// An undeclared parameter takes the kind of its arguments when every call agrees; calls that disagree are a
+/// reported conflict. Parameters that only get Int arguments (or none) stay Int. Arguments that are not literals
+/// are not judged here: a wrong one is still refused at the call by the emitter.
+fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
+	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
+	program.visit(&mut |node| {
+		let Node::List(items, _, _) = node else { return };
+		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+		let Some(function) = ctx.user_functions.get(name) else { return };
+		for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
+			if let Some(kind) = argument_literal_kind(argument) {
+				let kinds = argument_kinds.entry((name.clone(), index)).or_default();
+				if !kinds.contains(&kind) {
+					kinds.push(kind);
+				}
+			}
+		}
+	});
+	for ((name, index), kinds) in argument_kinds {
+		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
+		let param = &mut function.params[index];
+		if param.annotation.is_some() || param.default.is_some() || param.used_as.is_some() {
+			continue;
+		}
+		match kinds.as_slice() {
+			[Kind::Int] => {}
+			[kind] => param.used_as = Some(*kind),
+			[first, second, ..] => ctx.parameter_conflicts.push(format!(
+				"{name} is called with {} and {} for parameter {}: annotate it",
+				kind_with_article(*first), kind_with_article(*second), param.name)),
+			[] => {}
+		}
+	}
 }
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),

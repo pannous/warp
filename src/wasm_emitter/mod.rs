@@ -44,7 +44,7 @@ pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
 
-use crate::analyzer::{analyze_required_functions, captured_variables, param_kind, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, type_word_kind, Scope};
+use crate::analyzer::{analyze_required_functions, captured_variables, kind_with_article, param_kind, collect_all_types, collect_variables, extract_ffi_imports, extract_user_functions, infer_type, type_word_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::local::Local;
 use crate::extensions::numbers::Number;
@@ -464,7 +464,7 @@ impl WasmGcEmitter {
 			let expected = param_kind(param);
 			let given = self.get_type(argument);
 			if !expected.is_ref() && matches!(given, Kind::List | Kind::Text) && given != expected {
-				let message = format!("{} needs a {expected:?} for parameter {}, got {}", user_fn.name, param.name, argument.serialize());
+				let message = format!("{} needs {} for parameter {}, got {}", user_fn.name, kind_with_article(expected), param.name, argument.serialize());
 				self.emit_type_error(func, message);
 				return;
 			}
@@ -672,6 +672,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		self.type_errors.extend(self.ctx.parameter_conflicts.drain(..));
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);

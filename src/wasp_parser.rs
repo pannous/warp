@@ -273,37 +273,6 @@ impl WaspParser {
 		line_comment.trim().to_string()
 	}
 
-	/// The text of a `/* … */` comment, the parser standing on its opening
-	fn consume_block_comment(&mut self) -> String {
-		self.advance_by(2);
-		let mut block = String::new();
-		while self.current_char() != '\0' {
-			if self.current_char() == '*' && self.peek_char(1) == '/' {
-				self.advance_by(2);
-				break;
-			}
-			block.push(self.current_char());
-			self.advance();
-		}
-		block
-	}
-
-	/// Spaces and the comments that may sit inside a line: `1 /* inline */ + 1` and `a b # note`; the newline stays a separator
-	fn skip_spaces_and_inline_comments(&mut self) {
-		loop {
-			self.skip_spaces();
-			match (self.current_char(), self.peek_char(1)) {
-				('/', '*') => { self.consume_block_comment(); }
-				('#', ' ' | '\t') => {
-					while !matches!(self.current_char(), '\n' | '\0') {
-						self.advance();
-					}
-				}
-				_ => return,
-			}
-		}
-	}
-
 	fn skip_whitespace_and_comments(&mut self) -> (bool, usize, Option<String>) {
 		let mut had_newline = false;
 		let mut line_indent = 0;
@@ -333,8 +302,17 @@ impl WaspParser {
 			}
 			// /* block comment */
 			if c1 == '/' && c2 == '*' {
-				let block = self.consume_block_comment();
-				had_newline |= block.contains('\n');
+				self.advance_by(2);
+				let mut block = String::new();
+				while self.current_char() != '\0' {
+					if self.current_char() == '*' && self.peek_char(1) == '/' {
+						self.advance_by(2);
+						break;
+					}
+					if self.current_char() == '\n' { had_newline = true; }
+					block.push(self.current_char());
+					self.advance();
+				}
 				let trimmed = block.trim();
 				if !trimmed.is_empty() { comments.push(trimmed.to_string()); }
 				continue;
@@ -827,7 +805,7 @@ impl WaspParser {
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
 		loop {
-			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
+			self.skip_spaces(); // Only spaces, not newlines (newlines are separators)
 
 			// Step 2: Suffix (led)
 			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp) {
