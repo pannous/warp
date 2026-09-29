@@ -26,6 +26,7 @@ const STATE_KEYWORD: &str = "global";
 /// Trusted effect signatures of the built-in host and WASI functions.
 const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("fetch", Host, &[IO]),
+	("print", Wasi, &[IO]),
 	("puts", Wasi, &[IO]),
 	("puti", Wasi, &[IO]),
 	("putl", Wasi, &[IO]),

@@ -11,6 +11,8 @@ use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 const BUILTIN_CALLS: [&str; 10] = ["return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use"];
 
+const PRINT: &str = "print";
+
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
 	/// A variable is not callable.
@@ -20,6 +22,7 @@ impl WasmGcEmitter {
 			|| self.ctx.type_registry.get_by_name(name).is_some()
 			|| type_word_kind(&name.to_lowercase()).is_some()
 			|| is_function_keyword(name)
+			|| name == PRINT
 			|| BUILTIN_CALLS.contains(&name)
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
@@ -81,6 +84,11 @@ impl WasmGcEmitter {
 					return;
 				}
 			}
+		}
+
+		if items.len() == 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
+			self.emit_print(func, &items[1]);
+			return;
 		}
 
 		// WASI calls: puts, puti, putl, putf, fd_write — their i64 result is boxed like any value

@@ -59,3 +59,10 @@ fn test_declared_type_constructs() {
 fn test_type_constructor_arity_is_checked() {
 	fails_with("type P{x:int y:int}; P(1)", "P takes 2");
 }
+
+#[test]
+fn test_print_returns_its_value_without_a_capability_error() {
+	is!("print 42", 42);
+	is!("print(42)", 42);
+	is!("print 'hi'", "hi");
+}
