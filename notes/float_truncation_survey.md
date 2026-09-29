@@ -49,3 +49,28 @@ locals/globals of float kind do. `[..][2.7]` and `"abc"[2.7]` give `index out of
 Order: do 2 first (unblocks test), then 3, then flip `emit_truncated_float` to an error as the safety net.
 
 Worktree `probes/float_trunc_wt` is untracked scratch (it can be removed with `git worktree remove --force probes/float_trunc_wt`).
+
+## Outcome (A5 implemented, all sites closed)
+
+Final rule: **a float never becomes an exact Int implicitly.** Only the explicit `x as int` / `int(x)` truncates
+(`emit_truncating_cast`, which also serves floor/ceil/round through `emit_integral_float_as_int`); a NaN or a magnitude ≥ 2^63
+fails with the runtime error `float out of int range` because there is no f64 → bignum path. Everything else that used to truncate
+is now `emit_float_in_exact_context`: "<x> is a float where an exact Int is expected: use it in float arithmetic or truncate with `as int`".
+Mixed float/Int arithmetic and comparisons promote to f64; `%` is euclidean (`^`: libm `m.pow`, fractional literal exponents make the
+power a float, NaN traps as `invalid number`).
+
+| # | site | now | commit |
+|---|------|-----|--------|
+| 1, 2 | float global assign/declare | float-in-exact-context error | bab7a22b |
+| 3 | `as float` in an exact context | error, `as float` promotes in float context | a8f17bdf |
+| 4 | `x as int` / `int(x)` | the only truncation, range-checked | bab7a22b, ccaf3da9 |
+| 5 | assignment to a float local | keeps its f64; dropped statements via `emit_discarded_statement` | 40ac69a3 |
+| 6 | `√x` in an exact context | error | bab7a22b |
+| 7, 8 | float local/global read as an Int operand (index, `and`, `&`, …) | error | bab7a22b |
+| – | `x % 2`, `x == 2`, `x ^ 2`, `x > 1` with a float operand | computed as f64 | 506e6b94, fd4557dc |
+| – | floor/ceil/round (5 copies of trunc + box) | one helper, range-checked | ccaf3da9 |
+| – | FFI f64/f32 result read as an Int | error | ecc7847c |
+| – | floor/ceil/round/count in a function body | share the integer-builtin path with top level | 9be02d9b |
+
+Open: shifts do not exist (`<<` parses as `<` plus an angle group, see TODO.md); there is no exact Int for floats beyond i64.
+The scratch worktrees `probes/float_trunc_wt` and `probes/stage_check` are obsolete.
