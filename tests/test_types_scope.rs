@@ -24,3 +24,10 @@ fn test_data_key_is_a_scope() {
 	is!("a-b:2 c-d:4 a-b", 2);
 	is!("a-b:2 c-d:4 c-d", 4);
 }
+
+#[test]
+fn test_kebab_key_that_is_also_subtraction_warns() {
+	let warnings = warp::analyzer::lint(&warp::parse("a=5; b=3; a-b:2 c-d:4 a-b"));
+	assert!(warnings.iter().any(|warning| warning.message.contains("a-b")), "{warnings:?}");
+	assert!(warp::analyzer::lint(&warp::parse("a-b:2 c-d:4 a-b")).is_empty());
+}
