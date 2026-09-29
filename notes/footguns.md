@@ -12,8 +12,6 @@
 - `1/4+1/4` → 0: comparisons see 0.5, the returned sum is typed Int and truncated.
 - `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare → compiler panic `Cannot extract numeric value`.
 - `x=1;x++;x` → 1 (increment lost); `++i` parse error.
-- `f := it*10; 1 + f 3` → 3 (should be 31).
-- `x=[1 2 3]; x[3]` returns unevaluated program text; `x#0`, `x[-1]` → 1.
 - `'héllo'#2` → 'Ã' (byte index despite wiki promising char-safe `#`).
 - strings mutate through aliases: `x="ab";y=x;y#1="z";x` → 'zb'.
 - `country: NO` → `country:0` (YAML Norway problem) — needs a design decision on `yes`/`no` aliases.
