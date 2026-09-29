@@ -532,6 +532,9 @@ impl Index<&str> for Node {
 	type Output = Node;
 
 	fn index(&self, i: &str) -> &Self::Output {
+		if let Some(attribute_name) = i.strip_prefix('@') {
+			return self.attribute(attribute_name).unwrap_or(&Empty);
+		}
 		match self {
 			List(nodes, _, _) => {
 				// First, search directly in this list
@@ -730,6 +733,25 @@ impl Node {
 		Meta {
 			node: Box::new(self),
 			data: Box::new(comment),
+		}
+	}
+
+	/// Annotate with `@name(value)`; the innermost annotation is the one written last
+	pub fn with_attribute(self, name: &str, value: Node) -> Self {
+		Meta {
+			node: Box::new(self),
+			data: Box::new(Node::key(name, value)),
+		}
+	}
+
+	/// The value of the attribute `@name`, searched through all annotations of this node
+	pub fn attribute(&self, name: &str) -> Option<&Node> {
+		match self {
+			Meta { node, data } => match data.as_ref() {
+				Key(key, _, value) if matches!(key.as_ref(), Symbol(key_name) | Text(key_name) if key_name == name) => Some(value),
+				_ => node.attribute(name),
+			},
+			_ => None,
 		}
 	}
 

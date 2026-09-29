@@ -526,6 +526,25 @@ impl WaspParser {
 		}
 	}
 
+	fn unwrap_single(group: Node) -> Node {
+		match group {
+			Node::List(mut items, _, _) if items.len() == 1 => items.remove(0),
+			other => other,
+		}
+	}
+
+	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`
+	fn parse_attribute(&mut self) -> Node {
+		self.advance(); // skip '@'
+		let mut name = String::new();
+		while self.current_char().is_alphanumeric() || self.current_char() == '_' {
+			name.push(self.current_char());
+			self.advance();
+		}
+		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
+		self.parse_atom().with_attribute(&name, value)
+	}
+
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
 	fn parse_atom(&mut self) -> Node {
@@ -544,6 +563,7 @@ impl WaspParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			// $n parameter reference (e.g., $0 = first param)
+			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
 				let mut num_str = String::new();

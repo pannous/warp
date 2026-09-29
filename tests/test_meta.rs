@@ -53,7 +53,6 @@ fn test_meta_at() {
 }
 
 #[test]
-#[ignore]
 fn test_meta_at2() {
 	let code = "@attrib(1) @attrib2(42) tee{a:1}";
 	let node = parse(code);
