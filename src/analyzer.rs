@@ -47,6 +47,15 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	}
 }
 
+/// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
+pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
+	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(number.clone()).fract() != 0.0);
+	match arithmetic_kind(left, op, right) {
+		Kind::Int if fractional_exponent => Kind::Float,
+		kind => kind,
+	}
+}
+
 /// Kind as written: a literal keeps its data kind (`3.14` is a float literal even though its value
 /// computes exactly), anything else is inferred
 pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
@@ -158,7 +167,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
-			arithmetic_kind(infer_type(left, scope), op, infer_type(right, scope))
+			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
 		}
 		// Assignment/definition: type comes from value
 		Node::Key(_left, Op::Define | Op::Assign, right) => {

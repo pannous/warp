@@ -622,7 +622,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
-		crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
+		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list

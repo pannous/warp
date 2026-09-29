@@ -114,26 +114,27 @@ impl ImportManager {
 	/// Emit FFI imports for all registered FFI functions
 	fn emit_ffi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Clone data to avoid borrow conflict
-		let mut imports: Vec<(String, String, Vec<ValType>, Vec<ValType>)> = ctx
+		let mut imports: Vec<(String, String, &'static str, Vec<ValType>, Vec<ValType>)> = ctx
 			.ffi_imports
 			.iter()
 			.map(|(name, sig)| {
 				(
 					name.clone(),
 					sig.library.to_string(),
+					sig.name,
 					sig.params.clone(),
 					sig.results.clone(),
 				)
 			})
 			.collect();
-		imports.sort_by(|(a, _, _, _), (b, _, _, _)| a.cmp(b));
+		imports.sort_by(|(a, ..), (b, ..)| a.cmp(b));
 
-		for (name, library, params, results) in imports {
+		for (name, library, import_name, params, results) in imports {
 			let type_idx = type_manager.add_function_type(params, results);
 
 			// Import from library module (e.g., "m" for libm, "c" for libc)
 			self.imports
-				.import(&library, &name, EntityType::Function(type_idx));
+				.import(&library, import_name, EntityType::Function(type_idx));
 
 			// Register as an import function - use a leaked string for static lifetime
 			let static_name: &'static str = Box::leak(format!("ffi_{}", name).into_boxed_str());

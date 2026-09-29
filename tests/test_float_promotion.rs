@@ -30,6 +30,15 @@ fn test_literal_float_operations_do_not_truncate() {
 }
 
 #[test]
-fn test_fractional_float_power_is_refused_loudly() {
-	common::fails_with("f(x:float) := 2.0 ^ x; f(0.5)", "invalid number");
+fn test_fractional_exponent_uses_libm_pow() {
+	is!("f(x:float) := 2.0 ^ x; f(0.5)", 1.4142135623730951);
+	is!("f(x:float) := x ^ 0.5; f(4.0)", 2.0);
+	is!("2 ^ 0.5", 1.4142135623730951);
+	is!("2 ^ 3", 8);
+}
+
+#[test]
+fn test_undefined_float_power_is_refused_loudly() {
+	common::fails_with("f(x:float) := (0 - 2.0) ^ x; f(0.5)", "invalid number");
+	common::fails_with("y = 0.5; 2 ^ y", "integer exponent");
 }

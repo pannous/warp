@@ -17,6 +17,12 @@ mod type_manager;
 mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
+
+/// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
+const LIBM_POW: &str = "m.pow";
+
+/// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
+const EXACT_TRAP_MESSAGES: [(&str, &str); 1] = [("exact_pow", "an exact power needs an integer exponent")];
 pub use equality::{IS_TRUTHY, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
@@ -100,6 +106,8 @@ pub struct WasmGcEmitter {
 	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
 	// Runtime functions the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	missing_functions: std::collections::HashSet<&'static str>,
+	// libm functions the emitted operators need, keyed like ffi_imports (`m.pow`) so they never shadow a user function
+	missing_math_imports: std::collections::HashSet<&'static str>,
 	type_errors: Vec<String>,
 }
 
@@ -135,6 +143,7 @@ impl WasmGcEmitter {
 			int_remainder_global: 0,
 			text_heap_global: 0,
 			missing_functions: Default::default(),
+			missing_math_imports: Default::default(),
 			type_errors: Vec::new(),
 		}
 	}
@@ -494,7 +503,7 @@ impl WasmGcEmitter {
 			}
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
-				crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right))
+				self.arithmetic_type(left, op, right)
 			}
 			// For other nodes, use analyzer's infer_type
 			_ => infer_type(node, &self.scope),
@@ -661,10 +670,12 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
-		if !self.missing_functions.iter().all(|name| self.ctx.required_functions.contains(name)) {
+		let missing_import = self.missing_math_imports.iter().any(|key| !self.ctx.ffi_imports.contains_key(*key));
+		if missing_import || !self.missing_functions.iter().all(|name| self.ctx.required_functions.contains(name)) {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
 			rerun.missing_functions = std::mem::take(&mut self.missing_functions);
+			rerun.missing_math_imports = std::mem::take(&mut self.missing_math_imports);
 			rerun.emit_for_node(node);
 			*self = rerun;
 		}
@@ -692,6 +703,10 @@ impl WasmGcEmitter {
 		use crate::effects::{Capability, EffectReport};
 		let effects = EffectReport::of(node);
 		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name));
+		for key in &self.missing_math_imports {
+			let function = key.trim_start_matches("m.");
+			self.ctx.ffi_imports.extend(crate::ffi::get_ffi_signature(function).map(|signature| (key.to_string(), signature)));
+		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
 		self.config.emit_host_imports |= effects.needs(Capability::Host);
@@ -1113,7 +1128,7 @@ impl WasmGcEmitter {
 	}
 
 	fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
-		crate::analyzer::arithmetic_kind(self.get_type(left), op, self.get_type(right)).is_float()
+		self.arithmetic_type(left, op, right).is_float()
 	}
 
 	fn emit_assign_or_define(
@@ -1370,61 +1385,20 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::F64Sub);
 	}
 
-	/// base ^ exponent by squaring; only integral exponents exist for f64 without a libm, others trap as invalid_number
+	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	fn emit_float_power(&mut self, func: &mut Function) {
-		let (base, exponent, result) = (0, 1, 2);
-		self.pop_float_scratch(func, exponent);
-		self.pop_float_scratch(func, base);
-		self.push_float_scratch(func, exponent);
-		self.push_float_scratch(func, exponent);
-		func.instruction(&Instruction::F64Trunc);
+		let Some(pow) = self.ffi_func_index(LIBM_POW) else {
+			self.missing_math_imports.insert(LIBM_POW);
+			func.instruction(&Instruction::Unreachable);
+			return;
+		};
+		func.instruction(&Instruction::Call(pow));
+		self.pop_float_scratch(func, 0);
+		self.push_float_scratch(func, 0);
+		self.push_float_scratch(func, 0);
 		func.instruction(&Instruction::F64Ne);
 		self.emit_fail_if(func, "invalid_number");
-		self.push_float_scratch(func, exponent);
-		func.instruction(&Instruction::I64TruncF64S);
-		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
-		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::I64LtS);
-		func.instruction(&Instruction::If(BlockType::Empty));
-		func.instruction(&Instruction::F64Const(1.0.into()));
-		self.push_float_scratch(func, base);
-		func.instruction(&Instruction::F64Div);
-		self.pop_float_scratch(func, base);
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
-		func.instruction(&Instruction::I64Sub);
-		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::F64Const(1.0.into()));
-		self.pop_float_scratch(func, result);
-		func.instruction(&Instruction::Block(BlockType::Empty));
-		func.instruction(&Instruction::Loop(BlockType::Empty));
-		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
-		func.instruction(&Instruction::I64Eqz);
-		func.instruction(&Instruction::BrIf(1));
-		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64And);
-		func.instruction(&Instruction::I32WrapI64);
-		func.instruction(&Instruction::If(BlockType::Empty));
-		self.push_float_scratch(func, result);
-		self.push_float_scratch(func, base);
-		func.instruction(&Instruction::F64Mul);
-		self.pop_float_scratch(func, result);
-		func.instruction(&Instruction::End);
-		self.push_float_scratch(func, base);
-		self.push_float_scratch(func, base);
-		func.instruction(&Instruction::F64Mul);
-		self.pop_float_scratch(func, base);
-		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
-		func.instruction(&Instruction::I64Const(1));
-		func.instruction(&Instruction::I64ShrU);
-		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
-		func.instruction(&Instruction::Br(0));
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::End);
-		self.push_float_scratch(func, result);
+		self.push_float_scratch(func, 0);
 	}
 
 	fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
@@ -3331,7 +3305,8 @@ fn failed_run(failure: anyhow::Error) -> Node {
 		Some(_) => {}
 	}
 	let trace = format!("{:?}", failure);
-	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name));
-	let message = runtime_error.map_or_else(|| format!("{}", failure), |name| name.replace('_', " "));
+	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " "));
+	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
+	let message = runtime_error.or(exact_trap).unwrap_or_else(|| format!("{}", failure));
 	crate::node::error(&message)
 }
