@@ -971,27 +971,22 @@ impl WaspParser {
 		self.skip_spaces();
 		if self.current_char() == '{' {
 			let body_block = self.parse_atom(); // parse { block }
-			let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
-			return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
+			return while_do(rhs, body_block);
 		}
 
 		if let Node::Key(condition, Op::Colon, body) = &rhs {
-			let while_cond = Node::Key(Box::new(Empty), Op::While, condition.clone());
-			return Node::Key(Box::new(while_cond), Op::Do, body.clone());
+			return while_do(condition.as_ref().clone(), body.as_ref().clone());
+		}
+
+		if matches!(rhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1) && self.at_body_start() {
+			let body = self.parse_expr(0); // `while (i<9) i++`
+			return while_do(rhs, body);
 		}
 
 		if let Node::List(items, _, _) = rhs.drop_meta() {
 			if items.len() == 2 {
 				if let Node::List(_, Bracket::Curly, _) | Empty = items[1].drop_meta() { // `{}` parses as ø
-	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
-	fn at_body_start(&self) -> bool {
-		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
-	}
-
-					let condition = items[0].clone();
-					let body_block = items[1].clone();
-					let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
-					return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
+					return while_do(items[0].clone(), items[1].clone());
 				}
 			}
 		}
@@ -1001,12 +996,6 @@ impl WaspParser {
 
 	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
 		self.skip_spaces();
-		if matches!(rhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1) && self.at_body_start() {
-			let body = self.parse_expr(0); // `while (i<9) i++`
-			let while_cond = Node::Key(Box::new(Empty), Op::While, Box::new(rhs));
-			return Node::Key(Box::new(while_cond), Op::Do, Box::new(body));
-		}
-
 		if self.matches_keyword("else") {
 			self.advance_by(4);
 			self.skip_spaces();
@@ -1950,4 +1939,10 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1))) => Some(key),
 		_ => None,
 	}
+}
+
+/// `while condition body`: the loop head `ø while condition` applied `do` to its body
+fn while_do(condition: Node, body: Node) -> Node {
+	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
+	Node::Key(Box::new(head), Op::Do, Box::new(body))
 }
