@@ -150,7 +150,7 @@ pub(crate) fn function_definition(item: &Node) -> Option<FunctionDefinition> {
 		let parameters = def
 			.params
 			.iter()
-			.map(|(name, _)| (name.clone(), kinds.get(name).copied().unwrap_or(Kind::Int)))
+			.map(|param| (param.name.clone(), kinds.get(&param.name).copied().unwrap_or(Kind::Int)))
 			.collect();
 		return Some(FunctionDefinition { name: def.name, parameters, body: *def.body, source: item.clone() });
 	}

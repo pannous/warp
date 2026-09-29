@@ -49,7 +49,6 @@ fn test_law_float_parameter_kinds() {
 }
 
 #[test]
-#[ignore = "next"] // law found it: `:=` functions compile x:float params as Int, half(1.0) == 0
 fn test_law_float_parameters_are_tested() {
 	let (code, lawful) = (HALF, separate_laws(parse(HALF)));
 	assert_eq!(property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, code), Verdict::Holds);

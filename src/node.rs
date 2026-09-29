@@ -408,8 +408,9 @@ impl Node {
 		List(items, bracket, Separator::None)
 	}
 
-	pub fn todo(p0: String) -> Node {
-		Text(format!("TODO: {}", p0))
+	/// Placeholder for a missing feature: an error value, never a fake result
+	pub fn todo(missing_feature: String) -> Node {
+		error(&format!("not implemented yet: {missing_feature}"))
 	}
 
 	/// Convert Node to bool following truthiness rules:

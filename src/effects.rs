@@ -220,7 +220,7 @@ impl EffectReport {
 		let mut report = EffectReport::default();
 		for (name, definition) in &context.user_functions {
 			let mut function = resolver.function(&definition.body);
-			let parameters: Vec<&str> = definition.params.iter().map(|(parameter, _)| parameter.as_str()).collect();
+			let parameters: Vec<&str> = definition.params.iter().map(|param| param.name.as_str()).collect();
 			if function.calls.contains(name) && !recursion_shrinks(name, &parameters, &definition.body) {
 				function.perform(Div);
 			}

@@ -1,4 +1,4 @@
-use crate::context::{Context, UserFunctionDef};
+use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::function::{Function, FunctionRegistry, Signature};
@@ -68,6 +68,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::List(items, bracket, _) if !items.is_empty() => {
 			if crate::host::fetch_call(node).is_some() {
 				return Kind::Text; // or an Error value, see check_unchecked_use
+			}
+			if let Node::Symbol(name) = items[0].drop_meta() {
+				if let Some(kind) = scope.function_kind(name) {
+					return kind;
+				}
 			}
 			// Check for function calls: (funcname args...) where first item is a symbol
 			if items.len() >= 2 {
@@ -305,8 +310,8 @@ fn declared_kind(type_name: &str) -> Option<Kind> {
 /// Functions capture these by value when they are defined (DESIGN.md: immutable local bindings).
 pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(String, Kind)> {
 	let mut own = Scope::new();
-	for (name, _default) in &function.params {
-		own.define(name.clone(), None, Kind::Int);
+	for param in &function.params {
+		own.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(&function.body, &mut own);
 	let mut captured: Vec<(String, Kind)> = vec![];
@@ -326,6 +331,7 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 pub struct Scope {
 	pub locals: HashMap<String, Local>,
 	pub types: HashMap<String, Node>,  // User-defined types
+	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
 	pub parent: Option<Box<Scope>>,
 }
 
@@ -338,8 +344,17 @@ impl Scope {
 		Scope {
 			locals: HashMap::new(),
 			types: HashMap::new(),
+			function_kinds: HashMap::new(),
 			parent: Some(Box::new(self.clone())),
 		}
+	}
+
+	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
+		Scope { function_kinds, ..Scope::default() }
+	}
+
+	pub fn function_kind(&self, name: &str) -> Option<Kind> {
+		self.function_kinds.get(name).copied().or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
 	}
 
 	/// Look up a variable by name, checking parent scopes
@@ -655,7 +670,8 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
-	check_declared_types(program, &mut HashMap::new())
+	check_parameter_annotations(program)
+		.or_else(|| check_declared_types(program, &mut HashMap::new()))
 		.or_else(|| check_constants(program, &mut HashSet::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
@@ -936,6 +952,20 @@ fn check_constants(node: &Node, constants: &mut HashSet<String>) -> Option<Diagn
 	}
 }
 
+/// A parameter annotation must name a builtin or a user-defined type, `x:flaot` is a typo
+fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
+	let mut context = Context::new();
+	extract_user_functions(&mut context, program);
+	let mut user_types = crate::type_kinds::TypeRegistry::new();
+	collect_all_types(&mut user_types, program);
+	context.user_functions.values().flat_map(|function| &function.params).find_map(|param| {
+		let annotation = param.annotation.as_ref()?;
+		let type_name = annotation.name();
+		let known = annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some();
+		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
+	})
+}
+
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
 fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
@@ -1114,17 +1144,31 @@ fn literal_kind(value: &Node) -> Option<Kind> {
 
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
-fn infer_function_return_kind(params: &[(String, Option<Node>)], body: &Node) -> Kind {
-	let mut scope = Scope::new();
-	for (name, default) in params {
-		scope.define(name.clone(), None, param_kind(default));
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Kind {
+	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+	for param in params {
+		scope.define(param.name.clone(), None, param_kind(param));
 	}
-	infer_type(body, &scope)
+	match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
+		_ => infer_type(body, &scope),
+	}
 }
 
-/// A parameter takes the kind of its default value (a fresh value per call); untyped parameters are Int
-pub fn param_kind(default: &Option<Node>) -> Kind {
-	match default.as_ref().map(|value| infer_type(value, &Scope::new())) {
+/// `number` is the exact numeric tower (Int); the other builtin type names have their own kind
+fn annotated_kind(type_node: &Node) -> Option<Kind> {
+	match type_node.name().as_str() {
+		"number" => Some(Kind::Int),
+		type_name => builtin_type_kind(type_name),
+	}
+}
+
+/// A parameter takes its declared `x:type` kind, else the kind of its default value (a fresh value per call); otherwise Int
+pub fn param_kind(param: &Param) -> Kind {
+	if let Some(kind) = param.annotation.as_ref().and_then(annotated_kind) {
+		return kind;
+	}
+	match param.default.as_ref().map(|value| infer_type(value, &Scope::new())) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
 		_ => Kind::Int,
 	}
@@ -1135,6 +1179,26 @@ pub fn param_kind(default: &Option<Node>) -> Kind {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
+	refine_return_kinds(ctx);
+}
+
+/// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
+/// until the kinds settle: a call of a float-returning function is itself Float
+fn refine_return_kinds(ctx: &mut Context) {
+	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
+	for _ in 0..=ctx.user_functions.len() {
+		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
+			.map(|function| (function.name.clone(), infer_function_return_kind(&function.params, &function.body, &function_kinds)))
+			.collect();
+		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
+		function_kinds.extend(inferred);
+		if settled {
+			break;
+		}
+	}
+	for function in ctx.user_functions.values_mut() {
+		function.return_kind = function_kinds[&function.name];
+	}
 }
 
 fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
@@ -1145,9 +1209,9 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, _, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params: Vec<(String, Option<Node>)> =
-							items.iter().skip(1).filter_map(extract_param).collect();
-						let return_kind = infer_function_return_kind(&params, body);
+						let params: Vec<Param> =
+							extract_params(items);
+						let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 						let func_def = UserFunctionDef {
 							name: name.clone(),
 							params,
@@ -1168,15 +1232,15 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, _, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params: Vec<(String, Option<Node>)> =
-							items.iter().skip(1).filter_map(extract_param).collect();
+						let params: Vec<Param> =
+							extract_params(items);
 						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
 							let actual_params = if params.is_empty() {
-								vec![("it".to_string(), None)]
+								vec![Param::untyped("it")]
 							} else {
 								params
 							};
-							let return_kind = infer_function_return_kind(&actual_params, body);
+							let return_kind = infer_function_return_kind(&actual_params, body, &HashMap::new());
 							let func_def = UserFunctionDef {
 								name: name.clone(),
 								params: actual_params,
@@ -1193,8 +1257,8 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (uses implicit `it` parameter)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) {
-					let params = vec![("it".to_string(), None)];
-					let return_kind = infer_function_return_kind(&params, body);
+					let params = vec![Param::untyped("it")];
+					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 					let func_def = UserFunctionDef {
 						name: name.clone(),
 						params,
@@ -1233,20 +1297,25 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	}
 }
 
-/// Extract parameter name and optional default value from a parameter node
-fn extract_param(item: &Node) -> Option<(String, Option<Node>)> {
+/// The parameters after the function name in a signature list
+fn extract_params(signature: &[Node]) -> Vec<Param> {
+	signature.iter().skip(1).filter_map(extract_param).collect()
+}
+
+/// Extract parameter name, annotated kind and optional default value from a parameter node
+fn extract_param(item: &Node) -> Option<Param> {
 	match item.drop_meta() {
-		Node::Symbol(s) => Some((s.clone(), None)),
-		Node::Key(n, Op::Colon, _) => {
+		Node::Symbol(s) => Some(Param::untyped(s)),
+		Node::Key(n, Op::Colon, type_name) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some((s.clone(), None))
+				Some(Param { name: s.clone(), annotation: Some(type_name.as_ref().clone()), default: None })
 			} else {
 				None
 			}
 		}
 		Node::Key(n, Op::Assign, default) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some((s.clone(), Some(default.as_ref().clone())))
+				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()) })
 			} else {
 				None
 			}
@@ -1289,9 +1358,9 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		if let Node::List(sig_items, _, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					let params: Vec<(String, Option<Node>)> =
-						sig_items.iter().skip(1).filter_map(extract_param).collect();
-					let return_kind = infer_function_return_kind(&params, body);
+					let params: Vec<Param> =
+						extract_params(sig_items);
+					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 					return Some(UserFunctionDef {
 						name: name.clone(),
 						params,
@@ -1310,7 +1379,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 			if let Node::List(sig_items, _, _) = inner_items[0].drop_meta() {
 				if !sig_items.is_empty() {
 					if let Node::Symbol(name) = sig_items[0].drop_meta() {
-						let params: Vec<(String, Option<Node>)> = sig_items
+						let params: Vec<Param> = sig_items
 							.iter()
 							.skip(1)
 							.flat_map(|item| {
@@ -1323,7 +1392,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 							})
 							.collect();
 						let body = inner_items[1].clone();
-						let return_kind = infer_function_return_kind(&params, &body);
+						let return_kind = infer_function_return_kind(&params, &body, &HashMap::new());
 						return Some(UserFunctionDef {
 							name: name.clone(),
 							params,

@@ -301,13 +301,13 @@ impl WasmGcEmitter {
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
-		let param_types: Vec<ValType> = user_fn.params.iter().map(|(_, default)| self.storage_type(param_kind(default))).collect();
-		if returns_node {
-			let node_ref = self.node_ref(false);
-			self.type_manager.types_mut().ty().function(param_types, vec![Ref(node_ref)]);
+		let param_types: Vec<ValType> = user_fn.params.iter().map(|param| self.storage_type(param_kind(param))).collect();
+		let result_type = if returns_node {
+			Ref(self.node_ref(false))
 		} else {
-			self.type_manager.types_mut().ty().function(param_types, vec![ValType::I64]);
-		}
+			self.storage_type(user_fn.return_kind)
+		};
+		self.type_manager.types_mut().ty().function(param_types, vec![result_type]);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
@@ -326,9 +326,10 @@ impl WasmGcEmitter {
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function scope with parameters
-		let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
-		for (param_name, default) in user_fn.params.iter() {
-			self.scope.define(param_name.clone(), None, param_kind(default));
+		let function_scope = Scope::with_function_kinds(self.user_function_kinds());
+		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
+		for param in user_fn.params.iter() {
+			self.scope.define(param.name.clone(), None, param_kind(param));
 		}
 
 		// Collect any additional variables in the body
@@ -352,7 +353,7 @@ impl WasmGcEmitter {
 		if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {
-			self.emit_numeric_value(&mut func, &user_fn.body);
+			self.emit_value_of_kind(&mut func, &user_fn.body, user_fn.return_kind);
 		}
 		func.instruction(&Instruction::End);
 
@@ -386,9 +387,25 @@ impl WasmGcEmitter {
 		// Emit arguments and call
 		self.emit_user_function_call_inner(func, &user_fn, args);
 
-		// If function returns i64, wrap in new_int for Node context
-		if !returns_node {
+		if user_fn.return_kind.is_float() {
+			self.emit_call(func, "new_float");
+		} else if !returns_node {
 			self.emit_call(func, "new_int");
+		}
+	}
+
+	fn user_function_kinds(&self) -> HashMap<String, Kind> {
+		self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect()
+	}
+
+	/// Emit a call to a user-defined function whose result is needed as f64
+	fn emit_user_function_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let user_fn = self.ctx.user_functions[fn_name].clone();
+		if user_fn.return_kind.is_float() {
+			self.emit_user_function_call_inner(func, &user_fn, args);
+		} else {
+			self.emit_user_function_call_numeric(func, fn_name, args);
+			self.emit_int_to_f64(func, None);
 		}
 	}
 
@@ -404,9 +421,9 @@ impl WasmGcEmitter {
 		// Emit arguments and call
 		self.emit_user_function_call_inner(func, &user_fn, args);
 
-		// If function returns Node but we need i64, extract the value
-		if returns_node {
-			// Call get_int_value to extract integer from Node
+		if user_fn.return_kind.is_float() {
+			panic!("{fn_name} returns a float where an exact number is required, use `as int` to truncate explicitly");
+		} else if returns_node {
 			self.emit_call(func, "get_int_value");
 		}
 	}
@@ -419,10 +436,10 @@ impl WasmGcEmitter {
 		};
 
 		// Emit arguments; a missing argument evaluates its default anew at every call
-		for (i, (_param_name, default_value)) in user_fn.params.iter().enumerate() {
-			let argument = args.get(i).or(default_value.as_ref())
+		for (i, param) in user_fn.params.iter().enumerate() {
+			let argument = args.get(i).or(param.default.as_ref())
 				.unwrap_or_else(|| panic!("Missing argument {} for function {} (no default)", i, user_fn.name));
-			self.emit_value_of_kind(func, argument, param_kind(default_value));
+			self.emit_value_of_kind(func, argument, param_kind(param));
 		}
 
 		// Call the function
@@ -626,6 +643,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.missing_functions.iter());
@@ -2566,8 +2584,7 @@ impl WasmGcEmitter {
 						}
 						// Check for user function call
 						if self.ctx.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-							self.emit_int_to_f64(func, None);
+							self.emit_user_function_call_float(func, fn_name, &items[1..]);
 							return;
 						}
 					}

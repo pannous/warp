@@ -4,11 +4,25 @@ use crate::node::Node;
 use crate::type_kinds::{Kind, TypeRegistry};
 use std::collections::{HashMap, HashSet};
 
+/// A function parameter: its name, the type node of an explicit `x:type` annotation and an optional per-call default
+#[derive(Clone, Debug)]
+pub struct Param {
+    pub name: String,
+    pub annotation: Option<Node>,
+    pub default: Option<Node>,
+}
+
+impl Param {
+    pub fn untyped(name: &str) -> Self {
+        Param { name: name.to_string(), annotation: None, default: None }
+    }
+}
+
 /// User-defined function definition
 #[derive(Clone, Debug)]
 pub struct UserFunctionDef {
     pub name: String,
-    pub params: Vec<(String, Option<Node>)>,
+    pub params: Vec<Param>,
     pub body: Box<Node>,
     pub return_kind: Kind,
     pub func_index: Option<u32>,
