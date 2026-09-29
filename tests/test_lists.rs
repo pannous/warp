@@ -169,7 +169,6 @@ fn test_array_initialization() {
 }
 
 #[test]
-#[ignore]
 fn test_array_indices() {
 	// #[cfg(not(feature = "WASM"))]{
 	//         ( and INCLUDE_MERGER);
@@ -260,7 +259,7 @@ fn test_filter() {
 }
 
 #[test]
-#[ignore] // TODO: Node iteration needs type coercion
+// DONE: Node iteration needs type coercion
 fn test_iteration() {
 	let xs = ints(vec![1, 2, 3]);
 	let mut count = 0;
