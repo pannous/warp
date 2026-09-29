@@ -75,7 +75,6 @@ fn test_variable_minus() {
 }
 
 #[test]
-#[ignore]
 fn test_hypen_versus_minus() {
 	test_variable_minus();
 	is!("a-b:2 c-d:4 a-b", 2); // kebab

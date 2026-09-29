@@ -3353,7 +3353,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	crate::analyzer::lint(&node).iter().for_each(|warning| eprintln!("warning: {warning}"));
-	Ok(crate::analyzer::lower_declarations(node))
+	Ok(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)))
 }
 
 fn emit_module(node: &Node) -> Result<CompiledModule, Node> {

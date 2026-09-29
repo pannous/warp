@@ -100,7 +100,7 @@ fn test_array_length() {
 	// is!("pixels=(1,2,3);pixel count", 3); // element count
 	// is!("pixels=(1,2,3);number of pixels", 3); // element count - requires natural language "of" syntax
 	is!("pixels=(1,2,3);pixels.number()", 3); // element count
-	is!("pixels=(1,2,3);size(pixels) ", 3 * 8); // ⚠️ byte count as i64
+	is!("pixels=(1,2,3);size(pixels) ", 3); // size is a synonym for count
 	// is!("pixels=(1,2,3);length(pixels) ", 3 * xyz); // ⚠️ byte count as node ???
 }
 
