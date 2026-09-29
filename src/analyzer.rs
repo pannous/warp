@@ -1080,6 +1080,11 @@ pub fn lower_declarations(node: Node) -> Node {
 			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
+		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
+		Node::Key(base, op, _) if op.suffix_exponent().is_some() => {
+			let exponent = op.suffix_exponent().expect("guarded");
+			Node::Key(Box::new(lower_declarations(*base)), Op::Pow, Box::new(Node::int(exponent)))
+		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment
 		Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "const") => {
