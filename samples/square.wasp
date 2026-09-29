@@ -1,0 +1,3 @@
+// module fixture for `use square`, see tests/test_use_modules.rs
+answer := 42
+square(x) := x*x
