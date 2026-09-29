@@ -24,6 +24,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 12. **`use <file>`** module import (test_sinus_wasp_import).
 13. **Web host (L1)**: `$b.ok` / externref need a real webview host (C++ WebApp.cpp; Rust: wry?).
 
+14a. **Shift operators**: `2 << 1` silently gives 0 (parsed as `<` + angle group), `8 >> 1` a cryptic error.
+    Add exact-Int `<<` / `>>`, or make the parser reject them loudly?
+
 ## Test defects (can't pass unedited)
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?

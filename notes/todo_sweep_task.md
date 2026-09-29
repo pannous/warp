@@ -20,7 +20,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
-| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94, step 3 a8f17bdf, pow fd4557dc, step 4 bab7a22b — done; A5b ccaf3da9 ecc7847c; A5c: floor in function body 9be02d9b; float shift (test from bab7a22b fails on clean HEAD) + survey guide → warp-f6 |
+| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94, step 3 a8f17bdf, pow fd4557dc, step 4 bab7a22b — done; A5b ccaf3da9 ecc7847c; A5c: floor in function body 9be02d9b; bit/logical ops 7a8bd840, survey outcome 73e6203a — done; shifts don't exist (decision 14a) |
 | A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | done c519d7fe..bfcd81bd (10 un-ignored, 657/0/123); A6b: none newly passing; 67 ignored tests still fail (probes/ignored_run.log) |
 | A7 | notes/footguns.md plain-bugs list stale (6 of 7 fixed) → pointers to regression tests | done 9a436c80 |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
@@ -42,7 +42,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | survey done: 0 regressions; decisions: 1/2x grouping, ordinals 2nd, 2i/2e, spaced 2 km |
 | A11 | triage remaining ignored test_math tests (units, sin, primitive types) | f2cda334 (type words double/long, typed params); rest needs design: units+±+ranges, data-as-scope kebab keys, test_sin exact float eq (test defect), C-style decl blocks, use <file> modules |
 | C7 | triage ignored test_wit (nested separator groups) and test_wast tests | done eb31f69d 2318c301 aa52fedd (test_wit_parse); test_wast needs polish-notation decision |
-| A12 | unify missing_functions and missing math imports emission rerun into one mechanism | open |
+| A12 | unify missing_functions and missing math imports emission rerun into one mechanism | assigned warp-f6 |
 | C8 | empty {} blocks dropped (`x i {}` loses the block) | assigned warp-library |
 | A13 | triage ignored test_operators (1), test_todo (4) | done: all design-blocked (notes/open_decisions.md) |
 | A14 | triage ignored test_wasm.rs (~19), in slices of 3 fixes | assigned warp-numeric |
