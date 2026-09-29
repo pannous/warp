@@ -20,7 +20,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
-| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94, step 3 a8f17bdf, pow fd4557dc, step 4 bab7a22b — done; A5b ccaf3da9 ecc7847c; A5c (floor in function body, float shift → 0, survey as guide) → warp-f6 |
+| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94, step 3 a8f17bdf, pow fd4557dc, step 4 bab7a22b — done; A5b ccaf3da9 ecc7847c; A5c: floor in function body 9be02d9b; float shift (test from bab7a22b fails on clean HEAD) + survey guide → warp-f6 |
 | A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | done c519d7fe..bfcd81bd (10 un-ignored, 657/0/123); A6b: none newly passing; 67 ignored tests still fail (probes/ignored_run.log) |
 | A7 | notes/footguns.md plain-bugs list stale (6 of 7 fixed) → pointers to regression tests | done 9a436c80 |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
@@ -64,7 +64,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 - Commit test_results.txt only if your change caused its diff.
 - Shared checkout: edit only with the Edit tool, never scripts that rewrite whole files (2026-09-29: a script truncated
   wasm_emitter/mod.rs and wiped another agent's uncommitted B9(2) hunks). Work held uncommitted for a decision → also save a patch in probes/.
-- After each commit verify HEAD compiles on its own (git archive HEAD | tar -x -C probes/head_check; cargo build --offline --tests)
+- After each commit verify HEAD compiles AND its new tests pass on their own (a test can pass in the shared tree only thanks to
+  someone's uncommitted hunks: bab7a22b vs B9(2)). Verify HEAD compiles on its own (git archive HEAD | tar -x -C probes/head_check; cargo build --offline --tests)
   (2026-09-29: abaf6712 committed a call without its fn definition, main did not build until b8f9f79b).
 - If a break comes from another agent's in-progress edit, don't fix it — note it and continue.
 - If something can't be solved in reasonable time, record the difficulty in notes/footguns.md or a GitHub issue (gh) and move on.
