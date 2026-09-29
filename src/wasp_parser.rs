@@ -19,6 +19,8 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
+const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+
 const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
@@ -1329,8 +1331,26 @@ impl WaspParser {
 		let number = self.keep_source_literal(number, &literal);
 		match self.literal_type_suffix() {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
-			None => number,
+			None => self.with_juxtaposed_factor(number),
 		}
+	}
+
+	/// `2x` is 2*x, `3(4)` is 3*(4), `3x²` is 3*(x²): a number directly followed by a symbol or `(` multiplies.
+	/// Code only: data keeps `size: 3px`. Ordinals `1st` `2nd` `3rd` `4th` are no products.
+	fn with_juxtaposed_factor(&mut self, number: Node) -> Node {
+		let next = self.current_char();
+		let starts_factor = next.is_alphabetic() || next == '_' || next == '(';
+		if self.options.data_mode || !starts_factor || matches!(number, Node::Error(_)) || self.at_ordinal_suffix() {
+			return number;
+		}
+		let factor = self.parse_atom();
+		let factor = self.try_parse_superscript_power(&factor, 0).unwrap_or(factor);
+		Node::Key(Box::new(number), Op::Mul, Box::new(factor))
+	}
+
+	fn at_ordinal_suffix(&self) -> bool {
+		let word: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c)).collect();
+		ORDINAL_SUFFIXES.contains(&word.as_str())
 	}
 
 	/// Tight conversion written on the literal: `0.1f` → float, `0.1l` → exact, `0.1:float` / `1.5:int` → that type.
