@@ -39,10 +39,12 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | assigned warp-parser |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
-| A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | survey → warp-numeric |
+| A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | survey done: 0 regressions; decisions: 1/2x grouping, ordinals 2nd, 2i/2e, spaced 2 km |
 | A11 | triage remaining ignored test_math tests (units, sin, primitive types) | f2cda334 (type words double/long, typed params); rest needs design: units+±+ranges, data-as-scope kebab keys, test_sin exact float eq (test defect), C-style decl blocks, use <file> modules |
-| C7 | triage ignored test_wit (nested separator groups) and test_wast tests | assigned warp-library |
+| C7 | triage ignored test_wit (nested separator groups) and test_wast tests | done eb31f69d 2318c301 aa52fedd (test_wit_parse); test_wast needs polish-notation decision |
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | open |
+| C8 | empty {} blocks dropped (`x i {}` loses the block) | assigned warp-library |
+| A13 | triage ignored test_operators (1), test_todo (4) | assigned warp-numeric |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
@@ -61,6 +63,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 - Commit test_results.txt only if your change caused its diff.
 - Shared checkout: edit only with the Edit tool, never scripts that rewrite whole files (2026-09-29: a script truncated
   wasm_emitter/mod.rs and wiped another agent's uncommitted B9(2) hunks). Work held uncommitted for a decision → also save a patch in probes/.
+- After each commit verify HEAD compiles on its own (git archive HEAD | tar -x -C probes/head_check; cargo build --offline --tests)
+  (2026-09-29: abaf6712 committed a call without its fn definition, main did not build until b8f9f79b).
 - If a break comes from another agent's in-progress edit, don't fix it — note it and continue.
 - If something can't be solved in reasonable time, record the difficulty in notes/footguns.md or a GitHub issue (gh) and move on.
 - When done: append a short summary per item (fixed / left open + why) to the bottom of this file under "## Results", commit, push.
