@@ -5,7 +5,7 @@ use warp::Node;
 fn shape(node: &Node) -> String {
 	match node {
 		Node::Key(left, op, right) => format!("Key({}, {op:?}, {})", shape(left), shape(right)),
-		Node::List(items, bracket, separator) => format!("List{bracket:?}{separator:?}[{}]", items.iter().map(shape).collect::<Vec<_>>().join(", ")),
+		Node::List(items, _, _) => format!("List[{}]", items.iter().map(shape).collect::<Vec<_>>().join(", ")),
 		Node::Meta { node, .. } => format!("Meta({})", shape(node)),
 		Node::Symbol(name) => format!("Sym({name})"),
 		Node::Number(number) => format!("Num({number:?})"),
