@@ -29,7 +29,6 @@ fn test_type_symbol() {
 }
 
 #[test]
-#[ignore = "typed variable declaration tracking not yet implemented"]
 fn test_type_typed_variable() {
 	// Explicit type annotation - needs type tracking in scope
 	is!("x:int=42;type(x)", Node::Symbol("int".to_string()));
