@@ -229,6 +229,15 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 	collect_variables_inner(node, scope, false, false)
 }
 
+/// The name a `global` declaration introduces: `global x` and `global x=7`
+fn global_declared_name(declaration: &Node) -> Option<String> {
+	match declaration.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(target, Op::Assign | Op::Define, _) => global_declared_name(target),
+		_ => None,
+	}
+}
+
 fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bool, in_structure: bool) -> u32 {
 	let node = node.drop_meta();
 	match node {
@@ -239,6 +248,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				if kw == "global" {
 					// Don't define local for global variable
 					// But still count any variables in the value expression
+					scope.globals.extend(global_declared_name(right));
 					return collect_variables_inner(right, scope, true, false);
 				}
 				// Symbol:body is a tag/structure - right side is structure context
@@ -252,7 +262,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		Node::Key(left, Op::Define, right) => {
 			if !skip_first_assign {
 				if let Node::Symbol(name) = left.drop_meta() {
-					if scope.lookup(name).is_none() {
+					if scope.lookup(name).is_none() && !scope.is_global(name) {
 						let kind = binding_kind(right, scope);
 						scope.define(name.clone(), None, kind);
 					}
@@ -265,7 +275,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			if !skip_first_assign && !in_structure {
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
-					Node::Symbol(name) if scope.lookup(name).is_none() => {
+					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 						let declared = declared_type(left);
 						let kind = declared.and_then(|type_name| declared_kind(&type_name.name())).unwrap_or_else(|| binding_kind(right, scope));
 						scope.define(name.clone(), declared.map(|type_name| Box::new(type_name.clone())), kind);
@@ -350,6 +360,7 @@ pub struct Scope {
 	pub locals: HashMap<String, Local>,
 	pub types: HashMap<String, Node>,  // User-defined types
 	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
+	pub globals: HashSet<String>,  // Names declared `global`: assigning them later must not create a shadowing local
 	pub parent: Option<Box<Scope>>,
 }
 
@@ -363,12 +374,17 @@ impl Scope {
 			locals: HashMap::new(),
 			types: HashMap::new(),
 			function_kinds: HashMap::new(),
+			globals: HashSet::new(),
 			parent: Some(Box::new(self.clone())),
 		}
 	}
 
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
 		Scope { function_kinds, ..Scope::default() }
+	}
+
+	pub fn is_global(&self, name: &str) -> bool {
+		self.globals.contains(name) || self.parent.as_ref().is_some_and(|parent| parent.is_global(name))
 	}
 
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
@@ -1218,24 +1234,8 @@ pub fn param_kind(param: &Param) -> Kind {
 	}
 	match param.default.as_ref().map(|value| infer_type(value, &Scope::new())) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
-		_ => param.used_as.unwrap_or(Kind::Int),
+		_ => Kind::Int,
 	}
-}
-
-/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) take a list
-fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
-	let mut indexed: HashSet<String> = HashSet::new();
-	body.visit(&mut |node| {
-		if let Node::Key(list, Op::Hash, _) = node {
-			if let Node::Symbol(name) = list.drop_meta() {
-				indexed.insert(name.clone());
-			}
-		}
-	});
-	params.into_iter().map(|param| {
-		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
-		Param { used_as, ..param }
-	}).collect()
 }
 
 /// Recognizes patterns:
@@ -1274,7 +1274,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params: Vec<Param> =
-							with_usage_kinds(extract_params(items), body);
+							extract_params(items);
 						let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 						let func_def = UserFunctionDef {
 							name: name.clone(),
@@ -1297,10 +1297,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params: Vec<Param> =
-							with_usage_kinds(extract_params(items), body);
+							extract_params(items);
 						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
 							let actual_params = if params.is_empty() {
-								with_usage_kinds(vec![Param::untyped("it")], body)
+								vec![Param::untyped("it")]
 							} else {
 								params
 							};
@@ -1321,7 +1321,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					let params = if is_statement_block(body) { vec![] } else { with_usage_kinds(vec![Param::untyped("it")], body) };
+					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
 					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 					let func_def = UserFunctionDef {
 						name: name.clone(),
@@ -1372,7 +1372,7 @@ fn extract_params(signature: &[Node]) -> Vec<Param> {
 		};
 		match type_first_name {
 			Some(name) => {
-				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None, used_as: None });
+				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None });
 				items.next();
 			}
 			None => params.extend(extract_param(item)),
@@ -1387,14 +1387,14 @@ fn extract_param(item: &Node) -> Option<Param> {
 		Node::Symbol(s) => Some(Param::untyped(s)),
 		Node::Key(n, Op::Colon, type_name) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: Some(type_name.as_ref().clone()), default: None, used_as: None })
+				Some(Param { name: s.clone(), annotation: Some(type_name.as_ref().clone()), default: None })
 			} else {
 				None
 			}
 		}
 		Node::Key(n, Op::Assign, default) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()), used_as: None })
+				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()) })
 			} else {
 				None
 			}

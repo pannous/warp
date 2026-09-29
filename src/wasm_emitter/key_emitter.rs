@@ -50,14 +50,9 @@ impl WasmGcEmitter {
 		}
 
 		// Route to emit_arithmetic for numeric operations
-		let is_numeric_assign = *op == Op::Assign
-			&& matches!(left.drop_meta(), Node::Symbol(s) if {
-				self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
-			});
-		let is_numeric_define = *op == Op::Define
-			&& matches!(left.drop_meta(), Node::Symbol(s) if {
-				self.scope.lookup(s).is_some_and(|l| !l.kind.is_ref())
-			});
+		let assigns_numeric_variable = matches!(left.drop_meta(), Node::Symbol(s) if self.is_numeric_variable(s));
+		let is_numeric_assign = *op == Op::Assign && assigns_numeric_variable;
+		let is_numeric_define = *op == Op::Define && assigns_numeric_variable;
 
 		// Handle ref-type variable assignment (lists, etc.)
 		let is_ref_assign = (*op == Op::Assign || *op == Op::Define)

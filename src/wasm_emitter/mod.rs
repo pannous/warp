@@ -18,15 +18,6 @@ mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
 
-/// Something emission found it must have that the analysis pass did not request
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Need {
-	/// A runtime function, by registry name
-	Function(&'static str),
-	/// A libm import, keyed like ffi_imports (`m.pow`) so it never shadows a user function
-	MathImport(&'static str),
-}
-
 /// Builtins that round a float to an exact Int
 const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up", "round_half_even"];
 
@@ -119,8 +110,10 @@ pub struct WasmGcEmitter {
 	int_count_global: u32, // used slots in that heap
 	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
-	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
-	discovered_needs: std::collections::HashSet<Need>,
+	// Runtime functions the analyzer could not foresee (they depend on inferred types); emission reruns with them
+	missing_functions: std::collections::HashSet<&'static str>,
+	// libm functions the emitted operators need, keyed like ffi_imports (`m.pow`) so they never shadow a user function
+	missing_math_imports: std::collections::HashSet<&'static str>,
 	type_errors: Vec<String>,
 }
 
@@ -155,7 +148,8 @@ impl WasmGcEmitter {
 			int_count_global: 0,
 			int_remainder_global: 0,
 			text_heap_global: 0,
-			discovered_needs: Default::default(),
+			missing_functions: Default::default(),
+			missing_math_imports: Default::default(),
 			type_errors: Vec::new(),
 		}
 	}
@@ -668,10 +662,7 @@ impl WasmGcEmitter {
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
-		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
-			Need::Function(name) => Some(*name),
-			Need::MathImport(_) => None,
-		}));
+		self.ctx.required_functions.extend(self.missing_functions.iter());
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -685,19 +676,14 @@ impl WasmGcEmitter {
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
 		self.emit_node_main(node);
-		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
+		let missing_import = self.missing_math_imports.iter().any(|key| !self.ctx.ffi_imports.contains_key(*key));
+		if missing_import || !self.missing_functions.iter().all(|name| self.ctx.required_functions.contains(name)) {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
-			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
+			rerun.missing_functions = std::mem::take(&mut self.missing_functions);
+			rerun.missing_math_imports = std::mem::take(&mut self.missing_math_imports);
 			rerun.emit_for_node(node);
 			*self = rerun;
-		}
-	}
-
-	fn is_provided(&self, need: &Need) -> bool {
-		match need {
-			Need::Function(name) => self.ctx.required_functions.contains(name),
-			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 		}
 	}
 
@@ -723,11 +709,9 @@ impl WasmGcEmitter {
 		use crate::effects::{Capability, EffectReport};
 		let effects = EffectReport::of(node);
 		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name));
-		for need in &self.discovered_needs {
-			if let Need::MathImport(key) = need {
-				let function = key.trim_start_matches("m.");
-				self.ctx.ffi_imports.extend(crate::ffi::get_ffi_signature(function).map(|signature| (key.to_string(), signature)));
-			}
+		for key in &self.missing_math_imports {
+			let function = key.trim_start_matches("m.");
+			self.ctx.ffi_imports.extend(crate::ffi::get_ffi_signature(function).map(|signature| (key.to_string(), signature)));
 		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
@@ -1012,7 +996,7 @@ impl WasmGcEmitter {
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
 		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
 			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
-			self.discovered_needs.insert(Need::Function(name));
+			self.missing_functions.insert(name);
 			func.instruction(&Instruction::Unreachable);
 			return;
 		}
@@ -1127,6 +1111,10 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+			self.emit_node_instructions(func, &assignment);
+			return;
+		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
@@ -1189,6 +1177,19 @@ impl WasmGcEmitter {
 			// String data stored in Local's data_pointer/data_length, just emit 0
 			func.instruction(&Instruction::I64Const(0));
 			return true;
+		}
+
+		if let Node::Symbol(name) = left.drop_meta() {
+			if self.scope.lookup(name).is_none() {
+				if let Some(global_kind) = self.emit_global_store(func, name, right) {
+					match (global_kind.is_float(), use_float) {
+						(true, false) => self.emit_float_in_exact_context(func, name),
+						(false, true) => self.emit_int_to_f64(func, None),
+						_ => {}
+					}
+					return true;
+				}
+			}
 		}
 
 		// x:=42 or x=42 → emit value, store to local, return value
@@ -1429,7 +1430,7 @@ impl WasmGcEmitter {
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	fn emit_float_power(&mut self, func: &mut Function) {
 		let Some(pow) = self.ffi_func_index(LIBM_POW) else {
-			self.discovered_needs.insert(Need::MathImport(LIBM_POW));
+			self.missing_math_imports.insert(LIBM_POW);
 			func.instruction(&Instruction::Unreachable);
 			return;
 		};
@@ -1656,6 +1657,40 @@ impl WasmGcEmitter {
 
 	/// Emit global variable declaration: global x = value
 	/// Creates a mutable WASM global and initializes it, or reassigns existing global
+	/// A local or declared global holding a primitive number, not a Node reference
+	pub(super) fn is_numeric_variable(&self, name: &str) -> bool {
+		match self.scope.lookup(name) {
+			Some(local) => !local.kind.is_ref(),
+			None => self.ctx.user_globals.get(name).is_some_and(|(_, kind)| !kind.is_ref()),
+		}
+	}
+
+	/// `x += y` and `x++` on a declared global (not shadowed by a local) as the plain assignment `x = x + y`,
+	/// so globals resolve exactly like in plain assignment
+	fn global_update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
+		let Node::Symbol(name) = target.drop_meta() else { return None };
+		if self.scope.lookup(name).is_some() || !self.ctx.user_globals.contains_key(name) {
+			return None;
+		}
+		let (base_op, operand) = match op {
+			Op::Inc => (Op::Add, Node::int(1)),
+			Op::Dec => (Op::Sub, Node::int(1)),
+			_ if op.is_compound_assign() => (op.base_op(), operand.clone()),
+			_ => return None,
+		};
+		let updated = Node::Key(Box::new(target.clone()), base_op, Box::new(operand));
+		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(updated)))
+	}
+
+	/// `x = v` for a declared global x: store v in the global's own representation and leave it on the stack
+	fn emit_global_store(&mut self, func: &mut Function, name: &str, value: &Node) -> Option<Kind> {
+		let &(index, kind) = self.ctx.user_globals.get(name)?;
+		self.emit_value_of_kind(func, value, kind);
+		func.instruction(&Instruction::GlobalSet(index));
+		func.instruction(&Instruction::GlobalGet(index));
+		Some(kind)
+	}
+
 	/// `global x=7` declares x with the value 7; `global x` declares x zero-initialized
 	fn global_declaration_parts(decl: &Node) -> (String, Node) {
 		match decl.drop_meta() {
@@ -2300,6 +2335,10 @@ impl WasmGcEmitter {
 						}
 						self.emit_value_of_kind(func, right, kind);
 						func.instruction(&Instruction::LocalTee(position));
+					} else if let Some(kind) = self.emit_global_store(func, name, right) {
+						if kind.is_float() {
+							self.emit_float_in_exact_context(func, name);
+						}
 					} else {
 						panic!("Undefined variable: {}", name);
 					}
@@ -2308,7 +2347,11 @@ impl WasmGcEmitter {
 				}
 			}
 			// Increment/decrement: i++ or i--
-			Node::Key(left, op, _right) if *op == Op::Inc || *op == Op::Dec => {
+			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => {
+				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+					self.emit_numeric_value(func, &assignment);
+					return;
+				}
 				if let Node::Symbol(name) = left.drop_meta() {
 					let local_pos = self.scope
 						.lookup(name)
@@ -2324,6 +2367,10 @@ impl WasmGcEmitter {
 			// Compound assignment: x += y → x = x + y
 			Node::Key(left, op, right) if op.is_compound_assign() => {
 				if self.emit_compound_index_assignment(func, left, op, right) {
+					return;
+				}
+				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+					self.emit_numeric_value(func, &assignment);
 					return;
 				}
 				if let Node::Symbol(name) = left.drop_meta() {
@@ -2585,9 +2632,13 @@ impl WasmGcEmitter {
 			// Variable definition/assignment: x:=42 or x=42
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
-					self.emit_float_value(func, right);
-					if let Some(local) = self.scope.lookup(name) {
-						func.instruction(&Instruction::LocalTee(local.position));
+					if let Some(position) = self.scope.lookup(name).map(|local| local.position) {
+						self.emit_float_value(func, right);
+						func.instruction(&Instruction::LocalTee(position));
+					} else if let Some(kind) = self.emit_global_store(func, name, right) {
+						if !kind.is_float() {
+							self.emit_int_to_f64(func, None);
+						}
 					} else {
 						panic!("Undefined variable: {}", name);
 					}
