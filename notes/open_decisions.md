@@ -32,6 +32,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
+14d. `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
+14e. `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
 15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
 
