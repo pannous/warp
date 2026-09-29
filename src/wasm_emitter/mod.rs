@@ -338,10 +338,11 @@ impl WasmGcEmitter {
 		// Declare locals (parameters are already accounted for)
 		let num_params = user_fn.params.len() as u32;
 		let num_locals = self.scope.local_count();
-		let extra_locals = num_locals.saturating_sub(num_params);
 
 		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals);
-		let mut func = Function::new(vec![(extra_locals + big_int::INT_SCRATCH_LOCALS, ValType::I64)]);
+		let mut locals = self.local_declarations(num_params as usize);
+		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		let mut func = Function::new(locals);
 
 		// Captured variables read their definition-time globals
 		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
@@ -898,6 +899,19 @@ impl WasmGcEmitter {
 		self.string_table.allocate(s)
 	}
 
+	/// f64 on the stack → exact Int, truncated toward zero: what a float variable read in an exact context means
+	fn emit_truncated_float(&mut self, func: &mut Function) {
+		func.instruction(&Instruction::I64TruncF64S);
+		self.emit_int_from_machine(func);
+	}
+
+	/// Declarations of the scope's locals in position order, skipping the first `skipped` (the parameters)
+	fn local_declarations(&self, skipped: usize) -> Vec<(u32, ValType)> {
+		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
+		sorted_locals.sort_by_key(|local| local.position);
+		sorted_locals.into_iter().skip(skipped).map(|local| (1, self.storage_type(local.kind))).collect()
+	}
+
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
@@ -916,20 +930,7 @@ impl WasmGcEmitter {
 		// Build locals list based on variable types
 		// Each variable gets its own entry, then temp locals (all i64)
 		let mut locals: Vec<(u32, ValType)> = Vec::new();
-
-		// Sort locals by position to ensure correct order
-		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
-		sorted_locals.sort_by_key(|l| l.position);
-
-		for local in sorted_locals {
-			if local.kind.is_ref() {
-				locals.push((1, Ref(node_ref)));
-			} else if local.kind.is_float() {
-				locals.push((1, ValType::F64));
-			} else {
-				locals.push((1, ValType::I64));
-			}
-		}
+		locals.extend(self.local_declarations(0));
 
 		// Add temp locals (i64 for now)
 		if temp_locals > 0 {
@@ -1652,8 +1653,7 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
 				func.instruction(&Instruction::GlobalGet(global_idx));
-				func.instruction(&Instruction::I64TruncF64S);
-				self.emit_int_from_machine(func);
+				self.emit_truncated_float(func);
 			} else {
 				self.emit_numeric_value(func, &value);
 				func.instruction(&Instruction::GlobalSet(global_idx));
@@ -1671,8 +1671,7 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::GlobalSet(global_idx));
 			func.instruction(&Instruction::GlobalGet(global_idx));
 			// Convert to i64 for emit_numeric_value context
-			func.instruction(&Instruction::I64TruncF64S);
-			self.emit_int_from_machine(func);
+			self.emit_truncated_float(func);
 		} else {
 			self.emit_numeric_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
@@ -1891,8 +1890,7 @@ impl WasmGcEmitter {
 		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
 			"float" => {
 				self.emit_float_value(func, value);
-				func.instruction(&Instruction::I64TruncF64S);
-				self.emit_int_from_machine(func);
+				self.emit_truncated_float(func);
 			}
 			"exact" if exact_value => self.emit_numeric_value(func, value),
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
@@ -1942,8 +1940,7 @@ impl WasmGcEmitter {
 					// Runtime: float expression to int
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
-						func.instruction(&Instruction::I64TruncF64S);
-						self.emit_int_from_machine(func);
+						self.emit_truncated_float(func);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible; a ratio is truncated
@@ -2194,11 +2191,12 @@ impl WasmGcEmitter {
 					return;
 				}
 				if let Node::Symbol(name) = left.drop_meta() {
-					// Emit value
-					self.emit_numeric_value(func, right);
-					// Duplicate value on stack (tee = set + get)
-					if let Some(local) = self.scope.lookup(name) {
-						func.instruction(&Instruction::LocalTee(local.position));
+					if let Some((position, kind)) = self.scope.lookup(name).map(|local| (local.position, local.kind)) {
+						self.emit_value_of_kind(func, right, kind);
+						func.instruction(&Instruction::LocalTee(position));
+						if kind.is_float() {
+							self.emit_truncated_float(func);
+						}
 					} else {
 						panic!("Undefined variable: {}", name);
 					}
@@ -2285,8 +2283,7 @@ impl WasmGcEmitter {
 						// √x = sqrt(x), need f64 for sqrt then convert back to i64
 						self.emit_float_value(func, right);
 						func.instruction(&Instruction::F64Sqrt);
-						func.instruction(&Instruction::I64TruncF64S);
-						self.emit_int_from_machine(func);
+						self.emit_truncated_float(func);
 					}
 					Op::Neg => {
 						self.emit_numeric_value(func, right);
@@ -2351,15 +2348,13 @@ impl WasmGcEmitter {
 						self.emit_call(func, "get_int_value");
 					} else if local.kind.is_float() {
 						// Convert f64 local to i64 for integer operations
-						func.instruction(&Instruction::I64TruncF64S);
-						self.emit_int_from_machine(func);
+						self.emit_truncated_float(func);
 					}
 				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_float() {
 						// Convert f64 global to i64 for integer operations
-						func.instruction(&Instruction::I64TruncF64S);
-						self.emit_int_from_machine(func);
+						self.emit_truncated_float(func);
 					}
 				} else {
 					panic!("Undefined variable: {}", name);

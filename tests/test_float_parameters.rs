@@ -24,3 +24,9 @@ fn test_unknown_parameter_type_is_reported() {
 fn test_user_function_shadows_ffi_name() {
 	is!("pow(b, e) := e == 0 ? 1 : b * pow(b, e-1); pow(2, 10)", 1024);
 }
+
+#[test]
+fn test_float_local_inside_float_function() {
+	is!("half(x:float) := {y=x/2; y+1}; half(1)", 1.5);
+	is!("quarters(n) := {q=1/4; q*n}; quarters(2)", 0.5);
+}
