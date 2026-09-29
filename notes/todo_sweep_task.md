@@ -1,26 +1,35 @@
-# Task: TODO sweep (2026-09-29)
+# Task: TODO sweep (2026-09-29) — supervisor board
 
-Baseline: ./test.sh → 611 passed, 0 failed, 132 ignored (commit after 0d131407). Issue #2 closed (server file restored).
-Three agents work in the SAME checkout on disjoint packages. A reviewer (the spawning session) checks each commit.
+Baseline: ./test.sh → 611 passed, 0 failed, 132 ignored. Issue #2 closed (server file restored).
+The supervisor session owns this board and assigns ONE task per agent at a time; agents do not edit the board.
+Status: open | assigned <session> | review | done <commit> | parked (reason)
 
-## Package A "numeric" — function typing (session warp-numeric)
-1. tests/test_law.rs:52 `#[ignore = "next"]`: `:=` functions compile `x:float` params as Int, `half(1.0) == 0`.
-2. tests/probe_footguns.rs:129 `#[ignore = "next"]`: `(x*x) as i64` panics inside a function body.
-3. tests/test_math.rs:99 and :287 `#[ignore = "soon"]` (mixed-type variables / automatic casting).
-4. notes/footguns.md "Plain bugs": `1/4+1/4` → 0 (sum typed Int). Verify first — some entries may already be fixed.
+## High — ignore "next" / known wrong results
+| id | task | status |
+|---|---|---|
+| A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | assigned warp-numeric |
+| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | open |
+| A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | open |
+| B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | open |
 
-## Package B "parser" — precedence and sequences (session warp-parser)
-1. tests/test_functions.rs:139/145/151: `:=` vs newline precedence ("use newline once parser precedence is fixed").
-2. tests/test_angle.rs:35: function application without parens precedence.
-3. tests/test_string.rs:221: statement sequences `'hello';(1 2 3 4);10` → 10.
-4. notes/footguns.md "Plain bugs": `f := it*10; 1 + f 3` → should be 31; `x=[1 2 3]; x[3]` returns program text. Verify first.
+## Medium
+| id | task | status |
+|---|---|---|
+| B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | assigned warp-parser |
+| B2 | tests/test_angle.rs:35 function application without parens precedence | open |
+| B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | open |
+| A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | open |
+| C1 | src/main.rs:208 compile-only CLI path writing the .wasm | assigned warp-library |
+| C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | open |
 
-## Package C "library" — Rust API TODOs (session warp-library)
-1. src/main.rs:208 "don't run, just compile and save binary" — compile-only CLI path writing the .wasm.
-2. src/node.rs:412 returns `Text("TODO: …")` as a placeholder — replace with a real implementation or a loud error.
-3. tests/test_node.rs:7 Node `remove` method; tests/test_node_operators.rs:3/121-124 `Meta` not exported from `warp::*`.
-4. tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`).
-5. src/meta.rs:9 conditional compilation — only if cheap, else leave and report.
+## Low
+| id | task | status |
+|---|---|---|
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | open |
+| C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | open |
+| C5 | src/meta.rs:9 conditional compilation | open |
+| L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | open |
+| L2 | test_types.rs ignored type-system/generics tests | parked (large design work) |
 
 ## Rules for everyone
 - Read CLAUDE.md first. Run ./test.sh before and after each fix; a fix is done only when the formerly ignored/commented test passes.
