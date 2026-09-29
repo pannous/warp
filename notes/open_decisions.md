@@ -3,6 +3,15 @@
 Each item blocks ignored tests or a finished-but-uncommitted change. Answer any subset; unanswered items stay parked.
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
+## Decided by the user (2026-09-29) — implementation: notes/cloud_tasks.md
+- #1 yes: avoid panics everywhere, errors as values. #2 leave the trailers. #3 juxtaposition yes, spaced only if the unit exists.
+- #4 `size` = count; bytes via `byte count` / `number of bytes` / `#bytes in list`. #5 units yes.
+- #6 data as scope yes, warning when the kebab parts are also variables. #7 unresolved calls are errors.
+- #8 print gets an IO capability that eval grants implicitly (hidden). #9 `list of int`, plural type words (`numbers`) are lists.
+- #10 no opinion (parked). #11 exact reals may be assigned to a declared float with precision loss: `float x = π` allowed.
+- #12 `use <file>` yes. #13 web host later. #14 not-implemented errors unless easy (shifts: implement). Rest: cleanup.
+
+## Original questions
 ## Blocking finished work
 1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
    B9(2) turns all 9 panics into `Error('undefined variable: a')`. Replace with `fails_with("a+1", "undefined variable: a")`?
