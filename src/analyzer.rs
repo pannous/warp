@@ -1234,8 +1234,24 @@ pub fn param_kind(param: &Param) -> Kind {
 	}
 	match param.default.as_ref().map(|value| infer_type(value, &Scope::new())) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
-		_ => Kind::Int,
+		_ => param.used_as.unwrap_or(Kind::Int),
 	}
+}
+
+/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) take a list
+fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
+	let mut indexed: HashSet<String> = HashSet::new();
+	body.visit(&mut |node| {
+		if let Node::Key(list, Op::Hash, _) = node {
+			if let Node::Symbol(name) = list.drop_meta() {
+				indexed.insert(name.clone());
+			}
+		}
+	});
+	params.into_iter().map(|param| {
+		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
+		Param { used_as, ..param }
+	}).collect()
 }
 
 /// Recognizes patterns:
@@ -1274,7 +1290,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params: Vec<Param> =
-							extract_params(items);
+							with_usage_kinds(extract_params(items), body);
 						let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 						let func_def = UserFunctionDef {
 							name: name.clone(),
@@ -1297,10 +1313,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params: Vec<Param> =
-							extract_params(items);
+							with_usage_kinds(extract_params(items), body);
 						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
 							let actual_params = if params.is_empty() {
-								vec![Param::untyped("it")]
+								with_usage_kinds(vec![Param::untyped("it")], body)
 							} else {
 								params
 							};
@@ -1321,7 +1337,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
+					let params = if is_statement_block(body) { vec![] } else { with_usage_kinds(vec![Param::untyped("it")], body) };
 					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 					let func_def = UserFunctionDef {
 						name: name.clone(),
@@ -1372,7 +1388,7 @@ fn extract_params(signature: &[Node]) -> Vec<Param> {
 		};
 		match type_first_name {
 			Some(name) => {
-				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None });
+				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None, used_as: None });
 				items.next();
 			}
 			None => params.extend(extract_param(item)),
@@ -1387,14 +1403,14 @@ fn extract_param(item: &Node) -> Option<Param> {
 		Node::Symbol(s) => Some(Param::untyped(s)),
 		Node::Key(n, Op::Colon, type_name) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: Some(type_name.as_ref().clone()), default: None })
+				Some(Param { name: s.clone(), annotation: Some(type_name.as_ref().clone()), default: None, used_as: None })
 			} else {
 				None
 			}
 		}
 		Node::Key(n, Op::Assign, default) => {
 			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()) })
+				Some(Param { name: s.clone(), annotation: None, default: Some(default.as_ref().clone()), used_as: None })
 			} else {
 				None
 			}
