@@ -38,6 +38,8 @@ use node::Node;
 use wasm_emitter::eval;
 use extensions::numbers::Number;
 
+const DEFAULT_COMPILED_NAME: &str = "out.wasm";
+const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn node_to_i32(node: &Node) -> i32 {
@@ -109,6 +111,21 @@ fn main() {
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = if file_exists(target) { load_file(target) } else { target.to_string() };
         println!("{}", wasp_parser::parse_data(&text).serialize());
+    } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
+        // DONE: don't run, just compile and save binary
+        let target = extract_after(&arg_string, " ");
+        let code = if file_exists(&target) { load_file(&target) } else { target.clone() };
+        match wasm_emitter::compile(&code) {
+            Ok(module) => {
+                let output_path = compiled_output_path(&target);
+                fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
+                println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+            }
+            Err(final_value) => {
+                eprintln!("nothing to compile: {}", final_value.serialize());
+                std::process::exit(1);
+            }
+        }
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
         let warp_code = load_file(&arg_string);
         let result = eval(&warp_code);
@@ -202,14 +219,19 @@ fn main() {
         println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Wasp 🐝 {}", WARP_VERSION);
-    } else if arg_string.contains("compile") || arg_string.contains("build") || arg_string.contains("link") {
-        let code = extract_after(&arg_string, " ");
-        let _result = eval(&code);
-        // TODO: don't run, just compile and save binary
     } else {
         // Default: eval and print
         let result = eval(&arg_string);
         println!("» {}", result.serialize());
+    }
+}
+
+/// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
+fn compiled_output_path(target: &str) -> String {
+    if file_exists(target) {
+        std::path::Path::new(target).with_extension("wasm").to_string_lossy().into_owned()
+    } else {
+        DEFAULT_COMPILED_NAME.to_string()
     }
 }
 
@@ -235,6 +257,7 @@ fn usage() {
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
+    println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");

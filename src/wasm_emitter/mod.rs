@@ -3107,48 +3107,86 @@ pub fn eval_untrusted(code: &str) -> Node {
 	}
 }
 
-/// Compile and run an already parsed program; imports follow its resolved effects.
-pub fn eval_parsed(node: Node, _code: &str) -> Node {
-	if let Some(error) = node.first_error() {
-		return error.clone();
-	}
-	use crate::analyzer::collect_all_types;
-	use crate::effects::{without_constraints, Capability, EffectReport};
-	use crate::type_kinds::TypeRegistry;
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
+/// A compiled program and the host capabilities its imports need.
+pub struct CompiledModule {
+	pub bytes: Vec<u8>,
+	needs_host: bool,
+	needs_wasi: bool,
+	needs_ffi: bool,
+}
 
-	let node = match crate::injection::lower_templates(node) {
-		Ok(node) => node,
-		Err(error) => return error,
-	};
+/// Everything before code generation. `Err` is the final value of the program when it needs no module
+/// (a constant answer, an error, a denied capability).
+fn lower_for_emission(node: Node) -> Result<Node, Node> {
+	use crate::effects::{without_constraints, Capability, EffectReport};
+
+	if let Some(error) = node.first_error() {
+		return Err(error.clone());
+	}
+	let node = crate::injection::lower_templates(node)?;
 	let node = crate::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
-		return node;
+		return Err(node);
 	}
 	if let Some(answer) = crate::time::answer(&node) {
-		return answer;
+		return Err(answer);
 	}
 	if let Some(answer) = crate::real::answer(&node) {
-		return answer;
+		return Err(answer);
 	}
 	let node = crate::real::lower(node);
 	if let Some(error) = node.first_error() {
-		return error.clone();
+		return Err(error.clone());
 	}
 	let effects = EffectReport::of(&node);
 	if let Some(answer) = effects.answer(&node) {
-		return answer;
+		return Err(answer);
 	}
 	if let Some((name, capability)) = effects.denied(&Capability::GRANTED_BY_EVAL) {
-		return crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name()));
+		return Err(crate::node::error(&format!(
+			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
 	}
 	let node = without_constraints(node);
 	if let Some(error) = crate::analyzer::diagnose(&node) {
-		return error;
+		return Err(error);
 	}
 	crate::analyzer::lint(&node).iter().for_each(|warning| eprintln!("warning: {warning}"));
-	let node = crate::analyzer::lower_declarations(node);
+	Ok(crate::analyzer::lower_declarations(node))
+}
+
+fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
+	use crate::effects::Capability;
+	let mut emitter = WasmGcEmitter::new();
+	emitter.emit_for_node(node);
+	if let Some(type_error) = emitter.type_error() {
+		return Err(type_error);
+	}
+	let needs_host = emitter.imports(Capability::Host);
+	let needs_wasi = emitter.imports(Capability::Wasi);
+	let needs_ffi = emitter.imports(Capability::Ffi);
+	Ok(CompiledModule { bytes: emitter.finish(), needs_host, needs_wasi, needs_ffi })
+}
+
+/// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
+/// answer of a program that needs no module.
+pub fn compile(code: &str) -> Result<CompiledModule, Node> {
+	let lawful = crate::law::separate_laws(WaspParser::parse(code));
+	if let Some(violation) = crate::law::assert_laws(&lawful, code) {
+		return Err(violation);
+	}
+	emit_module(&lower_for_emission(lawful.program)?)
+}
+
+/// Compile and run an already parsed program; imports follow its resolved effects.
+pub fn eval_parsed(node: Node, _code: &str) -> Node {
+	use crate::analyzer::collect_all_types;
+	use crate::type_kinds::TypeRegistry;
+	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
+
+	let node = match lower_for_emission(node) {
+		Ok(node) => node,
+		Err(final_value) => return final_value,
+	};
 
 	// Pre-scan: collect all type definitions (supports forward references)
 	let mut type_registry = TypeRegistry::new();
@@ -3164,15 +3202,10 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 	}
 
 	// Fallback to standard Node encoding
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit_for_node(&node);
-	if let Some(type_error) = emitter.type_error() {
-		return type_error;
-	}
-	let needs_host = emitter.imports(Capability::Host);
-	let needs_wasi = emitter.imports(Capability::Wasi);
-	let needs_ffi = emitter.imports(Capability::Ffi);
-	let bytes = emitter.finish();
+	let CompiledModule { bytes, needs_host, needs_wasi, needs_ffi } = match emit_module(&node) {
+		Ok(module) => module,
+		Err(type_error) => return type_error,
+	};
 
 	// Use appropriate linker based on imports needed
 	let result = if needs_ffi {
