@@ -795,6 +795,7 @@ impl WasmGcEmitter {
 		// Emit list and string operation functions
 		self.emit_list_ops();
 		self.emit_equality_ops();
+		self.emit_map_get();
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
@@ -2318,6 +2319,11 @@ impl WasmGcEmitter {
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
+				if self.map_is_indexed_by_key(index) {
+					self.emit_indexed_node(func, list, index);
+					self.emit_call(func, "get_int_value");
+					return;
+				}
 				// Emit the list as a Node reference
 				self.emit_node_instructions(func, list);
 				// Emit the index

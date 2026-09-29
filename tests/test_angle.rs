@@ -312,7 +312,6 @@ fn test_if_gt() {
 	// is!("if 1<2:3", 3);
 }
 #[test]
-#[ignore]
 fn test_switch_evaluation() {
 	is!("{a:1+1 b:2}(a)", 2);
 	is!("x=a;{a:1 b:2}(x)", 1);
@@ -320,7 +319,6 @@ fn test_switch_evaluation() {
 }
 
 #[test]
-#[ignore]
 fn test_switch() {
 	//	todo if(1>0) ... innocent groups
 	is!("{a:1 b:2}[a]", 1);

@@ -240,10 +240,8 @@ impl WasmGcEmitter {
 			// node_count returns i64, wrap in new_int
 			self.emit_call(func, "new_int");
 		} else {
-			// Infix x#y = indexing - dispatches to string_char_at or list_node_at at runtime
-			self.emit_node_instructions(func, left); // emit node (string or list)
-			self.emit_numeric_value(func, right); // emit index
-			self.emit_call(func, "node_index_at"); // runtime dispatch
+			// Infix x#y = indexing - dispatches to string_char_at or list_node_at at runtime, or looks up a key
+			self.emit_indexed_node(func, left, right);
 		}
 	}
 

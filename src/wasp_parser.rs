@@ -982,23 +982,7 @@ impl WaspParser {
 		}
 		self.advance(); // skip ']'
 
-		let mut acc = lhs.clone();
-		for index in indices {
-			let index_unwrapped = index.drop_meta();
-			let adjusted_index = match index_unwrapped {
-				Node::Number(n) => {
-					Node::Number(*n + crate::extensions::numbers::Number::Int(1))
-				}
-				_ => Node::Key(
-					Box::new(index),
-					Op::Add,
-					Box::new(Node::Number(crate::extensions::numbers::Number::Int(1))),
-				),
-			};
-			acc = Node::Key(Box::new(acc), Op::Hash, Box::new(adjusted_index));
-		}
-
-		Some(acc)
+		Some(indices.into_iter().fold(lhs.clone(), subscript))
 	}
 
 	fn try_parse_implicit_application(
@@ -1827,4 +1811,23 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 		column: 0,
 		fix: Some(fix),
 	})
+}
+
+
+/// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time
+pub fn subscript(target: Node, index: Node) -> Node {
+	let one = Node::Number(crate::extensions::numbers::Number::Int(1));
+	let one_based = match index.drop_meta() {
+		Node::Number(n) => Node::Number(*n + crate::extensions::numbers::Number::Int(1)),
+		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
+	};
+	Node::Key(Box::new(target), Op::Hash, Box::new(one_based))
+}
+
+/// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)
+pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
+	match one_based_index.drop_meta() {
+		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1))) => Some(key),
+		_ => None,
+	}
 }

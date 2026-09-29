@@ -1090,9 +1090,24 @@ pub fn lower_declarations(node: Node) -> Node {
 				Node::List(declaration, bracket, separator)
 			}
 		}
+		Node::List(items, Bracket::None, _) if applied_object(&items).is_some() => {
+			let (object, key) = applied_object(&items).expect("guarded");
+			lower_declarations(crate::wasp_parser::subscript(object, key))
+		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
 		other => other,
+	}
+}
+
+/// `{a:1 b:2}(key)`: applying an object to a key looks it up, like `{a:1 b:2}[key]`
+fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
+	let [object, argument] = items else { return None };
+	let is_object = matches!(object.drop_meta(), Node::List(entries, Bracket::Curly, _)
+		if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))));
+	match argument.drop_meta() {
+		Node::List(key, Bracket::Round, _) if is_object && key.len() == 1 => Some((object.drop_meta().clone(), key[0].drop_meta().clone())),
+		_ => None,
 	}
 }
 
@@ -1559,6 +1574,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					ctx.required_functions.insert("node_count");
 				} else {
 					ctx.required_functions.insert("node_index_at");
+					ctx.required_functions.insert("map_get");
+					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 					ctx.required_functions.insert("string_char_at");
 					ctx.required_functions.insert("list_node_at");
 					ctx.required_functions.insert("list_at");

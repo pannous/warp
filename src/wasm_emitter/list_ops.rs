@@ -1,6 +1,6 @@
 //! List and string operation functions for WASM
 
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
@@ -448,7 +448,7 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 3] = ["index_out_of_range", "invalid_number", "out_of_memory"];
+pub const RUNTIME_ERRORS: [&str; 4] = ["index_out_of_range", "invalid_number", "out_of_memory", "key_not_found"];
 
 impl WasmGcEmitter {
 	fn emit_runtime_errors(&mut self) {
@@ -795,3 +795,66 @@ impl WasmGcEmitter {
 	}
 }
 
+
+const KEY_KIND: i64 = 6;
+const KIND_MASK: i64 = 0xFF;
+
+impl WasmGcEmitter {
+	/// The key of `target[key]`: an index that is a symbol or a text (not a number) selects the entry of that name
+	pub(super) fn map_is_indexed_by_key(&self, index: &Node) -> bool {
+		self.map_key(index).is_some()
+	}
+
+	fn map_key(&self, index: &Node) -> Option<Node> {
+		let key = crate::wasp_parser::subscript_key(index)?;
+		matches!(self.get_type(key), Kind::Symbol | Kind::Text).then(|| key.clone())
+	}
+
+	/// Push the Node at `target#index`: the entry value for a key, else the element at the 1-based position
+	pub(super) fn emit_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
+		self.emit_node_instructions(func, target);
+		match self.map_key(index) {
+			Some(key) => {
+				self.emit_node_instructions(func, &key);
+				self.emit_call(func, "map_get");
+			}
+			None => {
+				self.emit_numeric_value(func, index);
+				self.emit_call(func, "node_index_at");
+			}
+		}
+	}
+
+	/// map_get(map: ref $Node, key: ref $Node) -> ref $Node: the value of the first `key:value` entry whose key equals `key`
+	pub(super) fn emit_map_get(&mut self) {
+		if !self.should_emit_function("map_get") {
+			return;
+		}
+		let node = self.type_manager.node_type;
+		let node_ref = Ref(self.node_ref(false));
+		let nullable_node_ref = Ref(self.node_ref(true));
+		self.runtime_function("map_get", vec![node_ref, node_ref], vec![node_ref], vec![nullable_node_ref, nullable_node_ref], |s, f| {
+			let (cell, entry) = (2, 3);
+			let field = |f: &mut Function, local: u32, index: u32| {
+				f.instruction(&I::LocalGet(local));
+				f.instruction(&I::StructGet { struct_type_index: node, field_index: index });
+			};
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+			field(f, cell, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(entry)]);
+			field(f, entry, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+			field(f, entry, 1);
+			Self::emit_list(f, &[I::LocalGet(1)]);
+			s.call(f, VALUES_EQUAL);
+			f.instruction(&I::If(BlockType::Empty));
+			field(f, entry, 2);
+			Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End, I::End]);
+			field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			s.call(f, "key_not_found");
+			f.instruction(&I::Unreachable);
+		});
+	}
+}
