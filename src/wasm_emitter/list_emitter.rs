@@ -219,7 +219,7 @@ impl WasmGcEmitter {
 	/// Returns true if the function was handled
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
-			// count, length: elements, or graphemes of a text; size: bytes
+			// count, length, size: elements, or graphemes of a text
 			self.emit_node_instructions(func, arg);
 			self.emit_call(func, counter);
 			self.emit_call(func, "new_int");

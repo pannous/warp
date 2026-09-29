@@ -1555,24 +1555,23 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 	None
 }
 
-/// `count x`, `length x`, `size x`: the runtime function counting x in its unit. A text counts graphemes
-/// (user-perceived characters) except for `size`, which counts bytes; a user function of that name wins.
+/// `count x`, `length x`, `size x`: the runtime function counting the elements of x; a text counts its graphemes
+/// (user-perceived characters). Bytes are only counted by an explicit unit (`x.bytes`); a user function of that name wins.
 pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if ctx.user_functions.contains_key(name) {
 		return None;
 	}
 	match name {
-		"count" | "length" => Some("node_count"),
-		"size" => Some("node_size"),
+		"count" | "length" | "size" => Some("node_count"),
 		_ => None,
 	}
 }
 
-/// `x.count`, `x.length`, `x.size`, and the explicit text units `x.bytes`, `x.chars` (code points), `x.graphemes`
+/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		"number" => Some("node_count"),
-		"bytes" => Some("text_byte_count"),
+		"bytes" => Some("node_bytes"),
 		"chars" | "codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
@@ -1618,14 +1617,19 @@ fn unit_count(node: &Node) -> Option<Node> {
 	}
 }
 
-/// `number of x`, `count of x`, `length of x` → `count x`; `size of x` → `size x`;
-/// of a text unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`)
+/// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
+/// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	if let [unit, count, of, _, ..] = items {
+		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
+			let counted = rest_of(items, 3, bracket, separator);
+			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
+		}
+	}
 	let [word, of, _, ..] = items else { return None };
 	let Node::Symbol(word) = word.drop_meta() else { return None };
 	let counter = match word.as_str() {
-		"number" | "count" | "length" => "count",
-		"size" => "size",
+		"number" | "count" | "length" | "size" => "count",
 		_ => return None,
 	};
 	if !is_word(of, "of") {
@@ -1636,7 +1640,7 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 }
 
 fn require_counter(ctx: &mut Context, counter: &'static str) {
-	if counter == "node_size" {
+	if counter == "node_bytes" {
 		ctx.required_functions.insert("node_count");
 	}
 	ctx.required_functions.insert(counter);
