@@ -43,16 +43,23 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A11 | triage remaining ignored test_math tests (units, sin, primitive types) | f2cda334 (type words double/long, typed params); rest needs design: units+±+ranges, data-as-scope kebab keys, test_sin exact float eq (test defect), C-style decl blocks, use <file> modules |
 | C7 | triage ignored test_wit (nested separator groups) and test_wast tests | done eb31f69d 2318c301 aa52fedd (test_wit_parse); test_wast needs polish-notation decision |
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | assigned warp-f6 |
-| C8 | empty {} blocks dropped (`x i {}` loses the block) | assigned warp-library |
+| C8 | empty {} blocks dropped (`x i {}` loses the block) | done 207e4dfd, $main eval test 16594fbd |
 | A13 | triage ignored test_operators (1), test_todo (4) | done: all design-blocked (notes/open_decisions.md) |
 | A14 | triage ignored test_wasm.rs, in slices | slice 1: a84384e0 (16 un-ignored) 7cccd61f (global x); slice 2: named_data_sections hang, global compound assign → warp-numeric; (a) global modifier words in parser after B12 |
-| B12 | colon body parsed at `:` precedence: `while c: i+=2`, `if c: x+=1` crash; remove for_loop re-attach workaround | assigned warp-parser |
+| B12 | colon body parsed at `:` precedence: `while c: i+=2`, `if c: x+=1` crash; remove for_loop re-attach workaround | done d9989daf (+ repairs 4add7843 e027886f) |
+| C9 | `foo:=it#1;foo [1 2 3]` traps: `it` holding a list can't be indexed | assigned warp-library |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
 | L2 | test_types.rs ignored type-system/generics tests | parked (large design work) |
 
 ## Rules for everyone
+- COMMIT ONLY THROUGH A PRIVATE INDEX, never the shared one (2026-09-29: d9989daf committed a stale shared index and
+  silently reverted 7cccd61f; repaired in 4add7843 / e027886f):
+    export GIT_INDEX_FILE=$PWD/probes/<name>.index; rm -f $GIT_INDEX_FILE; git read-tree HEAD; git apply --cached <patch>
+    git diff --cached --stat HEAD; old=$(git rev-parse HEAD); new=$(git commit-tree $(git write-tree) -p $old -m msg)
+    git update-ref refs/heads/main $new $old && git push; unset GIT_INDEX_FILE
+  then verify a clean export (git archive HEAD) with your own CARGO_TARGET_DIR.
 - Read CLAUDE.md first. Run ./test.sh before and after each fix; a fix is done only when the formerly ignored/commented test passes.
 - NEVER modify or delete existing tests. You MAY remove an `#[ignore…]` attribute or uncomment a line marked TODO once it passes;
   replace that TODO word with DONE, keep the rest of the text identical.
