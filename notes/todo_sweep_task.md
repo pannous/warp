@@ -35,7 +35,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | done d184af4f |
 | C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @ attributes 74383853 553b398c, IndexMut 1e82fd43; tag form c1b29ed6, meta serialization 5202803b — all 5 done (696/1 expected/114), IndexMut meta, meta serialization → warp-library |
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
-| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); part 2 implemented, waits for user OK to replace should_panic test probe_footguns.rs:56 |
+| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); while(cond) body abaf6712 (test_wasm_while2 un-ignored); part 2 restored after wipe, patch probes/b9_part2.patch, waits for user OK to replace should_panic test probe_footguns.rs:56 |
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
