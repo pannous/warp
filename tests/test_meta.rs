@@ -68,7 +68,6 @@ fn test_meta_at2() {
 }
 
 #[test]
-#[ignore]
 fn test_parent_context() {
 	//     chars
 	let source = "{a:'HIO' d:{} b:3 c:ø}";

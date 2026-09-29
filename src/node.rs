@@ -249,7 +249,7 @@ impl Node {
 
 	pub fn name(&self) -> String {
 		match self {
-			Symbol(name) => name.clone(),
+			Symbol(name) | Text(name) => name.clone(),
 			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
