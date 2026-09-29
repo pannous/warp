@@ -45,7 +45,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | assigned warp-f6 |
 | C8 | empty {} blocks dropped (`x i {}` loses the block) | assigned warp-library |
 | A13 | triage ignored test_operators (1), test_todo (4) | done: all design-blocked (notes/open_decisions.md) |
-| A14 | triage ignored test_wasm.rs (~19), in slices of 3 fixes | assigned warp-numeric |
+| A14 | triage ignored test_wasm.rs, in slices | slice 1: a84384e0 (16 un-ignored) 7cccd61f (global x); slice 2: named_data_sections hang, global compound assign → warp-numeric; (a) global modifier words in parser after B12 |
 | B12 | colon body parsed at `:` precedence: `while c: i+=2`, `if c: x+=1` crash; remove for_loop re-attach workaround | assigned warp-parser |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
