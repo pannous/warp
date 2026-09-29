@@ -75,6 +75,7 @@ PASSED:
   ✓ probe_test2_check
   ✓ probe_while_execution
   ✓ test_abs_alias
+  ✓ test_absolute_value_arithmetic
   ✓ test_ackermann
   ✓ test_add_boxed_list_item
   ✓ test_add_item_list
@@ -99,6 +100,9 @@ PASSED:
   ✓ test_auto_type
   ✓ test_auto_type_nan
   ✓ test_bad_type
+  ✓ test_bare_name_of_function_with_parameter_is_an_error
+  ✓ test_bare_name_of_function_without_parameters_calls_it
+  ✓ test_bare_name_of_typed_function_is_an_error
   ✓ test_big_division_and_remainder
   ✓ test_big_int_to_float
   ✓ test_big_literal_round_trip
@@ -210,6 +214,7 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
+  ✓ test_fd_write
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -376,6 +381,7 @@ PASSED:
   ✓ test_module_cache_reuse
   ✓ test_modulo
   ✓ test_modulo_and_remainder_are_both_named
+  ✓ test_modulo_with_variables
   ✓ test_months_are_one_based
   ✓ test_multiline_structure
   ✓ test_mutation_through_alias_is_not_visible
@@ -487,6 +493,8 @@ PASSED:
   ✓ test_range
   ✓ test_raw_person_struct
   ✓ test_real_world_xml
+  ✓ test_remove
+  ✓ test_remove2
   ✓ test_rename_wasm_function
   ✓ test_repeated_local_time_needs_disambiguation
   ✓ test_reverse
@@ -642,4 +650,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-132 ignored, 637 passed, 0 failed, 637 total tested
+130 ignored, 645 passed, 0 failed, 645 total tested

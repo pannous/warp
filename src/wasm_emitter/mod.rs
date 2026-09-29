@@ -1001,8 +1001,11 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				if self.ctx.user_functions.get(s).is_some_and(|user_fn| user_fn.params.is_empty()) {
-					self.emit_user_function_call(func, s, &[]);
+				if let Some(user_fn) = self.ctx.user_functions.get(s) {
+					match user_fn.params.len() {
+						0 => self.emit_user_function_call(func, s, &[]),
+						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
+					}
 					return;
 				}
 				// Check if this is a local variable lookup
