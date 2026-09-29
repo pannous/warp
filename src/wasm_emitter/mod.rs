@@ -1640,18 +1640,20 @@ impl WasmGcEmitter {
 
 	/// Emit global variable declaration: global x = value
 	/// Creates a mutable WASM global and initializes it, or reassigns existing global
+	/// `global x=7` declares x with the value 7; `global x` declares x zero-initialized
+	fn global_declaration_parts(decl: &Node) -> (String, Node) {
+		match decl.drop_meta() {
+			Node::Symbol(name) => (name.clone(), Node::int(0)),
+			Node::Key(left, Op::Define | Op::Assign, right) => match left.drop_meta() {
+				Node::Symbol(name) => (name.clone(), right.as_ref().clone()),
+				_ => panic!("Expected symbol in global declaration, got {:?}", left),
+			},
+			_ => panic!("Expected a name or an assignment in global declaration, got {:?}", decl),
+		}
+	}
+
 	fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
-		// decl should be Key(name, Define/Assign, value)
-		let (name, value) = match decl.drop_meta() {
-			Node::Key(left, Op::Define | Op::Assign, right) => {
-				if let Node::Symbol(n) = left.drop_meta() {
-					(n.clone(), right.clone())
-				} else {
-					panic!("Expected symbol in global declaration, got {:?}", left);
-				}
-			}
-			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
-		};
+		let (name, value) = Self::global_declaration_parts(decl);
 
 		let kind = self.get_type(&value);
 
@@ -1727,16 +1729,7 @@ impl WasmGcEmitter {
 
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
 	fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
-		let (name, value) = match decl.drop_meta() {
-			Node::Key(left, Op::Define | Op::Assign, right) => {
-				if let Node::Symbol(n) = left.drop_meta() {
-					(n.clone(), right.clone())
-				} else {
-					panic!("Expected symbol in global declaration, got {:?}", left);
-				}
-			}
-			_ => panic!("Expected assignment in global declaration, got {:?}", decl),
-		};
+		let (name, value) = Self::global_declaration_parts(decl);
 
 		let kind = self.get_type(&value);
 
