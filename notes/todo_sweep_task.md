@@ -8,7 +8,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 - C merged 43268e8c (test defects, CLAUDE.md WIT paragraph); B9(2) merged 1edc270f (undefined variables → errors, 792/0).
 - Cloud routines (RemoteTrigger, Sonnet 5.5, fired 21:17Z): J trig_01Nv9Au5b9L4hpEpXwuxsX7d (claude/juxtaposition-units),
   S trig_011gWfa5Rw1NvthXAQyoj2SJ (claude/size-types-scope), E trig_01RHuJPKtxYoceTMejQnvh1p (claude/undefined-calls).
-- Queued: M (use <file>), F (float x = π, shifts, panic sweep). Supervisor merges after AGENT_CI_RESULT tests=success + local --all-features run.
+- Merged 94c416f2: E (undefined calls, min/max, print) + J (2x juxtaposition, unit words) — 826/0 all-features.
+- Running: S; J2 trig_01X3H6Ue5Ci8ktjDcUYc4Xkw (claude/units-followup: Quantity display, ±, ranges); M trig_01KDWq4HXStcgfaKbt5S1a59 (claude/use-modules). Queued: F. Supervisor merges after AGENT_CI_RESULT tests=success + local --all-features run.
 
 ## High — ignore "next" / known wrong results
 | id | task | status |
