@@ -402,6 +402,11 @@ impl WaspParser {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
 	}
 
+	/// A `;` that ends its line is a statement terminator of the same strength as the newline after it
+	fn only_blanks_before_newline(&self) -> bool {
+		self.chars[self.pos..].iter().find(|ch| !matches!(ch, ' ' | '\t' | '\r')) == Some(&'\n')
+	}
+
 	/// Check if current character can start an atom (for implicit application)
 	fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
@@ -1668,7 +1673,7 @@ impl WaspParser {
 				Separator::Colon
 			} else if ch == ';' {
 				self.advance();
-				Separator::Semicolon
+				if self.only_blanks_before_newline() { Separator::Newline } else { Separator::Semicolon }
 			} else if had_newline {
 				Separator::Newline
 			} else {
