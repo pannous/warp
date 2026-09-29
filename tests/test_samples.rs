@@ -32,12 +32,10 @@ fn test_ackermann() { is!("samples/ackermann.wasp", 61); }
 fn test_quadratic() { is!("samples/quadratic.wasp", 6); }
 
 #[test]
-#[ignore = "needs string return"]
 fn test_fizzbuzz() { is!("samples/fizzbuzz.wasp", "FizzBuzz"); }
 
 /// Test that all sample .wasp files can be parsed without errors
 #[test]
-#[ignore] // works but it's too slow
 fn test_parse_all_samples() {
 	println!("\n=== Testing All Sample Files ===\n");
 	// if 1 > 0 {
