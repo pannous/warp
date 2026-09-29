@@ -35,6 +35,7 @@ pub mod units;
 pub mod for_loop;
 pub mod type_constructor;
 pub mod min_max;
+pub mod modules;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
