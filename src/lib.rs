@@ -40,6 +40,7 @@ pub mod injection;
 pub mod diagnostic;
 pub mod time;
 pub mod real;
+pub mod units;
 pub mod for_loop;
 pub mod type_constructor;
 pub mod min_max;

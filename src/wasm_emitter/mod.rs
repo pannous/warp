@@ -3328,6 +3328,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::time::answer(&node) {
 		return Err(answer);
 	}
+	if let Some(answer) = crate::units::answer(&node) {
+		return Err(answer);
+	}
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}

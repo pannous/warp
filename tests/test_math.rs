@@ -184,7 +184,6 @@ fn test_sinus_wasp_import() {
 }
 
 #[test]
-#[ignore]
 fn test_units() {
 	is!("1 m + 1km", 1001); // todo m
 }
