@@ -7,8 +7,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 ## High — ignore "next" / known wrong results
 | id | task | status |
 |---|---|---|
-| A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | assigned warp-numeric, early review: silent f64→i64 trunc, captured_variables, typo'd annotations |
-| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | open |
+| A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | done 768e8a87 (bundled into C2's commit by mistake)
+| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | assigned warp-numeric |
 | A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | open |
 | B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | done 872063f4 0b795bf9 (stale, already fixed; duplicate tests sent back) |
 
@@ -17,15 +17,15 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 |---|---|---|
 | B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
 | B2 | tests/test_angle.rs:35 function application without parens precedence | done 872063f4 (already worked) |
-| B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | assigned warp-parser |
+| B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | open |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
-| C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | assigned warp-library |
+| C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
 
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | open |
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | assigned warp-library |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | open |
 | C5 | src/meta.rs:9 conditional compilation | open |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | open |
