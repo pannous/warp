@@ -3333,6 +3333,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
+	let node = crate::min_max::lower(node);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
