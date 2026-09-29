@@ -58,6 +58,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
   never reset/stash/revert others' work, never cargo clean. Conventional commits (fix:, feature(minor):, refactor:, test:),
   no AI attribution/co-author lines. Commit + push each fix separately, then run `cargo fix --allow-dirty` and commit again if it changed something.
 - Commit test_results.txt only if your change caused its diff.
+- Shared checkout: edit only with the Edit tool, never scripts that rewrite whole files (2026-09-29: a script truncated
+  wasm_emitter/mod.rs and wiped another agent's uncommitted B9(2) hunks). Work held uncommitted for a decision → also save a patch in probes/.
 - If a break comes from another agent's in-progress edit, don't fix it — note it and continue.
 - If something can't be solved in reasonable time, record the difficulty in notes/footguns.md or a GitHub issue (gh) and move on.
 - When done: append a short summary per item (fixed / left open + why) to the bottom of this file under "## Results", commit, push.
