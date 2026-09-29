@@ -37,7 +37,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
 | B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); while(cond) body abaf6712 (test_wasm_while2 un-ignored); part 2 restored after wipe, patch probes/b9_part2.patch, waits for user OK to replace should_panic test probe_footguns.rs:56 |
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
-| B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
+| B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | assigned warp-parser |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
 | A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | survey → warp-numeric |
 | A11 | triage remaining ignored test_math tests (units, sin, primitive types) | f2cda334 (type words double/long, typed params); rest needs design: units+±+ranges, data-as-scope kebab keys, test_sin exact float eq (test defect), C-style decl blocks, use <file> modules |
