@@ -12,11 +12,9 @@
 - `1/4+1/4` → 0: comparisons see 0.5, the returned sum is typed Int and truncated.
 - `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare → compiler panic `Cannot extract numeric value`.
 - `x=1;x++;x` → 1 (increment lost); `++i` parse error.
-- Solved before the 2026-09-29 sweep (verified again then; moved to Solved in wiki/Footguns.md, not new fixes):
-  `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`, fixed by 9d54997d; also `square:=it^2;1+square 2+3` → 26 and
-  `1 + square 1+2` → 10, enabled in tests/test_angle.rs) and `x=[1 2 3]; x[3]` → `Error('index out of range')`
-  (`test_index_out_of_bounds_is_an_error`). The old claim `x#0`, `x[-1]` → 1 is also gone: both are `Error('index out of range')`
-  (`test_selector_zero_is_an_error`, `test_negative_bracket_index_is_an_error` in tests/test_footgun_list_index_bounds.rs).
+- Already fixed before the 2026-09-29 sweep, now in wiki/Footguns.md: `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`,
+  9d54997d; tests/test_angle.rs covers `1+square 2+3`) and list index errors: `x[3]`, `x#0`, `x[-1]` → `Error('index out of range')`
+  (`test_index_out_of_bounds_is_an_error`, `test_negative_index_is_an_error`).
 - `'héllo'#2` → 'Ã' (byte index despite wiki promising char-safe `#`).
 - strings mutate through aliases: `x="ab";y=x;y#1="z";x` → 'zb'.
 - `country: NO` → `country:0` (YAML Norway problem) — needs a design decision on `yes`/`no` aliases.
