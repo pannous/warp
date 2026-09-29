@@ -25,9 +25,9 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: needs `mut` in existing test → user decision |
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: user allowed `mut` in test_remove/test_remove2 → queued for warp-library after L1 |
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → ff9b2d62 partial: function body {…} not yet yielding last item, back to warp-parser |
-| C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: needs rewriting the commented test lines → user |
+| C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | assigned warp-library |
 | L2 | test_types.rs ignored type-system/generics tests | parked (large design work) |
