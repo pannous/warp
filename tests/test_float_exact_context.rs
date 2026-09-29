@@ -5,7 +5,7 @@ mod common;
 #[test]
 fn test_float_read_in_exact_context_is_refused_loudly() {
 	common::fails_with("f(x:float) := [10,20,30][x]; f(2.0)", "is a float where an exact Int is expected");
-	common::fails_with("f(x:float) := x << 1; f(2.5)", "float");
+	common::fails_with("f(x:float) := x and 1; f(2.5)", "is a float where an exact Int is expected");
 }
 
 #[test]
