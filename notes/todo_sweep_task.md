@@ -20,7 +20,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
-| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94 (fractional pow via m.pow requested) |
+| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | survey fd9dad15 (notes/float_truncation_survey.md): 4 silent wrong results; rule implementation → warp-f6: step 1 40ac69a3, step 2 506e6b94, step 3 a8f17bdf, pow fd4557dc; step 4 in progress |
 | A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | done c519d7fe..bfcd81bd (10 un-ignored, 657/0/123); A6b: none newly passing; 67 ignored tests still fail (probes/ignored_run.log) |
 | A7 | notes/footguns.md plain-bugs list stale (6 of 7 fixed) → pointers to regression tests | done 9a436c80 |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
@@ -36,7 +36,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @ attributes 74383853 553b398c, IndexMut 1e82fd43; tag form c1b29ed6, meta serialization 5202803b — all 5 done (696/1 expected/114), IndexMut meta, meta serialization → warp-library |
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
 | B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); part 2 implemented, waits for user OK to replace should_panic test probe_footguns.rs:56 |
-| B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | queued warp-parser |
+| B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
 | A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | open, larger parser change |
