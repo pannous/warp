@@ -96,7 +96,6 @@ fn test_simple_variables() {
 }
 
 #[test]
-#[ignore = "soon"] // needs variable support with mixed types or automatic casting
 fn test_modulo_with_variables() {
 	is!("10007%10000.0", 7);
 	is!("i:=10007;i%10000", 7);
@@ -284,7 +283,6 @@ fn test_compound_assignment() {
 }
 
 #[test]
-#[ignore = "soon"]
 fn test_absolute_value_arithmetic() {
 	is!("‖3‖-1", 2);
 }
