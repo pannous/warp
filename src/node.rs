@@ -986,7 +986,10 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => format!("Data({:?})", d),
+			Data(d) => match d.downcast_ref::<crate::units::Quantity>() {
+				Some(quantity) => quantity.to_string(),
+				None => format!("Data({:?})", d),
+			},
 			// _ => format!("{:?}", self),
 		}
 	}
