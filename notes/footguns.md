@@ -9,7 +9,7 @@
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
 
 ## Plain bugs found while probing (2026-09-26), good agent tasks
-- `1/4+1/4` → 0: comparisons see 0.5, the returned sum is typed Int and truncated.
+- `1/4+1/4` → 0: fixed, pinned by `test_sum_of_quotients_is_not_truncated` (tests/probe_footguns.rs).
 - `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare → compiler panic `Cannot extract numeric value`.
 - `x=1;x++;x` → 1 (increment lost); `++i` parse error.
 - Already fixed before the 2026-09-29 sweep, now in wiki/Footguns.md: `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`,
