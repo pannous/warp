@@ -751,6 +751,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
+	warnings.extend(kebab_ambiguities(program));
 	warnings
 }
 
@@ -773,6 +774,79 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// `name:literal` as a data binding: the name and its value
+fn data_binding(item: &Node) -> Option<(&str, &Node)> {
+	let Node::Key(key, Op::Colon, value) = item.drop_meta() else { return None };
+	let (Node::Symbol(name), Node::Number(_) | Node::Text(_) | Node::Char(_)) = (key.drop_meta(), value.drop_meta()) else { return None };
+	Some((name, value.drop_meta()))
+}
+
+fn statements(program: &Node) -> &[Node] {
+	match program.drop_meta() {
+		Node::List(items, _, _) => items,
+		_ => std::slice::from_ref(program),
+	}
+}
+
+fn assigned_names(program: &Node) -> HashSet<&str> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.as_str());
+			}
+		}
+	});
+	names
+}
+
+/// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
+fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
+	let variables = assigned_names(program);
+	statements(program).iter().filter_map(|item| {
+		let (name, _) = data_binding(item)?;
+		let parts: Vec<&str> = name.split('-').collect();
+		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(part)) {
+			return None;
+		}
+		let message = format!("`{name}` is a data key here, but {} are also variables: `{}` would subtract", parts.join(" and "), parts.join(" - "));
+		Some(Diagnostic::at(item, message).fix(format!("write {} for the subtraction", parts.join(" - "))))
+	}).collect()
+}
+
+/// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
+/// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
+pub fn resolve_data_scope(program: Node) -> Node {
+	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	let Node::List(items, bracket, separator) = program else { return program };
+	let mut keys: HashMap<String, Node> = HashMap::new();
+	let mut resolved = Vec::with_capacity(items.len());
+	for item in items {
+		let item = substitute_keys(item, &keys);
+		if let Some((name, value)) = data_binding(&item) {
+			if !variables.contains(name) {
+				keys.insert(name.to_string(), value.clone());
+			}
+		}
+		resolved.push(item);
+	}
+	Node::List(resolved, bracket, separator)
+}
+
+fn substitute_keys(node: Node, keys: &HashMap<String, Node>) -> Node {
+	if keys.is_empty() {
+		return node;
+	}
+	match node {
+		Node::Symbol(name) => keys.get(&name).cloned().unwrap_or(Node::Symbol(name)),
+		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => Node::Key(left, op, Box::new(substitute_keys(*right, keys))),
+		Node::Key(left, op, right) => Node::Key(Box::new(substitute_keys(*left, keys)), op, Box::new(substitute_keys(*right, keys))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_keys(item, keys)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_keys(*node, keys)), data },
+		other => other,
 	}
 }
 
