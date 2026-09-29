@@ -136,19 +136,19 @@ fn test_modifiers() {
 
 #[test]
 fn test_fibonacci_auto_typed() {
-	// TODO: use newline once parser precedence is fixed for := vs newline
+	// DONE: use newline once parser precedence is fixed for := vs newline
 	is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
 }
 
 #[test]
 fn test_fibonacci_auto_param() {
-	// TODO: use newline once parser precedence is fixed for := vs newline
+	// DONE: use newline once parser precedence is fixed for := vs newline
 	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",55);
 }
 
 #[test]
 fn test_fibonacci_typed() {
-	// TODO: use newline once parser precedence is fixed for := vs newline
+	// DONE: use newline once parser precedence is fixed for := vs newline
 	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
 	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
 }
