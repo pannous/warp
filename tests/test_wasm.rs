@@ -75,7 +75,6 @@ fn test_implicit_multiplication() {
 }
 
 #[test]
-#[ignore]
 fn test_globals() {
 	is!("2*π", 2. * PI);
 	is!("dub:=it*2;dub(π)", 2. * PI);
@@ -381,7 +380,6 @@ fn test_math_operators() {
 }
 
 #[test]
-#[ignore]
 fn test_math_operators_runtime() {
 	is!("3^2", 9);
 	is!("3^1", 3);
