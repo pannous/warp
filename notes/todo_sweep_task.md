@@ -4,6 +4,9 @@ Baseline: ./test.sh → 611 passed, 0 failed, 132 ignored. Issue #2 closed (serv
 The supervisor session owns this board and assigns ONE task per agent at a time; agents do not edit the board.
 Status: open | assigned <session> | review | done <commit> | parked (reason)
 
+## Wave 2 (user decisions, notes/cloud_tasks.md): cloud sessions J (claude/juxtaposition-units), S (claude/size-types-scope),
+C (claude/test-cleanup) running; E, M, F queued; B9(2) → warp-parser (approved).
+
 ## High — ignore "next" / known wrong results
 | id | task | status |
 |---|---|---|
