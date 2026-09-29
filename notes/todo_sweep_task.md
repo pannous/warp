@@ -35,11 +35,12 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | done d184af4f |
 | C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @ attributes 74383853 553b398c, IndexMut 1e82fd43; tag form tee{a:1} (0 tests affected) + meta serialization → warp-library, IndexMut meta, meta serialization → warp-library |
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
-| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); part 2 assigned warp-parser |
+| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); part 2 implemented, waits for user OK to replace should_panic test probe_footguns.rs:56 |
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | queued warp-parser |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | open |
-| A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | assigned warp-numeric |
+| A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |
 | A10 | juxtaposition `3x` → 3*x (wiki/number.md), today a list; `1½` → list | open, larger parser change |
+| A11 | triage remaining ignored test_math tests (units, sin, primitive types) | assigned warp-numeric |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
