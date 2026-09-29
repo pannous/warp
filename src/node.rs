@@ -1556,6 +1556,7 @@ impl PartialEq<i64> for Node {
 			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
+			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.amount == *other),
 			_ => false,
 		}
 	}
@@ -2283,6 +2284,10 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
+			Data(data) => match data.downcast_ref::<crate::units::Quantity>() {
+				Some(quantity) => write!(f, "{}", quantity),
+				None => write!(f, "{:?}", self),
+			},
 			_ => write!(f, "{:?}", self),
 		}
 	}
