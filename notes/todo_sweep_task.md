@@ -33,7 +33,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | done 7e2e746c 417f3fed |
 | B7 | test_angle.rs test_switch / test_switch_evaluation: object key lookup {a:1 b:2}[a] | assigned warp-parser |
 | A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | assigned warp-numeric |
-| C6 | test_meta.rs 5 ignored failing tests (Meta API) | assigned warp-library |
+| C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @-attribute parser rule, IndexMut meta, meta serialization → warp-library |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
