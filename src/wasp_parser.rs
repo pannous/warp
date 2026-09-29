@@ -558,6 +558,15 @@ impl WaspParser {
 		}
 	}
 
+	/// `$main`, `$ii_i`: names keep their sigil (WAT identifiers, DOM selectors)
+	fn parse_dollar_name(&mut self) -> Node {
+		self.advance(); // skip '$'
+		match self.parse_symbol() {
+			Ok(name) => Symbol(format!("${name}")),
+			Err(message) => error(&message),
+		}
+	}
+
 	fn unwrap_single(group: Node) -> Node {
 		match group {
 			Node::List(mut items, _, _) if items.len() == 1 => items.remove(0),
@@ -595,6 +604,7 @@ impl WaspParser {
 			'ø' => { self.advance(); return Empty }
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
+			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
 				let mut num_str = String::new();
