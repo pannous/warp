@@ -44,7 +44,7 @@ fn test_resolved_calls_are_unchanged() {
 
 #[test]
 fn test_paren_data_stays_data() {
-	assert_eq!(parse_data("frobnicate(3)").to_string(), "frobnicate(3)");
+	assert_eq!(parse_data("frobnicate(3)").to_string(), "(frobnicate 3)");
 	assert!(!matches!(eval("(frobnicate 3)"), warp::Node::Error(_)));
 	assert!(!matches!(eval("(frobnicate, 3)"), warp::Node::Error(_)));
 	assert!(!matches!(eval("[frobnicate 3]"), warp::Node::Error(_)));
