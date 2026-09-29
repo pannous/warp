@@ -32,9 +32,9 @@ fn test_call() {
 	is!("square:=it^2;square(1+2)", 9);
 	is!("square:=it^2;square 1+2", 9);
 	//	preRegisterSignatures();
-	// TODO: precedence issue with function application without parens
-	// is!("square:=it^2;1+square 2+3", 26);
-	// is!("square:=it^2;1 + square 1+2", 10);
+	// DONE: precedence issue with function application without parens
+	is!("square:=it^2;1+square 2+3", 26);
+	is!("square:=it^2;1 + square 1+2", 10);
 
 	is!("square:=it^2;1+square(2+3)", 26);
 	// is!("square{i:3}", 9) //todo: match arguments!
