@@ -503,7 +503,6 @@ fn test_comparison_id_precedence() {
 }
 
 #[test]
-#[ignore]
 fn test_comparison_primitives() {
 	is!("42>2", 1);
 	is!("1<2", 1);
@@ -1272,7 +1271,6 @@ fn test_import_wasm() {
 }
 
 #[test]
-#[ignore]
 fn test_math_library() {
 	// todo generic power i as builtin
 	#[cfg(not(feature = "WASMTIME"))]
@@ -1463,7 +1461,6 @@ fn test_named_data_sections() {
 }
 
 #[test]
-#[ignore]
 fn test_auto_smarty() {
 	is!("11", 11);
 	is!("'c'", 'c');
