@@ -21,7 +21,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
 | A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | assigned warp-bugs (survey first) |
-| A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | done c519d7fe..bfcd81bd (10 un-ignored, 657/0/123); A6b re-run for package B files → warp-numeric |
+| A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | done c519d7fe..bfcd81bd (10 un-ignored, 657/0/123); A6b: none newly passing; 67 ignored tests still fail (probes/ignored_run.log) |
 | A7 | notes/footguns.md plain-bugs list stale (6 of 7 fixed) → pointers to regression tests | done 9a436c80 |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
 
@@ -31,6 +31,9 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: done e88399a6 (verified by warp-numeric) |
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → done ff9b2d62 b2f931d1 |
 | B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | done 7e2e746c 417f3fed |
+| B7 | test_angle.rs test_switch / test_switch_evaluation: object key lookup {a:1 b:2}[a] | assigned warp-parser |
+| A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | assigned warp-numeric |
+| C6 | test_meta.rs 5 ignored failing tests (Meta API) | assigned warp-library |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
