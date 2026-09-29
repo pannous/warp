@@ -1,6 +1,8 @@
 === Test Results ===
 
 PASSED:
+  ✓ assigning_an_at_key_annotates_any_node_in_insertion_order
+  ✓ attribute_names_may_be_kebab_case
   ✓ compile_command_emits_the_same_struct_module_as_eval
   ✓ compile_command_writes_wasm_without_running
   ✓ extensions::strings::tests::test_char_str_eq
@@ -64,7 +66,6 @@ PASSED:
   ✓ parse_list_via_separator_semicolon
   ✓ parse_list_via_separator_space
   ✓ parse_list_via_separator3
-  ✓ probe
   ✓ probe_def_add
   ✓ probe_def_block_syntax
   ✓ probe_def_syntax
@@ -142,6 +143,8 @@ PASSED:
   ✓ test_closures_in_loop_capture_each_iteration
   ✓ test_codepoint
   ✓ test_collatz
+  ✓ test_colon_body_of_while_stops_at_newline
+  ✓ test_colon_body_of_while_stops_at_semicolon
   ✓ test_colon_lists
   ✓ test_colon_object
   ✓ test_column_tracking
@@ -263,13 +266,20 @@ PASSED:
   ✓ test_first_char
   ✓ test_fizzbuzz
   ✓ test_fizzbuzz_nested_ternary
+  ✓ test_float_assignment_in_exact_context_is_refused_loudly
+  ✓ test_float_comparison_does_not_truncate
+  ✓ test_float_local_assignment_keeps_its_float_value
   ✓ test_float_local_inside_float_function
+  ✓ test_float_modulo_keeps_fraction
   ✓ test_float_operations
   ✓ test_float_parameter_keeps_all_digits
   ✓ test_float_parameter_keeps_fraction
   ✓ test_float_plus_int_type_upgrading
+  ✓ test_float_power_keeps_fraction
   ✓ test_float_return_through_main
   ✓ test_for_each
+  ✓ test_fraction_multiplication
+  ✓ test_fractional_float_power_is_refused_loudly
   ✓ test_fuel_budget_can_be_raised
   ✓ test_function_body_block_yields_its_last_item
   ✓ test_function_declaration
@@ -371,6 +381,7 @@ PASSED:
   ✓ test_list_index_past_end_is_an_error
   ✓ test_list_operations
   ✓ test_list_plus_concatenates
+  ✓ test_literal_float_operations_do_not_truncate
   ✓ test_logarithm
   ✓ test_logarithm_in_runtime
   ✓ test_logic_binds_weaker_than_comparison
@@ -386,6 +397,7 @@ PASSED:
   ✓ test_matrix_comma_index
   ✓ test_matrix_order
   ✓ test_merge_wabt
+  ✓ test_meta_at2
   ✓ test_missing_key_is_an_error
   ✓ test_mixed_prefix_infix
   ✓ test_mixed_syntax
@@ -395,6 +407,7 @@ PASSED:
   ✓ test_modulo_and_remainder_are_both_named
   ✓ test_modulo_with_variables
   ✓ test_months_are_one_based
+  ✓ test_multi_digit_superscript_exponent
   ✓ test_multiline_structure
   ✓ test_mutation_through_alias_is_not_visible
   ✓ test_nan_bits_are_canonical
@@ -449,6 +462,7 @@ PASSED:
   ✓ test_number
   ✓ test_number_declaration_spellings_agree
   ✓ test_number_floats
+  ✓ test_number_glyphs_at_end_of_input
   ✓ test_number_mix
   ✓ test_number_of_bytes_in_text
   ✓ test_number_of_chars_in_text
@@ -566,6 +580,7 @@ PASSED:
   ✓ test_sum
   ✓ test_sum_of_different_roots_stays_exact
   ✓ test_sum_of_quotients_is_not_truncated
+  ✓ test_superscript_powers
   ✓ test_switch
   ✓ test_switch_evaluation
   ✓ test_symbol
@@ -631,6 +646,7 @@ PASSED:
   ✓ test_variable_minus
   ✓ test_variable_reassignment
   ✓ test_variables
+  ✓ test_vulgar_fractions_are_exact
   ✓ test_wasm_gc_node_reading_concept
   ✓ test_wasm_roundtrip
   ✓ test_wasm_roundtrip_via_is
@@ -670,4 +686,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-120 ignored, 665 passed, 0 failed, 665 total tested
+117 ignored, 681 passed, 0 failed, 681 total tested

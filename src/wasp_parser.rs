@@ -959,6 +959,11 @@ impl WaspParser {
 		if self.matches_keyword("else") {
 			self.advance_by(4);
 			self.skip_spaces();
+		if let Node::Key(condition, Op::Colon, body) = &rhs {
+			let while_cond = Node::Key(Box::new(Empty), Op::While, condition.clone());
+			return Node::Key(Box::new(while_cond), Op::Do, body.clone());
+		}
+
 			let else_expr = match mode {
 				ElseParseMode::Atom => self.parse_atom(),
 				ElseParseMode::Expr => self.parse_expr(0),
