@@ -1440,7 +1440,6 @@ fn test_assert() {
 #[ignore]
 fn test_named_data_sections() {
 	is!("fest='def';test='abc'", "abc");
-	exit(0);
 }
 
 #[test]
