@@ -38,3 +38,13 @@ fn test_undeclared_and_int_targets_keep_their_rules() {
 	common::fails_with("x:int = 1.5", "x");
 	common::fails_with("f(x:float) := [10,20,30][x]; f(2.0)", "is a float where an exact Int is expected");
 }
+
+// an exact expression is computed exactly and rounded once to the nearest f64
+#[test]
+fn test_declared_float_rounds_an_exact_expression_once() {
+	is!("float y = 0.1+0.2; y", 0.3);
+	is!("y:float = 1/3 + 1/6; y", 0.5);
+	is!("x = 1/3; float y = x; y", 1.0 / 3.0);
+	is!("float x = 2^100; x", 2f64.powi(100));
+	is!("x:float = π; x = √2; x", SQRT_2);
+}
