@@ -140,11 +140,6 @@ fn test_string_concatenation() {
 	//	eq!(Node("✔"), True);
 	//	eq!(Node("✖️"), False);
 	//	eq!(Node("✖"), False);
-	// let huh = "a".s() + 2; // TODO: implement string operator overloads
-	//     assert!(_eq!(huh.length(), 2);
-	//     assert!(_eq!(huh[0], 'a');
-	//     assert!(_eq!(huh[1], '2');
-	//     assert!(_eq!(huh[2],  0);
 	is!("a2", "a2");
 
 	// TODO: implement string operator overloads
