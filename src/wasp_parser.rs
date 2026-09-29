@@ -536,11 +536,10 @@ impl WaspParser {
 	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`
 	fn parse_attribute(&mut self) -> Node {
 		self.advance(); // skip '@'
-		let mut name = String::new();
-		while self.current_char().is_alphanumeric() || self.current_char() == '_' {
-			name.push(self.current_char());
-			self.advance();
-		}
+		let name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(message) => return error(&message),
+		};
 		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
 		self.parse_atom().with_attribute(&name, value)
 	}
