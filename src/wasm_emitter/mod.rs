@@ -1001,6 +1001,10 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
+				if self.ctx.user_functions.get(s).is_some_and(|user_fn| user_fn.params.is_empty()) {
+					self.emit_user_function_call(func, s, &[]);
+					return;
+				}
 				// Check if this is a local variable lookup
 				if let Some(local) = self.scope.lookup(s) {
 					func.instruction(&Instruction::LocalGet(local.position));

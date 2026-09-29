@@ -74,7 +74,6 @@ PASSED:
   ✓ probe_parse_add_call
   ✓ probe_test2_check
   ✓ probe_while_execution
-  ✓ ratio
   ✓ test_abs_alias
   ✓ test_ackermann
   ✓ test_add_boxed_list_item
@@ -113,6 +112,7 @@ PASSED:
   ✓ test_braceless_call_in_argument_is_ambiguous
   ✓ test_braceless_call_takes_whole_argument
   ✓ test_braceless_recursive_call_takes_identifier_argument
+  ✓ test_branch_block_yields_its_last_item
   ✓ test_c_type_mapping
   ✓ test_calendar_day_is_not_24_hours
   ✓ test_calendar_overflow_is_explicit
@@ -163,6 +163,7 @@ PASSED:
   ✓ test_data_does_not_execute
   ✓ test_data_keeps_number_literals
   ✓ test_data_node_json
+  ✓ test_data_object_block_keeps_all_keys
   ✓ test_date_and_time_types_are_distinct
   ✓ test_date_literal_needs_strict_form
   ✓ test_debug_format
@@ -209,7 +210,6 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write_raw
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -251,6 +251,7 @@ PASSED:
   ✓ test_finite_domain_function_equality
   ✓ test_first_char
   ✓ test_fizzbuzz_nested_ternary
+  ✓ test_float_local_inside_float_function
   ✓ test_float_operations
   ✓ test_float_parameter_keeps_all_digits
   ✓ test_float_parameter_keeps_fraction
@@ -258,6 +259,7 @@ PASSED:
   ✓ test_float_return_through_main
   ✓ test_for_each
   ✓ test_fuel_budget_can_be_raised
+  ✓ test_function_body_block_yields_its_last_item
   ✓ test_function_declaration
   ✓ test_function_declaration_parse
   ✓ test_function_definitions
@@ -640,4 +642,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-132 ignored, 635 passed, 0 failed, 635 total tested
+132 ignored, 637 passed, 0 failed, 637 total tested

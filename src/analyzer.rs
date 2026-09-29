@@ -14,16 +14,22 @@ fn is_data_node(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 		Node::Symbol(s) => !is_function_keyword(s),
-		Node::List(items, bracket, separator) => !is_top_level_block(items, bracket, separator) && items.iter().all(is_data_node),
+		Node::List(items, bracket, separator) => !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
 		_ => false,
 	}
 }
 
-/// The top level is a block: its `;` and newline items run in order and the last one is the value
-/// (`1;2;3` → 3, `'hello';(1 2 3 4);10` → 10). `{…}` is a block literal and `(…)`, `[…]` are lists: they keep all items.
-pub fn is_top_level_block(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+/// An unbracketed `;`/newline list is a block: its items run in order and the last one is the value
+/// (`1;2;3` → 3, `'hello';(1 2 3 4);10` → 10). A program is one, and `{…}` is a block literal that keeps its items as a
+/// value until it is run as a function body or branch. `(…)` and `[…]` are lists and keep all items.
+pub fn is_unbracketed_block(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(separator, Separator::Semicolon | Separator::Newline) && *bracket == Bracket::None && items.len() > 1
+}
+
+/// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
+fn is_statement_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline))
 }
 
 /// Infer the Kind for an expression
@@ -140,7 +146,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return infer_type(&items[0], scope);
 			}
 			// Data list: all items are pure data → Kind::List
-			if !is_top_level_block(items, bracket, separator) && items.iter().all(is_data_node) {
+			if !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node) {
 				return Kind::List;
 			}
 			// Statement sequence: return type of last item
@@ -1261,10 +1267,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 					}
 				}
 			}
-			// Pattern: name := body (uses implicit `it` parameter)
+			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
-				if uses_it(body) || uses_dollar_param(body) {
-					let params = vec![Param::untyped("it")];
+				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
+					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
 					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
 					let func_def = UserFunctionDef {
 						name: name.clone(),
