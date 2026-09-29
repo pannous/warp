@@ -1384,8 +1384,9 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			// Include alphanumeric, underscore, and hyphen (for kebab-case)
-			// BUT: don't include hyphen if followed by a digit (that's subtraction)
-			let is_hyphen_in_symbol = ch == '-' && !self.peek_char(1).is_numeric();
+			// BUT: a hyphen joins only a following word, so `i--` and `x-1` end the symbol at the hyphen
+			let next = self.peek_char(1);
+			let is_hyphen_in_symbol = ch == '-' && (next.is_alphabetic() || next == '_');
 			if (ch.is_alphanumeric() && !is_number_glyph(ch)) || ch == '_' || is_hyphen_in_symbol {
 				symbol.push(ch);
 				self.advance();
