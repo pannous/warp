@@ -173,7 +173,8 @@ impl WaspParser {
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		let mut parser = WaspParser::new_with_options(input.to_string(), options);
-		parser.parse_list_with_separators(None, Bracket::None)
+		let program = parser.parse_list_with_separators(None, Bracket::None);
+		if program.is_nothing() { Empty } else { program }
 	}
 
 	fn end_of_input(&self) -> bool {
@@ -1770,7 +1771,7 @@ impl WaspParser {
 		bracket: Bracket,
 	) -> Node {
 		if items_with_seps.is_empty() {
-			return Empty;
+			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty }; // an empty block is a value
 		}
 
 		if items_with_seps.len() == 1 && bracket == Bracket::None {

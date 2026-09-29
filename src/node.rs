@@ -72,6 +72,14 @@ impl Node {
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
 	}
+	/// ø or a block without statements: `{}` evaluates to nothing
+	pub fn is_nothing(&self) -> bool {
+		match self.drop_meta() {
+			Empty => true,
+			List(items, Bracket::Curly, _) => items.is_empty(),
+			_ => false,
+		}
+	}
 	pub fn data_value(&self) -> Dada {
 		// 💡use via
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();

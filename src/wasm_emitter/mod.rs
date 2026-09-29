@@ -1932,7 +1932,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
 
-		if !matches!(body.drop_meta(), Node::Empty) { // `while c {}` only spins: nothing to evaluate
+		if !body.is_nothing() { // `while c {}` only spins: nothing to evaluate
 			self.emit_block_value(func, body);
 			func.instruction(&Instruction::LocalSet(result_local));
 		}
