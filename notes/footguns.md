@@ -10,16 +10,16 @@
 
 ## Plain bugs found while probing (2026-09-26), good agent tasks
 - `1/4+1/4` → 0: fixed, pinned by `test_sum_of_quotients_is_not_truncated` (tests/probe_footguns.rs).
-- `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare → compiler panic `Cannot extract numeric value`.
-- `x=1;x++;x` → 1 (increment lost); `++i` parse error.
+- `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare: fixed, pinned by `test_string_equality_is_by_value`,
+  `test_equality_across_kinds_is_structural`, `test_empty_values_are_falsy`, `test_unicode_normalization` (tests/probe_footguns.rs).
+- `x=1;x++;x` and `++i`: fixed, pinned by `test_increment_changes_variable`, `test_prefix_increment`.
 - Already fixed before the 2026-09-29 sweep, now in wiki/Footguns.md: `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`,
   9d54997d; tests/test_angle.rs covers `1+square 2+3`) and list index errors: `x[3]`, `x#0`, `x[-1]` → `Error('index out of range')`
   (`test_index_out_of_bounds_is_an_error`, `test_negative_index_is_an_error`).
-- `'héllo'#2` → 'Ã' (byte index despite wiki promising char-safe `#`).
-- strings mutate through aliases: `x="ab";y=x;y#1="z";x` → 'zb'.
-- `country: NO` → `country:0` (YAML Norway problem) — needs a design decision on `yes`/`no` aliases.
+- `'héllo'#2`: fixed, pinned by `test_character_indexing_is_unicode_safe`.
+- String mutation through aliases: fixed, pinned by `test_mutation_through_alias_is_not_visible`.
+- `country: NO` → `country:0` is the decided behaviour for `warp eval` (data keeps the symbol: `test_norway_problem_in_data`); see wiki/Footguns.md "The Norway problem".
 
-- `x as i64` panics inside a function body (`f(x) := (x*x) as i64`), works at top level.
 - Fixed: the Lean exporter now models Warp Int as unbounded `Int`; `law square(x) >= 0` is proved consistently with the runtime
   (`test_proof_model_matches_unbounded_int`). Explicit `as i64` proof terms remain future work.
 
