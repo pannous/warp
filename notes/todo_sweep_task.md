@@ -26,7 +26,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | id | task | status |
 |---|---|---|
 | C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | assigned warp-library |
-| B5 | semicolon binds loosest: a code block's value is its last ;/newline item, [] and data keep all items (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | assigned warp-parser (survey first) |
+| B5 | semicolon binds loosest: a block (top level, {}) yields its last ;/newline item; (), [] and data keep all items (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | assigned warp-parser (survey first) |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | open |
 | C5 | src/meta.rs:9 conditional compilation | open |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | open |
