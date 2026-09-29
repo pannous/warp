@@ -51,6 +51,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | C10 | untyped param silently coerces a list to Int (`foo(x):=x;foo([1 2 3])` → 3) → loud error / argument kind | part 1 08b3f97b; part 2 (all call sites agree else loud) 2a8d7793 — done (its read-tree race reverted d3eb186b, restored a115c2e0) |
 | A16 | regression: `download https://…` returns unevaluated list (worked at A14 slice 1) — bisect | no regression: download never existed, slice-1 PASS was vacuous under --all-features; 281abe1a re-ignores test_math_operators_runtime |
 | B14 | inline block/`# ` comments break expressions | done d3eb186b a115c2e0; test_comments2 expects C++ length of `y=0` (decision) |
+| A15 | survey: unresolved call in code position | done 3ca4b09c (0 test changes with `name(` rule), decision #7 |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
