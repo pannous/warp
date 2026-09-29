@@ -120,7 +120,6 @@ fn test_polymorphic_dispatch() {
 }
 
 #[test]
-#[ignore = "requires print function implementation"]
 fn test_print_function() {
 	is!("print 3", 3);
 }

@@ -2538,7 +2538,7 @@ impl WasmGcEmitter {
 				}
 			}
 			// Statement sequence or function call
-			Node::List(items, bracket, _) if !items.is_empty() => {
+			Node::List(items, bracket, separator) if !items.is_empty() => {
 				// Check for zero-argument function call: (funcname)
 				if items.len() == 1 && *bracket == Bracket::Round {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -2592,7 +2592,7 @@ impl WasmGcEmitter {
 					}
 				}
 				// Rounding and counting builtins build a node: its Int is the number
-				if self.emit_integer_builtin(func, items) {
+				if self.emit_integer_builtin(func, items) || self.reject_unresolved_call(func, items, bracket, separator) {
 					return;
 				}
 				self.emit_statement_sequence(func, items, Self::emit_numeric_value);
@@ -2739,7 +2739,7 @@ impl WasmGcEmitter {
 				}
 			}
 			// Function calls and statement sequences
-			Node::List(items, bracket, _) if !items.is_empty() => {
+			Node::List(items, bracket, separator) if !items.is_empty() => {
 				// Check for function call: [Symbol("funcname"), arg1, arg2, ...]
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -2766,6 +2766,9 @@ impl WasmGcEmitter {
 				}
 				if self.emit_integer_builtin(func, items) {
 					self.emit_int_to_f64(func, None);
+					return;
+				}
+				if self.reject_unresolved_call(func, items, bracket, separator) {
 					return;
 				}
 				// Statement sequence: execute all, return last as float
@@ -3329,6 +3332,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = crate::real::lower(node);
+	let node = crate::type_constructor::lower(node);
+	let node = crate::min_max::lower(node);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}

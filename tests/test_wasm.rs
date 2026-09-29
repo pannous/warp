@@ -191,7 +191,6 @@ fn test_const_return() {
 }
 
 #[test]
-#[ignore]
 fn test_print() {
 	// does wasm print? (visual control!!);
 	is!("print 42", 42);

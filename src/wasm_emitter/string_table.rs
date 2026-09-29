@@ -5,6 +5,9 @@ use crate::operators::Op;
 use std::collections::HashMap;
 use wasm_encoder::{ConstExpr, DataSection};
 
+/// Bytes at the start of linear memory reserved for the WASI iovec and nwritten slots (see `emit_wasi_puts`)
+const WASI_SCRATCH_BYTES: u32 = 16;
+
 /// Manages string allocation in WASM linear memory
 pub struct StringTable {
 	/// Maps strings to their offsets in linear memory
@@ -26,7 +29,7 @@ impl StringTable {
 	pub fn new() -> Self {
 		Self {
 			table: HashMap::new(),
-			next_offset: 0,
+			next_offset: WASI_SCRATCH_BYTES,
 			data_section: DataSection::new(),
 		}
 	}

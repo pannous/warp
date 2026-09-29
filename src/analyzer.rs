@@ -1759,6 +1759,18 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	}
 }
 
+/// The callee of `name(args)`: a call is a symbol applied with round brackets and no space before the arguments.
+/// `(name args)`, `(name, args)` and `[name args]` are data.
+pub fn call_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	match (items, bracket, separator) {
+		([head, _, ..], Bracket::Round, Separator::None) => match head.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// Recursively collect all type definitions from the AST into the TypeRegistry
 /// This pre-scan enables forward references (use a type before defining it)
 pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &Node) {

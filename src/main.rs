@@ -32,6 +32,8 @@ pub mod injection;
 pub mod time;
 pub mod real;
 pub mod for_loop;
+pub mod type_constructor;
+pub mod min_max;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
