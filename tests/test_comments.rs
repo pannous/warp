@@ -103,7 +103,6 @@ fn test_comment_with_metadata_accessor() {
 
 // Comments
 #[test]
-#[ignore]
 fn test_comments() {
 	is!("1+1 // comment", 2);
 	is!("1 /* inline */ + 1", 2);
