@@ -1318,10 +1318,8 @@ impl WasmGcEmitter {
 		true
 	}
 
-	fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
-		self.emit_float_value(func, left);
-		self.emit_float_value(func, right);
-
+	/// Apply an arithmetic operator to the two f64 on the stack. Mod is euclidean like the exact Ints, Rem truncates.
+	fn emit_float_arithmetic(&mut self, func: &mut Function, op: &Op) {
 		match op {
 			Op::Add => {
 				func.instruction(&Instruction::F64Add);
@@ -1335,28 +1333,110 @@ impl WasmGcEmitter {
 			Op::Div => {
 				func.instruction(&Instruction::F64Div);
 			}
-			Op::Mod | Op::Rem => {
-				// WASM doesn't have F64Rem. Use integer modulo path instead.
-				// Drop the f64 values and re-emit as i64
-				func.instruction(&Instruction::Drop);
-				func.instruction(&Instruction::Drop);
-				self.emit_int_operands_op(func, left, op, right);
-				self.emit_call(func, "new_int");
-				return ArithmeticWrap::None;
+			Op::Mod | Op::Rem => self.emit_float_remainder(func, *op == Op::Mod),
+			Op::Pow => self.emit_float_power(func),
+			_ => unreachable!("Unsupported float operator: {:?}", op),
+		}
+	}
+
+	fn push_float_scratch(&self, func: &mut Function, index: u32) {
+		func.instruction(&Instruction::LocalGet(self.scratch(index)));
+		func.instruction(&Instruction::F64ReinterpretI64);
+	}
+
+	fn pop_float_scratch(&self, func: &mut Function, index: u32) {
+		func.instruction(&Instruction::I64ReinterpretF64);
+		func.instruction(&Instruction::LocalSet(self.scratch(index)));
+	}
+
+	/// `a - |b| * floor(a / |b|)` (euclidean) or `a - b * trunc(a / b)`; the f64 operands live in the i64 scratch locals as bits
+	fn emit_float_remainder(&mut self, func: &mut Function, euclidean: bool) {
+		let (dividend, divisor) = (0, 1);
+		self.pop_float_scratch(func, divisor);
+		self.pop_float_scratch(func, dividend);
+		let push_divisor = |emitter: &Self, func: &mut Function| {
+			emitter.push_float_scratch(func, divisor);
+			if euclidean {
+				func.instruction(&Instruction::F64Abs);
 			}
-			Op::Pow => {
-				// Drop the f64 values and re-emit as i64 for power
-				func.instruction(&Instruction::Drop);
-				func.instruction(&Instruction::Drop);
-				self.emit_int_operands_op(func, left, op, right);
-				self.emit_call(func, "new_int");
-				return ArithmeticWrap::None;
-			}
+		};
+		self.push_float_scratch(func, dividend);
+		self.push_float_scratch(func, dividend);
+		push_divisor(self, func);
+		func.instruction(&Instruction::F64Div);
+		func.instruction(if euclidean { &Instruction::F64Floor } else { &Instruction::F64Trunc });
+		push_divisor(self, func);
+		func.instruction(&Instruction::F64Mul);
+		func.instruction(&Instruction::F64Sub);
+	}
+
+	/// base ^ exponent by squaring; only integral exponents exist for f64 without a libm, others trap as invalid_number
+	fn emit_float_power(&mut self, func: &mut Function) {
+		let (base, exponent, result) = (0, 1, 2);
+		self.pop_float_scratch(func, exponent);
+		self.pop_float_scratch(func, base);
+		self.push_float_scratch(func, exponent);
+		self.push_float_scratch(func, exponent);
+		func.instruction(&Instruction::F64Trunc);
+		func.instruction(&Instruction::F64Ne);
+		self.emit_fail_if(func, "invalid_number");
+		self.push_float_scratch(func, exponent);
+		func.instruction(&Instruction::I64TruncF64S);
+		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
+		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::I64LtS);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&Instruction::F64Const(1.0.into()));
+		self.push_float_scratch(func, base);
+		func.instruction(&Instruction::F64Div);
+		self.pop_float_scratch(func, base);
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
+		func.instruction(&Instruction::I64Sub);
+		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::F64Const(1.0.into()));
+		self.pop_float_scratch(func, result);
+		func.instruction(&Instruction::Block(BlockType::Empty));
+		func.instruction(&Instruction::Loop(BlockType::Empty));
+		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
+		func.instruction(&Instruction::I64Eqz);
+		func.instruction(&Instruction::BrIf(1));
+		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64And);
+		func.instruction(&Instruction::I32WrapI64);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		self.push_float_scratch(func, result);
+		self.push_float_scratch(func, base);
+		func.instruction(&Instruction::F64Mul);
+		self.pop_float_scratch(func, result);
+		func.instruction(&Instruction::End);
+		self.push_float_scratch(func, base);
+		self.push_float_scratch(func, base);
+		func.instruction(&Instruction::F64Mul);
+		self.pop_float_scratch(func, base);
+		func.instruction(&Instruction::LocalGet(self.scratch(exponent)));
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::I64ShrU);
+		func.instruction(&Instruction::LocalSet(self.scratch(exponent)));
+		func.instruction(&Instruction::Br(0));
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::End);
+		self.push_float_scratch(func, result);
+	}
+
+	fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
+		self.emit_float_value(func, left);
+		self.emit_float_value(func, right);
+
+		match op {
 			op if op.is_comparison() => {
 				self.emit_float_comparison(func, op);
 				return ArithmeticWrap::Int;
 			}
-			_ => unreachable!("Unsupported operator in emit_arithmetic: {:?}", op),
+			op => self.emit_float_arithmetic(func, op),
 		}
 
 		ArithmeticWrap::Float
@@ -1369,6 +1449,12 @@ impl WasmGcEmitter {
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
 	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		if op.is_comparison() && self.should_use_float(left, right, op) {
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+			self.emit_float_comparison(func, op);
+			return;
+		}
 		self.emit_numeric_value(func, left);
 		self.emit_numeric_value(func, right);
 		let (left_range, right_range) = (self.int_range(left), self.int_range(right));
@@ -2496,35 +2582,7 @@ impl WasmGcEmitter {
 				}
 				self.emit_float_value(func, left);
 				self.emit_float_value(func, right);
-				match op {
-					Op::Add => {
-						func.instruction(&Instruction::F64Add);
-					}
-					Op::Sub => {
-						func.instruction(&Instruction::F64Sub);
-					}
-					Op::Mul => {
-						func.instruction(&Instruction::F64Mul);
-					}
-					Op::Div => {
-						func.instruction(&Instruction::F64Div);
-					}
-					Op::Mod | Op::Rem => {
-						// WASM doesn't have F64Rem. Drop f64 values and use i64 path.
-						func.instruction(&Instruction::Drop);
-						func.instruction(&Instruction::Drop);
-						self.emit_int_operands_op(func, left, op, right);
-						self.emit_int_to_f64(func, None);
-					}
-					Op::Pow => {
-						// Drop f64 values and use i64_pow
-						func.instruction(&Instruction::Drop);
-						func.instruction(&Instruction::Drop);
-						self.emit_int_operands_op(func, left, op, right);
-						self.emit_int_to_f64(func, None);
-					}
-					_ => unreachable!(),
-				}
+				self.emit_float_arithmetic(func, op);
 			}
 			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
 			Node::Key(left, Op::Square, _) => {

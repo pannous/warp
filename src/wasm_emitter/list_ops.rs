@@ -466,7 +466,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap when the i32 condition on the stack is true
-	fn emit_fail_if(&self, func: &mut Function, error: &'static str) {
+	pub(super) fn emit_fail_if(&self, func: &mut Function, error: &'static str) {
 		func.instruction(&Instruction::If(BlockType::Empty));
 		self.call(func, error);
 		func.instruction(&Instruction::End);
