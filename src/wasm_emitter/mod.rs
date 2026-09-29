@@ -461,7 +461,14 @@ impl WasmGcEmitter {
 		for (i, param) in user_fn.params.iter().enumerate() {
 			let argument = args.get(i).or(param.default.as_ref())
 				.unwrap_or_else(|| panic!("Missing argument {} for function {} (no default)", i, user_fn.name));
-			self.emit_value_of_kind(func, argument, param_kind(param));
+			let expected = param_kind(param);
+			let given = self.get_type(argument);
+			if !expected.is_ref() && matches!(given, Kind::List | Kind::Text) && given != expected {
+				let message = format!("{} needs a {expected:?} for parameter {}, got {}", user_fn.name, param.name, argument.serialize());
+				self.emit_type_error(func, message);
+				return;
+			}
+			self.emit_value_of_kind(func, argument, expected);
 		}
 
 		// Call the function

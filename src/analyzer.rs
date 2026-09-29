@@ -1242,8 +1242,9 @@ pub fn param_kind(param: &Param) -> Kind {
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
 	body.visit(&mut |node| {
-		if let Node::Key(list, Op::Hash, _) = node {
-			if let Node::Symbol(name) = list.drop_meta() {
+		if let Node::Key(list, Op::Hash, counted) = node {
+			let sequence = if list.is_nothing() { counted } else { list };
+			if let Node::Symbol(name) = sequence.drop_meta() {
 				indexed.insert(name.clone());
 			}
 		}
