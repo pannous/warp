@@ -3,7 +3,7 @@ use warp::node::types;
 // @claude once tests here are passing, move them to the appropriate correct test file!
 
 #[test]
-#[ignore = "GRAFIX test - wasm_paint_routine not defined"]
+#[ignore = "GRAFIX test - with w=100 the program yields 0 (x=0,y=1, distance ~139 > r=99), expectation 1 looks wrong"]
 #[cfg(feature = "GRAFIX")]
 fn test_paint_wasm() {
 	is!("w=100;h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x - c)^2+(y - c)^2‖<r", 1);
