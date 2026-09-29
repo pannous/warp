@@ -1002,7 +1002,7 @@ impl WasmGcEmitter {
 			}
 			Node::Symbol(s) => {
 				if let Some(user_fn) = self.ctx.user_functions.get(s) {
-					match user_fn.params.len() {
+					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
 					}

@@ -100,6 +100,8 @@ PASSED:
   ✓ test_auto_type
   ✓ test_auto_type_nan
   ✓ test_bad_type
+  ✓ test_bare_name_counts_only_required_parameters
+  ✓ test_bare_name_of_function_with_only_defaults_calls_it
   ✓ test_bare_name_of_function_with_parameter_is_an_error
   ✓ test_bare_name_of_function_without_parameters_calls_it
   ✓ test_bare_name_of_typed_function_is_an_error
@@ -214,7 +216,7 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write
+  ✓ test_fd_write_raw
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -650,4 +652,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-130 ignored, 645 passed, 0 failed, 645 total tested
+130 ignored, 647 passed, 0 failed, 647 total tested
