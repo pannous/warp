@@ -977,6 +977,11 @@ impl WaspParser {
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
 	}
 
+	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
+	fn at_body_start(&self) -> bool {
+		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
+	}
+
 	fn finish_while_prefix(&mut self, rhs: Node) -> Node {
 		self.skip_spaces();
 		if self.current_char() == '{' {
