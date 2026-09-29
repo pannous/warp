@@ -19,6 +19,11 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 
+/// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
+const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+/// A vulgar fraction such as ⅓ decomposes (NFKD) into numerator, this slash and denominator: 1⁄3
+const FRACTION_SLASH: char = '⁄';
+
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[derive(Default)]
@@ -39,6 +44,22 @@ impl ParserOptions {
 	pub fn data() -> Self {
 		ParserOptions { data_mode: true, ..Default::default() }
 	}
+}
+
+fn superscript_digit(ch: char) -> Option<i64> {
+	SUPERSCRIPT_DIGITS.chars().position(|digit| digit == ch).map(|position| position as i64)
+}
+
+/// Numerator and denominator of a Unicode vulgar fraction character: ½ → (1, 2), ⅚ → (5, 6), ↉ → (0, 3)
+fn vulgar_fraction(ch: char) -> Option<(i64, i64)> {
+	let decomposed: String = std::iter::once(ch).nfkd().collect();
+	let (numerator, denominator) = decomposed.split_once(FRACTION_SLASH)?;
+	Some((numerator.parse().ok()?, denominator.parse().ok()?))
+}
+
+/// Characters that are numeric for Unicode but written next to a number as operators or literals of their own
+fn is_number_glyph(ch: char) -> bool {
+	superscript_digit(ch).is_some() || vulgar_fraction(ch).is_some()
 }
 
 fn is_identifier_char(c: char) -> bool {
@@ -520,8 +541,6 @@ impl WaspParser {
 		match (self.current_char(), self.peek_char(1)) {
 			('+', '+') => Some((Op::Inc, 2)),
 			('-', '-') => Some((Op::Dec, 2)),
-			('²', _) => Some((Op::Square, 1)),
-			('³', _) => Some((Op::Cube, 1)),
 			_ => None,
 		}
 	}
@@ -940,6 +959,11 @@ impl WaspParser {
 			return Node::Key(Box::new(while_cond), Op::Do, Box::new(body_block));
 		}
 
+		if let Node::Key(condition, Op::Colon, body) = &rhs {
+			let while_cond = Node::Key(Box::new(Empty), Op::While, condition.clone());
+			return Node::Key(Box::new(while_cond), Op::Do, body.clone());
+		}
+
 		if let Node::List(items, _, _) = rhs.drop_meta() {
 			if items.len() == 2 {
 				if let Node::List(_, Bracket::Curly, _) | Empty = items[1].drop_meta() { // `{}` parses as ø
@@ -959,11 +983,6 @@ impl WaspParser {
 		if self.matches_keyword("else") {
 			self.advance_by(4);
 			self.skip_spaces();
-		if let Node::Key(condition, Op::Colon, body) = &rhs {
-			let while_cond = Node::Key(Box::new(Empty), Op::While, condition.clone());
-			return Node::Key(Box::new(while_cond), Op::Do, body.clone());
-		}
-
 			let else_expr = match mode {
 				ElseParseMode::Atom => self.parse_atom(),
 				ElseParseMode::Expr => self.parse_expr(0),
@@ -974,7 +993,32 @@ impl WaspParser {
 		}
 	}
 
+	/// The exponent written in superscript digits at the cursor and its length in characters: ⁴ → (4, 1), ¹² → (12, 2)
+	fn superscript_exponent(&self) -> Option<(i64, usize)> {
+		let digits: Vec<i64> = self.chars.iter().skip(self.pos).map_while(|ch| superscript_digit(*ch)).collect();
+		let exponent = digits.iter().fold(0i64, |exponent, digit| exponent.saturating_mul(10).saturating_add(*digit));
+		(!digits.is_empty()).then_some((exponent, digits.len()))
+	}
+
+	/// `x⁴` is x^4; the single digits ² and ³ keep their dedicated square and cube operators
+	fn try_parse_superscript_power(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let (exponent, length) = self.superscript_exponent()?;
+		let (op, right) = match (exponent, length) {
+			(2, 1) => (Op::Square, Empty),
+			(3, 1) => (Op::Cube, Empty),
+			_ => (Op::Pow, Node::int(exponent)),
+		};
+		if op.binding_power().0 < min_bp {
+			return None;
+		}
+		self.advance_by(length);
+		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(right)))
+	}
+
 	fn try_parse_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		if let Some(power) = self.try_parse_superscript_power(lhs, min_bp) {
+			return Some(power);
+		}
 		let (op, chars) = self.peek_suffix_operator()?;
 		let (l_bp, _) = op.binding_power();
 		if l_bp < min_bp {
@@ -1220,6 +1264,10 @@ impl WaspParser {
 			}
 		}
 
+		if let Some(fraction) = self.vulgar_fraction_literal() {
+			return fraction;
+		}
+
 		self.push_digits(&mut num_str);
 		let mut is_float = false;
 		// Only consume . as decimal if NOT followed by another . (range operator)
@@ -1258,6 +1306,19 @@ impl WaspParser {
 		}
 	}
 
+	/// `⅓` is the exact ratio 1/3; a number written directly after it multiplies: `⅓9` is 3
+	fn vulgar_fraction_literal(&mut self) -> Option<Node> {
+		let (numerator, denominator) = vulgar_fraction(self.current_char())?;
+		self.advance();
+		let ratio = Number::ratio(Number::Int(numerator), Number::Int(denominator));
+		let fraction = Node::Number(ratio);
+		if !self.current_char().is_ascii_digit() {
+			return Some(fraction);
+		}
+		let factor = self.parse_number_value();
+		Some(Node::Key(Box::new(fraction), Op::Mul, Box::new(factor)))
+	}
+
 	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration
 	fn with_time_unit(&mut self, number: Node) -> Node {
 		let Node::Number(Number::Int(count)) = &number else {
@@ -1284,8 +1345,8 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			// '三'.is_numeric() is true but not ASCII
-			// Exclude ² and ³ as they are suffix operators, not part of the number
-			if ch.is_numeric() && ch != '²' && ch != '³' {
+			// Exclude superscripts and vulgar fractions: suffix operators and literals of their own
+			if ch.is_numeric() && !is_number_glyph(ch) {
 				num_str.push(ch);
 				self.advance();
 			} else if ch == '_' && self.prev_char().is_ascii_digit() && self.peek_char(1).is_ascii_digit() {
@@ -1325,7 +1386,7 @@ impl WaspParser {
 			// Include alphanumeric, underscore, and hyphen (for kebab-case)
 			// BUT: don't include hyphen if followed by a digit (that's subtraction)
 			let is_hyphen_in_symbol = ch == '-' && !self.peek_char(1).is_numeric();
-			if (ch.is_alphanumeric() && ch != '²' && ch != '³') || ch == '_' || is_hyphen_in_symbol {
+			if (ch.is_alphanumeric() && !is_number_glyph(ch)) || ch == '_' || is_hyphen_in_symbol {
 				symbol.push(ch);
 				self.advance();
 			} else {

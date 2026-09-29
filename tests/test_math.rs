@@ -287,13 +287,11 @@ fn test_absolute_value_arithmetic() {
 }
 
 #[test]
-#[ignore]
 fn test_fraction_multiplication() {
 	is!("⅓9", 3);
 }
 
 #[test]
-#[ignore]
 fn test_superscript_powers() {
 	is!("3⁴", 81);
 }
