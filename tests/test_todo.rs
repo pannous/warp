@@ -6,7 +6,7 @@ use warp::node::types;
 #[ignore = "GRAFIX test - wasm_paint_routine not defined"]
 #[cfg(feature = "GRAFIX")]
 fn test_paint_wasm() {
-	is!("h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x-c)^2+(y-c)^2‖<r", 1);
+	is!("w=100;h=100;r=10;i=100;c=99;r=99;x=i%w;y=i/h;k=‖(x - c)^2+(y - c)^2‖<r", 1);
 }
 
 // === If-then-else ===
