@@ -49,7 +49,7 @@ fn test_global_declaration_of_a_non_name_is_an_error() {
 
 #[test]
 fn test_struct_field_of_an_unknown_type_is_an_error() {
-	common::fails_with("type Point{x:Vec3}; Point{x:1}", "unknown type");
+	common::fails_with("type Point{x:Vec3}; 1+1", "unknown type");
 }
 
 #[test]
