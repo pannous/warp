@@ -18,6 +18,9 @@ mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
 
+/// Builtins that round a float to an exact Int
+const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up", "round_half_even"];
+
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 
@@ -2507,6 +2510,10 @@ impl WasmGcEmitter {
 						}
 					}
 				}
+				// Rounding and counting builtins build a node: its Int is the number
+				if self.emit_integer_builtin(func, items) {
+					return;
+				}
 				self.emit_statement_sequence(func, items, Self::emit_numeric_value);
 			}
 			// While loop: emit loop and get numeric result
@@ -2516,6 +2523,19 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, target) => self.emit_numeric_cast(func, located, value, target),
 			other => self.emit_not_a_number(func, located, other),
 		}
+	}
+
+	/// `floor(x)`, `count(list)`…: the builtin builds a node, its Int (raw i64 on the stack) is the number
+	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [Node::Symbol(fn_name), argument] = items else {
+			return false;
+		};
+		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str()) || crate::analyzer::counting_function(fn_name, &self.ctx).is_some();
+		if !integer_builtin || !self.emit_introspection_fn(func, fn_name, argument) {
+			return false;
+		}
+		self.emit_call(func, "get_int_value");
+		true
 	}
 
 	/// Emit the float value of a node onto the stack (as f64)
@@ -2657,6 +2677,10 @@ impl WasmGcEmitter {
 							return;
 						}
 					}
+				}
+				if self.emit_integer_builtin(func, items) {
+					self.emit_int_to_f64(func, None);
+					return;
 				}
 				// Statement sequence: execute all, return last as float
 				for (i, item) in items.iter().enumerate() {
