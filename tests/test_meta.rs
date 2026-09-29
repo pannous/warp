@@ -40,7 +40,6 @@ fn test_meta() {
 }
 
 #[test]
-#[ignore]
 fn test_meta_at() {
 	eq!(parse("tee{a:1}").name(), "tee");
 	eq!(parse("tee{a:1}").serialize(), "tee{a:1}");
