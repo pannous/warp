@@ -1063,6 +1063,7 @@ impl WaspParser {
 		if self.current_char() != '[' || min_bp > subscript_bp {
 			return None;
 		}
+		let before_bracket = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
@@ -1077,6 +1078,7 @@ impl WaspParser {
 		}
 
 		if self.current_char() != ']' {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_bracket; // `foo [1 2 3]`: a list argument, not an index
 			return None;
 		}
 		self.advance(); // skip ']'
@@ -1957,7 +1959,7 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 }
 
 /// `while condition body`: the loop head `ø while condition` applied `do` to its body
-fn while_do(condition: Node, body: Node) -> Node {
+pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))
 }

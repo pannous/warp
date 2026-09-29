@@ -1037,6 +1037,10 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal
 pub fn lower_declarations(node: Node) -> Node {
+	let node = match crate::for_loop::lower(node) {
+		Ok(loop_as_while) => return lower_declarations(loop_as_while),
+		Err(node) => node,
+	};
 	match node {
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
 			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
