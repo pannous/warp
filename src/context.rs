@@ -10,11 +10,13 @@ pub struct Param {
     pub name: String,
     pub annotation: Option<Node>,
     pub default: Option<Node>,
+    /// The kind the function body demands of an undeclared parameter, e.g. List for `xs#2`
+    pub used_as: Option<Kind>,
 }
 
 impl Param {
     pub fn untyped(name: &str) -> Self {
-        Param { name: name.to_string(), annotation: None, default: None }
+        Param { name: name.to_string(), annotation: None, default: None, used_as: None }
     }
 }
 
