@@ -368,7 +368,8 @@ fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.bytes", 8);
 	is!("x=\"👍🏽\";x.chars", 2);
 	is!("x=\"👍🏽\";x.graphemes", 1);
-	is!("pixels=(1,2,3);size(pixels)", 24); // lists keep 8 bytes per element
+	is!("pixels=(1,2,3);size(pixels)", 3); // size is a synonym for count
+	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
 #[test] // Swift: s.unicodeScalars.count; a char is a code point, as x.chars and Rust's chars()
