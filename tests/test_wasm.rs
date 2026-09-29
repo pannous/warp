@@ -237,7 +237,6 @@ fn test_math_primitives() {
 }
 
 #[test]
-#[ignore]
 fn test_float_operators() {
 	is!("3.0+3.0*3.0", 12);
 	is!("42.0/2.0", 21);
@@ -271,7 +270,6 @@ fn test_float_operators() {
 }
 
 #[test]
-#[ignore]
 fn test_norm2() {
 	is!("1-‖3‖/-3", 2);
 	is!("1-‖-3‖/3", 0);
@@ -295,7 +293,6 @@ fn test_norm2() {
 }
 
 #[test]
-#[ignore]
 fn test_norm() {
 	test_norm2();
 	is!("‖-3‖", 3);
@@ -406,7 +403,6 @@ fn test_math_operators_runtime() {
 }
 
 #[test]
-#[ignore]
 fn test_comparison_math() {
 	// may be evaluated by compiler!
 	is!("3*42>2*3", 1);
@@ -592,7 +588,6 @@ fn test_wasm_variables0() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_increment() {
 	is!("i=2;i++", 3);
 	skip!(
@@ -619,7 +614,6 @@ fn test_wasm_logic_unary_variables() {
 }
 
 #[test]
-#[ignore]
 fn test_self_modifying() {
 	is!("i=3;i*=3", 9);
 	is!("i=3;i+=3", 6);
@@ -664,7 +658,6 @@ fn test_wasm_logic_on_objects() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic() {
 	skip!(
 
@@ -736,7 +729,6 @@ fn test_wasm_logic_negated() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_combined() {
 	is!("3<1 and 3<1", 3 < 1);
 	is!("3<1 and 9>8", 3 < 1);
@@ -756,7 +748,6 @@ fn test_wasm_logic_combined() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_if() {
 	is!("if 2 : 3 else 4", 3);
 	is!("if 2 then 3 else 4", 3);
@@ -797,7 +788,6 @@ fn test_wasm_while2() {
 }
 
 #[test]
-#[ignore]
 fn test_square_precedence() {
 	// todo!
 	is!("π/2^2", PI / 4.);
@@ -1286,7 +1276,6 @@ fn test_math_library() {
 }
 
 #[test]
-#[ignore]
 fn test_smart_return_harder() {
 	is!("'a'", 'a');
 	//    is!("'a'", 'a'); // … should be 97
@@ -1303,7 +1292,6 @@ fn test_smart_return_harder() {
 	//    is!("x='abcde';x[3]", (int) 'd');// currently FAILS … OK typesafe!
 }
 #[test]
-#[ignore]
 fn test_smart_return() {
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -1529,7 +1517,6 @@ fn test_sinus() {
 }
 
 #[test]
-#[ignore]
 fn test_emit_basics() {
 	is!("true", true);
 	is!("false", false);
@@ -1550,7 +1537,6 @@ fn test_emit_basics() {
 	);
 }
 #[test]
-#[ignore]
 fn test_math_extra() {
 	is!("15÷5", 3);
 	is!("15÷5", 3);
@@ -1578,7 +1564,6 @@ fn test_root() {
 }
 
 #[test]
-#[ignore]
 fn test_root_float() {
 	//	skip!(
 	// include <cmath> causes problems, so skip
@@ -1596,7 +1581,6 @@ fn test_node_data_binary_reconstruction() {
 
 // SIMILAR AS:
 #[test]
-#[ignore]
 fn test_todo_browser() {
 	// test_fixed_in_browser(); // undefined
 	test_old_random_bugs(); // currently ok
