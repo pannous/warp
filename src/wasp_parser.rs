@@ -33,10 +33,16 @@ pub struct ParserOptions {
 	/// Data mode (untrusted or foreign data, never evaluated): English words stay symbols
 	/// (`NO` is Norway, not false) and numbers keep their source literal (`01234`, `1.10`)
 	pub data_mode: bool,
+	/// WIT syntax: `name<a, b>` applies a type (`tuple<s64, s64>`), `struct`/`type` are plain words
+	pub wit_mode: bool,
 }
 
 
 impl ParserOptions {
+	pub fn wit() -> Self {
+		ParserOptions { wit_mode: true, ..Default::default() }
+	}
+
 	pub fn xml() -> Self {
 		ParserOptions { xml_mode: true, ..Default::default() }
 	}
@@ -68,8 +74,9 @@ fn is_identifier_char(c: char) -> bool {
 
 /// Read and parse a WASP file
 pub fn parse_file(path: &str) -> Node {
+	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {
-		Ok(content) => WaspParser::parse(&content),
+		Ok(content) => WaspParser::parse_with_options(&content, options),
 		_ => error(&format!("Failed to read {}", path)),
 	}
 }
@@ -498,6 +505,7 @@ impl WaspParser {
 			'^' => Some((Op::Pow, 1)),
 			'×' | '⋅' => Some((Op::Mul, 1)),
 			'÷' => Some((Op::Div, 1)),
+			'<' | '>' if self.options.wit_mode => None, // angle brackets only delimit type arguments
 			'<' => Some((Op::Lt, 1)),
 			'>' => Some((Op::Gt, 1)),
 			'≤' => Some((Op::Le, 1)),
@@ -673,7 +681,10 @@ impl WaspParser {
 
 		// Handle "class"/"struct"/"type" keyword: class Name { fields }
 		// But NOT type(x) which is a function call for type introspection
-		if symbol == "class" || symbol == "struct" || (symbol == "type" && self.current_char() != '(') {
+		if self.options.wit_mode && self.current_char() == '<' {
+			return self.parse_type_application(symbol);
+		}
+		if !self.options.wit_mode && (symbol == "class" || symbol == "struct" || (symbol == "type" && self.current_char() != '(')) {
 			self.skip_whitespace();
 			let type_name = match self.parse_symbol() {
 				Ok(s) => s,
@@ -1415,6 +1426,13 @@ impl WaspParser {
 		} else {
 			Ok(symbol)
 		}
+	}
+
+	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
+	fn parse_type_application(&mut self, type_name: String) -> Node {
+		self.advance(); // skip '<'
+		let arguments = self.parse_list_with_separators(Some('>'), Bracket::Less);
+		Node::List(vec![Symbol(type_name), arguments], Bracket::None, Separator::None)
 	}
 
 	fn parse_bracketed(&mut self, open: char) -> Node {
