@@ -218,7 +218,7 @@ fn test_string_indices() {
 	is!("x='abcde';x#4='x';x[4]", 'e');
 	is!("i=0;x='abcde';x#4='x';x[4]", 'e');
 
-	// is!("'hello';(1 2 3 4);10", 10); // TODO: statement sequences - separate issue from string indexing
+	is!("'hello';(1 2 3 4);10", 10); // DONE: statement sequences - separate issue from string indexing
 
 	//	is!("'world'[1]", 'o');
 	is!("'world'#1", 'w');

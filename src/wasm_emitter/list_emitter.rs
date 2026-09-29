@@ -1,5 +1,6 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
+use crate::analyzer::is_semicolon_sequence;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
@@ -10,7 +11,7 @@ use super::WasmGcEmitter;
 impl WasmGcEmitter {
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
-	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) {
+	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
 		if items.is_empty() {
 			self.emit_call(func, "new_empty");
 			return;
@@ -150,7 +151,7 @@ impl WasmGcEmitter {
 		}
 
 		// Check if this is a statement sequence
-		let is_statement_sequence = self.is_statement_sequence(items);
+		let is_statement_sequence = is_semicolon_sequence(items, bracket, separator) || self.is_statement_sequence(items);
 
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);

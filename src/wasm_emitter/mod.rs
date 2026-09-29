@@ -1029,8 +1029,8 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				self.emit_key_node(func, left, op, right);
 			}
-			Node::List(items, bracket, _separator) => {
-				self.emit_list_node(func, items, bracket);
+			Node::List(items, bracket, separator) => {
+				self.emit_list_node(func, items, bracket, separator);
 			}
 			Node::Data(dada) => {
 				self.emit_string_call(func, &dada.type_name, "new_symbol");

@@ -14,10 +14,18 @@ fn is_data_node(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 		Node::Symbol(s) => !is_function_keyword(s),
-		Node::List(items, _, _) => items.iter().all(is_data_node),
+		Node::List(items, bracket, separator) => !is_semicolon_sequence(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
 		_ => false,
 	}
+}
+
+/// Unbracketed `a;b;c` of plain atoms is a data list (`a;b;c` → strings), but once an item is itself a bracketed group
+/// it reads as statements: run them in order and yield the last one (`'hello';(1 2 3 4);10` → 10).
+/// Inside brackets the semicolon always separates data, `(1;2;3)` and `(1,2; 3,4)` are lists.
+pub fn is_semicolon_sequence(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+	*separator == Separator::Semicolon && *bracket == Bracket::None
+		&& items.iter().any(|item| matches!(item.drop_meta(), Node::List(_, Bracket::Round | Bracket::Square | Bracket::Curly, _)))
 }
 
 /// Infer the Kind for an expression
@@ -65,7 +73,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			}
 		}
 		// List handling: distinguish data lists from statement sequences and function calls
-		Node::List(items, bracket, _) if !items.is_empty() => {
+		Node::List(items, bracket, separator) if !items.is_empty() => {
 			if crate::host::fetch_call(node).is_some() {
 				return Kind::Text; // or an Error value, see check_unchecked_use
 			}
@@ -134,7 +142,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return infer_type(&items[0], scope);
 			}
 			// Data list: all items are pure data → Kind::List
-			if items.iter().all(is_data_node) {
+			if !is_semicolon_sequence(items, bracket, separator) && items.iter().all(is_data_node) {
 				return Kind::List;
 			}
 			// Statement sequence: return type of last item

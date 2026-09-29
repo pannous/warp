@@ -1,6 +1,8 @@
 === Test Results ===
 
 PASSED:
+  ✓ compile_command_emits_the_same_struct_module_as_eval
+  ✓ compile_command_writes_wasm_without_running
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
@@ -51,6 +53,7 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ host::tests::test_host_state
   ✓ host::tests::test_host_state
+  ✓ newline_form_is_really_evaluated - should panic
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
@@ -204,7 +207,7 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write_raw
+  ✓ test_fd_write
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -236,14 +239,19 @@ PASSED:
   ✓ test_ffi_zlib_discovery
   ✓ test_fibonacci
   ✓ test_fibonacci_auto_param
+  ✓ test_fibonacci_auto_param_newline
   ✓ test_fibonacci_auto_typed
+  ✓ test_fibonacci_auto_typed_newline
   ✓ test_fibonacci_typed
+  ✓ test_fibonacci_typed_newline
   ✓ test_fibonacci_typed2
   ✓ test_filter
   ✓ test_finite_domain_function_equality
   ✓ test_first_char
   ✓ test_fizzbuzz_nested_ternary
   ✓ test_float_operations
+  ✓ test_float_parameter_keeps_all_digits
+  ✓ test_float_parameter_keeps_fraction
   ✓ test_float_plus_int_type_upgrading
   ✓ test_float_return_through_main
   ✓ test_for_each
@@ -312,6 +320,8 @@ PASSED:
   ✓ test_interpolation
   ✓ test_invalid_number_text_is_an_error
   ✓ test_is_compares_by_value
+  ✓ test_juxtaposition_application_binds_looser_than_arithmetic_argument
+  ✓ test_juxtaposition_application_inside_addition
   ✓ test_key
   ✓ test_key_equality
   ✓ test_key_object_set
@@ -326,6 +336,7 @@ PASSED:
   ✓ test_law_catches_a_false_property
   ✓ test_law_does_not_change_program_result
   ✓ test_law_float_parameter_kinds
+  ✓ test_law_float_parameters_are_tested
   ✓ test_law_holds_because_integers_do_not_wrap
   ✓ test_law_lean_export
   ✓ test_law_lean_export_modulo_is_euclidean
@@ -339,6 +350,7 @@ PASSED:
   ✓ test_leading_zero_is_not_octal
   ✓ test_library_optimization
   ✓ test_line_comments
+  ✓ test_list_index_past_end_is_an_error
   ✓ test_list_operations
   ✓ test_list_plus_concatenates
   ✓ test_logarithm
@@ -364,6 +376,7 @@ PASSED:
   ✓ test_multiline_structure
   ✓ test_mutation_through_alias_is_not_visible
   ✓ test_nan_bits_are_canonical
+  ✓ test_negative_bracket_index_is_an_error
   ✓ test_negative_index_is_an_error
   ✓ test_negative_literals_after_power_fix
   ✓ test_negative_modulo_is_linted
@@ -486,6 +499,7 @@ PASSED:
   ✓ test_sample
   ✓ test_scientific_notation
   ✓ test_scientific_notation_forms
+  ✓ test_selector_zero_is_an_error
   ✓ test_self_closing_tag
   ✓ test_semicolon_groups
   ✓ test_shell_holes_are_whole_arguments
@@ -506,6 +520,7 @@ PASSED:
   ✓ test_square
   ✓ test_square_roots_are_reduced
   ✓ test_square_roots_multiply_exactly
+  ✓ test_statement_sequence_with_grouped_list_in_the_middle
   ✓ test_str_string
   ✓ test_string_at
   ✓ test_string_basics
@@ -566,8 +581,10 @@ PASSED:
   ✓ test_unicode_le
   ✓ test_unicode_mul
   ✓ test_unicode_normalization
+  ✓ test_unknown_parameter_type_is_reported
   ✓ test_unproven_recursion_may_diverge
   ✓ test_use
+  ✓ test_user_function_shadows_ffi_name
   ✓ test_user_type_wasm_emission
   ✓ test_values_empty
   ✓ test_values_key
@@ -595,6 +612,7 @@ PASSED:
   ✓ test_zero_string_is_truthy
   ✓ test_zoned_time_records_its_rules_version
   ✓ test2def
+  ✓ todo_is_a_loud_error_naming_the_missing_feature
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
   ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
@@ -616,4 +634,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-132 ignored, 611 passed, 0 failed, 611 total tested
+132 ignored, 629 passed, 0 failed, 629 total tested
