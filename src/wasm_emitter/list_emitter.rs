@@ -1,14 +1,44 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
-use crate::analyzer::{is_unbracketed_block, type_word_kind};
+use crate::analyzer::{call_name, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
 use wasm_encoder::*;
 
-use super::WasmGcEmitter;
+use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
+
+/// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
+const BUILTIN_CALLS: [&str; 10] = ["return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use"];
 
 impl WasmGcEmitter {
+	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
+	/// A variable is not callable.
+	pub(super) fn resolves_call(&self, name: &str) -> bool {
+		self.ctx.user_functions.contains_key(name)
+			|| self.ctx.ffi_imports.contains_key(name)
+			|| self.ctx.type_registry.get_by_name(name).is_some()
+			|| type_word_kind(&name.to_lowercase()).is_some()
+			|| is_function_keyword(name)
+			|| BUILTIN_CALLS.contains(&name)
+			|| ROUNDING_FUNCTIONS.contains(&name)
+			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
+			|| crate::ffi::get_ffi_signature(name).is_some()
+	}
+
+	/// A call nothing resolves is an error value at the call; returns whether it was one
+	pub(super) fn reject_unresolved_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(name) = call_name(items, bracket, separator) else {
+			return false;
+		};
+		if self.resolves_call(name) {
+			return false;
+		}
+		let diagnostic = crate::diagnostic::Diagnostic::at(&items[0], format!("undefined function: {name}"));
+		self.emit_type_error(func, diagnostic.to_string());
+		true
+	}
+
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
@@ -138,6 +168,10 @@ impl WasmGcEmitter {
 					return;
 				}
 			}
+		}
+
+		if self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
 		}
 
 		// Check if this list contains type definitions
