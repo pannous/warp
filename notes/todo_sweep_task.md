@@ -21,18 +21,19 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
 | A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | assigned warp-bugs (survey first) |
-| A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | open (warp-bugs next) |
+| A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | assigned warp-numeric |
+| A7 | notes/footguns.md plain-bugs list stale (6 of 7 fixed) → pointers to regression tests | assigned warp-library |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
 
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: user allowed `mut` in test_remove/test_remove2 → assigned warp-numeric |
+| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: done e88399a6 (verified by warp-numeric) |
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → done ff9b2d62 b2f931d1 |
-| B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | assigned warp-parser |
+| B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | done 7e2e746c, defaults gap sent back |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
-| L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | assigned warp-library |
+| L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
 | L2 | test_types.rs ignored type-system/generics tests | parked (large design work) |
 
 ## Rules for everyone
