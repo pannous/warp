@@ -44,7 +44,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | C7 | triage ignored test_wit (nested separator groups) and test_wast tests | done eb31f69d 2318c301 aa52fedd (test_wit_parse); test_wast needs polish-notation decision |
 | A12 | unify missing_functions and missing math imports emission rerun into one mechanism | open |
 | C8 | empty {} blocks dropped (`x i {}` loses the block) | assigned warp-library |
-| A13 | triage ignored test_operators (1), test_todo (4) | assigned warp-numeric |
+| A13 | triage ignored test_operators (1), test_todo (4) | done: all design-blocked (notes/open_decisions.md) |
+| A14 | triage ignored test_wasm.rs (~19), in slices of 3 fixes | assigned warp-numeric |
 | C4 | tests/test_string.rs:143/150 string operator overloads (`"a".s() + 2`) | parked: user doesn't need it, commented lines stay TODO |
 | C5 | src/meta.rs:9 conditional compilation | done edd78b86 (LineInfo.line debug-only) |
 | L1 | test_web.rs:43 `$b.ok` emitAttributeSetter; :71 Externref kind | parked: needs a real webview host (wry?) + Externref Kind → user |
