@@ -126,7 +126,6 @@ fn test_print_function() {
 }
 
 #[test]
-#[ignore = "requires UTF-8 char indexing vs byte indexing"]
 fn test_utf8_char_indexing() {
 	// UTF-8 char indexing vs byte indexing (encoding redesign)
 	is!("'αβγδε'#3", 'γ');
