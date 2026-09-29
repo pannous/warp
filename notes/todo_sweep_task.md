@@ -20,7 +20,8 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
-| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | open, user decision |
+| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | assigned warp-bugs (survey first) |
+| A6 | stale #[ignore]s: A2/A3 showed ignored tests that already pass — run all ignored tests, un-ignore the passing ones | open (warp-bugs next) |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
 
 ## Low
