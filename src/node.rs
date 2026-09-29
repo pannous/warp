@@ -19,6 +19,9 @@ use crate::node::Node::*;
 use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
 
+/// Prefix of a `@name(value)` annotation key
+const ATTRIBUTE_MARK: char = '@';
+
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
 
@@ -532,7 +535,7 @@ impl Index<&str> for Node {
 	type Output = Node;
 
 	fn index(&self, i: &str) -> &Self::Output {
-		if let Some(attribute_name) = i.strip_prefix('@') {
+		if let Some(attribute_name) = i.strip_prefix(ATTRIBUTE_MARK) {
 			return self.attribute(attribute_name).unwrap_or(&Empty);
 		}
 		match self {
@@ -608,6 +611,9 @@ impl IndexMut<usize> for Node {
 
 impl IndexMut<&String> for Node {
 	fn index_mut(&mut self, i: &String) -> &mut Self::Output {
+		if let Some(attribute_name) = i.strip_prefix(ATTRIBUTE_MARK) {
+			return self.attribute_slot(attribute_name);
+		}
 		match self {
 			List(nodes, _, _) => {
 				if let Some(found) = nodes.iter_mut().find(|node| match node.drop_meta() {
@@ -736,22 +742,63 @@ impl Node {
 		}
 	}
 
-	/// Annotate with `@name(value)`; the innermost annotation is the one written last
+	/// Annotate with `@name(value)`; the attribute key keeps its `@` so it never mixes with comments or line info
 	pub fn with_attribute(self, name: &str, value: Node) -> Self {
 		Meta {
 			node: Box::new(self),
-			data: Box::new(Node::key(name, value)),
+			data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)),
 		}
 	}
 
-	/// The value of the attribute `@name`, searched through all annotations of this node
-	pub fn attribute(&self, name: &str) -> Option<&Node> {
+	/// All `@name(value)` annotations of this node, outermost first
+	pub fn attributes(&self) -> Vec<(&str, &Node)> {
 		match self {
-			Meta { node, data } => match data.as_ref() {
-				Key(key, _, value) if matches!(key.as_ref(), Symbol(key_name) | Text(key_name) if key_name == name) => Some(value),
-				_ => node.attribute(name),
-			},
-			_ => None,
+			Meta { node, data } => {
+				let own = match data.as_ref() {
+					Key(key, _, value) => match key.as_ref() {
+						Symbol(key_name) => key_name.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref())),
+						_ => None,
+					},
+					_ => None,
+				};
+				own.into_iter().chain(node.attributes()).collect()
+			}
+			_ => Vec::new(),
+		}
+	}
+
+	/// The value of the attribute `@name`
+	pub fn attribute(&self, name: &str) -> Option<&Node> {
+		self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value)
+	}
+
+	/// The value slot of attribute `@name`; a missing attribute is created around the innermost node,
+	/// so attributes keep their insertion order from the outside in.
+	fn attribute_slot(&mut self, name: &str) -> &mut Node {
+		if self.attribute(name).is_none() {
+			self.innermost_mut().wrap_in_attribute(name);
+		}
+		self.existing_attribute_slot(name).expect("attribute was just created")
+	}
+
+	fn innermost_mut(&mut self) -> &mut Node {
+		match self {
+			Meta { node, .. } => node.innermost_mut(),
+			other => other,
+		}
+	}
+
+	fn wrap_in_attribute(&mut self, name: &str) {
+		let core = std::mem::replace(self, Empty);
+		*self = core.with_attribute(name, Empty);
+	}
+
+	fn existing_attribute_slot(&mut self, name: &str) -> Option<&mut Node> {
+		let Meta { node, data } = self else { return None };
+		let is_named = matches!(data.as_ref(), Key(key, _, _) if matches!(key.as_ref(), Symbol(key_name) if key_name.strip_prefix(ATTRIBUTE_MARK) == Some(name)));
+		match (is_named, data.as_mut()) {
+			(true, Key(_, _, value)) => Some(value.as_mut()),
+			_ => node.existing_attribute_slot(name),
 		}
 	}
 
