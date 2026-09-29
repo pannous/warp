@@ -52,16 +52,12 @@ Recursive descent parser that converts text input to Node AST:
 
 ### Emitters
 
-Three distinct code generation backends:
+Two distinct code generation backends:
 
 0. **Generic Emitter** (`src/emitter.rs`)
     - Textual emitter similar to json5
 
-1. **WIT Emitter** (`src/wit_emitter.rs`)
-    - Generates WebAssembly Interface Type definitions
-    - Outputs `.wit` files defining type shapes for Node variants
-
-2. **WASM GC Emitter** (`src/wasm_gc_emitter.rs`)
+1. **WASM GC Emitter** (`src/wasm_gc_emitter.rs`)
     - Generates WASM GC bytecode using `wasm-encoder` crate
     - Creates GC struct types for each Node variant with proper tagging
     - Uses `NodeKind` enum for runtime type discrimination
