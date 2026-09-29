@@ -114,11 +114,7 @@ impl WasmGcEmitter {
 			},
 			Some(_) => match result_type { // Int or other → i64
 				None => { func.instruction(&Instruction::I64Const(0)); }
-				Some(ValType::F64) => { func.instruction(&Instruction::I64TruncF64S); }
-				Some(ValType::F32) => {
-					func.instruction(&Instruction::F64PromoteF32);
-					func.instruction(&Instruction::I64TruncF64S);
-				}
+				Some(ValType::F64 | ValType::F32) => self.emit_float_in_exact_context(func, sig.name),
 				Some(ValType::I32) => { func.instruction(&Instruction::I64ExtendI32S); }
 				_ => {} // I64 already correct
 			},
