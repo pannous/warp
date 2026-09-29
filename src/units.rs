@@ -215,7 +215,7 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 			result.map(Value::Number).ok_or(Stop::Unsupported)
 		}
 		(Value::Quantity(a), Op::Add | Op::Sub, Value::Quantity(b)) => sum(a, op, b),
-		(Value::Number(_), Op::Add | Op::Sub, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
+		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
 			fail(format!("incompatible operands: a plain number and {}", other.unit.name))
 		}
 		(Value::Number(n), Op::Mul, Value::Quantity(q)) | (Value::Quantity(q), Op::Mul, Value::Number(n)) => q
