@@ -121,7 +121,6 @@ fn test_integer_overflow_does_not_wrap() {
 }
 
 #[test]
-#[ignore = "next"] // `as i64` works at top level but panics inside a function body: Cannot extract numeric value from (x*x)asi64
 fn test_explicit_wrap_inside_function() {
 	is!("f(x) := (x*x) as i64; f(3037000500)", -9223372036709301616i64);
 }
