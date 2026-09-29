@@ -18,6 +18,8 @@ const MAX_INTEGER_EXPONENT: i64 = 4096;
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
+/// Words that may precede the name of a global: `global const int k=7`, `global export k=7`
+const DECLARATION_MODIFIERS: [&str; 12] = ["export", "const", "mutable", "mut", "long", "int", "integer", "float", "double", "short", "i32", "i64"];
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
 const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
@@ -694,6 +696,7 @@ impl WaspParser {
 
 		if symbol == "global" {
 			self.skip_whitespace();
+			self.skip_declaration_modifiers();
 			// Parse the rest as an expression (should be name=value or name:=value)
 			let decl = self.parse_expr(0);
 			return Node::Key(Box::new(Symbol("global".to_string())), Op::Colon, Box::new(decl));
@@ -997,6 +1000,22 @@ impl WaspParser {
 	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
 	fn at_body_start(&self) -> bool {
 		!matches!(self.current_char(), '\0' | ';' | ',' | '\n' | '}' | ')' | ']') && !self.matches_keyword("do")
+	}
+
+	/// Modifier and type words between `global` and the name (`global const int k=7`): the global holds the value, the words are dropped
+	fn skip_declaration_modifiers(&mut self) {
+		loop {
+			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
+			let is_modifier = DECLARATION_MODIFIERS.iter().any(|word| self.matches_keyword(word));
+			if !is_modifier || self.parse_symbol().is_err() {
+				return;
+			}
+			self.skip_spaces();
+			if !(self.current_char().is_alphabetic() || self.current_char() == '_') {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
+				return;
+			}
+		}
 	}
 
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement

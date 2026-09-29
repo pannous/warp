@@ -1170,7 +1170,6 @@ fn test_round_floor_ceiling() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_typed_globals() {
 	//    is!("global int k", 7);//   empty global initializer for int
 	is!("global long k=7", 7);
@@ -1181,7 +1180,6 @@ fn test_wasm_typed_globals() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_mutable_global() {
 	//	is!("$k=7",7);// ruby style, conflicts with templates `hi $name`
 	//    is!("k::=7", 7);// global variable !visually marked as global, !as good as:
