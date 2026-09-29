@@ -3317,7 +3317,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::modules::resolve(node);
+	let node = crate::analyzer::lower_negated_calls(crate::modules::resolve(node));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}

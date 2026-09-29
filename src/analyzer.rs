@@ -1264,6 +1264,27 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	refine_return_kinds(ctx);
 }
 
+/// `f -x` with a user function `f` is the call `f(-x)`: a function is never an operand of a subtraction
+pub fn lower_negated_calls(node: Node) -> Node {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, &node);
+	negate_calls(node, &ctx.user_functions)
+}
+
+fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>) -> Node {
+	let is_function = |operand: &Node| matches!(operand.drop_meta(), Node::Symbol(name) if functions.get(name).is_some_and(|function| !function.params.is_empty()));
+	match node {
+		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
+			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions)));
+			Node::List(vec![*function, negated], Bracket::None, Separator::Space)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions)), op, Box::new(negate_calls(*right, functions))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions)), data },
+		other => other,
+	}
+}
+
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
 	let name = format!("{kind:?}");
