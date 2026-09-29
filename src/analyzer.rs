@@ -1802,6 +1802,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			if op.is_arithmetic()
+				|| op.is_shift()
 				|| op.is_compound_assign()
 				|| matches!(op, Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor)
 			{

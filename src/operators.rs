@@ -46,6 +46,8 @@ pub enum Op {
 	Mod,  // %  mod  Euclidean: 0 ≤ a % b < |b|
 	Rem,  // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
 	Pow,  // ^  **
+	Shl,  // <<  shift left: a * 2^n
+	Shr,  // >>  shift right: floor(a / 2^n)
 
 	// Compound assignment operators (x op= y → x = x op y)
 	AddAssign, // +=
@@ -134,6 +136,9 @@ impl Op {
 			// Multiplicative (left-assoc)
 			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
 
+			// Shifts sit between additive and range: 1 << 2 + 3 → 1 << (2+3)
+			Op::Shl | Op::Shr => (135, 136),
+
 			// Additive (left-assoc)
 			Op::Add | Op::Sub | Op::PlusMinus => (140, 141),
 
@@ -213,6 +218,8 @@ impl Op {
 			Op::Mod => "%",
 			Op::Rem => "rem",
 			Op::Pow => "^",
+			Op::Shl => "<<",
+			Op::Shr => ">>",
 
 			// Compound assignment
 			Op::AddAssign => "+=",
@@ -301,6 +308,11 @@ impl Op {
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
 		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
+	}
+
+	/// Check if this is a shift operator, defined on exact Ints only
+	pub fn is_shift(&self) -> bool {
+		matches!(self, Op::Shl | Op::Shr)
 	}
 
 	/// Check if this is a comparison operator

@@ -89,6 +89,7 @@ impl WasmGcEmitter {
 		} else if op.is_logical() && !both_numeric {
 			self.emit_truthy_logical(func, left, op, right);
 		} else if op.is_arithmetic()
+			|| op.is_shift()
 			|| op.is_comparison()
 			|| op.is_logical()
 			|| is_numeric_define

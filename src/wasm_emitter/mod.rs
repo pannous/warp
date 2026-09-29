@@ -37,7 +37,10 @@ const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 const LIBM_POW: &str = "m.pow";
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
-const EXACT_TRAP_MESSAGES: [(&str, &str); 1] = [("exact_pow", "an exact power needs an integer exponent")];
+const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
+	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
+	("exact_pow", "an exact power needs an integer exponent"),
+];
 pub use equality::{IS_TRUTHY, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
@@ -534,7 +537,7 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(_) | Node::True | Node::False => true,
-			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_comparison() => true,
+			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_shift() || op.is_comparison() => true,
 			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
 			Node::Symbol(name) => {
@@ -1150,6 +1153,11 @@ impl WasmGcEmitter {
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
 			self.emit_node_instructions(func, &assignment);
+			return;
+		}
+		if op.is_shift() {
+			self.emit_shift(func, left, op, right);
+			self.emit_call(func, "new_int");
 			return;
 		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
@@ -2424,6 +2432,7 @@ impl WasmGcEmitter {
 				}
 				self.emit_int_operands_op(func, left, op, right);
 			}
+			Node::Key(left, op, right) if op.is_shift() => self.emit_shift(func, left, op, right),
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right

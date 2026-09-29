@@ -153,6 +153,13 @@ impl WasmGcEmitter {
 		candidates.iter().filter(|(_, range)| !is_fixnum_range(*range)).map(|(local, _)| *local).collect()
 	}
 
+	/// `a << n` and `a >> n` on exact Ints; a float operand is refused by the operand emitters
+	pub(crate) fn emit_shift(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		self.emit_numeric_value(func, left);
+		self.emit_numeric_value(func, right);
+		self.emit_call(func, if *op == Op::Shl { "int_shift_left" } else { "int_shift_right" });
+	}
+
 	/// Stack [a, b] → [a op b] for + - * / % ^ xor on Ints
 	pub(crate) fn emit_int_op(&mut self, func: &mut Function, op: &Op, left: IntRange, right: IntRange) {
 		if !self.int_runtime() {
