@@ -306,10 +306,30 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
-			emit(self, func, item);
-			if Some(i) != last_statement {
+			if Some(i) == last_statement {
+				emit(self, func, item);
+			} else {
+				self.emit_discarded_statement(func, item, emit);
 				func.instruction(&Instruction::Drop);
 			}
+		}
+	}
+
+	/// A statement whose value is dropped: an assignment to a float variable keeps its own f64 instead of being forced into an exact Int
+	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
+		if self.is_float_assignment(item) {
+			self.emit_float_value(func, item);
+		} else {
+			emit(self, func, item);
+		}
+	}
+
+	fn is_float_assignment(&self, item: &Node) -> bool {
+		match item.drop_meta() {
+			Node::Key(left, Op::Define | Op::Assign, _) => {
+				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+			}
+			_ => false,
 		}
 	}
 

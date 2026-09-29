@@ -2200,11 +2200,13 @@ impl WasmGcEmitter {
 				}
 				if let Node::Symbol(name) = left.drop_meta() {
 					if let Some((position, kind)) = self.scope.lookup(name).map(|local| (local.position, local.kind)) {
+						if kind.is_float() {
+							let message = format!("{} assigns a float where an exact Int is expected", located.serialize());
+							self.emit_type_error(func, message);
+							return;
+						}
 						self.emit_value_of_kind(func, right, kind);
 						func.instruction(&Instruction::LocalTee(position));
-						if kind.is_float() {
-							self.emit_truncated_float(func);
-						}
 					} else {
 						panic!("Undefined variable: {}", name);
 					}
@@ -2609,8 +2611,7 @@ impl WasmGcEmitter {
 				// Statement sequence: execute all, return last as float
 				for (i, item) in items.iter().enumerate() {
 					if i < items.len() - 1 {
-						// For non-last items, use regular emit and drop
-						self.emit_numeric_value(func, item);
+						self.emit_discarded_statement(func, item, Self::emit_numeric_value);
 						func.instruction(&Instruction::Drop);
 					} else {
 						// Last item as float
