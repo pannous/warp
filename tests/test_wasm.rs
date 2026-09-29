@@ -1437,7 +1437,6 @@ fn test_assert() {
 }
 // test once by looking at the output wasm/wat
 #[test]
-#[ignore]
 fn test_named_data_sections() {
 	is!("fest='def';test='abc'", "abc");
 }
