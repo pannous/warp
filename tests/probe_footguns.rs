@@ -1,15 +1,10 @@
 //! Footguns of other languages, checked against Warp (see footguns.md).
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
+mod common;
+use common::fails_with;
 use warp::wasm_emitter::{eval, eval_untrusted};
 use warp::{is, parse_data, Node};
-
-fn fails_with(code: &str, needle: &str) {
-	match eval(code) {
-		Node::Error(message) => assert!(format!("{message}").contains(needle), "{message}"),
-		other => panic!("expected an error containing {needle:?} for {code}, got {other:?}"),
-	}
-}
 
 #[test]
 fn test_division_is_not_truncating() {
