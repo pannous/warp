@@ -14,3 +14,41 @@ fn test_single_quantity_keeps_its_unit() {
 	assert_eq!(quantity.serialize(), "2 km");
 	assert_eq!(format!("{quantity:?}"), "2 km");
 }
+
+#[test]
+fn test_value_with_tolerance_prints_back() {
+	assert_eq!(wasm_emitter::eval("1950 ± 50").serialize(), "1950 ± 50");
+}
+
+#[test]
+fn test_plus_minus_ascii_spelling() {
+	assert_eq!(wasm_emitter::eval("1950 +- 50").serialize(), "1950 ± 50");
+}
+
+#[test]
+fn test_tolerance_in_a_unit() {
+	assert_eq!(wasm_emitter::eval("1950 cm ± 50").serialize(), "1950 ± 50 cm");
+	assert_eq!(wasm_emitter::eval("2m ± 5cm").serialize(), "200 ± 5 cm");
+}
+
+#[test]
+fn test_negative_tolerance_is_an_error() {
+	match wasm_emitter::eval("1950 ± -5") {
+		Node::Error(message) => assert!(format!("{message}").contains("negative")),
+		other => panic!("expected an error, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_range_with_a_unit() {
+	assert_eq!(wasm_emitter::eval("1900 - 2000 AD").serialize(), "1900 - 2000 AD");
+	assert_eq!(wasm_emitter::eval("1900 - 2000 cm").serialize(), "1900 - 2000 cm");
+}
+
+#[test]
+fn test_descending_range_is_an_error() {
+	match wasm_emitter::eval("2000 - 1900 AD") {
+		Node::Error(message) => assert!(format!("{message}").contains("descending")),
+		other => panic!("expected an error, got {other:?}"),
+	}
+}
