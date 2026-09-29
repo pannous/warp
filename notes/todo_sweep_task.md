@@ -9,7 +9,7 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 |---|---|---|
 | A1 | tests/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | done 768e8a87 (bundled into C2's commit by mistake)
 | A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | done a0b29543 (ignore was stale, already fixed earlier) |
-| A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | assigned warp-numeric |
+| A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | done e5934b38 (already fixed; fixed float locals in function bodies instead) |
 | B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | done 872063f4 0b795bf9 (stale, already fixed; duplicate tests sent back) |
 
 ## Medium
@@ -18,8 +18,9 @@ Status: open | assigned <session> | review | done <commit> | parked (reason)
 | B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
 | B2 | tests/test_angle.rs:35 function application without parens precedence | done 872063f4 (already worked) |
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
-| A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | open |
+| A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | assigned warp-numeric |
 | C1 | src/main.rs:208 compile-only CLI path writing the .wasm | done bc52e71c 1d260145 (after one review round) |
+| A5 | float local read in an exact context truncates silently (emit_truncated_float) — loud would break existing tests | open, user decision |
 | C2 | src/node.rs:412 `Text("TODO: …")` placeholder → real implementation or loud error | done 768e8a87 (Node::todo has no callers) |
 
 ## Low
