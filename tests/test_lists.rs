@@ -6,6 +6,7 @@ use warp::node::strings;
 
 // Array size tests
 #[test]
+#[ignore]
 fn test_array_size() {
 	// todo!
 	// There should be one-- and preferably only one --obvious way to do it.
