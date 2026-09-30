@@ -398,6 +398,7 @@ pub mod hints {
             }
         }
         match (written, is_prefix) {
+            ("¬&", false) => hint(written, "nand", "standard spelling of the operator"),
             ("&&" | "&" | "and", false) => and_operator(written),
             ("||" | "|" | "or", false) => or_operator(written),
             ("!" | "not", true) => not_operator(written),

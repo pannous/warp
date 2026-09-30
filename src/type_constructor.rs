@@ -32,14 +32,19 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: 
 	let name = call_name(items, bracket, separator)?;
 	let type_def = registry.get_by_name(name)?;
 	let arguments = &items[1..];
-	if arguments.len() != type_def.fields.len() {
-		let message = format!("{name} takes {} fields, got {}", type_def.fields.len(), arguments.len());
+	let required = type_def.fields.iter().filter(|field| !field.is_optional()).count();
+	if arguments.len() < required || arguments.len() > type_def.fields.len() {
+		let message = if required == type_def.fields.len() {
+			format!("{name} takes {} fields, got {}", type_def.fields.len(), arguments.len())
+		} else {
+			format!("{name} takes {required} to {} fields, got {}", type_def.fields.len(), arguments.len())
+		};
 		return Some(Diagnostic::at(&items[0], message).into_error());
 	}
 	let fields = type_def
 		.fields
 		.iter()
-		.zip(arguments)
+		.zip(arguments.iter().chain(std::iter::repeat(&Node::Empty)))
 		.map(|(field, value)| Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value.clone())))
 		.collect();
 	let body = Node::List(fields, Bracket::Curly, Separator::Space);
