@@ -2021,8 +2021,13 @@ impl WasmGcEmitter {
 		let result_local = self.next_temp_local;
 		self.next_temp_local += 1;
 
+		let ran_local = self.next_temp_local;
+		self.next_temp_local += 1;
+
 		func.instruction(&Instruction::I64Const(0));
 		func.instruction(&Instruction::LocalSet(result_local));
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::LocalSet(ran_local));
 
 		func.instruction(&Instruction::Block(BlockType::Empty));
 		func.instruction(&Instruction::Loop(BlockType::Empty));
@@ -2035,14 +2040,25 @@ impl WasmGcEmitter {
 			self.emit_block_value(func, body);
 			func.instruction(&Instruction::LocalSet(result_local));
 		}
+		func.instruction(&Instruction::I64Const(1));
+		func.instruction(&Instruction::LocalSet(ran_local));
 		func.instruction(&Instruction::Br(0));
 
 		func.instruction(&Instruction::End);
 		func.instruction(&Instruction::End);
 
-		func.instruction(&Instruction::LocalGet(result_local));
 		if wrap_result {
+			// the value of a loop is its last body value; a loop whose body never ran is empty
+			func.instruction(&Instruction::LocalGet(ran_local));
+			func.instruction(&Instruction::I32WrapI64);
+			func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(false)))));
+			func.instruction(&Instruction::LocalGet(result_local));
 			self.emit_call(func, "new_int");
+			func.instruction(&Instruction::Else);
+			self.emit_call(func, "new_empty");
+			func.instruction(&Instruction::End);
+		} else {
+			func.instruction(&Instruction::LocalGet(result_local));
 		}
 	}
 

@@ -303,8 +303,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, Op::Do, right) => {
-			// While loop needs a temp local for result
-			1 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
+			// While loop needs temp locals for the result and for "the body ran"
+			2 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
 			// Integer abs needs a temp local for the if-then-else pattern
