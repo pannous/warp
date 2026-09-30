@@ -3483,14 +3483,14 @@ pub fn out_of_fuel(steps: u64) -> Node {
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
 fn failed_run(failure: anyhow::Error) -> Node {
-	match failure.downcast_ref::<wasmtime::Trap>() {
+	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
-		Some(_) => {}
-	}
+		Some(trap) => trap,
+	};
 	let trace = format!("{:?}", failure);
 	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " "));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
-	let message = runtime_error.or(exact_trap).unwrap_or_else(|| format!("{}", failure));
+	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
 	crate::node::error(&message)
 }
