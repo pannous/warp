@@ -178,11 +178,12 @@ operand(block:text, token:text, effects:text, at) := {
 	out
 }
 
-// the space separated operands of a block; spaces between letters only separate them, spaces next to a word stay; a group (above, beside) joins its parts unstyled with the
-// prefix before or the infix between them that the script of the first part has
 // an operand that is one letter of the block: one character, its own entry (greek th, greek eta) or an entity name
 is_letter(block:text, token:text) := utf8_width(byte_at(token, 0)) == token.bytes or find(names_table, block + " " + token) >= 0 or find(names_table, token) >= 0
 
+// the space separated operands of a block; spaces between letters only separate them, spaces next to a word stay;
+// a group (above, beside) joins its parts unstyled with the prefix before or the infix between them that the script of
+// the first part has
 operands(block:text, content:text, effects:text, at) := {
 	out = ""
 	script = ""
