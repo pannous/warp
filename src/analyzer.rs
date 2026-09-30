@@ -2066,7 +2066,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
-			if matches!(op, Op::If | Op::While | Op::Question) {
+			if matches!(op, Op::If | Op::While | Op::Question | Op::Not) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
