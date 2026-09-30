@@ -215,6 +215,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Tag structures like html:body are Key
 			Kind::Key
 		}
+		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
+		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
+		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
 		// Comparison operators return Int (boolean as 0/1)
@@ -2194,6 +2197,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					analyze_required_functions(ctx, value);
 					return;
 				}
+			}
+			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
+				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
 			}
 			if *op == Op::Pow {
 				ctx.required_functions.insert("i64_pow");
