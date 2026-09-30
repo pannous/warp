@@ -1192,6 +1192,9 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
 			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
 		}
+		Node::List(items, bracket, separator) if of_type_declaration(&items, &bracket, &separator).is_some() => {
+			lower_declarations(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
+		}
 		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
 			lower_declarations(hashed_unit_count(&items).expect("guarded"))
 		}
@@ -1262,6 +1265,45 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
 		other => other,
+	}
+}
+
+/// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
+/// nested applications chain: `list of list of int`
+fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let [declaration, of, ..] = items else { return None };
+	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else { return None };
+	let Node::Symbol(mut type_name) = head.drop_meta().clone() else { return None };
+	if !is_word(of, "of") {
+		return None;
+	}
+	let mut next = 2;
+	let mut assignment = None;
+	while let Some(item) = items.get(next) {
+		next += 1;
+		match item.drop_meta() {
+			Node::Symbol(word) => type_name = format!("{type_name} of {word}"),
+			Node::Key(word, op, value) => {
+				let Node::Symbol(word) = word.drop_meta() else { return None };
+				type_name = format!("{type_name} of {word}");
+				assignment = Some((op.clone(), value.clone()));
+				break;
+			}
+			_ => return None,
+		}
+		match items.get(next) {
+			Some(of) if is_word(of, "of") => next += 1,
+			_ => break,
+		}
+	}
+	let typed_name = Node::Key(name.clone(), Op::Colon, Box::new(Node::Symbol(type_name)));
+	let declared = match assignment {
+		Some((op, value)) => Node::Key(Box::new(typed_name), op, value),
+		None => typed_name,
+	};
+	match &items[next..] {
+		[] => Some(declared),
+		rest => Some(Node::List([vec![declared], rest.to_vec()].concat(), bracket.clone(), separator.clone())),
 	}
 }
 

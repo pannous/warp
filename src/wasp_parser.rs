@@ -21,6 +21,9 @@ const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "rea
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
+/// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
+const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
+
 const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
@@ -54,6 +57,12 @@ impl ParserOptions {
 	pub fn data() -> Self {
 		ParserOptions { data_mode: true, ..Default::default() }
 	}
+}
+
+/// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
+fn type_application_name(name: &str, arguments: &str) -> String {
+	let arguments = arguments.replace('<', " of ").replace('>', "");
+	format!("{name} of {}", arguments.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
 fn superscript_digit(ch: char) -> Option<i64> {
@@ -770,6 +779,12 @@ impl WaspParser {
 			'{' => {
 				let block = self.parse_bracketed('{');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
+			}
+			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
+				let length = self.type_application_length().expect("guarded");
+				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
+				self.advance_by(length);
+				Symbol(type_application_name(&symbol, &arguments))
 			}
 			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' => {
 				// Only treat as generic if immediately after symbol (no space)
@@ -1588,6 +1603,41 @@ impl WaspParser {
 	}
 
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
+	/// Length of the `<int>`, `<list<int>>`, `<text, int>` directly at the cursor when everything inside is a type word;
+	/// `a<b`, `a<<b` and `a<b>c` are not type applications
+	fn type_application_length(&self) -> Option<usize> {
+		let mut depth = 0;
+		let mut word = String::new();
+		let mut words = Vec::new();
+		for offset in 0.. {
+			let ch = self.peek_char(offset);
+			match ch {
+				'<' => depth += 1,
+				'>' => depth -= 1,
+				ch if ch.is_alphanumeric() || ch == '_' || ch == '?' => {
+					word.push(ch);
+					continue;
+				}
+				',' | ' ' => {}
+				_ => return None,
+			}
+			if !word.is_empty() {
+				words.push(std::mem::take(&mut word));
+			}
+			if depth == 0 {
+				let is_type_argument = |word: &String| {
+					let bare = word.trim_end_matches('?');
+					crate::analyzer::type_word_kind(bare).is_some()
+						|| crate::analyzer::plural_element_type(bare).is_some()
+						|| GENERIC_TYPE_HEADS.contains(&bare)
+						|| bare.chars().next().is_some_and(char::is_uppercase)
+				};
+				return (offset > 1 && words.iter().all(is_type_argument)).then_some(offset + 1);
+			}
+		}
+		None
+	}
+
 	fn parse_type_application(&mut self, type_name: String) -> Node {
 		self.advance(); // skip '<'
 		let arguments = self.parse_list_with_separators(Some('>'), Bracket::Less);
