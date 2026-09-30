@@ -9,6 +9,15 @@ use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::{canonical_type_name, Kind};
 use std::collections::{HashMap, HashSet};
 
+/// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
+const COUNTING_PROPERTIES: [&str; 4] = ["number", "count", "length", "size"];
+/// The counting properties that are also functions: `number x` is the type conversion, not a count
+const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
+
+fn is_counting_property(word: &str) -> bool {
+	COUNTING_PROPERTIES.contains(&word)
+}
+
 /// Check if a node is pure data (not a statement/function call)
 fn is_data_node(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -1183,6 +1192,9 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
 			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
 		}
+		Node::List(items, bracket, separator) if of_type_declaration(&items, &bracket, &separator).is_some() => {
+			lower_declarations(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
+		}
 		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
 			lower_declarations(hashed_unit_count(&items).expect("guarded"))
 		}
@@ -1258,6 +1270,45 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
 		other => other,
+	}
+}
+
+/// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
+/// nested applications chain: `list of list of int`
+fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let [declaration, of, ..] = items else { return None };
+	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else { return None };
+	let Node::Symbol(mut type_name) = head.drop_meta().clone() else { return None };
+	if !is_word(of, "of") {
+		return None;
+	}
+	let mut next = 2;
+	let mut assignment = None;
+	while let Some(item) = items.get(next) {
+		next += 1;
+		match item.drop_meta() {
+			Node::Symbol(word) => type_name = format!("{type_name} of {word}"),
+			Node::Key(word, op, value) => {
+				let Node::Symbol(word) = word.drop_meta() else { return None };
+				type_name = format!("{type_name} of {word}");
+				assignment = Some((op.clone(), value.clone()));
+				break;
+			}
+			_ => return None,
+		}
+		match items.get(next) {
+			Some(of) if is_word(of, "of") => next += 1,
+			_ => break,
+		}
+	}
+	let typed_name = Node::Key(name.clone(), Op::Colon, Box::new(Node::Symbol(type_name)));
+	let declared = match assignment {
+		Some((op, value)) => Node::Key(Box::new(typed_name), op, value),
+		None => typed_name,
+	};
+	match &items[next..] {
+		[] => Some(declared),
+		rest => Some(Node::List([vec![declared], rest.to_vec()].concat(), bracket.clone(), separator.clone())),
 	}
 }
 
@@ -1788,16 +1839,13 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if ctx.user_functions.contains_key(name) {
 		return None;
 	}
-	match name {
-		"count" | "length" | "size" => Some("node_count"),
-		_ => None,
-	}
+	(is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)).then_some("node_count")
 }
 
 /// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
-		"number" => Some("node_count"),
+		_ if is_counting_property(name) => Some("node_count"),
 		"bytes" => Some("node_bytes"),
 		"chars" | "codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
@@ -1856,6 +1904,16 @@ fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 }
 
+/// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`
+fn property_of_name(items: &[Node], separator: &Separator) -> Option<Node> {
+	let [name, property] = items else { return None };
+	let (Node::Symbol(name_text), Node::Symbol(property_text)) = (name.drop_meta(), property.drop_meta()) else { return None };
+	if *separator != Separator::Space || is_counting_property(name_text) || !is_counting_property(property_text) {
+		return None;
+	}
+	Some(Node::Key(Box::new(name.clone()), Op::Dot, Box::new(property.clone())))
+}
+
 /// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
 /// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
@@ -1865,12 +1923,15 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
 		}
 	}
+	if let Some(property) = property_of_name(items, separator) {
+		return Some(property);
+	}
 	let [word, of, _, ..] = items else { return None };
 	let Node::Symbol(word) = word.drop_meta() else { return None };
-	let counter = match word.as_str() {
-		"number" | "count" | "length" | "size" => "count",
-		_ => return None,
-	};
+	if !is_counting_property(word) {
+		return None;
+	}
+	let counter = "count";
 	if !is_word(of, "of") {
 		return None;
 	}
