@@ -6,6 +6,20 @@ pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "functio
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
 
+/// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
+/// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
+pub const GLYPH_OPERATORS: [(char, Op, &str); 15] = [
+	('∧', Op::And, "and"), ('⋀', Op::And, "and"),
+	('∨', Op::Or, "or"), ('⋁', Op::Or, "or"),
+	('⊻', Op::Xor, "xor"),
+	('≟', Op::Eq, "=="), ('≡', Op::Eq, "=="), ('﹦', Op::Eq, "=="),
+	('‐', Op::Sub, "-"), ('‑', Op::Sub, "-"), ('‒', Op::Sub, "-"), ('–', Op::Sub, "-"), ('—', Op::Sub, "-"), ('―', Op::Sub, "-"), ('−', Op::Sub, "-"),
+];
+
+pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
+	GLYPH_OPERATORS.iter().find(|(known, _, _)| *known == glyph).map(|(_, op, canonical)| (*op, *canonical))
+}
+
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
 }

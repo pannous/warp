@@ -5,7 +5,7 @@ use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
-use crate::operators::{is_function_keyword, Op};
+use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::*;
 use log::warn;
@@ -596,6 +596,7 @@ impl WaspParser {
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
+		if self.matches_keyword("upto") { return Some((Op::To, 4)); }
 
 		// 1-char operators
 		match c1 {
@@ -623,9 +624,7 @@ impl WaspParser {
 			'¬' => Some((Op::Not, 1)),
 			'&' => Some((Op::And, 1)),
 			'|' => Some((Op::Or, 1)),
-			'∧' => Some((Op::And, 1)),
-			'⋁' => Some((Op::Or, 1)),
-			'⊻' => Some((Op::Xor, 1)),
+			glyph if glyph_operator(glyph).is_some() => glyph_operator(glyph).map(|(op, _)| (op, 1)),
 			'#' => Some((Op::Hash, 1)),
 			'?' => Some((Op::Question, 1)),
 			'…' => Some((Op::To, 1)),
@@ -658,6 +657,7 @@ impl WaspParser {
 			'+' if c2 == '+' && variable_follows => Some((Op::Inc, 2)),
 			'-' if c2 == '-' && variable_follows => Some((Op::Dec, 2)),
 			'-' => Some((Op::Neg, 1)),
+			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' => Some((Op::Sqrt, 1)),
 			'∛' => Some((Op::Cbrt, 1)),
