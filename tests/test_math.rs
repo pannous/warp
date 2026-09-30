@@ -171,7 +171,6 @@ fn test_logarithm_in_runtime() {
 }
 
 #[test]
-#[ignore]
 fn test_sinus_wasp_import() {
 	// using sin.wasp, not sin.wasm
 	// todo: compile and reuse sin.wasm if unmodified
