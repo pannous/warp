@@ -583,7 +583,12 @@ impl WaspParser {
 	fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
 		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
-			|| self.number_starts_at(0)
+			|| self.number_starts_at(0) || self.starts_function_reference()
+	}
+
+	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
+	fn starts_function_reference(&self) -> bool {
+		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
 	}
 
 	/// A digit, or a leading-dot decimal like `.5`
@@ -697,6 +702,7 @@ impl WaspParser {
 			'≠' => Some((Op::Ne, 1)),
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
+			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
 			'&' => Some((Op::And, 1)),
 			'|' => Some((Op::Or, 1)),
 			glyph if glyph_operator(glyph).is_some() => glyph_operator(glyph).map(|(op, _)| (op, 1)),
@@ -821,6 +827,14 @@ impl WaspParser {
 		}
 
 		let node = match self.current_char() {
+			// `&name` is the function `name` itself: a name is already a function value where a function is expected
+			'&' if self.starts_function_reference() => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(name) => Symbol(name),
+					Err(message) => error(&message),
+				}
+			}
 			'"' | '\'' | '«' => self.parse_string(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
@@ -1717,7 +1731,8 @@ impl WaspParser {
 			|| ch == '('
 			|| ch == '['
 			|| ch == '{'
-			|| ch == '-';
+			|| ch == '-'
+			|| self.starts_function_reference();
 		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function;
 
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
