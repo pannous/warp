@@ -88,6 +88,11 @@ impl ImportManager {
 			.import("host", "fetch_within", EntityType::Function(fetch_within_type_idx));
 		Self::register_import(ctx, "host_fetch_within");
 
+		// read: (path_ptr, path_len) -> (result_ptr, result_len), the file's bytes; a negative length marks a failure reason
+		self.imports
+			.import("host", "read", EntityType::Function(fetch_type_idx));
+		Self::register_import(ctx, "host_read");
+
 		// Import run from "host" module
 		self.imports
 			.import("host", "run", EntityType::Function(run_type_idx));

@@ -56,6 +56,8 @@ fn is_statement_block(node: &Node) -> bool {
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
+	} else if *op == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left, right) {
+		Kind::Text // concatenation
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -110,6 +112,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
 				if let Some(kind) = scope.function_kind(name) {
+					return kind;
+				}
+				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
 				}
 			}
@@ -192,7 +197,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);
 			let right_kind = infer_type(right, scope);
-			if left_kind == Kind::Float || right_kind == Kind::Float {
+			if op.base_op() == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind) {
+				Kind::Text
+			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
 			} else {
 				Kind::Int
@@ -219,25 +226,38 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			infer_type(right, scope)
 		}
 		// Ternary operator: condition ? then : else
-		Node::Key(_cond, Op::Question, then_else) => {
-			// Extract then and else branches from the Key(then, Colon, else) structure
-			if let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() {
-				let then_kind = infer_type(then_expr, scope);
-				let else_kind = infer_type(else_expr, scope);
-				// If either branch returns a reference type (Text, Symbol, etc.), return Text
-				if then_kind.is_ref() || else_kind.is_ref() {
-					Kind::Text
-				} else if then_kind == Kind::Float || else_kind == Kind::Float {
-					Kind::Float
-				} else {
-					Kind::Int
-				}
-			} else {
-				Kind::Int
-			}
+		Node::Key(_cond, Op::Question, then_else) => match then_else.drop_meta() {
+			Node::Key(then_expr, Op::Colon, else_expr) => branches_kind(infer_type(then_expr, scope), infer_type(else_expr, scope)),
+			_ => Kind::Int,
+		},
+		// if c {a} else {b}
+		Node::Key(if_then, Op::Else, else_expr) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
+			branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope))
+		}
+		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
+			branches_kind(branch_kind(then_expr, scope), Kind::Int)
 		}
 		// Default to Int for other cases
 		_ => Kind::Int,
+	}
+}
+
+/// A branch `{a; b}` is worth its last statement
+pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
+	match branch.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], scope),
+		other => infer_type(other, scope),
+	}
+}
+
+/// Either branch a reference type (Text, Symbol, List…): the value is a Node, else a number
+fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
+	if then_kind.is_ref() || else_kind.is_ref() {
+		Kind::Text
+	} else if then_kind == Kind::Float || else_kind == Kind::Float {
+		Kind::Float
+	} else {
+		Kind::Int
 	}
 }
 
@@ -1563,10 +1583,20 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
-	match body.drop_meta() {
+	let last_kind = match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),
-	}
+	};
+	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
+	let mut returns_node = false;
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
+				returns_node |= infer_type(&items[1], &scope).is_ref();
+			}
+		}
+	});
+	if returns_node && !last_kind.is_ref() { Kind::Text } else { last_kind }
 }
 
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind
