@@ -15,15 +15,16 @@ const decoder = new TextDecoder("utf-8", { fatal: false });
 const preloaded = new Map();
 let wasm; // the instance's exports
 let heapMark = 0; // text_heap after the module's init: every conversion's texts are dropped by resetting to it
+let warningList; // where host.warn reports: the list under the output being converted
 
 const $ = id => document.getElementById(id);
 
 function warn(message) {
 	console.warn(message);
+	if (!warningList) return $("status").append(` · ${message}`);
 	const item = document.createElement("li");
 	item.textContent = message;
-	$("warnings").append(item);
-	$("warnings-box").hidden = false;
+	warningList.append(item);
 }
 
 // ---- texts in wasm memory ------------------------------------------------------------------------------------
@@ -150,6 +151,8 @@ const codepoints = text => [...text].map(c => "U+" + c.codePointAt(0).toString(1
 
 function update(inputId, functionName, outputId) {
 	const output = $(outputId);
+	warningList = $(outputId + "-warnings");
+	warningList.replaceChildren();
 	const result = convert(functionName, $(inputId).value);
 	show(output, result);
 	$(outputId + "-codes").textContent = result.kind === KIND_ERROR ? "" : codepoints(result.text);

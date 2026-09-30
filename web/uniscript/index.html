@@ -46,7 +46,8 @@
 	}
 	button:hover { border-color: var(--accent); color: var(--accent); }
 	#status { font-size: .85rem; }
-	#status.error, #warnings-box { color: var(--error); }
+	#status.error, .warnings { color: var(--error); }
+	.warnings { font: .9rem/1.4 ui-monospace, Menlo, monospace; margin: .25rem 0 0; padding-left: 1.25rem; }
 	footer { margin-top: 3rem; font-size: .85rem; color: var(--muted); }
 </style>
 </head>
@@ -60,26 +61,27 @@
 	<div class="examples">
 		<button data-example="<:forall> x <:in> <:double R>: x² <:geq> 0">∀x∈ℝ</button>
 		<button data-example="<:fracture> Wasp <:/fracture> and <:double> Warp <:>">𝔣𝔯𝔞𝔨𝔱𝔲𝔯</button>
-		<button data-example="<:greek> athos <:/greek>">greek keyboard</button>
+		<button data-example="<:greek> filosofia <:/greek> <:greek> kosmos <:/greek> <:greek> chaos <:/greek>">greek</button>
 		<button data-example="<:red W> <:orange a> <:green s> <:blue p>">colors</button>
 		<button data-example="<:mirror red A> <:turn B> <:left green C> <:right blue D> <:flip E>">mirror, turn, color</button>
 		<button data-example="<:red circle> <:brown heart> <:iconic ⚠> \:infinity">emoji</button>
 		<button data-example="<:beside 犭 句> <:beside 木 木> <:above 木 林> <:mirror 你>">CJK composition</button>
 		<button data-example="<:above 𓀀 𓁐> <:mirror 𓀀>">hieroglyphs</button>
 		<button data-example="E = mc<:upper 2>, <:alpha> + <:beta> <:rightarrow> <:gamma>">math</button>
+		<button data-example="<:fracture 7> <:red 𓀀> <:greek c>">warnings</button>
 		<button data-example="<:nosuchthing> x">an error</button>
 	</div>
 	<textarea id="source" spellcheck="false" aria-label="uniscript"><:alpha> <:fracture A> \:infinity <:mirror red R></textarea>
 	<div id="unicode" class="output" aria-live="polite"></div>
 	<div id="unicode-codes" class="codes"></div>
+	<ul id="unicode-warnings" class="warnings"></ul>
 	<div class="examples"><button id="to-reverse">↓ spell the result back</button></div>
 
 	<h2>Unicode → Uniscript</h2>
 	<textarea id="reverse-source" spellcheck="false" aria-label="unicode" style="font-family: var(--uniscript); font-size: 1.5rem">α Ω 𝔄 ∞ ℝ 🔴 xᵃ</textarea>
 	<div id="reverse-uniscript" class="output spelled"></div>
 	<div id="reverse-uniscript-codes" class="codes" hidden></div>
-
-	<div id="warnings-box" hidden><h2>Warnings</h2><ul id="warnings"></ul></div>
+	<ul id="reverse-uniscript-warnings" class="warnings"></ul>
 
 	<footer>
 		Syntax: <code>&lt;:name&gt;</code> or <code>\:name</code> for one entity (Unicode, LaTeX or HTML names),

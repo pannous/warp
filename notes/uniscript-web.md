@@ -20,7 +20,8 @@ Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not commi
 - The module's `main` is its init: it calls `host.read("data/uniscript/entities.idx")` synchronously. Host calls are
   synchronous, so the page fetches the index before instantiating; any other path falls back to a synchronous XHR
   (charset `x-user-defined` keeps the bytes).
-- Imports come from `WebAssembly.Module.imports()`: `host.read`, `host.fetch`, `host.fetch_within` are real,
+- Imports come from `WebAssembly.Module.imports()`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
+  (`warning(message)` in wasp lists under the output of the conversion that raised it, cleared on the next one),
   `host.run` and anything unknown warn in the page and return 0 / -1.
 - Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh
   pages when it is 0 or full), then `new_text(ptr, len)`.
@@ -36,4 +37,6 @@ Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not commi
   hieroglyph groups.
 - Firefox and Safari not tested (agent-browser drives only Chromium); both ship WASM GC.
 - Nested tags (`<:above 木 <:beside 木 木>>`) are not supported by lib/uniscript.wasp: a tag ends at the first `>`.
+- Greek blocks join their words (spaces separate operands): one word per `<:greek> … <:/greek>`; no final sigma (θεοσ).
+- A repeated warning reports the operand's byte, not the character's: `<:greek> philosophia` warns twice "no greek form of h at byte 8".
 - The CJK font is 10.8 MB as woff2; it loads only when CJK or IDS characters appear (`unicode-range`).
