@@ -198,6 +198,11 @@ impl WaspParser {
 		*self.chars.get(self.pos).unwrap_or(&'\0')
 	}
 
+	fn is_identifier_start(&self, offset: usize) -> bool {
+		let letter = self.peek_char(offset);
+		letter.is_alphabetic() || letter == '_'
+	}
+
 	fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
@@ -726,6 +731,15 @@ impl WaspParser {
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode) {
 			return constant; // if true {} fall through :?
+		}
+
+		// Possessive: `p's name` is the field `p.name`
+		if !self.options.data_mode && self.current_char() == '\'' && self.peek_char(1) == 's' && self.peek_char(2) == ' ' && self.is_identifier_start(3) {
+			self.advance_by(3);
+			return match self.parse_symbol() {
+				Ok(field) => Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))),
+				Err(message) => error(&message),
+			};
 		}
 
 		// Optional type: `x:int?=ø`, `f(x:int?)` (wiki/null.md); a ternary `?` is followed by its branch instead

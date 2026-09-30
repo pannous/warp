@@ -12,7 +12,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::parse;
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 8] = [
@@ -60,7 +60,71 @@ pub fn lower(node: Node) -> Node {
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_assigned_names(&node, &mut shadowed);
-	Lowering { context, shadowed, temporaries: Cell::new(0) }.expand(node)
+	let mut assigned_objects = HashMap::new();
+	collect_assigned_objects(&node, &mut assigned_objects);
+	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
+	Lowering { context, shadowed, objects, temporaries: Cell::new(0) }.expand(node)
+}
+
+/// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
+fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
+	let key = match position {
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::Text(name.to_string())), data: data.clone() },
+		_ => Node::Text(name.to_string()),
+	};
+	crate::wasp_parser::subscript(object.clone(), key)
+}
+
+/// A field lookup by a name, as `field_lookup` builds it: its value is an object whenever the field holds one
+fn is_field_lookup(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Hash, index) if crate::wasp_parser::subscript_key(index).and_then(field_name).is_some())
+}
+
+/// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
+fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
+	let single;
+	let items: &[Node] = match node.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if !items.is_empty() => items,
+		Node::Key(_, Op::Colon, _) => {
+			single = [node.clone()];
+			&single
+		}
+		_ => return None,
+	};
+	items
+		.iter()
+		.map(|item| match item.drop_meta() {
+			Node::Key(key, Op::Colon, value) => Some((field_name(key)?, value.as_ref().clone())),
+			_ => None,
+		})
+		.collect()
+}
+
+fn field_name(key: &Node) -> Option<String> {
+	match key.drop_meta() {
+		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
+		_ => None,
+	}
+}
+
+/// Variables that are only ever assigned an object literal, with that literal; `None` for a variable assigned anything else too
+fn collect_assigned_objects(node: &Node, objects: &mut HashMap<String, Option<Node>>) {
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				let literal = object_entries(value).map(|_| value.as_ref().clone());
+				let both_objects = literal.is_some() && objects.get(name).is_none_or(|earlier| earlier.is_some());
+				objects.insert(name.clone(), if both_objects { literal } else { None });
+			}
+			collect_assigned_objects(value, objects);
+		}
+		Node::Key(left, _, right) => {
+			collect_assigned_objects(left, objects);
+			collect_assigned_objects(right, objects);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_objects(item, objects)),
+		_ => {}
+	}
 }
 
 fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
@@ -83,6 +147,7 @@ fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
 struct Lowering {
 	context: Context,
 	shadowed: HashSet<String>,
+	objects: HashMap<String, Node>,
 	temporaries: Cell<usize>,
 }
 
@@ -122,11 +187,24 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		if let Some(lookup) = self.of_lookup(items) {
+			return Some(lookup);
+		}
 		let head = match items.first()?.drop_meta() {
 			Node::Symbol(name) => name,
 			_ => return None,
 		};
 		let word = self.library_word(head)?;
+		if let [_, of, rest @ ..] = items {
+			if matches!(of.drop_meta(), Node::Symbol(word) if word == "of") && !rest.is_empty() {
+				// `first of xs` is `first(xs)`
+				let argument = match rest {
+					[single] => single.clone(),
+					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+				};
+				return Some(self.call(word, &items[0], vec![argument], false));
+			}
+		}
 		let is_call = call_name(items, bracket, separator).is_some();
 		let is_prefix = *bracket == Bracket::None && *separator == Separator::Space && items.len() > 1;
 		if !is_call && !is_prefix {
@@ -143,12 +221,54 @@ impl Lowering {
 			_ => return None,
 		};
 		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		let has_arguments = !arguments.is_empty();
+		let literal = self.object_literal(receiver);
+		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
+		if is_field && !has_arguments {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if let Some(word) = self.library_word(name) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
+		let is_object = literal.is_some() || is_field_lookup(receiver);
+		if is_object && !is_known && !has_arguments {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		(!is_known && is_value).then(|| Diagnostic::at(word_node, format!("undefined function: {name}")).into_error())
+	}
+
+	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
+	fn object_literal(&self, node: &Node) -> Option<Node> {
+		match node.drop_meta() {
+			Node::Symbol(name) => self.objects.get(name).cloned(),
+			Node::Key(base, Op::Hash, index) => {
+				let field = field_name(crate::wasp_parser::subscript_key(index)?)?;
+				let (_, value) = object_entries(&self.object_literal(base)?)?.into_iter().find(|(name, _)| *name == field)?;
+				object_entries(&value).map(|_| value)
+			}
+			other => object_entries(other).map(|_| other.clone()),
+		}
+	}
+
+	/// `word of object`, `c of b of p`: the lookup of a field, when the object is one; `None` for anything else
+	fn of_lookup(&self, items: &[Node]) -> Option<Node> {
+		let [word_node, of, rest @ ..] = items else { return None };
+		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		if !matches!(of.drop_meta(), Node::Symbol(word) if word == "of") || rest.is_empty() {
+			return None;
+		}
+		let object = match rest {
+			[single] => single.clone(),
+			[_, next_of, ..] if matches!(next_of.drop_meta(), Node::Symbol(word) if word == "of") => self.of_lookup(rest)?,
+			_ => return None,
+		};
+		let literal = self.object_literal(&object);
+		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
+		let is_object = literal.is_some() || is_field_lookup(&object);
+		let is_other_word = self.library_word(name).is_some() || counting_method(name, &self.context).is_some();
+		(is_object && (is_field || !is_other_word)).then(|| field_lookup(&object, name, word_node))
 	}
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
