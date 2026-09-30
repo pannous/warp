@@ -753,6 +753,13 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Unreachable);
 	}
 
+	/// Does the node read a variable (key names and other symbols of a data literal are not variables)
+	fn mentions_variable(&self, node: &Node) -> bool {
+		let mut found = false;
+		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some()));
+		found
+	}
+
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		self.emit_type_error(func, format!("undefined variable: {name}"));
 	}
@@ -2214,11 +2221,13 @@ impl WasmGcEmitter {
 					Node::Text(s) => {
 						self.emit_string_call(func, s, "new_text");
 					}
-					// Runtime: use cast function
-					_ => {
-						self.emit_node_instructions(func, value);
-						self.emit_call(func, "cast_to_string");
+					_ if !self.mentions_variable(value) => {
+						let (ptr, len) = self.allocate_string(&value.serialize());
+						func.instruction(&I32Const(ptr as i32));
+						func.instruction(&I32Const(len as i32));
+						self.emit_call(func, "new_text");
 					}
+					_ => self.emit_type_error(func, format!("`{} as string`: a value known only at runtime has no text yet", value.serialize())),
 				}
 			}
 			"char" | "character" => {
@@ -2499,6 +2508,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if self.compares_structurally(op, left, right) => {
 				self.emit_structural_equality(func, left, op, right);
 			}
+			Node::Key(left, op, right) if self.orders_a_list(op, left, right) => self.emit_unordered_list_error(func, left, op, right),
 			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
 				self.emit_int_operands_op(func, left, op, right);
 			}
@@ -2534,6 +2544,10 @@ impl WasmGcEmitter {
 				let counter = self.counting_getter(property).expect("guarded");
 				self.emit_node_instructions(func, counted);
 				self.emit_call(func, counter);
+			}
+			Node::Key(object, Op::Dot, field) if self.is_record_field(object, field) => {
+				self.emit_record_field(func, object, field);
+				self.emit_call(func, "get_int_value");
 			}
 			// Prefix # means count/length: #list returns element count
 			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {

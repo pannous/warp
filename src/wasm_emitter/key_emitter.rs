@@ -86,6 +86,8 @@ impl WasmGcEmitter {
 		if self.compares_structurally(op, left, right) {
 			self.emit_structural_equality(func, left, op, right);
 			self.emit_call(func, "new_int");
+		} else if self.orders_a_list(op, left, right) {
+			self.emit_unordered_list_error(func, left, op, right);
 		} else if op.is_logical() && !both_numeric {
 			self.emit_truthy_logical(func, left, op, right);
 		} else if op.is_arithmetic()
@@ -271,6 +273,11 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				return;
 			}
+		}
+
+		if self.is_record_field(left, right) {
+			self.emit_record_field(func, left, right);
+			return;
 		}
 
 		// Default: emit as Key node

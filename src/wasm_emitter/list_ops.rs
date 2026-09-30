@@ -841,6 +841,22 @@ impl WasmGcEmitter {
 		is_name.then(|| key.clone())
 	}
 
+	/// `object.field` on a record (a struct instance or a `key:value` block): the object's entry named `field`
+	pub(super) fn is_record_field(&self, object: &Node, property: &Node) -> bool {
+		matches!(property.drop_meta(), Node::Symbol(_)) && matches!(self.get_type(object), Kind::Key | Kind::List)
+	}
+
+	/// Push the Node of entry `field` of `object`; a missing entry is the runtime error `key not found`
+	pub(super) fn emit_record_field(&mut self, func: &mut Function, object: &Node, field: &Node) {
+		let Node::Symbol(name) = field.drop_meta() else { return };
+		self.emit_node_instructions(func, object);
+		let (ptr, len) = self.allocate_string(name);
+		func.instruction(&I::I32Const(ptr as i32));
+		func.instruction(&I::I32Const(len as i32));
+		self.emit_call(func, "new_symbol");
+		self.emit_call(func, "map_get");
+	}
+
 	/// Push the Node at `target#index`: the entry value for a key, else the element at the 1-based position
 	pub(super) fn emit_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		match self.map_key(index) {

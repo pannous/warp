@@ -5,6 +5,7 @@
 //! `is_truthy(x)` applies the rule `Node::is_falsy` already uses for `and`/`or`: empty values and errors are falsy.
 
 use super::WasmGcEmitter;
+use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::{any_heap_type, Kind};
@@ -31,6 +32,21 @@ impl WasmGcEmitter {
 			}
 			_ => false,
 		}
+	}
+
+	/// A list has no order against anything: `<`, `>`, `<=`, `>=` with a list operand is an error
+	pub(crate) fn orders_a_list(&self, op: &Op, left: &Node, right: &Node) -> bool {
+		let is_list = |node: &Node| match node.drop_meta() {
+			Node::List(_, Bracket::Square, _) => true,
+			Node::Symbol(_) => self.is_structured_value(node) && self.get_type(node) == Kind::List,
+			_ => false,
+		};
+		op.is_ordering() && (is_list(left) || is_list(right))
+	}
+
+	pub(crate) fn emit_unordered_list_error(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		let message = format!("cannot compare a list with `{op}`: {} {op} {}", left.serialize(), right.serialize());
+		self.emit_type_error(func, Diagnostic::at(left, message).to_string());
 	}
 
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
