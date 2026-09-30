@@ -101,3 +101,5 @@ D16 overflow contradict Decided rules). Found while implementing:
 37. First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
     not a funcref table: functions chosen at run time and capturing lambdas remain loud errors. A table needs one
     uniform (boxed) signature. Enough for now?
+38. Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
+    when it has a first element.

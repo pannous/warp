@@ -5,9 +5,9 @@ test_wasm_logic_unary, test_wasm_logic_unary_variables, test_wasm_logic_negated,
 
 Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decision (named); (c) the test expects what the Decided rules exclude.
 
-## (a) small fix, blocked by a pending merge: 1
+## (b) needs a user decision: is a list containing only ø falsy: 1
 
-- test_wasm.rs::test_wasm_logic_on_objects — `not {a:2}` needs the object check of the record-equality branch (is_object_literal in emit_condition)
+- test_wasm.rs::test_wasm_logic_on_objects — `not {a:2}`, `not {}`, `not []` work since zero-fill; only the last line `not ({[ø]})` → true fails: a list holding only ø is truthy under is_truthy (the test itself says "might skip")
 
 ## (b) needs a user decision: C-style and Go-style typed function declarations (`float addi(int x,int y){…}`, `func add1(x int) int {…}`): 6
 
@@ -153,7 +153,7 @@ Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decis
 ## also (c) test defects
 
 - test_todo.rs::test_array_type_generics — expects the text "list<int>" (decided output: `list of int`)
-- test_todo.rs::test_array_constructor — expects `size(pixels)` to count bytes (decided: size = count). Also a real crash: `pixels=640000*int` overflows the stack, because the zero list is expanded element by element at compile time; it needs a runtime fill loop
+- test_todo.rs::test_array_constructor — expects `size(pixels)` to count bytes (decided: size = count). (The `pixels=640000*int` stack overflow is fixed: zero_fill runtime loop.)
 - test_wasm.rs::test_array_indices_wasm — expects `puts('ok')` to return 0
 
 (`test_node.rs::test_mark_as_map` is not ignored; the `#[ignore]` the listing script saw sits in a block comment.)
