@@ -469,9 +469,9 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 14] = [
+pub const RUNTIME_ERRORS: [&str; 15] = [
 	"index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
-	"min_of_an_empty_list", "max_of_an_empty_list",
+	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 ];
 
