@@ -10,7 +10,11 @@ pub const SEARCH_DIRECTORIES: [&str; 3] = [".", "samples", "lib"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 const USE_KEYWORD: &str = "use";
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
-const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "const", "let", "var", "global"];
+const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
+
+fn is_declaration_keyword(keyword: &str) -> bool {
+	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
+}
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
 /// `use math` and other native libraries stay in place for the FFI; an unknown name is an error value.
@@ -114,9 +118,9 @@ fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
-		Node::Key(scope, Op::Colon, _) => matches!(scope.drop_meta(), Node::Symbol(keyword) if DECLARATION_KEYWORDS.contains(&keyword.as_str())),
+		Node::Key(scope, Op::Colon, _) => matches!(scope.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)),
 		Node::List(items, _, _) if items.len() >= 2 => {
-			matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword) || DECLARATION_KEYWORDS.contains(&keyword.as_str()))
+			matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword) || is_declaration_keyword(keyword))
 		}
 		_ => false,
 	}

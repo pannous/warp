@@ -1952,10 +1952,15 @@ fn unit_count(node: &Node) -> Option<Node> {
 	};
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
-		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[1], "in") => {
+		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[1], "in") && text_unit(&items[0].name()).is_some() => {
 			count_of(rest_of(items, 2, bracket, separator), &items[0])
 		}
 		Node::Key(text, Op::As, unit) => count_of(text.as_ref().clone(), unit),
+		// `"äb" in bytes`: the unit last
+		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[items.len() - 2], "in") => {
+			let (unit, text) = (&items[items.len() - 1], &items[..items.len() - 2]);
+			count_of(rest_of(text, 0, bracket, separator), unit)
+		}
 		_ => None,
 	}
 }
@@ -1989,6 +1994,13 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
 			let counted = rest_of(items, 3, bracket, separator);
 			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
+		}
+	}
+	if let [count, unit, of, _, ..] = items {
+		if is_word(count, "count") && is_word(of, "of") {
+			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_)).then(|| text_unit(&unit.name())).flatten() {
+				return Some(Node::Key(Box::new(rest_of(items, 3, bracket, separator)), Op::Dot, Box::new(Node::Symbol(unit_property.to_string()))));
+			}
 		}
 	}
 	if let Some(property) = property_of_name(items, separator) {

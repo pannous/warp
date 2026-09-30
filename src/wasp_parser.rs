@@ -5,7 +5,7 @@ use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
-use crate::operators::Op;
+use crate::operators::{is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::*;
 use log::warn;
@@ -24,7 +24,7 @@ const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
 
-const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
+const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
@@ -147,6 +147,8 @@ pub struct WaspParser {
 	stops_at_else: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
+	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
+	after_function_keyword: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
@@ -183,6 +185,7 @@ impl WaspParser {
 			equals_compares: false,
 			stops_at_else: false,
 			times_loops: 0,
+			after_function_keyword: false,
 			elvis_operands: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
@@ -761,6 +764,11 @@ impl WaspParser {
 		}
 	}
 
+	fn parameters_follow_after_blanks(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		blanks > 0 && self.peek_char(blanks) == '('
+	}
+
 	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
 	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
 	fn parse_symbol_with_suffix(&mut self) -> Node {
@@ -768,6 +776,12 @@ impl WaspParser {
 			Ok(s) => s,
 			Err(e) => return error(&e),
 		};
+
+		// `def square (n) {…}` names its function like `def square(n) {…}`
+		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
+		if names_function && self.parameters_follow_after_blanks() {
+			self.skip_spaces();
+		}
 
 		// Check for URL pattern: scheme://...
 		// Common schemes: http, https, ftp, file, data, ws, wss
@@ -1177,7 +1191,7 @@ impl WaspParser {
 		loop {
 			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
 			let word = self.parse_symbol().unwrap_or_default();
-			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
+			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
 				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
