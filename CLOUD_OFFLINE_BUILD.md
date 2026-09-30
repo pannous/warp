@@ -16,6 +16,8 @@ local builds use the registry cache in ~/.cargo (`offline = true`).
 `vendor/` stays untracked (ignored), never commit it to a work branch.
 
 ## Refresh it (after Cargo.lock changes: a missing crate shows as "no matching package named …")
+Automatic: .github/workflows/offline-build-refresh.yml runs when Cargo.lock changes on main (or by hand: gh workflow run
+"Offline build refresh"); free for this public repo, reuses the branch's vendor/ and the registry cache. By hand:
 Needs network (a local machine): in a clean export of main, `cargo vendor --config net.offline=false vendor`, verify the
 offline build above with an empty CARGO_HOME, then commit main's tree + `vendor/` as a merge commit on top of the old
 `vendor` tip (fast-forward push, no force). Add vendored files with `git -c core.autocrlf=false add -f vendor`:
