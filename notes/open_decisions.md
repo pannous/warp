@@ -11,6 +11,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - #10 no opinion (parked). #11 exact reals may be assigned to a declared float with precision loss: `float x = π` allowed.
 - #12 `use <file>` yes. #13 web host later. #14 not-implemented errors unless easy (shifts: implement). Rest: cleanup.
 
+## Decided 2026-09-30
+- Keep: unit sums use the finer unit (3010 m); `f - x` with a parameterized user function is `f(-x)`; untyped parameters take
+  the kind all call sites agree on, else a loud error.
+- Assignment past the end of a list stays an error. `x : 100 int` AND `pixel:int[100]` declare typed arrays.
+- A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
+- Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
+
 ## Original questions
 ## Blocking finished work
 1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
