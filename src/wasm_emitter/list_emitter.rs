@@ -138,10 +138,6 @@ impl WasmGcEmitter {
 				let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 				if !is_typed_decl {
 					if type_word_kind(&type_name.to_lowercase()).is_some() {
-						norm::type_constructor(type_name, &items[1].to_string());
-						if type_name == "str" || type_name == "String" {
-							norm::string_type(type_name);
-						}
 						self.emit_cast(func, &items[1], &items[0]);
 						return;
 					}
