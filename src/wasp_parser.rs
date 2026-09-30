@@ -28,6 +28,11 @@ const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
+/// Words that test a value for being ø or falsy, sugar for `not x`
+const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
+const EMPTY_WORD: &str = "empty";
+/// Words that may follow a test word and so end the condition
+const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 const TIMES_WORD: &str = "times";
 const ELVIS_WORD: &str = "elvis";
 const HEX_WORD: &str = "hex";
@@ -1001,6 +1006,7 @@ impl WaspParser {
 
 			if let Some(updated) = self.try_parse_evaluate_bang(&lhs)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
@@ -1100,6 +1106,12 @@ impl WaspParser {
 				continue;
 			}
 
+			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
+				self.functions.insert(lhs.name());
+				Op::Define
+			} else {
+				op
+			};
 			lhs = match previous_comparand.take() {
 				Some(middle) if op.is_ordering() => {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
@@ -1335,6 +1347,33 @@ impl WaspParser {
 		}
 		self.advance();
 		Some(lhs.clone())
+	}
+
+	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md).
+	/// The word must end the condition: a block, colon, `then`/`else`/`and`/`or` or the end of the statement follows.
+	/// `x is empty` stays the comparison with ø.
+	fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || matches!(lhs.drop_meta(), Empty) {
+			return None;
+		}
+		let is_length = "is".len();
+		let after_is = self.matches_keyword("is");
+		let word_start = if after_is { is_length + (is_length..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count() } else { 0 };
+		let word = TEST_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, letter)| self.peek_char(word_start + index) == letter) && !is_identifier_char(self.peek_char(word_start + word.len())))?;
+		if after_is && *word == EMPTY_WORD {
+			return None;
+		}
+		let end = word_start + word.len();
+		let blanks = (end..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let next = self.peek_char(end + blanks);
+		let word_ends_condition = !self.operand_follows(end) || matches!(next, '{' | ':') || CONDITION_FOLLOWERS.iter().any(|follower| {
+			follower.chars().enumerate().all(|(index, letter)| self.peek_char(end + blanks + index) == letter) && !is_identifier_char(self.peek_char(end + blanks + follower.len()))
+		});
+		if !word_ends_condition {
+			return None;
+		}
+		self.advance_by(end);
+		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
 
 	/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`, `3 times {body}`
@@ -2392,4 +2431,9 @@ fn negate_condition(conditional: Node) -> Node {
 		}
 		other => other,
 	}
+}
+
+/// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
+fn is_function_block(name: &Node, block: &Node) -> bool {
+	matches!(name.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) && mentions(block, "it")
 }
