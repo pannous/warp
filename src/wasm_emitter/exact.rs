@@ -18,9 +18,6 @@ use num_traits::{One, Pow};
 use wasm_encoder::*;
 use Instruction as I;
 
-/// Largest shift count: `1 << n` allocates n bits, a bigger count is a runtime error instead of an out-of-memory
-pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
-
 impl WasmGcEmitter {
 	/// Decimal literal as the exact value of its shortest round-trip digits: `0.1` → 1/10
 	pub(crate) fn emit_decimal_literal(&mut self, func: &mut Function, value: f64) {
@@ -373,40 +370,6 @@ impl WasmGcEmitter {
 			s.call(f, "int_pow");
 			f.instruction(&I::End);
 		});
-
-		// int_shift_left(a, n) = a * 2^n and int_shift_right(a, n) = floor(a / 2^n): arithmetic shifts of an unbounded Int
-		self.runtime_function("int_shift_left", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
-			s.emit_shift_operand_checks(f);
-			s.emit_power_of_two_shifted(f);
-			s.call(f, "int_mul");
-		});
-		self.runtime_function("int_shift_right", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
-			s.emit_shift_operand_checks(f);
-			s.emit_power_of_two_shifted(f);
-			s.call(f, "exact_div_assign");
-		});
-	}
-
-	/// Trap unless local 0 is an integer and local 1 a shift count in 0..=MAX_SHIFT_COUNT; each check runs only if the ones before it passed
-	fn emit_shift_operand_checks(&self, f: &mut Function) {
-		let trap_if = |f: &mut Function| Self::emit_list(f, &[I::If(BlockType::Empty), I::Unreachable, I::End]);
-		for local in [0, 1] {
-			f.instruction(&I::LocalGet(local));
-			self.call(f, "is_ratio");
-			trap_if(f);
-		}
-		self.is_negative(f, 1);
-		trap_if(f);
-		Self::emit_list(f, &[I::LocalGet(1), I::I64Const(MAX_SHIFT_COUNT)]);
-		self.call(f, "int_cmp");
-		Self::emit_list(f, &[I::I32Const(0), I::I32GtS]);
-		trap_if(f);
-	}
-
-	/// Push local 0, then 2^local 1
-	fn emit_power_of_two_shifted(&self, f: &mut Function) {
-		Self::emit_list(f, &[I::LocalGet(0), I::I64Const(2), I::LocalGet(1)]);
-		self.call(f, "exact_pow");
 	}
 
 	/// Push numerator(x) quot denominator(x)

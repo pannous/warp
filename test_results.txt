@@ -1,11 +1,19 @@
 === Test Results ===
 
 PASSED:
+  ✓ a_program_that_is_only_an_empty_block_is_empty
+  ✓ a_type_error_names_the_kind_with_its_article
+  ✓ an_empty_block_inside_a_statement_is_a_value
   ✓ assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ attribute_names_may_be_kebab_case
   ✓ attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ compile_command_emits_the_same_struct_module_as_eval
   ✓ compile_command_writes_wasm_without_running
+  ✓ counting_a_parameter_makes_it_a_list
+  ✓ disagreeing_calls_are_a_loud_error_naming_both_kinds
+  ✓ dollar_digit_stays_a_parameter_reference
+  ✓ dollar_names_keep_their_sigil
+  ✓ dollar_names_survive_eval
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
@@ -56,6 +64,12 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ host::tests::test_host_state
   ✓ host::tests::test_host_state
+  ✓ implicit_it_indexed_as_list
+  ✓ indexed_parameter_can_be_called_repeatedly_and_combined
+  ✓ list_argument_for_an_int_parameter_is_a_type_error
+  ✓ list_is_never_silently_reduced_to_its_last_element
+  ✓ matching_arguments_still_pass
+  ✓ named_parameter_indexed_as_list
   ✓ newline_form_is_really_evaluated - should panic
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_mode
@@ -67,7 +81,6 @@ PASSED:
   ✓ parse_list_via_separator_semicolon
   ✓ parse_list_via_separator_space
   ✓ parse_list_via_separator3
-  ✓ probe
   ✓ probe_def_add
   ✓ probe_def_block_syntax
   ✓ probe_def_syntax
@@ -78,6 +91,8 @@ PASSED:
   ✓ probe_parse_add_call
   ✓ probe_test2_check
   ✓ probe_while_execution
+  ✓ semicolon_at_line_end_separates_statements_like_the_newline
+  ✓ semicolon_inside_a_line_still_groups
   ✓ test_abs_alias
   ✓ test_absolute_value_arithmetic
   ✓ test_ackermann
@@ -116,6 +131,8 @@ PASSED:
   ✓ test_big_int_to_float
   ✓ test_big_literal_round_trip
   ✓ test_bit_field
+  ✓ test_block_comment_between_name_and_assignment
+  ✓ test_block_comment_between_operands
   ✓ test_block_comments
   ✓ test_block_node_json
   ✓ test_boolean_attribute
@@ -153,12 +170,14 @@ PASSED:
   ✓ test_column_tracking
   ✓ test_comment_metadata
   ✓ test_comment_with_metadata_accessor
+  ✓ test_comments
   ✓ test_comments_in_html_structure
   ✓ test_compact_empty
   ✓ test_compact_float
   ✓ test_compact_int
   ✓ test_comparison
   ✓ test_comparison_eq
+  ✓ test_comparison_math
   ✓ test_comparison_primitives
   ✓ test_comparisons_across_small_and_big
   ✓ test_compiler_failures_are_error_values
@@ -166,6 +185,7 @@ PASSED:
   ✓ test_complex_node_json
   ✓ test_complex_xml_document
   ✓ test_compound_assignment
+  ✓ test_compound_assignment_on_a_global
   ✓ test_compound_index_assignment
   ✓ test_const_is_single_assignment
   ✓ test_const_return
@@ -201,6 +221,7 @@ PASSED:
   ✓ test_effects_are_inferred_from_calls
   ✓ test_effects_of_query
   ✓ test_effects_propagate_through_callers_and_recursion
+  ✓ test_emit_basics
   ✓ test_emit_cast
   ✓ test_emit_for_node_tree_shaking
   ✓ test_emit_gc_types
@@ -225,6 +246,10 @@ PASSED:
   ✓ test_expected_structure
   ✓ test_explicit_cast_truncates_a_float
   ✓ test_explicit_wrap_inside_function
+  ✓ test_export_of_a_function_stays_a_function
+  ✓ test_export_with_type_word_keeps_the_value
+  ✓ test_export_without_initializer_is_zero
+  ✓ test_exported_variable_can_be_assigned
   ✓ test_factorial
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
@@ -238,6 +263,7 @@ PASSED:
   ✓ test_ffi_curl_discovery
   ✓ test_ffi_fabs
   ✓ test_ffi_fabs_from_m
+  ✓ test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ test_ffi_fmax
   ✓ test_ffi_fmin
   ✓ test_ffi_fmin_wasp_file
@@ -272,18 +298,27 @@ PASSED:
   ✓ test_fizzbuzz
   ✓ test_fizzbuzz_nested_ternary
   ✓ test_float_assignment_in_exact_context_is_refused_loudly
+  ✓ test_float_beyond_int_range_fails_cleanly
   ✓ test_float_comparison_does_not_truncate
   ✓ test_float_local_assignment_keeps_its_float_value
   ✓ test_float_local_inside_float_function
   ✓ test_float_modulo_keeps_fraction
   ✓ test_float_operations
+  ✓ test_float_operators
   ✓ test_float_parameter_keeps_all_digits
   ✓ test_float_parameter_keeps_fraction
   ✓ test_float_plus_int_type_upgrading
   ✓ test_float_power_keeps_fraction
   ✓ test_float_read_in_exact_context_is_refused_loudly
   ✓ test_float_return_through_main
+  ✓ test_for_classic_three_part_header
+  ✓ test_for_colon_body_with_assignments
   ✓ test_for_each
+  ✓ test_for_over_exclusive_range
+  ✓ test_for_over_inclusive_range
+  ✓ test_for_over_list_literal
+  ✓ test_for_over_list_variable
+  ✓ test_for_with_colon_body
   ✓ test_fraction_multiplication
   ✓ test_fractional_exponent_uses_libm_pow
   ✓ test_fuel_budget_can_be_raised
@@ -302,17 +337,27 @@ PASSED:
   ✓ test_global_int_multiple
   ✓ test_global_int_simple
   ✓ test_global_reassignment
+  ✓ test_global_with_export
   ✓ test_global_with_expression
   ✓ test_global_with_float
+  ✓ test_global_with_modifier_words
   ✓ test_global_with_pi
   ✓ test_global_with_reference
+  ✓ test_global_with_type_word
+  ✓ test_global_with_typed_define
+  ✓ test_global_without_initializer
+  ✓ test_global_without_initializer_keeps_the_type_word_out_of_the_name
+  ✓ test_globals
   ✓ test_graph_params
   ✓ test_group_cascade
   ✓ test_group_cascade0
   ✓ test_group_cascade1
   ✓ test_group_cascade2
   ✓ test_harder_arithmetic
+  ✓ test_hash_comment_after_a_statement_keeps_the_newline_separator
+  ✓ test_hash_comment_ends_the_expression_not_the_program
   ✓ test_hash_index
+  ✓ test_hash_without_space_is_still_the_index_operator
   ✓ test_hex
   ✓ test_hidden_side_effect_is_rejected
   ✓ test_host_fetch_import
@@ -323,6 +368,9 @@ PASSED:
   ✓ test_if
   ✓ test_if_block_syntax
   ✓ test_if_call_zero
+  ✓ test_if_colon_body_assignment_stops_at_else
+  ✓ test_if_colon_body_with_assignment
+  ✓ test_if_colon_body_with_compound_assignment
   ✓ test_if_gt
   ✓ test_if_math
   ✓ test_if_then_else
@@ -394,12 +442,15 @@ PASSED:
   ✓ test_logic_binds_weaker_than_comparison
   ✓ test_logic_precedence
   ✓ test_logical_and
+  ✓ test_logical_and_bit_operators_on_a_float_are_refused_loudly
+  ✓ test_logical_and_bit_operators_on_ints_still_work
   ✓ test_logical_or
   ✓ test_looked_up_value_takes_part_in_arithmetic
   ✓ test_magic_object_mismatch - should panic
   ✓ test_magic_object_roundtrip
   ✓ test_map
   ✓ test_mark_as_map
+  ✓ test_math_extra
   ✓ test_math_library
   ✓ test_matrix_comma_index
   ✓ test_matrix_order
@@ -426,6 +477,7 @@ PASSED:
   ✓ test_negative_literals_after_power_fix
   ✓ test_negative_modulo_is_linted
   ✓ test_negative_power_precedence
+  ✓ test_nested_for
   ✓ test_nested_node_json
   ✓ test_nested_position_tracking
   ✓ test_nested_structures
@@ -465,7 +517,9 @@ PASSED:
   ✓ test_node_sub_basic
   ✓ test_node_sub_booleans
   ✓ test_node_to_json_compact
+  ✓ test_norm
   ✓ test_norm_bars_are_brackets
+  ✓ test_norm2
   ✓ test_norway_problem_in_data
   ✓ test_not_binds_weaker_than_comparison
   ✓ test_null_needs_a_check
@@ -538,9 +592,12 @@ PASSED:
   ✓ test_repeated_local_time_needs_disambiguation
   ✓ test_reverse
   ✓ test_root
+  ✓ test_root_float
   ✓ test_root_list_strings
   ✓ test_root_lists
   ✓ test_round_floor_ceiling
+  ✓ test_rounding_builtins_work_inside_function_bodies
+  ✓ test_rounding_functions_give_exact_ints
   ✓ test_rounding_mode_is_named
   ✓ test_roundtrip
   ✓ test_rule_change_is_not_silent
@@ -552,6 +609,7 @@ PASSED:
   ✓ test_scientific_notation_forms
   ✓ test_selector_zero_is_an_error
   ✓ test_self_closing_tag
+  ✓ test_self_modifying
   ✓ test_semicolon_groups
   ✓ test_shell_holes_are_whole_arguments
   ✓ test_shrinking_recursion_is_total
@@ -563,6 +621,8 @@ PASSED:
   ✓ test_sine_at_rational_multiple_of_pi
   ✓ test_skipped_local_time_can_be_chosen_explicitly
   ✓ test_small_arithmetic_unchanged
+  ✓ test_smart_return
+  ✓ test_smart_return_harder
   ✓ test_smart_types
   ✓ test_sql_from_built_text_is_rejected
   ✓ test_sql_holes_are_parameters_not_text
@@ -572,6 +632,7 @@ PASSED:
   ✓ test_square_and_cube_inside_arithmetic
   ✓ test_square_brackets_keep_all_newline_items
   ✓ test_square_brackets_keep_all_semicolon_items
+  ✓ test_square_precedence
   ✓ test_square_roots_are_reduced
   ✓ test_square_roots_multiply_exactly
   ✓ test_statement_sequence_with_grouped_list_in_the_middle
@@ -608,6 +669,7 @@ PASSED:
   ✓ test_to_xml_self_closing
   ✓ test_to_xml_simple
   ✓ test_to_xml_with_attributes
+  ✓ test_todo_browser
   ✓ test_tools_availability
   ✓ test_tools_available
   ✓ test_top_level_newlines_yield_the_last_item
@@ -637,6 +699,9 @@ PASSED:
   ✓ test_type_synonyms
   ✓ test_type_typed_variable
   ✓ test_type_variable
+  ✓ test_type_word_alone_is_still_a_name
+  ✓ test_type_words_come_from_the_analyzer
+  ✓ test_typed_global_without_initializer_is_zero
   ✓ test_typed_literals_bind_tightly
   ✓ test_types_simple
   ✓ test_types_simple2
@@ -666,17 +731,27 @@ PASSED:
   ✓ test_variables
   ✓ test_vulgar_fractions_are_exact
   ✓ test_wasm_gc_node_reading_concept
+  ✓ test_wasm_if
+  ✓ test_wasm_increment
+  ✓ test_wasm_logic
+  ✓ test_wasm_logic_combined
+  ✓ test_wasm_mutable_global
+  ✓ test_wasm_mutable_global2
   ✓ test_wasm_roundtrip
   ✓ test_wasm_roundtrip_via_is
+  ✓ test_wasm_typed_globals
   ✓ test_wasm_while
   ✓ test_wasm_while2
   ✓ test_wasp_roundtrip
   ✓ test_wasp_to_json
+  ✓ test_while_colon_body_with_assignment
+  ✓ test_while_colon_body_with_compound_assignment
   ✓ test_while_loop
   ✓ test_while_loop_may_diverge
   ✓ test_while_parenthesized_condition_takes_a_bare_body
   ✓ test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ test_while_true_forever
+  ✓ test_wit_parse
   ✓ test_xml_comments
   ✓ test_xml_declaration
   ✓ test_xml_roundtrip
@@ -685,7 +760,10 @@ PASSED:
   ✓ test_zero_string_is_truthy
   ✓ test_zoned_time_records_its_rules_version
   ✓ test2def
+  ✓ text_argument_for_an_int_parameter_is_a_type_error
   ✓ todo_is_a_loud_error_naming_the_missing_feature
+  ✓ untyped_parameter_takes_the_kind_all_calls_agree_on
+  ✓ untyped_parameter_with_int_calls_or_none_stays_int
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
   ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
@@ -703,9 +781,12 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
   ✓ wisp_parser::tests::test_wisp_shorthand_operators
   ✓ wisp_parser::tests::test_wisp_tag
+  ✓ wit_struct_is_a_plain_word
+  ✓ wit_type_arguments_close_at_the_first_angle_bracket
 
 FAILED:
+  ✗ test_math_operators_runtime
   ✗ test_undefined_variable_is_an_error - should panic
 
 SUMMARY:
-113 ignored, 702 passed, 1 failed, 703 total tested
+90 ignored, 782 passed, 2 failed, 784 total tested

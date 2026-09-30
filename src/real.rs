@@ -14,7 +14,7 @@ use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"];
+const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"];
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;

@@ -13,7 +13,7 @@ const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
-	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
+	["node_count", "node_size", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
@@ -153,9 +153,9 @@ impl WasmGcEmitter {
 			self.exports.export("node_count", ExportKind::Func, idx);
 		}
 
-		// node_bytes(node) -> i64: the bytes of a text, 8 bytes per element otherwise
-		if self.should_emit_function("node_bytes") {
-			self.runtime_function("node_bytes", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
+		// node_size(node) -> i64: the bytes of a text, 8 bytes per element otherwise
+		if self.should_emit_function("node_size") {
+			self.runtime_function("node_size", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
 				s.emit_is_text(f);
 				f.instruction(&I::If(BlockType::Result(ValType::I64)));
 				f.instruction(&I::LocalGet(0));
@@ -257,7 +257,7 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// Text is UTF-8 and is read by one of three units: `.bytes` counts bytes, `.chars` code points,
+	/// Text is UTF-8 and is read by one of three units: `size` and `.bytes` count bytes, `.chars` code points,
 	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
 	fn emit_text_units(&mut self) {
 		let node_ref = Ref(self.node_ref(false));

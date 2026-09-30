@@ -38,9 +38,6 @@ pub struct TypeManager {
 	/// Next available type index
 	next_type_idx: u32,
 
-	/// Struct fields declared with a type no one defines; the module must not run then
-	pub type_errors: Vec<String>,
-
 	/// Map from user type names to their WASM type indices
 	user_type_indices: HashMap<String, u32>,
 }
@@ -65,7 +62,6 @@ impl TypeManager {
 			big_heap_type: 0,
 			ratio_type: 0,
 			next_type_idx: 0,
-			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
 		}
 	}
@@ -190,7 +186,7 @@ impl TypeManager {
 	}
 
 	/// Convert a FieldDef to a WASM FieldType
-	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef) -> FieldType {
+	pub fn field_def_to_wasm_field(&self, field: &FieldDef) -> FieldType {
 		let element_type = match field.type_name.as_str() {
 			// Node-mode: map wasp types to WASM types
 			"Int" | "i64" | "long" => Val(ValType::I64),
@@ -213,8 +209,7 @@ impl TypeManager {
 						heap_type: HeapType::Concrete(type_idx),
 					}))
 				} else {
-					self.type_errors.push(format!("unknown type: {other} of field {}", field.name));
-					Val(Ref(self.node_ref(true)))
+					panic!("Unknown type: {}", other);
 				}
 			}
 		};

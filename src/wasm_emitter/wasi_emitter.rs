@@ -6,8 +6,6 @@ use wasm_encoder::*;
 
 use super::WasmGcEmitter;
 
-const PRINT_TERMINATOR: &str = "\n";
-
 impl WasmGcEmitter {
 	/// Emit WASI puts: write string to stdout
 	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
@@ -60,23 +58,6 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::Call(f.call_index as u32));
 		}
 		// Stack now has i32 (error code), leave it for conversion to Node
-	}
-
-	/// `print x` / `print(x)`: writes a literal number or text and a newline to stdout, the value is the printed value.
-	/// Other values are an error value until runtime formatting exists.
-	pub(super) fn emit_print(&mut self, func: &mut Function, value: &Node) {
-		let text = match value.drop_meta() {
-			Node::Number(number) => number.to_string(),
-			Node::Text(text) => text.clone(),
-			_ => {
-				let diagnostic = crate::diagnostic::Diagnostic::at(value, "print supports literal numbers and text only so far");
-				self.emit_type_error(func, diagnostic.to_string());
-				return;
-			}
-		};
-		self.emit_wasi_puts(func, &Node::Text(format!("{text}{PRINT_TERMINATOR}")));
-		func.instruction(&Instruction::Drop);
-		self.emit_node_instructions(func, value);
 	}
 
 	/// Emit WASI puti: write integer to stdout
