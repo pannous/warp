@@ -938,6 +938,22 @@ impl WasmGcEmitter {
 		self.code.function(&func);
 		let idx = self.register_func("get_int_value");
 		self.exports.export("get_int_value", ExportKind::Func, idx);
+
+		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
+		// so a host without GC field access (JavaScript) can read a result text from memory
+		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
+			self.runtime_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
+				let string = HeapType::Concrete(s.type_manager.string_type);
+				s.emit_field(f, 0, 1);
+				f.instruction(&Instruction::RefTestNonNull(string));
+				f.instruction(&Instruction::If(BlockType::Result(ValType::I32)));
+				s.emit_text_field(f, 0, field_index);
+				f.instruction(&Instruction::Else);
+				f.instruction(&Instruction::I32Const(0));
+				f.instruction(&Instruction::End);
+			});
+			self.exports.export(name, ExportKind::Func, self.func_index(name));
+		}
 	}
 
 	/// Emit math helper functions (i64_pow, etc.)
