@@ -4,12 +4,13 @@ Baseline: ./test.sh → 611 passed, 0 failed, 132 ignored. Issue #2 closed (serv
 The supervisor session owns this board and assigns ONE task per agent at a time; agents do not edit the board.
 Status: open | assigned <session> | review | done <commit> | parked (reason)
 
-## Wave 2 (user decisions, notes/cloud_tasks.md)
-- C merged 43268e8c (test defects, CLAUDE.md WIT paragraph); B9(2) merged 1edc270f (undefined variables → errors, 792/0).
-- Cloud routines (RemoteTrigger, Sonnet 5.5, fired 21:17Z): J trig_01Nv9Au5b9L4hpEpXwuxsX7d (claude/juxtaposition-units),
-  S trig_011gWfa5Rw1NvthXAQyoj2SJ (claude/size-types-scope), E trig_01RHuJPKtxYoceTMejQnvh1p (claude/undefined-calls).
-- Merged 94c416f2: E (undefined calls, min/max, print) + J (2x juxtaposition, unit words) — 826/0 all-features.
-- Running: S; J2 trig_01X3H6Ue5Ci8ktjDcUYc4Xkw (claude/units-followup: Quantity display, ±, ranges); M trig_01KDWq4HXStcgfaKbt5S1a59 (claude/use-modules). Queued: F. Supervisor merges after AGENT_CI_RESULT tests=success + local --all-features run.
+## Wave 2 (user decisions, notes/cloud_tasks.md) — DONE 2026-09-30
+Merged into main (each: CI AGENT_CI_RESULT tests=success + local clean export --all-features):
+C 43268e8c (test defects), B9(2) 1edc270f (undefined variable → error), E+J 94c416f2 (undefined calls, print, min/max,
+juxtaposition, unit words), J2 cf1347ea (unit display, ±, ranges), S 82d28193 (size = count, list of int, data scope),
+F d9a57e27 (float x = π, << >>, panic sweep → notes/panic_sweep.md), M 96188a6c (use <file>, f -x negated call).
+Final: 878 passed, 0 failed, 111 ignored (sweep start: 611 passed).
+Left: #10 polish notation (no opinion), #13 web host (later), remaining ignored tests are design/host blocked.
 
 ## High — ignore "next" / known wrong results
 | id | task | status |
