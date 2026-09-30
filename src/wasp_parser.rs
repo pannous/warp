@@ -26,6 +26,12 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
 
+/// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
+const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
+const TIMES_WORD: &str = "times";
+/// `N times` takes everything up to an assignment: `n+1 times {…}`
+const TIMES_BP: u8 = 50;
+
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
 const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 /// A vulgar fraction such as ⅓ decomposes (NFKD) into numerator, this slash and denominator: 1⁄3
@@ -137,6 +143,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// `N times` loops parsed so far, numbering their hidden counters
+	times_loops: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -170,6 +178,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			stops_at_else: false,
+			times_loops: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}
@@ -588,6 +597,16 @@ impl WaspParser {
 		}
 	}
 
+	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards
+	fn peek_negated_control_word(&self) -> Option<(Op, usize)> {
+		if self.options.data_mode {
+			return None;
+		}
+		STATEMENT_MODIFIERS.iter()
+			.find(|(word, _, negated)| *negated && self.matches_keyword(word))
+			.map(|(word, op, _)| (*op, word.len()))
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
@@ -849,7 +868,12 @@ impl WaspParser {
 		self.skip_spaces();
 
 		// Step 1: Prefix (nud)
-		let mut lhs = if let Some((op, chars)) = self.peek_prefix_operator() {
+		let mut lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
+			self.advance_by(chars);
+			self.skip_spaces();
+			let rhs = self.parse_prefix_operand(op);
+			negate_condition(self.finish_prefix(op, rhs))
+		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
@@ -889,6 +913,11 @@ impl WaspParser {
 
 			// Step 2b: Subscript (tight, like Op::Hash)
 			if let Some(updated) = self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP) {
+				lhs = updated;
+				continue;
+			}
+
+			if let Some(updated) = self.try_parse_evaluate_bang(&lhs).or_else(|| self.try_parse_control_suffix(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
 			}
@@ -1222,6 +1251,56 @@ impl WaspParser {
 		}
 		self.advance_by(chars);
 		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(Empty)))
+	}
+
+	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway
+	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
+		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !is_evaluable {
+			return None;
+		}
+		self.advance();
+		Some(lhs.clone())
+	}
+
+	/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`, `3 times {body}`
+	fn try_parse_control_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
+			return None;
+		}
+		if min_bp <= TIMES_BP && self.matches_keyword(TIMES_WORD) {
+			self.advance_by(TIMES_WORD.len());
+			return Some(self.parse_times_loop(lhs.clone()));
+		}
+		let (word, guard, negated) = STATEMENT_MODIFIERS.iter().copied().find(|(word, _, _)| self.matches_keyword(word))?;
+		if min_bp > 0 {
+			return None;
+		}
+		self.advance_by(word.len());
+		self.skip_spaces();
+		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(Op::If.binding_power().1));
+		let condition = if negated { Node::Key(Box::new(Empty), Op::Not, Box::new(condition)) } else { condition };
+		Some(match guard {
+			Op::While => while_do(condition, lhs.clone()),
+			_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(lhs.clone())),
+		})
+	}
+
+	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
+	fn parse_times_loop(&mut self, count: Node) -> Node {
+		self.skip_spaces();
+		let body = match self.current_char() {
+			'{' => self.parse_atom(),
+			':' => {
+				self.advance();
+				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+			}
+			_ => return error("`times` needs a body: `3 times {…}`"),
+		};
+		self.times_loops += 1;
+		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
+		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
+		Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space)
 	}
 
 	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
@@ -2194,4 +2273,15 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))
+}
+
+/// The condition of the `if`/`while` head inside a parsed conditional or loop, negated: `unless c {…}` is `if not c {…}`
+fn negate_condition(conditional: Node) -> Node {
+	match conditional {
+		Node::Key(head, op @ (Op::Then | Op::Else | Op::Do), body) => Node::Key(Box::new(negate_condition(*head)), op, body),
+		Node::Key(empty, op @ (Op::If | Op::While), condition) if matches!(empty.drop_meta(), Empty) => {
+			Node::Key(empty, op, Box::new(Node::Key(Box::new(Empty), Op::Not, condition)))
+		}
+		other => other,
+	}
 }
