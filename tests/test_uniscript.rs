@@ -1,6 +1,7 @@
 //! Uniscript (wiki/uniscript.md) in wasp: lib/uniscript.wasp over data/uniscript/entities.idx
 
 use std::process::Command;
+use warp::diagnostic::take_runtime_warnings;
 use warp::{error, is};
 
 fn converts(uniscript: &str, unicode: &str) {
@@ -26,13 +27,42 @@ fn block_types_style_their_operands() {
 	converts("<:fracture A>", "𝔄");
 	converts("<:fracture A b c >", "𝔄𝔟𝔠");
 	converts("<:fracture> A b c <:>", "𝔄𝔟𝔠");
-	converts("<:greek> a b c <:/greek>", "αβψ"); // Greek keyboard layout: c is ψ
+	converts("<:greek> a b g d <:/greek>", "αβγδ");
 	converts("<:double d>", "𝕕");
 	converts("<:double-d>", "𝕕");
 	converts("x<:upper a>", "xᵃ");
 	converts("<:ligature ae>", "æ");
 	converts("<:reverseInPlace e>", "ɘ");
 	converts("<:iconic ⚠>", "⚠\u{FE0F}");
+}
+
+#[test]
+fn greek_is_transliterated_phonetically() {
+	converts("<:greek> athos <:/greek>", "αθοσ"); // th is one letter
+	converts("<:greek th ch ps>", "θχψ");
+	converts("<:greek eta Omega lambda>", "ηΩλ");
+}
+
+/// A character or combination without a Unicode counterpart stays plain, with a warning naming it and its position
+fn warns(uniscript: &str, unicode: &str, warning: &str) {
+	take_runtime_warnings();
+	converts(uniscript, unicode);
+	assert_eq!(take_runtime_warnings(), vec![warning.to_string()], "{uniscript}");
+}
+
+#[test]
+fn unsupported_characters_and_combinations_warn() {
+	warns("<:greek c>", "c", "uniscript: no greek form of c at byte 0");
+	warns("x <:fracture 7>", "x 7", "uniscript: no fracture form of 7 at byte 2");
+	warns("<:red 𓀀>", "𓀀", "uniscript: red does not apply to 𓀀 at byte 0");
+	warns("<:mirror red 狗>", "狗\u{E004D}", "uniscript: red does not apply to 狗 at byte 0");
+	warns("<:beside a b>", "ab", "uniscript: no beside group of a at byte 0");
+}
+
+#[test]
+fn use_strict_makes_uniscript_warnings_errors() {
+	is!("use strict; use uniscript; uniscript(\"<:greek c>\")", error("uniscript: no greek form of c at byte 0"));
+	is!("use strict; use uniscript; uniscript(\"<:greek a>\")", "α");
 }
 
 #[test]
@@ -49,6 +79,7 @@ fn effect_words_stack_on_one_operand() {
 	// fonts/README.md: one geometry and one color combine in either order
 	converts("<:mirror red A>", "A\u{E0072}\u{E004D}");
 	converts("<:red mirror A>", "A\u{E004D}\u{E0072}");
+	converts("<:reverse red R>", "R\u{E0072}\u{E004D}"); // reverse is mirror
 	converts("<:mirror red A b>", "A\u{E0072}\u{E004D}b\u{E0072}\u{E004D}");
 	converts("<:mirror red circle>", "🔴\u{E004D}");
 	spells("A\u{E0072}\u{E004D} 🔴\u{E004D}", "<:mirror red A> <:mirror red circle>");
