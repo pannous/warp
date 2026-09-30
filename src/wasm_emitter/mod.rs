@@ -3499,7 +3499,11 @@ fn failed_run(failure: anyhow::Error) -> Node {
 		Some(trap) => trap,
 	};
 	let trace = format!("{:?}", failure);
-	let runtime_error = list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " "));
+	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
+		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+		format!("no field {name}")
+	});
+	let runtime_error = missing_field.or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " ")));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
 	crate::node::error(&message)

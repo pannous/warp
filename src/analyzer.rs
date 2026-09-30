@@ -1397,6 +1397,18 @@ fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
+/// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits and `_`:
+/// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
+/// A symbol key `p[k]` is evaluated when `k` is a variable, so it is not a constant.
+pub fn constant_field_name(key: &Node) -> Option<String> {
+	let name = match key.drop_meta() {
+		Node::Text(name) => name.clone(),
+		Node::Char(letter) => letter.to_string(),
+		_ => return None,
+	};
+	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')).then_some(name)
+}
+
 pub fn is_append_method(name: &str) -> bool {
 	APPEND_METHODS.contains(&name)
 }
@@ -2096,6 +2108,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				} else {
 					ctx.required_functions.insert("node_index_at");
 					ctx.required_functions.insert("map_get");
+					if let Some(name) = crate::wasp_parser::subscript_key(value).and_then(constant_field_name) {
+						ctx.missing_field_names.insert(name);
+					}
 					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 					ctx.required_functions.insert("string_char_at");
 					ctx.required_functions.insert("list_node_at");

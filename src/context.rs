@@ -48,6 +48,8 @@ pub struct Context {
     pub captures: HashMap<String, Vec<(String, (u32, Kind))>>,
     /// Calls that disagree on the kind of an undeclared parameter, reported as type errors
     pub parameter_conflicts: Vec<String>,
+    /// Field names looked up by a constant key (`p.x`, `p["x"]`): each has a runtime error `no_field_x` for the miss
+    pub missing_field_names: std::collections::BTreeSet<String>,
 }
 
 impl Default for Context {
@@ -80,6 +82,7 @@ impl Context {
             captures: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),
+            missing_field_names: Default::default(),
         }
     }
 
