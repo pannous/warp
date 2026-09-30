@@ -344,7 +344,6 @@ fn test_empty_typed_functions() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
 fn test_types() {
 	test_bad_type();
 	test_deep_type();
