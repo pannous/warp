@@ -10,6 +10,13 @@ use crate::type_kinds::{canonical_type_name, Kind};
 use std::collections::{HashMap, HashSet};
 
 /// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
+/// Words that declare a name assignable once: `const x=5`, `final x=5`
+pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
+
+fn is_constant_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
+}
+
 const COUNTING_PROPERTIES: [&str; 4] = ["number", "count", "length", "size"];
 /// The counting properties that are also functions: `number x` is the type conversion, not a count
 const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
@@ -934,7 +941,7 @@ fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
 			Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => match items[0].drop_meta() {
-				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
+				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) && !CONSTANT_KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
 				_ => None,
 			},
 			_ => None,
@@ -1087,7 +1094,7 @@ fn check_constants(node: &Node, constants: &mut HashSet<String>) -> Option<Diagn
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
-				[keyword, declaration, rest @ ..] if matches!(keyword.drop_meta(), Node::Symbol(s) if s == "const") => {
+				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) => {
 					let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() else {
 						return Some(Diagnostic::at(declaration, format!("const needs a value: {}", declaration.serialize())).fix("const x = 5".to_string()));
 					};
@@ -1264,7 +1271,7 @@ pub fn lower_declarations(node: Node) -> Node {
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment
-		Node::List(items, bracket, separator) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if s == "const") => {
+		Node::List(items, bracket, separator) if items.len() >= 2 && is_constant_keyword(&items[0]) => {
 			let mut declaration = items.into_iter().skip(1).map(lower_declarations).collect::<Vec<_>>();
 			if declaration.len() == 1 {
 				declaration.remove(0)
