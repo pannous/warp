@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uniscript</title>
+<style>
+	@font-face { font-family: "Uniscript Sans"; src: url("fonts/UniscriptSans-Regular.woff2") format("woff2"); font-display: swap; }
+	@font-face {
+		font-family: "Uniscript CJK"; src: url("fonts/UniscriptCJK-Regular.woff2") format("woff2"); font-display: swap;
+		unicode-range: U+2E80-2FFF, U+3000-9FFF, U+F900-FAFF, U+20000-3FFFF, U+E0000-E007F;
+	}
+	@font-face {
+		font-family: "NewGardinerOmni"; src: url("fonts/NewGardinerOmni2d4.woff2") format("woff2"); font-display: swap;
+		unicode-range: U+13000-1345F;
+	}
+	:root {
+		--ground: #f7f5f0; --panel: #fffdf8; --ink: #1d1b16; --muted: #6b665c; --line: #d9d3c6; --accent: #7a3b12; --error: #b00020;
+		--uniscript: "Uniscript Sans", "Uniscript CJK", "NewGardinerOmni", system-ui, sans-serif;
+		color-scheme: light;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root { --ground: #171613; --panel: #211f1b; --ink: #ece7dc; --muted: #a39d90; --line: #3a372f; --accent: #e3a064; --error: #ff6b7a; color-scheme: dark; }
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--ground); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
+	main { max-width: 60rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+	h1 { font: 600 2rem/1.2 var(--uniscript); margin: 0 0 .25rem; }
+	h2 { font-size: 1rem; margin: 2rem 0 .5rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+	p { margin: .25rem 0; color: var(--muted); }
+	code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
+	a { color: var(--accent); }
+	textarea, .output {
+		display: block; width: 100%; padding: .75rem 1rem; border: 1px solid var(--line); border-radius: .5rem;
+		background: var(--panel); color: var(--ink);
+	}
+	textarea { font: 1.05rem/1.5 ui-monospace, Menlo, monospace; min-height: 6rem; resize: vertical; }
+	.output { font: 2rem/1.5 var(--uniscript); min-height: 4.5rem; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: .5rem; }
+	.output.spelled { font: 1.05rem/1.5 ui-monospace, Menlo, monospace; }
+	.output.error { color: var(--error); font: 1rem/1.5 ui-monospace, Menlo, monospace; }
+	.codes { font: .75rem/1.4 ui-monospace, Menlo, monospace; color: var(--muted); margin-top: .25rem; overflow-wrap: anywhere; }
+	.examples { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+	button {
+		font: .9rem/1.2 ui-monospace, Menlo, monospace; padding: .4rem .65rem; border: 1px solid var(--line); border-radius: 999px;
+		background: var(--panel); color: var(--ink); cursor: pointer;
+	}
+	button:hover { border-color: var(--accent); color: var(--accent); }
+	#status { font-size: .85rem; }
+	#status.error, .warnings { color: var(--error); }
+	.warnings { font: .9rem/1.4 ui-monospace, Menlo, monospace; margin: .25rem 0 0; padding-left: 1.25rem; }
+	footer { margin-top: 3rem; font-size: .85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+	<h1>Uniscript ↔ <span class="u">𝔘𝔫𝔦𝔠𝔬𝔡𝔢</span></h1>
+	<p>ASCII names for Unicode text. The conversion runs in <code>lib/uniscript.wasp</code> compiled to WebAssembly (GC) by
+		<a href="https://github.com/pannous/wasp">warp</a>. <span id="status">loading the module and its 3.4 MB index…</span></p>
+
+	<h2>Uniscript → Unicode</h2>
+	<div class="examples">
+		<button data-example="<:forall> x <:in> <:double R>: x² <:geq> 0">∀x∈ℝ</button>
+		<button data-example="<:fracture> Wasp <:/fracture> and <:double> Warp <:>">𝔣𝔯𝔞𝔨𝔱𝔲𝔯</button>
+		<button data-example="<:greek> filosofia <:/greek> <:greek> kosmos <:/greek> <:greek> chaos <:/greek>">greek</button>
+		<button data-example="<:red W> <:orange a> <:green s> <:blue p>">colors</button>
+		<button data-example="<:mirror red A> <:turn B> <:left green C> <:right blue D> <:flip E>">mirror, turn, color</button>
+		<button data-example="<:red circle> <:brown heart> <:iconic ⚠> \:infinity">emoji</button>
+		<button data-example="<:beside 犭 句> <:beside 木 木> <:above 木 林> <:mirror 你>">CJK composition</button>
+		<button data-example="<:above 𓀀 𓁐> <:mirror 𓀀>">hieroglyphs</button>
+		<button data-example="E = mc<:upper 2>, <:alpha> + <:beta> <:rightarrow> <:gamma>">math</button>
+		<button data-example="<:fracture 7> <:red 𓀀> <:greek c>">warnings</button>
+		<button data-example="<:nosuchthing> x">an error</button>
+	</div>
+	<textarea id="source" spellcheck="false" aria-label="uniscript"><:alpha> <:fracture A> \:infinity <:mirror red R></textarea>
+	<div id="unicode" class="output" aria-live="polite"></div>
+	<div id="unicode-codes" class="codes"></div>
+	<ul id="unicode-warnings" class="warnings"></ul>
+	<div class="examples"><button id="to-reverse">↓ spell the result back</button></div>
+
+	<h2>Unicode → Uniscript</h2>
+	<textarea id="reverse-source" spellcheck="false" aria-label="unicode" style="font-family: var(--uniscript); font-size: 1.5rem">α Ω 𝔄 ∞ ℝ 🔴 xᵃ</textarea>
+	<div id="reverse-uniscript" class="output spelled"></div>
+	<div id="reverse-uniscript-codes" class="codes" hidden></div>
+	<ul id="reverse-uniscript-warnings" class="warnings"></ul>
+
+	<footer>
+		Syntax: <code>&lt;:name&gt;</code> or <code>\:name</code> for one entity (Unicode, LaTeX or HTML names),
+		<code>&lt;:block operands&gt;</code> or <code>&lt;:block&gt; … &lt;:/block&gt;</code> for a style,
+		stacked effects like <code>&lt;:mirror red A&gt;</code>. Colors and geometry are invisible TAG characters that the
+		Uniscript fonts (Noto-derived, OFL) render; NewGardinerOmni (OFL) joins hieroglyphs.
+		Spec: <a href="https://github.com/pannous/wasp/blob/main/wiki/uniscript.md">wiki/uniscript.md</a>.
+	</footer>
+</main>
+<script src="uniscript.js"></script>
+</body>
+</html>
