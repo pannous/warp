@@ -1,0 +1,357 @@
+//! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
+
+use crate::type_kinds::Kind;
+use crate::wasm_emitter::WasmGcEmitter;
+use wasm_encoder::*;
+use Instruction as I;
+use Instruction::I32Const;
+use ValType::Ref;
+
+const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
+/// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
+const KIND_MASK: i64 = 0xFF;
+const ASCII_LIMIT: i32 = 0x80;
+const ASCII_CASE_OFFSET: i32 = 32;
+/// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
+const SQUARE_BRACKET_INFO: i64 = 1;
+const KIND_SHIFT: i64 = 8;
+/// An i64 has at most 19 digits, plus the sign
+const MAX_INT_BYTES: i32 = 20;
+const DECIMAL_BASE: i64 = 10;
+const ZERO_DIGIT: i32 = b'0' as i32;
+const MINUS_SIGN: i32 = b'-' as i32;
+const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+
+/// Names of the runtime functions, keyed by the library word
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 6] = [
+	("reverse", "list_reverse"),
+	("sort", "list_sort"),
+	("upper", "text_upper"),
+	("lower", "text_lower"),
+	("split", "text_split"),
+	("join", "list_join"),
+];
+
+impl WasmGcEmitter {
+	pub(crate) fn emit_library_ops(&mut self) {
+		self.emit_list_reverse();
+		self.emit_list_sort();
+		self.emit_text_case("text_upper", true);
+		self.emit_text_case("text_lower", false);
+		self.emit_text_split();
+		self.emit_list_join();
+	}
+
+	/// Push the i64 of the Int node in local `node`
+	fn emit_int_value_of(&self, func: &mut Function, node: u32) {
+		self.emit_field(func, node, 1);
+		if self.int_runtime() {
+			self.call(func, "int_from_payload");
+		} else {
+			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
+			func.instruction(&I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 });
+		}
+	}
+
+	/// Trap unless the node in local `local` has kind `expected`
+	fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
+		self.emit_field(func, local, 0);
+		Self::emit_list(func, &[I::I64Const(expected as i64), I::I64Ne]);
+		self.emit_fail_if(func, error);
+	}
+
+	/// A one-character string is a Codepoint node: local `text` becomes the equivalent one-byte Text node (ASCII only),
+	/// using the locals `length`, `address` and `code` as scratch
+	fn emit_codepoint_as_text(&self, func: &mut Function, text: u32, length: u32, address: u32, code: u32) {
+		let i31 = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
+		self.emit_field(func, text, 0);
+		Self::emit_list(func, &[I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Empty), I32Const(1), I::LocalSet(length)]);
+		self.emit_text_allocation(func, length, address);
+		self.emit_field(func, text, 1);
+		Self::emit_list(func, &[I::RefCastNonNull(i31), I::I31GetU, I::LocalTee(code), I32Const(ASCII_LIMIT), I::I32GeU]);
+		self.emit_fail_if(func, "non_ascii_text");
+		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(code), I::I32Store8(BYTE), I::LocalGet(address), I::LocalGet(length)]);
+		self.call(func, "new_text");
+		Self::emit_list(func, &[I::LocalSet(text), I::End]);
+	}
+
+	/// Trap unless local 0 is a list (or ø, which `emit_empty_as_null` turned into null)
+	fn emit_require_list(&self, func: &mut Function) {
+		Self::emit_list(func, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
+		self.emit_field(func, 0, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Ne]);
+		self.emit_fail_if(func, "not_a_list");
+		func.instruction(&I::End);
+	}
+
+	/// The list in local `acc` (null when empty) as a node: ø for the empty list
+	fn emit_list_result(&self, func: &mut Function, acc: u32) {
+		let node_ref = Ref(self.node_ref(false));
+		Self::emit_list(func, &[I::LocalGet(acc), I::RefIsNull, I::If(BlockType::Result(node_ref))]);
+		self.call(func, "new_empty");
+		Self::emit_list(func, &[I::Else, I::LocalGet(acc), I::RefAsNonNull, I::End]);
+	}
+
+	/// list_reverse(list): a new list with the cells in the opposite order
+	fn emit_list_reverse(&mut self) {
+		if !self.should_emit_function("list_reverse") && !self.should_emit_function("text_split") {
+			return;
+		}
+		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
+		let node_type = self.type_manager.node_type;
+		self.runtime_function("list_reverse", vec![nullable], vec![node_ref], vec![nullable], |s, f| {
+			let reversed = 1;
+			s.emit_empty_as_null(f, 0);
+			s.emit_require_list(f);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, 0, 0);
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::LocalGet(reversed), I::StructNew(node_type), I::LocalSet(reversed)]);
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End]);
+			s.emit_list_result(f, reversed);
+		});
+	}
+
+	/// list_sort(list): a new list of ints in ascending order (insertion into a sorted list)
+	fn emit_list_sort(&mut self) {
+		if !self.should_emit_function("list_sort") {
+			return;
+		}
+		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
+		let node_type = self.type_manager.node_type;
+		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+
+		// insert_sorted(sorted, element, value, kind): the cells of sorted before the first larger value, the element, the rest shared
+		let insert_sorted = next_index(self);
+		let params = vec![nullable, node_ref, ValType::I64, ValType::I64];
+		self.runtime_function("list_insert_sorted", params, vec![node_ref], vec![nullable], |s, f| {
+			let (sorted, element, value, kind, head) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[I::LocalGet(sorted), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
+			s.emit_field(f, sorted, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head)]);
+			s.emit_int_value_of(f, head);
+			Self::emit_list(f, &[I::LocalGet(value), I::I64GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
+			Self::emit_list(f, &[I::LocalGet(sorted), I::StructNew(node_type), I::Return, I::End]);
+			s.emit_field(f, sorted, 0);
+			s.emit_field(f, sorted, 1);
+			s.emit_field(f, sorted, 2);
+			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(value), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
+		});
+		assert_eq!(self.func_index("list_insert_sorted"), insert_sorted, "recursive call index");
+
+		self.runtime_function("list_sort", vec![nullable], vec![node_ref], vec![nullable, nullable], |s, f| {
+			let (sorted, element) = (1, 2);
+			s.emit_empty_as_null(f, 0);
+			s.emit_require_list(f);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
+			s.emit_require_kind(f, element, Kind::Int, "not_an_int");
+			Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
+			s.emit_int_value_of(f, element);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End]);
+			s.emit_list_result(f, sorted);
+		});
+	}
+
+	/// text_upper(text) / text_lower(text): a fresh text with the ASCII letters mapped; other bytes are refused
+	/// rather than silently kept, because case mapping beyond ASCII needs Unicode tables
+	fn emit_text_case(&mut self, name: &'static str, is_upper: bool) {
+		if !self.should_emit_function(name) {
+			return;
+		}
+		self.emit_text_heap_global();
+		let node_ref = Ref(self.node_ref(false));
+		let (node_type, string_type) = (self.type_manager.node_type, self.type_manager.string_type);
+		let (first, last) = if is_upper { (b'a', b'z') } else { (b'A', b'Z') };
+		let shift = if is_upper { -ASCII_CASE_OFFSET } else { ASCII_CASE_OFFSET };
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
+			let (pointer, end, length, copy, index, byte) = (1, 2, 3, 4, 5, 6);
+			s.emit_codepoint_as_text(f, 0, length, copy, byte);
+			s.emit_is_text(f);
+			f.instruction(&I::I32Eqz);
+			s.emit_fail_if(f, "not_a_text");
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(length)]);
+			s.emit_text_allocation(f, length, copy);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(length), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::LocalTee(byte)]);
+			Self::emit_list(f, &[I32Const(ASCII_LIMIT), I::I32GeU]);
+			s.emit_fail_if(f, "non_ascii_text");
+			// the byte is shifted when it is a letter of the other case
+			Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(index), I::I32Add]);
+			Self::emit_list(f, &[I::LocalGet(byte), I32Const(shift), I::I32Add, I::LocalGet(byte)]);
+			Self::emit_list(f, &[I::LocalGet(byte), I32Const(first as i32), I::I32Sub, I32Const((last - first + 1) as i32), I::I32LtU, I::Select]);
+			Self::emit_list(f, &[I::I32Store8(BYTE), I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(length), I::StructNew(string_type), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		});
+	}
+
+	/// text_split(text, separator): the pieces between the separators as a list of texts that share the bytes of the text
+	fn emit_text_split(&mut self) {
+		if !self.should_emit_function("text_split") {
+			return;
+		}
+		self.emit_text_heap_global();
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		let square_list = (SQUARE_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
+		let mut locals = vec![nullable];
+		locals.extend([ValType::I32; 11]);
+		self.runtime_function("text_split", vec![node_ref, node_ref], vec![node_ref], locals, |s, f| {
+			let (pieces, pointer, end, separator, separator_end, start, index, matched, offset) = (2, 3, 4, 5, 6, 7, 8, 9, 10);
+			let (length, address, code) = (11, 12, 13);
+			s.emit_codepoint_as_text(f, 0, length, address, code);
+			s.emit_codepoint_as_text(f, 1, length, address, code);
+			s.emit_require_kind(f, 0, Kind::Text, "not_a_text");
+			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
+			s.emit_text_bounds(f, pointer, end);
+			s.emit_text_field(f, 1, 0);
+			f.instruction(&I::LocalTee(separator));
+			s.emit_text_field(f, 1, 1);
+			Self::emit_list(f, &[I::I32Add, I::LocalSet(separator_end)]);
+			Self::emit_list(f, &[I::LocalGet(separator), I::LocalGet(separator_end), I::I32Eq]);
+			s.emit_fail_if(f, "empty_separator");
+			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalTee(start), I::LocalSet(index)]);
+			// the bytes from `start` up to the local `stop` as a text at the front of `pieces`
+			let push_piece = |f: &mut Function, stop: u32| {
+				Self::emit_list(f, &[I::I64Const(square_list), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+				s.call(f, "new_text");
+				Self::emit_list(f, &[I::LocalGet(pieces), I::StructNew(node_type), I::LocalSet(pieces)]);
+			};
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			// stop when the separator no longer fits before the end
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(separator_end), I::I32Add, I::LocalGet(separator), I::I32Sub, I::LocalGet(end), I::I32GtU, I::BrIf(1)]);
+			// compare the separator with the bytes at index
+			Self::emit_list(f, &[I32Const(1), I::LocalSet(matched), I32Const(0), I::LocalSet(offset)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(separator), I::LocalGet(offset), I::I32Add, I::LocalGet(separator_end), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(offset), I::I32Add, I::I32Load8U(BYTE)]);
+			Self::emit_list(f, &[I::LocalGet(separator), I::LocalGet(offset), I::I32Add, I::I32Load8U(BYTE), I::I32Ne]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(0), I::LocalSet(matched), I::Br(2), I::End]);
+			Self::emit_list(f, &[I::LocalGet(offset), I32Const(1), I::I32Add, I::LocalSet(offset), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(matched), I::If(BlockType::Empty)]);
+			push_piece(f, index);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(separator_end), I::I32Add, I::LocalGet(separator), I::I32Sub, I::LocalTee(index), I::LocalSet(start)]);
+			Self::emit_list(f, &[I::Else, I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::End, I::Br(0), I::End, I::End]);
+			push_piece(f, end);
+			Self::emit_list(f, &[I::LocalGet(pieces)]);
+			s.call(f, "list_reverse");
+		});
+	}
+
+	/// int_to_decimal(position, value): writes the decimal digits of the i64 at `position`, returns how many bytes it wrote
+	fn emit_int_to_decimal(&mut self) {
+		let locals = vec![ValType::I32, ValType::I32, ValType::I64, ValType::I32];
+		self.runtime_function("int_to_decimal", vec![ValType::I32, ValType::I64], vec![ValType::I32], locals, |_, f| {
+			let (position, value, negative, digits, rest, offset) = (0, 1, 2, 3, 4, 5);
+			Self::emit_list(f, &[I::LocalGet(value), I::I64Const(0), I::I64LtS, I::LocalTee(negative), I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(position), I32Const(MINUS_SIGN), I::I32Store8(BYTE), I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalSet(value), I::End]);
+			// count the digits
+			Self::emit_list(f, &[I32Const(1), I::LocalSet(digits), I::LocalGet(value), I::LocalSet(rest)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(rest), I::I64Const(DECIMAL_BASE), I::I64LtU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalSet(rest), I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits), I::Br(0), I::End, I::End]);
+			// write them from the last one back
+			Self::emit_list(f, &[I::LocalGet(digits), I::LocalSet(offset)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(offset), I::I32Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(offset), I32Const(1), I::I32Sub, I::LocalSet(offset)]);
+			Self::emit_list(f, &[I::LocalGet(position), I::LocalGet(negative), I::I32Add, I::LocalGet(offset), I::I32Add]);
+			Self::emit_list(f, &[I::LocalGet(value), I::I64Const(DECIMAL_BASE), I::I64RemU, I::I32WrapI64, I32Const(ZERO_DIGIT), I::I32Add, I::I32Store8(BYTE)]);
+			Self::emit_list(f, &[I::LocalGet(value), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalSet(value), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(digits), I::LocalGet(negative), I::I32Add]);
+		});
+	}
+
+	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them
+	fn emit_list_join(&mut self) {
+		if !self.should_emit_function("list_join") {
+			return;
+		}
+		self.emit_text_heap_global();
+		self.emit_int_to_decimal();
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		let i31 = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
+		let mut locals = vec![nullable, nullable];
+		locals.extend([ValType::I32; 6]);
+		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
+			let (cell, element) = (2, 3);
+			let (bound, address, position, is_first, code, length) = (4, 5, 6, 7, 8, 9);
+			let is_kind = |f: &mut Function, kind: Kind| {
+				s.emit_field(f, element, 0);
+				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
+			};
+			let next_element = |f: &mut Function| {
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
+			};
+			let loop_over_cells = |f: &mut Function| {
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+				next_element(f);
+			};
+			let end_loop = |f: &mut Function| {
+				s.emit_field(f, cell, 2);
+				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			};
+			// append the bytes of a text node: memory.copy(position, ptr, len); position += len
+			let append_text = |f: &mut Function, text: u32| {
+				f.instruction(&I::LocalGet(position));
+				s.emit_text_field(f, text, 0);
+				s.emit_text_field(f, text, 1);
+				Self::emit_list(f, &[COPY_BYTES, I::LocalGet(position)]);
+				s.emit_text_field(f, text, 1);
+				Self::emit_list(f, &[I::I32Add, I::LocalSet(position)]);
+			};
+			s.emit_empty_as_null(f, 0);
+			s.emit_require_list(f);
+			s.emit_codepoint_as_text(f, 1, length, address, code);
+			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
+			// pass 1: an upper bound of the bytes: every item, and a separator after it
+			loop_over_cells(f);
+			is_kind(f, Kind::Text);
+			f.instruction(&I::If(BlockType::Result(ValType::I32)));
+			s.emit_text_field(f, element, 1);
+			f.instruction(&I::Else);
+			is_kind(f, Kind::Int);
+			Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else]);
+			is_kind(f, Kind::Codepoint);
+			Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(1), I::Else]);
+			s.call(f, "not_a_joinable_item");
+			Self::emit_list(f, &[I32Const(0), I::End, I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(bound), I::I32Add]);
+			s.emit_text_field(f, 1, 1);
+			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);
+			end_loop(f);
+			s.emit_text_allocation(f, bound, address);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position), I32Const(1), I::LocalSet(is_first)]);
+			// pass 2: write
+			loop_over_cells(f);
+			Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
+			append_text(f, 1);
+			Self::emit_list(f, &[I::End, I32Const(0), I::LocalSet(is_first)]);
+			is_kind(f, Kind::Text);
+			f.instruction(&I::If(BlockType::Empty));
+			append_text(f, element);
+			f.instruction(&I::Else);
+			is_kind(f, Kind::Int);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(position), I::LocalGet(position)]);
+			s.emit_int_value_of(f, element);
+			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::I32Add, I::LocalSet(position), I::Else]);
+			// a character: only ASCII, which is one byte
+			s.emit_field(f, element, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(i31), I::I31GetU, I::LocalTee(code), I32Const(ASCII_LIMIT), I::I32GeU]);
+			s.emit_fail_if(f, "non_ascii_text");
+			Self::emit_list(f, &[I::LocalGet(position), I::LocalGet(code), I::I32Store8(BYTE), I::LocalGet(position), I32Const(1), I::I32Add, I::LocalSet(position), I::End, I::End]);
+			end_loop(f);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
+			s.call(f, "new_text");
+		});
+	}
+}

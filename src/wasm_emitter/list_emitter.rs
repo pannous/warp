@@ -25,9 +25,21 @@ impl WasmGcEmitter {
 			|| is_function_keyword(name)
 			|| name == PRINT
 			|| BUILTIN_CALLS.contains(&name)
+			|| crate::library_words::is_runtime_word(name)
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| crate::ffi::get_ffi_signature(name).is_some()
+	}
+
+	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one
+	fn emit_library_word_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(name) = call_name(items, bracket, separator) else { return false };
+		let Some((_, function)) = super::library_ops::LIBRARY_FUNCTIONS.iter().find(|(word, _)| *word == name) else { return false };
+		for argument in &items[1..] {
+			self.emit_node_instructions(func, argument);
+		}
+		self.emit_call(func, function);
+		true
 	}
 
 	/// A call nothing resolves is an error value at the call; returns whether it was one
@@ -169,6 +181,10 @@ impl WasmGcEmitter {
 					return;
 				}
 			}
+		}
+
+		if self.emit_library_word_call(func, items, bracket, separator) {
+			return;
 		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
