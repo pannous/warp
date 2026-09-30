@@ -10,6 +10,7 @@ use crate::wasp_parser::while_do;
 
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
+const IMPLICIT_VARIABLE: &str = "it";
 const FIRST_INDEX: i64 = 0;
 
 /// The `while` lowering of a `for` loop, or the node itself when it is not one
@@ -19,7 +20,7 @@ pub fn lower(node: Node) -> Result<Node, Node> {
 		_ => None,
 	};
 	let lowered = lowered.or_else(|| match node.drop_meta() {
-		Node::List(items, _, _) => for_in(items),
+		Node::List(items, _, _) => for_in(items).or_else(|| for_it(items)),
 		_ => None,
 	});
 	lowered.ok_or(node)
@@ -89,6 +90,15 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => counting_loop(variable, start, *op, end, body),
 		_ => walking_loop(variable, iterable, body),
 	})
+}
+
+/// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`
+fn for_it(items: &[Node]) -> Option<Node> {
+	let [keyword, iterable, body] = items else { return None };
+	if !is_word(keyword, FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	for_in(&[keyword.clone(), symbol(IMPLICIT_VARIABLE), symbol(IN_KEYWORD), iterable.clone(), body.clone()])
 }
 
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {

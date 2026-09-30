@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use crate::node::{Bracket, Node};
-use crate::operators::Op;
+use crate::operators::{glyph_operator, Op};
 
 // ============================================================================
 // Position Tracking for Hints
@@ -383,6 +383,18 @@ pub mod hints {
 
     /// The operator as written in the source; `is_prefix` tells `!x` from an infix use
     pub fn operator(written: &str, is_prefix: bool) {
+        let mut characters = written.chars();
+        if let (Some(glyph), None) = (characters.next(), characters.next()) {
+            if let Some((_, canonical)) = glyph_operator(glyph) {
+                match canonical {
+                    "and" => and_operator(written),
+                    "or" => or_operator(written),
+                    "xor" => {}
+                    _ => hint(written, canonical, "standard spelling of the operator"),
+                }
+                return;
+            }
+        }
         match (written, is_prefix) {
             ("&&" | "&" | "and", false) => and_operator(written),
             ("||" | "|" | "or", false) => or_operator(written),
@@ -398,8 +410,8 @@ pub mod hints {
     pub fn and_operator(used: &str) {
         let s = style();
         match (used, s.logical) {
-            ("&&" | "&", LogicalStyle::Words) => hint(used, "and", "word operators are more readable"),
-            ("and", LogicalStyle::Symbols) => hint("and", "&&", "symbol operators preferred"),
+            ("&&" | "&" | "∧" | "⋀", LogicalStyle::Words) => hint(used, "and", "word operators are more readable"),
+            ("and" | "∧" | "⋀", LogicalStyle::Symbols) => hint(used, "&&", "symbol operators preferred"),
             _ => {}
         }
     }
@@ -408,8 +420,8 @@ pub mod hints {
     pub fn or_operator(used: &str) {
         let s = style();
         match (used, s.logical) {
-            ("||" | "|", LogicalStyle::Words) => hint(used, "or", "word operators are more readable"),
-            ("or", LogicalStyle::Symbols) => hint("or", "||", "symbol operators preferred"),
+            ("||" | "|" | "∨" | "⋁", LogicalStyle::Words) => hint(used, "or", "word operators are more readable"),
+            ("or" | "∨" | "⋁", LogicalStyle::Symbols) => hint(used, "||", "symbol operators preferred"),
             _ => {}
         }
     }

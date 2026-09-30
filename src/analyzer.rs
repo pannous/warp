@@ -1273,6 +1273,10 @@ pub fn lower_declarations(node: Node) -> Node {
 			let (name, zeros) = typed_array_declaration(&declaration).expect("guarded");
 			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
 		}
+		// `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header
+		Node::Key(target, Op::Assign, value) if range_elements(&value).is_some() => {
+			Node::Key(target, Op::Assign, Box::new(range_elements(&value).expect("guarded")))
+		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
@@ -2017,6 +2021,14 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 	}
 	let counted = rest_of(items, 2, bracket, separator);
 	Some(unit_count(&counted).unwrap_or_else(|| Node::List(vec![Node::Symbol(counter.to_string()), counted], bracket.clone(), separator.clone())))
+}
+
+/// The list a range of integer literals stands for: `1..4` is [1 2 3], `1…4` and `1 to 4` are [1 2 3 4]; not an empty or computed range
+fn range_elements(range: &Node) -> Option<Node> {
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
+	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta()) else { return None };
+	let last = if *op == Op::To { *end } else { end - 1 };
+	(start <= &last).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
 }
 
 fn require_counter(ctx: &mut Context, counter: &'static str) {
