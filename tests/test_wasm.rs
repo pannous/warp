@@ -944,7 +944,6 @@ fn test_wasm_runtime_extension() {
 }
 
 #[test]
-#[ignore]
 fn test_string_concat_wasm() {
 	is!("'Hello, ' + 'World!'", "Hello, World!");
 }

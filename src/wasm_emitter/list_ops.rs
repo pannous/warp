@@ -6,7 +6,7 @@ use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
 use crate::type_kinds::Kind;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
@@ -630,8 +630,20 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::RefAsNonNull);
 				true
 			}
+			Kind::Text => {
+				self.emit_text_concatenation(func, left, right);
+				true
+			}
 			kind => self.emit_arithmetic_type_error(func, left, op, right, kind),
 		}
+	}
+
+	/// `left + right` of two texts: the runtime join of the pair with no separator
+	fn emit_text_concatenation(&mut self, func: &mut Function, left: &Node, right: &Node) {
+		let pair = Node::List(vec![left.clone(), right.clone()], Bracket::Square, Separator::Space);
+		self.emit_node_instructions(func, &pair);
+		self.emit_node_instructions(func, &Node::Text(String::new()));
+		self.emit_call(func, "list_join");
 	}
 
 	/// In a numeric context any collection or text operand is a type error

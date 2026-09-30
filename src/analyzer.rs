@@ -56,6 +56,8 @@ fn is_statement_block(node: &Node) -> bool {
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
+	} else if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
+		Kind::Text // a one-character text is a text too: "a"+"b" is "ab"
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -141,10 +143,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					}
 				}
 			}
-			// Function call with parentheses: assume Int result
+			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
-				if let Node::Symbol(_) = items[0].drop_meta() {
-					return Kind::Int;
+				if let Node::Symbol(name) = items[0].drop_meta() {
+					return crate::library_words::text_result_kind(name).unwrap_or(Kind::Int);
 				}
 			}
 			// Zero-arg function call: (funcname) with no args
@@ -343,6 +345,7 @@ fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	match value.drop_meta() {
 		Node::Empty => Kind::Empty,
 		Node::List(items, Bracket::Curly, _) if items.is_empty() => Kind::Empty, // the empty block is ø as well
+		Node::Char(_) => Kind::Text, // a variable holding "a" may later hold "ab": one-character texts are held as nodes
 		_ => infer_type(value, scope),
 	}
 }
