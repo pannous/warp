@@ -2678,7 +2678,7 @@ impl WasmGcEmitter {
 	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
 			if text_builtins::text_builtin_kind(fn_name, arguments.len()) == Some(Kind::Int) {
-				self.emit_byte_at(func, arguments);
+				self.emit_integer_text_builtin(func, fn_name, arguments);
 				return true;
 			}
 		}

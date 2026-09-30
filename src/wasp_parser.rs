@@ -33,6 +33,10 @@ const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefin
 const EMPTY_WORD: &str = "empty";
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
+/// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
+pub const TRY_MARKER: &str = "try·else";
+pub const ASSERT_MARKER: &str = "assert·else";
+const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 const TIMES_WORD: &str = "times";
 const ELVIS_WORD: &str = "elvis";
 const HEX_WORD: &str = "hex";
@@ -668,6 +672,38 @@ impl WaspParser {
 			.map(|(word, op, _)| (*op, word.len()))
 	}
 
+	/// `try` or `assert` followed by an operand: the words that guard a statement
+	fn peek_guard_word(&self) -> Option<&'static str> {
+		if self.options.data_mode {
+			return None;
+		}
+		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t'))
+			.map(|(_, marker)| marker)
+	}
+
+	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
+	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	fn parse_guard(&mut self, marker: &'static str) -> Node {
+		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
+		self.advance_by(word_length);
+		self.skip_spaces();
+		let outer = std::mem::replace(&mut self.stops_at_else, true);
+		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_expr(0));
+		self.stops_at_else = outer;
+		self.skip_spaces();
+		let fallback = if self.matches_keyword("else") {
+			self.advance_by("else".len());
+			self.skip_spaces();
+			self.parse_expr(0)
+		} else if marker == TRY_MARKER {
+			return error("`try` needs an `else`: `try X else Y`");
+		} else {
+			Empty
+		};
+		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
@@ -961,6 +997,8 @@ impl WaspParser {
 			self.skip_spaces();
 			let rhs = self.parse_prefix_operand(op);
 			negate_condition(self.finish_prefix(op, rhs))
+		} else if let Some(marker) = self.peek_guard_word() {
+			self.parse_guard(marker)
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
