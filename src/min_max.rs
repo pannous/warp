@@ -39,16 +39,17 @@ fn expand(node: Node, builtins: &[(&str, Op)]) -> Node {
 }
 
 fn extremum(items: &[Node], bracket: &Bracket, separator: &Separator, builtins: &[(&str, Op)]) -> Option<Node> {
-	let name = call_name(items, bracket, separator).or_else(|| call_without_arguments(items, bracket))?;
+	let name = call_name(items, bracket, separator)?;
 	let (_, better) = builtins.iter().find(|(builtin, _)| *builtin == name)?;
 	if let [Node::Symbol(list)] = items.get(1..).unwrap_or_default().iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
 		return Some(fold_list_at_runtime(name, list, better));
 	}
-	let arguments = candidates(&items[1..]);
+	let listed = list_literal_items(&items[1..]);
+	let arguments = listed.unwrap_or(&items[1..]);
 	if arguments.is_empty() {
 		return Some(Diagnostic::at(&items[0], format!("{name} of an empty list")).into_error());
 	}
-	if arguments.len() < MIN_ARGUMENTS && !is_list_literal(&items[1..]) {
+	if arguments.len() < MIN_ARGUMENTS && listed.is_none() {
 		return Some(Diagnostic::at(&items[0], format!("{name} takes at least {MIN_ARGUMENTS} arguments, got {}", arguments.len())).into_error());
 	}
 	if !arguments.iter().all(is_side_effect_free) {
@@ -62,30 +63,16 @@ fn extremum(items: &[Node], bracket: &Bracket, separator: &Separator, builtins: 
 	Some(chosen)
 }
 
-/// `max()` and `max([])` parse alike, as the round list `(max)`
-fn call_without_arguments<'a>(items: &'a [Node], bracket: &Bracket) -> Option<&'a str> {
-	match (items, bracket) {
-		([head], Bracket::Round) => match head.drop_meta() {
-			Node::Symbol(name) => Some(name),
+/// The items of the one list literal given instead of several arguments; ø is the empty list
+fn list_literal_items(arguments: &[Node]) -> Option<&[Node]> {
+	match arguments {
+		[single] => match single.drop_meta() {
+			Node::List(items, Bracket::Square, _) => Some(items),
+			Node::Empty => Some(&[]),
 			_ => None,
 		},
 		_ => None,
 	}
-}
-
-/// The arguments, or the items of the one list literal given instead
-fn candidates(arguments: &[Node]) -> &[Node] {
-	match arguments {
-		[single] => match single.drop_meta() {
-			Node::List(items, Bracket::Square, _) => items,
-			_ => arguments,
-		},
-		_ => arguments,
-	}
-}
-
-fn is_list_literal(arguments: &[Node]) -> bool {
-	matches!(arguments, [single] if matches!(single.drop_meta(), Node::List(_, Bracket::Square, _)))
 }
 
 /// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error

@@ -1613,6 +1613,7 @@ pub fn kind_with_article(kind: Kind) -> String {
 fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
+		Node::Empty => Some(Kind::List),
 		_ => None,
 	}
 }
