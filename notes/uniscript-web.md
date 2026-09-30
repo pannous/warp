@@ -11,6 +11,10 @@ web/uniscript/build.sh deploy    # … and rsync to pannous.com:/var/www/pannous
 cd web/uniscript && python3 -m http.server 8765   # local
 ```
 
+https://pannous.com/uniscript/rust/ is the uniscript repository's second page (its `docs/demo.html`, the Rust crate compiled
+to WebAssembly, deployed by its `docs/make_demo.sh deploy`). The two pages link to each other; the rsync of `deploy` excludes
+`/rust/` so `--delete` keeps it, and that page loads its fonts from this page's `fonts/`.
+
 Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `data/` (a copy of the
 3.4 MB index) and `fonts/` (woff2 of UniscriptSans, UniscriptCJK, NewGardinerOmni2d4, all OFL; from `fonts/dist` or
 `~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.

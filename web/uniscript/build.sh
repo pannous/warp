@@ -14,7 +14,7 @@ repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 cargo build --offline --bin warp
-target/debug/warp compile lib/uniscript.wasp
+"${CARGO_TARGET_DIR:-target}/debug/warp" compile lib/uniscript.wasp
 mv lib/uniscript.wasm "$page/uniscript.wasm"
 
 mkdir -p "$page/data/uniscript" "$page/fonts"
@@ -38,5 +38,6 @@ done
 
 if [ "${1:-}" = "deploy" ]; then
 	ssh "$SERVER" "mkdir -p $SERVER_DIR"
-	rsync -av --delete --exclude build.sh --exclude .gitignore "$page/" "$SERVER:$SERVER_DIR/"
+	# rust/ is the uniscript repository's demo (its docs/make_demo.sh deploy), not part of this page
+	rsync -av --delete --exclude build.sh --exclude .gitignore --exclude /rust/ "$page/" "$SERVER:$SERVER_DIR/"
 fi
