@@ -103,3 +103,19 @@ Same compile-time way as `map` (`lambdas::ITERATIONS`, one loop template per wor
 number of parameters is `reduce takes a function of two arguments`, anything else `functions are not first-class values yet`.
 Body `a-b` of a lambda with parameters a and b is the difference (kebab rule). Parser quirks that bite: `{it<k}` reads `it<k}` as a type
 application (write `it < k`), and `reduce [7] (a b)->…` reads `reduce [7]` as a subscript (bind the list first).
+
+# First-class functions (compile-time)
+
+Choice: no funcref table. The emitter gives every user function its own signature (i64, f64 or node per parameter and result, by inferred
+kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/function_values.rs` specialises: a function
+that uses a parameter as a function (`f(x)`, `f x`, `map xs f`, or passing it on) is replaced by one copy per function it is called with,
+`apply(double, 3)` calls `apply__double(3)` with `double` in place of `f` (specialisations sit where the original definition was, so captures by value
+behave). What can be passed: a defined function, `&name` (the parser reads it as the name), an alias (`g = double`, assigned once), an
+operator (`+` is `(a b)->a+b`: `fold [1 2 3] 0 +`, `reduce xs *`), a lambda or `{it*2}` block that reads no variable of the program.
+`sum := fold +` (also `map`, `filter`, `each`, `reduce` with only a function) defines a function of the list; fold without a start uses the
+identity of `+` (0) or `*` (1), else reduce. `map square on xs`, `map &square xs` (function first) work. A function chosen at run time
+(`h = if c then f else g; apply(h, 1)`) or a lambda that captures a variable is the error `functions are not first-class values yet`;
+that is what a funcref table plus closures would add. Pipeline: lambdas (loops for known functions) → function_values → lambdas strict (errors).
+Parser: `&name` is glued to the name and not to a word before it (`a &b` is now the application `a (&b)`, `a & b` and `a&b` stay `and`);
+`x<k` is a comparison, only a type name (`Vec<T>`, `list<int>`, a type word) starts a generic; a braceless `map xs f` is flattened.
+Not done: `f(+)` (an operator inside call brackets does not parse), unary operators as values, functions stored in lists or objects.

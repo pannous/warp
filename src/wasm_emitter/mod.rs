@@ -3483,6 +3483,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	let node = crate::type_tests::lower(node);
 	let node = crate::lambdas::lower(node);
+	let node = crate::function_values::lower(node);
+	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
 	let node = crate::min_max::lower(node);
