@@ -2512,6 +2512,12 @@ impl WasmGcEmitter {
 					_ => self.emit_type_error(func, format!("`{op}` of an exact number is not supported yet")),
 				}
 			}
+			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
+			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
+				let counter = self.counting_getter(property).expect("guarded");
+				self.emit_node_instructions(func, counted);
+				self.emit_call(func, counter);
+			}
 			// Prefix # means count/length: #list returns element count
 			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
 				self.emit_node_instructions(func, right);

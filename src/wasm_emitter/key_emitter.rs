@@ -241,6 +241,12 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// The runtime counter behind the getter word in `x.size`, `x.count`, `x.bytes`
+	pub(super) fn counting_getter(&self, property: &Node) -> Option<&'static str> {
+		let Node::Symbol(word) = property.drop_meta() else { return None };
+		crate::analyzer::counting_method(word, &self.ctx)
+	}
+
 	/// Emit dot operator: method calls and property access
 	fn emit_dot_op(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		// Check for introspection methods: count, number, size
