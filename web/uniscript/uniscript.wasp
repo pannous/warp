@@ -1,0 +1,2 @@
+// The uniscript page's module: build.sh compiles this to uniscript.wasm; `use uniscript` fetches github.com/pannous/uniscript
+use uniscript

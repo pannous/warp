@@ -1,6 +1,6 @@
 # Uniscript web page
 
-https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by `lib/uniscript.wasp`
+https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by the uniscript.wasp of the uniscript package (github.com/pannous/uniscript)
 compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`).
 
 ## Build and deploy
@@ -40,7 +40,7 @@ Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not commi
   errors (`<:nosuchthing>` in red), fonts render colors, mirror/turn/left/right, IDS composition (⿰木木 → 林) and
   hieroglyph groups.
 - Firefox and Safari not tested (agent-browser drives only Chromium); both ship WASM GC.
-- Nested tags (`<:above 木 <:beside 木 木>>`) are not supported by lib/uniscript.wasp: a tag ends at the first `>`.
+- Nested tags (`<:above 木 <:beside 木 木>>`) are not supported by uniscript.wasp: a tag ends at the first `>`.
 - Greek blocks join their words (spaces separate operands): one word per `<:greek> … <:/greek>`; no final sigma (θεοσ).
 - A repeated warning reports the operand's byte, not the character's: `<:greek> philosophia` warns twice "no greek form of h at byte 8".
 - The CJK font is 10.8 MB as woff2; it loads only when CJK or IDS characters appear (`unicode-range`).

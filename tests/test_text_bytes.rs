@@ -41,7 +41,7 @@ fn byte_slice_cuts_by_byte_offsets() {
 
 #[test]
 fn read_loads_a_file_as_bytes() {
-	is!("use package uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_slice(index, 0, 4)", "USX1");
-	is!("use package uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_at(index, 4)", 5);
+	is!("use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_slice(index, 0, 4)", "USX1");
+	is!("use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_at(index, 4)", 5);
 	is!("read(\"no/such/file\")", warp::error("read no/such/file failed: No such file or directory (os error 2)"));
 }

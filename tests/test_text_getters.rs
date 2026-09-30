@@ -74,7 +74,7 @@ fn text_getters_read_texts_and_errors() {
 
 #[test]
 fn compiled_uniscript_converts_like_the_browser_page() {
-	let mut uniscript = Compiled::of(&std::fs::read_to_string("lib/uniscript.wasp").unwrap());
+	let mut uniscript = Compiled::of(&std::fs::read_to_string("web/uniscript/uniscript.wasp").unwrap());
 	uniscript.main();
 	assert_eq!(uniscript.apply("uniscript", "<:alpha> <:fracture A> \\:infinity"), (KIND_TEXT, "α 𝔄 ∞".to_string()));
 	assert_eq!(uniscript.apply("uniscript", "<:nosuchthing>"), (KIND_ERROR, "unknown uniscript entity: nosuchthing".to_string()));

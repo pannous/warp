@@ -1,4 +1,4 @@
-//! Uniscript (wiki/uniscript.md) in wasp: lib/uniscript.wasp over the index of the uniscript package (packages.wasp)
+//! Uniscript (wiki/uniscript.md) in wasp: the uniscript package (packages.wasp): its uniscript.wasp over its data/entities.idx
 
 use std::process::Command;
 use warp::diagnostic::take_runtime_warnings;

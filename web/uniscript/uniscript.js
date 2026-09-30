@@ -1,4 +1,4 @@
-// Runs lib/uniscript.wasp compiled to WASM GC by warp (build.sh): the conversion happens in uniscript.wasm, this file is only
+// Runs uniscript.wasp (the uniscript package) compiled to WASM GC by warp (build.sh): the conversion happens in uniscript.wasm, this file is only
 // the host: the "host" imports (src/host.rs), texts into and out of wasm memory, and the page.
 
 const MODULE_URL = "uniscript.wasm";

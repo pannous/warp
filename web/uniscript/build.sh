@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds web/uniscript: lib/uniscript.wasp compiled to uniscript.wasm by warp, the entity index of the uniscript package, and the OFL fonts as woff2.
+# Builds web/uniscript: uniscript.wasp (use uniscript: the uniscript package) compiled to uniscript.wasm by warp, the entity index of the uniscript package, and the OFL fonts as woff2.
 # Usage: web/uniscript/build.sh [deploy]   (deploy: copy the page to the server afterwards)
 set -euo pipefail
 
@@ -14,11 +14,10 @@ repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 cargo build --offline --bin warp
-"${CARGO_TARGET_DIR:-target}/debug/warp" compile lib/uniscript.wasp
-mv lib/uniscript.wasm "$page/uniscript.wasm"
+"${CARGO_TARGET_DIR:-target}/debug/warp" compile web/uniscript/uniscript.wasp  # → uniscript.wasm, fetches packages/uniscript
 
 mkdir -p "$page/packages/uniscript/data" "$page/fonts"
-cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile: lib/uniscript.wasp uses package uniscript
+cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile
 
 find_font() {
 	for directory in $FONT_DIRS; do

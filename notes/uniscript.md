@@ -1,7 +1,7 @@
-# Uniscript in wasp: what it took (lib/uniscript.wasp, package uniscript)
+# Uniscript in wasp: what it took (uniscript.wasp of the uniscript package)
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
-`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. Data: `use package uniscript` fetches github.com/pannous/uniscript into packages/uniscript (notes/packages.md); index format: its src/index.rs.
+`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and loads its uniscript.wasp (notes/packages.md); index format: its src/index.rs.
 Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.
 
 ## Language features added for it (Rust)
@@ -42,7 +42,7 @@ Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/t
 - Reverse prefers: own name, a well known short name (same in HTML and LaTeX, or the HTML name is the last word of the Unicode
   name: alpha), the block form (`<:fracture A>`), else the Unicode name.
 
-## Porting note: meta information (TAG sequences), done in Rust and Swift, open in lib/uniscript.wasp
+## Porting note: meta information (TAG sequences), done in Rust and Swift, open in the package's uniscript.wasp
 Reference: github.com/pannous/uniscript `src/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
 `tests/meta_test.rs`, Swift `Sources/Uniscript/Meta.swift`; spec wiki/uniscript.md "Meta information".
 - Data: the package's index already has the 5 tables, appended, so `names_table`/`chars_table`/`suffixes_table` stay
