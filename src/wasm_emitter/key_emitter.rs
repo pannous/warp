@@ -275,11 +275,6 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if self.is_record_field(left, right) {
-			self.emit_record_field(func, left, right);
-			return;
-		}
-
 		// Default: emit as Key node
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);

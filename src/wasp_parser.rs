@@ -108,7 +108,7 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
 			_ => None,
 		},
-		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() => split_trailing_block(right, empty_is_block)
+		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => split_trailing_block(right, empty_is_block)
 			.map(|(operand, block)| (Node::Key(left.clone(), op.clone(), Box::new(operand)), block)),
 		_ => None,
 	}

@@ -2133,10 +2133,6 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					require_counter(ctx, counter);
 					return;
 				}
-				if matches!(value.drop_meta(), Node::Symbol(_)) {
-					ctx.required_functions.insert("map_get"); // a record field, `point.y`
-					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
-				}
 			}
 			analyze_required_functions(ctx, key);
 			analyze_required_functions(ctx, value);

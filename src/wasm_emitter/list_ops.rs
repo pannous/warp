@@ -826,6 +826,8 @@ impl WasmGcEmitter {
 
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
+/// struct_body(node): the field list of an instance of a declared type, else the node itself
+const STRUCT_BODY: &str = "struct_body";
 const KEY_KIND: i64 = 6;
 const KIND_MASK: i64 = 0xFF;
 
@@ -841,20 +843,12 @@ impl WasmGcEmitter {
 		is_name.then(|| key.clone())
 	}
 
-	/// `object.field` on a record (a struct instance or a `key:value` block): the object's entry named `field`
-	pub(super) fn is_record_field(&self, object: &Node, property: &Node) -> bool {
-		matches!(property.drop_meta(), Node::Symbol(_)) && matches!(self.get_type(object), Kind::Key | Kind::List)
-	}
-
-	/// Push the Node of entry `field` of `object`; a missing entry is the runtime error `key not found`
-	pub(super) fn emit_record_field(&mut self, func: &mut Function, object: &Node, field: &Node) {
-		let Node::Symbol(name) = field.drop_meta() else { return };
-		self.emit_node_instructions(func, object);
-		let (ptr, len) = self.allocate_string(name);
-		func.instruction(&I::I32Const(ptr as i32));
-		func.instruction(&I::I32Const(len as i32));
-		self.emit_call(func, "new_symbol");
-		self.emit_call(func, "map_get");
+	/// Push the map a lookup searches: a struct instance `point:{x:1 y:2}` is searched by its fields, anything else as it is
+	fn emit_lookup_target(&mut self, func: &mut Function, target: &Node) {
+		self.emit_node_instructions(func, target);
+		if !self.ctx.type_registry.types().is_empty() {
+			self.emit_call(func, STRUCT_BODY);
+		}
 	}
 
 	/// Push the Node at `target#index`: the entry value for a key, else the element at the 1-based position
@@ -865,7 +859,7 @@ impl WasmGcEmitter {
 				Some(name) => {
 					let node_ref = Ref(self.node_ref(false));
 					func.instruction(&I::Block(BlockType::Result(node_ref)));
-					self.emit_node_instructions(func, target);
+					self.emit_lookup_target(func, target);
 					let (pointer, length) = self.allocate_string(&name);
 					Self::emit_list(func, &[I32Const(pointer as i32), I32Const(length as i32)]);
 					self.emit_call(func, "new_symbol");
@@ -876,7 +870,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::End);
 				}
 				None => {
-					self.emit_node_instructions(func, target);
+					self.emit_lookup_target(func, target);
 					self.emit_node_instructions(func, &key);
 					self.emit_call(func, "map_get");
 				}
@@ -965,6 +959,28 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			f.instruction(&I::RefNull(HeapType::Concrete(node)));
 		});
+		if self.should_emit_function(STRUCT_BODY) {
+			let type_names: Vec<String> = self.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.allocate_string(name)).collect();
+			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], vec![], |s, f| {
+				let field = |f: &mut Function, index: u32| {
+					f.instruction(&I::LocalGet(0));
+					f.instruction(&I::StructGet { struct_type_index: node, field_index: index });
+				};
+				field(f, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
+				for (pointer, length) in type_symbols {
+					field(f, 1);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+					s.call(f, "new_symbol");
+					s.call(f, VALUES_EQUAL);
+					f.instruction(&I::If(BlockType::Empty));
+					field(f, 2);
+					Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
+				}
+				f.instruction(&I::LocalGet(0));
+			});
+		}
 		// map_get(map, key): the value, or the runtime error `key not found`
 		self.runtime_function("map_get", vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
 			Self::emit_list(f, &[I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);

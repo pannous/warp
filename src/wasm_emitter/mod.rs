@@ -1124,12 +1124,8 @@ impl WasmGcEmitter {
 				// Check if this is a local variable lookup
 				if let Some(local) = self.scope.lookup(s) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if local.kind.is_ref() {
-						return; // Already a Node reference
-					} else if local.kind.is_float() {
-						self.emit_call(func, "new_float");
-					} else {
-						self.emit_call(func, "new_int");
+					if !local.kind.is_ref() {
+						self.emit_primitive_as_node(func, local.kind);
 					}
 					return;
 				}
@@ -1138,10 +1134,8 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::GlobalGet(idx));
 					if kind.is_ref() {
 						func.instruction(&Instruction::RefAsNonNull);
-					} else if kind.is_float() {
-						self.emit_call(func, "new_float");
 					} else {
-						self.emit_call(func, "new_int");
+						self.emit_primitive_as_node(func, kind);
 					}
 					return;
 				}
@@ -1807,6 +1801,18 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, &value);
 			func.instruction(&Instruction::GlobalSet(global_idx));
 			func.instruction(&Instruction::GlobalGet(global_idx));
+			self.emit_call(func, "new_int");
+		}
+	}
+
+	/// The primitive on the stack (i64 or f64 as stored, see `storage_type`) as a Node of its kind
+	fn emit_primitive_as_node(&mut self, func: &mut Function, kind: Kind) {
+		if kind.is_float() {
+			self.emit_call(func, "new_float");
+		} else if kind == Kind::Codepoint {
+			func.instruction(&Instruction::I32WrapI64);
+			self.emit_call(func, "new_codepoint");
+		} else {
 			self.emit_call(func, "new_int");
 		}
 	}
@@ -2544,10 +2550,6 @@ impl WasmGcEmitter {
 				let counter = self.counting_getter(property).expect("guarded");
 				self.emit_node_instructions(func, counted);
 				self.emit_call(func, counter);
-			}
-			Node::Key(object, Op::Dot, field) if self.is_record_field(object, field) => {
-				self.emit_record_field(func, object, field);
-				self.emit_call(func, "get_int_value");
 			}
 			// Prefix # means count/length: #list returns element count
 			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
