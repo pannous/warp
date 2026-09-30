@@ -16,7 +16,7 @@
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.
   A local module named in a versioned `use` must declare a satisfying version.
 - `version` is a soft keyword (like Python's `match`): only before digits or a text; `version = 2` stays a variable.
-  `1.2.3` (two dots or more) lexes as a version literal; `version 1.10` keeps 1.10. Versions compare part by part at
+  `1.2.3` and `v1.2.3` (two dots or more) lex as version literals (`v2`, `v1.2` stay names); `version 1.10` keeps 1.10. Versions compare part by part at
   compile time (`1.9 < version 1.10`, `1.2.0 == 1.2`), otherwise they are their text.
 - Command line: `warp use uniscript >= 1.0` is just the program, fetching like any other.
 - Open: registry as its own repository (later); an update command.

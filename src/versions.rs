@@ -1,4 +1,4 @@
-//! Versions: `1.2.3` literals, `version 1.2.3` values anywhere in code (`version` is a soft keyword: only before a
+//! Versions: `1.2.3` and `v1.2.3` literals, `version 1.2.3` values anywhere in code (`version` is a soft keyword: only before a
 //! version, `version = 2` stays a variable), compared part by part as numbers (1.10 > 1.9).
 //! A module's top level `version 1.2.3` declares its version; `use x version 1.2.3`, `use x from 1.2.3` and
 //! `use x >= 1.2.3` require one of its package.
@@ -92,6 +92,17 @@ pub fn literal_len(chars: &[char]) -> usize {
 	}
 }
 
+/// Length of a git tag style version literal at the start: `v1.2.3`, the `v` and a version literal
+pub fn tagged_literal_len(chars: &[char]) -> usize {
+	if chars.first() != Some(&TAG_PREFIX) {
+		return 0;
+	}
+	match literal_len(&chars[1..]) {
+		0 => 0,
+		length => length + 1,
+	}
+}
+
 /// Length of the operand of the soft keyword `version`: digits and single dots (`version 1.10` keeps 1.10), else 0
 pub fn operand_len(chars: &[char]) -> usize {
 	dotted_digits(chars).0
@@ -120,7 +131,7 @@ fn dotted_digits(chars: &[char]) -> (usize, usize) {
 /// The version a node spells: a version literal, `version x`, a number, a text
 pub fn version_of(node: &Node) -> Option<Version> {
 	match node.drop_meta() {
-		Node::Symbol(text) if starts_with_digit(text) => Version::parse(text),
+		Node::Symbol(text) if is_version_literal(text) || text.starts_with(|c: char| c.is_ascii_digit()) => Version::parse(text),
 		Node::Text(text) => Version::parse(text),
 		Node::Number(_) => Version::parse(node.drop_meta().serialize().trim()),
 		Node::List(items, _, _) => match items.as_slice() {
@@ -135,8 +146,10 @@ pub fn is_version_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(keyword) if keyword == VERSION_KEYWORD)
 }
 
-fn starts_with_digit(text: &str) -> bool {
-	text.starts_with(|c: char| c.is_ascii_digit())
+/// `1.2.3` and `v1.2.3` as the lexer reads them; `v2` stays a name
+fn is_version_literal(text: &str) -> bool {
+	let chars: Vec<char> = text.chars().collect();
+	chars.len() == literal_len(&chars).max(tagged_literal_len(&chars))
 }
 
 /// The version a module declares with a top level `version 1.2.3`
@@ -147,7 +160,7 @@ pub fn declared_version(statements: &[Node]) -> Option<Version> {
 /// `version 1.2.3` and a version literal
 fn is_version_value(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(text) => starts_with_digit(text) && version_of(node).is_some(),
+		Node::Symbol(text) => is_version_literal(text),
 		Node::List(items, _, _) => items.len() == 2 && is_version_keyword(&items[0]) && version_of(node).is_some(),
 		_ => false,
 	}

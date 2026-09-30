@@ -992,6 +992,12 @@ impl WaspParser {
 	}
 
 	fn parse_symbol_with_suffix(&mut self) -> Node {
+		let version_len = crate::versions::tagged_literal_len(&self.chars[self.pos..]);
+		if version_len > 0 {
+			let literal: String = self.chars[self.pos..self.pos + version_len].iter().collect();
+			self.advance_by(version_len);
+			return Node::Symbol(literal);
+		}
 		let symbol = match self.parse_symbol() {
 			Ok(s) => s,
 			Err(e) => return error(&e),
