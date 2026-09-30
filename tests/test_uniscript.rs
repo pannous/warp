@@ -43,6 +43,14 @@ fn greek_is_transliterated_phonetically() {
 	converts("<:greek eta Omega lambda>", "ηΩλ");
 }
 
+/// Spaces between single letters only separate them; spaces next to a word are text and stay as written
+#[test]
+fn spaces_between_words_are_kept() {
+	converts("<:greek> filosofia kosmos<:/greek>", "φιλοσοφια κοσμοσ");
+	converts("<:greek a kosmos>", "α κοσμοσ");
+	converts("<:fracture Hello  World>", "ℌ𝔢𝔩𝔩𝔬  𝔚𝔬𝔯𝔩𝔡");
+}
+
 /// A character or combination without a Unicode counterpart stays plain, with a warning naming it and its position
 fn warns(uniscript: &str, unicode: &str, warning: &str) {
 	take_runtime_warnings();
