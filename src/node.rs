@@ -951,7 +951,10 @@ impl Node {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
-			Text(t) => format!("'{}'", t),
+			Text(t) => {
+				let quote = crate::normalize::text_quote();
+				format!("{quote}{t}{quote}")
+			}
 			Char(c) => format!("'{}'", c),
 			List(nodes, bracket, separator) => {
 				let close = bracket.closing();

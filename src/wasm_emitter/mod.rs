@@ -2610,12 +2610,7 @@ impl WasmGcEmitter {
 				if items.len() >= 2 {
 					if let Node::Symbol(fn_name) = items[0].drop_meta() {
 						if self.ctx.user_functions.contains_key(fn_name) {
-							// Check if it's a zero-arg call: (funcname Empty)
-							if items.len() == 2 && matches!(items[1].drop_meta(), Node::Empty) {
-								self.emit_user_function_call_numeric(func, fn_name, &[]);
-							} else {
-								self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-							}
+							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
 							return;
 						}
 						// Check for FFI function call
