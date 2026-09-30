@@ -175,10 +175,8 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check if this list contains type definitions
-		let has_type_def = items.iter().any(|item| matches!(item.drop_meta(), Node::Type { .. }));
-		if has_type_def {
-			self.emit_type_def_list(func, items);
+		if items.iter().any(|item| matches!(item.drop_meta(), Node::Type { .. })) {
+			self.emit_without_type_definitions(func, items, bracket, separator);
 			return;
 		}
 
@@ -319,16 +317,13 @@ impl WasmGcEmitter {
 		})
 	}
 
-	/// Emit a list containing type definitions
-	fn emit_type_def_list(&mut self, func: &mut Function, items: &[Node]) {
-		let last_expr = items
-			.iter()
-			.rev()
-			.find(|item| !matches!(item.drop_meta(), Node::Type { .. }));
-		if let Some(expr) = last_expr {
-			self.emit_node_instructions(func, expr);
-		} else {
-			self.emit_call(func, "new_empty");
+	/// A type definition declares and runs nothing (types are registered beforehand): emit the other items
+	fn emit_without_type_definitions(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
+		let rest: Vec<Node> = items.iter().filter(|item| !matches!(item.drop_meta(), Node::Type { .. })).cloned().collect();
+		match rest.as_slice() {
+			[] => self.emit_call(func, "new_empty"),
+			[only] => self.emit_node_instructions(func, only),
+			_ => self.emit_list_node(func, &rest, bracket, separator),
 		}
 	}
 

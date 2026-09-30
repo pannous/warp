@@ -335,6 +335,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	match value.drop_meta() {
 		Node::Empty => Kind::Empty,
+		Node::List(items, Bracket::Curly, _) if items.is_empty() => Kind::Empty, // the empty block is ø as well
 		_ => infer_type(value, scope),
 	}
 }
@@ -2082,6 +2083,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					require_counter(ctx, counter);
 					return;
 				}
+				if matches!(value.drop_meta(), Node::Symbol(_)) {
+					ctx.required_functions.insert("map_get"); // a record field, `point.y`
+					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
+				}
 			}
 			analyze_required_functions(ctx, key);
 			analyze_required_functions(ctx, value);
@@ -2264,7 +2269,13 @@ fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 
 	let signatures = get_signatures_from_headers(lib);
 	if signatures.is_empty() {
-		eprintln!("[FFI] Warning: No functions found for library '{}'", lib);
+		// the program is analysed several times (effects, emission), the library is reported once
+		static WARNED_LIBRARIES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+		let mut warned = WARNED_LIBRARIES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		if !warned.iter().any(|known| known == lib) {
+			eprintln!("[FFI] Warning: No functions found for library '{}'", lib);
+			warned.push(lib.to_string());
+		}
 		return;
 	}
 
