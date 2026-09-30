@@ -1189,6 +1189,11 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
 			lower_declarations(unit_count(&counted).expect("guarded"))
 		}
+		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
+		declaration if typed_array_declaration(&declaration).is_some() => {
+			let (name, zeros) = typed_array_declaration(&declaration).expect("guarded");
+			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
+		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
@@ -1277,6 +1282,44 @@ fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) => Some(&items[1]),
 		_ => None,
 	}
+}
+
+/// The zero value of an element type word (`int`, `ints`, `float`, `text` …)
+fn zero_element(type_word: &str) -> Option<Node> {
+	let element = plural_element_type(type_word).unwrap_or(type_word);
+	Some(match type_word_kind(element)? {
+		Kind::Int => Node::int(0),
+		Kind::Float => Node::float(0.0),
+		Kind::Text => Node::Text(String::new()),
+		Kind::Codepoint => Node::Char('\0'),
+		_ => return None,
+	})
+}
+
+/// The element count of the array type written `100 int` (a space list) or `int[100]` (a 1-based subscript, see `subscript`)
+fn array_type(type_node: &Node) -> Option<(usize, Node)> {
+	match type_node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[count, element] => match (count.drop_meta(), element.drop_meta()) {
+				(Node::Number(Number::Int(count)), Node::Symbol(word)) => Some((usize::try_from(*count).ok()?, zero_element(word)?)),
+				_ => None,
+			},
+			_ => None,
+		},
+		Node::Key(element, Op::Hash, one_based) => match (element.drop_meta(), one_based.drop_meta()) {
+			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => Some((usize::try_from(one_based - 1).ok()?, zero_element(word)?)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `x : 100 int` / `x:int[100]` as the variable and its zero-filled list
+fn typed_array_declaration(node: &Node) -> Option<(Node, Node)> {
+	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else { return None };
+	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let (count, zero) = array_type(type_node)?;
+	Some((name.drop_meta().clone(), Node::List(vec![zero; count], Bracket::Square, Separator::Space)))
 }
 
 /// The type a lowered declaration `x:T = v` attached to its target x
