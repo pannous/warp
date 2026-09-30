@@ -46,6 +46,7 @@ pub enum Op {
 	// Structural operators (existing)
 	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
 	Dot,      // .   member access
+	SafeDot,  // ?.  member access that is ø when the receiver is ø
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
 	Assign,   // =   assignment
@@ -139,7 +140,7 @@ impl Op {
 			Op::Inc | Op::Dec => (195, 0),
 
 			// Member access (tightest infix)
-			Op::Dot => (180, 181),
+			Op::Dot | Op::SafeDot => (180, 181),
 			Op::Scope => (175, 176),
 			Op::Hash => (170, 171), // index operator #
 
@@ -217,6 +218,7 @@ impl Op {
 			// Structural
 			Op::Colon => ":",
 			Op::Dot => ".",
+			Op::SafeDot => "?.",
 			Op::Scope => "::",
 			Op::Define => ":=",
 			Op::Assign => "=",
