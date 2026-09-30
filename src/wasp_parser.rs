@@ -1860,8 +1860,9 @@ impl WaspParser {
 			let pos_before = self.pos;
 			let item = self.parse_value();
 
-			if item == Empty {
-				if self.pos == pos_before {
+			let consumed_input = self.pos != pos_before;
+			if item == Empty && !(consumed_input && close.is_some()) {
+				if !consumed_input {
 					self.advance();
 				}
 				continue;
