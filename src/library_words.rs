@@ -361,7 +361,7 @@ fn merge_prefix_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 	[kept.to_vec(), vec![Node::List(rest.to_vec(), Bracket::None, Separator::Space)]].concat()
 }
 
-fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
+pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == placeholder => replacement.clone(),
 		Node::Key(left, op, right) => Node::Key(Box::new(substitute(*left, placeholder, replacement)), op, Box::new(substitute(*right, placeholder, replacement))),
