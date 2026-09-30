@@ -1,15 +1,16 @@
 use crate::StoreContextMut;
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
-use crate::component::{Instance, ResourceType};
+use crate::component::store::ComponentTaskState;
+use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
-use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
-};
+use crate::runtime::vm::component::{ComponentInstance, HandleTable, ResourceTables};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
+use core::fmt;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -59,11 +60,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         options: OptionsIndex,
         instance: Instance,
     ) -> LowerContext<'a, T> {
-        #[cfg(all(debug_assertions, feature = "component-model-async"))]
-        if store.engine().config().async_support {
-            // Assert that we're running on a fiber, which is necessary in
-            // case we call the guest's realloc function.
-            store.0.with_blocking(|_, _| {});
+        // Debug-assert that if we can't block that blocking is indeed allowed.
+        // This'll catch when this is accidentally created outside of a fiber
+        // when we need to be on a fiber.
+        if cfg!(debug_assertions) && !store.0.can_block() {
+            store.0.validate_sync_call().unwrap();
         }
         let (component, store) = instance.component_and_store_mut(store.0);
         LowerContext {
@@ -97,6 +98,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             instance,
             allow_realloc: false,
         }
+    }
+
+    /// Returns the `Instance` that's being lowered into.
+    pub fn instance_handle(&self) -> Instance {
+        self.instance
     }
 
     /// Returns the `&ComponentInstance` that's being lowered into.
@@ -140,6 +146,17 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ) -> Result<usize> {
         assert!(self.allow_realloc);
 
+        // All calls to `realloc` options in the canonical ABI zero out the
+        // `context.{get,set}` slots for the duration of the call. This sort of
+        // fakes a "fresh thread" for each call, but this is the only observable
+        // state so nothing else needs adjusting. Note though that the original
+        // values are preserved still to get restored after this call.
+        #[cfg(feature = "component-model-async")]
+        let orig_context = core::mem::replace(
+            self.store.0.vm_store_context_mut().component_context_mut(),
+            Default::default(),
+        );
+
         let (component, store) = self.instance.component_and_store_mut(self.store.0);
         let instance = self.instance.id().get(store);
         let options = &component.env_component().options[self.options];
@@ -179,6 +196,14 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             bail!("realloc return: beyond end of memory")
         }
 
+        // Note that this restoration isn't part of a `Drop` guard which works
+        // because once a component traps it's locked-down and inaccessible, so
+        // it's ok if this isn't restored.
+        #[cfg(feature = "component-model-async")]
+        {
+            *self.store.0.vm_store_context_mut().component_context_mut() = orig_context;
+        }
+
         Ok(result)
     }
 
@@ -215,7 +240,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        self.resource_tables().guest_resource_lower_own(rep, ty)
+        self.resource_tables()?.guest_resource_lower_own(rep, ty)
     }
 
     /// Lowers a `borrow` resource into the guest, converting the `rep` to a
@@ -236,19 +261,19 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         if self.instance().resource_owned_by_own_instance(ty) {
             return Ok(rep);
         }
-        self.resource_tables().guest_resource_lower_borrow(rep, ty)
+        self.resource_tables()?.guest_resource_lower_borrow(rep, ty)
     }
 
     /// Lifts a host-owned `own` resource at the `idx` specified into the
     /// representation of that resource.
     pub fn host_resource_lift_own(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        self.resource_tables().host_resource_lift_own(idx)
+        self.resource_tables()?.host_resource_lift_own(idx)
     }
 
     /// Lifts a host-owned `borrow` resource at the `idx` specified into the
     /// representation of that resource.
     pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        self.resource_tables().host_resource_lift_borrow(idx)
+        self.resource_tables()?.host_resource_lift_borrow(idx)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
@@ -260,10 +285,10 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
-        self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+        self.resource_tables()?
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Returns the underlying resource type for the `ty` table specified.
@@ -277,31 +302,18 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         InstanceType::new(self.instance())
     }
 
-    fn resource_tables(&mut self) -> HostResourceTables<'_> {
-        let (calls, host_table, host_resource_data, instance) = self
+    fn resource_tables(&mut self) -> Result<HostResourceTables<'_>> {
+        let (tables, data) = self
             .store
             .0
-            .component_resource_state_with_instance(self.instance);
-        HostResourceTables::from_parts(
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: Some(instance.guest_tables()),
-            },
-            host_resource_data,
-        )
+            .component_resource_tables_and_host_resource_data(Some(self.instance))?;
+        Ok(HostResourceTables::from_parts(tables, data))
     }
 
-    /// See [`HostResourceTables::enter_call`].
+    /// See [`HostResourceTables::validate_scope_exit`].
     #[inline]
-    pub fn enter_call(&mut self) {
-        self.resource_tables().enter_call()
-    }
-
-    /// See [`HostResourceTables::exit_call`].
-    #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.resource_tables().exit_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.resource_tables()?.validate_scope_exit()
     }
 }
 
@@ -313,6 +325,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 #[doc(hidden)]
 pub struct LiftContext<'a> {
     store_id: StoreId,
+    current_scope_id: Option<u32>,
     /// Like lowering, lifting always has options configured.
     options: OptionsIndex,
 
@@ -327,13 +340,13 @@ pub struct LiftContext<'a> {
     host_table: &'a mut HandleTable,
     host_resource_data: &'a mut HostResourceData,
 
-    calls: &'a mut CallContexts,
+    task_state: &'a mut ComponentTaskState,
 
-    #[cfg_attr(
-        not(feature = "component-model-async"),
-        allow(unused, reason = "easier to not #[cfg] away")
-    )]
-    concurrent_state: &'a mut ConcurrentState,
+    /// Remaining fuel for this hostcall/lift operation.
+    ///
+    /// This is decremented for strings/lists, for example, to cap the size of
+    /// data the host allocates on behalf of the guest.
+    hostcall_fuel: usize,
 }
 
 #[doc(hidden)]
@@ -344,8 +357,10 @@ impl<'a> LiftContext<'a> {
         store: &'a mut StoreOpaque,
         options: OptionsIndex,
         instance_handle: Instance,
-    ) -> LiftContext<'a> {
+    ) -> Result<LiftContext<'a>> {
         let store_id = store.id();
+        let hostcall_fuel = store.hostcall_fuel();
+        let current_scope_id = store.current_scope_id()?;
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that
@@ -354,22 +369,23 @@ impl<'a> LiftContext<'a> {
         // at this time.
         let memory =
             instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
-        let (calls, host_table, host_resource_data, instance, concurrent_state) =
-            store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
+        let (task_state, host_table, host_resource_data, instance) =
+            store.lift_context_parts(instance_handle);
         let (component, instance) = instance.component_and_self();
 
-        LiftContext {
+        Ok(LiftContext {
             store_id,
+            current_scope_id,
             memory,
             options,
             types: component.types(),
             instance,
             instance_handle,
-            calls,
+            task_state,
             host_table,
             host_resource_data,
-            concurrent_state,
-        }
+            hostcall_fuel,
+        })
     }
 
     /// Returns the canonical options that are being used during lifting.
@@ -409,8 +425,13 @@ impl<'a> LiftContext<'a> {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
-        self.concurrent_state
+    pub(crate) fn concurrent_state_and_instance_mut(
+        &mut self,
+    ) -> (&mut ConcurrentState, Pin<&mut ComponentInstance>) {
+        (
+            self.task_state.concurrent_state_mut(),
+            self.instance.as_mut(),
+        )
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its
@@ -422,10 +443,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<RuntimeInstance>)> {
         let idx = self.resource_tables().guest_resource_lift_own(idx, ty)?;
-        let (dtor, flags) = self.instance.dtor_and_flags(ty);
-        Ok((idx, dtor, flags))
+        let (dtor, instance) = self.instance.dtor_and_instance(ty);
+        Ok((idx, dtor, instance))
     }
 
     /// Lifts a `borrow` resource from the guest at the `idx` specified.
@@ -443,10 +464,10 @@ impl<'a> LiftContext<'a> {
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         self.resource_tables()
-            .host_resource_lower_own(rep, dtor, flags)
+            .host_resource_lower_own(rep, dtor, instance)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
@@ -469,25 +490,56 @@ impl<'a> LiftContext<'a> {
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
         HostResourceTables::from_parts(
             ResourceTables {
-                host_table: Some(self.host_table),
-                calls: self.calls,
-                // Note that the unsafety here should be valid given the contract of
-                // `LiftContext::new`.
-                guest: Some(self.instance.as_mut().guest_tables()),
+                host_table: self.host_table,
+                task_state: self.task_state,
+                guest: Some(self.instance.as_mut().instance_states()),
+                current_scope_id: self.current_scope_id,
             },
             self.host_resource_data,
         )
     }
 
-    /// See [`HostResourceTables::enter_call`].
+    /// See [`HostResourceTables::validate_scope_exit`].
     #[inline]
-    pub fn enter_call(&mut self) {
-        self.resource_tables().enter_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.resource_tables().validate_scope_exit()
     }
 
-    /// See [`HostResourceTables::exit_call`].
-    #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.resource_tables().exit_call()
+    /// Consumes `amt` units of fuel, typically a number of bytes, from this
+    /// context.
+    ///
+    /// Returns an error if the fuel is exhausted which will cause a trap in the
+    /// guest. Note that this is distinct from Wasm's fuel, this is just for
+    /// keeping track of data flowing from the guest to the host.
+    pub fn consume_fuel(&mut self, amt: usize) -> Result<()> {
+        match self.hostcall_fuel.checked_sub(amt) {
+            Some(new) => self.hostcall_fuel = new,
+            None => bail!(HostcallFuelExhausted),
+        }
+        Ok(())
+    }
+
+    /// Same as [`Self::consume_fuel`], but safely multiplies `len` and `size`
+    /// together before calling that.
+    pub fn consume_fuel_array(&mut self, len: usize, size: usize) -> Result<()> {
+        match len.checked_mul(size) {
+            Some(bytes) => self.consume_fuel(bytes),
+            None => bail!(HostcallFuelExhausted),
+        }
     }
 }
+
+#[derive(Debug)]
+struct HostcallFuelExhausted;
+
+impl fmt::Display for HostcallFuelExhausted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "too much data is being copied between the host and the guest: \
+             fuel allocated for hostcalls has been exhausted"
+        )
+    }
+}
+
+impl core::error::Error for HostcallFuelExhausted {}

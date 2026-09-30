@@ -36,9 +36,8 @@ pub fn try_parse_response<const N: usize>(
         }
     };
 
-    let input_used = match maybe_input_used {
-        Status::Complete(v) => v,
-        Status::Partial => return Ok(None),
+    let Status::Complete(input_used) = maybe_input_used else {
+        return Ok(None);
     };
 
     let version = {
@@ -54,8 +53,7 @@ pub fn try_parse_response<const N: usize>(
     let status = {
         // unwrap: Looking at the impl of parse(), code cannot be None.
         let v = res.code.unwrap_or(000);
-        // unwrap: Looking at the impl of parse(), the status is 3 digits and cant fail.
-        StatusCode::from_u16(v).unwrap()
+        status_code(v)?
     };
 
     let mut builder = Response::builder().version(version).status(status);
@@ -67,6 +65,15 @@ pub fn try_parse_response<const N: usize>(
     let response = builder.body(()).expect("a valid response");
 
     Ok(Some((input_used, response)))
+}
+
+/// Convert a status code parsed by httparse into a [`StatusCode`].
+///
+/// httparse accepts any three ASCII digits, but [`StatusCode`] only allows
+/// `100..=999`. Anything below 100 is a protocol error, not a panic.
+fn status_code(v: u16) -> Result<StatusCode, Error> {
+    StatusCode::from_u16(v)
+        .map_err(|_| Error::HttpParseFail(format!("invalid status code: {:03}", v)))
 }
 
 /// Try parsing as much as possible of a response.
@@ -109,14 +116,18 @@ pub fn try_parse_partial_response<const N: usize>(
             Some(v) => v,
             None => return Ok(None),
         };
-        // unwrap: Looking at the impl of parse(), the status is 3 digits and cant fail.
-        StatusCode::from_u16(v).unwrap_or_default()
+        status_code(v)?
     };
 
     let mut builder = Response::builder().version(version).status(status);
 
     for h in res.headers {
-        if h.name.is_empty() || h.value.is_empty() {
+        // On a partial parse, httparse leaves the unparsed slots as
+        // EMPTY_HEADER. A parsed header always has a non-empty name, since
+        // the first byte of a header line must be a token character. The
+        // value however can legitimately be empty, so only the name tells
+        // us where the parsed headers end.
+        if h.name.is_empty() {
             break;
         }
         builder = builder.header(h.name, h.value);
@@ -160,9 +171,8 @@ pub fn try_parse_request<const N: usize>(
         }
     };
 
-    let input_used = match maybe_input_used {
-        Status::Complete(v) => v,
-        Status::Partial => return Ok(None),
+    let Status::Complete(input_used) = maybe_input_used else {
+        return Ok(None);
     };
 
     let version = {
@@ -199,7 +209,7 @@ pub fn try_parse_request<const N: usize>(
 
 #[cfg(test)]
 mod test {
-    use crate::parser::{try_parse_request, try_parse_response};
+    use crate::parser::{try_parse_partial_response, try_parse_request, try_parse_response};
 
     #[test]
     fn ensure_no_half_response() {
@@ -214,5 +224,60 @@ mod test {
     fn error_on_invalid_authority() {
         let bytes = "GET example\".com HTTP/1.1\r\n\r\n";
         try_parse_request::<0>(bytes.as_bytes()).expect_err("invalid URI character");
+    }
+
+    // httparse accepts any three ASCII digits as a status code, but
+    // http::StatusCode only allows 100..=999. Codes below 100 must
+    // surface as an error rather than a panic (or a bogus 200).
+    // https://github.com/algesten/ureq-proto/issues/34
+
+    #[test]
+    fn error_on_invalid_status_code() {
+        let bytes = "HTTP/1.1 000 NOK\r\n\r\n";
+        try_parse_response::<20>(bytes.as_bytes()).expect_err("invalid status code");
+
+        let bytes = "HTTP/1.1 099 NOK\r\n\r\n";
+        try_parse_response::<20>(bytes.as_bytes()).expect_err("invalid status code");
+    }
+
+    #[test]
+    fn error_on_invalid_status_code_partial() {
+        let bytes = "HTTP/1.1 000 NOK\r\n";
+        try_parse_partial_response::<20>(bytes.as_bytes()).expect_err("invalid status code");
+    }
+
+    #[test]
+    fn partial_response_keeps_headers_after_empty_value() {
+        // An empty header value is legal. The partial parser must not
+        // mistake it for the end of the parsed headers and drop the rest.
+        let bytes = "HTTP/1.1 302 Found\r\n\
+            X-Empty:\r\n\
+            Location: http://example.com/\r\n";
+
+        let res = try_parse_partial_response::<20>(bytes.as_bytes())
+            .expect("parse ok")
+            .expect("status line complete");
+
+        assert_eq!(res.status().as_u16(), 302);
+        assert_eq!(res.headers().get("x-empty").expect("x-empty present"), "");
+        assert_eq!(
+            res.headers().get("location").expect("location present"),
+            "http://example.com/"
+        );
+    }
+
+    #[test]
+    fn boundary_status_codes_parse() {
+        let bytes = "HTTP/1.1 100 Continue\r\n\r\n";
+        let (_, res) = try_parse_response::<20>(bytes.as_bytes())
+            .expect("parse ok")
+            .expect("complete");
+        assert_eq!(res.status().as_u16(), 100);
+
+        let bytes = "HTTP/1.1 999 Whatever\r\n\r\n";
+        let (_, res) = try_parse_response::<20>(bytes.as_bytes())
+            .expect("parse ok")
+            .expect("complete");
+        assert_eq!(res.status().as_u16(), 999);
     }
 }

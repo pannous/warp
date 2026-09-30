@@ -1,9 +1,7 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
-use crate::CodegenError;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::Function;
-use crate::ir::pcc;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::settings::RegallocAlgorithm;
@@ -17,12 +15,13 @@ use regalloc2::{Algorithm, RegallocOptions};
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     domtree: &DominatorTree,
+    regalloc_ctx: &mut regalloc2::Ctx,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     emit_info: <B::MInst as MachInstEmit>::Info,
     sigs: SigSet,
     ctrl_plane: &mut ControlPlane,
-) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
+) -> CodegenResult<VCode<B::MInst>> {
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
 
@@ -31,7 +30,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs, b.flags().clone())?;
 
     // Lower the IR.
-    let mut vcode = {
+    let vcode = {
         log::debug!(
             "Number of CLIF instructions to lower: {}",
             f.dfg.num_insts()
@@ -49,13 +48,8 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     log::debug!("Number of lowered vcode blocks: {}", vcode.num_blocks());
     trace!("vcode from lowering: \n{:?}", vcode);
 
-    // Perform validation of proof-carrying-code facts, if requested.
-    if b.flags().enable_pcc() {
-        pcc::check_vcode_facts(f, &mut vcode, b).map_err(CodegenError::Pcc)?;
-    }
-
     // Perform register allocation.
-    let regalloc_result = {
+    {
         let _tt = timing::regalloc();
         let mut options = RegallocOptions::default();
         options.verbose_log = b.flags().regalloc_verbose_logs();
@@ -69,21 +63,25 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             RegallocAlgorithm::SinglePass => Algorithm::Fastalloc,
         };
 
-        regalloc2::run(&vcode, vcode.abi.machine_env(), &options)
+        regalloc2::run_with_ctx(&vcode, vcode.abi.machine_env(), &options, regalloc_ctx)
             .map_err(|err| {
                 log::error!(
-                    "Register allocation error for vcode\n{vcode:?}\nError: {err:?}\nCLIF for error:\n{f:?}",
+                    "Register allocation error for vcode\n\
+                     {vcode:?}\n\
+                     Error: {err:?}\n\
+                     CLIF for error:\n\
+                     {f:?}",
                 );
                 err
             })
-            .expect("register allocation")
-    };
+            .expect("register allocation");
+    }
 
     // Run the regalloc checker, if requested.
     if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
-        let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.abi.machine_env());
-        checker.prepare(&regalloc_result);
+        let mut checker = regalloc2::checker::Checker::new(&vcode, &vcode.abi.machine_env());
+        checker.prepare(&regalloc_ctx.output);
         checker
             .run()
             .map_err(|err| {
@@ -93,5 +91,5 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             .expect("register allocation checker");
     }
 
-    Ok((vcode, regalloc_result))
+    Ok(vcode)
 }

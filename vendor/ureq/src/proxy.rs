@@ -5,9 +5,12 @@ use ureq_proto::http::uri::{PathAndQuery, Scheme};
 
 use http::Uri;
 
+use crate::Error;
 use crate::http;
 use crate::util::{AuthorityExt, DebugUri};
-use crate::Error;
+
+#[cfg(all(windows, feature = "win-system-proxy"))]
+const REGISTRY_PATH: &str = r#"Software\Microsoft\Windows\CurrentVersion\Internet Settings"#;
 
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -23,6 +26,8 @@ pub enum ProxyProtocol {
     Socks4A,
     /// SOCKS5 proxy
     Socks5,
+    /// SOCKS5h proxy (proxy can resolve domain name)
+    Socks5h,
 }
 
 impl ProxyProtocol {
@@ -30,12 +35,18 @@ impl ProxyProtocol {
         match self {
             ProxyProtocol::Http => 80,
             ProxyProtocol::Https => 443,
-            ProxyProtocol::Socks4 | ProxyProtocol::Socks4A | ProxyProtocol::Socks5 => 1080,
+            ProxyProtocol::Socks4
+            | ProxyProtocol::Socks4A
+            | ProxyProtocol::Socks5
+            | ProxyProtocol::Socks5h => 1080,
         }
     }
 
     pub(crate) fn is_socks(&self) -> bool {
-        matches!(self, Self::Socks4 | Self::Socks4A | Self::Socks5)
+        matches!(
+            self,
+            Self::Socks4 | Self::Socks4A | Self::Socks5 | Self::Socks5h
+        )
     }
 
     pub(crate) fn is_connect(&self) -> bool {
@@ -48,7 +59,8 @@ impl ProxyProtocol {
             ProxyProtocol::Https => false,
             ProxyProtocol::Socks4 => true, // we must locally resolve before using proxy
             ProxyProtocol::Socks4A => false,
-            ProxyProtocol::Socks5 => false,
+            ProxyProtocol::Socks5 => true, // we must locally resolve before using proxy
+            ProxyProtocol::Socks5h => false,
         }
     }
 }
@@ -217,15 +229,40 @@ impl Proxy {
             "http_proxy",
         ];
 
+        let no_proxy = NoProxy::try_from_env();
         for attempt in TRY_ENV {
             if let Ok(env) = std::env::var(attempt) {
-                let no_proxy = NoProxy::try_from_env();
-                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy, true, None) {
+                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy.clone(), true, None) {
                     return Some(proxy);
                 }
             }
         }
 
+        #[cfg(all(windows, feature = "win-system-proxy"))]
+        {
+            use winreg::RegKey;
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+
+            let registry = RegKey::predef(HKEY_CURRENT_USER);
+            let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
+                return None;
+            };
+
+            let enabled = ie_settings
+                .get_value::<u32, _>("ProxyEnable")
+                .is_ok_and(|enable| enable == 1);
+            if !enabled {
+                return None;
+            }
+
+            ie_settings
+                .get_value::<String, _>("ProxyServer")
+                .ok()
+                .and_then(|proxy| {
+                    Self::new_with_flag(&format!("http://{proxy}"), no_proxy, true, None).ok()
+                })
+        }
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
@@ -429,6 +466,7 @@ impl TryFrom<&str> for ProxyProtocol {
             "socks4a" => Ok(ProxyProtocol::Socks4A),
             "socks" => Ok(ProxyProtocol::Socks5),
             "socks5" => Ok(ProxyProtocol::Socks5),
+            "socks5h" => Ok(ProxyProtocol::Socks5h),
             _ => Err(Error::InvalidProxyUrl),
         }
     }
@@ -452,6 +490,7 @@ impl fmt::Display for ProxyProtocol {
             ProxyProtocol::Socks4 => write!(f, "SOCKS4"),
             ProxyProtocol::Socks4A => write!(f, "SOCKS4a"),
             ProxyProtocol::Socks5 => write!(f, "SOCKS5"),
+            ProxyProtocol::Socks5h => write!(f, "SOCKS5h"),
         }
     }
 }
@@ -459,6 +498,7 @@ impl fmt::Display for ProxyProtocol {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum NoProxyEntry {
     ExactHost(String),
+    HostPrefix(String),
     HostSuffix(String),
     MatchAll,
 }
@@ -508,6 +548,31 @@ impl NoProxy {
             }
         }
 
+        #[cfg(all(windows, feature = "win-system-proxy"))]
+        {
+            use winreg::RegKey;
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+
+            let registry = RegKey::predef(HKEY_CURRENT_USER);
+            let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
+                return None;
+            };
+
+            ie_settings
+                .get_value::<String, _>("ProxyOverride")
+                .ok()
+                .map(|no_proxy| NoProxy {
+                    inner: no_proxy
+                        .split(";")
+                        .map(str::trim)
+                        // bypass <local>, which tells windows to bypass intranet addresses
+                        .filter(|&s| s != "<local>")
+                        .map(NoProxyEntry::try_parse)
+                        .flatten()
+                        .collect(),
+                })
+        }
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
@@ -524,6 +589,13 @@ impl NoProxyEntry {
                 Self::HostSuffix(u.chars().skip(1).collect::<String>().to_ascii_lowercase())
             }
             u if u.starts_with(".") => Self::HostSuffix(u.to_ascii_lowercase()),
+            u if u.ends_with("*") => Self::HostPrefix(
+                u.chars()
+                    .take(u.len() - 1)
+                    .collect::<String>()
+                    .to_ascii_lowercase(),
+            ),
+            u if u.ends_with(".") => Self::HostPrefix(u.to_ascii_lowercase()),
             _ => Self::ExactHost(u.to_ascii_lowercase()),
         };
         Some(entry)
@@ -539,6 +611,19 @@ impl NoProxyEntry {
                 } else {
                     // Slow path: convert host to lowercase and compare
                     pattern == &host.to_ascii_lowercase()
+                }
+            }
+            NoProxyEntry::HostPrefix(prefix) => {
+                if host.len() < prefix.len() {
+                    return false;
+                }
+                let host_prefix = &host[..prefix.len()];
+                // Fast path: if host prefix is already lowercase, do direct comparison
+                if host_prefix.chars().all(|c| !c.is_ascii_uppercase()) {
+                    prefix == host_prefix
+                } else {
+                    // Slow path: convert host prefix to lowercase and compare
+                    prefix == &host_prefix.to_ascii_lowercase()
                 }
             }
             NoProxyEntry::HostSuffix(suffix) => {
@@ -598,6 +683,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks4);
+        assert!(proxy.resolve_target());
     }
 
     #[test]
@@ -608,6 +694,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks4A);
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
@@ -618,6 +705,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5);
+        assert!(proxy.resolve_target());
     }
 
     #[test]
@@ -628,6 +716,18 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5);
+        assert!(proxy.resolve_target());
+    }
+
+    #[test]
+    fn parse_proxy_socks5h_user_pass_server_port() {
+        let proxy = Proxy::new("socks5h://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.username(), Some("user"));
+        assert_eq!(proxy.password(), Some("p@ssw0rd"));
+        assert_eq!(proxy.host(), "localhost");
+        assert_eq!(proxy.port(), 9999);
+        assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5h);
+        assert!(!proxy.resolve_target());
     }
 
     #[test]

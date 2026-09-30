@@ -6,9 +6,12 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
+use crate::Result;
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::module::ModuleRegistry;
-use crate::runtime::component::ComponentInstanceId;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::component::concurrent::ConcurrentInstanceState;
+use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
@@ -20,13 +23,14 @@ use crate::store::InstanceId;
 use crate::{Func, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use anyhow::Result;
 use core::mem;
 use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::error::OutOfMemory;
+use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{HostPtr, PrimaryMap, PtrSize as _, VMSharedTypeIndex};
 
 #[allow(
     clippy::cast_possible_truncation,
@@ -40,10 +44,48 @@ mod resources;
 
 pub use self::handle_table::{HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
-pub use self::handle_table::{TransmitLocalState, Waitable};
-#[cfg(feature = "component-model-async")]
-pub use self::resources::CallContext;
-pub use self::resources::{CallContexts, ResourceTables, TypedResource, TypedResourceIndex};
+pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
+pub use self::resources::{CallContext, ResourceTables, TypedResource, TypedResourceIndex};
+
+/// Represents the state of a (sub-)component instance.
+#[derive(Default)]
+pub struct InstanceState {
+    /// Represents the Component Model Async state of a (sub-)component instance.
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: ConcurrentInstanceState,
+
+    /// State of handles (e.g. resources, waitables, etc.) for this instance.
+    ///
+    /// For resource handles, this is paired with other information to create a
+    /// `ResourceTables` and manipulated through that.  For other handles, this
+    /// is used directly to translate guest handles to host representations and
+    /// vice-versa.
+    handle_table: HandleTable,
+
+    /// Dedicated table for threads that is separate from `handle_table`. Part
+    /// of the component-model-threading proposal.
+    #[cfg(feature = "component-model-async")]
+    thread_handle_table: ThreadHandleTable,
+}
+
+impl InstanceState {
+    /// Represents the Component Model Async state of a (sub-)component instance.
+    #[cfg(feature = "component-model-async")]
+    pub fn concurrent_state(&mut self) -> &mut ConcurrentInstanceState {
+        &mut self.concurrent_state
+    }
+
+    /// State of handles (e.g. resources, waitables, etc.) for this instance.
+    pub fn handle_table(&mut self) -> &mut HandleTable {
+        &mut self.handle_table
+    }
+
+    /// State of thread handles.
+    #[cfg(feature = "component-model-async")]
+    pub fn thread_handle_table(&mut self) -> &mut ThreadHandleTable {
+        &mut self.thread_handle_table
+    }
+}
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -86,21 +128,17 @@ pub struct ComponentInstance {
     // borrowing a store mutably at the same time as a contained instance.
     component: Component,
 
-    /// State of handles (e.g. resources, waitables, etc.) for this component.
-    ///
-    /// For resource handles, this is paired with other information to create a
-    /// `ResourceTables` and manipulated through that.  For other handles, this
-    /// is used directly to translate guest handles to host representations and
-    /// vice-versa.
-    instance_handle_tables: PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
+    /// Contains state specific to each (sub-)component instance within this
+    /// top-level instance.
+    instance_states: TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
-    instances: PrimaryMap<RuntimeInstanceIndex, InstanceId>,
+    instances: TryPrimaryMap<RuntimeInstanceIndex, InstanceId>,
 
     /// Storage for the type information about resources within this component
     /// instance.
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 
     /// Arguments that this instance used to be instantiated.
     ///
@@ -119,12 +157,6 @@ pub struct ComponentInstance {
 
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
-
-    /// Cached ABI return value from the last-invoked function call along with
-    /// the function index that was invoked.
-    ///
-    /// Used in `post_return_arg_set` and `post_return_arg_take` below.
-    post_return_arg: Option<(ExportIndex, ValRaw)>,
 
     /// Required by `InstanceLayout`, also required to be the last field (with
     /// repr(C))
@@ -155,7 +187,7 @@ pub struct ComponentInstance {
 /// This function returns a `bool` which indicates whether the call succeeded
 /// or not. On failure this function records trap information in TLS which
 /// should be suitable for reading later.
-pub type VMLoweringCallee = extern "C" fn(
+pub type VMLoweringCallee = unsafe extern "C" fn(
     vmctx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
@@ -287,40 +319,40 @@ impl ComponentInstance {
     pub(crate) fn new(
         id: ComponentInstanceId,
         component: &Component,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
-    ) -> OwnedComponentInstance {
+    ) -> Result<OwnedComponentInstance, OutOfMemory> {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
-        let mut instance_handle_tables =
-            PrimaryMap::with_capacity(num_instances.try_into().unwrap());
+        let mut instance_states = TryPrimaryMap::with_capacity(num_instances.try_into().unwrap())?;
         for _ in 0..num_instances {
-            instance_handle_tables.push(HandleTable::default());
+            instance_states.push(InstanceState::default())?;
         }
+
+        let instances = TryPrimaryMap::with_capacity(
+            component
+                .env_component()
+                .num_runtime_instances
+                .try_into()
+                .unwrap(),
+        )?;
 
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
-            instance_handle_tables,
-            instances: PrimaryMap::with_capacity(
-                component
-                    .env_component()
-                    .num_runtime_instances
-                    .try_into()
-                    .unwrap(),
-            ),
+            instance_states,
+            instances,
             component: component.clone(),
             resource_types,
             imports: imports.clone(),
             store: VMStoreRawPtr(store),
-            post_return_arg: None,
             vmctx: OwnedVMContext::new(),
-        });
+        })?;
         unsafe {
             ret.get_mut().initialize_vmctx();
         }
-        ret
+        Ok(ret)
     }
 
     #[inline]
@@ -334,7 +366,7 @@ impl ComponentInstance {
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
         unsafe {
             let ptr = self
-                .vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.instance_flags(instance));
+                .vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.may_leave().at(instance));
             InstanceFlags(SendSyncPtr::new(ptr))
         }
     }
@@ -346,7 +378,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_memory(&self, idx: RuntimeMemoryIndex) -> NonNull<VMMemoryDefinition> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_memory(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.memories().at(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -359,7 +391,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTableImport {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VMTableImport>(self.offsets.runtime_table(idx));
+            let ret = *self.vmctx_plus_offset::<VMTableImport>(self.offsets.tables().at(idx));
             debug_assert!(ret.from.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.vmctx.as_ptr() as usize != INVALID_PTR);
             ret
@@ -398,7 +430,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_realloc(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.reallocs().at(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -410,7 +442,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_callback(&self, idx: RuntimeCallbackIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_callback(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.callbacks().at(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -422,7 +454,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_post_return(&self, idx: RuntimePostReturnIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_post_return(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.post_returns().at(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -435,7 +467,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn lowering(&self, idx: LoweredIndex) -> VMLowering {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VMLowering>(self.offsets.lowering(idx));
+            let ret = *self.vmctx_plus_offset::<VMLowering>(self.offsets.lowerings().at(idx));
             debug_assert!(ret.callee.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.data.as_ptr() as usize != INVALID_PTR);
             ret
@@ -452,7 +484,7 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn trampoline_func_ref(&self, idx: TrampolineIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let offset = self.offsets.trampoline_func_ref(idx);
+            let offset = self.offsets.trampoline_func_refs().at(idx);
             let ret = self.vmctx_plus_offset_raw::<VMFuncRef>(offset);
             debug_assert!(
                 mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>(ret.as_ref().wasm_call)
@@ -466,7 +498,7 @@ impl ComponentInstance {
     /// Get the core Wasm function reference for the given unsafe intrinsic.
     pub fn unsafe_intrinsic_func_ref(&self, idx: UnsafeIntrinsic) -> NonNull<VMFuncRef> {
         unsafe {
-            let offset = self.offsets.unsafe_intrinsic_func_ref(idx);
+            let offset = self.offsets.intrinsic_func_refs().at(idx);
             let ret = self.vmctx_plus_offset_raw::<VMFuncRef>(offset);
             debug_assert!(
                 mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>(ret.as_ref().wasm_call)
@@ -491,7 +523,7 @@ impl ComponentInstance {
         ptr: NonNull<VMMemoryDefinition>,
     ) {
         unsafe {
-            let offset = self.offsets.runtime_memory(idx);
+            let offset = self.offsets.memories().at(idx);
             let storage = self.vmctx_plus_offset_mut::<VmPtr<VMMemoryDefinition>>(offset);
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr.into();
@@ -505,7 +537,7 @@ impl ComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let offset = self.offsets.runtime_realloc(idx);
+            let offset = self.offsets.reallocs().at(idx);
             let storage = self.vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(offset);
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr.into();
@@ -519,7 +551,7 @@ impl ComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let offset = self.offsets.runtime_callback(idx);
+            let offset = self.offsets.callbacks().at(idx);
             let storage = self.vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(offset);
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr.into();
@@ -533,7 +565,7 @@ impl ComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let offset = self.offsets.runtime_post_return(idx);
+            let offset = self.offsets.post_returns().at(idx);
             let storage = self.vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(offset);
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr.into();
@@ -550,7 +582,7 @@ impl ComponentInstance {
     /// here is never needed prior to it being configured here in the instance.
     pub fn set_runtime_table(self: Pin<&mut Self>, idx: RuntimeTableIndex, import: VMTableImport) {
         unsafe {
-            let offset = self.offsets.runtime_table(idx);
+            let offset = self.offsets.tables().at(idx);
             let storage = self.vmctx_plus_offset_mut::<VMTableImport>(offset);
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
@@ -566,7 +598,7 @@ impl ComponentInstance {
             debug_assert!(*self.vmctx_plus_offset::<usize>(callee) == INVALID_PTR);
             let data = self.offsets.lowering_data(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(data) == INVALID_PTR);
-            let offset = self.offsets.lowering(idx);
+            let offset = self.offsets.lowerings().at(idx);
             *self.vmctx_plus_offset_mut(offset) = lowering;
         }
     }
@@ -580,7 +612,7 @@ impl ComponentInstance {
         type_index: VMSharedTypeIndex,
     ) {
         unsafe {
-            let offset = self.offsets.trampoline_func_ref(idx);
+            let offset = self.offsets.trampoline_func_refs().at(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
             let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
             *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
@@ -601,7 +633,7 @@ impl ComponentInstance {
         type_index: VMSharedTypeIndex,
     ) {
         unsafe {
-            let offset = self.offsets.unsafe_intrinsic_func_ref(intrinsic);
+            let offset = self.offsets.intrinsic_func_refs().at(intrinsic);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
             let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
             *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
@@ -623,7 +655,7 @@ impl ComponentInstance {
         dtor: Option<NonNull<VMFuncRef>>,
     ) {
         unsafe {
-            let offset = self.offsets.resource_destructor(idx);
+            let offset = self.offsets.resource_destructors().at(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
             *self.vmctx_plus_offset_mut(offset) = dtor.map(VmPtr::from);
         }
@@ -635,14 +667,14 @@ impl ComponentInstance {
     /// after instantiation.
     pub fn resource_destructor(&self, idx: ResourceIndex) -> Option<NonNull<VMFuncRef>> {
         unsafe {
-            let offset = self.offsets.resource_destructor(idx);
+            let offset = self.offsets.resource_destructors().at(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) != INVALID_PTR);
             (*self.vmctx_plus_offset::<Option<VmPtr<VMFuncRef>>>(offset)).map(|p| p.as_non_null())
         }
     }
 
     unsafe fn initialize_vmctx(mut self: Pin<&mut Self>) {
-        let offset = self.offsets.magic();
+        let offset = u32::from(self.offsets.ptr.vmcomponent().magic());
         // SAFETY: it's safe to write the magic value during initialization and
         // this is also the right type of value to write.
         unsafe {
@@ -655,14 +687,14 @@ impl ComponentInstance {
         // is also the right type of value to store in the vmctx.
         static BUILTINS: libcalls::VMComponentBuiltins = libcalls::VMComponentBuiltins::INIT;
         let ptr = BUILTINS.expose_provenance();
-        let offset = self.offsets.builtins();
+        let offset = u32::from(self.offsets.ptr.vmcomponent().builtins());
         unsafe {
             *self.as_mut().vmctx_plus_offset_mut(offset) = VmPtr::from(ptr);
         }
 
         // SAFETY: it's safe to initialize the vmctx in this function and this
         // is also the right type of value to store in the vmctx.
-        let offset = self.offsets.vm_store_context();
+        let offset = u32::from(self.offsets.ptr.vmcomponent().store_context());
         unsafe {
             *self.as_mut().vmctx_plus_offset_mut(offset) =
                 VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
@@ -672,9 +704,9 @@ impl ComponentInstance {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
             // SAFETY: this is a valid initialization of all globals which are
-            // 32-bit values.
+            // 32-bit values. The `may_leave` flag starts out `true`.
             unsafe {
-                *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
+                *def.as_i32_mut() = 1;
                 self.instance_flags(i).as_raw().write(def);
             }
         }
@@ -702,7 +734,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_trampolines {
                 let i = TrampolineIndex::from_u32(i);
-                let offset = self.offsets.trampoline_func_ref(i);
+                let offset = self.offsets.trampoline_func_refs().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -710,7 +742,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_unsafe_intrinsics {
                 let i = UnsafeIntrinsic::from_u32(i);
-                let offset = self.offsets.unsafe_intrinsic_func_ref(i);
+                let offset = self.offsets.intrinsic_func_refs().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -718,7 +750,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
-                let offset = self.offsets.runtime_memory(i);
+                let offset = self.offsets.memories().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -726,7 +758,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
-                let offset = self.offsets.runtime_realloc(i);
+                let offset = self.offsets.reallocs().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -734,7 +766,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_runtime_callbacks {
                 let i = RuntimeCallbackIndex::from_u32(i);
-                let offset = self.offsets.runtime_callback(i);
+                let offset = self.offsets.callbacks().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -742,7 +774,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_runtime_post_returns {
                 let i = RuntimePostReturnIndex::from_u32(i);
-                let offset = self.offsets.runtime_post_return(i);
+                let offset = self.offsets.post_returns().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -750,7 +782,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_resources {
                 let i = ResourceIndex::from_u32(i);
-                let offset = self.offsets.resource_destructor(i);
+                let offset = self.offsets.resource_destructors().at(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
@@ -758,7 +790,7 @@ impl ComponentInstance {
             }
             for i in 0..self.offsets.num_runtime_tables {
                 let i = RuntimeTableIndex::from_u32(i);
-                let offset = self.offsets.runtime_table(i);
+                let offset = self.offsets.tables().at(i);
                 // SAFETY: see above
                 #[allow(clippy::cast_possible_truncation, reason = "known to not overflow")]
                 unsafe {
@@ -794,14 +826,14 @@ impl ComponentInstance {
     }
 
     /// Returns a reference to the resource type information.
-    pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    pub fn resource_types(&self) -> &Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
     }
 
     /// Returns a mutable reference to the resource type information.
     pub fn resource_types_mut(
         self: Pin<&mut Self>,
-    ) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    ) -> &mut Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().resource_types }
@@ -825,20 +857,28 @@ impl ComponentInstance {
         resource_instance == component.defined_resource_instances[idx]
     }
 
-    /// Returns the runtime state of resources associated with this component.
+    /// Returns the runtime state of resources and concurrency associated with
+    /// this component.
     #[inline]
-    pub fn guest_tables(
+    pub fn instance_states(
         self: Pin<&mut Self>,
     ) -> (
-        &mut PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
+        &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &ComponentTypes,
     ) {
         // safety: we've chosen the `pin` guarantee of `self` to not apply to
         // the map returned.
         unsafe {
             let me = self.get_unchecked_mut();
-            (&mut me.instance_handle_tables, me.component.types())
+            (&mut me.instance_states, me.component.types())
         }
+    }
+
+    pub fn instance_state(
+        self: Pin<&mut Self>,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> &mut InstanceState {
+        &mut self.instance_states().0[instance]
     }
 
     /// Returns the destructor and instance flags for the specified resource
@@ -846,18 +886,20 @@ impl ComponentInstance {
     ///
     /// This will lookup the origin definition of the `ty` table and return the
     /// destructor/flags for that.
-    pub fn dtor_and_flags(
+    pub fn dtor_and_instance(
         &self,
         ty: TypeResourceTableIndex,
-    ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
+    ) -> (Option<NonNull<VMFuncRef>>, Option<RuntimeInstance>) {
         let resource = self.component.types()[ty].unwrap_concrete_ty();
         let dtor = self.resource_destructor(resource);
         let component = self.component.env_component();
-        let flags = component.defined_resource_index(resource).map(|i| {
-            let instance = component.defined_resource_instances[i];
-            self.instance_flags(instance)
-        });
-        (dtor, flags)
+        let instance = component
+            .defined_resource_index(resource)
+            .map(|i| RuntimeInstance {
+                instance: self.id(),
+                index: component.defined_resource_instances[i],
+            });
+        (dtor, instance)
     }
 
     /// Returns the store-local id that points to this component.
@@ -867,7 +909,10 @@ impl ComponentInstance {
 
     /// Pushes a new runtime instance that's been created into
     /// `self.instances`.
-    pub fn push_instance_id(self: Pin<&mut Self>, id: InstanceId) -> RuntimeInstanceIndex {
+    pub fn push_instance_id(
+        self: Pin<&mut Self>,
+        id: InstanceId,
+    ) -> Result<RuntimeInstanceIndex, OutOfMemory> {
         self.instances_mut().push(id)
     }
 
@@ -881,7 +926,7 @@ impl ComponentInstance {
         self.instances[idx]
     }
 
-    fn instances_mut(self: Pin<&mut Self>) -> &mut PrimaryMap<RuntimeInstanceIndex, InstanceId> {
+    fn instances_mut(self: Pin<&mut Self>) -> &mut TryPrimaryMap<RuntimeInstanceIndex, InstanceId> {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().instances }
@@ -914,62 +959,6 @@ impl ComponentInstance {
                 self.imports.clone(),
                 self.resource_types.clone(),
             )
-        }
-    }
-
-    /// Sets the cached argument for the canonical ABI option `post-return` to
-    /// the `arg` specified.
-    ///
-    /// This function is used in conjunction with function calls to record,
-    /// after a function call completes, the optional ABI return value. This
-    /// return value is cached within this instance for future use when the
-    /// `post_return` Rust-API-level function is invoked.
-    ///
-    /// Note that `index` here is the index of the export that was just
-    /// invoked, and this is used to ensure that `post_return` is called on the
-    /// same function afterwards. This restriction technically isn't necessary
-    /// though and may be one we want to lift in the future.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if `post_return_arg` is already set to `Some`.
-    pub fn post_return_arg_set(self: Pin<&mut Self>, index: ExportIndex, arg: ValRaw) {
-        assert!(self.post_return_arg.is_none());
-        *self.post_return_arg_mut() = Some((index, arg));
-    }
-
-    /// Re-acquires the value originally saved via `post_return_arg_set`.
-    ///
-    /// This function will take a function `index` that's having its
-    /// `post_return` function called. If an argument was previously stored and
-    /// `index` matches the index that was stored then `Some(arg)` is returned.
-    /// Otherwise `None` is returned.
-    pub fn post_return_arg_take(self: Pin<&mut Self>, index: ExportIndex) -> Option<ValRaw> {
-        let post_return_arg = self.post_return_arg_mut();
-        let (expected_index, arg) = post_return_arg.take()?;
-        if index != expected_index {
-            *post_return_arg = Some((expected_index, arg));
-            None
-        } else {
-            Some(arg)
-        }
-    }
-
-    fn post_return_arg_mut(self: Pin<&mut Self>) -> &mut Option<(ExportIndex, ValRaw)> {
-        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
-        // the map returned.
-        unsafe { &mut self.get_unchecked_mut().post_return_arg }
-    }
-
-    pub(crate) fn check_may_leave(
-        &self,
-        instance: RuntimeComponentInstanceIndex,
-    ) -> anyhow::Result<()> {
-        let flags = self.instance_flags(instance);
-        if unsafe { flags.may_leave() } {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(crate::Trap::CannotLeaveComponent))
         }
     }
 }
@@ -1059,49 +1048,13 @@ impl InstanceFlags {
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_LEAVE != 0 }
+        unsafe { *self.as_raw().as_ref().as_i32() != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
-            }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn may_enter(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_ENTER != 0 }
-    }
-
-    #[inline]
-    pub unsafe fn set_may_enter(&mut self, val: bool) {
-        unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_ENTER;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_ENTER;
-            }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn needs_post_return(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_NEEDS_POST_RETURN != 0 }
-    }
-
-    #[inline]
-    pub unsafe fn set_needs_post_return(&mut self, val: bool) {
-        unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
-            }
+            *self.as_raw().as_mut().as_i32_mut() = val as i32;
         }
     }
 

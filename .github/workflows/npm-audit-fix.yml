@@ -1,0 +1,13 @@
+name: npm audit fix
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit-fix:
+    uses: pannous/hieros/.github/workflows/npm-audit-fix.yml@master

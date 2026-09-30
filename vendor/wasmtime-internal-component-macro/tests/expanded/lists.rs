@@ -103,8 +103,6 @@ pub struct TheLists {
     interface0: exports::foo::foo::lists::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheListsIndices {
         /// Creates a new copy of `TheListsIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -173,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::lists::HostWithStore,
+            D: foo::foo::lists::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::lists::Host,
             T: 'static,
         {
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod lists {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -371,10 +369,10 @@ pub mod foo {
                     >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn list_u8_param(
@@ -632,16 +630,15 @@ pub mod foo {
                     Host::load_store_everything(*self, a)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/lists")?;
                 inst.func_wrap(
                     "list-u8-param",
                     move |
@@ -948,6 +945,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/lists")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -957,7 +966,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod lists {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -1158,6 +1167,7 @@ pub mod exports {
                         >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     list_u8_param: wasmtime::component::Func,
                     list_u16_param: wasmtime::component::Func,
@@ -1235,16 +1245,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/lists")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/lists`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/lists` does \
                                                                           not have export `{name}`"
                                     )
@@ -1542,295 +1552,418 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_list_u8_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[u8],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[u8],),
+                                (),
+                            >::new_unchecked(self.list_u8_param)
+                        }
+                    }
                     pub fn call_list_u8_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[u8],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[u8],),
-                                (),
-                            >::new_unchecked(self.list_u8_param)
-                        };
+                        let callee = self.func_list_u8_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_u16_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[u16],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[u16],),
+                                (),
+                            >::new_unchecked(self.list_u16_param)
+                        }
                     }
                     pub fn call_list_u16_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[u16],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[u16],),
-                                (),
-                            >::new_unchecked(self.list_u16_param)
-                        };
+                        let callee = self.func_list_u16_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_u32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[u32],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[u32],),
+                                (),
+                            >::new_unchecked(self.list_u32_param)
+                        }
                     }
                     pub fn call_list_u32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[u32],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[u32],),
-                                (),
-                            >::new_unchecked(self.list_u32_param)
-                        };
+                        let callee = self.func_list_u32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_u64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[u64],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[u64],),
+                                (),
+                            >::new_unchecked(self.list_u64_param)
+                        }
                     }
                     pub fn call_list_u64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[u64],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[u64],),
-                                (),
-                            >::new_unchecked(self.list_u64_param)
-                        };
+                        let callee = self.func_list_u64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_s8_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[i8],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[i8],),
+                                (),
+                            >::new_unchecked(self.list_s8_param)
+                        }
                     }
                     pub fn call_list_s8_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[i8],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[i8],),
-                                (),
-                            >::new_unchecked(self.list_s8_param)
-                        };
+                        let callee = self.func_list_s8_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_s16_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[i16],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[i16],),
+                                (),
+                            >::new_unchecked(self.list_s16_param)
+                        }
                     }
                     pub fn call_list_s16_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[i16],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[i16],),
-                                (),
-                            >::new_unchecked(self.list_s16_param)
-                        };
+                        let callee = self.func_list_s16_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_s32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[i32],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[i32],),
+                                (),
+                            >::new_unchecked(self.list_s32_param)
+                        }
                     }
                     pub fn call_list_s32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[i32],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[i32],),
-                                (),
-                            >::new_unchecked(self.list_s32_param)
-                        };
+                        let callee = self.func_list_s32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_s64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[i64],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[i64],),
+                                (),
+                            >::new_unchecked(self.list_s64_param)
+                        }
                     }
                     pub fn call_list_s64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[i64],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[i64],),
-                                (),
-                            >::new_unchecked(self.list_s64_param)
-                        };
+                        let callee = self.func_list_s64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[f32],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[f32],),
+                                (),
+                            >::new_unchecked(self.list_f32_param)
+                        }
                     }
                     pub fn call_list_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[f32],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[f32],),
-                                (),
-                            >::new_unchecked(self.list_f32_param)
-                        };
+                        let callee = self.func_list_f32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&[f64],), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[f64],),
+                                (),
+                            >::new_unchecked(self.list_f64_param)
+                        }
                     }
                     pub fn call_list_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[f64],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[f64],),
-                                (),
-                            >::new_unchecked(self.list_f64_param)
-                        };
+                        let callee = self.func_list_f64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_list_u8_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<u8>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::__internal::Vec<u8>,),
+                            >::new_unchecked(self.list_u8_ret)
+                        }
                     }
                     pub fn call_list_u8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u8>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_u8_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_u16_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<u16>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<u8>,),
-                            >::new_unchecked(self.list_u8_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<u16>,),
+                            >::new_unchecked(self.list_u16_ret)
+                        }
                     }
                     pub fn call_list_u16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u16>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_u16_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_u32_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<u32>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<u16>,),
-                            >::new_unchecked(self.list_u16_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<u32>,),
+                            >::new_unchecked(self.list_u32_ret)
+                        }
                     }
                     pub fn call_list_u32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_u32_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_u64_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<u64>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<u32>,),
-                            >::new_unchecked(self.list_u32_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<u64>,),
+                            >::new_unchecked(self.list_u64_ret)
+                        }
                     }
                     pub fn call_list_u64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u64>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_u64_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_s8_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<i8>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<u64>,),
-                            >::new_unchecked(self.list_u64_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<i8>,),
+                            >::new_unchecked(self.list_s8_ret)
+                        }
                     }
                     pub fn call_list_s8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i8>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_s8_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_s16_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<i16>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<i8>,),
-                            >::new_unchecked(self.list_s8_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<i16>,),
+                            >::new_unchecked(self.list_s16_ret)
+                        }
                     }
                     pub fn call_list_s16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i16>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_s16_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_s32_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<i32>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<i16>,),
-                            >::new_unchecked(self.list_s16_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<i32>,),
+                            >::new_unchecked(self.list_s32_ret)
+                        }
                     }
                     pub fn call_list_s32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i32>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_s32_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_s64_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<i64>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<i32>,),
-                            >::new_unchecked(self.list_s32_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<i64>,),
+                            >::new_unchecked(self.list_s64_ret)
+                        }
                     }
                     pub fn call_list_s64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i64>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_s64_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_f32_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<f32>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<i64>,),
-                            >::new_unchecked(self.list_s64_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<f32>,),
+                            >::new_unchecked(self.list_f32_ret)
+                        }
                     }
                     pub fn call_list_f32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>> {
-                        let callee = unsafe {
+                        let callee = self.func_list_f32_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_list_f64_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<f64>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::Vec<f32>,),
-                            >::new_unchecked(self.list_f32_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (wasmtime::component::__internal::Vec<f64>,),
+                            >::new_unchecked(self.list_f64_ret)
+                        }
                     }
                     pub fn call_list_f64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::__internal::Vec<f64>,),
-                            >::new_unchecked(self.list_f64_ret)
-                        };
+                        let callee = self.func_list_f64_ret();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_tuple_list(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[(u8, i8)],),
+                        (wasmtime::component::__internal::Vec<(i64, u32)>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[(u8, i8)],),
+                                (wasmtime::component::__internal::Vec<(i64, u32)>,),
+                            >::new_unchecked(self.tuple_list)
+                        }
                     }
                     pub fn call_tuple_list<S: wasmtime::AsContextMut>(
                         &self,
@@ -1839,30 +1972,52 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<(i64, u32)>,
                     > {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[(u8, i8)],),
-                                (wasmtime::component::__internal::Vec<(i64, u32)>,),
-                            >::new_unchecked(self.tuple_list)
-                        };
+                        let callee = self.func_tuple_list();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_string_list_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[wasmtime::component::__internal::String],),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[wasmtime::component::__internal::String],),
+                                (),
+                            >::new_unchecked(self.string_list_arg)
+                        }
                     }
                     pub fn call_string_list_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &[wasmtime::component::__internal::String],
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[wasmtime::component::__internal::String],),
-                                (),
-                            >::new_unchecked(self.string_list_arg)
-                        };
+                        let callee = self.func_string_list_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_string_list_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::String,
+                            >,
+                        ),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::String,
+                                    >,
+                                ),
+                            >::new_unchecked(self.string_list_ret)
+                        }
                     }
                     pub fn call_string_list_ret<S: wasmtime::AsContextMut>(
                         &self,
@@ -1872,19 +2027,30 @@ pub mod exports {
                             wasmtime::component::__internal::String,
                         >,
                     > {
-                        let callee = unsafe {
+                        let callee = self.func_string_list_ret();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_tuple_string_list(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[(u8, wasmtime::component::__internal::String)],),
+                        (
+                            wasmtime::component::__internal::Vec<
+                                (wasmtime::component::__internal::String, u8),
+                            >,
+                        ),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
-                                (),
+                                (&[(u8, wasmtime::component::__internal::String)],),
                                 (
                                     wasmtime::component::__internal::Vec<
-                                        wasmtime::component::__internal::String,
+                                        (wasmtime::component::__internal::String, u8),
                                     >,
                                 ),
-                            >::new_unchecked(self.string_list_ret)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                            >::new_unchecked(self.tuple_string_list)
+                        }
                     }
                     pub fn call_tuple_string_list<S: wasmtime::AsContextMut>(
                         &self,
@@ -1895,19 +2061,30 @@ pub mod exports {
                             (wasmtime::component::__internal::String, u8),
                         >,
                     > {
-                        let callee = unsafe {
+                        let callee = self.func_tuple_string_list();
+                        let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
+                        Ok(ret0)
+                    }
+                    pub fn func_string_list(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[wasmtime::component::__internal::String],),
+                        (
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::String,
+                            >,
+                        ),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
-                                (&[(u8, wasmtime::component::__internal::String)],),
+                                (&[wasmtime::component::__internal::String],),
                                 (
                                     wasmtime::component::__internal::Vec<
-                                        (wasmtime::component::__internal::String, u8),
+                                        wasmtime::component::__internal::String,
                                     >,
                                 ),
-                            >::new_unchecked(self.tuple_string_list)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                            >::new_unchecked(self.string_list)
+                        }
                     }
                     pub fn call_string_list<S: wasmtime::AsContextMut>(
                         &self,
@@ -1918,19 +2095,22 @@ pub mod exports {
                             wasmtime::component::__internal::String,
                         >,
                     > {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[wasmtime::component::__internal::String],),
-                                (
-                                    wasmtime::component::__internal::Vec<
-                                        wasmtime::component::__internal::String,
-                                    >,
-                                ),
-                            >::new_unchecked(self.string_list)
-                        };
+                        let callee = self.func_string_list();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_record_list(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[SomeRecord],),
+                        (wasmtime::component::__internal::Vec<OtherRecord>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[SomeRecord],),
+                                (wasmtime::component::__internal::Vec<OtherRecord>,),
+                            >::new_unchecked(self.record_list)
+                        }
                     }
                     pub fn call_record_list<S: wasmtime::AsContextMut>(
                         &self,
@@ -1939,15 +2119,22 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherRecord>,
                     > {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[SomeRecord],),
-                                (wasmtime::component::__internal::Vec<OtherRecord>,),
-                            >::new_unchecked(self.record_list)
-                        };
+                        let callee = self.func_record_list();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_record_list_reverse(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[OtherRecord],),
+                        (wasmtime::component::__internal::Vec<SomeRecord>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[OtherRecord],),
+                                (wasmtime::component::__internal::Vec<SomeRecord>,),
+                            >::new_unchecked(self.record_list_reverse)
+                        }
                     }
                     pub fn call_record_list_reverse<S: wasmtime::AsContextMut>(
                         &self,
@@ -1956,15 +2143,22 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<SomeRecord>,
                     > {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[OtherRecord],),
-                                (wasmtime::component::__internal::Vec<SomeRecord>,),
-                            >::new_unchecked(self.record_list_reverse)
-                        };
+                        let callee = self.func_record_list_reverse();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_variant_list(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&[SomeVariant],),
+                        (wasmtime::component::__internal::Vec<OtherVariant>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&[SomeVariant],),
+                                (wasmtime::component::__internal::Vec<OtherVariant>,),
+                            >::new_unchecked(self.variant_list)
+                        }
                     }
                     pub fn call_variant_list<S: wasmtime::AsContextMut>(
                         &self,
@@ -1973,29 +2167,30 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherVariant>,
                     > {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&[SomeVariant],),
-                                (wasmtime::component::__internal::Vec<OtherVariant>,),
-                            >::new_unchecked(self.variant_list)
-                        };
+                        let callee = self.func_variant_list();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_load_store_everything(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&LoadStoreAllSizes,),
+                        (LoadStoreAllSizes,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&LoadStoreAllSizes,),
+                                (LoadStoreAllSizes,),
+                            >::new_unchecked(self.load_store_everything)
+                        }
                     }
                     pub fn call_load_store_everything<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &LoadStoreAllSizes,
                     ) -> wasmtime::Result<LoadStoreAllSizes> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&LoadStoreAllSizes,),
-                                (LoadStoreAllSizes,),
-                            >::new_unchecked(self.load_store_everything)
-                        };
+                        let callee = self.func_load_store_everything();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

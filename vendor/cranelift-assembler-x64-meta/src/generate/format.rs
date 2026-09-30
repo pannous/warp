@@ -25,7 +25,7 @@ enum ModRmStyle {
     },
 
     /// Same as `RegMem` above except that this is also used for VEX-encoded
-    /// instructios with "/is4" which indicates that the 4th register operand
+    /// instructions with "/is4" which indicates that the 4th register operand
     /// is encoded in a byte after the ModR/M byte.
     RegMemIs4 {
         reg: ModRmReg,
@@ -59,6 +59,20 @@ impl dsl::Format {
             .operands
             .iter()
             .filter(|o| !o.implicit)
+            .rev()
+            .map(|o| format!("{{{}}}", o.location))
+            .collect();
+        ordered_ops.join(", ")
+    }
+
+    /// Like [`Self::generate_att_style_operands`], but omits the fixed `%xmm0`
+    /// mask operand, which XED leaves implicit.
+    #[must_use]
+    pub(crate) fn generate_xed_style_operands(&self) -> String {
+        let ordered_ops: Vec<_> = self
+            .operands
+            .iter()
+            .filter(|o| !o.implicit && o.location != dsl::Location::xmm0)
             .rev()
             .map(|o| format!("{{{}}}", o.location))
             .collect();

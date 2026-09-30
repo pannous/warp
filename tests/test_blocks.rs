@@ -1,5 +1,5 @@
-use wasp::{eq, is, skip};
-use wasp::wasp_parser::parse;
+use warp::{eq, is, skip};
+use warp::wasp_parser::parse;
 
 #[test]
 fn test_indent_as_block() {
@@ -46,12 +46,7 @@ fn test_group_cascade2() {
 }
 
 #[test]
-// #[ignore]
 fn test_group_cascade() {
-	//	test_group_cascade2();
-	//	testGroupCascade0();
-	//	test_group_cascade1();
-
 	let result = parse(
 		r#"{ a b c, d e f; g h i , j k l
               a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2}
@@ -59,14 +54,7 @@ fn test_group_cascade() {
               a4 b4 c4 ,d4 e4 f4; g4 h4 i4 ,j4 k4 l4}"#,
 	);
 	result.print();
-	// eq!(result.kind(), groups); // ( {} {} ) because 2 {}!
 	let _first = result.first();
-	// eq!(first.kind(), objects); // { a b c … }
-	// eq!(first.first().kind(), groups); // or expression if x is op
-	//     eq!(result.length(), 2) // {…} and {and}
-	//     eq!(result[0].length(), 2) // a…  and a2…  with significant newline
-	//     eq!(result[0][0].length(), 2) // a b c, d e f  and  g h i , j k l
-	//     eq!(result[0][0][0].length(), 2) // a b c  and  d e f
 	eq!(result[0][0], parse("a b c, d e f; g h i , j k l")); // significant newline!
 	eq!(
 		result[0][1],
@@ -90,13 +78,16 @@ fn test_group_cascade() {
 
 
 #[test]
-#[ignore]
 fn test_matrix_order() {
 	is!("m=([[1, 2], [3, 4]]);m[0][1]", 2);
 	is!("([[1, 2], [3, 4]])[0][1]", 2);
 	is!("([[1, 2], [3, 4]])[1][0]", 3);
 	is!("([1, 2], [3, 4])[1][0]", 3);
 	is!("(1, 2; 3, 4)[1][0]", 3);
+}
+
+#[test]
+fn test_matrix_comma_index() {
 	is!("(1, 2; 3, 4)[1,0]", 3);
 	is!("(1 2, 3 4)[1,0]", 3);
 }

@@ -1,11 +1,11 @@
-use crate::Config;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
-use crate::runtime::vm::GcRuntime;
+use crate::runtime::vm::{GcRuntime, ModuleRuntimeInfo};
+use crate::{Config, RRConfig};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -46,6 +46,24 @@ pub struct Engine {
     inner: Arc<EngineInner>,
 }
 
+// These impls are strictly not necessary but they're currently serving the
+// purpose of the reducing the recursion limit necessary to prove
+// types/futures/etc are `Send` in Wasmtime. This is related to
+// rust-lang/rust#159228.
+//
+// SAFETY: we're re-stating what rustc itself is already going to infer. The
+// `_assert_send_sync` function beneath this is intended to serve as a
+// double-assertion that this actually holds.
+unsafe impl Send for Engine {}
+unsafe impl Sync for Engine {}
+
+fn _assert_send_sync(e: &Engine) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Engine { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct EngineInner {
     config: Config,
     features: WasmFeatures,
@@ -66,6 +84,12 @@ struct EngineInner {
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
+
+    /// The canonical empty `ModuleRuntimeInfo`, so that each store doesn't need
+    /// allocate its own copy when creating its default caller instance or GC
+    /// heap.
+    #[cfg(feature = "runtime")]
+    empty_module_runtime_info: ModuleRuntimeInfo,
 }
 
 impl core::fmt::Debug for Engine {
@@ -94,6 +118,10 @@ impl Engine {
     /// For example, feature `reference_types` will need to set
     /// the compiler setting `unwind_info` to `true`, but explicitly
     /// disable these two compiler settings will cause errors.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
         let (mut tunables, features) = config.validate()?;
@@ -122,8 +150,13 @@ impl Engine {
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         let _ = &mut tunables;
 
+        #[cfg(feature = "runtime")]
+        let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(
+            wasmtime_environ::Module::new(wasmtime_environ::StaticModuleIndex::from_u32(0)),
+        )?)?;
+
         Ok(Engine {
-            inner: Arc::new(EngineInner {
+            inner: try_new::<Arc<_>>(EngineInner {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
@@ -150,7 +183,9 @@ impl Engine {
                 config,
                 tunables,
                 features,
-            }),
+                #[cfg(feature = "runtime")]
+                empty_module_runtime_info,
+            })?,
         })
     }
 
@@ -251,11 +286,28 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    /// Returns whether the engine is configured to support async functions.
-    #[cfg(feature = "async")]
+    /// Returns whether the engine is configured to support execution recording
     #[inline]
-    pub fn is_async(&self) -> bool {
-        self.config().async_support
+    pub fn is_recording(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => false,
+            RRConfig::None => false,
+        }
+    }
+
+    /// Returns whether the engine is configured to support execution replaying
+    #[inline]
+    pub fn is_replaying(&self) -> bool {
+        match self.config().rr_config {
+            #[cfg(feature = "rr")]
+            RRConfig::Replaying => true,
+            #[cfg(feature = "rr")]
+            RRConfig::Recording => false,
+            RRConfig::None => false,
+        }
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by
@@ -302,7 +354,7 @@ impl Engine {
             .compatible_with_native_host
             .get_or_init(|| self._check_compatible_with_native_host())
             .clone()
-            .map_err(anyhow::Error::msg)
+            .map_err(crate::Error::msg)
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
@@ -458,13 +510,13 @@ information about this check\
             | "enable_nan_canonicalization"
             | "enable_float"
             | "enable_verifier"
-            | "enable_pcc"
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "regalloc_algorithm"
             | "is_pic"
             | "bb_padding_log2_minus_one"
             | "log2_min_function_alignment"
+            | "enable_compact_unwind_abi"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
@@ -536,6 +588,8 @@ information about this check\
             "has_lse" => "lse",
             "has_pauth" => "paca",
             "has_fp16" => "fp16",
+            "has_dotprod" => "dotprod",
+            "has_i8mm" => "i8mm",
 
             // aarch64 features which don't need detection
             // No effect on its own.
@@ -566,6 +620,7 @@ information about this check\
             "has_avx" => "avx",
             "has_avx2" => "avx2",
             "has_fma" => "fma",
+            "has_avx_vnni" => "avxvnni",
             "has_bmi1" => "bmi1",
             "has_bmi2" => "bmi2",
             "has_avx512bitalg" => "avx512bitalg",
@@ -573,6 +628,7 @@ information about this check\
             "has_avx512f" => "avx512f",
             "has_avx512vl" => "avx512vl",
             "has_avx512vbmi" => "avx512vbmi",
+            "has_avx512vnni" => "avx512vnni",
             "has_lzcnt" => "lzcnt",
 
             // pulley features
@@ -627,6 +683,11 @@ information about this check\
     pub fn is_pulley(&self) -> bool {
         self.target().is_pulley()
     }
+
+    #[cfg(feature = "runtime")]
+    pub(crate) fn empty_module_runtime_info(&self) -> &ModuleRuntimeInfo {
+        &self.inner.empty_module_runtime_info
+    }
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -637,7 +698,7 @@ impl Engine {
 
     pub(crate) fn try_compiler(&self) -> Result<&dyn wasmtime_environ::Compiler> {
         self.compiler()
-            .ok_or_else(|| anyhow!("Engine was not configured with a compiler"))
+            .ok_or_else(|| format_err!("Engine was not configured with a compiler"))
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.
@@ -748,7 +809,9 @@ impl Engine {
     }
 
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
-        self.inner.allocator.as_ref()
+        let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
+            self.inner.allocator.as_ref();
+        &*r
     }
 
     pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {
@@ -902,7 +965,7 @@ impl Engine {
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = crate::CodeMemory::new(self, mmap)?;
         code.publish()?;
-        Ok(Arc::new(code))
+        Ok(try_new(code)?)
     }
 
     /// Unload process-related trap/signal handlers and destroy this engine.
@@ -966,7 +1029,7 @@ impl Engine {
 }
 
 /// A weak reference to an [`Engine`].
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct EngineWeak {
     inner: alloc::sync::Weak<EngineInner>,
 }

@@ -7,27 +7,9 @@
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use smallvec::SmallVec;
 use wasmtime_environ::{Tunables, TypeConvert, WasmHeapType};
-
-/// The value of a WebAssembly global variable.
-#[derive(Clone, Copy)]
-pub enum GlobalVariable {
-    /// This is a variable in memory that should be referenced through a `GlobalValue`.
-    Memory {
-        /// The address of the global variable storage.
-        gv: ir::GlobalValue,
-        /// An offset to add to the address.
-        offset: Offset32,
-        /// The global variable's type.
-        ty: ir::Type,
-    },
-
-    /// This is a global variable that needs to be handled by the environment.
-    Custom,
-}
 
 /// Environment affecting the translation of a WebAssembly.
 pub trait TargetEnvironment: TypeConvert {
@@ -36,9 +18,6 @@ pub trait TargetEnvironment: TypeConvert {
 
     /// Whether to enable Spectre mitigations for heap accesses.
     fn heap_access_spectre_mitigation(&self) -> bool;
-
-    /// Whether to add proof-carrying-code facts to verify memory accesses.
-    fn proof_carrying_code(&self) -> bool;
 
     /// Get the Cranelift reference type to use for the given Wasm reference
     /// type.

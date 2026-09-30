@@ -4,10 +4,10 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::condcodes::FloatCC;
-use crate::ir::immediates::{Ieee32, Ieee64};
+use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
 use crate::ir::types::{self};
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
-use crate::opts::MemFlags;
+use crate::opts::MemFlagsData;
 use crate::timing;
 
 /// Perform the NaN canonicalization pass.
@@ -70,7 +70,7 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
         let canon_nan = pos.ins().scalar_to_vector(ty, canon_nan);
         let new_res = pos.ins().scalar_to_vector(ty, new_res);
         let is_nan = pos.ins().fcmp(comparison, new_res, new_res);
-        let is_nan = pos.ins().bitcast(ty, MemFlags::new(), is_nan);
+        let is_nan = pos.ins().bitcast(ty, MemFlagsData::new(), is_nan);
         let simd_result = pos.ins().bitselect(is_nan, canon_nan, new_res);
         pos.ins().with_result(val).extractlane(simd_result, 0);
     };
@@ -83,13 +83,17 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
 
     let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
         let is_nan = pos.ins().fcmp(comparison, new_res, new_res);
-        let is_nan = pos.ins().bitcast(val_type, MemFlags::new(), is_nan);
+        let is_nan = pos.ins().bitcast(val_type, MemFlagsData::new(), is_nan);
         pos.ins()
             .with_result(val)
             .bitselect(is_nan, canon_nan, new_res);
     };
 
     match val_type {
+        types::F16 => {
+            let canon_nan = pos.ins().f16const(Ieee16::NAN);
+            scalar_select(pos, canon_nan);
+        }
         types::F32 => {
             let canon_nan = pos.ins().f32const(Ieee32::NAN);
             if has_vector_support {
@@ -115,6 +119,11 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
             let canon_nan = pos.ins().f64const(Ieee64::NAN);
             let canon_nan = pos.ins().splat(types::F64X2, canon_nan);
             vector_select(pos, canon_nan);
+        }
+        types::F128 => {
+            let nan_const = pos.func.dfg.constants.insert(Ieee128::NAN.into());
+            let canon_nan = pos.ins().f128const(nan_const);
+            scalar_select(pos, canon_nan);
         }
         _ => {
             // Panic if the type given was not an IEEE floating point type.

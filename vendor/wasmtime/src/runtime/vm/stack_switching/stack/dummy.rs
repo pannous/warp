@@ -1,8 +1,8 @@
-use anyhow::Result;
+use crate::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
+use crate::runtime::vm::VMHostArray;
+use crate::runtime::vm::{VMContext, VMFuncRef};
 
 /// Making sure that this has the same size as the non-dummy version, to
 /// make some tests happy.
@@ -16,7 +16,7 @@ pub struct VMContinuationStack {
 
 impl VMContinuationStack {
     pub fn new(_size: usize) -> Result<Self> {
-        anyhow::bail!("Stack switching disabled or not implemented on this platform")
+        crate::bail!("Stack switching disabled or not implemented on this platform")
     }
 
     pub fn unallocated() -> Self {
@@ -28,7 +28,7 @@ impl VMContinuationStack {
     }
 
     pub unsafe fn from_raw_parts(_base: *mut u8, _guard_size: usize, _len: usize) -> Result<Self> {
-        anyhow::bail!("Stack switching disabled or not implemented on this platform")
+        crate::bail!("Stack switching disabled or not implemented on this platform")
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
@@ -59,9 +59,10 @@ impl VMContinuationStack {
         &self,
         _func_ref: *const VMFuncRef,
         _caller_vmctx: *mut VMContext,
-        _args: *mut VMHostArray<ValRaw>,
+        _args: *mut VMHostArray,
         _parameter_count: u32,
         _return_value_count: u32,
-    ) {
+    ) -> Result<()> {
+        Ok(())
     }
 }

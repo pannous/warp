@@ -1,3 +1,5 @@
+#[cfg(not(has_virtual_memory))]
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(has_virtual_memory)]
@@ -64,14 +66,16 @@ impl MmapVec {
     }
 
     #[cfg(not(has_virtual_memory))]
-    fn new_alloc(len: usize, alignment: usize) -> MmapVec {
+    fn new_alloc(len: usize, alignment: usize) -> Result<MmapVec, OutOfMemory> {
         let layout = Layout::from_size_align(len, alignment)
             .expect("Invalid size or alignment for MmapVec allocation");
-        let base = SendSyncPtr::new(
-            NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) })
-                .expect("Allocation of MmapVec storage failed"),
-        );
-        MmapVec::Alloc { base, layout }
+        match NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) }) {
+            Some(ptr) => {
+                let base = SendSyncPtr::new(ptr);
+                Ok(MmapVec::Alloc { base, layout })
+            }
+            None => return Err(OutOfMemory::new(layout.size())),
+        }
     }
 
     fn new_externally_owned(memory: NonNull<[u8]>) -> MmapVec {
@@ -93,7 +97,7 @@ impl MmapVec {
         }
         #[cfg(not(has_virtual_memory))]
         {
-            return Ok(MmapVec::new_alloc(size, alignment));
+            return Ok(MmapVec::new_alloc(size, alignment)?);
         }
     }
 
@@ -226,6 +230,21 @@ impl MmapVec {
         unsafe { mmap.make_readonly(range.start..range.end) }
     }
 
+    /// Makes the specified `range` within this `mmap` to be
+    /// read-write (and not executable).
+    #[cfg(has_virtual_memory)]
+    pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
+        let (mmap, len) = match self {
+            MmapVec::Mmap { mmap, len } => (mmap, *len),
+            MmapVec::ExternallyOwned { .. } => {
+                bail!("Unable to make externally owned memory read-write");
+            }
+        };
+        assert!(range.start <= range.end);
+        assert!(range.end <= len);
+        unsafe { mmap.make_readwrite(range.start..range.end) }
+    }
+
     /// Returns the underlying file that this mmap is mapping, if present.
     #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
@@ -281,19 +300,20 @@ impl MmapVec {
                 MmapVec::from_slice_with_alignment(&self[..], layout.align())
             }
             MmapVec::ExternallyOwned { .. } => {
-                anyhow::bail!("Cannot clone an externally-owned code memory.");
+                crate::bail!("Cannot clone an externally-owned code memory.");
             }
             #[cfg(has_virtual_memory)]
+            #[allow(
+                unused_variables,
+                reason = "`mmap` and `len` only used with `std` feature"
+            )]
             MmapVec::Mmap { mmap, len } => {
+                #[cfg(feature = "std")]
                 if let Some(original_file) = mmap.original_file() {
                     let mmap = Mmap::from_file(original_file.clone())?;
-                    Ok(MmapVec::Mmap { mmap, len: *len })
-                } else {
-                    MmapVec::from_slice_with_alignment(
-                        &self[..],
-                        crate::runtime::vm::host_page_size(),
-                    )
+                    return Ok(MmapVec::Mmap { mmap, len: *len });
                 }
+                MmapVec::from_slice_with_alignment(&self[..], crate::runtime::vm::host_page_size())
             }
         }
     }

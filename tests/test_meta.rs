@@ -1,12 +1,11 @@
 // Metadata tests
 // Migrated from tests_*.rs files
 
-use wasp::Node;
-use wasp::wasp_parser::parse;
-use wasp::{eq, exists, skip};
+use warp::Node;
+use warp::wasp_parser::parse;
+use warp::{eq, exists, skip};
 
 #[test]
-#[ignore]
 fn test_meta_field() {
 	let mut tee = parse("tee{a:1}");
 	tee["a"]["@attrib"] = 42.into();
@@ -24,7 +23,6 @@ fn test_meta_field() {
 }
 
 #[test]
-#[ignore]
 fn test_meta() {
 	let mut tee = parse("tee{a:1}");
 	tee["@attrib"] = 42.into();
@@ -40,7 +38,6 @@ fn test_meta() {
 }
 
 #[test]
-#[ignore]
 fn test_meta_at() {
 	eq!(parse("tee{a:1}").name(), "tee");
 	eq!(parse("tee{a:1}").serialize(), "tee{a:1}");
@@ -53,7 +50,6 @@ fn test_meta_at() {
 }
 
 #[test]
-#[ignore]
 fn test_meta_at2() {
 	let code = "@attrib(1) @attrib2(42) tee{a:1}";
 	let node = parse(code);
@@ -68,7 +64,6 @@ fn test_meta_at2() {
 }
 
 #[test]
-#[ignore]
 fn test_parent_context() {
 	//     chars
 	let source = "{a:'HIO' d:{} b:3 c:ø}";

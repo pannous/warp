@@ -161,14 +161,14 @@ fn build_isle(
 
     let mut had_error = false;
     for compilation in &isle_compilations.items {
-        for file in &compilation.inputs {
+        for file in &compilation.tracked_inputs {
             println!("cargo:rerun-if-changed={}", file.display());
         }
 
         if let Err(e) = run_compilation(compilation) {
             had_error = true;
             eprintln!("Error building ISLE files:");
-            eprintln!("{e:?}");
+            eprintln!("{e}");
             #[cfg(not(feature = "isle-errors"))]
             {
                 eprintln!("To see a more detailed error report, run: ");
@@ -199,9 +199,8 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
 
     let code = {
         let file_paths = compilation
-            .inputs
-            .iter()
-            .chain(compilation.untracked_inputs.iter());
+            .paths()
+            .map_err(|e| Errors::from_io(e, "list isle compilation file paths"))?;
 
         let mut options = isle::codegen::CodegenOptions::default();
         // Because we include!() the generated ISLE source, we cannot
@@ -210,6 +209,30 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         // include!()s it. (See
         // https://github.com/rust-lang/rust/issues/47995.)
         options.exclude_global_allow_pragmas = true;
+
+        // When `cranelift-codegen` is built with detailed tracing enabled, also
+        // ask the ISLE compiler to emit `log::{debug,trace}!` invocations in
+        // the generated code to help debug rule matching.
+        options.emit_logging = std::env::var("CARGO_FEATURE_TRACE_LOG").is_ok();
+
+        // Enable optional match-arm splitting in iterator terms for
+        // faster compile times in release builds.
+        //
+        // In debug builds, *always* split with an aggressive
+        // threshold, because we cannot rely on rustc doing regalloc
+        // on all of the local bindings to shrink the stack frame to a
+        // reasonable size.
+        if cfg!(debug_assertions) {
+            options.split_match_arms = true;
+            options.match_arm_split_threshold = Some(4);
+        } else {
+            options.split_match_arms = std::env::var("CARGO_FEATURE_ISLE_SPLIT_MATCH").is_ok();
+            if let Ok(value) = std::env::var("ISLE_SPLIT_MATCH_THRESHOLD") {
+                options.match_arm_split_threshold = Some(value.parse().unwrap_or_else(|err| {
+                    panic!("invalid ISLE_SPLIT_MATCH_THRESHOLD value '{value}': {err}");
+                }));
+            }
+        }
 
         if let Ok(out_dir) = std::env::var("OUT_DIR") {
             options.prefixes.push(isle::codegen::Prefix {

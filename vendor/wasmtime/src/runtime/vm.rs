@@ -44,6 +44,7 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
+use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex};
 
 #[cfg(feature = "gc")]
@@ -52,7 +53,6 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 mod always_mut;
 #[cfg(feature = "component-model")]
 pub mod component;
-mod const_expr;
 mod export;
 mod gc;
 mod imports;
@@ -90,6 +90,9 @@ pub(crate) mod interpreter_disabled;
 #[cfg(not(feature = "pulley"))]
 pub(crate) use interpreter_disabled as interpreter;
 
+#[cfg(feature = "component-model-async")]
+pub(crate) use sys::{component_async_tls_get, component_async_tls_set};
+
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
@@ -99,12 +102,11 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
+    PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
 pub use crate::runtime::vm::memory::{
@@ -124,10 +126,19 @@ pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
+#[cfg(feature = "gc-copying")]
+pub use crate::runtime::vm::vmcontext::VMCopyingHeapData;
+#[cfg(feature = "gc-drc")]
+pub use crate::runtime::vm::vmcontext::VMDrcHeapData;
+#[cfg(feature = "component-model-async")]
+pub use crate::runtime::vm::vmcontext::VMLazyThread;
+#[cfg(feature = "gc-null")]
+pub use crate::runtime::vm::vmcontext::VMNullHeapData;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMCommonStackInformation, VMContRef, VMContext, VMFuncRef,
+    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMHostArray,
+    VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStackLimits, VMStoreContext,
+    VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
@@ -150,22 +161,18 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "async")]
-mod async_yield;
-#[cfg(feature = "async")]
-pub use crate::runtime::vm::async_yield::*;
-
-#[cfg(feature = "gc-null")]
+#[allow(unused, reason = "hard to cfg on/off, weird feature interactions")]
 mod send_sync_unsafe_cell;
-#[cfg(feature = "gc-null")]
+#[allow(unused, reason = "hard to cfg on/off, weird feature interactions")]
 pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
-cfg_if::cfg_if! {
-    if #[cfg(has_virtual_memory)] {
+cfg_select! {
+    has_virtual_memory => {
         pub use crate::runtime::vm::byte_count::*;
         pub use crate::runtime::vm::mmap::{Mmap, MmapOffset};
         pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-    } else {
+    }
+    _ => {
         pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
     }
 }
@@ -214,15 +221,16 @@ pub unsafe trait VMStore: 'static {
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
+    /// Invoke this store's configured call hook, if any, to notify the
+    /// embedder of a transition between the host and WebAssembly.
+    #[cfg(feature = "call-hook")]
+    fn call_hook(&mut self, s: crate::CallHook) -> Result<()>;
+
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     #[cfg(target_has_atomic = "64")]
     fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
-
-    /// Metadata required for resources for the component model.
-    #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut component::CallContexts;
 
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
@@ -231,7 +239,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Invoke a debug handler, if present, at a debug event.
     #[cfg(feature = "debug")]
-    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> anyhow::Result<()>;
+    fn block_on_debug_handler(&mut self, event: crate::DebugEvent) -> crate::Result<()>;
 }
 
 impl Deref for dyn VMStore + '_ {
@@ -284,50 +292,62 @@ struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 unsafe impl Send for VMStoreRawPtr {}
 unsafe impl Sync for VMStoreRawPtr {}
 
-/// Functionality required by this crate for a particular module. This
-/// is chiefly needed for lazy initialization of various bits of
-/// instance state.
-///
-/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
-/// so that it can get to signatures, metadata on functions, memory and
-/// funcref-table images, etc. All of these things are ordinarily known
-/// by the higher-level layers of Wasmtime. Specifically, the main
-/// implementation of this trait is provided by
-/// `wasmtime::module::ModuleInner`.  Since the runtime crate sits at
-/// the bottom of the dependence DAG though, we don't know or care about
-/// that; we just need some implementor of this trait for each
-/// allocation request.
+/// Functionality required by this crate for a particular module. This is
+/// chiefly needed for lazy initialization of various bits of instance state.
 #[derive(Clone)]
 pub enum ModuleRuntimeInfo {
     Module(crate::Module),
-    Bare(Box<BareModuleInfo>),
+    Bare(Arc<BareModuleInfo>),
 }
 
 /// A barebones implementation of ModuleRuntimeInfo that is useful for
 /// cases where a purpose-built environ::Module is used and a full
 /// CompiledModule does not exist (for example, for tests or for the
 /// default-callee instance).
-#[derive(Clone)]
 pub struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
     offsets: VMOffsets<HostPtr>,
-    _registered_type: Option<RegisteredType>,
+    _registered_types: TryVec<RegisteredType>,
 }
 
 impl ModuleRuntimeInfo {
-    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
-        ModuleRuntimeInfo::bare_with_registered_type(module, None)
+    pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
+        ModuleRuntimeInfo::new_bare(module, TryVec::new())
     }
 
-    pub(crate) fn bare_with_registered_type(
+    /// Same as [`ModuleRuntimeInfo::bare`], but additionally keeps
+    /// `registered_types` alive for as long as the resulting instance.
+    ///
+    /// This is the choke point at which a host-allocated table or tag holds
+    /// `VMSharedTypeIndex`es alive on behalf of a store, so it is where we
+    /// check that those types belong to that store's engine. Returns an error
+    /// if any of `registered_types` was not registered with `engine`.
+    pub(crate) fn bare_with_registered_types(
         module: Arc<wasmtime_environ::Module>,
-        registered_type: Option<RegisteredType>,
-    ) -> Self {
-        ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
+        engine: &crate::Engine,
+        registered_types: impl IntoIterator<Item = RegisteredType>,
+    ) -> Result<Self> {
+        let mut types = TryVec::new();
+        for ty in registered_types {
+            crate::ensure!(
+                crate::Engine::same(engine, ty.engine()),
+                "type used with wrong engine"
+            );
+            types.push(ty)?;
+        }
+        Ok(ModuleRuntimeInfo::new_bare(module, types)?)
+    }
+
+    fn new_bare(
+        module: Arc<wasmtime_environ::Module>,
+        registered_types: TryVec<RegisteredType>,
+    ) -> Result<Self, OutOfMemory> {
+        let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
-            _registered_type: registered_type,
-        }))
+            _registered_types: registered_types,
+        })?;
+        Ok(ModuleRuntimeInfo::Bare(info))
     }
 
     /// The underlying Module.
@@ -354,10 +374,7 @@ impl ModuleRuntimeInfo {
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
-    fn memory_image(
-        &self,
-        memory: DefinedMemoryIndex,
-    ) -> anyhow::Result<Option<&Arc<MemoryImage>>> {
+    fn memory_image(&self, memory: DefinedMemoryIndex) -> crate::Result<Option<&Arc<MemoryImage>>> {
         match self {
             ModuleRuntimeInfo::Module(m) => {
                 let images = m.memory_images()?;
@@ -462,12 +479,18 @@ impl fmt::Display for WasmFault {
 
 /// Asserts that the future `f` is ready and returns its output.
 ///
-/// This function is intended to be used when `async_support` is verified as
-/// disabled. Internals of Wasmtime are generally `async` when they optionally
-/// can be, meaning that synchronous entrypoints will invoke this function
-/// after invoking the asynchronous internals. Due to `async_support` being
-/// disabled there should be no way to introduce a yield point meaning that all
-/// futures built from internal functions should always be ready.
+/// This function is intended to be used with `Store::validate_sync_call`.
+/// Internals of Wasmtime are generally `async` when they optionally can be,
+/// meaning that synchronous entrypoints will invoke this function after
+/// invoking the asynchronous internals. The `validate_sync_call` method
+/// ensures that during this `async` function call there won't actually be any
+/// yield points. If a yield point could possibly happen, then
+/// `validate_sync_call` will fail.
+///
+/// If `validate_sync_call` passes, then this function is an extra assert that
+/// yes, indeed, we coded everything correctly in Wasmtime and there shouldn't
+/// be any yield points in the future provided, so its result should be ready
+/// immediately.
 ///
 /// # Panics
 ///
@@ -487,7 +510,7 @@ pub fn assert_ready<F: Future>(f: F) -> F::Output {
 /// is available. If it isn't then `None` is returned and an appropriate panic
 /// message should be generated recommending to use an async function (e.g.
 /// `grow_async` instead of `grow`).
-pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+fn one_poll<F: Future>(f: F) -> Option<F::Output> {
     let mut context = Context::from_waker(&Waker::noop());
     match pin!(f).poll(&mut context) {
         Poll::Ready(output) => Some(output),

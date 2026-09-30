@@ -1,22 +1,21 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::CodegenResult;
-use crate::ir::{self, LibCall, MemFlags, Signature, TrapCode, types};
+use crate::ir::MemFlagsData;
+use crate::ir::{self, LibCall, Signature, TrapCode, types};
 use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
 use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings};
-use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
-use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -168,7 +167,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
 
             // Now assign ABIArgSlots for each register-sized part.
             //
@@ -358,7 +357,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     {
                         size
                     } else {
-                        let size = std::cmp::max(size, 8);
+                        let size = core::cmp::max(size, 8);
 
                         // Align.
                         debug_assert!(size.is_power_of_two());
@@ -855,6 +854,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             callee_conv: call_conv,
             caller_conv: call_conv,
             try_call_info: None,
+            patchable: false,
         })));
         insts
     }
@@ -874,11 +874,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true);
+            &MACHINE_ENV
         } else {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(false);
+            &MACHINE_ENV
         }
     }
 
@@ -888,10 +888,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> PRegSet {
         match (call_conv_of_callee, is_exception) {
             (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, _) => ALL_CLOBBERS,
             (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
             (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
-            (isa::CallConv::Patchable, _) => NO_CLOBBERS,
+            (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
             (_, false) => SYSV_CLOBBERS,
             (call_conv, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
@@ -900,6 +906,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
@@ -922,7 +929,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `winch` calling convention doesn't have any callee-save
             // registers.
             CallConv::Winch => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::Tail => regs
+            CallConv::Fast | CallConv::SystemV | CallConv::Tail => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -932,8 +939,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
-            // The `patchable` calling convention makes every reg a callee-save reg.
-            CallConv::Patchable => regs.iter().cloned().collect(),
+            // The `preserve_all` calling convention makes every reg a callee-save reg.
+            CallConv::PreserveAll => regs.iter().cloned().collect(),
             CallConv::Probestack => todo!("probestack?"),
             CallConv::AppleAarch64 => unreachable!(),
         };
@@ -972,7 +979,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::rax(), regs::rdx()];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -1003,7 +1012,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32: off,
                     base: regs::rsp(),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 })
             }
         }
@@ -1075,7 +1084,7 @@ fn get_intreg_for_retval(
             // NB: `r15` is reserved as a scratch register.
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             2 if flags.enable_llvm_abi_extensions() => Some(regs::rcx()),
@@ -1088,8 +1097,6 @@ fn get_intreg_for_retval(
         },
 
         CallConv::Winch => is_last.then(|| regs::rax()),
-        // The patchable ABI does not support any return values.
-        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1108,7 +1115,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             7 => Some(regs::xmm7()),
             _ => None,
         },
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Fast | CallConv::SystemV | CallConv::PreserveAll => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
@@ -1118,8 +1125,6 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
-        // The patchable ABI does not support any return values.
-        CallConv::Patchable => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1273,71 +1278,116 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(XMM15))
 }
 
-fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
+const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
+    const fn preg(r: Reg) -> PReg {
+        r.to_real_reg().unwrap().preg()
     }
 
     let mut env = MachineEnv {
         preferred_regs_by_class: [
             // Preferred GPRs: caller-saved in the SysV ABI.
-            vec![
-                preg(regs::rsi()),
-                preg(regs::rdi()),
-                preg(regs::rax()),
-                preg(regs::rcx()),
-                preg(regs::rdx()),
-                preg(regs::r8()),
-                preg(regs::r9()),
-                preg(regs::r10()),
-                preg(regs::r11()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::rsi()))
+                .with(preg(regs::rdi()))
+                .with(preg(regs::rax()))
+                .with(preg(regs::rcx()))
+                .with(preg(regs::rdx()))
+                .with(preg(regs::r8()))
+                .with(preg(regs::r9()))
+                .with(preg(regs::r10()))
+                .with(preg(regs::r11())),
             // Preferred XMMs: the first 8, which can have smaller encodings
             // with AVX instructions.
-            vec![
-                preg(regs::xmm0()),
-                preg(regs::xmm1()),
-                preg(regs::xmm2()),
-                preg(regs::xmm3()),
-                preg(regs::xmm4()),
-                preg(regs::xmm5()),
-                preg(regs::xmm6()),
-                preg(regs::xmm7()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::xmm0()))
+                .with(preg(regs::xmm1()))
+                .with(preg(regs::xmm2()))
+                .with(preg(regs::xmm3()))
+                .with(preg(regs::xmm4()))
+                .with(preg(regs::xmm5()))
+                .with(preg(regs::xmm6()))
+                .with(preg(regs::xmm7())),
             // The Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         non_preferred_regs_by_class: [
             // Non-preferred GPRs: callee-saved in the SysV ABI.
-            vec![
-                preg(regs::rbx()),
-                preg(regs::r12()),
-                preg(regs::r13()),
-                preg(regs::r14()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::rbx()))
+                .with(preg(regs::r12()))
+                .with(preg(regs::r13()))
+                .with(preg(regs::r14())),
             // Non-preferred XMMs: the last 8 registers, which can have larger
             // encodings with AVX instructions.
-            vec![
-                preg(regs::xmm8()),
-                preg(regs::xmm9()),
-                preg(regs::xmm10()),
-                preg(regs::xmm11()),
-                preg(regs::xmm12()),
-                preg(regs::xmm13()),
-                preg(regs::xmm14()),
-                preg(regs::xmm15()),
-            ],
+            PRegSet::empty()
+                .with(preg(regs::xmm8()))
+                .with(preg(regs::xmm9()))
+                .with(preg(regs::xmm10()))
+                .with(preg(regs::xmm11()))
+                .with(preg(regs::xmm12()))
+                .with(preg(regs::xmm13()))
+                .with(preg(regs::xmm14()))
+                .with(preg(regs::xmm15())),
             // The Vector Regclass is unused
-            vec![],
+            PRegSet::empty(),
         ],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
     };
 
-    debug_assert_eq!(regs::r15(), regs::pinned_reg());
+    debug_assert!(regs::PINNED_REG == cranelift_assembler_x64::gpr::enc::R15);
     if !enable_pinned_reg {
-        env.non_preferred_regs_by_class[0].push(preg(regs::r15()));
+        env.non_preferred_regs_by_class[0] =
+            env.non_preferred_regs_by_class[0].with(preg(regs::r15()));
     }
 
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machinst::abi::Callee;
+    use alloc::vec::Vec;
+
+    fn make_frame_layout(total_relevant_fields_sum: u32) -> FrameLayout {
+        FrameLayout {
+            word_bytes: 8,
+            incoming_args_size: 0,
+            tail_args_size: 0,
+            setup_area_size: 0,
+            clobber_size: 0,
+            fixed_frame_storage_size: total_relevant_fields_sum,
+            stackslots_size: 0,
+            outgoing_args_size: 0,
+            clobbered_callee_saves: Vec::new(),
+            function_calls: crate::machinst::FunctionCalls::None,
+        }
+    }
+
+    const ONE_GIB: u32 = 1 << 30;
+
+    #[test]
+    fn frame_layout_under_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB - 1);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_at_exact_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_over_limit_is_rejected() {
+        let layout = make_frame_layout(ONE_GIB + 1);
+        assert!(Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
 }

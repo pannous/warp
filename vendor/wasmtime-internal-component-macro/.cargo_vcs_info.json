@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "0807b003ef6250372b57cc083d2df28f8728abee"
+    "sha1": "46c23a87dac1465986a8ad53ba6a7ae49372857b"
   },
   "path_in_vcs": "crates/component-macro"
 }

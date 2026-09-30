@@ -10,7 +10,7 @@ use syn::{Token, braced, token};
 use wasmtime_wit_bindgen::{
     FunctionConfig, FunctionFilter, FunctionFlags, Opts, Ownership, TrappableError,
 };
-use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
+use wit_parser::{PackageId, Resolve, WorldId};
 
 pub struct Config {
     opts: Opts,
@@ -20,8 +20,8 @@ pub struct Config {
     include_generated_code_from_file: bool,
 }
 
-pub fn expand(input: &Config) -> Result<TokenStream> {
-    let mut src = match input.opts.generate(&input.resolve, input.world) {
+pub fn expand(input: &mut Config) -> Result<TokenStream> {
+    let mut src = match input.opts.generate(&mut input.resolve, input.world) {
         Ok(s) => s,
         Err(e) => return Err(Error::new(Span::call_site(), e.to_string())),
     };
@@ -58,13 +58,16 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     }
     let mut contents = src.parse::<TokenStream>().unwrap();
 
-    // Include a dummy `include_str!` for any files we read so rustc knows that
+    // Include a dummy `include_bytes!` for any files we read so rustc knows that
     // we depend on the contents of those files.
     for file in input.files.iter() {
         contents.extend(
-            format!("const _: &str = include_str!(r#\"{}\"#);\n", file.display())
-                .parse::<TokenStream>()
-                .unwrap(),
+            format!(
+                "const _: &[u8] = include_bytes!(r#\"{}\"#);\n",
+                file.display()
+            )
+            .parse::<TokenStream>()
+            .unwrap(),
         );
     }
 
@@ -132,6 +135,7 @@ impl Parse for Config {
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
+                    Opt::NamedImports(val) => opts.named_imports.extend(val),
                     Opt::AdditionalDerives(paths) => {
                         opts.additional_derive_attributes = paths
                             .into_iter()
@@ -144,7 +148,11 @@ impl Parse for Config {
                     Opt::WasmtimeCrate(f) => {
                         opts.wasmtime_crate = Some(f.into_token_stream().to_string())
                     }
+                    Opt::Anyhow(val) => {
+                        opts.anyhow = val;
+                    }
                     Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
+                    Opt::IncludeComponentType(val) => opts.include_component_type = val,
                     Opt::Imports(config, span) => {
                         if imports_configured {
                             return Err(Error::new(span, "cannot specify imports configuration"));
@@ -230,7 +238,7 @@ fn parse_source(
 
     if let Some(inline) = inline {
         pkgs.truncate(0);
-        pkgs.push(resolve.push_group(UnresolvedPackageGroup::parse("macro-input", inline)?)?);
+        pkgs.push(resolve.push_str("macro-input", inline)?);
     }
 
     Ok((resolve, pkgs, files))
@@ -246,6 +254,7 @@ mod kw {
     syn::custom_keyword!(ownership);
     syn::custom_keyword!(interfaces);
     syn::custom_keyword!(with);
+    syn::custom_keyword!(named_imports);
     syn::custom_keyword!(except_imports);
     syn::custom_keyword!(only_imports);
     syn::custom_keyword!(additional_derives);
@@ -253,15 +262,15 @@ mod kw {
     syn::custom_keyword!(skip_mut_forwarding_impls);
     syn::custom_keyword!(require_store_data_send);
     syn::custom_keyword!(wasmtime_crate);
+    syn::custom_keyword!(anyhow);
     syn::custom_keyword!(include_generated_code_from_file);
+    syn::custom_keyword!(include_component_type);
     syn::custom_keyword!(debug);
     syn::custom_keyword!(imports);
     syn::custom_keyword!(exports);
     syn::custom_keyword!(store);
     syn::custom_keyword!(trappable);
-    syn::custom_keyword!(ignore_wit);
     syn::custom_keyword!(exact);
-    syn::custom_keyword!(task_exit);
 }
 
 enum Opt {
@@ -272,12 +281,15 @@ enum Opt {
     Ownership(Ownership),
     Interfaces(syn::LitStr),
     With(HashMap<String, String>),
+    NamedImports(HashMap<String, String>),
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
     SkipMutForwardingImpls(bool),
     RequireStoreDataSend(bool),
     WasmtimeCrate(syn::Path),
+    Anyhow(bool),
     IncludeGeneratedCodeFromFile(bool),
+    IncludeComponentType(bool),
     Debug(bool),
     Imports(FunctionConfig, Span),
     Exports(FunctionConfig, Span),
@@ -376,6 +388,14 @@ impl Parse for Opt {
             let fields: Punctuated<(String, String), Token![,]> =
                 contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields)))
+        } else if l.peek(kw::named_imports) {
+            input.parse::<kw::named_imports>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            let _lbrace = braced!(contents in input);
+            let fields: Punctuated<(String, String), Token![,]> =
+                contents.parse_terminated(with_field_parse, Token![,])?;
+            Ok(Opt::NamedImports(HashMap::from_iter(fields)))
         } else if l.peek(kw::additional_derives) {
             input.parse::<kw::additional_derives>()?;
             input.parse::<Token![:]>()?;
@@ -403,10 +423,20 @@ impl Parse for Opt {
             input.parse::<kw::wasmtime_crate>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::WasmtimeCrate(input.parse()?))
+        } else if l.peek(kw::anyhow) {
+            input.parse::<kw::anyhow>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::Anyhow(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(kw::include_generated_code_from_file) {
             input.parse::<kw::include_generated_code_from_file>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::IncludeGeneratedCodeFromFile(
+                input.parse::<syn::LitBool>()?.value,
+            ))
+        } else if l.peek(kw::include_component_type) {
+            input.parse::<kw::include_component_type>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::IncludeComponentType(
                 input.parse::<syn::LitBool>()?.value,
             ))
         } else if l.peek(kw::imports) {
@@ -525,15 +555,9 @@ fn parse_function_config(input: ParseStream<'_>) -> Result<FunctionConfig> {
                 } else if l.peek(kw::trappable) {
                     input.parse::<kw::trappable>()?;
                     flags |= FunctionFlags::TRAPPABLE;
-                } else if l.peek(kw::ignore_wit) {
-                    input.parse::<kw::ignore_wit>()?;
-                    flags |= FunctionFlags::IGNORE_WIT;
                 } else if l.peek(kw::exact) {
                     input.parse::<kw::exact>()?;
                     flags |= FunctionFlags::EXACT;
-                } else if l.peek(kw::task_exit) {
-                    input.parse::<kw::task_exit>()?;
-                    flags |= FunctionFlags::TASK_EXIT;
                 } else {
                     return Err(l.error());
                 }

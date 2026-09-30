@@ -3,13 +3,13 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::append_vmctx_info;
 use crate::debug::Compilation;
 use crate::translate::get_vmctx_value_label;
-use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::LineEncoding;
 use gimli::write;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasmtime_environ::error::{Context, Error};
 use wasmtime_environ::{
     DebugInfoData, EntityRef, FunctionMetadata, PrimaryMap, StaticModuleIndex, WasmFileInfo,
     WasmValType,
@@ -60,10 +60,11 @@ fn generate_line_info(
 
     let maps = addr_tr.iter().flat_map(|(_, transform)| {
         transform.map().iter().filter_map(|(_, map)| {
-            if translated.contains(&map.symbol) {
+            let sym = map.symbol?;
+            if translated.contains(&sym) {
                 None
             } else {
-                Some((map.symbol, map))
+                Some((sym, map))
             }
         })
     });
@@ -196,7 +197,7 @@ fn generate_vars(
     addr_tr: &AddressTransform,
     frame_info: &FunctionFrameInfo,
     scope_ranges: &[(u64, u64)],
-    vmctx_ptr_die_ref: write::Reference,
+    vmctx_ptr_die_ref: write::DebugInfoRef,
     wasm_types: &WasmTypesDieRefs,
     func_meta: &FunctionMetadata,
     locals_names: Option<&HashMap<u32, &str>>,
@@ -290,13 +291,20 @@ pub fn generate_simulated_dwarf(
     addr_tr: &PrimaryMap<StaticModuleIndex, AddressTransform>,
     translated: &HashSet<usize>,
     out_encoding: gimli::Encoding,
-    vmctx_ptr_die_refs: &PrimaryMap<StaticModuleIndex, write::Reference>,
+    vmctx_ptr_die_refs: &PrimaryMap<StaticModuleIndex, write::DebugInfoRef>,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
+    // A component without any core modules has no functions to describe, and
+    // the compilation unit below names itself after the first translation's
+    // wasm file. There is nothing to simulate, so leave the DWARF empty.
+    let Some((_, first_translation)) = compilation.translations.iter().next() else {
+        return Ok(());
+    };
+
     let (wasm_file, path) = {
-        let di = &compilation.translations.iter().next().unwrap().1.debuginfo;
+        let di = &first_translation.debuginfo;
         let path = di
             .wasm_file
             .path
@@ -357,7 +365,9 @@ pub fn generate_simulated_dwarf(
     let wasm_types = add_wasm_types(unit, root_id, out_strings);
     let mut unit_ranges = vec![];
     for (module, index) in compilation.indexes().collect::<Vec<_>>() {
-        let (symbol, _) = compilation.function(module, index);
+        let (Some(symbol), _) = compilation.function(module, index) else {
+            continue;
+        };
         if translated.contains(&symbol) {
             continue;
         }

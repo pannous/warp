@@ -3,8 +3,10 @@ use alloc::boxed::Box;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::io;
+use std::mem::needs_drop;
 use std::ops::Range;
 use std::ptr;
+use wasmtime_environ::prelude::*;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Threading::*;
 
@@ -89,18 +91,25 @@ where
         (*state).initial_closure.set(ptr::null_mut());
         let suspend = Suspend { state };
         let initial = suspend.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+        let suspend = super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+
+        let parent = (*suspend.state).parent.get();
+        debug_assert!(!parent.is_null());
+
+        // Technically this means that this function `fiber_start` never
+        // returns, but that's how the fibers API works on Windows it seems.
+        SwitchToFiber(parent);
     }
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
+    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> Result<Self>
     where
         F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
         unsafe {
             let state = Box::new(StartState {
-                initial_closure: Cell::new(Box::into_raw(Box::new(func)).cast()),
+                initial_closure: Cell::new(Box::into_raw(try_new(func)?).cast()),
                 parent: Cell::new(ptr::null_mut()),
                 result_location: Cell::new(ptr::null()),
             });
@@ -115,7 +124,7 @@ impl Fiber {
 
             if fiber.is_null() {
                 drop(Box::from_raw(state.initial_closure.get().cast::<F>()));
-                return Err(io::Error::last_os_error());
+                return Err(io::Error::last_os_error().into());
             }
 
             Ok(Self { fiber, state })
@@ -128,6 +137,21 @@ impl Fiber {
             let parent_fiber = if is_fiber {
                 wasmtime_fiber_get_current()
             } else {
+                // Newer Rust versions use fiber local storage to register an internal hook that
+                // calls thread locals' destructors on thread exit.
+                // This has a limitation: the hook only runs in a regular thread (not in a fiber).
+                // We convert back into a thread once execution returns to this function,
+                // but we must also ensure that the hook is registered before converting into a fiber.
+                // Otherwise, a different fiber could be the first to register the hook,
+                // causing the hook to be called (and skipped) prematurely when that fiber is deleted.
+                struct Guard;
+
+                impl Drop for Guard {
+                    fn drop(&mut self) {}
+                }
+                assert!(needs_drop::<Guard>());
+                thread_local!(static GUARD: Guard = Guard);
+                GUARD.with(|_g| {});
                 ConvertThreadToFiber(ptr::null_mut())
             };
             assert!(
@@ -154,7 +178,19 @@ impl Fiber {
 impl Drop for Fiber {
     fn drop(&mut self) {
         unsafe {
+            let is_fiber = IsThreadAFiber() != 0;
+            if !is_fiber {
+                // DeleteFiber runs FLS destructors. Make those destructors
+                // observe a fiber so Rust does not run thread-local cleanup
+                // for the live thread.
+                let fiber = ConvertThreadToFiber(ptr::null_mut());
+                assert!(!fiber.is_null(), "failed to make current thread a fiber");
+            }
             DeleteFiber(self.fiber);
+            if !is_fiber {
+                let res = ConvertFiberToThread();
+                assert!(res != 0, "failed to convert main thread back");
+            }
         }
     }
 }
@@ -171,9 +207,10 @@ impl Suspend {
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!()
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {

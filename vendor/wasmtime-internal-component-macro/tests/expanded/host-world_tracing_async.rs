@@ -98,10 +98,10 @@ pub struct Host_Indices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Host_ {}
-pub trait Host_ImportsWithStore: wasmtime::component::HasData + Send {}
-impl<_T: ?Sized> Host_ImportsWithStore for _T
+pub trait Host_ImportsWithStore<T>: wasmtime::component::HasData + Send {}
+impl<H: ?Sized, T> Host_ImportsWithStore<T> for H
 where
-    _T: wasmtime::component::HasData + Send,
+    H: wasmtime::component::HasData + Send,
 {}
 pub trait Host_Imports: Send {
     fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
@@ -112,8 +112,6 @@ impl<_T: Host_Imports + ?Sized + Send> Host_Imports for &mut _T {
     }
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl Host_Indices {
         /// Creates a new copy of `Host_Indices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -180,7 +178,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: Host_ImportsWithStore,
+            D: Host_ImportsWithStore<T>,
             for<'a> D::Data<'a>: Host_Imports,
             T: 'static + Send,
         {
@@ -216,7 +214,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: Host_ImportsWithStore + Send,
+            D: Host_ImportsWithStore<T> + Send,
             for<'a> D::Data<'a>: Host_Imports + Send,
             T: 'static + Send,
         {

@@ -21,6 +21,7 @@ pub(crate) struct RustcCodegenFlags<'a> {
     dwarf_version: Option<u32>,
     stack_protector: Option<&'a str>,
     linker_plugin_lto: Option<bool>,
+    target_features: Vec<&'a str>,
 }
 
 impl<'this> RustcCodegenFlags<'this> {
@@ -165,9 +166,8 @@ impl<'this> RustcCodegenFlags<'this> {
             "-Zbranch-protection" | "-Cbranch-protection" => {
                 self.branch_protection = flag_not_empty(value)?;
             }
-            // https://doc.rust-lang.org/beta/unstable-book/compiler-flags/dwarf-version.html
-            // FIXME: Drop the -Z variant and update the doc link once the option is stabilized
-            "-Zdwarf-version" | "-Cdwarf-version" => {
+            // https://doc.rust-lang.org/beta/rustc/codegen-options/index.html#dwarf-version
+            "-Cdwarf-version" => {
                 self.dwarf_version = flag_not_empty_generic(flag, value.and_then(arg_to_u32))?;
             }
             // https://github.com/rust-lang/rust/issues/114903
@@ -175,9 +175,59 @@ impl<'this> RustcCodegenFlags<'this> {
             "-Zstack-protector" | "-Cstack-protector" => {
                 self.stack_protector = flag_not_empty(value)?;
             }
+            // https://doc.rust-lang.org/rustc/codegen-options/index.html#target-feature
+            "-Ctarget-feature" => {
+                if let Some(value) = flag_not_empty(value)? {
+                    self.target_features
+                        .extend(value.split(',').filter(|feature| !feature.is_empty()));
+                }
+            }
             _ => {}
         }
         Ok(())
+    }
+
+    /// Map a single `-Ctarget-feature` entry such as `+avx2` to the matching GCC/Clang flag.
+    ///
+    /// Only features whose GCC/Clang flag is known to mean the same thing are mapped. Anything
+    /// else (unknown features, other architectures) is skipped instead of being passed through.
+    fn target_feature_cc_flag(arch: &str, feature: &str) -> Option<String> {
+        let (enable, feature) = match feature.strip_prefix('+') {
+            Some(feature) => (true, feature),
+            // rustc ignores features without a `+` or `-` prefix
+            None => (false, feature.strip_prefix('-')?),
+        };
+
+        let cc_feature = match arch {
+            // https://doc.rust-lang.org/reference/attributes/codegen.html#x86-or-x86_64
+            // https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+            // https://clang.llvm.org/docs/ClangCommandLineReference.html#x86
+            // `sse` and `sse2` are left out: they are part of the x86 ABI, and `-mno-sse2` makes
+            // GCC reject C functions that return floating point values.
+            "x86" | "x86_64" => match feature {
+                "adx" | "aes" | "avx" | "avx2" | "avx512bf16" | "avx512bitalg" | "avx512bw"
+                | "avx512cd" | "avx512dq" | "avx512f" | "avx512fp16" | "avx512ifma"
+                | "avx512vbmi" | "avx512vbmi2" | "avx512vl" | "avx512vnni" | "avx512vpopcntdq"
+                | "avxvnni" | "bmi2" | "f16c" | "fma" | "fxsr" | "gfni" | "lzcnt" | "movbe"
+                | "popcnt" | "rdseed" | "sha" | "sse3" | "sse4.1" | "sse4.2" | "sse4a"
+                | "ssse3" | "vaes" | "vpclmulqdq" | "xsave" | "xsavec" | "xsaveopt" | "xsaves" => {
+                    feature
+                }
+                // Rust and GCC/Clang use different names for these
+                "bmi1" => "bmi",
+                "cmpxchg16b" => "cx16",
+                "pclmulqdq" => "pclmul",
+                "rdrand" => "rdrnd",
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        Some(if enable {
+            format!("-m{cc_feature}")
+        } else {
+            format!("-mno-{cc_feature}")
+        })
     }
 
     // Rust and clang/cc don't agree on what equivalent flags should look like.
@@ -245,15 +295,13 @@ impl<'this> RustcCodegenFlags<'this> {
                 }
             }
             // https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-fno-omit-frame-pointer
-            // https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-fomit-frame-pointer
+            // https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-momit-leaf-frame-pointer
             // https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fomit-frame-pointer
             if let Some(value) = self.force_frame_pointers {
-                let cc_flag = if value {
-                    "-fno-omit-frame-pointer"
-                } else {
-                    "-fomit-frame-pointer"
-                };
-                push_if_supported(cc_flag.into());
+                if value {
+                    push_if_supported("-fno-omit-frame-pointer".into());
+                    push_if_supported("-mno-omit-leaf-frame-pointer".into());
+                }
             }
             // https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-mno-red-zone
             // https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html#index-mno-red-zone
@@ -295,6 +343,12 @@ impl<'this> RustcCodegenFlags<'this> {
                     _ => None,
                 };
                 if let Some(cc_flag) = cc_flag {
+                    push_if_supported(cc_flag.into());
+                }
+            }
+            // Keep the order, so that a later `-feature` still overrides an earlier `+feature`.
+            for feature in &self.target_features {
+                if let Some(cc_flag) = Self::target_feature_cc_flag(target.arch, feature) {
                     push_if_supported(cc_flag.into());
                 }
             }
@@ -447,8 +501,9 @@ mod tests {
             "-Crelocation-model=pic",
             "-Csoft-float=yes",
             "-Zbranch-protection=bti,pac-ret,leaf",
-            "-Zdwarf-version=5",
+            "-Cdwarf-version=5",
             "-Zstack-protector=strong",
+            "-Ctarget-feature=+sve",
             // Set flags we don't recognise but rustc supports next
             // rustc flags
             "--cfg",
@@ -535,7 +590,6 @@ mod tests {
             "-Cstrip=symbols",
             "-Csymbol-mangling-version=v0",
             "-Ctarget-cpu=native",
-            "-Ctarget-feature=+sve",
             // Unstable options
             "-Ztune-cpu=machine",
         ];
@@ -558,7 +612,50 @@ mod tests {
                 dwarf_version: Some(5),
                 stack_protector: Some("strong"),
                 linker_plugin_lto: Some(true),
+                target_features: vec!["+sve"],
             },
         );
+    }
+
+    #[test]
+    fn target_features() {
+        let expected = RustcCodegenFlags {
+            target_features: vec!["+avx2", "-sse4a"],
+            ..RustcCodegenFlags::default()
+        };
+        check("-Ctarget-feature=+avx2,-sse4a", &expected);
+        check("-C\u{1f}target-feature=+avx2,-sse4a", &expected);
+        check("--codegen\u{1f}target-feature=+avx2,-sse4a", &expected);
+        check("--codegen=target-feature=+avx2,-sse4a", &expected);
+        // Repeated flags are all kept in order, so that later ones win.
+        check(
+            "-Ctarget-feature=+avx\u{1f}-Ctarget-feature=+avx2,-avx",
+            &RustcCodegenFlags {
+                target_features: vec!["+avx", "+avx2", "-avx"],
+                ..RustcCodegenFlags::default()
+            },
+        );
+    }
+
+    #[test]
+    fn target_feature_cc_flag() {
+        let flag = RustcCodegenFlags::target_feature_cc_flag;
+        assert_eq!(flag("x86_64", "+ssse3").as_deref(), Some("-mssse3"));
+        assert_eq!(flag("x86_64", "-avx2").as_deref(), Some("-mno-avx2"));
+        assert_eq!(flag("x86", "+sse4.2").as_deref(), Some("-msse4.2"));
+        // Features that GCC and Clang name differently
+        assert_eq!(flag("x86_64", "+bmi1").as_deref(), Some("-mbmi"));
+        assert_eq!(flag("x86_64", "+pclmulqdq").as_deref(), Some("-mpclmul"));
+        assert_eq!(flag("x86_64", "+rdrand").as_deref(), Some("-mrdrnd"));
+        assert_eq!(flag("x86_64", "-cmpxchg16b").as_deref(), Some("-mno-cx16"));
+        // Features without a known equivalent are skipped
+        assert_eq!(flag("x86_64", "+crt-static"), None);
+        assert_eq!(flag("x86_64", "+not-a-feature"), None);
+        assert_eq!(flag("x86_64", "-sse2"), None);
+        // rustc ignores features without a `+` or `-` prefix
+        assert_eq!(flag("x86_64", "avx2"), None);
+        // Other architectures are not mapped yet
+        assert_eq!(flag("aarch64", "+neon"), None);
+        assert_eq!(flag("aarch64", "+aes"), None);
     }
 }

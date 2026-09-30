@@ -1,237 +1,162 @@
-use wasp::extensions::numbers::Number;
-use wasp::Node;
-use wasp::Node::Symbol;
-use wasp::{Bracket, Separator};
-use wasp::wasm_gc_emitter::WasmGcEmitter;
-use wasp::{eq, write_wasm};
-use wasp::Node::Empty;
-use wasp::wasm_gc_reader::read_bytes;
+use warp::Node::{Empty, Type};
+use warp::*;
+use warp::wasm_emitter::eval;
+use warp::{eq, is, key, symbol, wasm_object, wasm_struct, Node};
 
-/// Test ergonomic reading patterns from rasm
-#[test]
-fn test_ergonomic_node_reading() {
-	println!("=== Testing Ergonomic WASM GC Reading ===\n");
-
-	// Generate a WASM module with a simple node
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Number(Number::Int(42));
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-
-	// Read it back ergonomically using fast shared engine
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	println!("✓ Loaded WASM module and got root node");
-
-	// Test field access
-	let kind: i32 = root.get("tag").expect("Failed to get tag");
-	println!("  Root kind (tag): {}", kind);
-	eq!(kind, 1); // NodeKind::Number
-
-	let int_value: i64 = root.get("int_value").expect("Failed to get int_value");
-	println!("  Int value: {}", int_value);
-	eq!(int_value, 42);
-
-	// Test convenience method
-	let kind2 = root.kind().expect("Failed to get kind");
-	println!("  Using .kind(): {}", kind2);
-	eq!(kind2, 1);
-
-	println!("\n✓ Ergonomic field access works!");
+// End goal API achieved - unified struct for both Rust and WASM GC
+// Single definition creates both Rust struct and WASM GC reader
+wasm_struct! {
+	Person {
+		name: String,
+		age: i64,
+	}
 }
 
-/// Test reading text nodes with memory access
 #[test]
-fn test_read_text_node() {
-	println!("=== Testing Text Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Text("hello".to_string());
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	println!("✓ Loaded text node");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 2); // NodeKind::Text
-
-	// Read text from linear memory
-	let text = root.text().expect("Failed to read text");
-	println!("  Text: '{}'", text);
-	eq!(text, "hello");
-
-	println!("\n✓ Text reading from linear memory works!");
+fn test_class_instance_magic_roundtrip() {
+	let alice = Person { name: "Alice".into(), age: 30 };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice); // IT WORKS!! 🎉
 }
 
-/// Test reading symbol nodes
+
 #[test]
-fn test_read_symbol_node() {
-	println!("=== Testing Symbol Node Reading ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Symbol("my_var".to_string());
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 4); // NodeKind::Symbol
-
-	let text = root.text().expect("Failed to read symbol");
-	println!("  Symbol: '{}'", text);
-	eq!(text, "my_var");
-
-	println!("\n✓ Symbol reading works!");
+fn test_magic_object_roundtrip() {
+	// wasm_object! creates wasm_struct! class definition AND instance in one go!!
+	// 🎉 Most ergonomic way to create classes and instances, beautiful syntax!
+	let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 }
 
-/// Test the complete ergonomic pattern similar to: root = read("test.wasm"); is!(root.name, "html")
+
 #[test]
-fn test_ergonomic_pattern() {
-	println!("=== Testing Complete Ergonomic Pattern ===\n");
+fn test_debug_format() {
+	// Verify the Debug output format shows type name, field names and values
+	// Expected: Data(GcObject{Person{name:'Bob' age:42}})
+	let result = eval("class Person{name:String age:i64}; Person{name:'Bob' age:42}");
+	let debug_str = format!("{:?}", result);
+	println!("Debug output: {}", debug_str);
+	assert!(debug_str.contains("Person{"), "Should contain type name 'Person{{");
+	assert!(debug_str.contains("name:"), "Should contain field name 'name:'");
+	assert!(debug_str.contains("age:"), "Should contain field name 'age:'");
+	assert!(debug_str.contains("'Bob'"), "Should contain value 'Bob'");
+	assert!(debug_str.contains("42"), "Should contain value 42");
+}
 
-	// Generate WASM with a Key node that has a name
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
+#[test]
+#[should_panic(expected = "'Bob'")] // Now shows actual values in assertion!
+fn test_magic_object_mismatch() {
+	let alice = wasm_object! { Person4 { name: String = "Alice", age: i64 = 30 } };
+	is!("class Person4{name:String age:i64}; Person4{name:'Bob' age:42}", alice);
+}
 
-	let node = Node::Key(
-		Box::new(Symbol("html".to_string())),
-		Box::new(Node::List(
-			vec![
-				Node::keys(".param", "test"),
-				Node::keys("body", "ok"),
-			],
-			Bracket::Curly,
-			Separator::None,
-		)),
+/*
+let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }; is PERFECTLY FINE
+
+  Why full type inference like Person { name= "Alice", age= 30 } isn't possible:
+  Rust's declarative macros (macro_rules!) are purely syntactic -
+  they can't inspect the type of a literal like 30 at compile time. That requires:
+  - Procedural macros (separate crate)
+  - Or const generics with unstable features
+ */
+
+fn field(name: &str, type_name: &str) -> Node {
+	let typ=Type {
+		name: Box::new(symbol(type_name)),
+		body: Box::new(Empty),
+	};
+	key(name, typ)
+}
+
+#[test]
+fn test_class_definition() {
+	is!(
+		"class Person{name:String age:i64}",
+		Type {
+			name: Box::new(symbol("Person")),
+			body: Box::new(list(vec![field("name","String"), field("age", "i64")]))
+		}
 	);
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let filename = "out/test_ergonomic_pattern.wasm";
-	write_wasm(filename, &bytes);
 }
 
 #[test]
-#[ignore]
-fn what_was_that(){
-	let root = Empty; // eval(filename).expect("Failed to read WASM file");
-
-	println!("✓ Read WASM file");
-
-	// Access name field
-	let name = root.name();
-	println!("  Name: '{}'", name);
-
-	// The pattern: is!(root.name, "html")
-	eq!(name, "html");
-	println!("\n✓ Pattern works: root.name() == \"html\"");
-
-	// Verify kind
-	let _kind = root.kind();
-	// println!("  Kind: {}", kind);
-	// eq!(kind, 7); // NodeKind::Tag
+fn test_class_instance_explicit() -> anyhow::Result<()> {
+	// if the beautiful test_magic_object_roundtrip fails, debug the result here
+	// eval() now returns Node::Data(GcObject) for class instances
+	// Verify GcObject fields match expected values
+	use warp::gc_traits::GcObject;
+	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	if let Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+		// Field access by index (name access requires register_gc_types_from_wasm)
+		let name: String = gc_obj.get_string(0)?;
+		let age: i64 = gc_obj.get(1)?;
+		eq!(name, "Alice");
+		eq!(age, 30);
+	}
+	Ok(())
 }
 
-/// Test field existence checking
+
+
+
 #[test]
-fn test_field_existence() {
-	println!("=== Testing Field Existence ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Number(Number::Int(123));
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	// Test has() method
-	assert!(root.has("tag").unwrap());
-	assert!(root.has("int_value").unwrap());
-	assert!(root.has("kind").unwrap()); // alias
-	assert!(!root.has("nonexistent").unwrap());
-
-	println!("✓ Field existence checking works");
+fn test_class_instance2() -> anyhow::Result<()> {
+	// eval() now returns Node::Data(GcObject) for class instances
+	// Use from_gc() to create Person from GcObject
+	use warp::gc_traits::GcObject;
+	let result = eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
+	if let Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
+		let person = Person::from_gc(gc_obj)?;
+		// Generated accessor methods - IDE autocomplete works!
+		let name: String = person.name()?;
+		let age: i64 = person.age()?;
+		eq!(name, "Alice");
+		eq!(age, 30);
+	} else {
+		panic!("expected Node::Data(GcObject), got {:?}", result);
+	}
+	Ok(())
 }
 
-/// Test empty node
 #[test]
-fn test_empty_node() {
-	println!("=== Testing Empty Node ===\n");
+fn test_class_instance_raw() {
+	use warp::gc_traits::GcObject;
 
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
+	let alice = Person::new("Alice", 30);
 
-	emitter.emit_node_main(&Node::Empty);
+	// eval() automatically detects class+instance and returns Node::Data(GcObject)
+	let result = warp::wasm_emitter::eval("class Person{name:String age:i64}; Person{name:'Alice' age:30}");
 
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
+	// Extract GcObject and convert to Person struct
+	if let warp::Node::Data(dada) = &result {
+		let gc_obj = dada.downcast_ref::<GcObject>().expect("should be GcObject");
 
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 0); // NodeKind::Empty
+		// Read fields directly (this approach works)
+		let name: String = gc_obj.get_string(0).unwrap();
+		let age: i64 = gc_obj.get(1).unwrap();
+		let person = Person { name, age };
 
-	println!("✓ Empty node works");
+		assert_eq!(person, alice);
+		println!("eval() returns Node::Data(GcObject): {:?}", person);
+	} else {
+		panic!("expected Node::Data, got {:?}", result);
+	}
 }
 
-/// Test codepoint node
+
 #[test]
-fn test_codepoint_node() {
-	println!("=== Testing Char Node ===\n");
-
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Char('🦀');
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 3); // NodeKind::Char
-
-	let codepoint: i64 = root.get("int_value").expect("Failed to get codepoint");
-	println!(
-		"  Char value: {} ({})",
-		codepoint,
-		char::from_u32(codepoint as u32).unwrap_or('?')
-	);
-	eq!(codepoint, '🦀' as i64);
-
-	println!("✓ Char node works");
+fn test_text() {
+	is!("'test'", "test");
 }
 
-/// Test float number node
 #[test]
-fn test_float_node() {
-	println!("=== Testing Float Node ===\n");
+fn test_symbol() {
+	is!("test", symbol("test"));
+}
 
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit();
-
-	let node = Node::Number(Number::Float(1.23));
-	emitter.emit_node_main(&node);
-
-	let bytes = emitter.finish();
-	let root = read_bytes(&bytes).expect("Failed to read WASM");
-
-	let kind = root.kind().expect("Failed to get kind");
-	eq!(kind, 1); // NodeKind::Number
-
-	let float_value: f64 = root.get("float_value").expect("Failed to get float");
-	println!("  Float value: {}", float_value);
-	eq!(float_value, 1.23);
-
-	println!("✓ Float node works");
+#[test]
+fn test_codepoint() {
+	is!("'𖠋'", "𖠋");
+	is!("'𖠋'", '𖠋');
 }

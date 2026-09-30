@@ -99,8 +99,6 @@ pub struct Path1Indices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Path1 {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl Path1Indices {
         /// Creates a new copy of `Path1Indices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -167,7 +165,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: paths::path1::test::HostWithStore,
+            D: paths::path1::test::HostWithStore<T>,
             for<'a> D::Data<'a>: paths::path1::test::Host,
             T: 'static,
         {
@@ -181,25 +179,36 @@ pub mod paths {
         #[allow(clippy::all)]
         pub mod test {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("paths:path1/test")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }

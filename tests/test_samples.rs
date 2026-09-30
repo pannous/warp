@@ -1,11 +1,41 @@
 use std::fs;
 use std::path::Path;
-use wasp::Node;
-use wasp::wasp_parser::WaspParser;
+use warp::Node;
+use warp::wasp_parser::WaspParser;
+use warp::is;
+
+#[test]
+fn test_fibonacci() { is!("samples/fibonacci.wasp", 55); }
+
+#[test]
+fn test_factorial() { is!("samples/factorial.wasp", 120); }
+
+#[test]
+fn test_primes() { is!("samples/primes.wasp", 1); }
+
+#[test]
+fn test_gcd() { is!("samples/gcd.wasp", 6); }
+
+#[test]
+fn test_sum() { is!("samples/sum.wasp", 55); }
+
+#[test]
+fn test_power() { is!("samples/power.wasp", 1024); }
+
+#[test]
+fn test_collatz() { is!("samples/collatz.wasp", 111); }
+
+#[test]
+fn test_ackermann() { is!("samples/ackermann.wasp", 61); }
+
+#[test]
+fn test_quadratic() { is!("samples/quadratic.wasp", 6); }
+
+#[test]
+fn test_fizzbuzz() { is!("samples/fizzbuzz.wasp", "FizzBuzz"); }
 
 /// Test that all sample .wasp files can be parsed without errors
 #[test]
-#[ignore] // works but it's too slow
 fn test_parse_all_samples() {
 	println!("\n=== Testing All Sample Files ===\n");
 	// if 1 > 0 {
@@ -36,7 +66,7 @@ fn test_parse_all_samples() {
 			Ok(content) => {
 				let node = WaspParser::parse(&content);
 				if let Node::Error(e) = &node {
-					println!("✗ Parse error: {}", e);
+					println!("✗ Parse error: {:?}", e);
 					failed_files.push(filename.to_string());
 				} else {
 					println!("✓");
@@ -70,7 +100,7 @@ fn test_parse_all_samples() {
 		}
 
 		// Known problematic files that can fail
-		let known_issues = vec!["lib.wasp", "errors.wasp", "webgpu.wasp"];
+		let known_issues = ["lib.wasp", "errors.wasp", "webgpu.wasp"];
 		let unexpected_failures: Vec<_> = failed_files
 			.iter()
 			.filter(|f| !known_issues.contains(&f.as_str()))

@@ -2,7 +2,7 @@
 // shared code with wasp tests etc
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 // only lib.rs allows reexporting as:
-// use wasp::extensions::*; etc
+// use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
 pub mod extensions;
 pub use extensions::lists::*;
@@ -11,31 +11,69 @@ pub use extensions::strings::*;
 pub use extensions::utils::*;
 pub mod smarty;
 pub mod util; // reexported for tests
+pub use util::gc_engine;
 pub mod analyzer;
 pub mod compiler;
-pub mod emitter;
 pub mod node;
 pub mod run;
 pub mod type_kinds;
-pub mod wasm_gc_emitter;
-pub mod wasm_gc_reader;
+pub mod gc_traits;
+pub mod context;
+pub mod wasm_emitter;
+pub mod wasm_reader;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
+pub mod wisp_parser;
+pub mod operators;
 pub mod ast;
 pub mod meta;
+pub mod host;
+pub mod ffi;
+pub mod ffi_parser;
+pub mod function;
+pub mod normalize;
+pub mod local;
+pub mod law;
+pub mod function_equality;
+pub mod effects;
+pub mod injection;
+pub mod diagnostic;
+pub mod time;
+pub mod real;
+pub mod units;
+pub mod for_loop;
+pub mod type_constructor;
+pub mod min_max;
+pub mod modules;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
 pub use node::{Bracket, Node, Separator};
+pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
+// Node convenience constructors
+pub use node::{block, codepoint, error, error_node, float, floats, data, int, ints, key, key_op, key_ops, list, parens, symbol, symbols, text, texts};
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use wasp_parser::{parse, parse_file, parse_xml, WaspParser};
+pub use wasp_parser::{parse, parse_data, parse_file, parse_xml, WaspParser};
+pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
-pub use type_kinds::{AstKind, NodeKind};
+pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};
 // Metadata
-pub use meta::{Dada, LineInfo};
+pub use meta::{Dada, LineInfo, DataType};
 // WASM
-pub use wasm_gc_emitter::WasmGcEmitter;
-pub use wasm_gc_reader::GcObject;
+pub use wasm_emitter::{WasmGcEmitter};
+// Host functions
+pub use host::{HostState, link_host_functions, create_host_linker};
+// Functions
+pub use function::{Function, FunctionRegistry, Signature, Arg, ABI, kind_to_valtype};
+// Local (unified struct for variables)
+pub use local::Local;
+// Legacy GcObject for backward compatibility (3-field Node layout)
+pub use wasm_reader::GcObject;
+// New gc_traits module with rasm-style ergonomic GC struct access
+// Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
+pub use gc_traits::{register_gc_types_from_wasm, FromVal, ToVal, FieldIndex, GcStructWrapper, GcReadable};
+// GcComparable trait for Node comparison with wasm_struct types
+pub use node::GcComparable;

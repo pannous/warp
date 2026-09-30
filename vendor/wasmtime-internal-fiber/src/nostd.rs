@@ -28,20 +28,35 @@
 use crate::stackswitch::*;
 use crate::{Result, RunResult, RuntimeFiberStack};
 use alloc::boxed::Box;
-use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use core::ops::Range;
+use wasmtime_environ::prelude::*;
 
 // The no_std implementation is infallible in practice, but we use
-// `anyhow::Error` here absent any better alternative.
-pub type Error = anyhow::Error;
+// `wasmtime_environ::error::Error` here absent any better alternative.
+pub use wasmtime_environ::error::Error;
 
 pub struct FiberStack {
     base: BasePtr,
     len: usize,
+    storage: FiberStackStorage,
+}
+
+#[expect(
+    dead_code,
+    reason = "fields are held to own the backing storage until drop"
+)]
+enum FiberStackStorage {
     /// Backing storage, if owned. Allocated once at startup and then
     /// not reallocated afterward.
-    storage: Vec<u8>,
+    Owned(TryVec<Align16>),
+    Unmanaged,
+    Custom(Box<dyn RuntimeFiberStack>),
+}
+
+#[repr(align(16))]
+struct Align16 {
+    _contents: u128,
 }
 
 struct BasePtr(*mut u8);
@@ -49,49 +64,46 @@ struct BasePtr(*mut u8);
 unsafe impl Send for BasePtr {}
 unsafe impl Sync for BasePtr {}
 
-const STACK_ALIGN: usize = 16;
-
-/// Align a pointer by incrementing it up to `align - 1`
-/// bytes. `align` must be a power of two. Also updates the length as
-/// appropriate so that `ptr + len` points to the same endpoint.
-fn align_ptr(ptr: *mut u8, len: usize, align: usize) -> (*mut u8, usize) {
-    let ptr = ptr as usize;
-    let aligned = (ptr + align - 1) & !(align - 1);
-    let new_len = len - (aligned - ptr);
-    (aligned as *mut u8, new_len)
-}
-
 impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
-        let mut storage = Vec::new();
-        storage.reserve_exact(size);
+        let mut storage = TryVec::new();
+        let size_rounded_up = size
+            .checked_next_multiple_of(16)
+            .ok_or_else(|| format_err!("stack size too large to round up to 16 bytes"))?;
+        let size_in_16byte_units = size_rounded_up / 16;
+        storage.reserve_exact(size_in_16byte_units)?;
         if zeroed {
-            storage.resize(size, 0);
+            storage.resize_with(size_in_16byte_units, || Align16 { _contents: 0 })?;
         }
-        let (base, len) = align_ptr(storage.as_mut_ptr(), size, STACK_ALIGN);
         Ok(FiberStack {
-            storage,
-            base: BasePtr(base),
-            len,
+            base: BasePtr(storage.as_mut_ptr().cast()),
+            len: storage.capacity() * 16,
+            storage: FiberStackStorage::Owned(storage),
         })
     }
 
     pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         Ok(FiberStack {
-            storage: vec![],
+            storage: FiberStackStorage::Unmanaged,
             base: BasePtr(unsafe { base.offset(isize::try_from(guard_size).unwrap()) }),
             len,
         })
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
-        self.storage.is_empty()
+        matches!(self.storage, FiberStackStorage::Unmanaged)
     }
 
-    pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
-        unimplemented!("Custom fiber stacks not supported in no_std fiber library")
+    pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
+        let range = custom.range();
+        let start_ptr = range.start as *mut u8;
+        Ok(FiberStack {
+            base: BasePtr(start_ptr),
+            len: range.len(),
+            storage: FiberStackStorage::Custom(custom),
+        })
     }
 
     pub fn top(&self) -> Option<*mut u8> {
@@ -114,14 +126,16 @@ pub struct Suspend {
     top_of_stack: *mut u8,
 }
 
-extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8)
+extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8) -> *mut u8
 where
     F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
     unsafe {
         let inner = Suspend { top_of_stack };
         let initial = inner.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()))
+        let inner =
+            super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()));
+        inner.top_of_stack
     }
 }
 
@@ -133,10 +147,10 @@ impl Fiber {
         // On unsupported platforms `wasmtime_fiber_init` is a panicking shim so
         // return an error saying the host architecture isn't supported instead.
         if !SUPPORTED_ARCH {
-            anyhow::bail!("fibers unsupported on this host architecture");
+            bail!("fibers unsupported on this host architecture");
         }
         unsafe {
-            let data = Box::into_raw(Box::new(func)).cast();
+            let data = Box::into_raw(try_new::<Box<_>>(func)?).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
         }
 
@@ -175,9 +189,10 @@ impl Suspend {
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!();
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {

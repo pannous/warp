@@ -1,0 +1,215 @@
+# Claude Conversation (c8ca48f4)
+
+## 👤 Human
+
+@src/wasm_emitter.rs It's pretty messy. Create a refactoring plan and a task list of how to make it much more elegant. I'm hoping for 50% code reduction at least.
+
+---
+
+## 🤖 Assistant
+
+Looking at this 2000+ line file, I can see significant opportunities for refactoring. Here's my analysis and plan:
+
+## Key Problems Identified
+
+1. **Single Responsibility Violation** - The `WasmGcEmitter` handles: type management, imports, function registration, code generation, string allocation, scope management, and configuration
+2. **Massive Constructor Section** - Lines 836-1500+ contain repetitive `new_*` constructors with similar patterns
+3. **Mixed Abstraction Levels** - High-level orchestration mixed with low-level instruction emission
+4. **Scattered Configuration** - 5+ boolean flags controlling behavior
+5. **Duplicated Patterns** - Import management (host/WASI/FFI), comparison operators, user function calls
+6. **God Method** - `emit_node_instructions` likely 500+ lines handling all node types
+7. **No Encapsulation** - Everything is in `impl WasmGcEmitter` block
+
+## Refactoring Plan
+
+### Phase 1: Extract Configuration & Managers (30% reduction)
+- Move all config flags to `EmitterConfig` struct
+- Extract `TypeManager` for type indices and registration
+- Extract `ImportManager` for host/WASI/FFI imports
+- Extract `StringTable` into own module
+
+### Phase 2: Extract Constructor Generation (20% reduction)
+- Create macro `constructor!` to generate all `new_*` functions
+- Pattern: all constructors follow `kind + data + value -> struct.new`
+- Single parameterized helper instead of 15+ similar functions
+
+### Phase 3: Trait-Based Emission (15% reduction)
+- Define `trait NodeEmitter` with `emit(&self, ctx: &mut EmitContext)`
+- Implement for each `Node` variant
+- Replace giant match in `emit_node_instructions` with trait dispatch
+
+### Phase 4: Consolidate Helpers (10% reduction)
+- Generic `emit_comparison<T>` instead of separate i64/f64 versions
+- Table-driven operator mapping instead of match statements
+- Consolidate getter generation with macros
+
+### Phase 5: Builder Pattern for Complex Operations (10% reduction)
+- `FunctionBuilder` for function emission
+- `TypeBuilder` for type construction
+- Fluent APIs reduce boilerplate
+
+## Task List
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+→ `TaskCreate`
+
+---
+
+## 🤖 Assistant
+
+I've created a task list with 16 tasks organized into 5 phases for refactoring. Now let me explore the codebase to understand dependencies and create a detailed refactoring plan.
+
+---
+
+## 🤖 Assistant
+
+→ `Task` (Explore)
+
+---
+
+## 🤖 Assistant
+
+→ `Task` (Explore)
+
+---
+
+## 🤖 Assistant
+
+Perfect! Now I have complete understanding of the architecture. Let me create a comprehensive refactoring plan.
+
+---
+
+## 🤖 Assistant
+
+→ `Write`: `/Users/me/.claude/plans/fancy-dazzling-lynx.md`
+
+---
+
+## 🤖 Assistant
+
+I've created a comprehensive refactoring plan at `/Users/me/.claude/plans/fancy-dazzling-lynx.md`. Here's what it covers:
+
+## Plan Highlights
+
+**Current State**: 4,718 lines in single file, 651-line monolithic `emit_node_instructions` method
+
+**Target**: 2,300-2,700 lines across 12 focused modules (43% reduction)
+
+**Approach**: 5 phases
+1. **Extract Configuration & Strings** (150 lines saved)
+2. **Extract Type & Import Management** (200 lines saved)  
+3. **Macro-Based Constructor Generation** (500 lines saved)
+4. **Trait-Based Node Emission** (630 lines saved)
+5. **Consolidation & Cleanup** (220 lines saved)
+
+**Key Innovations**:
+- `constructor!` macro to generate all 15+ `new_*` functions from patterns
+- `NodeEmitter` trait for dispatch instead of 651-line match statement
+- `EmitContext` struct to simplify method signatures
+- Generic `emit_comparison` instead of separate i64/f64 versions
+
+**Safety**: All refactoring is internal-only, public API unchanged, 11 test files should pass without modification
+
+The plan includes detailed task breakdown, new module structure, verification strategy, and risk mitigation. Ready to review?
+
+---
+
+## 🤖 Assistant
+
+→ `ExitPlanMode`
+
+---
+

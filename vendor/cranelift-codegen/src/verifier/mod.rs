@@ -57,7 +57,7 @@
 //! Ad hoc checking
 //!
 //! - Stack slot loads and stores must be in-bounds.
-//! - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
+//! - Immediate constraints for certain opcodes, like `iconst.i8 1234`.
 //! - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
 //!   range for their polymorphic type.
 //! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
@@ -72,8 +72,8 @@ use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue, Inst,
-    JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
-    ValueList, types,
+    JumpTable, MemFlags, MemFlagsData, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
+    types,
 };
 use crate::ir::{ExceptionTableItem, Signature};
 use crate::isa::{CallConv, TargetIsa};
@@ -84,6 +84,7 @@ use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
+use cranelift_entity::packed_option::ReservedValue;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -99,7 +100,7 @@ pub struct VerifierError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierError {}
+impl core::error::Error for VerifierError {}
 
 impl Display for VerifierError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -178,7 +179,7 @@ pub struct VerifierErrors(pub Vec<VerifierError>);
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for VerifierErrors {}
+impl core::error::Error for VerifierErrors {}
 
 impl VerifierErrors {
     /// Return a new `VerifierErrors` struct.
@@ -388,7 +389,7 @@ impl<'a> Verifier<'a> {
                         }
                     }
                 }
-                ir::GlobalValueData::Load { base, .. } => {
+                ir::GlobalValueData::Load { base, flags, .. } => {
                     if let Some(isa) = self.isa {
                         let base_type = self.func.global_values[base].global_type(isa);
                         let pointer_type = isa.pointer_type();
@@ -401,6 +402,12 @@ impl<'a> Verifier<'a> {
                             ));
                         }
                     }
+                    let flags_data = self.func.dfg.mem_flags[flags];
+                    if let Some(region) = flags_data.alias_region() {
+                        if !self.func.dfg.alias_regions.is_valid(region) {
+                            errors.report((gv, format!("undefined alias region {region}")));
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -410,50 +417,21 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_memory_types(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        // Verify that all fields are statically-sized and lie within
-        // the struct, do not overlap, and are in offset order
-        for (mt, mt_data) in &self.func.memory_types {
-            match mt_data {
-                MemoryTypeData::Struct { size, fields } => {
-                    let mut last_offset = 0;
-                    for field in fields {
-                        if field.offset < last_offset {
-                            errors.report((
-                                mt,
-                                format!(
-                                    "memory type {} has a field at offset {}, which is out-of-order",
-                                    mt, field.offset
-                                ),
-                            ));
-                        }
-                        last_offset = match field.offset.checked_add(u64::from(field.ty.bytes())) {
-                            Some(o) => o,
-                            None => {
-                                errors.report((
-                                        mt,
-                                        format!(
-                                            "memory type {} has a field at offset {} of size {}; offset plus size overflows a u64",
-                                            mt, field.offset, field.ty.bytes()),
-                                ));
-                                break;
-                            }
-                        };
-
-                        if last_offset > *size {
-                            errors.report((
-                                        mt,
-                                        format!(
-                                            "memory type {} has a field at offset {} of size {} that overflows the struct size {}",
-                                            mt, field.offset, field.ty.bytes(), *size),
-                                          ));
-                        }
-                    }
-                }
-                _ => {}
+    fn verify_alias_regions(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
+        let mut seen_user_ids = crate::HashMap::new();
+        for (ar, ar_data) in self.func.dfg.alias_regions.iter() {
+            if let Some(&prev) = seen_user_ids.get(&ar_data.user_id) {
+                errors.report((
+                    ar,
+                    format!(
+                        "duplicate alias region user_id {}: {} and {}",
+                        ar_data.user_id, prev, ar
+                    ),
+                ));
+            } else {
+                seen_user_ids.insert(ar_data.user_id, ar);
             }
         }
-
         Ok(())
     }
 
@@ -567,6 +545,20 @@ impl<'a> Verifier<'a> {
             self.verify_inst_result(inst, res, errors)?;
         }
 
+        // Verify alias region references in memflags.
+        if let Some(flags) = self.func.dfg.insts[inst].memflags() {
+            let flags_data = self.func.dfg.mem_flags[flags];
+            if let Some(region) = flags_data.alias_region() {
+                if !self.func.dfg.alias_regions.is_valid(region) {
+                    errors.report((
+                        inst,
+                        self.context(inst),
+                        format!("undefined alias region {region}"),
+                    ));
+                }
+            }
+        }
+
         match self.func.dfg.insts[inst] {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
@@ -594,7 +586,7 @@ impl<'a> Verifier<'a> {
             } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
                 self.verify_value_list(inst, args, errors)?;
-                self.verify_callee_abi(inst, func_ref, opcode, errors)?;
+                self.verify_callee_patchability(inst, func_ref, opcode, errors)?;
             }
             CallIndirect {
                 sig_ref, ref args, ..
@@ -625,13 +617,10 @@ impl<'a> Verifier<'a> {
             FuncAddr { func_ref, .. } => {
                 self.verify_func_ref(inst, func_ref, errors)?;
             }
-            StackLoad { stack_slot, .. } | StackStore { stack_slot, .. } => {
+            StackAddr { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot, errors)?;
             }
-            DynamicStackLoad {
-                dynamic_stack_slot, ..
-            }
-            | DynamicStackStore {
+            DynamicStackAddr {
                 dynamic_stack_slot, ..
             } => {
                 self.verify_dynamic_stack_slot(inst, dynamic_stack_slot, errors)?;
@@ -751,13 +740,11 @@ impl<'a> Verifier<'a> {
             | UnaryIeee64 { .. }
             | Binary { .. }
             | BinaryImm8 { .. }
-            | BinaryImm64 { .. }
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }
             | IntAddTrap { .. }
             | IntCompare { .. }
-            | IntCompareImm { .. }
             | FloatCompare { .. }
             | Load { .. }
             | Store { .. }
@@ -955,34 +942,40 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_callee_abi(
+    fn verify_callee_patchability(
         &self,
         inst: Inst,
         func_ref: FuncRef,
         opcode: Opcode,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
-        let callee_sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
-        let callee_sig = &self.func.dfg.signatures[callee_sig_ref];
-        let callee_abi = callee_sig.call_conv;
-        match (opcode, callee_abi) {
-            (Opcode::PatchableCall, CallConv::Patchable) => {
-                if !self.func.dfg.ext_funcs[func_ref].colocated {
-                    errors.fatal((
-                        inst,
-                        self.context(inst),
-                        "patchable call to non-colocated function".to_string(),
-                    ))?;
-                }
-            }
-            (Opcode::PatchableCall, _) => {
-                errors.fatal((
-                    inst,
-                    self.context(inst),
-                    "patchable call with non-patchable-ABI callee".to_string(),
-                ))?;
-            }
-            _ => {}
+        let ir::ExtFuncData {
+            patchable,
+            colocated,
+            signature,
+            name: _,
+        } = self.func.dfg.ext_funcs[func_ref];
+        let signature = &self.func.dfg.signatures[signature];
+        if patchable && (opcode == Opcode::ReturnCall || opcode == Opcode::ReturnCallIndirect) {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable funcref cannot be used in a return_call".to_string(),
+            ))?;
+        }
+        if patchable && !colocated {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call to non-colocated function".to_string(),
+            ))?;
+        }
+        if patchable && !signature.returns.is_empty() {
+            errors.fatal((
+                inst,
+                self.context(inst),
+                "patchable call cannot occur to a function with return values".to_string(),
+            ))?;
         }
         Ok(())
     }
@@ -1138,6 +1131,7 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult {
         let typ = self.func.dfg.ctrl_typevar(inst);
         let value_type = self.func.dfg.value_type(arg);
+        let flags_data = self.func.dfg.mem_flags[flags];
 
         if typ.bits() != value_type.bits() {
             errors.fatal((
@@ -1149,15 +1143,15 @@ impl<'a> Verifier<'a> {
                     typ.bits()
                 ),
             ))
-        } else if flags != MemFlags::new()
-            && flags != MemFlags::new().with_endianness(ir::Endianness::Little)
-            && flags != MemFlags::new().with_endianness(ir::Endianness::Big)
+        } else if flags_data != MemFlagsData::new()
+            && flags_data != MemFlagsData::new().with_endianness(ir::Endianness::Little)
+            && flags_data != MemFlagsData::new().with_endianness(ir::Endianness::Big)
         {
             errors.fatal((
                 inst,
                 "The bitcast instruction only accepts the `big` or `little` memory flags",
             ))
-        } else if flags == MemFlags::new() && typ.lane_count() != value_type.lane_count() {
+        } else if flags_data == MemFlagsData::new() && typ.lane_count() != value_type.lane_count() {
             errors.fatal((
                 inst,
                 "Byte order specifier required for bitcast instruction changing lane count",
@@ -1863,7 +1857,7 @@ impl<'a> Verifier<'a> {
 
         match *inst_data {
             ir::InstructionData::Store { flags, .. } => {
-                if flags.readonly() {
+                if self.func.dfg.mem_flags[flags].readonly() {
                     errors.fatal((
                         inst,
                         self.context(inst),
@@ -2010,8 +2004,6 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        self.verify_signature(AnyEntity::Function, &self.func.signature, errors)?;
-
         if errors.has_error() { Err(()) } else { Ok(()) }
     }
 
@@ -2080,58 +2072,50 @@ impl<'a> Verifier<'a> {
 
     fn verify_signature(
         &self,
-        loc: impl Into<AnyEntity>,
-        data: &Signature,
+        sig: &Signature,
+        entity: impl Into<AnyEntity>,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
-        if data.call_conv == CallConv::Patchable {
-            if data.params.len() > 4 {
-                return errors.fatal((
-                    loc,
-                    "signature with patchable ABI does not allow more than four arguments"
-                        .to_string(),
-                ));
-            }
-            if data.returns.len() > 0 {
-                return errors.fatal((
-                    loc,
-                    "signature with patchable ABI does not allow any returns".to_string(),
-                ));
-            }
-            for param in &data.params {
-                if param.value_type != crate::ir::types::I32
-                    && param.value_type != crate::ir::types::I64
-                {
-                    return errors.fatal((
-                        loc,
-                        "signature with patchable ABI does not allow non-I32/I64 arguments"
-                            .to_string(),
-                    ));
-                }
-                if param.extension != ArgumentExtension::None {
-                    return errors.fatal((
-                        loc,
-                        "signature with patchable ABI does not allow sign/zero-extended arguments"
-                            .to_string(),
-                    ));
+        match sig.call_conv {
+            CallConv::PreserveAll => {
+                if !sig.returns.is_empty() {
+                    errors.fatal((
+                        entity,
+                        "Signature with `preserve_all` ABI cannot have return values".to_string(),
+                    ))?;
                 }
             }
+            _ => {}
         }
         Ok(())
     }
 
     fn verify_signatures(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        // Check that "patchable" ABI signatures have no returns and
-        // only up to four integer-typed args.
-        for (sigref, data) in &self.func.dfg.signatures {
-            self.verify_signature(sigref, data, errors)?;
+        // Verify this function's own signature.
+        self.verify_signature(&self.func.signature, AnyEntity::Function, errors)?;
+        // Verify signatures referenced by any extfunc, using that
+        // extfunc as the entity to which to attach the error.
+        for (func, funcdata) in &self.func.dfg.ext_funcs {
+            // Non-contiguous func entities result in placeholders
+            // with invalid signatures; skip them.
+            if !funcdata.signature.is_reserved_value() {
+                self.verify_signature(&self.func.dfg.signatures[funcdata.signature], func, errors)?;
+            }
+        }
+        // Verify all signatures, including those only used by
+        // e.g. indirect calls. Technically this re-verifies
+        // signatures verified above but we want the first pass to
+        // attach errors to funcrefs and we also need to verify all
+        // defined signatures.
+        for (sig, sigdata) in &self.func.dfg.signatures {
+            self.verify_signature(sigdata, sig, errors)?;
         }
         Ok(())
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
-        self.verify_memory_types(errors)?;
+        self.verify_alias_regions(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;

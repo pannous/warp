@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::chars::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -173,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::chars::HostWithStore,
+            D: foo::foo::chars::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::chars::Host,
             T: 'static,
         {
@@ -190,11 +188,11 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod chars {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 /// A function that accepts a character
@@ -212,16 +210,15 @@ pub mod foo {
                     Host::return_char(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/chars")?;
                 inst.func_wrap(
                     "take-char",
                     move |
@@ -243,6 +240,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/chars")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -252,7 +261,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod chars {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     take_char: wasmtime::component::Func,
                     return_char: wasmtime::component::Func,
@@ -276,16 +286,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/chars")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/chars`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/chars` does \
                     not have export `{name}`"
                                     )
@@ -322,35 +332,43 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_take_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(char,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (char,),
+                                (),
+                            >::new_unchecked(self.take_char)
+                        }
+                    }
                     /// A function that accepts a character
                     pub fn call_take_char<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: char,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (char,),
-                                (),
-                            >::new_unchecked(self.take_char)
-                        };
+                        let callee = self.func_take_char();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_return_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (char,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (char,),
+                            >::new_unchecked(self.return_char)
+                        }
                     }
                     /// A function that returns a character
                     pub fn call_return_char<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<char> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (char,),
-                            >::new_unchecked(self.return_char)
-                        };
+                        let callee = self.func_return_char();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

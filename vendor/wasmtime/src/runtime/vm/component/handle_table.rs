@@ -1,6 +1,6 @@
 use super::{TypedResource, TypedResourceIndex};
-use alloc::vec::Vec;
-use anyhow::{Result, bail};
+use crate::prelude::TryVec;
+use crate::{Result, bail};
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 
@@ -36,7 +36,7 @@ pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
-    Borrow { scope: usize },
+    Borrow { scope: u32 },
 }
 
 /// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
@@ -68,7 +68,7 @@ enum Slot {
     /// count of the `scope`.
     ResourceBorrow {
         resource: TypedResource,
-        scope: usize,
+        scope: u32,
     },
 
     /// Represents a host task handle.
@@ -82,6 +82,7 @@ enum Slot {
     },
 
     /// Represents a guest thread handle.
+    #[cfg(feature = "component-model-async")]
     GuestThread {
         rep: u32,
     },
@@ -113,14 +114,14 @@ enum Slot {
 
 pub struct HandleTable {
     next: u32,
-    slots: Vec<Slot>,
+    slots: TryVec<Slot>,
 }
 
 impl Default for HandleTable {
     fn default() -> Self {
         Self {
             next: 0,
-            slots: Vec::new(),
+            slots: TryVec::new(),
         }
     }
 }
@@ -134,27 +135,30 @@ impl HandleTable {
     }
 
     fn insert(&mut self, slot: Slot) -> Result<u32> {
-        let next = self.next as usize;
-        if next == self.slots.len() {
-            self.slots.push(Slot::Free {
-                next: self.next.checked_add(1).unwrap(),
-            });
-        }
-        let ret = self.next;
-        self.next = match mem::replace(&mut self.slots[next], slot) {
-            Slot::Free { next } => next,
-            _ => unreachable!(),
-        };
+        let next = self.next;
+
         // The component model reserves index 0 as never allocatable so add one
         // to the table index to start the numbering at 1 instead. Also note
         // that the component model places an upper-limit per-table on the
         // maximum allowed index.
-        let ret = ret + 1;
-        if ret >= MAX_HANDLE {
+        //
+        // First check to make sure the returned handle is in-bounds, then do
+        // the actual allocation below.
+        if next + 1 >= MAX_HANDLE {
             bail!("cannot allocate another handle: index overflow");
         }
 
-        Ok(ret)
+        if next as usize == self.slots.len() {
+            self.slots.push(Slot::Free {
+                next: next.checked_add(1).unwrap(),
+            })?;
+        }
+        self.next = match mem::replace(&mut self.slots[next as usize], slot) {
+            Slot::Free { next } => next,
+            _ => unreachable!(),
+        };
+
+        Ok(next + 1)
     }
 
     fn remove(&mut self, idx: u32) -> Result<()> {
@@ -194,7 +198,7 @@ impl HandleTable {
     /// Inserts a new `borrow` resource into this table whose type/rep are
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: usize) -> Result<u32> {
+    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: u32) -> Result<u32> {
         self.insert(Slot::ResourceBorrow { resource, scope })
     }
 
@@ -454,25 +458,27 @@ impl HandleTable {
         Ok(ret)
     }
 
-    /// Removes the writable future handle from `idx`, returning its `rep`.
+    /// Removes the writable future handle from `idx`, returning its `rep` along
+    /// with whether the writer is "done" (i.e. it either successfully wrote a
+    /// value or was notified that the readable end was dropped).
     pub fn future_remove_writable(
         &mut self,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
-    ) -> Result<u32> {
+    ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
             Slot::Future { rep, ty, state } => {
                 if *ty != expected_ty {
                     bail!("handle is a future of a different type");
                 }
-                match state {
-                    TransmitLocalState::Write { .. } => {}
+                let is_done = match state {
+                    TransmitLocalState::Write { done } => *done,
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
                     TransmitLocalState::Busy => bail!("cannot drop busy future"),
-                }
-                *rep
+                };
+                (*rep, is_done)
             }
             _ => bail!("handle is not a future"),
         };
@@ -571,16 +577,23 @@ impl HandleTable {
             _ => bail!("handle is not a waitable"),
         }
     }
+}
 
+#[derive(Default)]
+#[cfg(feature = "component-model-async")]
+pub struct ThreadHandleTable(HandleTable);
+
+#[cfg(feature = "component-model-async")]
+impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::GuestThread { rep })
+        self.0.insert(Slot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.
     pub fn guest_thread_rep(&mut self, idx: u32) -> Result<u32> {
-        match self.get_mut(idx)? {
+        match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => Ok(*rep),
             _ => bail!("handle is not a guest thread"),
         }
@@ -590,11 +603,11 @@ impl HandleTable {
     ///
     /// Returns the internal `rep`.
     pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
-        let rep = match self.get_mut(idx)? {
+        let rep = match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
-        self.remove(idx)?;
+        self.0.remove(idx)?;
         Ok(rep)
     }
 }

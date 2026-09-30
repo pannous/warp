@@ -1,8 +1,8 @@
 pub enum WorldResource {}
-pub trait HostWorldResourceWithStore: wasmtime::component::HasData {}
-impl<_T: ?Sized> HostWorldResourceWithStore for _T
+pub trait HostWorldResourceWithStore<T>: wasmtime::component::HasData {}
+impl<H: ?Sized, T> HostWorldResourceWithStore<T> for H
 where
-    _T: wasmtime::component::HasData,
+    H: wasmtime::component::HasData,
 {}
 pub trait HostWorldResource {
     fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
@@ -136,10 +136,12 @@ pub struct TheWorld {
     interface1: exports::foo::foo::uses_resource_transitively::Guest,
     some_world_func2: wasmtime::component::Func,
 }
-pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldResourceWithStore {}
-impl<_T: ?Sized> TheWorldImportsWithStore for _T
+pub trait TheWorldImportsWithStore<
+    T,
+>: wasmtime::component::HasData + HostWorldResourceWithStore<T> {}
+impl<H: ?Sized, T> TheWorldImportsWithStore<T> for H
 where
-    _T: wasmtime::component::HasData + HostWorldResourceWithStore,
+    H: wasmtime::component::HasData + HostWorldResourceWithStore<T>,
 {}
 pub trait TheWorldImports: HostWorldResource {
     fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource>;
@@ -150,8 +152,6 @@ impl<_T: TheWorldImports + ?Sized> TheWorldImports for &mut _T {
     }
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -170,11 +170,11 @@ const _: () = {
                 let (item, index) = _component
                     .get_export(None, "some-world-func2")
                     .ok_or_else(|| {
-                        anyhow::anyhow!("no export `some-world-func2` found")
+                        wasmtime::format_err!("no export `some-world-func2` found")
                     })?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
-                        anyhow::Context::context(
+                        wasmtime::error::Context::context(
                             func
                                 .typecheck::<
                                     (),
@@ -186,7 +186,7 @@ const _: () = {
                     }
                     _ => {
                         Err(
-                            anyhow::anyhow!(
+                            wasmtime::format_err!(
                                 "export `some-world-func2` is not a function"
                             ),
                         )?
@@ -261,7 +261,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: TheWorldImportsWithStore,
+            D: TheWorldImportsWithStore<T>,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static,
         {
@@ -272,9 +272,11 @@ const _: () = {
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostWorldResource::drop(
-                            &mut host_getter(store.data_mut()),
-                            resource,
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostWorldResource::drop(
+                                &mut host_getter(store.data_mut()),
+                                resource,
+                            ),
                         )
                     },
                 )?;
@@ -324,13 +326,13 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::resources::HostWithStore
-                + foo::foo::long_use_chain1::HostWithStore
-                + foo::foo::long_use_chain2::HostWithStore
-                + foo::foo::long_use_chain3::HostWithStore
-                + foo::foo::long_use_chain4::HostWithStore
-                + foo::foo::transitive_interface_with_resource::HostWithStore
-                + TheWorldImportsWithStore,
+            D: foo::foo::resources::HostWithStore<T>
+                + foo::foo::long_use_chain1::HostWithStore<T>
+                + foo::foo::long_use_chain2::HostWithStore<T>
+                + foo::foo::long_use_chain3::HostWithStore<T>
+                + foo::foo::long_use_chain4::HostWithStore<T>
+                + foo::foo::transitive_interface_with_resource::HostWithStore<T>
+                + TheWorldImportsWithStore<T>,
             for<'a> D::Data<
                 'a,
             >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
@@ -351,18 +353,25 @@ const _: () = {
             >(linker, host_getter)?;
             Ok(())
         }
-        pub fn call_some_world_func2<S: wasmtime::AsContextMut>(
+        pub fn func_some_world_func2(
             &self,
-            mut store: S,
-        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>> {
-            let callee = unsafe {
+        ) -> wasmtime::component::TypedFunc<
+            (),
+            (wasmtime::component::Resource<WorldResource>,),
+        > {
+            unsafe {
                 wasmtime::component::TypedFunc::<
                     (),
                     (wasmtime::component::Resource<WorldResource>,),
                 >::new_unchecked(self.some_world_func2)
-            };
+            }
+        }
+        pub fn call_some_world_func2<S: wasmtime::AsContextMut>(
+            &self,
+            mut store: S,
+        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>> {
+            let callee = self.func_some_world_func2();
             let (ret0,) = callee.call(store.as_context_mut(), ())?;
-            callee.post_return(store.as_context_mut())?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -377,12 +386,12 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod resources {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum Bar {}
-            pub trait HostBarWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostBarWithStore for _T
+            pub trait HostBarWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostBarWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostBar {
                 fn new(&mut self) -> wasmtime::component::Resource<Bar>;
@@ -469,10 +478,10 @@ pub mod foo {
                 );
             };
             pub enum Fallible {}
-            pub trait HostFallibleWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostFallibleWithStore for _T
+            pub trait HostFallibleWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostFallibleWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostFallible {
                 fn new(
@@ -502,11 +511,15 @@ pub mod foo {
                     HostFallible::drop(*self, rep)
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + HostFallibleWithStore {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostBarWithStore<
+                    T,
+                > + HostFallibleWithStore<T> {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostBarWithStore
-                    + HostFallibleWithStore,
+                H: wasmtime::component::HasData + HostBarWithStore<T>
+                    + HostFallibleWithStore<T>,
             {}
             pub trait Host: HostBar + HostFallible {
                 fn bar_own_arg(&mut self, x: wasmtime::component::Resource<Bar>) -> ();
@@ -666,22 +679,23 @@ pub mod foo {
                     Host::func_with_handle_typedef(*self, x)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource(
                     "bar",
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostBar::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostBar::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 inst.resource(
@@ -689,7 +703,12 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Fallible>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostFallible::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFallible::drop(
+                                &mut host_getter(store.data_mut()),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 inst.func_wrap(
@@ -932,16 +951,28 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/resources")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
         #[allow(clippy::all)]
         pub mod long_use_chain1 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum A {}
-            pub trait HostAWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostAWithStore for _T
+            pub trait HostAWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostAWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostA {
                 fn drop(
@@ -957,93 +988,130 @@ pub mod foo {
                     HostA::drop(*self, rep)
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostAWithStore {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostAWithStore<T> {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostAWithStore,
+                H: wasmtime::component::HasData + HostAWithStore<T>,
             {}
             pub trait Host: HostA {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource(
                     "a",
                     wasmtime::component::ResourceType::host::<A>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostA::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostA::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/long-use-chain1")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
         pub mod long_use_chain2 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
         pub mod long_use_chain3 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
         pub mod long_use_chain4 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn foo(&mut self) -> wasmtime::component::Resource<A>;
@@ -1053,16 +1121,15 @@ pub mod foo {
                     Host::foo(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap(
                     "foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -1073,16 +1140,28 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/long-use-chain4")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
         #[allow(clippy::all)]
         pub mod transitive_interface_with_resource {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub enum Foo {}
-            pub trait HostFooWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostFooWithStore for _T
+            pub trait HostFooWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostFooWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostFoo {
                 fn drop(
@@ -1098,33 +1177,48 @@ pub mod foo {
                     HostFoo::drop(*self, rep)
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostFooWithStore {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostFooWithStore<T> {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostFooWithStore,
+                H: wasmtime::component::HasData + HostFooWithStore<T>,
             {}
             pub trait Host: HostFoo {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker
-                    .instance("foo:foo/transitive-interface-with-resource")?;
                 inst.resource(
                     "foo",
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostFoo::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFoo::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker
+                    .instance("foo:foo/transitive-interface-with-resource")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
@@ -1135,8 +1229,9 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod uses_resource_transitively {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 pub type Foo = super::super::super::super::foo::foo::transitive_interface_with_resource::Foo;
+                #[derive(Clone)]
                 pub struct Guest {
                     handle: wasmtime::component::Func,
                 }
@@ -1158,16 +1253,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/uses-resource-transitively")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
                                                                                 not have export `{name}`"
                                     )
@@ -1197,19 +1292,26 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_handle(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Foo>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Foo>,),
+                                (),
+                            >::new_unchecked(self.handle)
+                        }
+                    }
                     pub fn call_handle<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::Resource<Foo>,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Foo>,),
-                                (),
-                            >::new_unchecked(self.handle)
-                        };
+                        let callee = self.func_handle();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
                     }
                 }

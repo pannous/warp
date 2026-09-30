@@ -11,9 +11,9 @@
 
 [package]
 edition = "2024"
-rust-version = "1.89.0"
+rust-version = "1.96.0"
 name = "cranelift-codegen-shared"
-version = "0.127.0"
+version = "0.136.1"
 authors = ["The Cranelift Project Developers"]
 build = false
 autolib = false

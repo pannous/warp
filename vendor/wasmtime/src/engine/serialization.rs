@@ -28,10 +28,13 @@ use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{FileFlags, Object as _, ObjectSection, read::elf::ElfFile64};
+use object::{
+    FileFlags, Object as _,
+    elf::FileHeader64,
+    read::elf::{ElfFile64, FileHeader, SectionHeader},
+};
 use serde_derive::{Deserialize, Serialize};
-use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+use wasmtime_environ::{FlagValue, ObjectKind, OperatorCostStrategy, Tunables, obj};
 
 const VERSION: u8 = 0;
 
@@ -57,36 +60,54 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = ElfFile64::<Endianness>::parse(mmap)
+    let header = FileHeader64::<Endianness>::parse(mmap)
         .map_err(obj::ObjectCrateErrorWrapper)
         .context("failed to parse precompiled artifact as an ELF")?;
+    let endian = header
+        .endian()
+        .context("failed to parse header endianness")?;
+
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
     };
-    match obj.flags() {
-        FileFlags::Elf {
-            os_abi: obj::ELFOSABI_WASMTIME,
-            abi_version: 0,
-            e_flags,
-        } if e_flags & expected_e_flags == expected_e_flags => {}
-        _ => bail!("incompatible object file format"),
-    }
+    ensure!(
+        header.e_flags(endian).contains(expected_e_flags),
+        "incompatible object file format"
+    );
 
-    let data = obj
-        .section_by_name(obj::ELF_WASM_ENGINE)
-        .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
-        .data()
+    let section_headers = header
+        .section_headers(endian, mmap)
+        .context("failed to parse section headers")?;
+    let strings = header
+        .section_strings(endian, mmap, section_headers)
+        .context("failed to parse strings table")?;
+    let sections = header
+        .sections(endian, mmap)
+        .context("failed to parse sections table")?;
+
+    let mut section_header = None;
+    for s in sections.iter() {
+        let name = s.name(endian, strings)?;
+        if name == obj::ELF_WASM_ENGINE.as_bytes() {
+            section_header = Some(s);
+        }
+    }
+    let Some(section_header) = section_header else {
+        bail!("failed to find section `{}`", obj::ELF_WASM_ENGINE)
+    };
+    let data = section_header
+        .data(endian, mmap)
         .map_err(obj::ObjectCrateErrorWrapper)?;
     let (first, data) = data
         .split_first()
-        .ok_or_else(|| anyhow!("invalid engine section"))?;
+        .ok_or_else(|| format_err!("invalid engine section"))?;
     if *first != VERSION {
         bail!("mismatched version in engine section");
     }
     let (len, data) = data
         .split_first()
-        .ok_or_else(|| anyhow!("invalid engine section"))?;
+        .ok_or_else(|| format_err!("invalid engine section"))?;
     let len = usize::from(*len);
     let (version, data) = if data.len() < len + 1 {
         bail!("engine section too small")
@@ -95,19 +116,13 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     };
 
     match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => {
-            let version = core::str::from_utf8(version)?;
-            if version != env!("CARGO_PKG_VERSION_MAJOR") {
-                bail!("Module was compiled with incompatible Wasmtime version '{version}'");
-            }
-        }
-        ModuleVersionStrategy::Custom(v) => {
+        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
+        _ => {
             let version = core::str::from_utf8(&version)?;
-            if version != v {
+            if version != engine.config().module_version.as_str() {
                 bail!("Module was compiled with incompatible version '{version}'");
             }
         }
-        ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
     postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
 }
@@ -121,11 +136,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     let mut data = Vec::new();
     data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
+    let version = engine.config().module_version.as_str();
     // This precondition is checked in Config::module_version:
     assert!(
         version.len() < 256,
@@ -145,12 +156,12 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_MODULE != 0 => Some(Precompiled::Module),
+        } if e_flags.contains(obj::EF_WASMTIME_MODULE) => Some(Precompiled::Module),
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_COMPONENT != 0 => Some(Precompiled::Component),
+        } if e_flags.contains(obj::EF_WASMTIME_COMPONENT) => Some(Precompiled::Component),
         _ => None,
     }
 }
@@ -168,11 +179,11 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 
 #[derive(Serialize, Deserialize)]
 pub struct Metadata<'a> {
-    target: String,
+    target: TryString,
     #[serde(borrow)]
-    shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    shared_flags: TryVec<(&'a str, FlagValue<'a>)>,
     #[serde(borrow)]
-    isa_flags: Vec<(&'a str, FlagValue<'a>)>,
+    isa_flags: TryVec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: u64,
 }
@@ -182,9 +193,9 @@ impl Metadata<'_> {
     pub fn new(engine: &Engine) -> Result<Metadata<'static>> {
         let compiler = engine.try_compiler()?;
         Ok(Metadata {
-            target: compiler.triple().to_string(),
-            shared_flags: compiler.flags(),
-            isa_flags: compiler.isa_flags(),
+            target: compiler.triple().to_string().into(),
+            shared_flags: compiler.flags().into(),
+            isa_flags: compiler.isa_flags().into(),
             tunables: engine.tunables().clone(),
             features: engine.features().bits(),
         })
@@ -202,7 +213,7 @@ impl Metadata<'_> {
     fn check_triple(&self, engine: &Engine) -> Result<()> {
         let engine_target = engine.target();
         let module_target =
-            target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
+            target_lexicon::Triple::from_str(&self.target).map_err(|e| format_err!(e))?;
 
         if module_target.architecture != engine_target.architecture {
             bail!(
@@ -225,7 +236,7 @@ impl Metadata<'_> {
         for (name, val) in self.shared_flags.iter() {
             engine
                 .check_compatible_with_shared_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())
@@ -235,7 +246,7 @@ impl Metadata<'_> {
         for (name, val) in self.isa_flags.iter() {
             engine
                 .check_compatible_with_isa_flag(name, val)
-                .map_err(|s| anyhow::Error::msg(s))
+                .map_err(|s| crate::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
         }
         Ok(())
@@ -264,6 +275,22 @@ impl Metadata<'_> {
         );
     }
 
+    fn check_cost(
+        consume_fuel: bool,
+        found: &OperatorCostStrategy,
+        expected: &OperatorCostStrategy,
+    ) -> Result<()> {
+        if !consume_fuel {
+            return Ok(());
+        }
+
+        if found != expected {
+            bail!("Module costs are incompatible");
+        }
+
+        Ok(())
+    }
+
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             collector,
@@ -271,8 +298,10 @@ impl Metadata<'_> {
             memory_guard_size,
             debug_native,
             debug_guest,
+            debug_symbols,
             parse_wasm_debuginfo,
             consume_fuel,
+            ref operator_cost,
             epoch_interruption,
             memory_may_move,
             guard_before_linear_memory,
@@ -282,9 +311,10 @@ impl Metadata<'_> {
             signals_based_traps,
             memory_init_cow,
             inlining,
-            inlining_intra_module,
             inlining_small_callee_size,
             inlining_sum_size_threshold,
+            concurrency_support,
+            recording,
 
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
@@ -297,6 +327,27 @@ impl Metadata<'_> {
 
             // Just a debugging aid, doesn't affect functionality at all.
             debug_adapter_modules: _,
+
+            // This is a runtime GC debugging setting, doesn't affect compilation.
+            gc_zeal_alloc_counter: _,
+
+            gc_heap_reservation,
+            gc_heap_guard_size,
+            gc_heap_may_move,
+            gc_heap_initial_size,
+
+            // This doesn't affect compilation, it's just a runtime setting.
+            gc_heap_reservation_for_growth: _,
+
+            // No need to match whether or not this metadata is emitted, if it
+            // is or isn't then that's fine, the runtime handles it the same
+            // way.
+            metadata_for_internal_asserts: _,
+            metadata_for_gc_heap_corruption: _,
+
+            // Only affects cold-block layout; a compiled artifact loads into an
+            // engine configured either way.
+            branch_hinting: _,
         } = self.tunables;
 
         Self::check_collector(collector, other.collector)?;
@@ -316,12 +367,14 @@ impl Metadata<'_> {
             "native debug information support",
         )?;
         Self::check_bool(debug_guest, other.debug_guest, "guest debug")?;
+        Self::check_bool(debug_symbols, other.debug_symbols, "debug symbols")?;
         Self::check_bool(
             parse_wasm_debuginfo,
             other.parse_wasm_debuginfo,
             "WebAssembly backtrace support",
         )?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
+        Self::check_cost(consume_fuel, operator_cost, &other.operator_cost)?;
         Self::check_bool(
             epoch_interruption,
             other.epoch_interruption,
@@ -354,7 +407,6 @@ impl Metadata<'_> {
             other.memory_init_cow,
             "memory initialization with CoW",
         )?;
-        Self::check_bool(inlining, other.inlining, "function inlining")?;
         Self::check_int(
             inlining_small_callee_size,
             other.inlining_small_callee_size,
@@ -365,7 +417,29 @@ impl Metadata<'_> {
             other.inlining_sum_size_threshold,
             "function inlining sum-size threshold",
         )?;
-        Self::check_intra_module_inlining(inlining_intra_module, other.inlining_intra_module)?;
+        Self::check_bool(
+            concurrency_support,
+            other.concurrency_support,
+            "concurrency support",
+        )?;
+        Self::check_bool(recording, other.recording, "RR recording support")?;
+        Self::check_inlining(inlining, other.inlining)?;
+        Self::check_int(
+            gc_heap_reservation,
+            other.gc_heap_reservation,
+            "GC heap reservation",
+        )?;
+        Self::check_int(
+            gc_heap_guard_size,
+            other.gc_heap_guard_size,
+            "GC heap guard size",
+        )?;
+        Self::check_int(
+            gc_heap_initial_size,
+            other.gc_heap_initial_size,
+            "GC heap initial size",
+        )?;
+        Self::check_bool(gc_heap_may_move, other.gc_heap_may_move, "GC heap may move")?;
 
         Ok(())
     }
@@ -406,20 +480,22 @@ impl Metadata<'_> {
         }
     }
 
-    fn check_intra_module_inlining(
-        module: wasmtime_environ::IntraModuleInlining,
-        host: wasmtime_environ::IntraModuleInlining,
+    fn check_inlining(
+        module: wasmtime_environ::Inlining,
+        host: wasmtime_environ::Inlining,
     ) -> Result<()> {
         if module == host {
             return Ok(());
         }
 
         let desc = |cfg| match cfg {
-            wasmtime_environ::IntraModuleInlining::No => "without intra-module inlining",
-            wasmtime_environ::IntraModuleInlining::Yes => "with intra-module inlining",
-            wasmtime_environ::IntraModuleInlining::WhenUsingGc => {
+            wasmtime_environ::Inlining::No => "without intra-module inlining",
+            wasmtime_environ::Inlining::Yes => "with intra-module inlining",
+            wasmtime_environ::Inlining::InterModuleAndIntraGc => {
                 "with intra-module inlining only when using GC"
             }
+            wasmtime_environ::Inlining::Intrinsics => "with intrinsic inlining",
+            wasmtime_environ::Inlining::InterModule => "with inter-module inlining",
         };
 
         let module = desc(module);
@@ -443,7 +519,7 @@ mod test {
     fn test_architecture_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine)?;
-        metadata.target = "unknown-generic-linux".to_string();
+        metadata.target = "unknown-generic-linux".to_string().into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -466,7 +542,8 @@ mod test {
         metadata.target = format!(
             "{}-generic-unknown",
             target_lexicon::Triple::host().architecture
-        );
+        )
+        .into();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -479,6 +556,15 @@ mod test {
         Ok(())
     }
 
+    fn assert_contains(error: &Error, msg: &str) {
+        let msg = msg.trim();
+        if error.chain().any(|e| e.to_string().contains(msg)) {
+            return;
+        }
+
+        panic!("failed to find:\n\n'''{msg}\n'''\n\nwithin error message:\n\n'''{error:?}'''")
+    }
+
     #[test]
     fn test_cranelift_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
@@ -486,17 +572,20 @@ mod test {
 
         metadata
             .shared_flags
-            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(format!("{e:?}").starts_with(
-                "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
-            )),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported",
+                );
+            }
         }
 
         Ok(())
@@ -509,27 +598,27 @@ Caused by:
 
         metadata
             .isa_flags
-            .push(("not_a_flag", FlagValue::Bool(true)));
+            .push(("not_a_flag", FlagValue::Bool(true)))?;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert!(
-                format!("{e:?}").starts_with(
-                    "\
-compilation settings of module incompatible with native host
-
-Caused by:
-    don't know how to test for target-specific flag \"not_a_flag\" at runtime",
-                ),
-                "bad error {e:?}",
-            ),
+            Err(e) => {
+                assert_contains(
+                    &e,
+                    "compilation settings of module incompatible with native host",
+                );
+                assert_contains(
+                    &e,
+                    "don't know how to test for target-specific flag \"not_a_flag\" at runtime",
+                );
+            }
         }
 
         Ok(())
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
+    #[cfg_attr(any(miri, not(has_native_signals)), ignore)]
     #[cfg(target_pointer_width = "64")] // different defaults on 32-bit platforms
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();

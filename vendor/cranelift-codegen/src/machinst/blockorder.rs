@@ -64,8 +64,8 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::SecondaryMap;
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
+use crate::{FxHashMap, FxHashSet};
 use crate::{machinst::*, trace};
-use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Mapping from CLIF BBs to VCode BBs.
 #[derive(Debug)]
@@ -78,7 +78,7 @@ pub struct BlockLoweringOrder {
     lowered_succ_indices: Vec<BlockIndex>,
     /// Ranges in `lowered_succ_indices` giving the successor lists for each lowered
     /// block. Indexed by lowering-order index (`BlockIndex`).
-    lowered_succ_ranges: Vec<(Option<Inst>, std::ops::Range<usize>)>,
+    lowered_succ_ranges: Vec<(Option<Inst>, core::ops::Range<usize>)>,
     /// BlockIndex for each original Block.
     blockindex_by_block: SecondaryMap<Block, BlockIndex>,
     /// Cold blocks. These blocks are not reordered in the
@@ -134,6 +134,7 @@ impl LoweredBlock {
     }
 
     /// The associated out-edge successor, if this is a critical edge.
+    #[cfg(test)]
     pub fn out_edge(&self) -> Option<Block> {
         match self {
             &LoweredBlock::CriticalEdge { succ, .. } => Some(succ),
@@ -256,7 +257,7 @@ impl BlockLoweringOrder {
                         lowered_succ_indices
                             .extend(block_succs[range].iter().map(|lb| lb_to_bindex[lb]));
 
-                        if f.layout.is_cold(block) {
+                        if f.is_effectively_cold(block) {
                             cold_blocks.insert(bindex);
                         }
 
@@ -281,7 +282,7 @@ impl BlockLoweringOrder {
                         // Edges inherit indirect branch and cold block metadata from their
                         // successor.
 
-                        if f.layout.is_cold(succ) {
+                        if f.is_effectively_cold(succ) {
                             cold_blocks.insert(bindex);
                         }
 

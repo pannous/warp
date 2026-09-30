@@ -1,0 +1,73 @@
+// Particle System
+// Physics simulation with gravity and collision
+
+type Particle: {
+    x: float, y: float
+    vx: float, vy: float
+    life: float
+    color: Color
+}
+
+particles = []
+gravity = 0.1
+friction = 0.99
+width = 800
+height = 600
+
+def spawn(x, y, count) {
+    for _ in 0..count {
+        angle = random() * 2 * pi
+        speed = random() * 5 + 2
+        particles.push(Particle {
+            x: x, y: y
+            vx: cos(angle) * speed
+            vy: sin(angle) * speed
+            life: 1.0
+            color: hsv(random() * 60 + 10, 1.0, 1.0)  // warm colors
+        })
+    }
+}
+
+def update() {
+    for p in particles {
+        p.vy = p.vy + gravity
+        p.vx = p.vx * friction
+        p.vy = p.vy * friction
+        p.x = p.x + p.vx
+        p.y = p.y + p.vy
+        p.life = p.life - 0.01
+
+        // Bounce off walls
+        if p.x < 0 or p.x > width {
+            p.vx = -p.vx * 0.8
+            p.x = clamp(p.x, 0, width)
+        }
+        if p.y > height {
+            p.vy = -p.vy * 0.8
+            p.y = height
+        }
+    }
+
+    // Remove dead particles
+    particles = particles.filter(p => p.life > 0)
+}
+
+def render() {
+    clear(black)
+    for p in particles {
+        alpha = p.life
+        size = p.life * 4 + 1
+        circle(p.x, p.y, size, p.color.with_alpha(alpha))
+    }
+}
+
+// Main loop
+canvas(width, height)
+on_click((x, y) => spawn(x, y, 50))
+
+loop {
+    if mouse_down { spawn(mouse_x, mouse_y, 5) }
+    update()
+    render()
+    sleep(16)
+}

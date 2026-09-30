@@ -20,21 +20,24 @@
 
 use crate::component::dfg::CoreDef;
 use crate::component::{
-    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
-    RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
+    Adapter, AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder,
+    FlatType, InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode,
+    TypeFuncIndex, UnsafeIntrinsic,
 };
 use crate::fact::transcode::Transcoder;
-use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
-use crate::{ModuleInternedTypeIndex, prelude::*};
-use std::borrow::Cow;
+use crate::prelude::*;
+use crate::{
+    EntityRef, FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, ModuleInternedTypeIndex,
+    PrimaryMap, Trap, Tunables, WasmValType,
+};
 use std::collections::HashMap;
 use wasm_encoder::*;
+use wasmparser::WasmFeatures;
 
 mod core_types;
 mod signature;
 mod trampoline;
 mod transcode;
-mod traps;
 
 /// Fixed parameter types for the `prepare_call` built-in function.
 ///
@@ -54,10 +57,13 @@ pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
 
 /// Representation of an adapter module.
 pub struct Module<'a> {
-    /// Whether or not debug code is inserted into the adapters themselves.
-    debug: bool,
+    /// Compilation configuration
+    tunables: &'a Tunables,
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
+
+    /// The Wasm features enabled for validation of this module.
+    features: WasmFeatures,
 
     /// Core wasm type section that's incrementally built
     core_types: core_types::CoreTypes,
@@ -78,8 +84,6 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
-    imported_resource_enter_call: Option<FuncIndex>,
-    imported_resource_exit_call: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
     imported_async_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
@@ -90,7 +94,14 @@ pub struct Module<'a> {
     imported_stream_transfer: Option<FuncIndex>,
     imported_error_context_transfer: Option<FuncIndex>,
 
-    imported_check_blocking: Option<FuncIndex>,
+    imported_enter_sync_call: Option<FuncIndex>,
+    imported_exit_sync_call: Option<FuncIndex>,
+
+    /// Cached versions of unsafe intrinsics and where they were imported.
+    imported_unsafe_intrinsics: HashMap<UnsafeIntrinsic, FuncIndex>,
+
+    /// Cached versions of the imported `trap` intrinsic, one per trap code.
+    imported_traps: HashMap<Trap, FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -114,9 +125,6 @@ struct AdapterData {
     /// The core wasm function that this adapter will be calling (the original
     /// function that was `canon lift`'d)
     callee: FuncIndex,
-    /// FIXME(#4185) should be plumbed and handled as part of the new reentrance
-    /// rules not yet implemented here.
-    called_as_export: bool,
 }
 
 /// Configuration options which apply at the "global adapter" level.
@@ -124,6 +132,8 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    /// The Wasmtime-assigned component instance index where the options were
+    /// originally specified.
     instance: RuntimeComponentInstanceIndex,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
@@ -139,11 +149,9 @@ struct AdapterOptions {
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 /// Linear memory.
 struct LinearMemoryOptions {
-    /// Whether or not the `memory` field, if present, is a 64-bit memory.
-    memory64: bool,
     /// An optionally-specified memory where values may travel through for
     /// types like lists.
-    memory: Option<MemoryIndex>,
+    memory: Option<(MemoryIndex, Memory)>,
     /// An optionally-specified function to be used to allocate space for
     /// types such as strings as they go into a module.
     realloc: Option<FuncIndex>,
@@ -151,7 +159,7 @@ struct LinearMemoryOptions {
 
 impl LinearMemoryOptions {
     fn ptr(&self) -> ValType {
-        if self.memory64 {
+        if self.memory64() {
             ValType::I64
         } else {
             ValType::I32
@@ -159,7 +167,22 @@ impl LinearMemoryOptions {
     }
 
     fn ptr_size(&self) -> u8 {
-        if self.memory64 { 8 } else { 4 }
+        if self.memory64() { 8 } else { 4 }
+    }
+
+    fn memory64(&self) -> bool {
+        self.memory
+            .as_ref()
+            .map(|(_, ty)| ty.idx_type == IndexType::I64)
+            .unwrap_or(false)
+    }
+
+    fn sizealign(&self, abi: &CanonicalAbiInfo) -> (u32, u32) {
+        if self.memory64() {
+            (abi.size64, abi.align64)
+        } else {
+            (abi.size32, abi.align32)
+        }
     }
 }
 
@@ -239,10 +262,15 @@ enum HelperLocation {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypesBuilder, debug: bool) -> Module<'a> {
+    pub fn new(
+        types: &'a ComponentTypesBuilder,
+        tunables: &'a Tunables,
+        features: WasmFeatures,
+    ) -> Module<'a> {
         Module {
-            debug,
+            tunables,
             types,
+            features,
             core_types: Default::default(),
             core_imports: Default::default(),
             imported: Default::default(),
@@ -256,13 +284,14 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
-            imported_resource_enter_call: None,
-            imported_resource_exit_call: None,
             imported_async_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
-            imported_check_blocking: None,
+            imported_enter_sync_call: None,
+            imported_exit_sync_call: None,
+            imported_unsafe_intrinsics: HashMap::new(),
+            imported_traps: HashMap::new(),
             exports: Vec::new(),
         }
     }
@@ -306,9 +335,6 @@ impl<'a> Module<'a> {
                 lift,
                 lower,
                 callee,
-                // FIXME(#4185) should be plumbed and handled as part of the new
-                // reentrance rules not yet implemented here.
-                called_as_export: true,
             },
         );
 
@@ -343,30 +369,32 @@ impl<'a> Module<'a> {
 
         let data_model = match data_model {
             crate::component::DataModel::Gc {} => DataModel::Gc {},
-            crate::component::DataModel::LinearMemory {
-                memory,
-                memory64,
-                realloc,
-            } => {
-                let memory = memory.as_ref().map(|memory| {
-                    self.import_memory(
-                        "memory",
-                        &format!("m{}", self.imported_memories.len()),
-                        MemoryType {
-                            minimum: 0,
-                            maximum: None,
-                            shared: false,
-                            memory64: *memory64,
-                            page_size_log2: None,
-                        },
-                        memory.clone().into(),
+            crate::component::DataModel::LinearMemory { memory, realloc } => {
+                let memory = memory.as_ref().map(|(memory, ty)| {
+                    (
+                        self.import_memory(
+                            "memory",
+                            &format!("m{}", self.imported_memories.len()),
+                            MemoryType {
+                                minimum: 0,
+                                maximum: None,
+                                shared: ty.shared,
+                                memory64: ty.idx_type == IndexType::I64,
+                                page_size_log2: if ty.page_size_log2 == 16 {
+                                    None
+                                } else {
+                                    Some(ty.page_size_log2.into())
+                                },
+                            },
+                            memory.clone().into(),
+                        ),
+                        *ty,
                     )
                 });
                 let realloc = realloc.as_ref().map(|func| {
-                    let ptr = if *memory64 {
-                        ValType::I64
-                    } else {
-                        ValType::I32
+                    let ptr = match memory.as_ref().unwrap().1.idx_type {
+                        IndexType::I32 => ValType::I32,
+                        IndexType::I64 => ValType::I64,
                     };
                     let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
                     self.import_func(
@@ -376,11 +404,7 @@ impl<'a> Module<'a> {
                         func.clone(),
                     )
                 });
-                DataModel::LinearMemory(LinearMemoryOptions {
-                    memory64: *memory64,
-                    memory,
-                    realloc,
-                })
+                DataModel::LinearMemory(LinearMemoryOptions { memory, realloc })
             }
         };
 
@@ -694,36 +718,85 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_resource_enter_call(&mut self) -> FuncIndex {
-        self.import_simple(
-            "resource",
-            "enter-call",
-            &[],
-            &[],
-            Import::ResourceEnterCall,
-            |me| &mut me.imported_resource_enter_call,
-        )
-    }
-
-    fn import_resource_exit_call(&mut self) -> FuncIndex {
-        self.import_simple(
-            "resource",
-            "exit-call",
-            &[],
-            &[],
-            Import::ResourceExitCall,
-            |me| &mut me.imported_resource_exit_call,
-        )
-    }
-
-    fn import_check_blocking(&mut self) -> FuncIndex {
+    fn import_enter_sync_call(&mut self) -> FuncIndex {
         self.import_simple(
             "async",
-            "check-blocking",
+            "enter-sync-call",
+            &[ValType::I32; 3],
+            &[],
+            Import::EnterSyncCall,
+            |me| &mut me.imported_enter_sync_call,
+        )
+    }
+
+    fn import_exit_sync_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "exit-sync-call",
             &[],
             &[],
-            Import::CheckBlocking,
-            |me| &mut me.imported_check_blocking,
+            Import::ExitSyncCall,
+            |me| &mut me.imported_exit_sync_call,
+        )
+    }
+
+    /// Imports the `context.get` intrinsic for the `slot`th context slot.
+    fn import_context_get(&mut self, slot: usize) -> FuncIndex {
+        let intrinsic = match slot {
+            0 => UnsafeIntrinsic::ContextGetI32_0,
+            1 => UnsafeIntrinsic::ContextGetI32_1,
+            _ => unreachable!(),
+        };
+        self.import_unsafe_intrinsic(intrinsic, &format!("get{slot}"))
+    }
+
+    /// Imports the `context.set` intrinsic for the `slot`th context slot.
+    fn import_context_set(&mut self, slot: usize) -> FuncIndex {
+        let intrinsic = match slot {
+            0 => UnsafeIntrinsic::ContextSetI32_0,
+            1 => UnsafeIntrinsic::ContextSetI32_1,
+            _ => unreachable!(),
+        };
+        self.import_unsafe_intrinsic(intrinsic, &format!("set{slot}"))
+    }
+
+    fn import_unsafe_intrinsic(&mut self, intrinsic: UnsafeIntrinsic, name: &str) -> FuncIndex {
+        let map = |ty: &WasmValType| match ty {
+            crate::WasmValType::I32 => ValType::I32,
+            crate::WasmValType::I64 => ValType::I64,
+            crate::WasmValType::F32 => ValType::F32,
+            crate::WasmValType::F64 => ValType::F64,
+            crate::WasmValType::V128 => ValType::V128,
+            crate::WasmValType::Ref(_) => unreachable!(),
+        };
+        let params = intrinsic.core_params().iter().map(map).collect::<Vec<_>>();
+        let results = intrinsic.core_results().iter().map(map).collect::<Vec<_>>();
+
+        self.import_simple_get_and_set(
+            "context",
+            name,
+            &params,
+            &results,
+            Import::UnsafeIntrinsic(intrinsic),
+            |me| me.imported_unsafe_intrinsics.get(&intrinsic).copied(),
+            |me, idx| {
+                me.imported_unsafe_intrinsics.insert(intrinsic, idx);
+            },
+        )
+    }
+
+    fn import_trap(&mut self, trap: Trap) -> FuncIndex {
+        let name = format!("trap{}", trap as u8);
+        self.import_simple_get_and_set(
+            "runtime",
+            &name,
+            &[],
+            &[],
+            Import::Trap(trap),
+            |me| me.imported_traps.get(&trap).copied(),
+            |me, idx| {
+                me.imported_traps.insert(trap, idx);
+            },
         )
     }
 
@@ -765,9 +838,7 @@ impl<'a> Module<'a> {
         // With all functions numbered the fragments of the body of each
         // function can be assigned into one final adapter function.
         let mut code = CodeSection::new();
-        let mut traps = traps::TrapSection::default();
-        for (id, func) in self.funcs.iter() {
-            let mut func_traps = Vec::new();
+        for (_, func) in self.funcs.iter() {
             let mut body = Vec::new();
 
             // Encode all locals used for this function
@@ -783,12 +854,8 @@ impl<'a> Module<'a> {
             // here to the final function index.
             for chunk in func.body.iter() {
                 match chunk {
-                    Body::Raw(code, traps) => {
-                        let start = body.len();
+                    Body::Raw(code) => {
                         body.extend_from_slice(code);
-                        for (offset, trap) in traps {
-                            func_traps.push((start + offset, *trap));
-                        }
                     }
                     Body::Call(id) => {
                         Instruction::Call(id_to_index[*id].as_u32()).encode(&mut body);
@@ -799,10 +866,7 @@ impl<'a> Module<'a> {
                 }
             }
             code.raw(&body);
-            traps.append(id_to_index[id].as_u32(), func_traps);
         }
-
-        let traps = traps.finish();
 
         let mut result = wasm_encoder::Module::new();
         result.section(&self.core_types.section);
@@ -810,12 +874,6 @@ impl<'a> Module<'a> {
         result.section(&funcs);
         result.section(&exports);
         result.section(&code);
-        if self.debug {
-            result.section(&CustomSection {
-                name: "wasmtime-trampoline-traps".into(),
-                data: Cow::Borrowed(&traps),
-            });
-        }
         result.finish()
     }
 
@@ -848,11 +906,6 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
-    /// Sets up entry metadata for a borrow resources when a call starts.
-    ResourceEnterCall,
-    /// Tears down a previous entry and handles checking borrow-related
-    /// metadata.
-    ResourceExitCall,
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
@@ -885,9 +938,17 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
-    /// An intrinsic used by FACT-generated modules to check whether an
-    /// async-typed function may be called via a sync lower.
-    CheckBlocking,
+    /// An intrinsic for trapping the instance with a specific trap code.
+    Trap(Trap),
+    /// An intrinsic used by FACT-generated modules to check whether an instance
+    /// may be entered for a sync-to-sync call and push a task onto the stack if
+    /// so.
+    EnterSyncCall,
+    /// An intrinsic used by FACT-generated modules to pop the task previously
+    /// pushed by `EnterSyncCall`.
+    ExitSyncCall,
+    /// An unsafe intrinsic, such as reading/writing `context.{get,set}` slots.
+    UnsafeIntrinsic(UnsafeIntrinsic),
 }
 
 impl Options {
@@ -899,7 +960,7 @@ impl Options {
         let flat = types.flat_types(ty)?;
         match self.data_model {
             DataModel::Gc {} => todo!("CM+GC"),
-            DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64 {
+            DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64() {
                 flat.memory64
             } else {
                 flat.memory32
@@ -954,8 +1015,6 @@ struct Function {
 ///
 /// 1. First a `Raw` variant is used to contain general instructions for the
 ///    wasm function. This is populated by `Compiler::instruction` primarily.
-///    This also comes with a list of traps. and the byte offset within the
-///    first vector of where the trap information applies to.
 ///
 /// 2. A `Call` instruction variant for a `FunctionId` where the final
 ///    `FuncIndex` isn't known until emission time.
@@ -971,7 +1030,7 @@ struct Function {
 /// easier to represent. A 5-byte leb may be more efficient at compile-time if
 /// necessary, however.
 enum Body {
-    Raw(Vec<u8>, Vec<(usize, traps::Trap)>),
+    Raw(Vec<u8>),
     Call(FunctionId),
     RefFunc(FunctionId),
 }

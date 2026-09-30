@@ -1,8 +1,11 @@
 //! Working with GC `struct` objects.
+#![cfg(feature = "gc")]
 
 use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{self, VMGcHeader, VMStore, VMStructRef};
+use crate::store::{Asyncness, StoreId};
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
+use crate::vm::{self, VMGcHeader, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
@@ -10,6 +13,7 @@ use crate::{
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
 };
+use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
@@ -66,6 +70,11 @@ pub struct StructRefPre {
 impl StructRefPre {
     /// Create a new `StructRefPre` that is associated with the given store
     /// and type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
     pub fn new(mut store: impl AsContextMut, ty: StructType) -> Self {
         Self::_new(store.as_context_mut().0, ty)
     }
@@ -73,7 +82,6 @@ impl StructRefPre {
     pub(crate) fn _new(store: &mut StoreOpaque, ty: StructType) -> Self {
         store.insert_gc_host_alloc_type(ty.registered_type().clone());
         let store_id = store.id();
-
         StructRefPre { store_id, ty }
     }
 
@@ -218,11 +226,12 @@ impl StructRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error
+    /// will be returned because [`StructRef::new_async`] should be used
+    /// instead.
     ///
-    /// Panics if your engine is configured for async; use
-    /// [`StructRef::new_async`][crate::StructRef::new_async] to perform
-    /// synchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
@@ -231,9 +240,17 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
-        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), allocator, fields))
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            fields,
+            Asyncness::No,
+        ))
     }
 
     /// Asynchronously allocate a new `struct` and get a reference to it.
@@ -265,7 +282,7 @@ impl StructRef {
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), allocator, fields).await
+        Self::_new_async(store, limiter.as_mut(), allocator, fields, Asyncness::Yes).await
     }
 
     pub(crate) async fn _new_async(
@@ -273,10 +290,11 @@ impl StructRef {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &StructRefPre,
         fields: &[Val],
+        asyncness: Asyncness,
     ) -> Result<Rooted<StructRef>> {
         Self::type_check_fields(store, allocator, fields)?;
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await
@@ -350,7 +368,7 @@ impl StructRef {
             Err(e) => {
                 store
                     .require_gc_store_mut()?
-                    .dealloc_uninit_struct(structref);
+                    .dealloc_uninit_struct(structref)?;
                 Err(e)
             }
         }
@@ -440,7 +458,7 @@ impl StructRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
 
         let index = header.ty().expect("structrefs should have concrete types");
@@ -472,7 +490,7 @@ impl StructRef {
                     return None;
                 }
                 self.index += 1;
-                Some(self.structref._field(&mut self.store, i).unwrap())
+                self.structref._field(&mut self.store, i).ok()
             }
 
             #[inline]
@@ -493,7 +511,7 @@ impl StructRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.require_gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
     fn structref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMStructRef> {
@@ -503,7 +521,7 @@ impl StructRef {
         Ok(gc_ref.as_structref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
@@ -551,7 +569,7 @@ impl StructRef {
         let structref = self.structref(store)?.unchecked_copy();
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
-        Ok(structref.read_field(store, &layout, field_ty.element_type(), index))
+        structref.read_field(store, &layout, field_ty.element_type(), index)
     }
 
     /// Set this struct's `index`th field.
@@ -604,7 +622,7 @@ impl StructRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
         Ok(header.ty().expect("structrefs should have concrete types"))
     }

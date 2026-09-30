@@ -164,6 +164,7 @@
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
+    error::OutOfMemory,
     store::{AsStoreOpaque, AutoAssertNoGc, StoreId, StoreOpaque},
 };
 use crate::{ValRaw, prelude::*};
@@ -171,13 +172,13 @@ use alloc::sync::{Arc, Weak};
 use core::any;
 use core::marker;
 use core::mem::{self, MaybeUninit};
-use core::num::{NonZeroU64, NonZeroUsize};
+use core::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
 use core::{
     fmt::{self, Debug},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
 };
-use wasmtime_slab::{Id as SlabId, Slab};
+use wasmtime_core::slab::{Id as SlabId, Slab};
 
 mod sealed {
     use super::*;
@@ -214,7 +215,7 @@ mod sealed {
         /// objects that have been unrooted.
         fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
             self.get_gc_ref(store).ok_or_else(|| {
-                anyhow!("attempted to use a garbage-collected object that has been unrooted")
+                format_err!("attempted to use a garbage-collected object that has been unrooted")
             })
         }
 
@@ -314,7 +315,7 @@ impl GcRootIndex {
     /// Panics if `self` is not associated with the given store.
     pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
         self.get_gc_ref(store).ok_or_else(|| {
-            anyhow!("attempted to use a garbage-collected object that has been unrooted")
+            format_err!("attempted to use a garbage-collected object that has been unrooted")
         })
     }
 
@@ -323,6 +324,26 @@ impl GcRootIndex {
     pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
         let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
         Ok(store.clone_gc_ref(&gc_ref))
+    }
+
+    /// Exposes this value's raw `VMGcRef` to wasm as a `u32`.
+    pub(crate) fn expose_gc_ref_to_wasm(
+        &self,
+        store: &mut AutoAssertNoGc<'_>,
+    ) -> Result<NonZeroU32> {
+        let gc_ref = self.try_clone_gc_ref(store)?;
+
+        let raw = match store.optional_gc_store_mut() {
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
+            None => {
+                // NB: do not force the allocation of a GC heap just because the
+                // program is using `i31ref`s.
+                debug_assert!(gc_ref.is_i31());
+                gc_ref.as_raw_non_zero_u32()
+            }
+        };
+
+        Ok(raw)
     }
 }
 
@@ -451,7 +472,7 @@ impl RootSet {
         log::trace!("Begin trace user LIFO roots");
         for root in &mut self.lifo_roots {
             unsafe {
-                gc_roots_list.add_root((&mut root.gc_ref).into(), "user LIFO root");
+                gc_roots_list.add_vmgcref_root((&mut root.gc_ref).into(), "user LIFO root");
             }
         }
         log::trace!("End trace user LIFO roots");
@@ -459,7 +480,7 @@ impl RootSet {
         log::trace!("Begin trace user owned roots");
         for (_id, root) in self.owned_rooted.iter_mut() {
             unsafe {
-                gc_roots_list.add_root(root.into(), "user owned root");
+                gc_roots_list.add_vmgcref_root(root.into(), "user owned root");
             }
         }
         log::trace!("End trace user owned roots");
@@ -1047,7 +1068,7 @@ impl<T: GcRef> Rooted<T> {
     pub(crate) fn _to_owned_rooted(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = self.try_clone_gc_ref(&mut store)?;
-        Ok(OwnedRooted::new(&mut store, gc_ref))
+        Ok(OwnedRooted::new(&mut store, gc_ref)?)
     }
 
     /// Are these two `Rooted<T>`s the same GC root?
@@ -1209,18 +1230,7 @@ impl<T: GcRef> Rooted<T> {
         ptr: &mut MaybeUninit<ValRaw>,
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-
-        let raw = match store.optional_gc_store_mut() {
-            Some(s) => s.expose_gc_ref_to_wasm(gc_ref),
-            None => {
-                // NB: do not force the allocation of a GC heap just because the
-                // program is using `i31ref`s.
-                debug_assert!(gc_ref.is_i31());
-                gc_ref.as_raw_non_zero_u32()
-            }
-        };
-
+        let raw = self.inner.expose_gc_ref_to_wasm(store)?;
         ptr.write(val_raw(raw.get()));
         Ok(())
     }
@@ -1275,6 +1285,14 @@ impl<T: GcRef> Rooted<T> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(from_cloned_gc_ref(store, gc_ref))
+    }
+
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+        <Self as RootedGcRefImpl<_>>::try_gc_ref(self, store)
+    }
+
+    pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
+        <Self as RootedGcRefImpl<_>>::try_clone_gc_ref(self, store)
     }
 }
 
@@ -1524,8 +1542,7 @@ where
 ///
 /// An `OwnedRooted<T>` is a strong handle to a garbage-collected `T`,
 /// preventing its referent (and anything else transitively referenced) from
-/// being collected by the GC until [`unroot`][crate::OwnedRooted::unroot] is
-/// explicitly called.
+/// being collected by the GC until it is dropped.
 ///
 /// An `OwnedRooted<T>` keeps its rooted GC object alive at least
 /// until the `OwnedRooted<T>` itself is dropped. The
@@ -1628,7 +1645,10 @@ where
     /// `gc_ref` should be a GC reference pointing to an instance of the GC type
     /// that `T` represents. Failure to uphold this invariant is memory safe but
     /// will result in general incorrectness such as panics and wrong results.
-    pub(crate) fn new(store: &mut AutoAssertNoGc<'_>, gc_ref: VMGcRef) -> Self {
+    pub(crate) fn new(
+        store: &mut AutoAssertNoGc<'_>,
+        gc_ref: VMGcRef,
+    ) -> Result<Self, OutOfMemory> {
         // We always have the opportunity to trim and unregister stale
         // owned roots whenever we have a mut borrow to the store. We
         // take the opportunity to do so here to avoid tying growth of
@@ -1640,12 +1660,12 @@ where
         store.trim_gc_liveness_flags(false);
 
         let roots = store.gc_roots_mut();
-        let id = roots.owned_rooted.alloc(gc_ref);
+        let id = roots.owned_rooted.alloc(gc_ref)?;
         let liveness_flag = Arc::new(());
         roots
             .liveness_flags
             .push((Arc::downgrade(&liveness_flag), id));
-        OwnedRooted {
+        Ok(OwnedRooted {
             inner: GcRootIndex {
                 store_id: store.id(),
                 generation: 0,
@@ -1653,7 +1673,7 @@ where
             },
             liveness_flag,
             _phantom: marker::PhantomData,
-        }
+        })
     }
 
     #[inline]
@@ -1823,8 +1843,7 @@ where
         ptr: &mut MaybeUninit<ValRaw>,
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
-        let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = self.inner.expose_gc_ref_to_wasm(store)?;
         ptr.write(val_raw(raw.get()));
         Ok(())
     }

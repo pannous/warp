@@ -13,9 +13,13 @@
 //! less catastrophic than doing an indirect call to an attacker-controlled
 //! function pointer.
 
+use crate::bail_bug;
 use crate::prelude::*;
 use core::any::Any;
-use wasmtime_slab::{Id, Slab};
+use wasmtime_core::{
+    alloc::PanicOnOom,
+    slab::{Id, Slab},
+};
 
 /// Side table for each `externref`'s host data value.
 #[derive(Default)]
@@ -39,28 +43,37 @@ fn deref_box_mut<T: ?Sized>(b: &mut Box<T>) -> &mut T {
 impl ExternRefHostDataTable {
     /// Allocate a new `externref` host data value.
     pub fn alloc(&mut self, value: Box<dyn Any + Send + Sync>) -> ExternRefHostDataId {
-        let id = self.slab.alloc(value);
+        // TODO(#12069): handle allocation failure here
+        let id = self.slab.alloc(value).panic_on_oom();
         let id = ExternRefHostDataId(id);
         log::trace!("allocated new externref host data: {id:?}");
         id
     }
 
     /// Deallocate an `externref` host data value.
-    pub fn dealloc(&mut self, id: ExternRefHostDataId) -> Box<dyn Any + Send + Sync> {
+    pub fn dealloc(&mut self, id: ExternRefHostDataId) -> Result<Box<dyn Any + Send + Sync>> {
+        // Verify this exists before deleting it
+        self.get(id)?;
         log::trace!("deallocated externref host data: {id:?}");
-        self.slab.dealloc(id.0)
+        Ok(self.slab.dealloc(id.0))
     }
 
     /// Get a shared borrow of the host data associated with the given ID.
-    pub fn get(&self, id: ExternRefHostDataId) -> &(dyn Any + Send + Sync) {
-        let data: &Box<dyn Any + Send + Sync> = self.slab.get(id.0).unwrap();
-        deref_box(data)
+    pub fn get(&self, id: ExternRefHostDataId) -> Result<&(dyn Any + Send + Sync)> {
+        let data: &Box<dyn Any + Send + Sync> = match self.slab.get(id.0) {
+            Some(data) => data,
+            None => bail_bug!("invalid `ExternRefHostDataId`"),
+        };
+        Ok(deref_box(data))
     }
 
     /// Get a mutable borrow of the host data associated with the given ID.
-    pub fn get_mut(&mut self, id: ExternRefHostDataId) -> &mut (dyn Any + Send + Sync) {
-        let data: &mut Box<dyn Any + Send + Sync> = self.slab.get_mut(id.0).unwrap();
-        deref_box_mut(data)
+    pub fn get_mut(&mut self, id: ExternRefHostDataId) -> Result<&mut (dyn Any + Send + Sync)> {
+        let data: &mut Box<dyn Any + Send + Sync> = match self.slab.get_mut(id.0) {
+            Some(data) => data,
+            None => bail_bug!("invalid `ExternRefHostDataId`"),
+        };
+        Ok(deref_box_mut(data))
     }
 }
 
@@ -74,9 +87,12 @@ mod tests {
 
         let x = 42_u32;
         let id = table.alloc(Box::new(x));
-        assert!(table.get(id).is::<u32>());
-        assert_eq!(*table.get(id).downcast_ref::<u32>().unwrap(), 42);
-        assert!(table.get_mut(id).is::<u32>());
-        assert_eq!(*table.get_mut(id).downcast_ref::<u32>().unwrap(), 42);
+        assert!(table.get(id).unwrap().is::<u32>());
+        assert_eq!(*table.get(id).unwrap().downcast_ref::<u32>().unwrap(), 42);
+        assert!(table.get_mut(id).unwrap().is::<u32>());
+        assert_eq!(
+            *table.get_mut(id).unwrap().downcast_ref::<u32>().unwrap(),
+            42
+        );
     }
 }

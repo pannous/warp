@@ -1,13 +1,15 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::Arc;
 use std::{fmt, io, time};
 
 use crate::config::Config;
+use crate::unversioned::transport::time::Instant;
 use crate::util::IoResultExt;
-use crate::Error;
+use crate::{Error, Timeout};
 
-use super::chain::Either;
 use super::ResolvedSocketAddrs;
+use super::chain::Either;
 
 use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
@@ -32,7 +34,13 @@ impl<In: Transport> Connector<In> for TcpConnector {
         }
 
         let config = &details.config;
-        let stream = try_connect(&details.addrs, details.timeout, config)?;
+        let stream = try_connect(
+            &details.addrs,
+            details.now,
+            details.timeout,
+            details.current_time.clone(),
+            config,
+        )?;
 
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
@@ -43,38 +51,137 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
 fn try_connect(
     addrs: &ResolvedSocketAddrs,
+    start: Instant,
     timeout: NextTimeout,
+    current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
     config: &Config,
 ) -> Result<TcpStream, Error> {
+    try_connect_with(addrs, start, timeout, current_time, |addr, per_addr| {
+        try_connect_single(addr, per_addr, config)
+    })
+}
+
+fn try_connect_with<T>(
+    addrs: &ResolvedSocketAddrs,
+    start: Instant,
+    timeout: NextTimeout,
+    current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
+    mut connect: impl FnMut(SocketAddr, Option<Duration>) -> Result<T, Error>,
+) -> Result<T, Error> {
+    // The idea here is to give each attempt a budget of the total time to try.
+    // For a host returning multiple addresses, we share the budget between them
+    // using a geometric series that sums to exactly the total budget.
+    //
+    // Background: https://curl.se/mail/lib-2021-01/0037.html
+    //
+    // Example: Timeout is 10 seconds, and the host returns 4 addresses.
+    //
+    // Address 0: 5.33 seconds (53.3% of budget)
+    // Address 1: 2.67 seconds (26.7% of budget)
+    // Address 2: 1.33 seconds (13.3% of budget)
+    // Address 3: 0.67 seconds (6.7% of budget)
+    // Sum: 10.0 seconds
+    //
+    // For a single address, it gets the full budget (100%).
+    // We cap the lowest to 10ms.
+    //
+    const MIN_PER_ADDRESS_TIMEOUT: Duration = Duration::from_millis(10);
+
+    let num_addrs = addrs.len();
+
+    // Pre-calculate the total weight for the geometric series.
+    // For weights [1, 1/2, 1/4, 1/8, ...], the sum is 2 * (1 - 1/2^n)
+    let total_weight = 2.0 * (1.0 - 0.5_f64.powi(num_addrs as i32));
+
+    // Start with weight 1.0 for the first address, then halve for each subsequent.
+    let mut weight = 1.0_f64;
+
+    // The most recent per-address failure, so that a host whose every address
+    // fails reports what actually happened instead of a synthesized refusal.
+    let mut last_err: Option<Error> = None;
+
     for addr in addrs {
-        match try_connect_single(*addr, timeout, config) {
+        // Calculate this address's timeout using geometric series.
+        let per_addr = timeout.not_zero().map(|t| {
+            let secs = t.as_secs_f64() * weight / total_weight;
+            let timeout = Duration::from_millis((secs * 1000.0) as u64);
+            timeout.max(MIN_PER_ADDRESS_TIMEOUT)
+        });
+
+        match connect(*addr, per_addr) {
             // First that connects
             Ok(v) => return Ok(v),
-            // Intercept ConnectionRefused to try next addrs
-            Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
-                trace!("{} connection refused", addr);
+            // Intercept errors that concern only this address to try next addrs
+            Err(Error::Io(e)) if is_addr_specific_error(&e) => {
+                trace!("{} failed: {}", addr, e);
+                last_err = Some(Error::Io(e));
                 continue;
+            }
+            Err(e @ Error::Timeout(_)) => {
+                // Check if we hit the overall global timeout for the connect.
+                let elapsed = current_time().duration_since(start);
+                if elapsed > timeout.after {
+                    return Err(Error::Timeout(timeout.reason));
+                }
+
+                // We still got time to try the next address.
+                last_err = Some(e);
             }
             // Other errors bail
             Err(e) => return Err(e),
         }
+
+        // Halve the weight for the next address
+        weight /= 2.0;
     }
 
     debug!("Failed to connect to any resolved address");
-    Err(Error::Io(io::Error::new(
-        io::ErrorKind::ConnectionRefused,
-        "Connection refused",
-    )))
+    Err(last_err.unwrap_or_else(|| {
+        Error::Io(io::Error::new(
+            io::ErrorKind::ConnectionRefused,
+            "Connection refused",
+        ))
+    }))
+}
+
+/// Whether a failed connect concerns only the address tried, meaning the next
+/// resolved address might still succeed.
+///
+/// `ConnectionRefused` means this address answered and said no. The
+/// unreachable/unavailable kinds mean the local network stack rejected this
+/// address at routing level without asking anything: the typical case is a
+/// host whose resolver returns IPv6 addresses first but which has no IPv6
+/// route, where the AAAA connect fails instantly while the A record would
+/// have worked (#1184). Browsers and curl mask that condition by moving on to
+/// the next address, which is the behavior matched here.
+fn is_addr_specific_error(e: &io::Error) -> bool {
+    // On Windows, a VPN or firewall can surface the blocked address family as
+    // WSAEACCES, which maps to ErrorKind::PermissionDenied. Match the raw OS
+    // error to retry this socket error without retrying every permission error (#1184).
+    #[cfg(windows)]
+    const WSAEACCES: i32 = 10013;
+    #[cfg(windows)]
+    if e.raw_os_error() == Some(WSAEACCES) {
+        return true;
+    }
+
+    matches!(
+        e.kind(),
+        io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::HostUnreachable
+            | io::ErrorKind::NetworkUnreachable
+            | io::ErrorKind::AddrNotAvailable
+    )
 }
 
 fn try_connect_single(
     addr: SocketAddr,
-    timeout: NextTimeout,
+    per_addr: Option<Duration>,
     config: &Config,
 ) -> Result<TcpStream, Error> {
     trace!("Try connect TcpStream to {}", addr);
 
-    let maybe_stream = if let Some(when) = timeout.not_zero() {
+    let maybe_stream = if let Some(when) = per_addr {
         TcpStream::connect_timeout(&addr, *when)
     } else {
         TcpStream::connect(addr)
@@ -84,7 +191,8 @@ fn try_connect_single(
     let stream = match maybe_stream {
         Ok(v) => v,
         Err(e) if e.kind() == io::ErrorKind::TimedOut => {
-            return Err(Error::Timeout(timeout.reason))
+            // The parent replaces this reason if the overall deadline has expired.
+            return Err(Error::Timeout(Timeout::Connect));
         }
         Err(e) => return Err(e.into()),
     };
@@ -217,5 +325,164 @@ impl fmt::Debug for TcpTransport {
         f.debug_struct("TcpTransport")
             .field("addr", &self.stream.peer_addr().ok())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // Script connect outcomes so routing failures and timeouts are deterministic.
+    fn scripted_connect(
+        outcomes: Vec<Result<(), Error>>,
+        elapsed: Duration,
+    ) -> (Result<(), Error>, usize) {
+        let mut addrs = ResolvedSocketAddrs::from_fn(|_| SocketAddr::from(([0, 0, 0, 0], 0)));
+        for i in 0..outcomes.len() {
+            addrs.push(SocketAddr::from(([127, 0, 0, 1], 10000 + i as u16)));
+        }
+        let start = Instant::now();
+        let mut outcomes = outcomes.into_iter();
+        let mut attempts = 0;
+        let result = try_connect_with(
+            &addrs,
+            start,
+            NextTimeout {
+                after: Duration::from_secs(10),
+                reason: Timeout::Global,
+            },
+            Arc::new(move || start + elapsed),
+            |addr, _| {
+                assert_eq!(addr, addrs[attempts]);
+                attempts += 1;
+                outcomes.next().unwrap()
+            },
+        );
+        (result, attempts)
+    }
+
+    fn io_error(kind: io::ErrorKind) -> Result<(), Error> {
+        Err(io::Error::from(kind).into())
+    }
+
+    #[test]
+    fn timeout_replaces_earlier_unreachable_error() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                io_error(io::ErrorKind::NetworkUnreachable),
+                Err(Error::Timeout(Timeout::Connect)),
+            ],
+            Duration::from_secs(6),
+        );
+        assert_eq!(attempts, 2);
+        assert!(matches!(result, Err(Error::Timeout(Timeout::Connect))));
+    }
+
+    #[test]
+    fn addr_specific_failures_and_timeout_fall_back_to_success() {
+        for failure in [
+            io_error(io::ErrorKind::ConnectionRefused),
+            io_error(io::ErrorKind::HostUnreachable),
+            io_error(io::ErrorKind::NetworkUnreachable),
+            io_error(io::ErrorKind::AddrNotAvailable),
+            Err(Error::Timeout(Timeout::Connect)),
+        ] {
+            let (result, attempts) = scripted_connect(
+                vec![failure, Ok(()), io_error(io::ErrorKind::PermissionDenied)],
+                Duration::from_secs(1),
+            );
+            assert!(result.is_ok());
+            assert_eq!(attempts, 2);
+        }
+    }
+
+    #[test]
+    fn last_io_error_replaces_timeout_and_preserves_details() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                Err(Error::Timeout(Timeout::Connect)),
+                Err(io::Error::new(io::ErrorKind::HostUnreachable, "last address").into()),
+            ],
+            Duration::from_secs(1),
+        );
+        assert_eq!(attempts, 2);
+        let Err(Error::Io(error)) = result else {
+            panic!("expected last I/O error: {result:?}");
+        };
+        assert_eq!(error.kind(), io::ErrorKind::HostUnreachable);
+        assert_eq!(error.to_string(), "last address");
+    }
+
+    #[test]
+    fn all_timeouts_report_connect_timeout() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                Err(Error::Timeout(Timeout::Connect)),
+                Err(Error::Timeout(Timeout::Connect)),
+            ],
+            Duration::from_secs(6),
+        );
+        assert_eq!(attempts, 2);
+        assert!(matches!(result, Err(Error::Timeout(Timeout::Connect))));
+    }
+
+    #[test]
+    fn overall_timeout_takes_precedence_and_stops_attempts() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                io_error(io::ErrorKind::NetworkUnreachable),
+                Err(Error::Timeout(Timeout::Connect)),
+                Ok(()),
+            ],
+            Duration::from_secs(11),
+        );
+        assert_eq!(attempts, 2);
+        assert!(matches!(result, Err(Error::Timeout(Timeout::Global))));
+    }
+
+    #[test]
+    fn other_io_errors_stop_attempts() {
+        let (result, attempts) = scripted_connect(
+            vec![io_error(io::ErrorKind::PermissionDenied), Ok(())],
+            Duration::from_secs(1),
+        );
+        assert_eq!(attempts, 1);
+        assert!(matches!(result, Err(Error::Io(e)) if e.kind() == io::ErrorKind::PermissionDenied));
+    }
+
+    #[test]
+    fn empty_address_list_reports_refusal() {
+        let (result, attempts) = scripted_connect(vec![], Duration::from_secs(0));
+        assert_eq!(attempts, 0);
+        assert!(
+            matches!(result, Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused)
+        );
+    }
+
+    #[test]
+    fn addr_specific_errors_try_the_next_addr() {
+        for kind in [
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::HostUnreachable,
+            io::ErrorKind::NetworkUnreachable,
+            io::ErrorKind::AddrNotAvailable,
+        ] {
+            assert!(
+                is_addr_specific_error(&io::Error::from(kind)),
+                "{kind:?} should move on to the next address"
+            );
+        }
+        for kind in [io::ErrorKind::TimedOut, io::ErrorKind::PermissionDenied] {
+            assert!(
+                !is_addr_specific_error(&io::Error::from(kind)),
+                "{kind:?} should bail"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn wsaeacces_tries_the_next_addr() {
+        assert!(is_addr_specific_error(&io::Error::from_raw_os_error(10013)));
     }
 }

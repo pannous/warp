@@ -103,8 +103,6 @@ pub struct HttpInterface {
     interface0: exports::http_handler::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl HttpInterfaceIndices {
         /// Creates a new copy of `HttpInterfaceIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -173,7 +171,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::http_types::HostWithStore + http_fetch::HostWithStore + Send,
+            D: foo::foo::http_types::HostWithStore<T> + http_fetch::HostWithStore<T>
+                + Send,
             for<'a> D::Data<'a>: foo::foo::http_types::Host + http_fetch::Host + Send,
             T: 'static + Send,
         {
@@ -191,7 +190,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod http_types {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -230,24 +229,35 @@ pub mod foo {
                     4 == < Response as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/http-types")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
@@ -255,7 +265,7 @@ pub mod foo {
 #[allow(clippy::all)]
 pub mod http_fetch {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::{anyhow, Box};
+    use wasmtime::component::__internal::Box;
     pub type Request = super::foo::foo::http_types::Request;
     const _: () = {
         assert!(8 == < Request as wasmtime::component::ComponentType >::SIZE32);
@@ -266,42 +276,57 @@ pub mod http_fetch {
         assert!(8 == < Response as wasmtime::component::ComponentType >::SIZE32);
         assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
     };
-    pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn fetch_request<T>(
-            accessor: &wasmtime::component::Accessor<T, Self>,
+    pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+        fn fetch_request(
+            host: wasmtime::component::Access<T, Self>,
             request: Request,
         ) -> impl ::core::future::Future<Output = Response> + Send;
     }
     pub trait Host: Send {}
     impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-    pub fn add_to_linker<T, D>(
-        linker: &mut wasmtime::component::Linker<T>,
+    pub fn add_to_linker_instance<T, D>(
+        inst: &mut wasmtime::component::LinkerInstance<'_, T>,
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {
-        let mut inst = linker.instance("http-fetch")?;
-        inst.func_wrap_concurrent(
+        inst.func_wrap_async(
             "fetch-request",
-            move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Request,)| {
-                wasmtime::component::__internal::Box::pin(async move {
-                    let host = &caller.with_getter(host_getter);
-                    let r = <D as HostWithStore>::fetch_request(host, arg0).await;
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| {
+                wasmtime::component::__internal::Box::new(async move {
+                    let access_cx = wasmtime::AsContextMut::as_context_mut(&mut caller);
+                    let host = wasmtime::component::Access::<
+                        T,
+                        D,
+                    >::new(access_cx, host_getter);
+                    let r = <D as HostWithStore<T>>::fetch_request(host, arg0).await;
                     Ok((r,))
                 })
             },
         )?;
         Ok(())
     }
+    pub fn add_to_linker<T, D>(
+        linker: &mut wasmtime::component::Linker<T>,
+        host_getter: fn(&mut T) -> D::Data<'_>,
+    ) -> wasmtime::Result<()>
+    where
+        D: HostWithStore<T>,
+        for<'a> D::Data<'a>: Host,
+        T: 'static + Send,
+    {
+        let mut inst = linker.instance("http-fetch")?;
+        add_to_linker_instance::<T, D>(&mut inst, host_getter)
+    }
 }
 pub mod exports {
     #[allow(clippy::all)]
     pub mod http_handler {
         #[allow(unused_imports)]
-        use wasmtime::component::__internal::{anyhow, Box};
+        use wasmtime::component::__internal::Box;
         pub type Request = super::super::foo::foo::http_types::Request;
         const _: () = {
             assert!(8 == < Request as wasmtime::component::ComponentType >::SIZE32);
@@ -312,6 +337,7 @@ pub mod exports {
             assert!(8 == < Response as wasmtime::component::ComponentType >::SIZE32);
             assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
         };
+        #[derive(Clone)]
         pub struct Guest {
             handle_request: wasmtime::component::Func,
         }
@@ -333,14 +359,16 @@ pub mod exports {
                     .component()
                     .get_export_index(None, "http-handler")
                     .ok_or_else(|| {
-                        anyhow::anyhow!("no exported instance named `http-handler`")
+                        wasmtime::format_err!(
+                            "no exported instance named `http-handler`"
+                        )
                     })?;
-                let mut lookup = move |name| {
+                let mut lookup = move |name: &str| {
                     _instance_pre
                         .component()
                         .get_export_index(Some(&instance), name)
                         .ok_or_else(|| {
-                            anyhow::anyhow!(
+                            wasmtime::format_err!(
                                 "instance export `http-handler` does \
             not have export `{name}`"
                             )
@@ -370,6 +398,16 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_handle_request(
+                &self,
+            ) -> wasmtime::component::TypedFunc<(Request,), (Response,)> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<
+                        (Request,),
+                        (Response,),
+                    >::new_unchecked(self.handle_request)
+                }
+            }
             pub async fn call_handle_request<_T, _D>(
                 &self,
                 accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -379,13 +417,8 @@ pub mod exports {
                 _T: Send,
                 _D: wasmtime::component::HasData,
             {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<
-                        (Request,),
-                        (Response,),
-                    >::new_unchecked(self.handle_request)
-                };
-                let ((ret0,), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                let callee = self.func_handle_request();
+                let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                 Ok(ret0)
             }
         }

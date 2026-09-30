@@ -1,4 +1,5 @@
 //! AArch64 ISA definitions: registers.
+#![expect(missing_docs, reason = "fields mostly self-describing")]
 
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;
@@ -8,14 +9,14 @@ use crate::machinst::{Reg, RegClass, Writable};
 use regalloc2::PReg;
 use regalloc2::VReg;
 
-use std::string::{String, ToString};
+use alloc::string::{String, ToString};
 
 //=============================================================================
 // Registers, the Universe thereof, and printing
 
 /// The pinned register on this architecture.
 /// It must be the same as Spidermonkey's HeapReg, as found in this file.
-/// https://searchfox.org/mozilla-central/source/js/src/jit/arm64/Assembler-arm64.h#103
+/// <https://searchfox.org/mozilla-central/source/js/src/jit/arm64/Assembler-arm64.h#103>
 pub const PINNED_REG: u8 = 21;
 
 /// Get a reference to an X-register (integer register). Do not use
@@ -36,8 +37,8 @@ pub fn writable_xreg(num: u8) -> Writable<Reg> {
 }
 
 /// Get a reference to a V-register (vector/FP register).
-pub fn vreg(num: u8) -> Reg {
-    Reg::from(vreg_preg(num))
+pub const fn vreg(num: u8) -> Reg {
+    Reg::from_real_reg(vreg_preg(num))
 }
 
 /// Get the given V-register as a PReg.
@@ -47,7 +48,6 @@ pub(crate) const fn vreg_preg(num: u8) -> PReg {
 }
 
 /// Get a writable reference to a V-register.
-#[cfg(test)] // Used only in test code.
 pub fn writable_vreg(num: u8) -> Writable<Reg> {
     Writable::from_reg(vreg(num))
 }

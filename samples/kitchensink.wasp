@@ -1,0 +1,20 @@
+#!/usr/bin/env wasp
+{
+f: /*inline comments*/ "inline comments",
+  "a": "classical json",
+  d: "semicolons optional";
+  b: "quotes optional",
+  c: "commas optional"
+  e: "trailing comments" // trailing comments
+  x: "paired group", y:"paired group" // parsed as (x y) , should still be accessible via root[x] !
+
+  "g": /*inline comments*/ "inline comments"
+  // todo ? <!-- html comments ? -->
+  "address": {
+    street="highway 66",
+    distict="Metro",
+    distict="Metro",// Duplicate key not allowed?
+    //    distict=Metro,
+    //    city:{Paris France}
+  }
+}

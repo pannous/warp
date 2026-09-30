@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::integers::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -175,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::integers::HostWithStore + Send,
+            D: foo::foo::integers::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::integers::Host + Send,
             T: 'static + Send,
         {
@@ -192,11 +190,11 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod integers {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn a1(
@@ -346,16 +344,15 @@ pub mod foo {
                     async move { Host::pair_ret(*self).await }
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("foo:foo/integers")?;
                 inst.func_wrap_async(
                     "a1",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u8,)| {
@@ -561,6 +558,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("foo:foo/integers")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -570,7 +579,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod integers {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     a1: wasmtime::component::Func,
                     a2: wasmtime::component::Func,
@@ -626,16 +636,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/integers")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/integers`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/integers` does \
                                                     not have export `{name}`"
                                     )
@@ -774,6 +784,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_a1(&self) -> wasmtime::component::TypedFunc<(u8,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u8,),
+                                (),
+                            >::new_unchecked(self.a1)
+                        }
+                    }
                     pub async fn call_a1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -782,17 +800,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u8,),
-                                (),
-                            >::new_unchecked(self.a1)
-                        };
+                        let callee = self.func_a1();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a2(&self) -> wasmtime::component::TypedFunc<(i8,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (i8,),
+                                (),
+                            >::new_unchecked(self.a2)
+                        }
                     }
                     pub async fn call_a2<S: wasmtime::AsContextMut>(
                         &self,
@@ -802,17 +822,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (i8,),
-                                (),
-                            >::new_unchecked(self.a2)
-                        };
+                        let callee = self.func_a2();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a3(&self) -> wasmtime::component::TypedFunc<(u16,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u16,),
+                                (),
+                            >::new_unchecked(self.a3)
+                        }
                     }
                     pub async fn call_a3<S: wasmtime::AsContextMut>(
                         &self,
@@ -822,17 +844,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u16,),
-                                (),
-                            >::new_unchecked(self.a3)
-                        };
+                        let callee = self.func_a3();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a4(&self) -> wasmtime::component::TypedFunc<(i16,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (i16,),
+                                (),
+                            >::new_unchecked(self.a4)
+                        }
                     }
                     pub async fn call_a4<S: wasmtime::AsContextMut>(
                         &self,
@@ -842,17 +866,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (i16,),
-                                (),
-                            >::new_unchecked(self.a4)
-                        };
+                        let callee = self.func_a4();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a5(&self) -> wasmtime::component::TypedFunc<(u32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u32,),
+                                (),
+                            >::new_unchecked(self.a5)
+                        }
                     }
                     pub async fn call_a5<S: wasmtime::AsContextMut>(
                         &self,
@@ -862,17 +888,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u32,),
-                                (),
-                            >::new_unchecked(self.a5)
-                        };
+                        let callee = self.func_a5();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a6(&self) -> wasmtime::component::TypedFunc<(i32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (i32,),
+                                (),
+                            >::new_unchecked(self.a6)
+                        }
                     }
                     pub async fn call_a6<S: wasmtime::AsContextMut>(
                         &self,
@@ -882,17 +910,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (i32,),
-                                (),
-                            >::new_unchecked(self.a6)
-                        };
+                        let callee = self.func_a6();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a7(&self) -> wasmtime::component::TypedFunc<(u64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u64,),
+                                (),
+                            >::new_unchecked(self.a7)
+                        }
                     }
                     pub async fn call_a7<S: wasmtime::AsContextMut>(
                         &self,
@@ -902,17 +932,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u64,),
-                                (),
-                            >::new_unchecked(self.a7)
-                        };
+                        let callee = self.func_a7();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a8(&self) -> wasmtime::component::TypedFunc<(i64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (i64,),
+                                (),
+                            >::new_unchecked(self.a8)
+                        }
                     }
                     pub async fn call_a8<S: wasmtime::AsContextMut>(
                         &self,
@@ -922,17 +954,24 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (i64,),
-                                (),
-                            >::new_unchecked(self.a8)
-                        };
+                        let callee = self.func_a8();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_a9(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (u8, i8, u16, i16, u32, i32, u64, i64),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u8, i8, u16, i16, u32, i32, u64, i64),
+                                (),
+                            >::new_unchecked(self.a9)
+                        }
                     }
                     pub async fn call_a9<S: wasmtime::AsContextMut>(
                         &self,
@@ -949,20 +988,22 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u8, i8, u16, i16, u32, i32, u64, i64),
-                                (),
-                            >::new_unchecked(self.a9)
-                        };
+                        let callee = self.func_a9();
                         let () = callee
                             .call_async(
                                 store.as_context_mut(),
                                 (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7),
                             )
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(())
+                    }
+                    pub fn func_r1(&self) -> wasmtime::component::TypedFunc<(), (u8,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u8,),
+                            >::new_unchecked(self.r1)
+                        }
                     }
                     pub async fn call_r1<S: wasmtime::AsContextMut>(
                         &self,
@@ -971,17 +1012,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u8,),
-                            >::new_unchecked(self.r1)
-                        };
+                        let callee = self.func_r1();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r2(&self) -> wasmtime::component::TypedFunc<(), (i8,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (i8,),
+                            >::new_unchecked(self.r2)
+                        }
                     }
                     pub async fn call_r2<S: wasmtime::AsContextMut>(
                         &self,
@@ -990,17 +1033,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (i8,),
-                            >::new_unchecked(self.r2)
-                        };
+                        let callee = self.func_r2();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r3(&self) -> wasmtime::component::TypedFunc<(), (u16,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u16,),
+                            >::new_unchecked(self.r3)
+                        }
                     }
                     pub async fn call_r3<S: wasmtime::AsContextMut>(
                         &self,
@@ -1009,17 +1054,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u16,),
-                            >::new_unchecked(self.r3)
-                        };
+                        let callee = self.func_r3();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r4(&self) -> wasmtime::component::TypedFunc<(), (i16,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (i16,),
+                            >::new_unchecked(self.r4)
+                        }
                     }
                     pub async fn call_r4<S: wasmtime::AsContextMut>(
                         &self,
@@ -1028,17 +1075,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (i16,),
-                            >::new_unchecked(self.r4)
-                        };
+                        let callee = self.func_r4();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r5(&self) -> wasmtime::component::TypedFunc<(), (u32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u32,),
+                            >::new_unchecked(self.r5)
+                        }
                     }
                     pub async fn call_r5<S: wasmtime::AsContextMut>(
                         &self,
@@ -1047,17 +1096,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u32,),
-                            >::new_unchecked(self.r5)
-                        };
+                        let callee = self.func_r5();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r6(&self) -> wasmtime::component::TypedFunc<(), (i32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (i32,),
+                            >::new_unchecked(self.r6)
+                        }
                     }
                     pub async fn call_r6<S: wasmtime::AsContextMut>(
                         &self,
@@ -1066,17 +1117,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (i32,),
-                            >::new_unchecked(self.r6)
-                        };
+                        let callee = self.func_r6();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r7(&self) -> wasmtime::component::TypedFunc<(), (u64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u64,),
+                            >::new_unchecked(self.r7)
+                        }
                     }
                     pub async fn call_r7<S: wasmtime::AsContextMut>(
                         &self,
@@ -1085,17 +1138,19 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u64,),
-                            >::new_unchecked(self.r7)
-                        };
+                        let callee = self.func_r7();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_r8(&self) -> wasmtime::component::TypedFunc<(), (i64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (i64,),
+                            >::new_unchecked(self.r8)
+                        }
                     }
                     pub async fn call_r8<S: wasmtime::AsContextMut>(
                         &self,
@@ -1104,17 +1159,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (i64,),
-                            >::new_unchecked(self.r8)
-                        };
+                        let callee = self.func_r8();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_pair_ret(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ((i64, u8),)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                ((i64, u8),),
+                            >::new_unchecked(self.pair_ret)
+                        }
                     }
                     pub async fn call_pair_ret<S: wasmtime::AsContextMut>(
                         &self,
@@ -1123,16 +1182,10 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                ((i64, u8),),
-                            >::new_unchecked(self.pair_ret)
-                        };
+                        let callee = self.func_pair_ret();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;
-                        callee.post_return_async(store.as_context_mut()).await?;
                         Ok(ret0)
                     }
                 }

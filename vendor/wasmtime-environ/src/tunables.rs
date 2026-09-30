@@ -1,8 +1,10 @@
+use crate::prelude::*;
 use crate::{IndexType, Limits, Memory, TripleExt};
-use anyhow::{Error, Result, anyhow, bail};
+use core::num::NonZeroU32;
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
+use wasmparser::Operator;
 
 macro_rules! define_tunables {
     (
@@ -46,8 +48,8 @@ macro_rules! define_tunables {
             /// Configure the `Tunables` provided.
             pub fn configure(&self, tunables: &mut Tunables) {
                 $(
-                    if let Some(val) = self.$field {
-                        tunables.$field = val;
+                    if let Some(val) = &self.$field {
+                        tunables.$field = val.clone();
                     }
                 )*
             }
@@ -80,12 +82,19 @@ define_tunables! {
         /// the guest.
         pub debug_guest: bool,
 
+        /// Whether we are enabling native symbols to get inserted into the
+        /// final `*.cwasm`.
+        pub debug_symbols: bool,
+
         /// Whether or not to retain DWARF sections in compiled modules.
         pub parse_wasm_debuginfo: bool,
 
         /// Whether or not fuel is enabled for generated code, meaning that fuel
         /// will be consumed every time a wasm instruction is executed.
         pub consume_fuel: bool,
+
+        /// The cost of each operator. If fuel is not enabled, this is ignored.
+        pub operator_cost: OperatorCostStrategy,
 
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
@@ -128,10 +137,7 @@ define_tunables! {
 
         /// Whether to enable inlining in Wasmtime's compilation orchestration
         /// or not.
-        pub inlining: bool,
-
-        /// Whether to inline calls within the same core Wasm module or not.
-        pub inlining_intra_module: IntraModuleInlining,
+        pub inlining: Inlining,
 
         /// The size of "small callees" that can be inlined regardless of the
         /// caller's size.
@@ -140,6 +146,59 @@ define_tunables! {
         /// The general size threshold for the sum of the caller's and callee's
         /// sizes, past which we will generally not inline calls anymore.
         pub inlining_sum_size_threshold: u32,
+
+        /// Whether any component model feature related to concurrency is
+        /// enabled.
+        pub concurrency_support: bool,
+
+        /// Whether recording in RR is enabled or not. This is used primarily
+        /// to signal checksum computation for compiled artifacts.
+        pub recording: bool,
+
+        /// An allocation counter that triggers GC when it reaches zero.
+        ///
+        /// Decremented on every allocation and when it hits zero, a GC is
+        /// forced and the counter is reset. Only effective when
+        /// `cfg(gc_zeal)` is enabled.
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
+
+        /// Initial size, in bytes, to be allocated for GC heaps.
+        ///
+        /// This is the same as `memory_reservation` but for GC heaps.
+        pub gc_heap_reservation: u64,
+
+        /// The size, in bytes, of the guard page region for GC heaps.
+        ///
+        /// This is the same as `memory_guard_size` but for GC heaps.
+        pub gc_heap_guard_size: u64,
+
+        /// The size, in bytes, to allocate at the end of a relocated GC heap
+        /// for growth.
+        ///
+        /// This is the same as `memory_reservation_for_growth` but for GC
+        /// heaps.
+        pub gc_heap_reservation_for_growth: u64,
+
+        /// The size, in bytes, to set as the minimum for GC heaps.
+        pub gc_heap_initial_size: u64,
+
+        /// Whether or not GC heaps are allowed to be reallocated after initial
+        /// allocation at runtime.
+        ///
+        /// This is the same as `memory_may_move` but for GC heaps.
+        pub gc_heap_may_move: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on internal assertions failing.
+        pub metadata_for_internal_asserts: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on gc heap corruption being detected.
+        pub metadata_for_gc_heap_corruption: bool,
+
+        /// Whether `metadata.code.branch_hint` sections are parsed and used to
+        /// mark cold blocks during compilation.
+        pub branch_hinting: bool,
     }
 
     pub struct ConfigTunables {
@@ -168,7 +227,7 @@ impl Tunables {
         }
         let mut ret = match target
             .pointer_width()
-            .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
+            .map_err(|_| format_err!("failed to retrieve target pointer width"))?
         {
             PointerWidth::U32 => Tunables::default_u32(),
             PointerWidth::U64 => Tunables::default_u64(),
@@ -180,12 +239,13 @@ impl Tunables {
         if target.is_pulley() {
             ret.signals_based_traps = false;
             ret.memory_guard_size = 0;
+            ret.gc_heap_guard_size = 0;
         }
         Ok(ret)
     }
 
     /// Returns the default set of tunables for running under MIRI.
-    pub const fn default_miri() -> Tunables {
+    pub fn default_miri() -> Tunables {
         Tunables {
             collector: None,
 
@@ -200,6 +260,7 @@ impl Tunables {
             debug_native: false,
             parse_wasm_debuginfo: true,
             consume_fuel: false,
+            operator_cost: OperatorCostStrategy::Default,
             epoch_interruption: false,
             memory_may_move: true,
             guard_before_linear_memory: true,
@@ -210,16 +271,27 @@ impl Tunables {
             winch_callable: false,
             signals_based_traps: false,
             memory_init_cow: true,
-            inlining: false,
-            inlining_intra_module: IntraModuleInlining::WhenUsingGc,
+            inlining: Inlining::No,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
+            concurrency_support: true,
+            recording: false,
+            gc_zeal_alloc_counter: None,
+            gc_heap_reservation: 0,
+            gc_heap_guard_size: 0,
+            gc_heap_reservation_for_growth: 0,
+            gc_heap_may_move: true,
+            gc_heap_initial_size: 0,
+            metadata_for_internal_asserts: false,
+            metadata_for_gc_heap_corruption: true,
+            branch_hinting: false,
+            debug_symbols: true,
         }
     }
 
     /// Returns the default set of tunables for running under a 32-bit host.
-    pub const fn default_u32() -> Tunables {
+    pub fn default_u32() -> Tunables {
         Tunables {
             // For 32-bit we scale way down to 10MB of reserved memory. This
             // impacts performance severely but allows us to have more than a
@@ -229,12 +301,18 @@ impl Tunables {
             memory_reservation_for_growth: 1 << 20, // 1MB
             signals_based_traps: true,
 
+            // GC heaps on 32-bit: conservative defaults similar to linear
+            // memories.
+            gc_heap_reservation: 10 * (1 << 20),
+            gc_heap_guard_size: 0x1_0000,
+            gc_heap_reservation_for_growth: 1 << 20, // 1MB
+
             ..Tunables::default_miri()
         }
     }
 
     /// Returns the default set of tunables for running under a 64-bit host.
-    pub const fn default_u64() -> Tunables {
+    pub fn default_u64() -> Tunables {
         Tunables {
             // 64-bit has tons of address space to static memories can have 4gb
             // address space reservations liberally by default, allowing us to
@@ -254,6 +332,12 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            // GC heaps on 64-bit: use 4GiB reservation and 32MiB guard pages
+            // to enable bounds check elision, matching linear memory defaults.
+            gc_heap_reservation: 1 << 32,
+            gc_heap_guard_size: 32 << 20,
+            gc_heap_reservation_for_growth: 2 << 30, // 2GB
+
             signals_based_traps: true,
             ..Tunables::default_miri()
         }
@@ -261,16 +345,85 @@ impl Tunables {
 
     /// Get the GC heap's memory type, given our configured tunables.
     pub fn gc_heap_memory_type(&self) -> Memory {
+        // We *could* try to match the target architecture's page size, but that
+        // would require exercising a page size for memories that we don't
+        // otherwise support for Wasm; we conservatively avoid that, and just
+        // use the default Wasm page size, for now.
+        let page_size_log2 = 16;
+        let min = self.gc_heap_initial_size.div_ceil(1 << page_size_log2);
         Memory {
             idx_type: IndexType::I32,
-            limits: Limits { min: 0, max: None },
+            limits: Limits { min, max: None },
             shared: false,
-            // We *could* try to match the target architecture's page size, but that
-            // would require exercising a page size for memories that we don't
-            // otherwise support for Wasm; we conservatively avoid that, and just
-            // use the default Wasm page size, for now.
-            page_size_log2: 16,
+            page_size_log2,
         }
+    }
+}
+
+/// Whether a heap is backing a linear memory or a GC heap.
+///
+/// This is used by [`MemoryTunables`] to select between the memory tunables and
+/// the GC heap tunables.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MemoryKind {
+    /// A WebAssembly linear memory.
+    LinearMemory,
+    /// A GC heap for garbage-collected objects.
+    GcHeap,
+}
+
+/// A view into a [`Tunables`] that selects the appropriate linear-memory or
+/// GC-heap flavor of each tunable based on a [`MemoryKind`].
+pub struct MemoryTunables<'a> {
+    tunables: &'a Tunables,
+    kind: MemoryKind,
+}
+
+impl<'a> MemoryTunables<'a> {
+    /// Create a new `MemoryTunables` view.
+    pub fn new(tunables: &'a Tunables, kind: MemoryKind) -> Self {
+        Self { tunables, kind }
+    }
+
+    /// The virtual memory reservation for this kind of memory.
+    pub fn reservation(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation,
+        }
+    }
+
+    /// The size of the guard page region for this kind of memory.
+    pub fn guard_size(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_guard_size,
+            MemoryKind::GcHeap => self.tunables.gc_heap_guard_size,
+        }
+    }
+
+    /// Extra virtual memory to reserve beyond the initially mapped pages for
+    /// this kind of memory.
+    pub fn reservation_for_growth(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation_for_growth,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation_for_growth,
+        }
+    }
+
+    /// Whether this kind of memory's base pointer may be relocated at runtime.
+    pub fn may_move(&self) -> bool {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_may_move,
+            MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
+        }
+    }
+
+    /// Get the underlying tunables.
+    ///
+    /// This is ONLY for accessing tunable fields that DO NOT come in a
+    /// linear-memory flavor and a GC-heap flavor.
+    pub fn tunables(&self) -> &'a Tunables {
+        self.tunables
     }
 }
 
@@ -281,6 +434,8 @@ pub enum Collector {
     DeferredReferenceCounting,
     /// The null collector.
     Null,
+    /// The copying collector.
+    Copying,
 }
 
 impl fmt::Display for Collector {
@@ -288,31 +443,287 @@ impl fmt::Display for Collector {
         match self {
             Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
             Collector::Null => write!(f, "null"),
+            Collector::Copying => write!(f, "copying"),
         }
     }
 }
 
-/// Whether to inline function calls within the same module.
+/// Inlining modes supported by Wasmtime.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[expect(missing_docs, reason = "self-describing variants")]
-pub enum IntraModuleInlining {
+pub enum Inlining {
+    /// All inlining is enabled wherever possible.
+    ///
+    /// This includes inter-module inlining (across modules) as well as
+    /// intra-module inlining (within a module).
+    ///
+    /// Note that backtraces may omit inlined stack frames.
     Yes,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is only allowed when the module is using GC.
+    ///
+    /// Note that backtraces may omit inlined stack frames.
+    InterModuleAndIntraGc,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is not allowed.
+    ///
+    /// Note that backtraces may omit inlined stack frames.
+    InterModule,
+
+    /// No module inlining is allowed, either inter- or intra-module. Only
+    /// inlining Wasmtime's intrinsics are allowed.
+    ///
+    /// This option, for example, never emits WebAssembly stack frames from
+    /// backtraces.
+    Intrinsics,
+
+    /// Inlining is disabled entirely.
     No,
-    WhenUsingGc,
 }
 
-impl FromStr for IntraModuleInlining {
+impl FromStr for Inlining {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "y" | "yes" | "true" => Ok(Self::Yes),
             "n" | "no" | "false" => Ok(Self::No),
-            "gc" => Ok(Self::WhenUsingGc),
+            "gc" => Ok(Self::InterModuleAndIntraGc),
+            "inter-module" => Ok(Self::InterModuleAndIntraGc),
+            "intrinsics" => Ok(Self::Intrinsics),
             _ => bail!(
                 "invalid intra-module inlining option string: `{s}`, \
-                 only yes,no,gc accepted"
+                 only yes,no,gc,inter-module,intrinsics accepted"
             ),
         }
     }
 }
+
+impl fmt::Display for Inlining {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Inlining::Yes => write!(f, "yes"),
+            Inlining::InterModuleAndIntraGc => write!(f, "gc"),
+            Inlining::InterModule => write!(f, "inter-module"),
+            Inlining::Intrinsics => write!(f, "intrinsics"),
+            Inlining::No => write!(f, "no"),
+        }
+    }
+}
+
+/// The cost of each operator.
+///
+/// Note: a more dynamic approach (e.g. a user-supplied callback) can be
+/// added as a variant in the future if needed.
+#[derive(Clone, Hash, Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub enum OperatorCostStrategy {
+    /// A table of operator costs.
+    Table(Box<OperatorCost>),
+
+    /// Each cost defaults to 1 fuel unit, except `Nop`, `Drop` and
+    /// a few control flow operators.
+    #[default]
+    Default,
+}
+
+impl OperatorCostStrategy {
+    /// Create a new operator cost strategy with a table of costs.
+    pub fn table(cost: OperatorCost) -> Self {
+        OperatorCostStrategy::Table(Box::new(cost))
+    }
+
+    /// Get the cost of an operator.
+    pub fn cost(&self, op: &Operator) -> i64 {
+        match self {
+            OperatorCostStrategy::Table(cost) => cost.cost(op),
+            OperatorCostStrategy::Default => default_operator_cost(op),
+        }
+    }
+
+    /// Get the costs of work whose size is only known at runtime.
+    pub fn variable(&self) -> &VariableOperatorCost {
+        match self {
+            OperatorCostStrategy::Table(cost) => &cost.variable,
+            OperatorCostStrategy::Default => &DEFAULT_VARIABLE_OPERATOR_COST,
+        }
+    }
+}
+
+const DEFAULT_VARIABLE_OPERATOR_COST: VariableOperatorCost = VariableOperatorCost::new();
+
+/// Fuel costs for operators whose work is proportional to a runtime operand.
+///
+/// These costs are charged in addition to the corresponding flat cost in
+/// [`OperatorCost`].
+#[derive(Clone, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct VariableOperatorCost {
+    /// Cost per byte copied by `memory.copy`.
+    pub memory_copy_per_byte: u8,
+    /// Cost per byte written by `memory.fill`.
+    pub memory_fill_per_byte: u8,
+    /// Cost per byte copied by `memory.init`.
+    pub memory_init_per_byte: u8,
+    /// Cost per page requested by `memory.grow`.
+    pub memory_grow_per_page: u8,
+
+    /// Cost per element copied by `table.copy`.
+    pub table_copy_per_element: u8,
+    /// Cost per element written by `table.fill`.
+    pub table_fill_per_element: u8,
+    /// Cost per element copied by `table.init`.
+    pub table_init_per_element: u8,
+    /// Cost per element requested by `table.grow`.
+    pub table_grow_per_element: u8,
+
+    /// Cost per element copied by `array.copy`.
+    pub array_copy_per_element: u8,
+    /// Cost per element written by `array.fill`.
+    pub array_fill_per_element: u8,
+    /// Cost per element initialized by `array.new_data`.
+    pub array_new_data_per_element: u8,
+    /// Cost per element initialized by `array.init_data`.
+    pub array_init_data_per_element: u8,
+    /// Cost per element initialized by `array.new_elem`.
+    pub array_new_elem_per_element: u8,
+    /// Cost per element initialized by `array.init_elem`.
+    pub array_init_elem_per_element: u8,
+    /// Cost per element initialized by `array.new_default`.
+    pub array_new_default_per_element: u8,
+    /// Cost per element initialized by `array.new`.
+    pub array_new_per_element: u8,
+}
+
+impl VariableOperatorCost {
+    /// Creates the default variable-cost table.
+    pub const fn new() -> Self {
+        Self {
+            memory_copy_per_byte: 1,
+            memory_fill_per_byte: 1,
+            memory_init_per_byte: 1,
+            memory_grow_per_page: 1,
+            table_copy_per_element: 1,
+            table_fill_per_element: 1,
+            table_init_per_element: 1,
+            table_grow_per_element: 1,
+            array_copy_per_element: 1,
+            array_fill_per_element: 1,
+            array_new_data_per_element: 1,
+            array_init_data_per_element: 1,
+            array_new_elem_per_element: 1,
+            array_init_elem_per_element: 1,
+            array_new_default_per_element: 1,
+            array_new_per_element: 1,
+        }
+    }
+}
+
+impl Default for VariableOperatorCost {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+const fn default_operator_cost(op: &Operator) -> i64 {
+    match op {
+        // Nop and drop generate no code, so don't consume fuel for them.
+        Operator::Nop | Operator::Drop => 0,
+
+        // Control flow may create branches, but is generally cheap and
+        // free, so don't consume fuel. Note the lack of `if` since some
+        // cost is incurred with the conditional check.
+        Operator::Block { .. }
+        | Operator::Loop { .. }
+        | Operator::Unreachable
+        | Operator::Return
+        | Operator::Else
+        | Operator::End => 0,
+
+        // Everything else, just call it one operation.
+        _ => 1,
+    }
+}
+
+macro_rules! default_cost {
+    // Nop and drop generate no code, so don't consume fuel for them.
+    (Nop) => {
+        0
+    };
+    (Drop) => {
+        0
+    };
+
+    // Control flow may create branches, but is generally cheap and
+    // free, so don't consume fuel. Note the lack of `if` since some
+    // cost is incurred with the conditional check.
+    (Block) => {
+        0
+    };
+    (Loop) => {
+        0
+    };
+    (Unreachable) => {
+        0
+    };
+    (Return) => {
+        0
+    };
+    (Else) => {
+        0
+    };
+    (End) => {
+        0
+    };
+
+    // Everything else, just call it one operation.
+    ($op:ident) => {
+        1
+    };
+}
+
+macro_rules! define_operator_cost {
+    ($(@$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident ($($ann:tt)*) )*) => {
+        /// The fuel cost of each operator in a table.
+        #[derive(Clone, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+        #[allow(missing_docs, non_snake_case, reason = "to avoid triggering clippy lints")]
+        pub struct OperatorCost {
+            $(
+                pub $op: u8,
+            )*
+            /// Costs for work whose size is only known at runtime.
+            pub variable: VariableOperatorCost,
+        }
+
+        impl OperatorCost {
+            /// Returns the cost of the given operator.
+            pub fn cost(&self, op: &Operator) -> i64 {
+                match op {
+                    $(
+                        Operator::$op $({ $($arg: _),* })? => self.$op as i64,
+                    )*
+                    unknown => panic!("unknown op: {unknown:?}"),
+                }
+            }
+        }
+
+        impl OperatorCost {
+            /// Creates a new `OperatorCost` table with default costs for each operator.
+            pub const fn new() -> Self {
+                Self {
+                    $(
+                        $op: default_cost!($op),
+                    )*
+                    variable: VariableOperatorCost::new(),
+                }
+            }
+        }
+
+        impl Default for OperatorCost {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    }
+}
+
+wasmparser::for_each_operator!(define_operator_cost);

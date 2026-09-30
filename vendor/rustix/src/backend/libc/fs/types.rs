@@ -1,4 +1,5 @@
 use crate::backend::c;
+#[cfg(not(target_os = "horizon"))]
 use crate::ffi;
 use bitflags::bitflags;
 
@@ -361,6 +362,14 @@ bitflags! {
         #[cfg(target_os = "freebsd")]
         const EMPTY_PATH = bitcast!(c::O_EMPTY_PATH);
 
+        /// `O_SYMLINK`
+        #[cfg(any(apple, target_os = "redox"))]
+        const SYMLINK = bitcast!(c::O_SYMLINK);
+
+        /// `O_NOFOLLOW_ANY`
+        #[cfg(apple)]
+        const NOFOLLOW_ANY = bitcast!(c::O_NOFOLLOW_ANY);
+
         /// `O_LARGEFILE`
         ///
         /// Rustix and/or libc will automatically set this flag when
@@ -508,6 +517,22 @@ bitflags! {
     }
 }
 
+#[cfg(target_os = "redox")]
+bitflags! {
+    /// `RENAME_*` constants for use with [`renameat_with`].
+    ///
+    /// [`renameat_with`]: crate::fs::renameat_with
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+    pub struct RenameFlags: ffi::c_uint {
+        /// `RENAME_NOREPLACE`
+        const NOREPLACE = bitcast!(c::RENAME_NOREPLACE);
+
+        /// <https://docs.rs/bitflags/*/bitflags/#externally-defined-flags>
+        const _ = !0;
+    }
+}
+
 #[cfg(apple)]
 bitflags! {
     /// `RENAME_*` constants for use with [`renameat_with`].
@@ -603,6 +628,7 @@ impl FileType {
         target_os = "aix",
         target_os = "espidf",
         target_os = "haiku",
+        target_os = "horizon",
         target_os = "nto",
         target_os = "redox",
         target_os = "vita"

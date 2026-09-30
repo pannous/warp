@@ -9,7 +9,7 @@ use crate::runtime::vm::SendSyncPtr;
 use crate::runtime::vm::memory::{MemoryBase, RuntimeLinearMemory};
 use core::mem;
 use core::ptr::NonNull;
-use wasmtime_environ::Tunables;
+use wasmtime_environ::MemoryTunables;
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
@@ -25,26 +25,34 @@ pub struct MallocMemory {
 impl MallocMemory {
     pub fn new(
         _ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
     ) -> Result<Self> {
-        if tunables.memory_guard_size > 0 {
+        if memory_tunables.guard_size() > 0 {
             bail!("malloc memory is only compatible if guard pages aren't used");
         }
-        if tunables.memory_reservation > 0 {
+        if memory_tunables.reservation() > 0 {
             bail!("malloc memory is only compatible with no ahead-of-time memory reservation");
         }
-        if tunables.memory_init_cow {
+        if memory_tunables.tunables().memory_init_cow {
             bail!("malloc memory cannot be used with CoW images");
         }
 
         let initial_allocation_byte_size = minimum
-            .checked_add(tunables.memory_reservation_for_growth.try_into()?)
+            .checked_add(memory_tunables.reservation_for_growth().try_into()?)
             .context("memory allocation size too large")?;
 
         let initial_allocation_len = byte_size_to_element_len(initial_allocation_byte_size);
         let mut storage = Vec::new();
-        storage.try_reserve(initial_allocation_len)?;
+        storage
+            .try_reserve(initial_allocation_len)
+            .with_context(|| {
+                format!(
+                    "failed to allocate {initial_allocation_byte_size:#x} \
+                     bytes ({minimum:#x} minimum + {:#x} memory_reservation_for_growth)",
+                    memory_tunables.reservation_for_growth(),
+                )
+            })?;
 
         let initial_len = byte_size_to_element_len(minimum);
         if initial_len > 0 {
@@ -71,7 +79,8 @@ impl RuntimeLinearMemory for MallocMemory {
         let new_element_len = byte_size_to_element_len(new_size);
         if new_element_len > self.storage.len() {
             self.storage
-                .try_reserve(new_element_len - self.storage.len())?;
+                .try_reserve(new_element_len - self.storage.len())
+                .with_context(|| format!("failed to grow memory to {new_size:#x} bytes"))?;
             grow_storage_to(&mut self.storage, new_element_len);
             self.base_ptr =
                 SendSyncPtr::new(NonNull::new(self.storage.as_mut_ptr()).unwrap()).cast();
@@ -136,6 +145,7 @@ fn grow_storage_to(storage: &mut Vec<Align16>, new_len: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasmtime_environ::{MemoryKind, Tunables};
 
     // This is currently required by the constructor but otherwise ignored in
     // the creation of a `MallocMemory`, so just have a single one used in
@@ -148,16 +158,20 @@ mod tests {
     };
 
     // Valid tunables that can be used to create a `MallocMemory`.
-    const TUNABLES: Tunables = Tunables {
-        memory_reservation: 0,
-        memory_guard_size: 0,
-        memory_init_cow: false,
-        ..Tunables::default_miri()
-    };
+    fn tunables() -> Tunables {
+        Tunables {
+            memory_reservation: 0,
+            memory_guard_size: 0,
+            memory_init_cow: false,
+            ..Tunables::default_miri()
+        }
+    }
 
     #[test]
     fn simple() {
-        let mut memory = MallocMemory::new(&TY, &TUNABLES, 10).unwrap();
+        let t = tunables();
+        let mt = MemoryTunables::new(&t, MemoryKind::LinearMemory);
+        let mut memory = MallocMemory::new(&TY, &mt, 10).unwrap();
         assert_eq!(memory.storage.len(), 1);
         assert_valid(&memory);
 
@@ -180,15 +194,16 @@ mod tests {
 
     #[test]
     fn reservation_not_initialized() {
-        let tunables = Tunables {
+        let t = Tunables {
             memory_reservation_for_growth: 1 << 20,
-            ..TUNABLES
+            ..tunables()
         };
-        let mut memory = MallocMemory::new(&TY, &tunables, 10).unwrap();
+        let mt = MemoryTunables::new(&t, MemoryKind::LinearMemory);
+        let mut memory = MallocMemory::new(&TY, &mt, 10).unwrap();
         assert_eq!(memory.storage.len(), 1);
         assert_eq!(
             memory.storage.capacity(),
-            (tunables.memory_reservation_for_growth / 16) as usize + 1,
+            (t.memory_reservation_for_growth / 16) as usize + 1,
         );
         assert_valid(&memory);
 
@@ -196,7 +211,7 @@ mod tests {
         assert_eq!(memory.storage.len(), 7);
         assert_eq!(
             memory.storage.capacity(),
-            (tunables.memory_reservation_for_growth / 16) as usize + 1,
+            (t.memory_reservation_for_growth / 16) as usize + 1,
         );
         assert_valid(&memory);
     }

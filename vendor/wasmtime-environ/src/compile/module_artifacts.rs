@@ -1,12 +1,12 @@
 //! Definitions of runtime structures and metadata which are serialized into ELF
 //! with `postcard` as part of a module's compilation process.
 
+use crate::WasmChecksum;
+use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
-    CompiledModuleInfo, DebugInfoData, FunctionName, MemoryInitialization, Metadata,
-    ModuleTranslation, Tunables, obj,
+    CompiledModuleInfo, DebugInfoData, FunctionName, Metadata, ModuleTranslation, Tunables, obj,
 };
-use anyhow::{Result, bail};
 use object::SectionKind;
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use std::ops::Range;
@@ -117,29 +117,24 @@ impl<'a> ObjectBuilder<'a> {
             mut module,
             debuginfo,
             has_unparsed_debuginfo,
-            data,
             data_align,
-            passive_data,
+            runtime_data,
+            wasm,
             ..
         } = translation;
 
         // Place all data from the wasm module into a section which will the
         // source of the data later at runtime. This additionally keeps track of
         // the offset of
-        let mut total_data_len = 0;
         let data_offset = self
             .obj
             .append_section_data(self.data, &[], data_align.unwrap_or(1));
-        for (i, data) in data.iter().enumerate() {
-            // The first data segment has its alignment specified as the alignment
-            // for the entire section, but everything afterwards is adjacent so it
-            // has alignment of 1.
+        for (i, (_, data)) in runtime_data.iter().enumerate() {
+            // The first data segment has its alignment specified as the
+            // alignment for the entire section, but everything afterwards is
+            // adjacent so it has alignment of 1.
             let align = if i == 0 { data_align.unwrap_or(1) } else { 1 };
             self.obj.append_section_data(self.data, data, align);
-            total_data_len += data.len();
-        }
-        for data in passive_data.iter() {
-            self.obj.append_section_data(self.data, data, 1);
         }
 
         // If any names are present in the module then the `ELF_NAME_DATA` section
@@ -170,34 +165,12 @@ impl<'a> ObjectBuilder<'a> {
             }
         }
 
-        // Data offsets in `MemoryInitialization` are offsets within the
-        // `translation.data` list concatenated which is now present in the data
-        // segment that's appended to the object. Increase the offsets by
-        // `self.data_size` to account for any previously added module.
-        let data_offset = u32::try_from(data_offset).unwrap();
-        match &mut module.memory_initialization {
-            MemoryInitialization::Segmented(list) => {
-                for segment in list {
-                    segment.data.start = segment.data.start.checked_add(data_offset).unwrap();
-                    segment.data.end = segment.data.end.checked_add(data_offset).unwrap();
-                }
-            }
-            MemoryInitialization::Static { map } => {
-                for (_, segment) in map {
-                    if let Some(segment) = segment {
-                        segment.data.start = segment.data.start.checked_add(data_offset).unwrap();
-                        segment.data.end = segment.data.end.checked_add(data_offset).unwrap();
-                    }
-                }
-            }
-        }
-
         // Data offsets for passive data are relative to the start of
-        // `translation.passive_data` which was appended to the data segment
+        // `translation.runtime_data` which was appended to the data segment
         // of this object, after active data in `translation.data`. Update the
         // offsets to account prior modules added in addition to active data.
-        let data_offset = data_offset + u32::try_from(total_data_len).unwrap();
-        for (_, range) in module.passive_data_map.iter_mut() {
+        let data_offset = u32::try_from(data_offset).unwrap();
+        for (_, range) in module.runtime_data.iter_mut() {
             range.start = range.start.checked_add(data_offset).unwrap();
             range.end = range.end.checked_add(data_offset).unwrap();
         }
@@ -220,6 +193,7 @@ impl<'a> ObjectBuilder<'a> {
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,
                 dwarf,
             },
+            checksum: WasmChecksum::from_binary(wasm, self.tunables.recording),
         })
     }
 
@@ -240,6 +214,32 @@ impl<'a> ObjectBuilder<'a> {
         });
         let offset = self.obj.append_section_data(section_id, data, 1);
         dwarf.push((T::id() as u8, offset..offset + data.len() as u64));
+    }
+
+    /// Appends the original Wasm bytecode for one or more core modules as a
+    /// pair of new ELF sections.
+    ///
+    /// `modules` is an iterator of raw Wasm binary slices, one per core
+    /// module, in `StaticModuleIndex` order.
+    pub fn append_wasm_bytecode<'b>(&mut self, modules: impl IntoIterator<Item = &'b [u8]>) {
+        let bytecode_id = self.obj.add_section(
+            self.obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASMTIME_WASM_BYTECODE.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let ends_id = self.obj.add_section(
+            self.obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASMTIME_WASM_BYTECODE_ENDS.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let mut end: u32 = 0;
+        for wasm in modules {
+            self.obj.append_section_data(bytecode_id, wasm, 1);
+            end = end
+                .checked_add(u32::try_from(wasm.len()).expect("module bytecode exceeds 4 GiB"))
+                .expect("total bytecode exceeds 4 GiB");
+            self.obj.append_section_data(ends_id, &end.to_le_bytes(), 4);
+        }
     }
 
     /// Creates the `ELF_WASMTIME_INFO` section from the given serializable data
@@ -284,22 +284,14 @@ impl FinishedObject for Vec<u8> {
         struct ObjectVec(Vec<u8>);
 
         impl WritableBuffer for ObjectVec {
-            fn len(&self) -> usize {
-                self.0.len()
-            }
-
-            fn reserve(&mut self, additional: usize) -> Result<(), ()> {
+            fn reserve(&mut self, additional: u64) -> Result<(), ()> {
                 assert_eq!(self.0.len(), 0, "cannot reserve twice");
-                self.0 = Vec::with_capacity(additional);
+                self.0 = Vec::with_capacity(additional as usize);
                 Ok(())
             }
 
-            fn resize(&mut self, new_len: usize) {
-                if new_len <= self.0.len() {
-                    self.0.truncate(new_len)
-                } else {
-                    self.0.extend(vec![0; new_len - self.0.len()])
-                }
+            fn write_zeros(&mut self, additional: u64) {
+                self.0.extend(vec![0; additional as usize])
             }
 
             fn write_bytes(&mut self, val: &[u8]) {

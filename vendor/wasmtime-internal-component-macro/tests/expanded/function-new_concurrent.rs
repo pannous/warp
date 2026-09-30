@@ -103,8 +103,6 @@ pub struct Foo {
     new: wasmtime::component::Func,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl FooIndices {
         /// Creates a new copy of `FooIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -119,16 +117,16 @@ const _: () = {
             let new = {
                 let (item, index) = _component
                     .get_export(None, "new")
-                    .ok_or_else(|| anyhow::anyhow!("no export `new` found"))?;
+                    .ok_or_else(|| wasmtime::format_err!("no export `new` found"))?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
-                        anyhow::Context::context(
+                        wasmtime::error::Context::context(
                             func.typecheck::<(), ()>(&_instance_type),
                             "type-checking export func `new`",
                         )?;
                         index
                     }
-                    _ => Err(anyhow::anyhow!("export `new` is not a function"))?,
+                    _ => Err(wasmtime::format_err!("export `new` is not a function"))?,
                 }
             };
             Ok(FooIndices { new })
@@ -182,6 +180,9 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
         }
+        pub fn func_new(&self) -> wasmtime::component::TypedFunc<(), ()> {
+            unsafe { wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new) }
+        }
         pub async fn call_new<_T, _D>(
             &self,
             accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -190,10 +191,8 @@ const _: () = {
             _T: Send,
             _D: wasmtime::component::HasData,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new)
-            };
-            let ((), _) = callee.call_concurrent(accessor, ()).await?;
+            let callee = self.func_new();
+            let () = callee.call_concurrent(accessor, ()).await?;
             Ok(())
         }
     }

@@ -1,4 +1,15 @@
+vendor
 target
 *.wasm
 wiki/
 out
+
+/Users/me/dev/angles/warp/vendor
+
+vendor
+.DS_Store
+probes/agent_logs/
+
+probes/bench_base_target/
+
+probes/footguns/inspiration/

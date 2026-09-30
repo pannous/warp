@@ -1,14 +1,17 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::Node::Empty;
-use wasp::wasp_parser::parse;
+use warp::eq;
+use warp::int;
+use warp::wasp_parser::parse;
+use warp::Kind::Key;
+use warp::Node;
+use warp::Node::Empty;
 
 #[test]
 pub fn test_parser_serialize() {
 	let code = "{ key: [ value, { key2: value2, num:123, text:'yeah' } ] }";
 	let ast: Node = parse(code);
 	let serial = ast.serialize();
-	let right = "{key=[value, {key2=value2, num=123, text='yeah'}]}";
+	// Now serialization preserves the operator (: vs =)
+	let right = "{key:[value, {key2:value2, num:123, text:'yeah'}]}";
 	eq!(serial, right);
 	eq!(ast.size(), 1);
 }
@@ -31,6 +34,30 @@ fn test_group_cascade0() {
 	let result = parse("x='abcde';x#4='y';x#4");
 	eq!(result.length(), 3);
 }
+
+
+#[test]
+fn test_colon_object() {
+	let person = parse(r#"person:{name:"Joe" age:42}"#);
+	eq!(person.kind(), Key);
+	eq!(person.length(), 2);
+	eq!(person.name(), "person");
+	// eq!(person["name"].kind(), Key); or does it select the key give it's value automatically? wrapped in Meta??
+	eq!(person["name"], "Joe");
+	eq!(person["age"], 42); // either age:42 == 42 or index gives deep value directly
+	eq!(person[0].kind(), Key);
+	eq!(person[0].name(), "name");
+	eq!(person[1], 42);
+}
+
+
+#[test]
+fn test_key_object_set() {
+	let mut person = parse(r#"person:{name:"Joe" age:42}"#);
+	person["age"] = int(41);
+	eq!(person["age"], 41);
+}
+
 
 #[test]
 fn test_colon_lists() {
@@ -232,4 +259,42 @@ fn test_simple_separators() {
 fn test_expected_structure() {
 	let r = parse("a b c");
 	println!("a b c => {} (len={})", r, r.length());
+}
+
+#[test]
+fn test_nested_ternary_depth2() {
+	// Simple nested ternary (depth 2)
+	let result = parse("x > 0 ? 1 : x < 0 ? -1 : 0");
+	println!("nested ternary: {:?}", result);
+	// Should parse without hanging - the ? operator chains correctly
+	assert!(result != Empty);
+}
+
+#[test]
+fn test_fizzbuzz_nested_ternary() {
+	// FizzBuzz - classic interview problem with nested ternaries (single line)
+	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz" : n % 3 == 0 ? "Fizz" : n % 5 == 0 ? "Buzz" : n
+
+fizzbuzz(15)"#;
+	let result = parse(code);
+	println!("fizzbuzz parsed: {:?}", result);
+	// Should parse the nested ternary without issues
+	assert!(result != Empty);
+	// The result should have 2 items: the def and the function call
+	eq!(result.length(), 2);
+}
+
+#[test]
+fn test_nested_ternary_multiline() {
+	// Multiline nested ternary - continuation lines start with :
+	// NOTE: This currently parses with errors due to leading : on continuation lines
+	// being interpreted incorrectly. This test documents the current behavior.
+	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz"
+                 : n % 3 == 0 ? "Fizz"
+                 : n % 5 == 0 ? "Buzz"
+                 : n"#;
+	let result = parse(code);
+	println!("multiline ternary parsed: {:?}", result);
+	// Currently parses but with errors - documents current behavior
+	assert!(result != Empty);
 }

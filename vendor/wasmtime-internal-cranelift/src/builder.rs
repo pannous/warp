@@ -4,7 +4,6 @@
 //! well as providing a function to return the default configuration to build.
 
 use crate::isa_builder::IsaBuilder;
-use anyhow::Result;
 use cranelift_codegen::{
     CodegenResult,
     isa::{self, OwnedTargetIsa},
@@ -13,6 +12,7 @@ use std::fmt;
 use std::path;
 use std::sync::Arc;
 use target_lexicon::Triple;
+use wasmtime_environ::error::Result;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
 
 struct Builder {
@@ -86,9 +86,6 @@ impl CompilerBuilder for Builder {
             }
             "wasmtime_linkopt_force_jump_veneer" => {
                 self.linkopts.force_jump_veneers = value.parse()?;
-            }
-            "wasmtime_inlining_intra_module" => {
-                self.tunables.as_mut().unwrap().inlining_intra_module = value.parse()?;
             }
             "wasmtime_inlining_small_callee_size" => {
                 self.tunables.as_mut().unwrap().inlining_small_callee_size = value.parse()?;

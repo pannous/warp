@@ -21,9 +21,8 @@
 //! the own is removed or otherwise taken out.
 
 use crate::prelude::*;
-use crate::runtime::vm::component::{
-    InstanceFlags, ResourceTables, TypedResource, TypedResourceIndex,
-};
+use crate::runtime::component::RuntimeInstance;
+use crate::runtime::vm::component::{ResourceTables, TypedResource, TypedResourceIndex};
 use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
 use crate::store::StoreOpaque;
 use core::ptr::NonNull;
@@ -63,13 +62,13 @@ pub struct HostResourceTables<'a> {
 #[derive(Default)]
 pub struct HostResourceData {
     cur_generation: u32,
-    table_slot_metadata: Vec<TableSlot>,
+    table_slot_metadata: TryVec<TableSlot>,
 }
 
 #[derive(Copy, Clone)]
 pub struct TableSlot {
     generation: u32,
-    pub(super) flags: Option<InstanceFlags>,
+    pub(super) instance: Option<RuntimeInstance>,
     pub(super) dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
 
@@ -97,16 +96,9 @@ impl HostResourceIndex {
 }
 
 impl<'a> HostResourceTables<'a> {
-    pub fn new_host(store: &'a mut StoreOpaque) -> HostResourceTables<'a> {
-        let (calls, host_table, host_resource_data) = store.component_resource_state();
-        HostResourceTables::from_parts(
-            ResourceTables {
-                host_table: Some(host_table),
-                calls,
-                guest: None,
-            },
-            host_resource_data,
-        )
+    pub fn new_host(store: &'a mut StoreOpaque) -> Result<HostResourceTables<'a>> {
+        let (tables, data) = store.component_resource_tables_and_host_resource_data(None)?;
+        Ok(HostResourceTables::from_parts(tables, data))
     }
 
     pub fn from_parts(
@@ -144,16 +136,16 @@ impl<'a> HostResourceTables<'a> {
     /// will point to the `rep` specified. The returned index is suitable for
     /// conversion into either [`Resource`] or [`ResourceAny`].
     ///
-    /// The `dtor` and instance `flags` are specified as well to know what
+    /// The `dtor` and instance `instance` are specified as well to know what
     /// destructor to run when this resource is destroyed.
     pub fn host_resource_lower_own(
         &mut self,
         rep: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
+        instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_own(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, dtor, flags))
+        Ok(self.new_host_index(idx, dtor, instance)?)
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
@@ -161,7 +153,7 @@ impl<'a> HostResourceTables<'a> {
         let idx = self
             .tables
             .resource_lower_borrow(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, None, None))
+        Ok(self.new_host_index(idx, None, None)?)
     }
 
     /// Validates that `idx` is still valid for the host tables, notably
@@ -185,7 +177,7 @@ impl<'a> HostResourceTables<'a> {
         // precise error, such as a lift operation.
         if let Some(actual) = actual {
             if actual.generation != idx.generation() {
-                bail!("host-owned resource is being used with the wrong type");
+                bail!("host-owned resource was already de-allocated");
             }
         }
 
@@ -208,12 +200,12 @@ impl<'a> HostResourceTables<'a> {
         &mut self,
         idx: u32,
         dtor: Option<NonNull<VMFuncRef>>,
-        flags: Option<InstanceFlags>,
-    ) -> HostResourceIndex {
+        instance: Option<RuntimeInstance>,
+    ) -> Result<HostResourceIndex> {
         let list = &mut self.host_resource_data.table_slot_metadata;
         let info = TableSlot {
             generation: self.host_resource_data.cur_generation,
-            flags,
+            instance,
             dtor: dtor.map(SendSyncPtr::new),
         };
         match list.get_mut(idx as usize) {
@@ -225,16 +217,16 @@ impl<'a> HostResourceTables<'a> {
                     assert_eq!(idx, 1);
                     list.push(TableSlot {
                         generation: 0,
-                        flags: None,
+                        instance: None,
                         dtor: None,
-                    });
+                    })?;
                 }
                 assert_eq!(idx as usize, list.len());
-                list.push(info);
+                list.push(info)?;
             }
         }
 
-        HostResourceIndex::new(idx, info.generation)
+        Ok(HostResourceIndex::new(idx, info.generation))
     }
 
     /// Drops a host-owned resource from host tables.
@@ -317,17 +309,10 @@ impl<'a> HostResourceTables<'a> {
             .resource_lift_borrow(TypedResourceIndex::Component { ty, index })
     }
 
-    /// Begins a call into the component instance, starting recording of
-    /// metadata related to resource borrowing.
-    #[inline]
-    pub fn enter_call(&mut self) {
-        self.tables.enter_call()
-    }
-
     /// Completes a call into the component instance, validating that it's ok to
     /// complete by ensuring the are no remaining active borrows.
     #[inline]
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.tables.exit_call()
+    pub fn validate_scope_exit(&mut self) -> Result<()> {
+        self.tables.validate_scope_exit()
     }
 }

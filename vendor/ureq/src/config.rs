@@ -8,8 +8,8 @@ use std::time::Duration;
 use http::Uri;
 
 use crate::middleware::{Middleware, MiddlewareChain};
-use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
+use crate::{Body, Error, http};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
@@ -145,6 +145,13 @@ use typestate::RequestScope;
 /// let response = agent.run(request);
 /// ```
 ///
+/// Request-level changes to connection settings (TLS, IP family, TCP_NODELAY,
+/// buffer sizes, or the configured User-Agent used for proxy CONNECT) bypass
+/// the Agent's pool when incompatible with its configuration. Such connections
+/// are not returned to the pool. Proxy settings are distinguished by the pool key.
+/// TLS credentials, explicit root sets, and custom crypto providers are compared
+/// by shared identity: cloning retains compatibility, independently constructing
+/// them may disable pooling even when their contents match.
 #[derive(Clone)]
 pub struct Config {
     http_status_as_error: bool,
@@ -175,6 +182,54 @@ pub struct Config {
 }
 
 impl Config {
+    /// Whether this configuration can use the Agent's connection pool.
+    ///
+    /// Keep this pattern exhaustive: every new field needs a pooling decision.
+    /// Custom connectors must still respect the Agent's connection-sharing boundary.
+    pub(crate) fn can_share_pool_with(&self, agent: &Self) -> bool {
+        let Self {
+            ip_family,
+            #[cfg(feature = "_tls")]
+            tls_config,
+            no_delay,
+            input_buffer_size,
+            output_buffer_size,
+            user_agent,
+            // Already separated by the pool key.
+            proxy: _,
+            // Applied to each request or response, independently of the transport.
+            http_status_as_error: _,
+            https_only: _,
+            max_redirects: _,
+            max_redirects_will_error: _,
+            redirect_auth_headers: _,
+            save_redirect_history: _,
+            accept: _,
+            accept_encoding: _,
+            timeouts: _,
+            max_response_header_size: _,
+            allow_non_standard_methods: _,
+            middleware: _,
+            // Pool capacity is Agent-only; idle age is checked during lookup.
+            max_idle_connections: _,
+            max_idle_connections_per_host: _,
+            max_idle_age: _,
+        } = self;
+
+        #[cfg(feature = "_tls")]
+        if !tls_config.can_share_pool_with(&agent.tls_config) {
+            return false;
+        }
+
+        *ip_family == agent.ip_family
+            && *no_delay == agent.no_delay
+            && *input_buffer_size == agent.input_buffer_size
+            && *output_buffer_size == agent.output_buffer_size
+            // User-Agent also participates in proxy CONNECT establishment.
+            && user_agent.as_str(DEFAULT_USER_AGENT)
+                == agent.user_agent.as_str(DEFAULT_USER_AGENT)
+    }
+
     /// A builder to make a bespoke configuration.
     ///
     /// The default values are already set.
@@ -238,6 +293,7 @@ impl Config {
     /// Config for TLS.
     ///
     /// This config is generic for all TLS connectors.
+    /// Request configurations incompatible with the Agent bypass its connection pool.
     #[cfg(feature = "_tls")]
     pub fn tls_config(&self) -> &TlsConfig {
         &self.tls_config
@@ -458,6 +514,7 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Config for TLS.
     ///
     /// This config is generic for all TLS connectors.
+    /// Request configurations incompatible with the Agent bypass its connection pool.
     #[cfg(feature = "_tls")]
     pub fn tls_config(mut self, v: TlsConfig) -> Self {
         self.config().tls_config = v;
@@ -696,17 +753,26 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for establishing the connection
     ///
-    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
+    /// This covers opening the socket, negotiating with any proxy, and for a
+    /// TLS connection, completing the TLS handshake. The handshake is done as
+    /// part of connecting, so it is not covered by [`timeout_send_request`].
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_send_request`]: ConfigBuilder::timeout_send_request
     pub fn timeout_connect(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.connect = v;
         self
     }
 
-    /// Max duration for sending the request, but not the request body.
+    /// Max duration for sending the request headers, but not the request body.
+    ///
+    /// This starts after the connection (including any TLS handshake) is
+    /// established, see [`timeout_connect`].
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_connect`]: ConfigBuilder::timeout_connect
     pub fn timeout_send_request(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.send_request = v;
         self
@@ -733,15 +799,25 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for receiving the response headers, but not the body
     ///
+    /// This stops applying once the response headers have been received.
+    /// Reading the body is covered separately by [`timeout_recv_body`].
+    ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_body`]: ConfigBuilder::timeout_recv_body
     pub fn timeout_recv_response(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.recv_response = v;
         self
     }
 
-    /// Max duration for receving the response body.
+    /// Max total duration for receiving the response body.
+    ///
+    /// This starts when the response headers have been received, see
+    /// [`timeout_recv_response`]. The budget is not restarted for each read.
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_response`]: ConfigBuilder::timeout_recv_response
     pub fn timeout_recv_body(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.recv_body = v;
         self
@@ -776,11 +852,7 @@ impl AutoHeaderValue {
             AutoHeaderValue::Provided(v) => v.as_str(),
         };
 
-        if x.is_empty() {
-            None
-        } else {
-            Some(x)
-        }
+        if x.is_empty() { None } else { Some(x) }
     }
 }
 
@@ -796,33 +868,33 @@ impl<S: AsRef<str>> From<S> for AutoHeaderValue {
 impl ConfigBuilder<AgentScope> {
     /// Finalize the config
     pub fn build(self) -> Config {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<Any> ConfigBuilder<RequestScope<Any>> {
     /// Finalize the config
     pub fn build(self) -> RequestBuilder<Any> {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
     /// Finalize the config
     pub fn build(self) -> http::Request<S> {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
     /// Finalize the config
     pub fn build(self) -> WithAgent<'a, S> {
-        self.0 .0
+        self.0.0
     }
 
     /// Run the request with the agent in the ConfigBuilder
     pub fn run(self) -> Result<Response<Body>, Error> {
-        self.0 .0.run()
+        self.0.0.run()
     }
 }
 
@@ -840,7 +912,7 @@ pub struct Timeouts {
     /// Max duration for doing the DNS lookup when establishing the connection
     pub resolve: Option<Duration>,
 
-    /// Max duration for establishing the connection
+    /// Max duration for establishing the connection, including any TLS handshake.
     pub connect: Option<Duration>,
 
     /// Max duration for sending the request, but not the request body.
@@ -855,7 +927,7 @@ pub struct Timeouts {
     /// Max duration for receiving the response headers, but not the body
     pub recv_response: Option<Duration>,
 
-    /// Max duration for receving the response body.
+    /// Max total duration for receiving the response body.
     pub recv_body: Option<Duration>,
 }
 

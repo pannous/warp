@@ -4,8 +4,8 @@ extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{CloneAny, Dada, LineInfo};
-use crate::wasm_gc_reader::GcObject;
+use crate::meta::{CloneAny, Dada, DataType, LineInfo};
+use crate::wasm_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -13,97 +13,22 @@ use std::any::Any;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
-use syn::Signature;
-// use wasp::type_kinds::{AstKind, NodeKind};
+use crate::operators::{is_function_keyword, Op};
+// use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, NodeKind};
+use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
-// node[i]
 
-// Wasp ABI GC Node representation design:
-// This is a single struct that can represent any node type
+/// Prefix of a `@name(value)` annotation key
+const ATTRIBUTE_MARK: char = '@';
 
-// todo move node layout to wasp_abi.rs
-// todo ... any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ...
+/// Meta key holding the source text of a literal (see `with_source_literal`)
+const SOURCE_LITERAL: &str = "literal";
 
-/* restructure the whole emitter emit_node_instructions serialization to use
-(type $Node (struct
-	  (field $kind i64)
-	  (field $key (ref null $Node))   param?  bra ket ;)
-	  (field $value (ref null $Node)) body?
-	  (field $payload (ref null any))
-	) )
-**/
-// flag enum and variant are wit / component-model types ONLY
-// ref.i31 i31ref
-// (ref.cast (<operand>) (<rtt>))
-// (rtt.canon <type>)
-// (br_on_cast $label (<operand>) (<rtt>)) <<<
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum DataType {
-	Primitive, // map to Node(Number) early! get rid? sometimes need f16 vs f32 vs f64?
-	String,    // map to Node(String) early! get rid?
-	Vec,       // map to Node::List(…) early or keep raw for efficiency!
-	Tuple,     // - '' -
-	Reference,
-	Struct, // map to Node(…) early!! (if possible, else interesting Rust objects!)
-	Other,  // <- only interesting cases
-	None,   // <- only interesting cases
-}
 
-/// Operator for Key nodes - distinguishes different binding operations
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Op {
-	Colon,    // :   type annotation (tightest)
-	Dot,      // .   member access
-	Scope,    // ::  scope resolution
-	Define,   // :=  definition
-	Assign,   // =   assignment
-	Arrow,    // ->  arrow/return type
-	FatArrow, // =>  fat arrow/lambda
-	None,     // implicit/unknown
-}
-
-impl Op {
-	/// Binding power: (left_bp, right_bp)
-	/// Higher = tighter binding. Right > left means right-associative.
-	pub fn binding_power(&self) -> (u8, u8) {
-		match self {
-			Op::Dot => (100, 101),      // tightest, left-assoc: a.b.c → (a.b).c
-			Op::Scope => (90, 91),      // left-assoc: a::b::c → (a::b)::c
-			Op::Colon => (80, 81),      // right-assoc: a:b:c → a:(b:c)
-			Op::Arrow => (30, 29),      // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (30, 29),   // right-assoc
-			Op::Define => (20, 19),     // right-assoc: a:=b:=c → a:=(b:=c)
-			Op::Assign => (20, 19),     // right-assoc: a=b=c → a=(b=c)
-			Op::None => (0, 0),
-		}
-	}
-
-	/// The string representation of this operator
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Op::Colon => ":",
-			Op::Dot => ".",
-			Op::Scope => "::",
-			Op::Define => ":=",
-			Op::Assign => "=",
-			Op::Arrow => "->",
-			Op::FatArrow => "=>",
-			Op::None => "",
-		}
-	}
-}
-
-impl std::fmt::Display for Op {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.as_str())
-	}
-}
-
-// use wasp::Node;
-// use wasp::*; !
+// use warp::Node;
+// use warp::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
@@ -113,11 +38,11 @@ pub enum Node {
 	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
 	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
+	// Number(Float|Int),
 	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
 	Text(String),
-	Error(String),
-	// String(String),
 	Symbol(String),
+	Error(Box<Node>),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
 
 	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
@@ -127,10 +52,7 @@ pub enum Node {
 	// Map via map:{[k,v],…} or "map"={k:v, …} or just [k:v, …] for us
 	Data(Dada), // most generic container for any kind of data not captured by other node types
 	Meta { node: Box<Node>, data: Box<Node> },
-	// Type(Box<Node>, Box<Node>), // Special Class Ast(Node, AstKind) !)
-	// Ast(Node, AstKind), // wrap AST nodes if needed
-	// Class(String, Box<Node>), // name, body // class A{a:int}
-	// Type via  Meta(node, Data { Type }) ? NAH Type is essential!!
+	Type { name: Box<Node>, body: Box<Node> }, // type definition: name + fields
 }
 
 impl Node {
@@ -140,9 +62,6 @@ impl Node {
 			data: Box::new(meta),
 		}
 	}
-}
-
-impl Node {
 	pub fn class(&self) -> Node {
 		todo!("class via kind and/or metadata?")
 	}
@@ -152,6 +71,14 @@ impl Node {
 	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
+	}
+	/// ø or a block without statements: `{}` evaluates to nothing
+	pub fn is_nothing(&self) -> bool {
+		match self.drop_meta() {
+			Empty => true,
+			List(items, Bracket::Curly, _) => items.is_empty(),
+			_ => false,
+		}
 	}
 	pub fn data_value(&self) -> Dada {
 		// 💡use via
@@ -166,8 +93,20 @@ impl Node {
 			},
 		}
 	}
-	pub fn remove(&self, from: i32, to: i32) {
-		todo!("remove from {} to {}", from, to)
+	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
+	/// A negative `to` means up to the end, `to` is clamped to the last child.
+	pub fn remove(&mut self, from: i32, to: i32) {
+		match self {
+			List(items, _, _) => {
+				let last = items.len() as i32 - 1;
+				let to = if to < 0 { last } else { to.max(from).min(last) };
+				if from >= 0 && from <= to {
+					items.drain(from as usize..=to as usize);
+				}
+			}
+			Meta { node, .. } => node.remove(from, to),
+			_ => panic!("can't remove without children: {self:?}"),
+		}
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
 		List(
@@ -185,7 +124,7 @@ impl Node {
 					Empty
 				}
 			}
-			Key(k, _, _v) => k.as_ref().clone(), // first part of key-value pair is the key
+			Key(k, _, _v) => k.drop_meta().clone(), // first part of key-value pair is the key
 			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
@@ -253,23 +192,25 @@ impl Node {
 		}
 	}
 
-	pub fn kind(&self) -> NodeKind {
+	/// Returns the Kind for this node (Meta unwraps to inner node's tag)
+	pub fn kind(&self) -> Kind {
 		match self {
-			Empty => NodeKind::Empty,
-			Text(_) => NodeKind::Text,
-			Char(_) => NodeKind::Codepoint,
-			Symbol(_) => NodeKind::Symbol,
-			Key(_, _, _) => NodeKind::Key,
-			List(_, Bracket::Curly, _) => NodeKind::Block, // {} still maps to Block kind
-			List(_, _, _) => NodeKind::List,
-			Data(_) => NodeKind::Data,
-			Meta { .. } => NodeKind::Meta,
-			Error(_) => NodeKind::Error,
-			False => NodeKind::Number, // map to 0 !
-			True => NodeKind::Number,  // map to 1
-			Node::Number(_) => NodeKind::Number,
-			// List(_, Separator::Colon, _) => NodeKind::Pair, // a:b maps to Pair kind
-			// List(_, Separator::Equals, _) => NodeKind::Pair, // a=b maps to Pair kind
+			Empty => Kind::Empty,
+			Text(_) => Kind::Text,
+			Char(_) => Kind::Codepoint,
+			Symbol(_) => Kind::Symbol,
+			Key(_, _, _) => Kind::Key,
+			List(_, Bracket::Curly, _) => Kind::Block,
+			List(_, _, _) => Kind::List,
+			Data(_) => Kind::Data,
+			Meta { node, .. } => node.kind(),
+			Type { .. } => Kind::TypeDef,
+			Error(_) => Kind::Error,
+			False | True => Kind::Int,
+			Node::Number(num) => match num {
+				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) => Kind::Int, // exact numbers
+				_ => Kind::Float, // Float, Complex, Nan, Inf
+			},
 		}
 	}
 	pub fn length(&self) -> i32 {
@@ -298,7 +239,20 @@ impl Node {
 			Node::Number(_) | Text(_) | Char(_) | Data(_) => {
 				self //.clone()
 			}
-			Meta { node, .. } => node.value(),
+			List(items, _, _) => {
+				if items.len() == 1 {
+					items.first().unwrap()
+				} else {
+					&Empty // or self
+				}
+			}
+			Meta { node, data } => {
+				if node.is_nil() {
+					data.value()
+				} else {
+					node.value()
+				}
+			}
 			Key(_, _, v) => v.value(),
 			_ => &Empty,
 		}
@@ -306,17 +260,23 @@ impl Node {
 
 	pub fn name(&self) -> String {
 		match self {
-			Symbol(name) => name.clone(),
-			Key(k, _, _) => match k.as_ref() {
+			Symbol(name) | Text(name) => name.clone(),
+			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
 				_ => String::new(),
 			},
 			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
-				// todo only for specific cases like expressions
 				if let Some(first) = items.first() {
-					first.name()
+					let first_name = first.name();
+					// For function declarations, the name is in the second element
+					if is_function_keyword(&first_name) {
+						if let Some(second) = items.get(1) {
+							return second.name();
+						}
+					}
+					first_name
 				} else {
 					String::new()
 				}
@@ -325,86 +285,101 @@ impl Node {
 		}
 	}
 
-	// fixme todo completely rework this function and move it to another file!
+	/// Convert compact 3-field WASM GC object to Node
+	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
-		// Read the tag field to determine node type
-		// If this fails, the ref is likely null
-		let tag = match obj.kind() {
-			Ok(t) => t,
+		// Read the kind field (i64), lower 8 bits are the tag
+		let kind = match obj.kind() {
+			Ok(k) => k,
 			Err(_) => return Empty, // Null ref becomes Empty
 		};
+		let tag = (kind & 0xFF) as u8;
 
 		match tag {
-			t if t == NodeKind::Empty as i32 => Empty,
+			t if t == Kind::Empty as u8 => Empty,
 
-			t if t == NodeKind::Number as i32 => {
-				// Try int first, then float
-				if let Ok(int_val) = obj.get::<i64>("int_value") {
-					if int_val != 0 {
-						return Node::Number(Number::Int(int_val));
-					}
+			t if t == Kind::Int as u8 => {
+				match obj.read_int() {
+					Ok(number) => Node::Number(number),
+					Err(e) => Node::Error(Box::new(Text(format!("unreadable Int: {}", e)))),
 				}
-				if let Ok(float_val) = obj.get::<f64>("float_value") {
-					if float_val != 0.0 {
-						return Node::Number(Number::Float(float_val));
-					}
-				}
-				Node::Number(Number::Int(0))
 			}
 
-			t if t == NodeKind::Text as i32 => match obj.text() {
-				Ok(s) => Text(s),
-				Err(e) => Text(format!("Error reading text: {}", e)),
-			},
-
-			t if t == NodeKind::Codepoint as i32 => match obj.get::<i64>("int_value") {
-				Ok(code) => {
-					if let Some(c) = char::from_u32(code as u32) {
-						Char(c)
-					} else {
-						Char('\0')
-					}
+			t if t == Kind::Float as u8 => {
+				// data field contains boxed f64
+				match obj.read_boxed_f64() {
+					Ok(val) => Node::Number(Number::Float(val)),
+					Err(_) => Node::Number(Number::Float(0.0)),
 				}
-				Err(_) => Char('\0'),
-			},
+			}
 
-			t if t == NodeKind::Symbol as i32 => match obj.text() {
-				Ok(s) => Symbol(s),
-				Err(e) => Symbol(format!("Error reading symbol: {}", e)),
-			},
+			t if t == Kind::Text as u8 => {
+				// data field contains $String struct
+				match obj.text() {
+					Ok(s) => Text(s),
+					Err(e) => Text(format!("Error reading text: {}", e)),
+				}
+			}
 
-			t if t == NodeKind::Key as i32 => {
-				// Read key from left field, fallback to Symbol from name field
-				let key = match obj.get::<GcObject>("left") {
-					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
-					Err(_) => {
-						// Fallback: reconstruct Symbol from name field for backward compatibility
-						let s = obj.name().unwrap_or_default();
-						Box::new(if s.is_empty() { Empty } else { Symbol(s) })
+			t if t == Kind::Codepoint as u8 => {
+				// data field contains i31ref with codepoint
+				match obj.read_i31() {
+					Ok(code) => {
+						if let Some(c) = char::from_u32(code as u32) {
+							Char(c)
+						} else {
+							Char('\0')
+						}
 					}
-				};
+					Err(_) => Char('\0'),
+				}
+			}
 
-				// Recursively read the value node from right field
-				let value = match obj.get::<GcObject>("right") {
+			t if t == Kind::Symbol as u8 => {
+				// data field contains $String struct
+				match obj.text() {
+					Ok(s) => Symbol(s),
+					Err(e) => Symbol(format!("Error reading symbol: {}", e)),
+				}
+			}
+
+			t if t == Kind::Key as u8 => {
+				// data field contains key node, value field contains value node
+				// op_info is encoded in upper bits of kind: (op_info << 8) | Key
+				let op_code = (kind >> 8) & 0xFF;
+				let op = crate::operators::code_to_op(op_code);
+				let key = match obj.data_as_node() {
 					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
 					Err(_) => Box::new(Empty),
 				};
-				Key(key, Op::None, value) // TODO: decode operator from wasm
+				let value = match obj.value() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				Key(key, op, value)
 			}
 
-			t if t == NodeKind::Block as i32 => {
-				// TODO: decode bracket info from int_value and read items
-				List(vec![], Bracket::Curly, Separator::None)
+			t if t == Kind::Block as u8 => {
+				// data=first item, value=rest, bracket info in upper bits of kind
+				Self::read_list_from_gc(obj, Bracket::Curly, kind)
 			}
 
-			t if t == NodeKind::List as i32 => {
-				// TODO: read items from linked list structure
-				List(vec![], Bracket::Square, Separator::None)
+			t if t == Kind::List as u8 => {
+				// data=first item, value=rest, bracket info in upper bits of kind
+				let bracket_info = (kind >> 8) & 0xFF;
+				let bracket = match bracket_info {
+					0 => Bracket::Curly,
+					1 => Bracket::Square,
+					2 => Bracket::Round,
+					3 => Bracket::Less,
+					_ => Bracket::None,
+				};
+				Self::read_list_from_gc(obj, bracket, kind)
 			}
 
-			t if t == NodeKind::Data as i32 => {
-				let type_name = obj.name().unwrap_or_else(|_| String::new());
-				// Create placeholder Dada with the type name
+			t if t == Kind::Data as u8 => {
+				// For now, read type_name from text
+				let type_name = obj.text().unwrap_or_default();
 				Data(Dada {
 					data: Box::new(format!("<wasm data: {}>", type_name)),
 					type_name,
@@ -412,12 +387,53 @@ impl Node {
 				})
 			}
 
-			_ => Text(format!("Unknown NodeKind: {}", tag)),
+			t if t == Kind::TypeDef as u8 => {
+				// data = name node, value = body node
+				let name = match obj.data_as_node() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				let body = match obj.value() {
+					Ok(child_obj) => Box::new(Node::from_gc_object(&child_obj)),
+					Err(_) => Box::new(Empty),
+				};
+				Type { name, body }
+			}
+
+			_ => Text(format!("Unknown Kind: {}", tag)),
 		}
 	}
 
-	pub fn todo(p0: String) -> Node {
-		Text(format!("TODO: {}", p0))
+	/// Read a list from compact GC representation
+	fn read_list_from_gc(obj: &GcObject, bracket: Bracket, _kind: i64) -> Node {
+		let mut items = Vec::new();
+
+		// data = first item
+		if let Ok(first_obj) = obj.data_as_node() {
+			let first = Self::from_gc_object(&first_obj);
+			if first != Empty {
+				items.push(first);
+			}
+		}
+
+		// value = rest (either single item or nested list)
+		if !obj.value_is_null() {
+			if let Ok(rest_obj) = obj.value() {
+				let rest = Self::from_gc_object(&rest_obj);
+				match rest {
+					List(rest_items, _, _) => items.extend(rest_items),
+					Empty => {}
+					other => items.push(other),
+				}
+			}
+		}
+
+		List(items, bracket, Separator::None)
+	}
+
+	/// Placeholder for a missing feature: an error value, never a fake result
+	pub fn todo(missing_feature: String) -> Node {
+		error(&format!("not implemented yet: {missing_feature}"))
 	}
 
 	/// Convert Node to bool following truthiness rules:
@@ -443,6 +459,28 @@ impl Node {
 		}
 	}
 }
+//
+// impl Index<Node> for Node {
+// 	type Output = Node;
+//
+// 	fn index(&self, n: Node) -> &Self::Output {
+// 		match self {
+// 			List(elements, _, _) => match n {
+// 				Number(Number::Int(i)) => elements.get(i).unwrap_or(&Empty),
+// 				_ => &Empty,
+// 			},
+// 			Key(k, _, v) => {
+// 				if **k == n {
+// 					&v /* (a:b)[a]==b */
+// 				} else {
+// 					&v[n]  // Pass through to value: person:{x y}[0] => x
+// 				}
+// 			}
+// 			Meta { node, .. } => &node[n],
+// 			_ => &Empty,
+// 		}
+// 	}
+// }
 
 impl Index<usize> for Node {
 	type Output = Node;
@@ -450,6 +488,7 @@ impl Index<usize> for Node {
 	fn index(&self, i: usize) -> &Self::Output {
 		match self {
 			List(elements, _, _) => elements.get(i).unwrap_or(&Empty),
+			Key(_, _, v) => &v[i], // Pass through to value: person:{x y}[0] => x
 			Meta { node, .. } => &node[i],
 			_ => &Empty,
 		}
@@ -462,13 +501,13 @@ impl Index<&String> for Node {
 	fn index(&self, i: &String) -> &Self::Output {
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => *t == *i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
-					match found {
+					match found.drop_meta() {
 						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
@@ -476,6 +515,10 @@ impl Index<&String> for Node {
 					&Empty
 				}
 			}
+			Key(k, _, v) => match k.drop_meta() {
+				Symbol(key) | Text(key) if key == i => v.as_ref(),
+				_ => &v[i], // Pass through to value
+			},
 			Meta { node, data } => {
 				if node[i] != Empty {
 					&node[i]
@@ -500,26 +543,44 @@ impl Index<&str> for Node {
 	type Output = Node;
 
 	fn index(&self, i: &str) -> &Self::Output {
+		if let Some(attribute_name) = i.strip_prefix(ATTRIBUTE_MARK) {
+			return self.attribute(attribute_name).unwrap_or(&Empty);
+		}
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.find2(&|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+				// First, search directly in this list
+				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
-					match found {
+					match found.drop_meta() {
 						Key(_, _, v) => v.as_ref(),
 						other => other,
 					}
 				} else {
+					// For tag structures like ((name params...) body), search in params
+					// Pattern: first element is a list containing [symbol, params...]
+					if let Some(first) = nodes.first() {
+						let first = first.drop_meta();
+						if let List(inner, _, _) = first {
+							// Skip the first element (tag name) and search in params
+							for param in inner.iter().skip(1) {
+								let result = &param[i];
+								if result != &Empty {
+									return result;
+								}
+							}
+						}
+					}
 					&Empty
 				}
 			}
-			Key(k, _, v) => match k.as_ref() {
+			Key(k, _, v) => match k.drop_meta() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),
-				_ => &Empty,
-			}
+				_ => &v[i], // Pass through to value: person:{name:"Joe"}["name"] => "Joe"
+			},
 			Meta { node, data } => {
 				if node[i] != Empty {
 					&node[i]
@@ -529,6 +590,14 @@ impl Index<&str> for Node {
 			}
 			_ => &Empty,
 		}
+	}
+}
+
+impl Index<char> for Node {
+	type Output = Node;
+
+	fn index(&self, i: char) -> &Self::Output {
+		self.index(i.to_string().as_str())
 	}
 }
 
@@ -550,15 +619,23 @@ impl IndexMut<usize> for Node {
 
 impl IndexMut<&String> for Node {
 	fn index_mut(&mut self, i: &String) -> &mut Self::Output {
+		if let Some(attribute_name) = i.strip_prefix(ATTRIBUTE_MARK) {
+			return self.attribute_slot(attribute_name);
+		}
 		match self {
 			List(nodes, _, _) => {
-				if let Some(found) = nodes.iter_mut().find(|node| match node {
-					Key(k, _, _) => matches!(k.as_ref(), Symbol(key) | Text(key) if key == i),
+				if let Some(found) = nodes.iter_mut().find(|node| match node.drop_meta() {
+					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
 					Text(t) => t == i,
 					_ => false,
 				}) {
 					// If we found a Key, return mutable reference to its value
+					// Need to unwrap Meta first if present
 					match found {
+						Meta { node, .. } => match node.as_mut() {
+							Key(_, _, v) => v.as_mut(),
+							other => other,
+						},
 						Key(_, _, v) => v.as_mut(),
 						other => other,
 					}
@@ -566,6 +643,7 @@ impl IndexMut<&String> for Node {
 					panic!("Key '{}' not found", i)
 				}
 			}
+			Key(_, _, v) => &mut v[i], // Pass through to value
 			Meta { node, .. } => &mut node[i],
 			_ => panic!("Cannot mutably index this node type"),
 		}
@@ -578,11 +656,19 @@ impl IndexMut<&str> for Node {
 	}
 }
 
-impl Node {
-	// associated 'static' functions
-	pub fn new() -> Node {
-		Empty
+impl IndexMut<char> for Node {
+	fn index_mut(&mut self, i: char) -> &mut Self::Output {
+		&mut self[&i.to_string()]
 	}
+}
+
+impl Node {
+	// fn new() -> Self {
+	// 	// can be extended via .add a[b]=c !?! test_mark_as_map wished ;)
+	// 	Empty
+	// }
+
+	// associated 'static' functions
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
@@ -590,7 +676,11 @@ impl Node {
 		Key(Box::new(k), op, Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(Text(v.to_string())))
+		Key(
+			Box::new(Symbol(s.to_string())),
+			Op::Colon,
+			Box::new(Text(v.to_string())),
+		)
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
@@ -634,6 +724,24 @@ impl Node {
 		}
 	}
 
+	/// Keep the source text of a literal whose value would print differently (`01234`, `1.10`)
+	pub fn with_source_literal(self, literal: &str) -> Self {
+		Meta {
+			node: Box::new(self),
+			data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))),
+		}
+	}
+
+	pub fn source_literal(&self) -> Option<&str> {
+		match self {
+			Meta { node, data } => match &data[SOURCE_LITERAL] {
+				Text(literal) => Some(literal),
+				_ => node.source_literal(),
+			},
+			_ => None,
+		}
+	}
+
 	pub fn with_comment(self, comment: String) -> Self {
 		let comment = Node::key("comment", Node::text(&comment));
 		Meta {
@@ -642,10 +750,83 @@ impl Node {
 		}
 	}
 
+	/// Annotate with `@name(value)`; the attribute key keeps its `@` so it never mixes with comments or line info
+	pub fn with_attribute(self, name: &str, value: Node) -> Self {
+		Meta {
+			node: Box::new(self),
+			data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)),
+		}
+	}
+
+	/// The annotation this very Meta layer carries, if it is one
+	fn own_attribute(&self) -> Option<(&str, &Node)> {
+		let Meta { data, .. } = self else { return None };
+		let Key(key, _, value) = data.as_ref() else { return None };
+		let Symbol(key_name) = key.as_ref() else { return None };
+		key_name.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref()))
+	}
+
+	/// All `@name(value)` annotations of this node, outermost first
+	pub fn attributes(&self) -> Vec<(&str, &Node)> {
+		match self {
+			Meta { node, .. } => self.own_attribute().into_iter().chain(node.attributes()).collect(),
+			_ => Vec::new(),
+		}
+	}
+
+	/// The value of the attribute `@name`
+	pub fn attribute(&self, name: &str) -> Option<&Node> {
+		self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value)
+	}
+
+	/// The value slot of attribute `@name`; a missing attribute is created around the innermost node,
+	/// so attributes keep their insertion order from the outside in.
+	fn attribute_slot(&mut self, name: &str) -> &mut Node {
+		if self.attribute(name).is_none() {
+			self.innermost_mut().wrap_in_attribute(name);
+		}
+		self.existing_attribute_slot(name).expect("attribute was just created")
+	}
+
+	fn innermost_mut(&mut self) -> &mut Node {
+		match self {
+			Meta { node, .. } => node.innermost_mut(),
+			other => other,
+		}
+	}
+
+	fn wrap_in_attribute(&mut self, name: &str) {
+		let core = std::mem::replace(self, Empty);
+		*self = core.with_attribute(name, Empty);
+	}
+
+	fn existing_attribute_slot(&mut self, name: &str) -> Option<&mut Node> {
+		let Meta { node, data } = self else { return None };
+		let is_named = matches!(data.as_ref(), Key(key, _, _) if matches!(key.as_ref(), Symbol(key_name) if key_name.strip_prefix(ATTRIBUTE_MARK) == Some(name)));
+		match (is_named, data.as_mut()) {
+			(true, Key(_, _, value)) => Some(value.as_mut()),
+			_ => node.existing_attribute_slot(name),
+		}
+	}
+
 	pub fn drop_meta(&self) -> &Node {
 		match self {
 			Meta { node, .. } => node.drop_meta(),
 			_ => self,
+		}
+	}
+
+	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
+	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
+		let node = self.drop_meta();
+		action(node);
+		match node {
+			Key(left, _, right) => {
+				left.visit(action);
+				right.visit(action);
+			}
+			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
+			_ => {}
 		}
 	}
 
@@ -698,7 +879,7 @@ impl Node {
 
 	pub fn get_key(&self) -> &str {
 		match self {
-			Key(k, _) => match k.as_ref() {
+			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.as_str(),
 				_ => "",
 			},
@@ -707,9 +888,17 @@ impl Node {
 		}
 	}
 
+	pub fn get_op(&self) -> Op {
+		match self {
+			Key(_, op, _) => *op,
+			Meta { node, .. } => node.get_op(),
+			_ => Op::None,
+		}
+	}
+
 	pub fn get_value(&self) -> Node {
 		match self {
-			Key(_, v) => v.as_ref().clone(),
+			Key(_, _, v) => v.as_ref().clone(),
 			Meta { node, .. } => node.get_value(),
 			_ => Empty,
 		}
@@ -738,6 +927,27 @@ impl Node {
 	}
 
 	pub fn serialize_recurse(&self, meta: bool) -> String {
+		self.serialize_with(meta, true)
+	}
+
+	fn attribute_source((name, value): (&str, &Node)) -> String {
+		match value {
+			True => format!("{ATTRIBUTE_MARK}{name} "),
+			_ => format!("{ATTRIBUTE_MARK}{name}({}) ", value.serialize()),
+		}
+	}
+
+	/// `@name(value)` annotations in front of the node, outermost first, each followed by a space
+	fn attribute_prefix(&self) -> String {
+		self.attributes().into_iter().map(Self::attribute_source).collect()
+	}
+
+	fn own_attribute_prefix(&self) -> String {
+		self.own_attribute().map(Self::attribute_source).unwrap_or_default()
+	}
+
+	/// A key prints the annotations of its value in front of itself: `tee{@unit(cm) a:1}`
+	fn serialize_with(&self, meta: bool, attributes: bool) -> String {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
@@ -751,28 +961,32 @@ impl Node {
 					format!("{}{}{}", bracket, nodes[0].serialize(), close)
 				} else {
 					let items: Vec<String> = nodes.iter().map(|n| n.serialize()).collect();
-					format!(
-						"{}{}{}",
-						bracket,
-						items.join(&*(separator.to_string() + " ")),
-						close
-					)
+					let separator = separator.to_string();
+					let joint = if separator.ends_with(char::is_whitespace) { separator } else { separator + " " };
+					format!("{}{}{}", bracket, items.join(&joint), close)
 				}
 			}
-			Key(k, v) => format!("{}={}", k, v.serialize_recurse(meta)),
-			Error(e) => format!("Error({})", e),
+			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
+			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}{}", v.attribute_prefix(), k, v.serialize_with(meta, false)), // tee{a:1}
+			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
+			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
 			True => "true".to_string(),
 			False => "false".to_string(),
 			Meta { node, data } => {
-				let inner = node.serialize_recurse(meta);
+				if let Some(literal) = self.source_literal() {
+					return literal.to_string();
+				}
+				let own_prefix = if attributes { self.own_attribute_prefix() } else { String::new() };
+				let inner = format!("{own_prefix}{}", node.serialize_with(meta, attributes));
 				if meta {
 					format!("{} {}", inner, data.meta_string())
 				} else {
 					inner
 				}
 			}
-			Data(d) => format!("Data({})", d.type_name),
+			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
+			Data(d) => crate::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
 			// _ => format!("{:?}", self),
 		}
 	}
@@ -781,14 +995,6 @@ impl Node {
 		match self {
 			List(items, _, _) => NodeIter::new(items.clone()),
 			Meta { node, .. } => node.iter(),
-			_ => NodeIter::new(vec![]),
-		}
-	}
-
-	pub fn into_iter(self) -> NodeIter {
-		match self {
-			List(items, _, _) => NodeIter::new(items),
-			Meta { node, .. } => (*node).clone().into_iter(),
 			_ => NodeIter::new(vec![]),
 		}
 	}
@@ -802,6 +1008,51 @@ impl Node {
 			_ => 0,
 		}
 	}
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0 || self == &Empty
+	}
+
+	/// The first Error node in the tree, e.g. a parse diagnostic
+	pub fn first_error(&self) -> Option<&Node> {
+		match self {
+			Error(_) => Some(self),
+			Key(left, _, right) => left.first_error().or_else(|| right.first_error()),
+			List(items, _, _) => items.iter().find_map(Node::first_error),
+			Meta { node, .. } => node.first_error(),
+			Type { name, body } => name.first_error().or_else(|| body.first_error()),
+			_ => None,
+		}
+	}
+
+	/// Name of a key given twice in this object `{key: value …}`; code blocks may redefine
+	pub fn duplicate_key(&self) -> Option<String> {
+		let List(items, Bracket::Curly, _) = self.drop_meta() else { return None };
+		let mut seen = std::collections::HashSet::new();
+		items.iter().filter_map(|item| match item.drop_meta() {
+			Key(key, Op::Colon, _) => match key.drop_meta() {
+				Symbol(name) | Text(name) => Some(name.clone()),
+				_ => None,
+			},
+			_ => None,
+		}).find(|name| !seen.insert(name.clone()))
+	}
+
+	pub fn is_falsy(&self) -> bool {
+		match self {
+			Empty => true,
+			False => true,
+			Node::Number(n) => n.zero(),
+			Text(s) => s.is_empty(),
+			Char('\0') => true,
+			List(items, _, _) => items.is_empty(),
+			Key(a, _, b) => a.is_falsy() && b.is_falsy(),
+			Meta { node, .. } => node.is_falsy(), // metadata doesn't affect truthiness
+			Error(_) => true, // a failed result: `if x {…}` checks it (wiki/null.md, DESIGN.md "Effects")
+			// Data(d) if d.data_type == DataType::None => true,
+			_ => false,
+		}
+	}
+
 
 	pub fn to_json(&self) -> Result<String, serde_json::Error> {
 		let value = self.to_json_value();
@@ -817,7 +1068,7 @@ impl Node {
 	/// Key nodes become XML tags, dotted keys (.attr) become attributes
 	pub fn to_xml(&self) -> String {
 		match self.drop_meta() {
-			Key(tag_name, body) => {
+			Key(tag_name, _, body) => {
 				let mut attributes = Vec::new();
 				let mut content_parts = Vec::new();
 
@@ -826,25 +1077,28 @@ impl Node {
 					List(items, _, _) => {
 						for item in items {
 							match item.drop_meta() {
-								Key(k, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
-										if key_str.starts_with('.') {
+								Key(k, _, v) => {
+									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
+										if let Some(attr_name) = key_str.strip_prefix('.') {
 											// This is an attribute
-											let attr_name = &key_str[1..]; // Remove leading dot
+											// Remove leading dot
 											match v.as_ref() {
 												True => {
 													// Boolean attribute (no value)
 													attributes.push(attr_name.to_string());
 												}
 												Text(s) | Symbol(s) => {
-													attributes.push(format!("{}=\"{}\"", attr_name, s));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, s));
 												}
 												Number(n) => {
-													attributes.push(format!("{}=\"{}\"", attr_name, n));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, n));
 												}
 												_ => {
 													let val = Node::serialize(v);
-													attributes.push(format!("{}=\"{}\"", attr_name, val));
+													attributes
+														.push(format!("{}=\"{}\"", attr_name, val));
 												}
 											}
 										} else {
@@ -927,24 +1181,24 @@ impl Node {
 						let mut map = Map::new();
 						for item in items {
 							match item {
-								Key(k, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+								Key(k, _, v) => {
+									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 										map.insert(key_str.clone(), v.to_json_value());
 									}
 								}
 								List(nested, Bracket::Curly, _) => {
 									// Nested curly lists become nested objects
 									for nested_item in nested {
-										if let Key(k, v) = nested_item {
-											if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+										if let Key(k, _, v) = nested_item {
+											if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 												map.insert(key_str.clone(), v.to_json_value());
 											}
 										}
 									}
 								}
 								other => {
-									// Non-Key items: try to infer a key
-									let key = format!("item_{}", map.len());
+									// let key = format!("item_{}", map.len());
+									let key = format!("{}", map.len()); // just the number
 									map.insert(key, other.to_json_value());
 								}
 							}
@@ -954,9 +1208,9 @@ impl Node {
 					_ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
 				}
 			}
-			Key(k, v) => {
+			Key(k, _, v) => {
 				let mut map = Map::new();
-				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 					map.insert(key_str.clone(), v.to_json_value());
 				}
 				Value::Object(map)
@@ -975,7 +1229,7 @@ impl Node {
 						// Extract dotted keys from metadata
 						let mut map = Map::new();
 						for item in items {
-							if let Key(k, v) = item {
+							if let Key(k, _, v) = item {
 								map.insert(format!(".{}", k), v.to_json_value());
 							}
 						}
@@ -989,20 +1243,37 @@ impl Node {
 						map.insert("_value".to_string(), node.to_json_value());
 						Value::Object(map)
 					}
+				} else if let Some(_info) = data.get_lineinfo() {
+					node.to_json_value() // ignore lineinfo
 				} else if **data != Empty {
-					// Single non-Key metadata
-					let mut map = Map::new();
-					map.insert(".meta".to_string(), data.to_json_value());
-					map.insert("_value".to_string(), node.to_json_value());
-					return Value::Object(map);
+					let inner = node.to_json_value();
+					let meta_val = data.to_json_value();
+					match inner {
+						Value::Object(mut map) => {
+							map.insert(".meta".to_string(), meta_val);
+							Value::Object(map)
+						}
+						_ => {
+							let mut map = Map::new();
+							map.insert("_value".to_string(), inner);
+							map.insert(".meta".to_string(), meta_val);
+							Value::Object(map)
+						}
+					}
 				} else {
 					// No metadata, just unwrap
 					node.to_json_value()
 				}
 			}
+			Type { name, body } => {
+				let mut map = Map::new();
+				map.insert("_type".to_string(), name.to_json_value());
+				map.insert("fields".to_string(), body.to_json_value());
+				Value::Object(map)
+			}
 			Error(e) => {
 				let mut map = Map::new();
-				map.insert("_error".to_string(), Value::String(e.clone()));
+				map.insert("_error".to_string(), e.to_json_value());
 				Value::Object(map)
 			}
 		}
@@ -1050,11 +1321,15 @@ impl IntoIterator for Node {
 	type IntoIter = NodeIter;
 
 	fn into_iter(self) -> Self::IntoIter {
-		self.into_iter()
+		match self {
+			List(items, _, _) => NodeIter::new(items),
+			Meta { node, .. } => (*node).clone().into_iter(),
+			_ => NodeIter::new(vec![]),
+		}
 	}
 }
 
-impl<'a> IntoIterator for &'a Node {
+impl IntoIterator for &Node {
 	type Item = Node;
 	type IntoIter = NodeIter;
 
@@ -1075,7 +1350,7 @@ pub enum Bracket {
 }
 
 impl Bracket {
-	fn opening(&self) -> char {
+	pub fn opening(&self) -> char {
 		match self {
 			Bracket::None => ' ',
 			Bracket::Curly => '{',
@@ -1106,7 +1381,7 @@ impl fmt::Display for Bracket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
 	Space,     // ' ' - tightest binding
-	Colon,     // ','
+	Colon,     // ',' Comma
 	Semicolon, // ';'
 	Newline,   // '\n'
 	Tab,       // '\t'
@@ -1158,7 +1433,7 @@ impl fmt::Display for Separator {
 			Separator::Space => write!(f, " "),
 			Separator::Colon => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
-			Separator::Newline => write!(f, "\n"),
+			Separator::Newline => writeln!(f),
 			Separator::Tab => write!(f, "\t"),
 			Separator::None => Ok(()),
 		}
@@ -1209,15 +1484,14 @@ impl PartialEq for Node {
 				match other {
 					True => !s.is_empty(),
 					False => s.is_empty(),
-					Symbol(s2) => s == s2,
-					// todo variable values? nah not here
+					Symbol(s2) | Text(s2) => s == s2,
 					_ => false,
 				}
 			}
 			Text(s) => match other {
 				True => !s.is_empty(),
 				False => s.is_empty(),
-				Text(s2) => s == s2,
+				Text(s2) | Symbol(s2) => s == s2,
 				_ => false,
 			},
 
@@ -1242,14 +1516,18 @@ impl PartialEq for Node {
 				};
 				node.as_ref().eq(other_unwrapped)
 			}
-			Key(k1, v1) => match other {
-				Key(k2, v2) => k1 == k2 && v1 == v2,
+			Key(k1, op1, v1) => match other {
+				Key(k2, op2, v2) => k1 == k2 && op1 == op2 && v1 == v2,
 				_ => false,
 			},
 			List(items1, _, _) => match other {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
 				Meta { node, .. } => self == node.as_ref(), // unwrap Meta
+				_ => false,
+			},
+			Type { name: n1, body: b1 } => match other {
+				Type { name: n2, body: b2 } => n1 == n2 && b1 == b2,
 				_ => false,
 			},
 			Error(e1) => match other {
@@ -1275,7 +1553,10 @@ impl PartialEq<i64> for Node {
 		match self {
 			Node::Number(Number::Int(n)) => n == other,
 			Node::Number(Number::Float(f)) => *f == *other as f64,
+			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
+			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
+			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.amount == *other),
 			_ => false,
 		}
 	}
@@ -1289,10 +1570,10 @@ impl PartialEq<bool> for Node {
 			// Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },
 			// Node::Number(Number::Float(f)) => *f == if *other { 1.0 } else { 0.0 },
 			Empty => !*other,
-			Symbol(s) => s.is_empty() == !*other,
-			Text(s) => s.is_empty() == !*other,
-			List(l, _, _) => l.is_empty() == !*other,
-			Key(_, _) => *other,  // todo NEVER false OR check value k=v ?
+			Symbol(s) => s.is_empty() != *other,
+			Text(s) => s.is_empty() != *other,
+			List(l, _, _) => l.is_empty() != *other,
+			Key(_, _, v) => v.is_nil() != *other, // Key is true if its value is non-empty
 			_ => false,
 		}
 	}
@@ -1300,7 +1581,7 @@ impl PartialEq<bool> for Node {
 
 impl PartialEq<i32> for Node {
 	fn eq(&self, other: &i32) -> bool {
-		self == &(*other as i64)
+		self == (*other as i64)
 	}
 }
 
@@ -1309,6 +1590,9 @@ impl PartialEq<f64> for Node {
 		match self {
 			Node::Number(Number::Float(f)) => f == other,
 			Node::Number(Number::Int(n)) => *n as f64 == *other,
+			Node::Number(quotient @ Number::Quotient(..)) => f64::from(*quotient) == *other,
+			// an exact real equals the f64 nearest to it, up to the rounding of evaluating it in f64
+			Node::Number(Number::Real(r)) => (r.to_f64() - other).abs() <= other.abs() * 4.0 * f64::EPSILON,
 			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
@@ -1482,19 +1766,13 @@ impl PartialEq<serde_json::Value> for Node {
 			(Char(c), Value::String(json_s)) => &c.to_string() == json_s,
 
 			// List comparison (arrays and objects)
-			(List(items, bracket, _), Value::Array(json_arr)) => {
-				// Non-curly lists map to arrays
-				if !matches!(bracket, Bracket::Curly) {
-					if items.len() != json_arr.len() {
-						return false;
-					}
-					items
+			// Non-curly lists map to arrays
+			(List(items, bracket, _), Value::Array(json_arr)) if !matches!(bracket, Bracket::Curly) => {
+				items.len() == json_arr.len()
+					&& items
 						.iter()
 						.zip(json_arr.iter())
 						.all(|(node, json_val)| node == json_val)
-				} else {
-					false
-				}
 			}
 			(List(items, bracket, _), Value::Object(json_obj)) => {
 				// Curly lists map to objects
@@ -1504,11 +1782,11 @@ impl PartialEq<serde_json::Value> for Node {
 						return false;
 					}
 					items.iter().all(|item| {
-						if let Key(k, v) = item {
-							if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+						if let Key(k, _, v) = item {
+							if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 								json_obj
 									.get(key_str.as_str())
-									.map_or(false, |json_val| v.as_ref() == json_val)
+									.is_some_and(|json_val| v.as_ref() == json_val)
 							} else {
 								false
 							}
@@ -1522,12 +1800,12 @@ impl PartialEq<serde_json::Value> for Node {
 			}
 
 			// Key comparison (single-key objects)
-			(Key(k, v), Value::Object(json_obj)) => {
-				if let Symbol(key_str) | Text(key_str) = k.as_ref() {
+			(Key(k, _, v), Value::Object(json_obj)) => {
+				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
 					json_obj.len() == 1
 						&& json_obj
 							.get(key_str.as_str())
-							.map_or(false, |json_val| v.as_ref() == json_val)
+							.is_some_and(|json_val| v.as_ref() == json_val)
 				} else {
 					false
 				}
@@ -1543,6 +1821,37 @@ impl PartialEq<serde_json::Value> for Node {
 impl PartialEq<Node> for serde_json::Value {
 	fn eq(&self, other: &Node) -> bool {
 		other == self
+	}
+}
+
+/// Trait for types that can be compared with Node::Data(GcObject)
+/// Used by wasm_struct! macro to enable `is!("code", struct_value)` comparisons
+pub trait GcComparable {
+	/// Try to create Self from a GcObject
+	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self> where Self: Sized;
+	/// Compare self with another instance
+	fn gc_eq(&self, other: &Self) -> bool;
+}
+
+impl Node {
+	/// Compare with a GcComparable type by extracting from Data variant
+	pub fn eq_gc<T: GcComparable + fmt::Debug>(&self, other: &T) -> bool {
+		if let Data(dada) = self {
+			if let Some(gc_obj) = dada.downcast_ref::<crate::gc_traits::GcObject>() {
+				if let Some(extracted) = T::try_from_gc(gc_obj) {
+					return other.gc_eq(&extracted);
+				}
+			}
+		}
+		false
+	}
+}
+
+/// Blanket impl: Node can be compared with any GcComparable type
+/// This enables `assert_eq!(result, alice)` where alice is a wasm_struct! type
+impl<T: GcComparable + fmt::Debug> PartialEq<T> for Node {
+	fn eq(&self, other: &T) -> bool {
+		self.eq_gc(other)
 	}
 }
 
@@ -1960,6 +2269,7 @@ impl fmt::Display for Node {
 		match self {
 			Node::Number(Number::Int(n)) => write!(f, "{}", n),
 			Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
+			Node::Number(Number::Real(real)) => write!(f, "{}", real),
 			Node::Number(n) => write!(f, "{:?}", n),
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),
@@ -1974,6 +2284,10 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
+			Data(data) => match crate::units::describe(data) {
+				Some(text) => write!(f, "{}", text),
+				None => write!(f, "{:?}", self),
+			},
 			_ => write!(f, "{:?}", self),
 		}
 	}
@@ -2004,3 +2318,113 @@ fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
 		other => f(other),
 	}
 }
+
+// ============ Free Convenience Constructors ============
+// Short, ergonomic functions for creating Node values
+
+pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(Dada::new(value)) }
+
+pub fn int(n: i64) -> Node { Number(Number::Int(n)) }
+
+pub fn float(n: f64) -> Node {
+	Number(Number::Float(n))
+}
+
+pub fn text(s: &str) -> Node {
+	Text(s.to_string())
+}
+
+pub fn symbol(s: &str) -> Node {
+	Symbol(s.to_string())
+}
+
+pub fn error(s: &str) -> Node {
+	Error(Box::new(Text(s.to_string())))
+}
+
+pub fn error_node(n: Node) -> Node {
+	Error(Box::new(n))
+}
+
+pub fn codepoint(c: char) -> Node {
+	Char(c)
+}
+
+pub fn key(k: &str, v: Node) -> Node {
+	Key(Box::new(Symbol(k.to_string())), Op::Colon, Box::new(v))
+}
+
+pub fn types(name: &str) -> Node {
+	// Returns a Symbol with the type name, matching what type() introspection returns
+	Symbol(name.to_string())
+}
+
+pub fn type_definition(name: &str, body: Node) -> Node {
+	Type {
+		name: Box::new(Symbol(name.to_string())),
+		body: Box::new(body),
+	}
+}
+
+
+pub fn key_op(k: Node, op: Op, v: Node) -> Node {
+	Key(Box::new(k), op, Box::new(v))
+}
+
+// pub fn key_ops(k: &str, op: Op, v: Node) -> Node {
+pub fn key_ops(k: String, op: Op, v: Node) -> Node {
+	Key(Box::new(Symbol(format!(".{}", k))), op, Box::new(v))
+}
+
+pub fn list(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Square, Separator::None)
+}
+
+pub fn block(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Curly, Separator::None)
+}
+
+pub fn parens(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::Round, Separator::None)
+}
+
+pub fn ints(xs: Vec<i32>) -> Node {
+	List(
+		xs.into_iter().map(|x| int(x as i64)).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn floats(xs: Vec<f64>) -> Node {
+	List(
+		xs.into_iter().map(float).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn texts(xs: Vec<&str>) -> Node {
+	List(
+		xs.into_iter().map(text).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn symbols(xs: Vec<&str>) -> Node {
+	List(
+		xs.into_iter().map(symbol).collect(),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+
+pub fn strings(p0: Vec<&str>) -> Node {
+	List(
+		map(p0, |s| Text(s.to_string())),
+		Bracket::Square,
+		Separator::None,
+	)
+}
+

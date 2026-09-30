@@ -4,13 +4,13 @@ version = 4
 
 [[package]]
 name = "cranelift-assembler-x64-meta"
-version = "0.127.0"
+version = "0.136.1"
 dependencies = [
  "cranelift-srcgen",
 ]
 
 [[package]]
 name = "cranelift-srcgen"
-version = "0.127.0"
+version = "0.136.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6f4b039f453b66c75e9f7886e5a2af96276e151f44dc19b24b58f9a0c98009"
+checksum = "89643801d9192df80c294f174d5fe0416395e7edb0bb3024784ba10fc933e76f"

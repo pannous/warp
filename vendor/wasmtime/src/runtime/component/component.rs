@@ -1,6 +1,7 @@
-use crate::component::InstanceExportLookup;
 use crate::component::matching::InstanceType;
 use crate::component::types;
+#[cfg(feature = "wit-parser")]
+use crate::component::wit_parser::ItemName;
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
@@ -11,6 +12,7 @@ use crate::{
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
+use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
@@ -20,7 +22,7 @@ use wasmtime_environ::component::{
     GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
     TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
-use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace};
+use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
 /// A compiled WebAssembly Component.
@@ -59,6 +61,19 @@ pub struct Component {
     inner: Arc<ComponentInner>,
 }
 
+// SAFETY: restating what rustc already infers to reduce work on rustc.
+//
+// See comments on the similar impls for `Engine` for more details.
+unsafe impl Send for Component {}
+unsafe impl Sync for Component {}
+
+fn _assert_send_sync(e: &Component) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Component { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct ComponentInner {
     /// Unique id for this component within this process.
     ///
@@ -94,6 +109,15 @@ struct ComponentInner {
     /// `realloc`, to avoid the need to look up types in the registry and take
     /// locks when calling `realloc` via `TypedFunc::call_raw`.
     realloc_func_type: Arc<FuncType>,
+
+    /// The checksum of the source binary from which the module was compiled.
+    checksum: WasmChecksum,
+}
+
+impl fmt::Debug for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Component").finish_non_exhaustive()
+    }
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -141,7 +165,7 @@ impl Component {
     /// ```no_run
     /// # use wasmtime::*;
     /// # use wasmtime::component::Component;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let wasm_bytes: Vec<u8> = Vec::new();
     /// let component = Component::new(&engine, &wasm_bytes)?;
@@ -155,7 +179,7 @@ impl Component {
     /// ```
     /// # use wasmtime::*;
     /// # use wasmtime::component::Component;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let component = Component::new(&engine, "(component (core module))")?;
     /// # Ok(())
@@ -202,6 +226,12 @@ impl Component {
     /// [`Component::serialize`].
     ///
     /// For more information see the [`Module::deserialize`] method.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Unsafety
     ///
@@ -285,14 +315,16 @@ impl Component {
     ///     (component (import "x" (type (sub resource))))
     /// "#)?;
     ///
-    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    /// let aty = a.component_type();
+    /// let bty = b.component_type();
+    /// let (_, a_ty) = aty.imports(&engine).next().unwrap();
+    /// let (_, b_ty) = bty.imports(&engine).next().unwrap();
     ///
-    /// let a_ty = match a_ty {
+    /// let a_ty = match a_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let b_ty = match b_ty {
+    /// let b_ty = match b_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -320,14 +352,15 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    /// let ty = a.component_type();
+    /// let (_, import) = ty.imports(&engine).next().unwrap();
+    /// let (_, export) = ty.exports(&engine).next().unwrap();
     ///
-    /// let import = match import {
+    /// let import = match import.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let export = match export {
+    /// let export = match export.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -385,10 +418,9 @@ impl Component {
     }
 
     fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
-        let resources = Arc::new(PrimaryMap::new());
         f(&InstanceType {
             types: self.types(),
-            resources: &resources,
+            resources: None,
         })
     }
 
@@ -407,6 +439,7 @@ impl Component {
             table: index,
             mut types,
             mut static_modules,
+            checksum,
         } = match artifacts {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
@@ -427,13 +460,13 @@ impl Component {
         let signatures = engine.register_and_canonicalize_types(
             types.module_types_mut(),
             static_modules.iter_mut().map(|(_, m)| &mut m.module),
-        );
+        )?;
         types.canonicalize_for_runtime_usage(&mut |idx| signatures.shared_type(idx).unwrap());
 
         // Assemble the `EngineCode` artifact which is shared by all core wasm
         // modules as well as the final component.
         let types = Arc::new(types);
-        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into()));
+        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into())?);
 
         // Convert all information about static core wasm modules into actual
         // `Module` instances by converting each `CompiledModuleInfo`, the
@@ -461,6 +494,7 @@ impl Component {
                 info,
                 index,
                 realloc_func_type,
+                checksum,
             }),
         })
     }
@@ -477,7 +511,7 @@ impl Component {
         &self.inner.static_modules[idx]
     }
 
-    #[cfg(feature = "profiling")]
+    #[cfg(any(feature = "profiling", feature = "debug"))]
     pub(crate) fn static_modules(&self) -> impl Iterator<Item = &Module> {
         self.inner.static_modules.values()
     }
@@ -553,6 +587,31 @@ impl Component {
         &self.inner.code
     }
 
+    /// Get this component's code object's `.text` section, containing its
+    /// compiled executable code.
+    pub fn text(&self) -> &[u8] {
+        self.engine_code().text()
+    }
+
+    /// Get information about functions in this component's `.text` section:
+    /// their module index, function index, name, and offset+length.
+    pub fn functions(&self) -> impl Iterator<Item = crate::ModuleFunction> + '_ {
+        self.inner
+            .static_modules
+            .values()
+            .flat_map(|m| m.functions())
+    }
+
+    /// Get the address map for this component's `.text` section.
+    ///
+    /// See [`Module::address_map`] for more details.
+    pub fn address_map(&self) -> Option<impl Iterator<Item = (usize, Option<u32>)> + '_> {
+        Some(
+            wasmtime_environ::iterate_address_map(self.engine_code().address_map_data())?
+                .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
+        )
+    }
+
     /// Same as [`Module::serialize`], except for a component.
     ///
     /// Note that the artifact produced here must be passed to
@@ -562,7 +621,11 @@ impl Component {
     /// [`Module::serialize`]: crate::Module::serialize
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        Ok(self.engine_code().image().to_vec())
+        let image = self.engine_code().image();
+        let mut v = TryVec::new();
+        v.reserve(image.len())?;
+        v.try_extend(image.iter().copied())?;
+        Ok(v.into())
     }
 
     /// Creates a new `VMFuncRef` with all fields filled out for the destructor
@@ -653,7 +716,7 @@ impl Component {
         };
         for init in &self.env_component().initializers {
             match init {
-                GlobalInitializer::InstantiateModule(inst) => match inst {
+                GlobalInitializer::InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = self.static_module(*index);
                         resources.add(&module.resources_required());
@@ -682,10 +745,7 @@ impl Component {
     /// For more information see
     /// [`Module::image_range`](crate::Module::image_range).
     pub fn image_range(&self) -> Range<*const u8> {
-        let range = self.inner.code.text_range();
-        let start = range.start.raw() as *const u8;
-        let end = range.end.raw() as *const u8;
-        start..end
+        self.inner.code.image().as_ptr_range()
     }
 
     /// Force initialization of copy-on-write images to happen here-and-now
@@ -734,7 +794,7 @@ impl Component {
     pub fn get_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<ComponentExportIndex> {
         let index = self.lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
@@ -765,8 +825,8 @@ impl Component {
     /// If the export is located then two values are returned: a
     /// [`types::ComponentItem`] which enables introspection about the type of
     /// the export and a [`ComponentExportIndex`]. The index returned notably
-    /// implements the [`InstanceExportLookup`] trait which enables using it
-    /// with [`Instance::get_func`](crate::component::Instance::get_func) for
+    /// implements the [`ExportLookup`] trait which enables using it with
+    /// [`Instance::get_func`](crate::component::Instance::get_func) for
     /// example.
     ///
     /// The returned [`types::ComponentItem`] is more expensive to calculate
@@ -816,7 +876,7 @@ impl Component {
     pub fn get_export(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
         let index = self.lookup_export_index(instance, name)?;
@@ -839,22 +899,14 @@ impl Component {
     pub(crate) fn lookup_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<ExportIndex> {
-        let info = self.env_component();
-        let exports = match instance {
-            Some(idx) => {
-                if idx.id != self.inner.id {
-                    return None;
-                }
-                match &info.export_items[idx.index] {
-                    Export::Instance { exports, .. } => exports,
-                    _ => return None,
-                }
+        if let Some(idx) = instance {
+            if idx.id != self.inner.id {
+                return None;
             }
-            None => &info.exports,
-        };
-        exports.get(name, &NameMapNoIntern).copied()
+        }
+        name.lookup(self, instance.map(|idx| &idx.index))
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -866,8 +918,33 @@ impl Component {
         &self.inner.engine
     }
 
+    /// Is this `Component` the same as another?
+    ///
+    /// Ordinarily, component identity does not matter: a Wasmtime user
+    /// will create or obtain a component from some source and
+    /// instantiate it, and any two `Component` objects created from the
+    /// same source component are interchangeable. However, introspecting
+    /// component identity may be useful when examining Wasm VM state,
+    /// e.g. via debug APIs. It is guaranteed that `Component::same`
+    /// returns true for `Component` objects that reference the same
+    /// underlying component (e.g., one created via a `clone` of the
+    /// other).
+    #[inline]
+    pub fn same(a: &Component, b: &Component) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
+    }
+
     pub(crate) fn realloc_func_ty(&self) -> &Arc<FuncType> {
         &self.inner.realloc_func_type
+    }
+
+    #[allow(
+        unused,
+        reason = "used only for verification with wasmtime `rr` feature \
+        and requires a lot of unnecessary gating across crates"
+    )]
+    pub(crate) fn checksum(&self) -> &WasmChecksum {
+        &self.inner.checksum
     }
 
     /// Returns the `Export::LiftedFunction` metadata associated with `export`.
@@ -885,12 +962,16 @@ impl Component {
             _ => unreachable!(),
         }
     }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.inner.index
+    }
 }
 
 /// A value which represents a known export of a component.
 ///
 /// This is the return value of [`Component::get_export`] and implements the
-/// [`InstanceExportLookup`] trait to work with lookups like
+/// [`ExportLookup`] trait to work with lookups like
 /// [`Instance::get_func`](crate::component::Instance::get_func).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct ComponentExportIndex {
@@ -898,8 +979,60 @@ pub struct ComponentExportIndex {
     pub(crate) index: ExportIndex,
 }
 
-impl InstanceExportLookup for ComponentExportIndex {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+/// Trait used to lookup the export of a component or instance.
+///
+/// This trait is used as an implementation detail of
+/// [`Instance::get_func`](crate::component::Instance::get_func).
+/// and related `get_*` methods, as well as [`Component::get_export`] and
+/// related `get_*` methods. Notable implementors of this trait are:
+///
+/// * `str`
+/// * `String`
+/// * [`ComponentExportIndex`]
+///
+/// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
+/// need to be implemented externally.
+pub trait ExportLookup {
+    #[doc(hidden)]
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex>;
+}
+
+impl<T> ExportLookup for &T
+where
+    T: ExportLookup + ?Sized,
+{
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        T::lookup(self, component, instance)
+    }
+}
+
+impl ExportLookup for str {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        let info = component.env_component();
+        let exports = match instance {
+            Some(idx) => match &info.export_items[*idx] {
+                Export::Instance { exports, .. } => exports,
+                _ => return None,
+            },
+            None => &info.exports,
+        };
+        let (index, _) = exports.get(self, &NameMapNoIntern)?;
+        Some(*index)
+    }
+}
+
+impl ExportLookup for String {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        str::lookup(self, component, instance)
+    }
+}
+
+impl ExportLookup for ComponentExportIndex {
+    fn lookup(
+        &self,
+        component: &Component,
+        _instance: Option<&ExportIndex>,
+    ) -> Option<ExportIndex> {
         if component.inner.id == self.id {
             Some(self.index)
         } else {
@@ -908,13 +1041,23 @@ impl InstanceExportLookup for ComponentExportIndex {
     }
 }
 
+#[cfg(feature = "wit-parser")]
+impl ExportLookup for ItemName {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        let instance = self
+            .instance_name()
+            .and_then(|instance_name| instance_name.lookup(component, instance));
+        self.name.lookup(component, instance.as_ref())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::component::Component;
-    use crate::{Config, Engine};
+    use crate::{CodeBuilder, Config, Engine};
     use wasmtime_environ::MemoryInitialization;
-
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
         let mut config = Config::new();
         config.wasm_component_model(true);
@@ -936,5 +1079,104 @@ mod tests {
             let init = &module.env_module().memory_initialization;
             assert!(matches!(init, MemoryInitialization::Static { .. }));
         }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn image_range_is_whole_image() {
+        let wat = r#"
+                (component
+                    (core module
+                        (memory 1)
+                        (data (i32.const 0) "1234")
+                        (func (export "f") (param i32) (result i32)
+                            local.get 0)))
+            "#;
+        let engine = Engine::default();
+        let mut builder = CodeBuilder::new(&engine);
+        builder.wasm_binary_or_text(wat.as_bytes(), None).unwrap();
+        let bytes = builder.compile_component_serialized().unwrap();
+
+        let comp = unsafe { Component::deserialize(&engine, &bytes).unwrap() };
+        let image_range = comp.image_range();
+        let len = image_range.end.addr() - image_range.start.addr();
+        // Length may be strictly greater if it becomes page-aligned.
+        assert!(len >= bytes.len());
+    }
+
+    #[cfg(feature = "wit-parser")]
+    #[test]
+    fn component_export_lookup_item_name() {
+        use crate::component::wit_parser::ItemName;
+
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        let engine = Engine::new(&config).unwrap();
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (type $string string)
+                    (export "string-type" (type $string))
+                    (component $inner
+                        (type $a_tuple (tuple string string))
+                        (export "a-tuple" (type $a_tuple))
+                    )
+                    (instance $i (instantiate $inner))
+                    (export "an-instance" (instance $i))
+                    (export "my:test/iface" (instance $i))
+                    (export "my:test/other@0.1.0" (instance $i))
+                )
+            "#,
+        )
+        .unwrap();
+
+        // ItemName can address a top level export:
+        assert!(component.get_export(None, "string-type").is_some());
+        assert_eq!(
+            component.get_export_index(None, "string-type"),
+            component.get_export_index(None, "string-type".parse::<ItemName>().unwrap())
+        );
+
+        // ItemName can address an export in an instance:
+        assert!(component.get_export(None, "an-instance").is_some());
+        let an_instance_index = component.get_export_index(None, "an-instance");
+        assert!(
+            component
+                .get_export(an_instance_index.as_ref(), "a-tuple")
+                .is_some()
+        );
+
+        // ItemName can address an export in an instance with a package name
+        assert!(component.get_export(None, "my:test/iface").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/iface");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component.get_export_index(None, "my:test/iface.a-tuple".parse::<ItemName>().unwrap())
+        );
+
+        // ItemName can address an export in an instance with a package name
+        // and a version
+        assert!(component.get_export(None, "my:test/other@0.1.0").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/other@0.1.0");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component.get_export_index(
+                None,
+                "my:test/other.a-tuple@0.1.0".parse::<ItemName>().unwrap()
+            )
+        );
+
+        // Both mechanisms for lookup respect semver - patch version is
+        // ignored because its a 0.x.y release
+        assert!(component.get_export(None, "my:test/other@0.1.1").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/other@0.1.1");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component.get_export_index(
+                None,
+                "my:test/other.a-tuple@0.1.2".parse::<ItemName>().unwrap()
+            )
+        );
     }
 }

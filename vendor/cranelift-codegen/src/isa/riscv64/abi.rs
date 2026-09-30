@@ -17,11 +17,10 @@ use crate::isa::unwind::UnwindInst;
 use crate::settings;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{MachineEnv, PReg, PRegSet};
+use regalloc2::{MachineEnv, PRegSet};
 
+use alloc::borrow::ToOwned;
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
-use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
 pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
@@ -59,7 +58,7 @@ impl RiscvFlags {
 
             // Due to a limitation in regalloc2, we can't support types
             // larger than 1024 bytes. So limit that here.
-            return std::cmp::min(size, 1024);
+            return core::cmp::min(size, 1024);
         }
 
         return 0;
@@ -133,7 +132,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
@@ -165,7 +164,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     // Compute size and 16-byte stack alignment happens
                     // separately after all args.
                     let size = reg_ty.bits() / 8;
-                    let size = std::cmp::max(size, 8);
+                    let size = core::cmp::max(size, 8);
                     // Align.
                     debug_assert!(size.is_power_of_two());
                     next_stack = align_to(next_stack, size);
@@ -195,11 +194,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
-        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem.into(), ty, MemFlagsData::trusted())
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Inst {
-        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem.into(), from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -226,6 +225,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
@@ -274,9 +274,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::TrapIf {
-            cc: IntCC::UnsignedLessThan,
-            rs1: stack_reg(),
-            rs2: limit_reg,
+            cmp: IntegerCompare {
+                kind: IntCC::UnsignedLessThan,
+                rs1: stack_reg(),
+                rs2: limit_reg,
+            },
             trap_code: ir::TrapCode::STACK_OVERFLOW,
         });
         insts
@@ -291,12 +293,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
         let mem = AMode::RegOffset(base, offset as i64);
-        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem, ty, MemFlagsData::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
         let mem = AMode::RegOffset(base, offset as i64);
-        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem, from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
@@ -345,13 +347,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 AMode::SPOffset(8),
                 link_reg(),
                 I64,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
             insts.push(Inst::gen_store(
                 AMode::SPOffset(0),
                 fp_reg(),
                 I64,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
 
             if flags.unwind_info() {
@@ -384,13 +386,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 writable_link_reg(),
                 AMode::SPOffset(8),
                 I64,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
             insts.push(Inst::gen_load(
                 writable_fp_reg(),
                 AMode::SPOffset(0),
                 I64,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
             insts.extend(Self::gen_sp_reg_adjust(16));
         }
@@ -447,19 +449,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     AMode::SPOffset(8),
                     link_reg(),
                     I64,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                 ));
                 insts.push(Inst::gen_load(
                     writable_fp_reg(),
                     AMode::SPOffset(i64::from(incoming_args_diff)),
                     I64,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                 ));
                 insts.push(Inst::gen_store(
                     AMode::SPOffset(0),
                     fp_reg(),
                     I64,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                 ));
 
                 // Finally, sync the frame pointer with SP
@@ -502,7 +504,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     AMode::SPOffset(i64::from(stack_size - cur_offset - ty.bytes())),
                     Reg::from(reg.to_reg()),
                     ty,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                 ));
 
                 if flags.unwind_info() {
@@ -545,7 +547,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 reg.map(Reg::from),
                 AMode::SPOffset(i64::from(stack_size - cur_offset - ty.bytes())),
                 ty,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
             cur_offset += ty.bytes();
         }
@@ -593,6 +595,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 callee_conv: call_conv,
                 callee_pop_size: 0,
                 try_call_info: None,
+                patchable: false,
             }),
         });
         insts
@@ -612,8 +615,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
-        static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-        MACHINE_ENV.get_or_init(create_reg_environment)
+        static MACHINE_ENV: MachineEnv = create_reg_environment();
+        &MACHINE_ENV
     }
 
     fn get_regs_clobbered_by_call(
@@ -622,7 +625,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> PRegSet {
         match call_conv_of_callee {
             isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
-            isa::CallConv::Patchable => NO_CLOBBERS,
+            // Note that "PreserveAll" actually preserves nothing at
+            // the callsite if used for a `try_call`, because the
+            // unwinder ABI for `try_call`s is still "no clobbered
+            // register restores" for this ABI (so as to work with
+            // Wasmtime).
+            isa::CallConv::PreserveAll if is_exception => ALL_CLOBBERS,
+            isa::CallConv::PreserveAll => NO_CLOBBERS,
             _ => DEFAULT_CLOBBERS,
         }
     }
@@ -640,7 +649,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         outgoing_args_size: u32,
     ) -> FrameLayout {
         let is_callee_saved = |reg: &Writable<RealReg>| match call_conv {
-            isa::CallConv::Patchable => true,
+            isa::CallConv::PreserveAll => true,
             _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
         };
         let mut regs: Vec<Writable<RealReg>> =
@@ -720,7 +729,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::a0(), regs::a1()];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
             _ => &[],
         }
     }
@@ -947,7 +958,7 @@ const ALL_CLOBBERS: PRegSet = PRegSet::empty()
 
 const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
-fn create_reg_environment() -> MachineEnv {
+const fn create_reg_environment() -> MachineEnv {
     // Some C Extension instructions can only use a subset of the registers.
     // x8 - x15, f8 - f15, v8 - v15 so we should prefer to use those since
     // they allow us to emit C instructions more often.
@@ -958,45 +969,114 @@ fn create_reg_environment() -> MachineEnv {
     //   3. Compressible Callee Saved registers.
     //   4. Non-Compressible Callee Saved registers.
 
-    let preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (10..=15).map(px_reg).collect();
-        let f_registers: Vec<PReg> = (10..=15).map(pf_reg).collect();
-        let v_registers: Vec<PReg> = (8..=15).map(pv_reg).collect();
+    let preferred_regs_by_class: [PRegSet; 3] = [
+        PRegSet::empty()
+            .with(px_reg(10))
+            .with(px_reg(11))
+            .with(px_reg(12))
+            .with(px_reg(13))
+            .with(px_reg(14))
+            .with(px_reg(15)),
+        PRegSet::empty()
+            .with(pf_reg(10))
+            .with(pf_reg(11))
+            .with(pf_reg(12))
+            .with(pf_reg(13))
+            .with(pf_reg(14))
+            .with(pf_reg(15)),
+        PRegSet::empty()
+            .with(pv_reg(8))
+            .with(pv_reg(9))
+            .with(pv_reg(10))
+            .with(pv_reg(11))
+            .with(pv_reg(12))
+            .with(pv_reg(13))
+            .with(pv_reg(14))
+            .with(pv_reg(15)),
+    ];
 
-        [x_registers, f_registers, v_registers]
-    };
-
-    let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
+    let non_preferred_regs_by_class: [PRegSet; 3] = [
         // x0 - x4 are special registers, so we don't want to use them.
         // Omit x30 and x31 since they are the spilltmp registers.
-
-        // Start with the Non-Compressible Caller Saved registers.
-        let x_registers: Vec<PReg> = (5..=7)
-            .chain(16..=17)
-            .chain(28..=29)
+        PRegSet::empty()
+            .with(px_reg(5))
+            .with(px_reg(6))
+            .with(px_reg(7))
+            // Start with the Non-Compressible Caller Saved registers.
+            .with(px_reg(16))
+            .with(px_reg(17))
+            .with(px_reg(28))
+            .with(px_reg(29))
             // The first Callee Saved register is x9 since its Compressible
             // Omit x8 since it's the frame pointer.
-            .chain(9..=9)
+            .with(px_reg(9))
             // The rest of the Callee Saved registers are Non-Compressible
-            .chain(18..=27)
-            .map(px_reg)
-            .collect();
-
+            .with(px_reg(18))
+            .with(px_reg(19))
+            .with(px_reg(20))
+            .with(px_reg(21))
+            .with(px_reg(22))
+            .with(px_reg(23))
+            .with(px_reg(24))
+            .with(px_reg(25))
+            .with(px_reg(26))
+            .with(px_reg(27)),
         // Prefer Caller Saved registers.
-        let f_registers: Vec<PReg> = (0..=7)
-            .chain(16..=17)
-            .chain(28..=31)
+        PRegSet::empty()
+            .with(pf_reg(0))
+            .with(pf_reg(1))
+            .with(pf_reg(2))
+            .with(pf_reg(3))
+            .with(pf_reg(4))
+            .with(pf_reg(5))
+            .with(pf_reg(6))
+            .with(pf_reg(7))
+            .with(pf_reg(16))
+            .with(pf_reg(17))
+            .with(pf_reg(28))
+            .with(pf_reg(29))
+            .with(pf_reg(30))
+            .with(pf_reg(31))
             // Once those are exhausted, we should prefer f8 and f9 since they are
             // callee saved, but compressible.
-            .chain(8..=9)
-            .chain(18..=27)
-            .map(pf_reg)
-            .collect();
-
-        let v_registers = (0..=7).chain(16..=31).map(pv_reg).collect();
-
-        [x_registers, f_registers, v_registers]
-    };
+            .with(pf_reg(8))
+            .with(pf_reg(9))
+            .with(pf_reg(18))
+            .with(pf_reg(19))
+            .with(pf_reg(20))
+            .with(pf_reg(21))
+            .with(pf_reg(22))
+            .with(pf_reg(23))
+            .with(pf_reg(24))
+            .with(pf_reg(25))
+            .with(pf_reg(26))
+            .with(pf_reg(27)),
+        PRegSet::empty()
+            .with(pv_reg(0))
+            .with(pv_reg(1))
+            .with(pv_reg(2))
+            .with(pv_reg(3))
+            .with(pv_reg(4))
+            .with(pv_reg(5))
+            .with(pv_reg(6))
+            .with(pv_reg(7))
+            .with(pv_reg(16))
+            .with(pv_reg(17))
+            .with(pv_reg(18))
+            .with(pv_reg(19))
+            .with(pv_reg(20))
+            .with(pv_reg(21))
+            .with(pv_reg(22))
+            .with(pv_reg(23))
+            .with(pv_reg(24))
+            .with(pv_reg(25))
+            .with(pv_reg(26))
+            .with(pv_reg(27))
+            .with(pv_reg(28))
+            .with(pv_reg(29))
+            .with(pv_reg(30))
+            .with(pv_reg(31)),
+    ];
 
     MachineEnv {
         preferred_regs_by_class,
@@ -1038,7 +1118,7 @@ impl Riscv64MachineDeps {
                 AMode::SPOffset(0),
                 zero_reg(),
                 I32,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
         }
 

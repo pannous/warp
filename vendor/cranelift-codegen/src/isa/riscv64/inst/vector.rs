@@ -1,4 +1,3 @@
-use crate::Reg;
 use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
@@ -452,6 +451,10 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmnandMM => 0b011101,
             VecAluOpRRR::VmsgtuVX | VecAluOpRRR::VmnorMM => 0b011110,
             VecAluOpRRR::VmsgtVX | VecAluOpRRR::VmfgeVF => 0b011111,
+            // Zvbb
+            VecAluOpRRR::VandnVV | VecAluOpRRR::VandnVX => 0b000001,
+            VecAluOpRRR::VrorVV | VecAluOpRRR::VrorVX => 0b010100,
+            VecAluOpRRR::VrolVV | VecAluOpRRR::VrolVX => 0b010101,
         }
     }
 
@@ -481,7 +484,10 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmsltuVV
             | VecAluOpRRR::VmsltVV
             | VecAluOpRRR::VmsleuVV
-            | VecAluOpRRR::VmsleVV => VecOpCategory::OPIVV,
+            | VecAluOpRRR::VmsleVV
+            | VecAluOpRRR::VandnVV
+            | VecAluOpRRR::VrorVV
+            | VecAluOpRRR::VrolVV => VecOpCategory::OPIVV,
             VecAluOpRRR::VwaddVV
             | VecAluOpRRR::VwaddWV
             | VecAluOpRRR::VwadduVV
@@ -539,7 +545,10 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmsleuVX
             | VecAluOpRRR::VmsleVX
             | VecAluOpRRR::VmsgtuVX
-            | VecAluOpRRR::VmsgtVX => VecOpCategory::OPIVX,
+            | VecAluOpRRR::VmsgtVX
+            | VecAluOpRRR::VandnVX
+            | VecAluOpRRR::VrorVX
+            | VecAluOpRRR::VrolVX => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV
@@ -688,6 +697,8 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VmsleVI => 0b011101,
             VecAluOpRRImm5::VmsgtuVI => 0b011110,
             VecAluOpRRImm5::VmsgtVI => 0b011111,
+            // Zvbb
+            VecAluOpRRImm5::VrorVI => 0b010100,
         }
     }
 
@@ -715,7 +726,8 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VmsleuVI
             | VecAluOpRRImm5::VmsleVI
             | VecAluOpRRImm5::VmsgtuVI
-            | VecAluOpRRImm5::VmsgtVI => VecOpCategory::OPIVI,
+            | VecAluOpRRImm5::VmsgtVI
+            | VecAluOpRRImm5::VrorVI => VecOpCategory::OPIVI,
         }
     }
 
@@ -729,7 +741,8 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VrgatherVI
             | VecAluOpRRImm5::VmvrV
             | VecAluOpRRImm5::VnclipWI
-            | VecAluOpRRImm5::VnclipuWI => true,
+            | VecAluOpRRImm5::VnclipuWI
+            | VecAluOpRRImm5::VrorVI => true,
             VecAluOpRRImm5::VaddVI
             | VecAluOpRRImm5::VrsubVI
             | VecAluOpRRImm5::VandVI
@@ -816,6 +829,13 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtfxV
             | VecAluOpRR::VfwcvtffV
             | VecAluOpRR::VfncvtffW => 0b010010,
+            // Zvbb
+            VecAluOpRR::VbrevV
+            | VecAluOpRR::Vbrev8V
+            | VecAluOpRR::Vrev8V
+            | VecAluOpRR::VclzV
+            | VecAluOpRR::VctzV
+            | VecAluOpRR::VcpopV => 0b010010,
         }
     }
 
@@ -828,7 +848,13 @@ impl VecAluOpRR {
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => VecOpCategory::OPMVV,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VbrevV
+            | VecAluOpRR::Vbrev8V
+            | VecAluOpRR::Vrev8V
+            | VecAluOpRR::VclzV
+            | VecAluOpRR::VctzV
+            | VecAluOpRR::VcpopV => VecOpCategory::OPMVV,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => VecOpCategory::OPFVF,
             VecAluOpRR::VfmvFS
             | VecAluOpRR::VfsqrtV
@@ -880,6 +906,13 @@ impl VecAluOpRR {
             // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
             // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0,
+            // Zvbb VXUNARY0
+            VecAluOpRR::Vbrev8V => 0b01000,
+            VecAluOpRR::Vrev8V => 0b01001,
+            VecAluOpRR::VbrevV => 0b01010,
+            VecAluOpRR::VclzV => 0b01100,
+            VecAluOpRR::VctzV => 0b01101,
+            VecAluOpRR::VcpopV => 0b01110,
         }
     }
 
@@ -904,7 +937,13 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtfxuV
             | VecAluOpRR::VfcvtfxV
             | VecAluOpRR::VfwcvtffV
-            | VecAluOpRR::VfncvtffW => true,
+            | VecAluOpRR::VfncvtffW
+            | VecAluOpRR::VbrevV
+            | VecAluOpRR::Vbrev8V
+            | VecAluOpRR::Vrev8V
+            | VecAluOpRR::VclzV
+            | VecAluOpRR::VctzV
+            | VecAluOpRR::VcpopV => true,
             VecAluOpRR::VmvSX
             | VecAluOpRR::VfmvSF
             | VecAluOpRR::VmvVV
@@ -934,7 +973,13 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtfxuV
             | VecAluOpRR::VfcvtfxV
             | VecAluOpRR::VfwcvtffV
-            | VecAluOpRR::VfncvtffW => RegClass::Vector,
+            | VecAluOpRR::VfncvtffW
+            | VecAluOpRR::VbrevV
+            | VecAluOpRR::Vbrev8V
+            | VecAluOpRR::Vrev8V
+            | VecAluOpRR::VclzV
+            | VecAluOpRR::VctzV
+            | VecAluOpRR::VcpopV => RegClass::Vector,
             VecAluOpRR::VmvXS => RegClass::Int,
             VecAluOpRR::VfmvFS => RegClass::Float,
         }
@@ -959,7 +1004,13 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtfxuV
             | VecAluOpRR::VfcvtfxV
             | VecAluOpRR::VfwcvtffV
-            | VecAluOpRR::VfncvtffW => RegClass::Vector,
+            | VecAluOpRR::VfncvtffW
+            | VecAluOpRR::VbrevV
+            | VecAluOpRR::Vbrev8V
+            | VecAluOpRR::Vrev8V
+            | VecAluOpRR::VclzV
+            | VecAluOpRR::VctzV
+            | VecAluOpRR::VcpopV => RegClass::Vector,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => RegClass::Float,
             VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
         }
@@ -1007,6 +1058,12 @@ impl fmt::Display for VecAluOpRR {
             VecAluOpRR::VfcvtfxV => "vfcvt.f.x.v",
             VecAluOpRR::VfwcvtffV => "vfwcvt.f.f.v",
             VecAluOpRR::VfncvtffW => "vfncvt.f.f.w",
+            VecAluOpRR::VbrevV => "vbrev.v",
+            VecAluOpRR::Vbrev8V => "vbrev8.v",
+            VecAluOpRR::Vrev8V => "vrev8.v",
+            VecAluOpRR::VclzV => "vclz.v",
+            VecAluOpRR::VctzV => "vctz.v",
+            VecAluOpRR::VcpopV => "vcpop.v",
         })
     }
 }
@@ -1060,12 +1117,6 @@ impl fmt::Display for VecAluOpRImm5 {
 }
 
 impl VecAMode {
-    pub fn get_base_register(&self) -> Option<Reg> {
-        match self {
-            VecAMode::UnitStride { base, .. } => base.get_base_register(),
-        }
-    }
-
     pub fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
             VecAMode::UnitStride { base, .. } => base.get_operands(collector),

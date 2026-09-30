@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 mod cert;
-pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
+pub use cert::{Certificate, PemItem, PrivateKey, parse_pem};
 
 #[cfg(feature = "_rustls")]
 pub(crate) mod rustls;
@@ -78,6 +78,46 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
+    /// Conservatively compare connection settings without relying on hash equality.
+    /// Keep the pattern exhaustive so new TLS fields require an explicit decision.
+    pub(crate) fn can_share_pool_with(&self, agent: &Self) -> bool {
+        let Self {
+            provider,
+            client_cert,
+            root_certs,
+            use_sni,
+            disable_verification,
+            #[cfg(feature = "_rustls")]
+            rustls_crypto_provider,
+        } = self;
+
+        // Clones retain identity. Independently constructed credentials or root
+        // sets conservatively use fresh connections even if their bytes match.
+        let same_client = match (client_cert, &agent.client_cert) {
+            (None, None) => true,
+            (Some(a), Some(b)) => Arc::ptr_eq(&a.0, &b.0),
+            _ => false,
+        };
+        let same_roots = match (root_certs, &agent.root_certs) {
+            (RootCerts::WebPki, RootCerts::WebPki)
+            | (RootCerts::PlatformVerifier, RootCerts::PlatformVerifier) => true,
+            (RootCerts::Specific(a), RootCerts::Specific(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        };
+        #[cfg(feature = "_rustls")]
+        match (rustls_crypto_provider, &agent.rustls_crypto_provider) {
+            (None, None) => {}
+            (Some(a), Some(b)) if Arc::ptr_eq(a, b) => {}
+            _ => return false,
+        }
+
+        *provider == agent.provider
+            && same_client
+            && same_roots
+            && *use_sni == agent.use_sni
+            && *disable_verification == agent.disable_verification
+    }
+
     /// Builder to make a bespoke config.
     pub fn builder() -> TlsConfigBuilder {
         TlsConfigBuilder {
@@ -279,12 +319,12 @@ impl ClientCert {
 
     /// Client certificate chain.
     pub fn certs(&self) -> &[Certificate<'static>] {
-        &self.0 .0
+        &self.0.0
     }
 
     /// Client certificate private key.
     pub fn private_key(&self) -> &PrivateKey<'static> {
-        &self.0 .1
+        &self.0.1
     }
 }
 
@@ -372,8 +412,138 @@ mod test {
     use assert_no_alloc::*;
 
     #[test]
+    fn specific_roots_pool_by_identity() {
+        let roots = || RootCerts::new_with_certs(&[Certificate::from_der(b"root")]);
+        let a = TlsConfig::builder().root_certs(roots()).build();
+        assert!(a.can_share_pool_with(&a.clone()));
+        let b = TlsConfig::builder().root_certs(roots()).build();
+        assert!(!a.can_share_pool_with(&b));
+    }
+
+    #[test]
+    #[cfg(feature = "_rustls")]
+    fn crypto_providers_pool_by_identity() {
+        let provider = || Arc::new(::rustls::crypto::aws_lc_rs::default_provider());
+        let a = TlsConfig::builder()
+            .unversioned_rustls_crypto_provider(provider())
+            .build();
+        assert!(a.can_share_pool_with(&a.clone()));
+        let b = TlsConfig::builder()
+            .unversioned_rustls_crypto_provider(provider())
+            .build();
+        assert!(!a.can_share_pool_with(&b));
+        assert!(!a.can_share_pool_with(&TlsConfig::default()));
+        assert!(!TlsConfig::default().can_share_pool_with(&a));
+    }
+
+    #[test]
     fn tls_config_clone_does_not_allocate() {
         let c = TlsConfig::default();
         assert_no_alloc(|| c.clone());
+    }
+
+    #[cfg(any(feature = "_rustls", feature = "native-tls"))]
+    mod handshake {
+        use std::sync::Arc;
+
+        use crate::tls::{TlsConfig, TlsProvider};
+        use crate::transport::time::{Duration, Instant};
+        use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
+        use crate::transport::{NextTimeout, Transport};
+        use crate::unversioned::resolver::{DefaultResolver, Resolver};
+        use crate::{Agent, Error, Timeout};
+
+        #[derive(Debug)]
+        struct TimeoutTransport {
+            buffers: LazyBuffers,
+            timeout: NextTimeout,
+        }
+
+        impl Transport for TimeoutTransport {
+            fn buffers(&mut self) -> &mut dyn Buffers {
+                &mut self.buffers
+            }
+
+            fn transmit_output(
+                &mut self,
+                _amount: usize,
+                timeout: NextTimeout,
+            ) -> Result<(), Error> {
+                assert_eq!(timeout, self.timeout);
+                Err(Error::Timeout(timeout.reason))
+            }
+
+            fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+                assert_eq!(timeout, self.timeout);
+                Err(Error::Timeout(timeout.reason))
+            }
+
+            fn is_open(&mut self) -> bool {
+                true
+            }
+        }
+
+        fn check_timeout(connector: impl Connector<TimeoutTransport>, tls_config: TlsConfig) {
+            let config = Agent::config_builder()
+                .proxy(None)
+                .tls_config(tls_config)
+                .build();
+            let uri = "https://example.com/".parse().unwrap();
+            let resolver = DefaultResolver::default();
+
+            for reason in [Timeout::Connect, Timeout::Global] {
+                let timeout = NextTimeout {
+                    after: Duration::from_secs(7),
+                    reason,
+                };
+                let details = ConnectionDetails {
+                    uri: &uri,
+                    addrs: resolver.empty(),
+                    resolver: &resolver,
+                    config: &config,
+                    request_level: false,
+                    now: Instant::now(),
+                    timeout,
+                    current_time: Arc::new(Instant::now),
+                    run_connector: Arc::new(|_| unreachable!("TLS must use the chained transport")),
+                };
+                let transport = TimeoutTransport {
+                    buffers: LazyBuffers::new(1024, 1024),
+                    timeout,
+                };
+
+                let error = connector.connect(&details, Some(transport)).unwrap_err();
+                assert!(
+                    matches!(error, Error::Timeout(actual) if actual == reason),
+                    "{error:?}"
+                );
+            }
+        }
+
+        #[test]
+        #[cfg(feature = "_rustls")]
+        fn rustls_uses_connection_timeout() {
+            let tls_config = TlsConfig::builder()
+                .provider(TlsProvider::Rustls)
+                .disable_verification(true)
+                .unversioned_rustls_crypto_provider(Arc::new(
+                    ::rustls::crypto::aws_lc_rs::default_provider(),
+                ))
+                .build();
+            check_timeout(crate::tls::rustls::RustlsConnector::default(), tls_config);
+        }
+
+        #[test]
+        #[cfg(feature = "native-tls")]
+        fn native_tls_uses_connection_timeout() {
+            let tls_config = TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .disable_verification(true)
+                .build();
+            check_timeout(
+                crate::tls::native_tls::NativeTlsConnector::default(),
+                tls_config,
+            );
+        }
     }
 }

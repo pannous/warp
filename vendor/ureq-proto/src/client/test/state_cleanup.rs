@@ -1,7 +1,7 @@
 use http::{Request, Response, StatusCode, Version};
 
-use crate::client::test::scenario::write_response;
 use crate::CloseReason;
+use crate::client::test::scenario::write_response;
 
 use super::scenario::Scenario;
 
@@ -151,6 +151,73 @@ fn close_due_to_close_delimited_body() {
     assert_eq!(
         *inner.close_reason.first().unwrap(),
         CloseReason::CloseDelimitedBody
+    );
+
+    assert!(call.must_close_connection());
+}
+
+// Connection options are comma-separated tokens compared case-insensitively.
+// https://www.rfc-editor.org/rfc/rfc9110#section-7.6.1
+
+#[test]
+fn close_due_to_server_connection_close_capitalized() {
+    let scenario = Scenario::builder()
+        .get("https://a.test")
+        .response(
+            Response::builder()
+                .header("connection", "Close")
+                .body(())
+                .unwrap(),
+        )
+        .build();
+
+    let call = scenario.to_cleanup();
+    let inner = call.inner();
+    assert!(
+        inner
+            .close_reason
+            .contains(&CloseReason::ServerConnectionClose)
+    );
+
+    assert!(call.must_close_connection());
+}
+
+#[test]
+fn close_due_to_server_connection_close_in_list() {
+    let scenario = Scenario::builder()
+        .get("https://a.test")
+        .response(
+            Response::builder()
+                .header("connection", "keep-alive, close")
+                .body(())
+                .unwrap(),
+        )
+        .build();
+
+    let call = scenario.to_cleanup();
+    let inner = call.inner();
+    assert!(
+        inner
+            .close_reason
+            .contains(&CloseReason::ServerConnectionClose)
+    );
+
+    assert!(call.must_close_connection());
+}
+
+#[test]
+fn close_due_to_client_connection_close_capitalized() {
+    let scenario = Scenario::builder()
+        .get("https://a.test")
+        .header("connection", "Close")
+        .build();
+
+    let call = scenario.to_cleanup();
+    let inner = call.inner();
+    assert!(
+        inner
+            .close_reason
+            .contains(&CloseReason::ClientConnectionClose)
     );
 
     assert!(call.must_close_connection());

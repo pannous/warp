@@ -1,13 +1,12 @@
 // Web/Browser tests
 // Migrated from tests_*.rs files
 
-use wasp::analyzer::analyze;
-use wasp::extensions::print;
-use wasp::type_kinds::NodeKind;
-use wasp::util::fetch;
-use wasp::wasm_gc_emitter::eval;
-use wasp::wasp_parser::parse;
-use wasp::{eq, is, put, skip};
+use warp::analyzer::analyze;
+use warp::extensions::print;
+use warp::util::fetch;
+use warp::wasm_emitter::eval;
+use warp::wasp_parser::parse;
+use warp::{eq, is, put, skip};
 
 #[test]
 fn test_html_wasp() {
@@ -29,11 +28,9 @@ fn test_js() {
 }
 
 #[test]
+#[ignore = "later"]
 fn test_inner_html() {
-	#[cfg(not(any(feature = "WEBAPP", feature = "MY_WASM")))]
-	{
-		return;
-	}
+	// let html = parse_xml("<html><bold>test</bold></html>");
 	// let html = parse("<html><bold>test</bold></html>");
 	// eq!(*html.value(), "<bold>test</bold>");
 	// let serialized = html.serialize();
@@ -42,16 +39,11 @@ fn test_inner_html() {
 	//	eval("<html><script>alert('ok')</script></html>");
 	#[cfg(feature = "WEBAPP")]
 	{
-		// todo browser "too"
-		// skip!(
-
 		eval("<html><bold id=b ok=123>test</bold></html>");
 		is!("$b.ok", 123); // TODO emitAttributeSetter
 		eval("<script>console.log('ok!')</script>");
 		eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
-		                                       // );
 	}
-
 	//	eval("$b.innerHTML='<i>ok</i>'");
 	//	eval("<html><bold id='anchor'>…</bold></html>");
 	//	eval("$anchor.innerHTML='<i>ok</i>'");
@@ -60,37 +52,24 @@ fn test_inner_html() {
 	//	eval("$results.innerHTML='<bold>test</bold>'");
 }
 
-#[test]
-fn test_html() {
-	//	testHtmlWasp();
-	//	testJS();
-	test_inner_html();
-}
 
 #[test]
-#[ignore]
 fn test_fetch() {
-	// todo: use host fetch if available
+	is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
 	let res = fetch("https://pannous.com/files/test");
-	if res.contains("not available") {
-		print("fetch not available. set CURL=1 in CMakelists.txt or use host function");
-		return;
-	}
 	eq!(res, "test 2 5 3 7");
 	is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 	is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	skip!(
-
-		assert!_emit("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
-		assert!_emit("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	);
+	is!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
+	is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 }
 
 #[test]
 #[ignore]
 fn test_canvas() {
-	let result = analyze(parse("$canvas"));
-	eq!(result.kind(), NodeKind::Externref);
+	let _result = analyze(parse("$canvas"));
+	// TODO: Externref type not yet implemented in Kind
+	// eq!(result.kind(), NodeKind::Externref);
 	let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
 	put!(nod);
 }
@@ -118,10 +97,10 @@ fn test_dom() {
 }
 
 #[test]
+#[ignore = "WEBAPP feature required"]
 fn test_dom_property() {
 	#[cfg(not(feature = "WEBAPP"))]
 	{
-		return;
 	}
 	#[cfg(feature = "WEBAPP")]
 	{
@@ -131,7 +110,7 @@ fn test_dom_property() {
 		result = eval("$canvas.width");
 		eq!(result.value(), &300);
 		//	return;
-		result = eval("$canvas.style");
+		let _style = eval("$canvas.style");
 	}
 	// eq!(result.kind(), strings);
 	//	eq!(result.kind(), stringp);

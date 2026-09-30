@@ -1,18 +1,19 @@
+use crate::error::OutOfMemory;
 use crate::func::HostFunc;
-use crate::hash_map::{Entry, HashMap};
 use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, Module, StoreContextMut, Val, ValRaw,
+    Instance, IntoFunc, Module, Result, StoreContextMut, Val, ValRaw, prelude::*,
 };
-use crate::{IntoFunc, prelude::*};
 use alloc::sync::Arc;
 use core::fmt::{self, Debug};
 #[cfg(feature = "async")]
 use core::future::Future;
 use core::marker;
+use core::mem::MaybeUninit;
 use log::warn;
+use wasmtime_environ::{Atom, PanicOnOom, StringPool};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -74,17 +75,17 @@ use log::warn;
 /// The [`Linker`] type is not compatible with usage between multiple [`Engine`]
 /// values. An [`Engine`] is provided when a [`Linker`] is created and only
 /// stores and items which originate from that [`Engine`] can be used with this
-/// [`Linker`]. If more than one [`Engine`] is used with a [`Linker`] then that
-/// may cause a panic at runtime, similar to how if a [`Func`] is used with the
-/// wrong [`Store`] that can also panic at runtime.
+/// [`Linker`]. Instantiating a [`Module`] from another [`Engine`] returns an
+/// error, and mixing engines in other ways may cause a panic at runtime,
+/// similar to how if a [`Func`] is used with the wrong [`Store`] that can also
+/// panic at runtime.
 ///
 /// [`Store`]: crate::Store
 /// [`Global`]: crate::Global
 pub struct Linker<T> {
     engine: Engine,
-    string2idx: HashMap<Arc<str>, usize>,
-    strings: Vec<Arc<str>>,
-    map: HashMap<ImportKey, Definition>,
+    pool: StringPool,
+    map: TryHashMap<ImportKey, Definition>,
     allow_shadowing: bool,
     allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
@@ -100,9 +101,8 @@ impl<T> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
-            string2idx: self.string2idx.clone(),
-            strings: self.strings.clone(),
-            map: self.map.clone(),
+            pool: self.pool.clone_panic_on_oom(),
+            map: self.map.clone_panic_on_oom(),
             allow_shadowing: self.allow_shadowing,
             allow_unknown_exports: self.allow_unknown_exports,
             _marker: self._marker,
@@ -112,20 +112,39 @@ impl<T> Clone for Linker<T> {
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 struct ImportKey {
-    name: usize,
-    module: usize,
+    module: Atom,
+    name: Atom,
+}
+
+impl TryClone for ImportKey {
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 #[derive(Clone)]
 pub(crate) enum Definition {
-    Extern(Extern, DefinitionType),
+    Extern {
+        item: Extern,
+        ty: DefinitionType,
+        /// The engine of the store that `item` was taken from, which is the
+        /// engine that assigned any type indices within `ty`.
+        engine: Engine,
+    },
     HostFunc(Arc<HostFunc>),
+}
+
+impl TryClone for Definition {
+    fn try_clone(&self) -> core::result::Result<Self, OutOfMemory> {
+        Ok(self.clone())
+    }
 }
 
 /// This is a sort of slimmed down `ExternType` which notably doesn't have a
 /// `FuncType`, which is an allocation, and additionally retains the current
 /// size of the table/memory.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum DefinitionType {
     Func(wasmtime_environ::VMSharedTypeIndex),
     Global(wasmtime_environ::Global),
@@ -148,9 +167,8 @@ impl<T> Linker<T> {
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
-            map: HashMap::new(),
-            string2idx: HashMap::new(),
-            strings: Vec::new(),
+            map: TryHashMap::new(),
+            pool: StringPool::new(),
             allow_shadowing: false,
             allow_unknown_exports: false,
             _marker: marker::PhantomData,
@@ -173,7 +191,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let mut linker = Linker::<()>::new(&engine);
     /// linker.func_wrap("", "", || {})?;
@@ -204,7 +222,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module)")?;
     /// # let mut store = Store::new(&engine, ());
@@ -230,7 +248,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
     /// # let mut store = Store::new(&engine, ());
@@ -240,7 +258,7 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()>
+    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> Result<()>
     where
         T: 'static,
     {
@@ -267,7 +285,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
     /// # let mut store = Store::new(&engine, ());
@@ -281,7 +299,7 @@ impl<T> Linker<T> {
         &mut self,
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> anyhow::Result<()>
+    ) -> Result<()>
     where
         T: 'static,
     {
@@ -290,7 +308,7 @@ impl<T> Linker<T> {
             if let Err(import_err) = self._get_by_import(&import) {
                 let default_extern =
                     import_err.ty().default_value(&mut store).with_context(|| {
-                        anyhow!(
+                        format_err!(
                             "no default value exists for `{}::{}` with type `{:?}`",
                             import.module(),
                             import.name(),
@@ -324,7 +342,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -344,6 +362,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn define(
         &mut self,
         store: impl AsContext<Data = T>,
@@ -355,29 +377,17 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let store = store.as_context();
-        let key = self.import_key(module, Some(name));
+        let key = self.import_key(module, name)?;
         self.insert(key, Definition::new(store.0, item.into()))?;
         Ok(self)
     }
 
-    /// Same as [`Linker::define`], except only the name of the import is
-    /// provided, not a module name as well.
-    ///
-    /// This is only relevant when working with the module linking proposal
-    /// where one-level names are allowed (in addition to two-level names).
-    /// Otherwise this method need not be used.
-    pub fn define_name(
-        &mut self,
-        store: impl AsContext<Data = T>,
-        name: &str,
-        item: impl Into<Extern>,
-    ) -> Result<&mut Self>
+    fn func_insert(&mut self, module: &str, name: &str, func: HostFunc) -> Result<&mut Self>
     where
         T: 'static,
     {
-        let store = store.as_context();
-        let key = self.import_key(name, None);
-        self.insert(key, Definition::new(store.0, item.into()))?;
+        let key = self.import_key(module, name)?;
+        self.insert(key, Definition::HostFunc(try_new(func)?))?;
         Ok(self)
     }
 
@@ -389,6 +399,12 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_new(
         &mut self,
         module: &str,
@@ -399,11 +415,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        assert!(ty.comes_from_same_engine(self.engine()));
-        let func = HostFunc::new(&self.engine, ty, func);
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, HostFunc::new(&self.engine, ty, func)?)
     }
 
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
@@ -423,17 +435,14 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [MaybeUninit<ValRaw>]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self>
     where
         T: 'static,
     {
-        assert!(ty.comes_from_same_engine(self.engine()));
         // SAFETY: the contract of this function is the same as `new_unchecked`.
-        let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func) };
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func)? };
+        self.func_insert(module, name, func)
     }
 
     /// Creates a [`Func::new_async`]-style function named in this linker.
@@ -444,12 +453,9 @@ impl<T> Linker<T> {
     ///
     /// This method panics in the following situations:
     ///
-    /// * This linker is not associated with an [async
-    ///   config](crate::Config::async_support).
-    ///
     /// * If the given function type is not associated with the same engine as
     ///   this linker.
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg(feature = "async")]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -466,20 +472,9 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_new_async` without enabling async support in the config"
-        );
-        assert!(ty.comes_from_same_engine(self.engine()));
-        self.func_new(module, name, ty, move |caller, params, results| {
-            let instance = caller.caller();
-            caller.store.with_blocking(|store, cx| {
-                let caller = Caller::new(store, instance);
-                cx.block_on(core::pin::Pin::from(func(caller, params, results)))
-            })?
-        })
+        self.func_insert(module, name, HostFunc::new_async(&self.engine, ty, func)?)
     }
 
     /// Define a host function within this linker.
@@ -512,7 +507,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// let mut linker = Linker::new(&engine);
     /// linker.func_wrap("host", "double", |x: i32| x * 2)?;
@@ -538,6 +533,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_wrap<Params, Args>(
         &mut self,
         module: &str,
@@ -547,10 +546,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let func = HostFunc::wrap(&self.engine, func);
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, func.into_func(&self.engine)?)
     }
 
     /// Asynchronous analog of [`Linker::func_wrap`].
@@ -566,27 +562,9 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_async` without enabling async support on the config",
-        );
-        let func =
-            HostFunc::wrap_inner(&self.engine, move |caller: Caller<'_, T>, args: Params| {
-                let instance = caller.caller();
-                let result = caller.store.block_on(|store| {
-                    let caller = Caller::new(store, instance);
-                    func(caller, args).into()
-                });
-                match result {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => Args::fallible_from_error(e),
-                }
-            });
-        let key = self.import_key(module, Some(name));
-        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
-        Ok(self)
+        self.func_insert(module, name, HostFunc::wrap_async(&self.engine, func)?)
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
@@ -617,7 +595,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -645,6 +623,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instance(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -655,15 +637,10 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let mut store = store.as_context_mut();
-        let exports = instance
+        let exports: TryVec<_> = instance
             .exports(&mut store)
-            .map(|e| {
-                (
-                    self.import_key(module_name, Some(e.name())),
-                    e.into_extern(),
-                )
-            })
-            .collect::<Vec<_>>();
+            .map(|e| Ok((self.import_key(module_name, e.name())?, e.into_extern())))
+            .try_collect::<_, Error>()?;
         for (key, export) in exports {
             self.insert(key, Definition::new(store.0, export))?;
         }
@@ -708,7 +685,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -738,7 +715,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -855,7 +832,13 @@ impl<T> Linker<T> {
     /// Define automatic instantiations of a [`Module`] in this linker.
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
-    #[cfg(all(feature = "async", feature = "cranelift"))]
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    #[cfg(feature = "async")]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -935,7 +918,7 @@ impl<T> Linker<T> {
                 let instance_pre = self.instantiate_pre(module)?;
                 let export_name = export.name().to_owned();
                 let func = mk_func(&mut store, func_ty, export_name, instance_pre);
-                let key = self.import_key(module_name, Some(export.name()));
+                let key = self.import_key(module_name, export.name())?;
                 self.insert(key, Definition::new(store.0, func.into()))?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
@@ -982,6 +965,10 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if any shadowing violations happen while defining new
     /// items, or if the original item wasn't defined.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn alias(
         &mut self,
         module: &str,
@@ -989,8 +976,8 @@ impl<T> Linker<T> {
         as_module: &str,
         as_name: &str,
     ) -> Result<&mut Self> {
-        let src = self.import_key(module, Some(name));
-        let dst = self.import_key(as_module, Some(as_name));
+        let src = self.import_key(module, name)?;
+        let dst = self.import_key(as_module, as_name)?;
         match self.map.get(&src).cloned() {
             Some(item) => self.insert(dst, item)?,
             None => bail!("no item named `{module}::{name}` defined"),
@@ -1007,15 +994,19 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if any shadowing violations happen while defining new
     /// items.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
-        let module = self.intern_str(module);
-        let as_module = self.intern_str(as_module);
-        let items = self
+        let module = self.pool.insert(module)?;
+        let as_module = self.pool.insert(as_module)?;
+        let items: TryVec<_> = self
             .map
             .iter()
             .filter(|(key, _def)| key.module == module)
-            .map(|(key, def)| (key.name, def.clone()))
-            .collect::<Vec<_>>();
+            .map(|(key, def)| Ok((key.name, def.clone())))
+            .try_collect::<_, Error>()?;
         for (name, item) in items {
             self.insert(
                 ImportKey {
@@ -1029,43 +1020,21 @@ impl<T> Linker<T> {
     }
 
     fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
-        match self.map.entry(key) {
-            Entry::Occupied(_) if !self.allow_shadowing => {
-                let module = &self.strings[key.module];
-                let desc = match self.strings.get(key.name) {
-                    Some(name) => format!("{module}::{name}"),
-                    None => module.to_string(),
-                };
-                bail!("import of `{desc}` defined twice")
-            }
-            Entry::Occupied(mut o) => {
-                o.insert(item);
-            }
-            Entry::Vacant(v) => {
-                v.insert(item);
-            }
+        if !self.allow_shadowing && self.map.contains_key(&key) {
+            let module = &self.pool[key.module];
+            let name = &self.pool[key.name];
+            bail!("import of `{module}::{name}` defined twice");
         }
+
+        self.map.insert(key, item)?;
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: Option<&str>) -> ImportKey {
-        ImportKey {
-            module: self.intern_str(module),
-            name: name
-                .map(|name| self.intern_str(name))
-                .unwrap_or(usize::max_value()),
-        }
-    }
-
-    fn intern_str(&mut self, string: &str) -> usize {
-        if let Some(idx) = self.string2idx.get(string) {
-            return *idx;
-        }
-        let string: Arc<str> = string.into();
-        let idx = self.strings.len();
-        self.strings.push(string.clone());
-        self.string2idx.insert(string, idx);
-        idx
+    fn import_key(&mut self, module: &str, name: &str) -> Result<ImportKey, OutOfMemory> {
+        Ok(ImportKey {
+            module: self.pool.insert(module)?,
+            name: self.pool.insert(name)?,
+        })
     }
 
     /// Attempts to instantiate the `module` provided.
@@ -1102,7 +1071,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -1132,6 +1101,12 @@ impl<T> Linker<T> {
 
     /// Attempts to instantiate the `module` provided. This is the same as
     /// [`Linker::instantiate`], except for async `Store`s.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
@@ -1163,7 +1138,7 @@ impl<T> Linker<T> {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// # let engine = Engine::default();
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
@@ -1193,6 +1168,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, module: &Module) -> Result<InstancePre<T>>
     where
         T: 'static,
@@ -1219,16 +1198,20 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let mut imports = module
+        ensure!(
+            Engine::same(&self.engine, module.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
+        let mut imports: TryVec<_> = module
             .imports()
-            .map(|import| self._get_by_import(&import))
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|import| Ok(self._get_by_import(&import)?))
+            .try_collect::<_, Error>()?;
         if let Some(store) = store {
             for import in imports.iter_mut() {
                 import.update_size(store);
             }
         }
-        unsafe { InstancePre::new(module, imports) }
+        unsafe { InstancePre::new(&self.engine, module, imports) }
     }
 
     /// Returns an iterator over all items defined in this `Linker`, in
@@ -1255,10 +1238,10 @@ impl<T> Linker<T> {
         self.map.iter().map(move |(key, item)| {
             let store = store.as_context_mut();
             (
-                &*self.strings[key.module],
-                &*self.strings[key.name],
+                &self.pool[key.module],
+                &self.pool[key.name],
                 // Should be safe since `T` is connecting the linker and store
-                unsafe { item.to_extern(store.0) },
+                unsafe { item.to_extern(store.0).panic_on_oom() },
             )
         })
     }
@@ -1266,31 +1249,40 @@ impl<T> Linker<T> {
     /// Looks up a previously defined value in this [`Linker`], identified by
     /// the names provided.
     ///
-    /// Returns `None` if this name was not previously defined in this
+    /// Returns an error if this name was not previously defined in this
     /// [`Linker`].
     ///
     /// # Panics
     ///
     /// This function will panic if the `store` provided does not come from the
     /// same [`Engine`] that this linker was created with.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get(
         &self,
         mut store: impl AsContextMut<Data = T>,
         module: &str,
         name: &str,
-    ) -> Option<Extern>
+    ) -> Result<Extern>
     where
         T: 'static,
     {
         let store = store.as_context_mut().0;
-        // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get(module, name)?.to_extern(store) })
+        match self._get(module, name) {
+            // Safety: `T` is connecting the linker and store.
+            Some(def) => Ok(unsafe { def.to_extern(store)? }),
+            None => bail!("missing definition for `{module}::{name}`"),
+        }
     }
 
     fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
         let key = ImportKey {
-            module: *self.string2idx.get(module)?,
-            name: *self.string2idx.get(name)?,
+            module: self.pool.get_atom(module)?,
+            name: self.pool.get_atom(name)?,
         };
         self.map.get(&key)
     }
@@ -1306,15 +1298,38 @@ impl<T> Linker<T> {
     /// same [`Engine`] that this linker was created with.
     pub fn get_by_import(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         import: &ImportType,
     ) -> Option<Extern>
     where
         T: 'static,
     {
+        self.try_get_by_import(store, import)
+            .expect("out of memory")
+    }
+
+    /// Same as [`Linker::get_by_import`] but returns an error instead of
+    /// panicking on allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    pub fn try_get_by_import(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        import: &ImportType,
+    ) -> Result<Option<Extern>>
+    where
+        T: 'static,
+    {
         let store = store.as_context_mut().0;
-        // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get_by_import(import).ok()?.to_extern(store) })
+        match self._get_by_import(import) {
+            // Should be safe since `T` is connecting the linker and store
+            Ok(def) => Ok(Some(unsafe { def.to_extern(store)? })),
+            Err(_) => Ok(None),
+        }
     }
 
     fn _get_by_import(&self, import: &ImportType) -> Result<Definition, UnknownImportError> {
@@ -1334,11 +1349,23 @@ impl<T> Linker<T> {
     /// Panics if the default function found is not owned by `store`. This
     /// function will also panic if the `store` provided does not come from the
     /// same [`Engine`] that this linker was created with.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get_default(&self, mut store: impl AsContextMut<Data = T>, module: &str) -> Result<Func>
     where
         T: 'static,
     {
-        if let Some(external) = self.get(&mut store, module, "") {
+        if let Some(external) = self.get(&mut store, module, "").map(Some).or_else(|e| {
+            if e.is::<OutOfMemory>() {
+                Err(e)
+            } else {
+                Ok(None)
+            }
+        })? {
             if let Extern::Func(func) = external {
                 return Ok(func);
             }
@@ -1346,7 +1373,17 @@ impl<T> Linker<T> {
         }
 
         // For compatibility, also recognize "_start".
-        if let Some(external) = self.get(&mut store, module, "_start") {
+        if let Some(external) = self
+            .get(&mut store, module, "_start")
+            .map(Some)
+            .or_else(|e| {
+                if e.is::<OutOfMemory>() {
+                    Err(e)
+                } else {
+                    Ok(None)
+                }
+            })?
+        {
             if let Extern::Func(func) = external {
                 return Ok(func);
             }
@@ -1367,13 +1404,26 @@ impl<T: 'static> Default for Linker<T> {
 impl Definition {
     fn new(store: &StoreOpaque, item: Extern) -> Definition {
         let ty = DefinitionType::from(store, &item);
-        Definition::Extern(item, ty)
+        Definition::Extern {
+            item,
+            ty,
+            engine: store.engine().clone(),
+        }
     }
 
     pub(crate) fn ty(&self) -> DefinitionType {
         match self {
-            Definition::Extern(_, ty) => ty.clone(),
+            Definition::Extern { ty, .. } => *ty,
             Definition::HostFunc(func) => DefinitionType::Func(func.sig_index()),
+        }
+    }
+
+    /// The engine that assigned the type indices within this definition's
+    /// [`Definition::ty`].
+    pub(crate) fn engine(&self) -> &Engine {
+        match self {
+            Definition::Extern { engine, .. } => engine,
+            Definition::HostFunc(func) => func.engine(),
         }
     }
 
@@ -1384,33 +1434,45 @@ impl Definition {
     /// Note the unsafety here is due to calling `HostFunc::to_func`. The
     /// requirement here is that the `T` that was originally used to create the
     /// `HostFunc` matches the `T` on the store.
-    pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Extern {
+    pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Result<Extern, OutOfMemory> {
         match self {
-            Definition::Extern(e, _) => e.clone(),
+            Definition::Extern { item, .. } => Ok(item.clone()),
             // SAFETY: the contract of this function is the same as what's
             // required of `to_func`, that `T` of the store matches the `T` of
             // this original definition.
-            Definition::HostFunc(func) => unsafe { func.to_func(store).into() },
+            Definition::HostFunc(func) => unsafe { Ok(func.to_func(store)?.into()) },
         }
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
-            Definition::Extern(e, _) => e.comes_from_same_store(store),
+            Definition::Extern { item, .. } => item.comes_from_same_store(store),
             Definition::HostFunc(_func) => true,
         }
     }
 
     fn update_size(&mut self, store: &StoreOpaque) {
         match self {
-            Definition::Extern(Extern::Memory(m), DefinitionType::Memory(_, size)) => {
+            Definition::Extern {
+                item: Extern::Memory(m),
+                ty: DefinitionType::Memory(_, size),
+                ..
+            } => {
                 *size = m.internal_size(store);
             }
-            Definition::Extern(Extern::SharedMemory(m), DefinitionType::Memory(_, size)) => {
+            Definition::Extern {
+                item: Extern::SharedMemory(m),
+                ty: DefinitionType::Memory(_, size),
+                ..
+            } => {
                 *size = m.size();
             }
-            Definition::Extern(Extern::Table(m), DefinitionType::Table(_, size)) => {
-                *size = m._size(store);
+            Definition::Extern {
+                item: Extern::Table(m),
+                ty: DefinitionType::Table(_, size),
+                ..
+            } => {
+                *size = m.size_(store);
             }
             _ => {}
         }
@@ -1421,7 +1483,7 @@ impl DefinitionType {
     pub(crate) fn from(store: &StoreOpaque, item: &Extern) -> DefinitionType {
         match item {
             Extern::Func(f) => DefinitionType::Func(f.type_index(store)),
-            Extern::Table(t) => DefinitionType::Table(*t.wasmtime_ty(store), t._size(store)),
+            Extern::Table(t) => DefinitionType::Table(*t.wasmtime_ty(store), t.size_(store)),
             Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(store)),
             Extern::Memory(t) => {
                 DefinitionType::Memory(*t.wasmtime_ty(store), t.internal_size(store))
@@ -1488,8 +1550,9 @@ impl ModuleKind {
 
 /// Error for an unresolvable import.
 ///
-/// Returned - wrapped in an [`anyhow::Error`] - by [`Linker::instantiate`] and
-/// related methods for modules with unresolvable imports.
+/// Returned - wrapped in an [`Error`][crate::Error] - by
+/// [`Linker::instantiate`] and related methods for modules with unresolvable
+/// imports.
 #[derive(Clone, Debug)]
 pub struct UnknownImportError {
     module: String,

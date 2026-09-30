@@ -1,8 +1,8 @@
 #![allow(unused)]
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::String;
-use crate::node::Node;
-use crate::node::Node::{Empty, Error, True, False};
+use crate::node::{error, int, float, text, Node};
+use crate::node::Node::{Empty, True, False};
 use crate::wasp_parser::parse;
 //
 // // todo move these to ABI.h once it is used:
@@ -14,7 +14,8 @@ use crate::wasp_parser::parse;
 // #define buffer_header_32  0x44000000 // incompatible with List!
 // //#define map_header_32    0x46000000 // compatible with Map
 // #define map_header_32    0x50000000 // compatible with Map
-// #define ref_header_32    0x60000000 // index of externref == js object ! in table (export "externref_table") 1 externref
+// #define ref_header_32    0x60000000 // index of externref == js object
+// ! in table (export "externref_table") 1 externref
 // //#define smart_mask_32    0x70000000 ??
 // #define node_header_32   0x80000000 // more complex than array!
 // #define kind_header_32   0xDD000000
@@ -69,6 +70,9 @@ use crate::wasp_parser::parse;
 // 	double56 = 0x7F, // first hex of nearly all f64 by coincidence
 // }
 
+
+/// # Safety
+/// none;)
 pub unsafe fn str56(ptr: u64) -> &'static str {
 	let p = ptr as *const u8;
 	let len: usize = 100; // todo strlen(ptr) as usize;
@@ -76,13 +80,18 @@ pub unsafe fn str56(ptr: u64) -> &'static str {
 	core::str::from_utf8_unchecked(bytes)
 }
 
+/// # Safety
+///
+/// no Safety;)
 pub unsafe fn str32(ptr: u32, len: u32) -> &'static str {
 	let bytes = core::slice::from_raw_parts(ptr as *const u8, len as usize);
 	core::str::from_utf8_unchecked(bytes)
 }
 
+/// # Safety
+/// Caller must ensure `pointer` encodes a valid 56-bit pointer to a valid UTF-8 string.
 pub unsafe fn string56(pointer: u64) -> Node {
-	Node::Text(str56(pointer).to_string())
+	text(str56(pointer))
 }
 
 pub fn char24(data32: u32) -> Node {
@@ -92,7 +101,25 @@ pub fn char24(data32: u32) -> Node {
 // supperfluous since we have multi-value returns now!! (type32 + data64 )
 // or even full node (type32 + node64 + payload64 ) ( P S O ) ( predicate subject object )
 // or even full node (type32 + value64 + node64 ) ( P O S ) ( type/predicate object subject )
-// ( P O S ) ≈ (T V N) (type value node) perfect for:
+// ( P O S ) ≈ (T K N) (type key node) perfect for:
+// (type $Node (struct
+// 	  (field $kind i64)
+// 	  (field $payload (ref null any))
+// 	  (field $key (ref null $Node))
+// 	  (field $value (ref null $Node))
+// 	) )
+
+// if we merge the key with the payload in wasm we get a very compact representation:
+// (type $String (struct
+// 	  (field $ptr i64)
+// 	  (field $len i32)
+// 	) )
+// (type $Node (struct
+// 	  (field $kind i64)
+// 	  (field $data (ref null any)) // key + payload merged!
+// 	  (field $value (ref null $Node)) // object node or meta data
+// 	) )
+// Why? so we can directly match our representation to compact code like:
 // (tag 'html' [(meta 'attribute' (class "item")) /* mixed with body : */ (text "hello")  ))
 // (defn 'myfunc' [(meta 'params' [a b]) (body ( ... ) ) ) // params are STRONG meta, not comments!
 // (call 'myfunc' [arg1 arg2])  shorthand: my
@@ -113,6 +140,7 @@ pub fn char24(data32: u32) -> Node {
 // (true 1 True)  shorthand: True
 // (true 1 ø)  shorthand: True
 // (bool 0 ø)  shorthand: False  == ALWAYS over method vs === like in js
+
 // or even full node (node64 type32 payload64) ( S P O ) ( subject predictable object )
 // or even full node (node64 type32 payload64) ( S P O ) ( subject predictable object )
 
@@ -122,7 +150,7 @@ pub fn float28(data28: u32) -> Node {
 	let left = data28 << 1 & 0xFF00000;
 	let right = data28 & 0x00FFFFF;
 	let f = f32::from_bits(left | right);
-	Node::Number(Number::Float(f as f64))
+	float(f as f64)
 }
 
 pub fn float_data28(f: f32) -> u32 {
@@ -150,14 +178,14 @@ pub fn smarty32(smart: u32) -> Node {
 	let data28 = smart & 0x0FFFFFFF;
 	if smart == 0 { return Empty; } // null pointer or 0 we neither know nor care?
 	match header4 {
-		0x0 => Node::Number(Number::Int(data28 as i64)), // positive int, just reinterpret!
-		0xF => Node::Number(Number::Int(smart as i32 as i64)), // negative int juat all bits
+		0x0 => int(data28 as i64), // positive int, just reinterpret!
+		0xF => int(smart as i32 as i64), // negative int juat all bits
 		0x2 => float28(data28),
-		0x3 => Node::Number(Number::Float(f32::from_bits(smart) as f64)), // which ones??
+		0x3 => float(f32::from_bits(smart) as f64), // which ones??
 		0x1 => unsafe { string56(data24 as u64) },
 		0xC => char24(data24),
 		0xD => unsafe { parse(str32(data24, 3)) },
-		0xE => unsafe { Error(format!("{}", str32(data24, 3))) }, // error with string message
+		0xE => unsafe { error(str32(data24, 3)) }, // error with string message
 		_ => unreachable!(),
 	}
 }
@@ -173,20 +201,20 @@ pub fn smarty(smart: u64) -> Node {
 	let data32 = (smart & 0x00000000FFFFFFFF) as u32;
 	let data56 = smart & 0x00FFFFFFFFFFFFFF; // small header + 56 bits data
 	match header8 {
-		0x00 => Node::Number(Number::Int(data56 as i64)), // positive int, just reinterpret!
-		0xFF => Node::Number(Number::Int(smart as i64)),  // negative int juat all bits
-		0x7F => Node::Number(Number::Float(f64::from_bits(smart))), // double just all bits!
+		0x00 => int(data56 as i64), // positive int, just reinterpret!
+		0xFF => int(smart as i64),  // negative int juat all bits
+		0x7F => float(f64::from_bits(smart)), // double just all bits!
 		0x01 => unsafe { string56(data56) },
 		0x10 => unsafe { string56(data56) },
 		0xC0 => char24(data32),
 		0xD0 => unsafe { parse(str56(data56)) }, // wasp data string!
-		0xE1 => unsafe { Error(format!("{}", str56(data56))) }, // error with string message
+		0xE1 => unsafe { error(str56(data56)) }, // error with string message
 		// _ => unreachable!(),
 		_ => {
 			if header16 == 0xB001 {  // BOOL wasteful header
 				if data32 == 0 { False } else { True }
 			} else {
-				Error(format!("smart: {} unknown", smart))
+				error(&format!("smart: {} unknown", smart))
 			}
 		}
 	}

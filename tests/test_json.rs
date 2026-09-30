@@ -1,10 +1,11 @@
 use serde_json::json;
-use wasp::eq;
-use wasp::Bracket;
-use wasp::Node;
-use wasp::Node::Symbol;
-use wasp::Separator;
-use wasp::util::show_type_name;
+use warp::eq;
+use warp::Bracket;
+use warp::Node;
+use warp::Node::Symbol;
+use warp::Op;
+use warp::Separator;
+use warp::util::show_type_name;
 
 #[test]
 fn test_node_to_json_compact() {
@@ -38,6 +39,7 @@ fn test_implicit_html_structure() {
 			),
 			Node::Key(
 				Box::new(Symbol("colors".to_string())),
+				Op::Colon,
 				Box::new(Node::list(vec![
 					Node::symbol("red"),
 					Node::symbol("green"),

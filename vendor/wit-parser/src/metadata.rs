@@ -15,11 +15,15 @@
 //! format to store this information inline.
 
 use crate::{
-    Docs, Function, InterfaceId, PackageId, Resolve, Stability, TypeDefKind, TypeId, WorldId,
-    WorldItem, WorldKey,
+    Docs, Function, IndexMap, InterfaceId, PackageId, Resolve, Stability, TypeDefKind, TypeId,
+    WorldId, WorldItem, WorldKey,
 };
+use alloc::string::{String, ToString};
+#[cfg(feature = "serde")]
+use alloc::vec;
+#[cfg(feature = "serde")]
+use alloc::vec::Vec;
 use anyhow::{Result, bail};
-use indexmap::IndexMap;
 #[cfg(feature = "serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -257,6 +261,28 @@ struct WorldMetadata {
         serde(default, skip_serializing_if = "StringMap::is_empty")
     )]
     interface_export_stability: StringMap<Stability>,
+
+    /// Docs attached to interface imports that aren't inline, mirroring
+    /// `interface_import_stability`, for example:
+    ///
+    /// ```wit
+    /// world foo {
+    ///     /// These docs.
+    ///     import an-interface;
+    /// }
+    /// ```
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "StringMap::is_empty")
+    )]
+    interface_import_docs: StringMap<String>,
+
+    /// Same as `interface_import_docs`, but for exports.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "StringMap::is_empty")
+    )]
+    interface_export_docs: StringMap<String>,
 }
 
 impl WorldMetadata {
@@ -270,6 +296,38 @@ impl WorldMetadata {
         let mut func_exports = StringMap::default();
         let mut interface_import_stability = StringMap::default();
         let mut interface_export_stability = StringMap::default();
+        let mut interface_import_docs = StringMap::default();
+        let mut interface_export_docs = StringMap::default();
+
+        // Records the stability and docs of a non-inline (by-reference)
+        // interface import/export, keyed by its world-key name, so that they
+        // can be restored by `inject`. Docs and stability are recorded
+        // independently since either may be present without the other.
+        let mut record_interface_metadata = |key: &WorldKey, item: &WorldItem, import: bool| {
+            let (stability, docs) = match item {
+                WorldItem::Interface {
+                    stability, docs, ..
+                } => (stability, docs),
+                _ => return,
+            };
+            let name = resolve.name_world_key(key);
+            if !stability.is_unknown() {
+                let map = if import {
+                    &mut interface_import_stability
+                } else {
+                    &mut interface_export_stability
+                };
+                map.insert(name.clone(), stability.clone());
+            }
+            if let Some(contents) = &docs.contents {
+                let map = if import {
+                    &mut interface_import_docs
+                } else {
+                    &mut interface_export_docs
+                };
+                map.insert(name, contents.clone());
+            }
+        };
 
         for ((key, item), import) in world
             .imports
@@ -282,6 +340,10 @@ impl WorldMetadata {
                 // docs/stability and insert it into one of our maps.
                 WorldKey::Name(name) => match item {
                     WorldItem::Interface { id, .. } => {
+                        if resolve.interfaces[*id].name.is_some() {
+                            record_interface_metadata(key, item, import);
+                            continue;
+                        }
                         let data = InterfaceMetadata::extract(resolve, *id);
                         if data.is_empty() {
                             continue;
@@ -298,7 +360,7 @@ impl WorldMetadata {
                         let prev = map.insert(name.to_string(), data);
                         assert!(prev.is_none());
                     }
-                    WorldItem::Type(id) => {
+                    WorldItem::Type { id, .. } => {
                         let data = TypeMetadata::extract(resolve, *id);
                         if !data.is_empty() {
                             types.insert(name.to_string(), data);
@@ -323,24 +385,10 @@ impl WorldMetadata {
                     }
                 },
 
-                // For interface imports/exports extract the stability and
-                // record it if necessary.
+                // For interface imports/exports extract the stability/docs and
+                // record them if necessary.
                 WorldKey::Interface(_) => {
-                    let stability = match item {
-                        WorldItem::Interface { stability, .. } => stability,
-                        _ => continue,
-                    };
-                    if stability.is_unknown() {
-                        continue;
-                    }
-
-                    let map = if import {
-                        &mut interface_import_stability
-                    } else {
-                        &mut interface_export_stability
-                    };
-                    let name = resolve.name_world_key(key);
-                    map.insert(name, stability.clone());
+                    record_interface_metadata(key, item, import);
                 }
             }
         }
@@ -355,6 +403,8 @@ impl WorldMetadata {
             func_exports,
             interface_import_stability,
             interface_export_stability,
+            interface_import_docs,
+            interface_export_docs,
         }
     }
 
@@ -378,7 +428,7 @@ impl WorldMetadata {
                     None => world.exports.get_mut(&key),
                 }
             };
-            let Some(WorldItem::Interface { id, stability }) = item else {
+            let Some(WorldItem::Interface { id, stability, .. }) = item else {
                 bail!("missing interface {name:?}");
             };
             *stability = data.stability.clone();
@@ -389,7 +439,7 @@ impl WorldMetadata {
         // Process all types, which are always imported, for this world.
         for (name, data) in &self.types {
             let key = WorldKey::Name(name.to_string());
-            let Some(WorldItem::Type(id)) = resolve.worlds[id].imports.get(&key) else {
+            let Some(WorldItem::Type { id, .. }) = resolve.worlds[id].imports.get(&key) else {
                 bail!("missing type {name:?}");
             };
             data.inject(resolve, *id)?;
@@ -436,6 +486,31 @@ impl WorldMetadata {
             }
         }
 
+        // Update the docs of interface imports/exports that aren't kebab-named,
+        // reusing the same `stabilities` key map built above.
+        for ((name, docs), import) in self
+            .interface_import_docs
+            .iter()
+            .map(|p| (p, true))
+            .chain(self.interface_export_docs.iter().map(|p| (p, false)))
+        {
+            let key = match stabilities.get(&(name.clone(), import)) {
+                Some(key) => key.clone(),
+                None => bail!("missing interface `{name}`"),
+            };
+            let item = if import {
+                world.imports.get_mut(&key)
+            } else {
+                world.exports.get_mut(&key)
+            };
+            match item {
+                Some(WorldItem::Interface { docs: d, .. }) => {
+                    d.contents = Some(docs.clone());
+                }
+                _ => bail!("item `{name}` wasn't an interface"),
+            }
+        }
+
         // Update the docs/stability of all functions imported/exported from
         // this world.
         for ((name, data), only_export) in self
@@ -475,6 +550,8 @@ impl WorldMetadata {
             && self.func_exports.is_empty()
             && self.interface_import_stability.is_empty()
             && self.interface_export_stability.is_empty()
+            && self.interface_import_docs.is_empty()
+            && self.interface_export_docs.is_empty()
     }
 
     #[cfg(feature = "serde")]
@@ -495,6 +572,8 @@ impl WorldMetadata {
             && self.func_exports.is_empty()
             && self.interface_import_stability.is_empty()
             && self.interface_export_stability.is_empty()
+            && self.interface_import_docs.is_empty()
+            && self.interface_export_docs.is_empty()
     }
 }
 
@@ -597,7 +676,7 @@ enum FunctionMetadata {
 
     /// In the v1+ format we're tracking at least docs but also the stability
     /// of functions.
-    DocsAndStabilty {
+    DocsAndStability {
         #[cfg_attr(
             feature = "serde",
             serde(default, skip_serializing_if = "Option::is_none")
@@ -616,7 +695,7 @@ impl FunctionMetadata {
         if TRY_TO_EMIT_V0_BY_DEFAULT && func.stability.is_unknown() {
             FunctionMetadata::JustDocs(func.docs.contents.clone())
         } else {
-            FunctionMetadata::DocsAndStabilty {
+            FunctionMetadata::DocsAndStability {
                 docs: func.docs.contents.clone(),
                 stability: func.stability.clone(),
             }
@@ -628,7 +707,7 @@ impl FunctionMetadata {
             FunctionMetadata::JustDocs(docs) => {
                 func.docs.contents = docs.clone();
             }
-            FunctionMetadata::DocsAndStabilty { docs, stability } => {
+            FunctionMetadata::DocsAndStability { docs, stability } => {
                 func.docs.contents = docs.clone();
                 func.stability = stability.clone();
             }
@@ -639,7 +718,7 @@ impl FunctionMetadata {
     fn is_empty(&self) -> bool {
         match self {
             FunctionMetadata::JustDocs(docs) => docs.is_none(),
-            FunctionMetadata::DocsAndStabilty { docs, stability } => {
+            FunctionMetadata::DocsAndStability { docs, stability } => {
                 docs.is_none() && stability.is_unknown()
             }
         }
@@ -649,7 +728,7 @@ impl FunctionMetadata {
     fn is_compatible_with_v0(&self) -> bool {
         match self {
             FunctionMetadata::JustDocs(_) => true,
-            FunctionMetadata::DocsAndStabilty { .. } => false,
+            FunctionMetadata::DocsAndStability { .. } => false,
         }
     }
 }
@@ -739,7 +818,7 @@ impl TypeMetadata {
         Ok(())
     }
 
-    fn inject_items<T: std::fmt::Debug>(
+    fn inject_items<T: core::fmt::Debug>(
         &self,
         items: &mut [T],
         f: impl Fn(&mut T) -> (&String, &mut Docs),

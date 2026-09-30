@@ -1,0 +1,27 @@
+# Claude Conversation (490a91be)
+
+## 👤 Human
+
+sh -c "\"/opt/other/rust/build/aarch64-apple-darwin/stage1/bin/rustc\" \"/Users/me/dev/angles/warp/tests/test_string.rs\" -o \"/Users/me/dev/angles/warp/tests/test_string\" && \"/Users/me/dev/angles/warp/tests/test_string\""
+error[E0432]: unresolved import `warp`
+ --> /Users/me/dev/angles/warp/tests/test_string.rs:1:5
+  |
+1 | use warp::{eq, is, put, skip};
+  |     ^^^^ use of unresolved module or unlinked crate `warp`
+  |
+help: you might be missing a crate named `warp`, add it to your project and import it in your code
+
+It normally works, just not in my IDE.
+
+---
+
+## 🤖 Assistant
+
+That's expected. Integration tests in `tests/` can't be compiled standalone with `rustc` - they need the crate built first. The `warp` crate is only available when running through `cargo test`, which builds the library and links it.
+
+Your IDE is trying to compile the file directly. To fix this in your IDE, you'd typically configure it to use `cargo test --test test_string` instead of invoking `rustc` directly.
+
+`cargo test` should work fine from the terminal.
+
+---
+

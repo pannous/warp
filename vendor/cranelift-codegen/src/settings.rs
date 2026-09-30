@@ -290,7 +290,7 @@ pub enum SetError {
     BadValue(String),
 }
 
-impl std::error::Error for SetError {}
+impl core::error::Error for SetError {}
 
 impl fmt::Display for SetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -500,7 +500,6 @@ regalloc_checker = false
 regalloc_verbose_logs = false
 enable_alias_analysis = true
 enable_verifier = true
-enable_pcc = false
 is_pic = false
 use_colocated_libcalls = false
 enable_nan_canonicalization = false
@@ -514,6 +513,7 @@ enable_probestack = false
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true
 enable_incremental_compilation_cache_checks = false
+enable_compact_unwind_abi = false
 "#;
         if actual != expected {
             panic!(

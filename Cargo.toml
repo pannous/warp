@@ -4,8 +4,8 @@
 
 
 [package]
-name = "wasp"
-version = "0.1.0"
+name = "warp"
+version = "0.1.1"
 edition = "2021"  # Cargo edition! NOT package edition!
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -37,6 +37,8 @@ WASMTIME = []
 WEBAPP = []
 release = []
 wasm = []
+optimizer = [] # Enable optimizing wasm via ...
+ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 
 [dependencies]
 # ⚠️ toggle OFFLINE mode!
@@ -44,22 +46,26 @@ wasm = []
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 anyhow = "1.0"
 regex = "1.10.3"
+unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 #wast = "*"
-wat = "*"
-wasmparser = "*"
-wasm-encoder = "*"
+wat = "1.259"
+wasmparser = "0.259"
+wasm-encoder = "0.259"
 log = "0.4.29"
 #fetch = "0.8.1"
-#num-bigint = "0.4.6"
+num-bigint = { version = "0.4.8", features = ["serde"] }
+num-traits = "0.2"
+num-integer = "0.1"
 ureq = "3.1.4"
 once_cell = "1.21.3"
+paste = "1.0"
+rustyline = "18"
+libloading = "0.9"  # Dynamic library loading for FFI (raylib, SDL2, etc.)
 
-[target.'cfg(not(target_os = "wasm32"))'.dependencies]
-syn = { version = "2.0", features = ["full", "extra-traits"] }
-reqwest = { version = "0.13.1", features = ["blocking"] }
+# syn and reqwest removed - treeshaking
 
 #wasm-bindgen = "0.2.91"
 
@@ -70,7 +76,8 @@ reqwest = { version = "0.13.1", features = ["blocking"] }
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = "40.0.0"
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "wat"] }
+wasmtime-wasi = "49.0.1"
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime
@@ -88,17 +95,10 @@ parity-wasm = "*" # Low-level WebAssembly format library for serializing, deseri
 #Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
 # parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
 
-wasmparser = "*" # A WebAssembly binary format parser
-
-
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]
 # only compiled and included when running tests or examples
-
-
-#syn = "*" # latest version
-#syn = "2" # >= 2.0.0
-#syn = "2.0.48"
+syn = { version = "3", features = ["full", "extra-traits"] }
 
 
 [profile.dev]
@@ -121,8 +121,11 @@ inherits = "dev"       # Use dev profile for tests
 
 [profile.release]
 incremental = false    # Release doesn't need incremental
-opt-level = 3
-lto = "thin"           # Thin LTO for faster release builds
+opt-level = "z"        # Optimize for size
+lto = true             # Full LTO for maximum treeshaking
+codegen-units = 1      # Single codegen unit for best optimization
+panic = "abort"        # Smaller binary, no unwinding
+strip = true           # Strip symbols
 
 [lib]
 # to compile to wasm using `wasm-pack build` :

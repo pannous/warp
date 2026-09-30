@@ -4,18 +4,17 @@ use super::{PulleyFlags, PulleyTargetKind, inst::*};
 use crate::isa::pulley_shared::PointerWidth;
 use crate::{
     CodegenResult,
-    ir::{self, MemFlags, Signature, types::*},
+    ir::{self, MemFlagsData, Signature, types::*},
     isa,
     machinst::*,
     settings,
 };
+use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
-use regalloc2::{MachineEnv, PReg, PRegSet};
+use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{SmallVec, smallvec};
-use std::borrow::ToOwned;
-use std::sync::OnceLock;
 
 /// Support for the Pulley ABI from the callee side (within a function body).
 pub(crate) type PulleyCallee<P> = Callee<PulleyMachineDeps<P>>;
@@ -92,7 +91,7 @@ where
         for param in params {
             // Find the regclass(es) of the register(s) used to store a value of
             // this type.
-            let (rcs, reg_tys) = Self::I::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Self::I::rc_for_type(&param.value_type)?;
 
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
@@ -130,7 +129,7 @@ where
                     // Compute size and 16-byte stack alignment happens
                     // separately after all args.
                     let size = reg_ty.bits() / 8;
-                    let size = std::cmp::max(size, 8);
+                    let size = core::cmp::max(size, 8);
 
                     // Align.
                     debug_assert!(size.is_power_of_two());
@@ -165,8 +164,8 @@ where
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianess to avoid
+        let mut flags = MemFlagsData::trusted();
+        // Stack loads/stores of vectors always use little-endianness to avoid
         // implementing a byte-swap of vectors on big-endian platforms.
         if ty.is_vector() {
             flags.set_endianness(ir::Endianness::Little);
@@ -175,8 +174,8 @@ where
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianess to avoid
+        let mut flags = MemFlagsData::trusted();
+        // Stack loads/stores of vectors always use little-endianness to avoid
         // implementing a byte-swap of vectors on big-endian platforms.
         if ty.is_vector() {
             flags.set_endianness(ir::Endianness::Little);
@@ -212,6 +211,7 @@ where
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
@@ -262,13 +262,13 @@ where
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
         let base = XReg::try_from(base).unwrap();
         let mem = Amode::RegOffset { base, offset };
-        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted()).into()
+        Inst::gen_load(into_reg, mem, ty, MemFlagsData::trusted()).into()
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
         let base = XReg::try_from(base).unwrap();
         let mem = Amode::RegOffset { base, offset };
-        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted()).into()
+        Inst::gen_store(mem, from_reg, ty, MemFlagsData::trusted()).into()
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
@@ -345,9 +345,11 @@ where
         }
 
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
-            insts.push(
-                Inst::gen_store(Amode::SpOffset { offset }, reg, ty, MemFlags::trusted()).into(),
-            );
+            let mut flags = MemFlagsData::trusted();
+            if ty.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
+            insts.push(Inst::gen_store(Amode::SpOffset { offset }, reg, ty, flags).into());
         }
 
         insts
@@ -366,12 +368,16 @@ where
 
         // Restore clobbered registers that are manually managed in Cranelift.
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
+            let mut flags = MemFlagsData::trusted();
+            if ty.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
             insts.push(
                 Inst::gen_load(
                     Writable::from_reg(reg),
                     Amode::SpOffset { offset },
                     ty,
-                    MemFlags::trusted(),
+                    flags,
                 )
                 .into(),
             );
@@ -475,18 +481,18 @@ where
     }
 
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
-        static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-        MACHINE_ENV.get_or_init(create_reg_environment)
+        static MACHINE_ENV: MachineEnv = create_reg_environment();
+        &MACHINE_ENV
     }
 
     fn get_regs_clobbered_by_call(
         call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Patchable {
-            NO_CLOBBERS
-        } else if is_exception {
+        if is_exception {
             ALL_CLOBBERS
+        } else if call_conv_of_callee == isa::CallConv::PreserveAll {
+            NO_CLOBBERS
         } else {
             DEFAULT_CLOBBERS
         }
@@ -505,7 +511,7 @@ where
         outgoing_args_size: u32,
     ) -> FrameLayout {
         let is_callee_save = |reg: &Writable<RealReg>| match call_conv {
-            isa::CallConv::Patchable => true,
+            isa::CallConv::PreserveAll => true,
             _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
         };
         let mut regs: Vec<Writable<RealReg>> =
@@ -560,12 +566,21 @@ where
         Writable::from_reg(regs::x_reg(15))
     }
 
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[
             Reg::from_real_reg(regs::px_reg(0)),
             Reg::from_real_reg(regs::px_reg(1)),
         ];
-        PAYLOAD_REGS
+        match call_conv {
+            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
+                PAYLOAD_REGS
+            }
+            isa::CallConv::Fast
+            | isa::CallConv::WindowsFastcall
+            | isa::CallConv::AppleAarch64
+            | isa::CallConv::Probestack
+            | isa::CallConv::Winch => &[],
+        }
     }
 }
 
@@ -699,29 +714,47 @@ impl FrameLayout {
         &'a self,
         style: &'a FrameStyle,
     ) -> impl Iterator<Item = (i32, Type, Reg)> + 'a {
-        let mut offset = self.stack_size();
+        // `push_frame_save` always saves the pulley-managed registers at the
+        // *top* of the allocated frame (the highest addresses, `amt - 8`
+        // downward). Therefore the manually-managed clobbers must be placed
+        // *below* that pulley-saved region. The pulley-saved registers are not
+        // necessarily first in `clobbered_callee_saves` (it is sorted by
+        // register, and the manually-managed integer registers x0..x15 sort
+        // before the pulley-managed x16..x31), so we cannot simply walk the
+        // list from the top assigning slots in order -- doing so would place a
+        // manually-managed register on top of a pulley-saved one and the two
+        // stores would collide.
+        //
+        // Instead reserve the top `num_saved_by_pulley` 8-byte slots for the
+        // pulley-managed registers (matching `push_frame_save`) and hand out
+        // the remaining, lower slots to the manually-managed registers.
+        let num_saved_by_pulley = match style {
+            FrameStyle::PulleySetupAndSaveClobbers {
+                saved_by_pulley, ..
+            } => u32::from(saved_by_pulley.len()),
+            _ => 0,
+        };
+        let mut offset = self.stack_size() - num_saved_by_pulley * 8;
         self.clobbered_callee_saves.iter().filter_map(move |reg| {
-            // Allocate space for this clobber no matter what. If pulley is
-            // managing this then we're just accounting for the pulley-saved
-            // registers as well. Note that all pulley-managed registers come
-            // first in the list here.
-            offset -= 8;
             let r_reg = reg.to_reg();
-            let ty = match r_reg.class() {
-                RegClass::Int => {
-                    // If this register is saved by pulley, skip this clobber.
-                    if let FrameStyle::PulleySetupAndSaveClobbers {
-                        saved_by_pulley, ..
-                    } = style
-                    {
-                        if let Some(reg) = r_reg.hw_enc().checked_sub(16) {
-                            if saved_by_pulley.contains(reg) {
-                                return None;
-                            }
+            // If this register is saved by pulley, skip it: its slot is one of
+            // the reserved top slots accounted for above.
+            if let FrameStyle::PulleySetupAndSaveClobbers {
+                saved_by_pulley, ..
+            } = style
+            {
+                if r_reg.class() == RegClass::Int {
+                    if let Some(reg) = r_reg.hw_enc().checked_sub(16) {
+                        if saved_by_pulley.contains(reg) {
+                            return None;
                         }
                     }
-                    I64
                 }
+            }
+            // Allocate space for this manually-managed clobber.
+            offset -= 8;
+            let ty = match r_reg.class() {
+                RegClass::Int => I64,
                 RegClass::Float => F64,
                 RegClass::Vector => I8X16,
             };
@@ -957,26 +990,118 @@ const ALL_CLOBBERS: PRegSet = PRegSet::empty()
 
 const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
-fn create_reg_environment() -> MachineEnv {
+const fn create_reg_environment() -> MachineEnv {
     // Prefer caller-saved registers over callee-saved registers, because that
     // way we don't need to emit code to save and restore them if we don't
     // mutate them.
 
-    let preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (0..16).map(|x| px_reg(x)).collect();
-        let f_registers: Vec<PReg> = (0..32).map(|x| pf_reg(x)).collect();
-        let v_registers: Vec<PReg> = (0..32).map(|x| pv_reg(x)).collect();
-        [x_registers, f_registers, v_registers]
-    };
+    let preferred_regs_by_class: [PRegSet; 3] = [
+        PRegSet::empty()
+            .with(px_reg(0))
+            .with(px_reg(1))
+            .with(px_reg(2))
+            .with(px_reg(3))
+            .with(px_reg(4))
+            .with(px_reg(5))
+            .with(px_reg(6))
+            .with(px_reg(7))
+            .with(px_reg(8))
+            .with(px_reg(9))
+            .with(px_reg(10))
+            .with(px_reg(11))
+            .with(px_reg(12))
+            .with(px_reg(13))
+            .with(px_reg(14))
+            .with(px_reg(15)),
+        PRegSet::empty()
+            .with(pf_reg(0))
+            .with(pf_reg(1))
+            .with(pf_reg(2))
+            .with(pf_reg(3))
+            .with(pf_reg(4))
+            .with(pf_reg(5))
+            .with(pf_reg(6))
+            .with(pf_reg(7))
+            .with(pf_reg(8))
+            .with(pf_reg(9))
+            .with(pf_reg(10))
+            .with(pf_reg(11))
+            .with(pf_reg(12))
+            .with(pf_reg(13))
+            .with(pf_reg(14))
+            .with(pf_reg(15))
+            .with(pf_reg(16))
+            .with(pf_reg(17))
+            .with(pf_reg(18))
+            .with(pf_reg(19))
+            .with(pf_reg(20))
+            .with(pf_reg(21))
+            .with(pf_reg(22))
+            .with(pf_reg(23))
+            .with(pf_reg(24))
+            .with(pf_reg(25))
+            .with(pf_reg(26))
+            .with(pf_reg(27))
+            .with(pf_reg(28))
+            .with(pf_reg(29))
+            .with(pf_reg(30))
+            .with(pf_reg(31)),
+        PRegSet::empty()
+            .with(pv_reg(0))
+            .with(pv_reg(1))
+            .with(pv_reg(2))
+            .with(pv_reg(3))
+            .with(pv_reg(4))
+            .with(pv_reg(5))
+            .with(pv_reg(6))
+            .with(pv_reg(7))
+            .with(pv_reg(8))
+            .with(pv_reg(9))
+            .with(pv_reg(10))
+            .with(pv_reg(11))
+            .with(pv_reg(12))
+            .with(pv_reg(13))
+            .with(pv_reg(14))
+            .with(pv_reg(15))
+            .with(pv_reg(16))
+            .with(pv_reg(17))
+            .with(pv_reg(18))
+            .with(pv_reg(19))
+            .with(pv_reg(20))
+            .with(pv_reg(21))
+            .with(pv_reg(22))
+            .with(pv_reg(23))
+            .with(pv_reg(24))
+            .with(pv_reg(25))
+            .with(pv_reg(26))
+            .with(pv_reg(27))
+            .with(pv_reg(28))
+            .with(pv_reg(29))
+            .with(pv_reg(30))
+            .with(pv_reg(31)),
+    ];
 
-    let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (16..XReg::SPECIAL_START)
-            .map(|x| px_reg(x.into()))
-            .collect();
-        let f_registers: Vec<PReg> = vec![];
-        let v_registers: Vec<PReg> = vec![];
-        [x_registers, f_registers, v_registers]
-    };
+    let non_preferred_regs_by_class: [PRegSet; 3] = [
+        PRegSet::empty()
+            .with(px_reg(16))
+            .with(px_reg(17))
+            .with(px_reg(18))
+            .with(px_reg(19))
+            .with(px_reg(20))
+            .with(px_reg(21))
+            .with(px_reg(22))
+            .with(px_reg(23))
+            .with(px_reg(24))
+            .with(px_reg(25))
+            .with(px_reg(26))
+            .with(px_reg(27))
+            .with(px_reg(28))
+            .with(px_reg(29)),
+        PRegSet::empty(),
+        PRegSet::empty(),
+    ];
+
+    debug_assert!(XReg::SPECIAL_START == 30);
 
     MachineEnv {
         preferred_regs_by_class,

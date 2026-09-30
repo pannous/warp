@@ -121,18 +121,19 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Future(_)
                     | TypeDefKind::Stream(_)
                     | TypeDefKind::List(_)
+                    | TypeDefKind::Map(_, _)
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource => true,
+                    | TypeDefKind::Resource
+                    | TypeDefKind::FixedLengthList(..) => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
-                    TypeDefKind::FixedSizeList(..) => todo!(),
                 }
             }
         }
@@ -187,8 +188,15 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Resource => unreachable!(),
 
             TypeDefKind::Type(t) => self.ty(t, mode),
+            TypeDefKind::Map(k, v) => {
+                let key = self.ty(k, mode);
+                let value = self.ty(v, mode);
+                format!("std::collections::HashMap<{key}, {value}>")
+            }
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(..) => todo!(),
+            TypeDefKind::FixedLengthList(t, size) => {
+                format!("[{}; {}]", self.ty(t, mode), size)
+            }
         }
     }
 
@@ -396,8 +404,8 @@ pub trait RustGenerator<'a> {
 
     fn typedfunc_sig(&self, func: &Function, param_mode: TypeMode) -> String {
         let mut out = "(".to_string();
-        for (_, ty) in func.params.iter() {
-            out.push_str(&self.ty(ty, param_mode));
+        for param in func.params.iter() {
+            out.push_str(&self.ty(&param.ty, param_mode));
             out.push_str(", ");
         }
         out.push_str("), (");

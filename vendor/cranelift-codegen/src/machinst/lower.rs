@@ -6,27 +6,28 @@
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
 use crate::entity::SecondaryMap;
-use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
-use crate::ir::pcc::{Fact, FactContext, PccError, PccResult};
+use crate::inst_predicates::{
+    has_lowering_side_effect, is_constant_64bit, must_lower_even_if_unused,
+};
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
-    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags,
-    RelSourceLoc, SigRef, Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, RelSourceLoc, SigRef,
+    Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
     ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, CallArgList, CallInfo,
-    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig, SigSet, TryCallInfo, VCode,
-    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
-    writable_value_regs,
+    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, MachMemFlags, Reg, Sig, SigSet,
+    TryCallInfo, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    ValueRegs, Writable, writable_value_regs,
 };
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
+use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 use cranelift_control::ControlPlane;
-use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
-use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 
@@ -149,22 +150,6 @@ pub trait LowerBackend {
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
     }
-
-    /// The type of state carried between `check_fact` invocations.
-    type FactFlowState: Default + Clone + Debug;
-
-    /// Check any facts about an instruction, given VCode with facts
-    /// on VRegs. Takes mutable `VCode` so that it can propagate some
-    /// kinds of facts automatically.
-    fn check_fact(
-        &self,
-        _ctx: &FactContext<'_>,
-        _vcode: &mut VCode<Self::MInst>,
-        _inst: InsnIndex,
-        _state: &mut Self::FactFlowState,
-    ) -> PccResult<()> {
-        Err(PccError::UnimplementedBackend)
-    }
 }
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
@@ -194,7 +179,12 @@ pub struct Lower<'func, I: VCodeInst> {
     /// i.e., the version of global state that exists before an instruction
     /// executes.  For each side-effecting instruction, the *exit* color is its
     /// entry color plus one.
-    side_effect_inst_entry_colors: FxHashMap<Inst, InstColor>,
+    ///
+    /// The current color is incremented to at least 1 before any instruction is
+    /// processed, so every side-effecting instruction has a color `>= 1`, and
+    /// the default `InstColor::new(0)` serves as a "not side-effecting"
+    /// sentinel.
+    side_effect_inst_entry_colors: SecondaryMap<Inst, InstColor>,
 
     /// Current color as we scan during lowering. While we are lowering an
     /// instruction, this is equal to the color *at entry to* the instruction.
@@ -202,9 +192,6 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// Current instruction as we scan during lowering.
     cur_inst: Option<Inst>,
-
-    /// Instruction constant values, if known.
-    inst_constants: FxHashMap<Inst, u64>,
 
     /// Use-counts per SSA value, as counted in the input IR. These
     /// are "coarsened", in the abstract-interpretation sense: we only
@@ -216,6 +203,22 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
+
+    /// "Opportunistic defs" of values: when lowering an instruction that
+    /// incidentally computes another value (e.g., a branch that directly
+    /// consumes the flags of an `uadd_overflow` also computes the sum), we
+    /// record that value here, along with the regs it was computed into and
+    /// the use-count at the time of registration.
+    ///
+    /// When the scan reaches the actual definition of such a value, if its
+    /// use-count has not grown (i.e., no further uses were found while
+    /// scanning up), then the definition can be skipped and the value can be
+    /// aliased to the opportunistically-computed regs instead.
+    ///
+    /// The key is (block, value): the opportunistic def is only usable when
+    /// the actual definition is in the same block as the registration site,
+    /// further up in the scan.
+    opportunistic_defs: FxHashMap<(Block, Value), (ValueRegs<Reg>, u32)>,
 
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
@@ -408,7 +411,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 if value_regs[param].is_invalid() {
-                    let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[param].clone())?;
+                    let regs = vregs.alloc(ty)?;
                     value_regs[param] = regs;
                     trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
@@ -417,7 +420,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
                     if value_regs[result].is_invalid() && !ty.is_invalid() {
-                        let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[result].clone())?;
+                        let regs = vregs.alloc(ty)?;
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
@@ -479,12 +482,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             regs
         });
 
-        // Compute instruction colors, find constant instructions, and find instructions with
-        // side-effects, in one combined pass.
+        // Compute instruction colors and find instructions with side-effects.
         let mut cur_color = 0;
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
-        let mut side_effect_inst_entry_colors = FxHashMap::default();
-        let mut inst_constants = FxHashMap::default();
+        let mut side_effect_inst_entry_colors = SecondaryMap::with_default(InstColor::new(0));
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -492,15 +493,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
                 trace!("bb {} inst {} has color {}", bb, inst, cur_color);
                 if side_effect {
-                    side_effect_inst_entry_colors.insert(inst, InstColor::new(cur_color));
+                    side_effect_inst_entry_colors[inst] = InstColor::new(cur_color);
                     trace!(" -> side-effecting; incrementing color for next inst");
                     cur_color += 1;
-                }
-
-                // Determine if this is a constant; if so, add to the table.
-                if let Some(c) = is_constant_64bit(f, inst) {
-                    trace!(" -> constant: {}", c);
-                    inst_constants.insert(inst, c);
                 }
             }
 
@@ -517,9 +512,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             sret_reg,
             block_end_colors,
             side_effect_inst_entry_colors,
-            inst_constants,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
+            opportunistic_defs: FxHashMap::default(),
             inst_sunk: FxHashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
@@ -537,10 +532,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     pub fn sigs_mut(&mut self) -> &mut SigSet {
         self.vcode.sigs_mut()
-    }
-
-    pub fn vregs_mut(&mut self) -> &mut VRegAllocator<I> {
-        &mut self.vregs
     }
 
     fn gen_arg_setup(&mut self) {
@@ -710,10 +701,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> CallInfo<T> {
-        self.vcode
-            .abi()
-            .gen_call_info(self.vcode.sigs(), sig, dest, uses, defs, try_call_info)
+        self.vcode.abi().gen_call_info(
+            self.vcode.sigs(),
+            sig,
+            dest,
+            uses,
+            defs,
+            try_call_info,
+            patchable,
+        )
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
@@ -729,6 +727,112 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             .inst_results(inst)
             .iter()
             .any(|&result| self.value_lowered_uses[result] > 0)
+    }
+
+    /// Record an "opportunistic def" of `val` into `regs` at the current scan
+    /// position.
+    ///
+    /// The lowering that is currently being generated (e.g., a branch that
+    /// directly consumes the flags produced by an `uadd_overflow`) also
+    /// computes `val`'s value as a byproduct, and does so in `regs`. If, when
+    /// the scan reaches the actual definition of `val` (which must be in the
+    /// current block, further up), no further uses of `val` are found (i.e.,
+    /// the use-count matches the one recorded here), then that definition can
+    /// be skipped entirely and `val` can be aliased to `regs` instead.
+    ///
+    /// If further uses *are* found, then this opportunistic def is discarded
+    /// and the actual definition is lowered as usual (this is safe because
+    /// the value is still computed by the current lowering, just unused).
+    pub fn opportunistic_def(&mut self, val: Value, regs: ValueRegs<Reg>) {
+        trace!("opportunistic_def: val {val} regs {regs:?}");
+
+        if self.value_lowered_uses[val] == 0 {
+            trace!(" -> no uses so far; ignoring");
+            return;
+        }
+
+        // The actual definition of `val` must be in the same block as the
+        // current scan position, further up. Otherwise the regs computed here
+        // cannot possibly dominate all uses of `val` (and in particular the
+        // use-count check below is meaningless across blocks), so ignore.
+        let cur_block = match self
+            .cur_inst
+            .and_then(|inst| self.f.layout.inst_block(inst))
+        {
+            Some(block) => block,
+            None => {
+                trace!(" -> no current inst/block; ignoring");
+                return;
+            }
+        };
+        let def_block = match self.f.dfg.value_def(val) {
+            ValueDef::Result(src_inst, _) => self.f.layout.inst_block(src_inst),
+            _ => None,
+        };
+        if def_block != Some(cur_block) {
+            trace!(" -> def not in current block; ignoring");
+            return;
+        }
+
+        let uses = self.value_lowered_uses[val];
+        // Note that a later registration for the same (block, value)
+        // overwrites an earlier one: the later one is higher in the block
+        // (closer to the definition), so its defs dominate those of the
+        // earlier one, and it is strictly more useful.
+        self.opportunistic_defs
+            .insert((cur_block, val), (regs, uses));
+        trace!(" -> recorded with {uses} uses so far");
+    }
+
+    /// Attempt to commit to the opportunistic defs recorded for the results
+    /// of `inst` (whose definition is at the current scan position in
+    /// `block`).
+    ///
+    /// Returns `true` if we were able to use the opportunistic defs
+    /// and can skip this lowering.
+    fn try_use_opportunistic_defs(&mut self, block: Block, inst: Inst) -> bool {
+        let results = self.f.dfg.inst_results(inst);
+
+        // To skip the lowering and use the opportunistic defs, every
+        // result of `inst` that has uses must have a registered
+        // opportunistic def whose recorded use-count matches the
+        // current one.
+        for &result in results {
+            if self.value_lowered_uses[result] == 0 {
+                continue;
+            }
+            match self.opportunistic_defs.get(&(block, result)) {
+                Some(&(_, recorded_uses)) if recorded_uses == self.value_lowered_uses[result] => {}
+                _ => {
+                    trace!(
+                        "opportunistic defs: not committing for inst {inst}: \
+                         result {result} has {} uses but no matching opportunistic def",
+                        self.value_lowered_uses[result]
+                    );
+                    return false;
+                }
+            }
+        }
+
+        // Commit: set aliases for every result that has an opportunistic def
+        // (by the check above, this is exactly the set of results with uses),
+        // and clear the entries.
+        for &result in results {
+            if let Some(&(regs, _)) = self.opportunistic_defs.get(&(block, result)) {
+                let dsts = self.value_regs[result];
+                debug_assert_eq!(dsts.len(), regs.len());
+                for (&dst, &src) in dsts.regs().iter().zip(regs.regs().iter()) {
+                    trace!(
+                        "set vreg alias (opportunistic def): {result:?} = {dst:?}, \
+                         lowering = {src:?}"
+                    );
+                    self.vregs.set_vreg_alias(dst, src);
+                }
+                self.opportunistic_defs.remove(&(block, result));
+            }
+        }
+
+        true
     }
 
     fn lower_clif_block<B: LowerBackend<MInst = I>>(
@@ -759,31 +863,37 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // each IR instruction.
         for inst in self.f.layout.block_insts(block).rev() {
             let data = &self.f.dfg.insts[inst];
-            let has_side_effect = has_lowering_side_effect(self.f, inst);
+            // A non-zero entry color marks a side-effecting instruction (see the
+            // field's doc comment).
+            let entry_color = self.side_effect_inst_entry_colors[inst];
+            let has_side_effect = entry_color.get() != 0;
+
             // If  inst has been sunk to another location, skip it.
             if self.is_inst_sunk(inst) {
                 continue;
             }
+
             // Are any outputs used at least once?
             let value_needed = self.is_any_inst_result_needed(inst);
+
+            // Do we have to emit this instruction even though nothing uses its
+            // results? Note that this is not the same question as
+            // `has_side_effect` above: loads are colored as side-effecting so
+            // that load merging cannot move one across a store, but a load that
+            // is defined not to trap can simply be dropped when it is dead.
+            let must_lower = must_lower_even_if_unused(self.f, inst);
+
             trace!(
-                "lower_clif_block: block {} inst {} ({:?}) is_branch {} side_effect {} value_needed {}",
-                block,
-                inst,
-                data,
+                "lower_clif_block: {block}, {inst}, ({data:?}), is_branch {}, \
+                 has_side_effect {has_side_effect}, must_lower {must_lower}, \
+                 value_needed {value_needed}",
                 data.opcode().is_branch(),
-                has_side_effect,
-                value_needed,
             );
 
             // Update scan state to color prior to this inst (as we are scanning
             // backward).
             self.cur_inst = Some(inst);
             if has_side_effect {
-                let entry_color = *self
-                    .side_effect_inst_entry_colors
-                    .get(&inst)
-                    .expect("every side-effecting inst should have a color-map entry");
                 self.cur_scan_entry_color = Some(entry_color);
             }
 
@@ -795,11 +905,22 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Value defined by "inst" becomes live after it in normal
             // order, and therefore **before** in reversed order.
-            self.emit_value_label_live_range_start_for_inst(inst);
+            // Only emit value label aliases if the instruction will be lowered
+            // (otherwise we want to keep using the earlier label instead).
+            self.emit_value_label_live_range_start_for_inst(inst, must_lower || value_needed);
 
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
-            if has_side_effect || value_needed {
+            if must_lower || value_needed {
+                if !has_side_effect && !must_lower && self.try_use_opportunistic_defs(block, inst) {
+                    trace!(
+                        "lowering: inst {}: {}: using opportunistic defs; skipping",
+                        inst,
+                        self.f.dfg.display_inst(inst)
+                    );
+                    continue;
+                }
+
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = match backend.lower(self, inst) {
                     Some(regs) => regs,
@@ -817,16 +938,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     }
                 };
 
-                // The ISLE generated code emits its own registers to define the
-                // instruction's lowered values in. However, other instructions
-                // that use this SSA value will be lowered assuming that the value
-                // is generated into a pre-assigned, different, register.
+                // The ISLE generated code emits its own registers to define
+                // the instruction's lowered values in. However, other
+                // instructions that use this SSA value will be lowered
+                // assuming that the value is generated into a
+                // pre-assigned, different, register.
                 //
-                // To connect the two, we set up "aliases" in the VCodeBuilder
-                // that apply when it is building the Operand table for the
-                // regalloc to use. These aliases effectively rewrite any use of
-                // the pre-assigned register to the register that was returned by
-                // the ISLE lowering logic.
+                // To connect the two, we set up "aliases" in the
+                // VCodeBuilder that apply when it is building the Operand
+                // table for the regalloc to use. These aliases effectively
+                // rewrite any use of the pre-assigned register to the
+                // register that was returned by the ISLE lowering logic.
                 let results = self.f.dfg.inst_results(inst);
                 debug_assert_eq!(temp_regs.len(), results.len());
                 for (regs, &result) in temp_regs.iter().zip(results) {
@@ -942,14 +1064,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_marks_for_value(&mut self, val: Value) {
+    fn emit_value_label_marks_for_value(&mut self, val: Value, allow_alias: bool) {
         let regs = self.value_regs[val];
         if regs.len() > 1 {
             return;
         }
         let reg = regs.only_reg().unwrap();
 
-        if let Some(label_starts) = self.get_value_labels(val, 0) {
+        if let Some(label_starts) = self.get_value_labels(val, if allow_alias { 0 } else { !0 }) {
             let labels = label_starts
                 .iter()
                 .map(|&ValueLabelStart { label, .. }| label)
@@ -964,7 +1086,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_live_range_start_for_inst(&mut self, inst: Inst) {
+    fn emit_value_label_live_range_start_for_inst(&mut self, inst: Inst, allow_alias: bool) {
         if self.f.dfg.values_labels.is_none() {
             return;
         }
@@ -975,7 +1097,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             inst
         );
         for &val in self.f.dfg.inst_results(inst) {
-            self.emit_value_label_marks_for_value(val);
+            self.emit_value_label_marks_for_value(val, allow_alias);
         }
     }
 
@@ -986,7 +1108,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         trace!("value labeling: block {}", block);
         for &arg in self.f.dfg.block_params(block) {
-            self.emit_value_label_marks_for_value(arg);
+            self.emit_value_label_marks_for_value(arg, true);
         }
         self.finish_ir_inst(Default::default());
     }
@@ -1143,19 +1265,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Reused vectors for branch lowering.
         let mut targets: SmallVec<[MachLabel; 2]> = SmallVec::new();
 
-        // get a copy of the lowered order; we hold this separately because we
-        // need a mut ref to the vcode to mutate it below.
-        let lowered_order: SmallVec<[LoweredBlock; 64]> = self
-            .vcode
-            .block_order()
-            .lowered_order()
-            .iter()
-            .cloned()
-            .collect();
-
         // Main lowering loop over lowered blocks.
-        for (bindex, lb) in lowered_order.iter().enumerate().rev() {
-            let bindex = BlockIndex::new(bindex);
+        let num_blocks = self.vcode.block_order().lowered_order().len();
+        for i in (0..num_blocks).rev() {
+            // We index into the (immutable) lowered order one block at a time,
+            // copying the block out, so that the immutable borrow of
+            // `self.vcode` ends immediately and leaves `&mut self` free for
+            // lowering below.
+            let bindex = BlockIndex::new(i);
+            let lb = self.vcode.block_order().lowered_order()[i];
 
             // Lower the block body in reverse order (see comment in
             // `lower_clif_block()` for rationale).
@@ -1163,8 +1281,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // End branch.
             if let Some(bb) = lb.orig_block() {
                 if let Some(branch) = self.collect_branch_and_targets(bindex, bb, &mut targets) {
+                    let branch_start = self.vcode.vcode.num_insts();
                     self.lower_clif_branch(backend, bindex, bb, branch, &targets)?;
                     self.finish_ir_inst(self.srcloc(branch));
+
+                    // Branch instructions like try_call can also be safepoints
+                    // that need stack maps. Forward the stack map from the CLIF
+                    // branch to the VCode safepoint, just like we do for
+                    // non-branch instructions in `lower_clif_block`.
+                    if let Some(entries) = self.f.dfg.user_stack_map_entries(branch) {
+                        let branch_end = self.vcode.vcode.num_insts();
+                        for i in branch_start..branch_end {
+                            let iix = InsnIndex::new(i);
+                            if self.vcode.vcode[iix].is_safepoint() {
+                                self.vcode.add_user_stack_map(
+                                    BackwardsInsnIndex::new(iix.index()),
+                                    entries,
+                                );
+                                break;
+                            }
+                        }
+                    }
                 }
             } else {
                 // If no orig block, this must be a pure edge block;
@@ -1215,6 +1352,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             ValueUseState::Unused => true,
             _ => false,
         }
+    }
+
+    /// Does this value still have uses to serve at the current point in the
+    /// lowering scan? If not, a lowering may be elided.
+    pub(crate) fn value_lowered_used(&self, val: Value) -> bool {
+        self.value_lowered_uses[val] > 0
     }
 
     pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {
@@ -1279,11 +1422,7 @@ fn compute_use_states(
     let uses = |value| {
         trace!(" -> pushing args for {} onto stack", value);
         if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-            if is_value_use_root(f, src_inst) {
-                None
-            } else {
-                Some(f.dfg.inst_values(src_inst))
-            }
+            Some(f.dfg.inst_values(src_inst))
         } else {
             None
         }
@@ -1343,26 +1482,6 @@ fn compute_use_states(
     value_ir_uses
 }
 
-/// Definition of a "root" instruction for the calculation of `ValueUseState`.
-///
-/// This function calculates whether `inst` is considered a "root" for value-use
-/// information. This concept is used to forcibly prevent looking-through the
-/// instruction during `get_value_as_source_or_const` as it additionally
-/// prevents propagating `Multiple`-used results of the `inst` here to the
-/// operands of the instruction.
-///
-/// Currently this is defined as multi-result instructions. That means that
-/// lowerings are never allowed to look through a multi-result instruction to
-/// generate patterns. Note that this isn't possible in ISLE today anyway so
-/// this isn't currently much of a loss.
-///
-/// The main purpose of this function is to prevent the operands of a
-/// multi-result instruction from being forcibly considered `Multiple`-used
-/// regardless of circumstances.
-fn is_value_use_root(f: &Function, inst: Inst) -> bool {
-    f.dfg.inst_results(inst).len() > 1
-}
-
 /// Function-level queries.
 impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn dfg(&self) -> &DataFlowGraph {
@@ -1413,14 +1532,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Returns the memory flags of a given memory access.
-    pub fn memflags(&self, ir_inst: Inst) -> Option<MemFlags> {
+    pub fn memflags(&self, ir_inst: Inst) -> Option<MachMemFlags> {
         match &self.f.dfg.insts[ir_inst] {
-            &InstructionData::AtomicCas { flags, .. } => Some(flags),
-            &InstructionData::AtomicRmw { flags, .. } => Some(flags),
+            &InstructionData::AtomicCas { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
+            &InstructionData::AtomicRmw { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
-            | &InstructionData::Store { flags, .. } => Some(flags),
-            &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
+            | &InstructionData::Store { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
+            &InstructionData::StoreNoOffset { flags, .. } => {
+                Some(self.f.dfg.mem_flags[flags].into())
+            }
             _ => None,
         }
     }
@@ -1459,16 +1580,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     pub fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
-        self.inst_constants.get(&ir_inst).map(|&c| {
-            // The upper bits must be zero, enforced during legalization and by
-            // the CLIF verifier.
-            debug_assert_eq!(c, {
-                let input_size = self.output_ty(ir_inst, 0).bits() as u64;
-                let shift = 64 - input_size;
-                (c << shift) >> shift
-            });
-            c
-        })
+        let c = is_constant_64bit(self.f, ir_inst)?;
+
+        // The upper bits must be zero, enforced during legalization and by
+        // the CLIF verifier.
+        debug_assert_eq!(c, {
+            let input_size = self.output_ty(ir_inst, 0).bits() as u64;
+            let shift = 64 - input_size;
+            (c << shift) >> shift
+        });
+
+        Some(c)
     }
 
     /// Get the input as one of two options other than a direct register:
@@ -1558,19 +1680,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             //   instruction was sunk, we allow other instructions (that came
             //   prior to the sunk instruction) to sink.
             ValueDef::Result(src_inst, result_idx) => {
-                let src_side_effect = has_lowering_side_effect(self.f, src_inst);
+                // A non-zero entry color marks a side-effecting instruction (see
+                // the field's doc comment).
+                let src_entry_color = self.side_effect_inst_entry_colors[src_inst];
+                let src_side_effect = src_entry_color.get() != 0;
                 trace!(" -> src inst {}", self.f.dfg.display_inst(src_inst));
                 trace!(" -> has lowering side effect: {}", src_side_effect);
-                if is_value_use_root(self.f, src_inst) {
-                    // If this instruction is a "root instruction" then it's
-                    // required that we can't look through it to see the
-                    // definition. This means that the `ValueUseState` for the
-                    // operands of this result assume that this instruction is
-                    // generated exactly once which might get violated were we
-                    // to allow looking through it.
-                    trace!(" -> is a root instruction");
-                    InputSourceInst::None
-                } else if !src_side_effect {
+                if !src_side_effect {
                     // Otherwise if this instruction has no side effects and the
                     // value is used only once then we can look through it with
                     // a "unique" tag. A non-unique `Use` can be shown for other
@@ -1592,13 +1708,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     if self.cur_scan_entry_color.is_some()
                         && self.value_ir_uses[val] == ValueUseState::Once
                         && self.num_outputs(src_inst) == 1
-                        && self
-                            .side_effect_inst_entry_colors
-                            .get(&src_inst)
-                            .unwrap()
-                            .get()
-                            + 1
-                            == self.cur_scan_entry_color.unwrap().get()
+                        && src_entry_color.get() + 1 == self.cur_scan_entry_color.unwrap().get()
                     {
                         InputSourceInst::UniqueUse(src_inst, 0)
                     } else {
@@ -1614,6 +1724,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Increment the reference count for the Value, ensuring that it gets lowered.
+    #[cfg(any(
+        feature = "x86",
+        feature = "arm64",
+        feature = "riscv64",
+        feature = "s390x",
+        feature = "pulley"
+    ))]
     pub fn increment_lowered_uses(&mut self, val: Value) {
         self.value_lowered_uses[val] += 1
     }
@@ -1641,18 +1758,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         regs
     }
-
-    /// Get the ValueRegs for the edge-defined values for special
-    /// try-call-return block arguments.
-    pub fn try_call_return_defs(&mut self, ir_inst: Inst) -> &[ValueRegs<Writable<Reg>>] {
-        &self.try_call_rets.get(&ir_inst).unwrap()[..]
-    }
-
-    /// Get the Regs for the edge-defined values for special
-    /// try-call-return exception payload arguments.
-    pub fn try_call_exception_defs(&mut self, ir_inst: Inst) -> &[Writable<Reg>] {
-        &self.try_call_payloads.get(&ir_inst).unwrap()[..]
-    }
 }
 
 /// Codegen primitives: allocate temps, emit instructions, set result registers,
@@ -1661,11 +1766,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
         writable_value_regs(self.vregs.alloc_with_deferred_error(ty))
-    }
-
-    /// Get the current root instruction that we are lowering.
-    pub fn cur_inst(&self) -> Inst {
-        self.cur_inst.unwrap()
     }
 
     /// Emit a machine instruction.
@@ -1687,11 +1787,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             assert!(self.value_lowered_uses[*result] == 0);
         }
 
-        let sunk_inst_entry_color = self
-            .side_effect_inst_entry_colors
-            .get(&ir_inst)
-            .cloned()
-            .unwrap();
+        let sunk_inst_entry_color = self.side_effect_inst_entry_colors[ir_inst];
         let sunk_inst_exit_color = InstColor::new(sunk_inst_entry_color.get() + 1);
         assert!(sunk_inst_exit_color == self.cur_scan_entry_color.unwrap());
         self.cur_scan_entry_color = Some(sunk_inst_entry_color);
@@ -1711,33 +1807,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Indicate that a constant should be emitted.
     pub fn use_constant(&mut self, constant: VCodeConstantData) -> VCodeConstant {
         self.vcode.constants().insert(constant)
-    }
-
-    /// Cause the value in `reg` to be in a virtual reg, by copying it into a
-    /// new virtual reg if `reg` is a real reg. `ty` describes the type of the
-    /// value in `reg`.
-    pub fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
-        if reg.to_virtual_reg().is_some() {
-            reg
-        } else {
-            let new_reg = self.alloc_tmp(ty).only_reg().unwrap();
-            self.emit(I::gen_move(new_reg, reg, ty));
-            new_reg.to_reg()
-        }
-    }
-
-    /// Add a range fact to a register, if no other fact is present.
-    pub fn add_range_fact(&mut self, reg: Reg, bit_width: u16, min: u64, max: u64) {
-        if self.flags.enable_pcc() {
-            self.vregs.set_fact_if_missing(
-                reg.to_virtual_reg().unwrap(),
-                Fact::Range {
-                    bit_width,
-                    min,
-                    max,
-                },
-            );
-        }
     }
 }
 
@@ -1767,26 +1836,5 @@ mod tests {
         assert_eq!(uses[v3], ValueUseState::Once);
         assert_eq!(uses[v4], ValueUseState::Once);
         assert_eq!(uses[v5], ValueUseState::Once);
-    }
-
-    #[test]
-    fn results_used_twice_but_not_operands() {
-        let mut func = Function::new();
-        let block0 = func.dfg.make_block();
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(block0);
-        let v1 = pos.ins().iconst(types::I64, 0);
-        let v2 = pos.ins().iconst(types::I64, 1);
-        let v3 = pos.ins().iconcat(v1, v2);
-        let (v4, v5) = pos.ins().isplit(v3);
-        pos.ins().return_(&[v4, v4]);
-        let func = pos.func;
-
-        let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
-        assert_eq!(uses[v2], ValueUseState::Once);
-        assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Multiple);
-        assert_eq!(uses[v5], ValueUseState::Unused);
     }
 }

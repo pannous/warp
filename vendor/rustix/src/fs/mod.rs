@@ -1,12 +1,14 @@
 //! Filesystem operations.
 
 mod abs;
-#[cfg(not(target_os = "redox"))]
 mod at;
 mod constants;
 #[cfg(linux_kernel)]
 mod copy_file_range;
-#[cfg(all(feature = "alloc", not(any(target_os = "espidf", target_os = "redox"))))]
+#[cfg(all(
+    feature = "alloc",
+    not(any(target_os = "espidf", target_os = "horizon", target_os = "redox"))
+))]
 mod dir;
 #[cfg(not(any(
     apple,
@@ -51,7 +53,7 @@ mod raw_dir;
 mod seek_from;
 #[cfg(target_os = "linux")]
 mod sendfile;
-#[cfg(not(any(target_os = "espidf", target_os = "redox")))]
+#[cfg(not(target_os = "espidf"))]
 mod special;
 #[cfg(linux_kernel)]
 mod statx;
@@ -67,12 +69,14 @@ mod sync;
 mod xattr;
 
 pub use abs::*;
-#[cfg(not(target_os = "redox"))]
 pub use at::*;
 pub use constants::*;
 #[cfg(linux_kernel)]
 pub use copy_file_range::copy_file_range;
-#[cfg(all(feature = "alloc", not(any(target_os = "espidf", target_os = "redox"))))]
+#[cfg(all(
+    feature = "alloc",
+    not(any(target_os = "espidf", target_os = "horizon", target_os = "redox"))
+))]
 pub use dir::{Dir, DirEntry};
 #[cfg(not(any(
     apple,
@@ -115,7 +119,7 @@ pub use raw_dir::{RawDir, RawDirEntry};
 pub use seek_from::SeekFrom;
 #[cfg(target_os = "linux")]
 pub use sendfile::sendfile;
-#[cfg(not(any(target_os = "espidf", target_os = "redox")))]
+#[cfg(not(target_os = "espidf"))]
 pub use special::*;
 #[cfg(linux_kernel)]
 pub use statx::*;

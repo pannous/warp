@@ -5,13 +5,16 @@ use std::sync::Arc;
 use crate::{files::Files, lexer::Pos};
 
 /// A collection of errors from attempting to compile some ISLE source files.
+#[derive(Debug)]
 pub struct Errors {
     /// The individual errors.
     pub errors: Vec<Error>,
     pub(crate) files: Arc<Files>,
 }
 
-impl std::fmt::Debug for Errors {
+impl std::error::Error for Errors {}
+
+impl std::fmt::Display for Errors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.errors.is_empty() {
             return Ok(());
@@ -23,6 +26,7 @@ impl std::fmt::Debug for Errors {
                 Error::TypeError { msg, .. } => format!("type error: {msg}"),
                 Error::UnreachableError { msg, .. } => format!("unreachable rule: {msg}"),
                 Error::OverlapError { msg, .. } => format!("overlap error: {msg}"),
+                Error::RecursionError { msg, .. } => format!("recursion error: {msg}"),
                 Error::ShadowedError { .. } => {
                     "more general higher-priority rule shadows other rules".to_string()
                 }
@@ -33,7 +37,8 @@ impl std::fmt::Debug for Errors {
 
                 Error::ParseError { span, .. }
                 | Error::TypeError { span, .. }
-                | Error::UnreachableError { span, .. } => {
+                | Error::UnreachableError { span, .. }
+                | Error::RecursionError { span, .. } => {
                     vec![Label::primary(span.from.file, span)]
                 }
 
@@ -127,6 +132,15 @@ pub enum Error {
         rules: Vec<Span>,
     },
 
+    /// Recursive rules error. Term is recursive without explicit opt-in.
+    RecursionError {
+        /// The error message.
+        msg: String,
+
+        /// The location of the term declaration.
+        span: Span,
+    },
+
     /// The rules can never match because another rule will always match first.
     ShadowedError {
         /// The locations of the unmatchable rules.
@@ -213,6 +227,41 @@ impl Errors {
             writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+/// Builder for the `isle::Errors`.
+pub struct ErrorsBuilder(Errors);
+
+impl ErrorsBuilder {
+    /// Start building an [Errors] object.
+    pub fn new() -> Self {
+        Self(Errors {
+            errors: Vec::new(),
+            files: Arc::new(Files::default()),
+        })
+    }
+
+    /// Return the built [Errors] object.
+    pub fn build(self) -> Errors {
+        self.0
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object.
+    pub fn errors(mut self, errors: Vec<Error>) -> Self {
+        self.0.errors = errors;
+        self
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object to a single error.
+    pub fn error(self, error: Error) -> Self {
+        self.errors(vec![error])
+    }
+
+    /// Set the `files` field of the under-construction [Errors] object.
+    pub fn files(mut self, files: Arc<Files>) -> Self {
+        self.0.files = files;
+        self
     }
 }
 

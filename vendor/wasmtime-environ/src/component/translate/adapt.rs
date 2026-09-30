@@ -115,9 +115,9 @@
 //! time this may want to be revisited if too many adapter modules are being
 //! created.
 
-use crate::EntityType;
 use crate::component::translate::*;
 use crate::fact;
+use crate::{EntityType, Memory};
 use std::collections::HashSet;
 
 /// Metadata information about a fused adapter.
@@ -150,10 +150,8 @@ pub enum DataModel {
 
     /// Data is stored in a linear memory.
     LinearMemory {
-        /// An optional memory definition supplied.
-        memory: Option<dfg::CoreExport<MemoryIndex>>,
-        /// If `memory` is specified, whether it's a 64-bit memory.
-        memory64: bool,
+        /// An optional memory definition supplied, and its type.
+        memory: Option<(dfg::CoreExport<MemoryIndex>, Memory)>,
         /// An optional definition of `realloc` to used.
         realloc: Option<dfg::CoreDef>,
     },
@@ -205,8 +203,11 @@ impl<'data> Translator<'_, 'data> {
         // the module using standard core wasm translation, and then fills out
         // the dfg metadata for each adapter.
         for (module_id, adapter_module) in state.adapter_modules.iter() {
-            let mut module =
-                fact::Module::new(self.types.types(), self.tunables.debug_adapter_modules);
+            let mut module = fact::Module::new(
+                self.types.types(),
+                self.tunables,
+                *self.validator.features(),
+            );
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
@@ -250,8 +251,9 @@ impl<'data> Translator<'_, 'data> {
             // partitioned in-order so we're guaranteed to push the adapters
             // in-order here as well. (with an assert to double-check)
             for (adapter, name) in adapter_module.adapters.iter().zip(&names) {
-                let index = translation.module.exports[name];
-                let i = component.adapter_partitionings.push((module_id, index));
+                let name = translation.module.strings.get_atom(name).unwrap();
+                let export = translation.module.exports[&name];
+                let i = component.adapter_partitionings.push((module_id, export));
                 assert_eq!(i, *adapter);
             }
 
@@ -323,8 +325,6 @@ fn fact_import_to_core_def(
         fact::Import::ResourceTransferBorrow => {
             simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
         }
-        fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
-        fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),
         }),
@@ -345,7 +345,12 @@ fn fact_import_to_core_def(
         fact::Import::ErrorContextTransfer => {
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
-        fact::Import::CheckBlocking => simple_intrinsic(dfg::Trampoline::CheckBlocking),
+        fact::Import::Trap(trap) => simple_intrinsic(dfg::Trampoline::Trap(*trap)),
+        fact::Import::EnterSyncCall => simple_intrinsic(dfg::Trampoline::EnterSyncCall),
+        fact::Import::ExitSyncCall => simple_intrinsic(dfg::Trampoline::ExitSyncCall),
+        fact::Import::UnsafeIntrinsic(intrinsic) => {
+            dfg::CoreDef::UnsafeIntrinsic(ty.unwrap_func().unwrap_module_type_index(), *intrinsic)
+        }
     }
 }
 
@@ -413,12 +418,8 @@ impl PartitionAdapterModules {
             DataModel::Gc {} => {
                 // Nothing to do here yet.
             }
-            DataModel::LinearMemory {
-                memory,
-                memory64: _,
-                realloc,
-            } => {
-                if let Some(memory) = memory {
+            DataModel::LinearMemory { memory, realloc } => {
+                if let Some((memory, _ty)) = memory {
                     self.core_export(dfg, memory);
                 }
                 if let Some(def) = realloc {

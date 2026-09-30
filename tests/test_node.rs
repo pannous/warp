@@ -1,20 +1,16 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::wasp_parser::parse;
+use warp::wasp_parser::parse;
 
 #[test]
-#[ignore]
 fn test_remove() {
-	let result = parse("a b c d");
-	// result.remove(1, 2); // TODO: implement remove method
+	let mut result = parse("a b c d");
+	result.remove(1, 2); // DONE: implement remove method
 	let replaced = parse("a d");
 	assert!(result == replaced);
 }
 
 #[test]
-#[ignore]
 fn test_remove2() {
-	let result = parse("a b c d");
+	let mut result = parse("a b c d");
 	result.remove(2, 10);
 	let replaced = parse("a b");
 	assert!(result == replaced);
@@ -29,6 +25,14 @@ fn test_replace() {
 	assert!(result == replaced);
 }
 
+#[test]
+fn test_mark_as_map() {
+	let mut mappy = parse("{a:1 b:2 c:3}");
+	mappy['a'] = 10.into();
+	assert_eq!(mappy['a'], 10);
+}
+
+/*
 #[test]
 #[ignore]
 fn test_mark_as_map() {
@@ -60,3 +64,4 @@ fn test_mark_as_map() {
 	assert!(marked["b"] == compare["b"]);
 	assert!(compare == marked);
 }
+*/

@@ -1,0 +1,4 @@
+// Power function - recursive
+def pow(base, exp) := exp == 0 ? 1 : base * pow(base, exp-1)
+
+pow(2, 10)

@@ -29,7 +29,7 @@ impl EmitInfo {
         }
     }
 
-    fn endianness(&self, flags: MemFlags) -> Endianness {
+    fn endianness(&self, flags: MemFlagsData) -> Endianness {
         flags.endianness(self.isa_flags.endianness())
     }
 }
@@ -125,7 +125,7 @@ fn pulley_emit<P>(
     P: PulleyTargetKind,
 {
     match inst {
-        // Pseduo-instructions that don't actually encode to anything.
+        // Pseudo-instructions that don't actually encode to anything.
         Inst::Args { .. } | Inst::Rets { .. } | Inst::DummyUse { .. } => {}
 
         Inst::TrapIf { cond, code } => {
@@ -152,22 +152,21 @@ fn pulley_emit<P>(
         }
 
         Inst::LoadExtNameFar { dst, name, offset } => {
-            let size = match P::pointer_width() {
+            let (reloc, size) = match P::pointer_width() {
                 PointerWidth::PointerWidth32 => {
                     enc::xconst32(sink, dst, 0);
-                    4
+                    (Reloc::Abs4, 4)
                 }
                 PointerWidth::PointerWidth64 => {
                     enc::xconst64(sink, dst, 0);
-                    8
+                    (Reloc::Abs8, 8)
                 }
             };
             let end = sink.cur_offset();
-            sink.add_reloc_at_offset(end - size, Reloc::Abs8, &**name, *offset);
+            sink.add_reloc_at_offset(end - size, reloc, &**name, *offset);
         }
 
-        Inst::Call { info } | Inst::PatchableCall { info } => {
-            let is_patchable = matches!(inst, Inst::PatchableCall { .. });
+        Inst::Call { info } => {
             let start = sink.cur_offset();
 
             // If arguments happen to already be in the right register for the
@@ -199,23 +198,25 @@ fn pulley_emit<P>(
                     Some(state.frame_layout.sp_to_fp()),
                     try_call.exception_handlers(&state.frame_layout),
                 );
-            } else if is_patchable {
-                sink.add_patchable_call_site(sink.cur_offset() - start);
             } else {
                 sink.add_call_site();
             }
 
-            let adjust = -i32::try_from(info.callee_pop_size).unwrap();
-            for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                i.emit(sink, emit_info, state);
-            }
+            if info.patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
+            } else {
+                let adjust = -i32::try_from(info.callee_pop_size).unwrap();
+                for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
+                    i.emit(sink, emit_info, state);
+                }
 
-            // Load any stack-carried return values.
-            info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
-                state.frame_layout().stackslots_size,
-                |inst| inst.emit(sink, emit_info, state),
-                |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
-            );
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
+                );
+            }
 
             // If this is a try-call, jump to the continuation
             // (normal-return) block.

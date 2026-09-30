@@ -1,12 +1,12 @@
 use std::{fmt, mem};
 
 use http::uri::PathAndQuery;
-use http::{header, HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version, header};
 
-use crate::body::BodyWriter;
+use crate::Error;
+use crate::body::{BodyWriter, parse_content_length_value};
 use crate::ext::MethodExt;
 use crate::util::compare_lowercase_ascii;
-use crate::Error;
 
 /// `Request` with amends.
 ///
@@ -169,15 +169,12 @@ impl AmendedRequest {
             req_auth_header = true;
         }
 
-        let mut content_length: Option<u64> = None;
-        if let Some(h) = self.headers_get(header::CONTENT_LENGTH) {
-            let n = h
-                .to_str()
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .ok_or(Error::BadContentLengthHeader)?;
-            content_length = Some(n);
-        }
+        // We control what we send: a single header line holding a single
+        // number. A comma separated list must not reach the wire.
+        let content_length = self
+            .headers_get(header::CONTENT_LENGTH)
+            .map(|h| parse_content_length_value(h.as_bytes()))
+            .transpose()?;
 
         let has_chunked = self
             .headers_get_all(header::TRANSFER_ENCODING)
@@ -223,6 +220,22 @@ fn join(base: Uri, location: &str) -> Result<Uri, Error> {
         // Location is a complete Uri.
         // unwrap is ok beause has_scheme cannot be true if parsing failed.
         return Ok(maybe.unwrap());
+    }
+
+    if location.starts_with("//") {
+        // Location is a network-path reference, i.e. it holds its own
+        // authority and we only inherit the scheme of the base uri.
+        // https://datatracker.ietf.org/doc/html/rfc3986#section-4.2
+        let scheme = parts
+            .scheme
+            .as_ref()
+            .ok_or_else(|| Error::BadLocationHeader(location.to_string()))?;
+
+        let joined: Uri = format!("{}:{}", scheme.as_str(), location)
+            .parse()
+            .map_err(|_| Error::BadLocationHeader(location.to_string()))?;
+
+        return Ok(joined);
     }
 
     if location.starts_with("/") {
@@ -314,5 +327,53 @@ mod test {
     fn join_things() {
         let uri: Uri = "foo.html".parse().unwrap();
         println!("{:?}", uri.into_parts());
+    }
+
+    #[test]
+    fn join_absolute_uri() {
+        let base: Uri = "https://example.com/a/b".parse().unwrap();
+        let uri = join(base, "http://other.example.com/c").unwrap();
+        assert_eq!(uri, "http://other.example.com/c");
+    }
+
+    #[test]
+    fn join_root_relative_path() {
+        let base: Uri = "https://example.com/a/b".parse().unwrap();
+        let uri = join(base, "/c").unwrap();
+        assert_eq!(uri, "https://example.com/c");
+    }
+
+    #[test]
+    fn join_relative_path() {
+        let base: Uri = "https://example.com/a/b".parse().unwrap();
+        let uri = join(base, "c/d").unwrap();
+        assert_eq!(uri, "https://example.com/a/c/d");
+    }
+
+    #[test]
+    fn join_network_path_reference() {
+        // https://github.com/algesten/ureq/issues/1196
+        let base: Uri = "https://www.wikidata.org/wiki/Special:EntityData/Q2"
+            .parse()
+            .unwrap();
+        let uri = join(base, "//www.wikidata.org/wiki/Special:EntityData/Q2.ttl").unwrap();
+        assert_eq!(
+            uri,
+            "https://www.wikidata.org/wiki/Special:EntityData/Q2.ttl"
+        );
+    }
+
+    #[test]
+    fn join_network_path_reference_keeps_base_scheme() {
+        let base: Uri = "http://example.com/a/b".parse().unwrap();
+        let uri = join(base, "//other.example.com/c").unwrap();
+        assert_eq!(uri, "http://other.example.com/c");
+    }
+
+    #[test]
+    fn join_network_path_reference_keeps_authority_details() {
+        let base: Uri = "https://example.com/x".parse().unwrap();
+        let uri = join(base, "//other.example.com:8443/y?q=1").unwrap();
+        assert_eq!(uri, "https://other.example.com:8443/y?q=1");
     }
 }

@@ -1,13 +1,13 @@
-use http::{header, HeaderName, HeaderValue, Response, StatusCode, Version};
+use http::{HeaderValue, Response, StatusCode, Version, header};
 
+use crate::Error;
 use crate::body::BodyReader;
 use crate::ext::HeaderIterExt;
 use crate::parser::{try_parse_partial_response, try_parse_response};
 use crate::util::log_data;
-use crate::Error;
 
-use super::state::RecvResponse;
 use super::MAX_RESPONSE_HEADERS;
+use super::state::RecvResponse;
 use super::{Call, CloseReason, RecvResponseResult};
 
 impl Call<RecvResponse> {
@@ -36,18 +36,29 @@ impl Call<RecvResponse> {
             None => return Ok((0, None)),
         };
 
-        if response.status() == StatusCode::CONTINUE {
-            // We have received a 100-continue response. This can happen in two scenarios:
-            // 1. A "delayed" 100-continue when we used Expect: 100-continue but the server
-            //    did not produce the response in time while we were in the Await100 state.
-            // 2. An unsolicited 100-continue from a server that sends it regardless of
-            //    whether the client requested it (e.g., on a regular GET request).
-            //
-            // According to RFC 7231, 100-continue is an informational (1xx) response and
-            // should always be consumed by clients, regardless of whether it was solicited.
-            self.inner.await_100_continue = false;
+        // Handle all 1xx informational responses according to RFC 9110.
+        // These can happen in several scenarios:
+        // 1. A "delayed" 100-continue when we used Expect: 100-continue but the server
+        //    did not produce the response in time while we were in the Await100 state.
+        // 2. An unsolicited 1xx response from a server that sends it regardless of
+        //    whether the client requested it (e.g., on a regular GET request).
+        // 3. Other informational responses like 102 Processing or 103 Early Hints.
+        //
+        // According to RFC 9110, all 1xx responses are informational and should be
+        // consumed by clients, with the exception of 101 Switching Protocols.
+        let status = response.status();
 
-            // We consume the response and wait for the actual final response.
+        if status == StatusCode::CONTINUE {
+            // Consume 100 Continue and clear the await flag for delayed 100-continue
+            self.inner.await_100_continue = false;
+            return Ok((input_used, None));
+        } else if status == StatusCode::SWITCHING_PROTOCOLS {
+            // 101 is special: mark connection so it won't be returned to pool,
+            // but return the response to the caller (don't consume it).
+            self.inner.close_reason.push(CloseReason::ProtocolSwitch);
+            // Fall through to return the response
+        } else if status.is_informational() {
+            // Other 1xx (102 Processing, 103 Early Hints, etc.): consume and wait for final response
             return Ok((input_used, None));
         }
 
@@ -131,20 +142,13 @@ impl Call<RecvResponse> {
             return Ok(Some((input_used, response)));
         }
 
-        let header_lookup = |name: HeaderName| {
-            if let Some(header) = response.headers().get(name) {
-                return header.to_str().ok();
-            }
-            None
-        };
-
         let force_recv = self.inner.force_recv_body;
         let recv_body_mode = BodyReader::for_response(
             http10,
             self.inner.request.method(),
             status,
             force_recv,
-            &header_lookup,
+            response.headers(),
         )?;
 
         self.inner.state.reader = Some(recv_body_mode);

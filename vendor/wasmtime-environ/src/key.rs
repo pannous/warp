@@ -18,31 +18,38 @@ use serde_derive::{Deserialize, Serialize};
 #[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum FuncKeyKind {
     /// A Wasm-defined function.
-    DefinedWasmFunction = FuncKey::new_kind(0b000),
+    DefinedWasmFunction = FuncKey::new_kind(0b0000),
 
     /// A trampoline from an array-caller to the given Wasm-callee.
-    ArrayToWasmTrampoline = FuncKey::new_kind(0b001),
+    ArrayToWasmTrampoline = FuncKey::new_kind(0b0001),
 
     /// A trampoline from a Wasm-caller to an array-callee of the given type.
-    WasmToArrayTrampoline = FuncKey::new_kind(0b010),
+    WasmToArrayTrampoline = FuncKey::new_kind(0b0010),
 
     /// A trampoline from a Wasm-caller to the given builtin.
-    WasmToBuiltinTrampoline = FuncKey::new_kind(0b011),
+    WasmToBuiltinTrampoline = FuncKey::new_kind(0b0011),
+
+    /// A trampoline from the patchable ABI to the given builtin.
+    PatchableToBuiltinTrampoline = FuncKey::new_kind(0b0100),
 
     /// A Pulley-specific host call.
-    PulleyHostCall = FuncKey::new_kind(0b100),
+    PulleyHostCall = FuncKey::new_kind(0b0101),
 
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
-    ComponentTrampoline = FuncKey::new_kind(0b101),
+    ComponentTrampoline = FuncKey::new_kind(0b0110),
 
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
-    ResourceDropTrampoline = FuncKey::new_kind(0b110),
+    ResourceDropTrampoline = FuncKey::new_kind(0b0111),
 
     /// A Wasmtime unsafe intrinsic function.
     #[cfg(feature = "component-model")]
-    UnsafeIntrinsic = FuncKey::new_kind(0b111),
+    UnsafeIntrinsic = FuncKey::new_kind(0b1000),
+
+    /// Initialization function for a module, such as initializing "complicated"
+    /// globals and passive element segments.
+    ModuleStartup = FuncKey::new_kind(0b1001),
 }
 
 impl From<FuncKeyKind> for u32 {
@@ -66,7 +73,11 @@ impl FuncKeyKind {
             x if x == Self::ArrayToWasmTrampoline.into() => Self::ArrayToWasmTrampoline,
             x if x == Self::WasmToArrayTrampoline.into() => Self::WasmToArrayTrampoline,
             x if x == Self::WasmToBuiltinTrampoline.into() => Self::WasmToBuiltinTrampoline,
+            x if x == Self::PatchableToBuiltinTrampoline.into() => {
+                Self::PatchableToBuiltinTrampoline
+            }
             x if x == Self::PulleyHostCall.into() => Self::PulleyHostCall,
+            x if x == Self::ModuleStartup.into() => Self::ModuleStartup,
 
             #[cfg(feature = "component-model")]
             x if x == Self::ComponentTrampoline.into() => Self::ComponentTrampoline,
@@ -119,9 +130,12 @@ impl FuncKeyNamespace {
     /// Panics when given invalid raw representations.
     pub fn from_raw(raw: u32) -> Self {
         match FuncKeyKind::from_raw(raw & FuncKey::KIND_MASK) {
-            FuncKeyKind::DefinedWasmFunction | FuncKeyKind::ArrayToWasmTrampoline => Self(raw),
+            FuncKeyKind::DefinedWasmFunction
+            | FuncKeyKind::ArrayToWasmTrampoline
+            | FuncKeyKind::ModuleStartup => Self(raw),
             FuncKeyKind::WasmToArrayTrampoline
             | FuncKeyKind::WasmToBuiltinTrampoline
+            | FuncKeyKind::PatchableToBuiltinTrampoline
             | FuncKeyKind::PulleyHostCall => {
                 assert_eq!(raw & FuncKey::MODULE_MASK, 0);
                 Self(raw)
@@ -192,14 +206,18 @@ pub enum Abi {
     Wasm = 0,
     /// The "array" ABI, or suitable to be an `array_call` field.
     Array = 1,
+    /// The "patchable" ABI. Signature same as Wasm ABI, but
+    /// Cranelift-level (machine-level) ABI is different (no
+    /// clobbers).
+    Patchable = 2,
 }
 
-#[cfg(feature = "component-model")]
 impl Abi {
     fn from_raw(raw: u32) -> Self {
         match raw {
             x if x == Self::Wasm.into_raw() => Self::Wasm,
             x if x == Self::Array.into_raw() => Self::Array,
+            x if x == Self::Patchable.into_raw() => Self::Patchable,
             _ => panic!("invalid raw representation passed to `Abi::from_raw`: {raw}"),
         }
     }
@@ -228,6 +246,9 @@ pub enum FuncKey {
     /// A Pulley-specific host call.
     PulleyHostCall(HostCall),
 
+    /// A trampoline from the patchable ABI to the given builtin.
+    PatchableToBuiltinTrampoline(BuiltinFunctionIndex),
+
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
     ComponentTrampoline(Abi, component::TrampolineIndex),
@@ -239,6 +260,13 @@ pub enum FuncKey {
     /// A Wasmtime intrinsic function.
     #[cfg(feature = "component-model")]
     UnsafeIntrinsic(Abi, component::UnsafeIntrinsic),
+
+    /// Initialization function for a module, such as initializing "complicated"
+    /// globals and passive element segments.
+    ///
+    /// This function has the `Abi` specified and will initialize the module
+    /// specified.
+    ModuleStartup(Abi, StaticModuleIndex),
 }
 
 impl Ord for FuncKey {
@@ -258,7 +286,7 @@ impl PartialOrd for FuncKey {
 }
 
 impl FuncKey {
-    const KIND_BITS: u32 = 3;
+    const KIND_BITS: u32 = 4;
     const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
     const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
     const MODULE_MASK: u32 = !Self::KIND_MASK;
@@ -294,6 +322,11 @@ impl FuncKey {
                 let index = builtin.index();
                 (namespace, index)
             }
+            FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                let namespace = FuncKeyKind::PatchableToBuiltinTrampoline.into_raw();
+                let index = builtin.index();
+                (namespace, index)
+            }
             FuncKey::PulleyHostCall(host_call) => {
                 let namespace = FuncKeyKind::PulleyHostCall.into_raw();
                 let index = host_call.index();
@@ -322,6 +355,13 @@ impl FuncKey {
                 let index = intrinsic.index();
                 (namespace, index)
             }
+
+            FuncKey::ModuleStartup(abi, module) => {
+                assert_eq!(module.as_u32() & Self::KIND_MASK, 0);
+                let namespace = FuncKeyKind::ModuleStartup.into_raw() | module.as_u32();
+                let index = abi.into_raw();
+                (namespace, index)
+            }
         };
         (FuncKeyNamespace(namespace), FuncKeyIndex(index))
     }
@@ -341,13 +381,14 @@ impl FuncKey {
         self.into_parts().1
     }
 
-    /// Get ABI of the function that this key is definining.
+    /// Get ABI of the function that this key is defining.
     pub fn abi(self) -> Abi {
         match self {
             FuncKey::DefinedWasmFunction(_, _) => Abi::Wasm,
             FuncKey::ArrayToWasmTrampoline(_, _) => Abi::Array,
             FuncKey::WasmToArrayTrampoline(_) => Abi::Wasm,
             FuncKey::WasmToBuiltinTrampoline(_) => Abi::Wasm,
+            FuncKey::PatchableToBuiltinTrampoline(_) => Abi::Patchable,
             FuncKey::PulleyHostCall(_) => Abi::Wasm,
             #[cfg(feature = "component-model")]
             FuncKey::ComponentTrampoline(abi, _) => abi,
@@ -355,6 +396,7 @@ impl FuncKey {
             FuncKey::ResourceDropTrampoline => Abi::Wasm,
             #[cfg(feature = "component-model")]
             FuncKey::UnsafeIntrinsic(abi, _) => abi,
+            FuncKey::ModuleStartup(abi, _) => abi,
         }
     }
 
@@ -412,6 +454,11 @@ impl FuncKey {
                 let builtin = BuiltinFunctionIndex::from_u32(b);
                 Self::WasmToBuiltinTrampoline(builtin)
             }
+            FuncKeyKind::PatchableToBuiltinTrampoline => {
+                assert_eq!(a & Self::MODULE_MASK, 0);
+                let builtin = BuiltinFunctionIndex::from_u32(b);
+                Self::PatchableToBuiltinTrampoline(builtin)
+            }
             FuncKeyKind::PulleyHostCall => {
                 assert_eq!(a & Self::MODULE_MASK, 0);
                 let host_call = HostCall::from_index(b);
@@ -435,6 +482,12 @@ impl FuncKey {
                 let abi = Abi::from_raw(a & Self::MODULE_MASK);
                 let intrinsic = component::UnsafeIntrinsic::from_u32(b);
                 Self::UnsafeIntrinsic(abi, intrinsic)
+            }
+
+            FuncKeyKind::ModuleStartup => {
+                let module = StaticModuleIndex::from_u32(a & Self::MODULE_MASK);
+                let abi = Abi::from_raw(b);
+                Self::ModuleStartup(abi, module)
             }
         }
     }
@@ -530,9 +583,12 @@ impl FuncKey {
     /// looking up the StoreCode (or having access to the Store).
     pub fn is_store_invariant(&self) -> bool {
         match self {
-            Self::DefinedWasmFunction(..) | Self::ArrayToWasmTrampoline(..) => false,
+            Self::DefinedWasmFunction(..)
+            | Self::ArrayToWasmTrampoline(..)
+            | Self::ModuleStartup(..) => false,
             Self::WasmToArrayTrampoline(..)
             | Self::WasmToBuiltinTrampoline(..)
+            | Self::PatchableToBuiltinTrampoline(..)
             | Self::PulleyHostCall(..) => true,
             #[cfg(feature = "component-model")]
             Self::ComponentTrampoline(..)

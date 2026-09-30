@@ -99,8 +99,6 @@ pub struct WasiIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Wasi {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl WasiIndices {
         /// Creates a new copy of `WasiIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -167,8 +165,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::wasi_filesystem::HostWithStore
-                + foo::foo::wall_clock::HostWithStore,
+            D: foo::foo::wasi_filesystem::HostWithStore<T>
+                + foo::foo::wall_clock::HostWithStore<T>,
             for<'a> D::Data<
                 'a,
             >: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host,
@@ -185,7 +183,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod wasi_filesystem {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -247,10 +245,10 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn create_directory_at(&mut self) -> Result<(), Errno>;
@@ -264,16 +262,15 @@ pub mod foo {
                     Host::stat(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap(
                     "create-directory-at",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -292,11 +289,23 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
         #[allow(clippy::all)]
         pub mod wall_clock {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -316,24 +325,35 @@ pub mod foo {
                     1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }

@@ -408,8 +408,8 @@ pub(crate) fn emit(
             Inst::addq_mi(rsp, guard_plus_count).emit(sink, info, state);
         }
 
-        Inst::CallKnown { info: call_info } | Inst::PatchableCallKnown { info: call_info } => {
-            let is_patchable = matches!(inst, Inst::PatchableCallKnown { .. });
+        Inst::CallKnown { info: call_info } => {
+            let start = sink.cur_offset();
             let stack_map = state.take_stack_map();
 
             asm::inst::callq_d::new(0).emit(sink, info, state);
@@ -431,10 +431,6 @@ pub(crate) fn emit(
                     Some(state.frame_layout().sp_to_fp()),
                     try_call.exception_handlers(&state.frame_layout()),
                 );
-            } else if is_patchable {
-                // Patchable call-site of length 5 bytes. The
-                // MachBuffer knows how to NOP out the callsite.
-                sink.add_patchable_call_site(5);
             } else {
                 sink.add_call_site();
             }
@@ -443,19 +439,22 @@ pub(crate) fn emit(
             // callee, to ensure that StackAMode values are always computed from
             // a consistent SP.
             if call_info.callee_pop_size > 0 {
-                assert!(!is_patchable);
                 let rsp = Writable::from_reg(regs::rsp());
                 let callee_pop_size = i32::try_from(call_info.callee_pop_size)
                     .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");
                 Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
-            // Load any stack-carried return values.
-            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
-                state.frame_layout().stackslots_size,
-                |inst| inst.emit(sink, info, state),
-                |_space_needed| None,
-            );
+            if call_info.patchable {
+                sink.add_patchable_call_site(sink.cur_offset() - start);
+            } else {
+                // Load any stack-carried return values.
+                call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, info, state),
+                    |_space_needed| None,
+                );
+            }
 
             // If this is a try-call, jump to the continuation
             // (normal-return) block.
@@ -736,7 +735,7 @@ pub(crate) fn emit(
             // Emit jump table (table of 32-bit offsets).
             sink.bind_label(start_of_jumptable, state.ctrl_plane_mut());
             let jt_off = sink.cur_offset();
-            for &target in targets.iter().chain(std::iter::once(default_target)) {
+            for &target in targets.iter().chain(core::iter::once(default_target)) {
                 let word_off = sink.cur_offset();
                 // off_into_table is an addend here embedded in the label to be later patched at
                 // the end of codegen. The offset is initially relative to this jump table entry;
@@ -1132,7 +1131,7 @@ pub(crate) fn emit(
                         inst.emit(sink, info, state);
                     }
                     OperandSize::Size64 => {
-                        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare,
+                        // An f64 can represent `i32::MIN - 1` exactly with precision to spare,
                         // so there are values less than -2^(N-1) that convert correctly to INT_MIN.
                         let cst = if output_bits < 64 {
                             no_overflow_cc = CC::NBE; // >
@@ -1364,9 +1363,9 @@ pub(crate) fn emit(
                 let inst = Inst::imm(
                     OperandSize::Size64,
                     if *dst_size == OperandSize::Size64 {
-                        u64::max_value()
+                        u64::MAX
                     } else {
-                        u32::max_value() as u64
+                        u64::from(u32::MAX)
                     },
                     dst,
                 );
@@ -1420,9 +1419,16 @@ pub(crate) fn emit(
                 // If we know the distance to the name is within 2GB (e.g., a
                 // module-local function), we can generate a RIP-relative
                 // address, with a relocation.
+                //
+                // Note that this is `X86PCRel4` rather than `X86CallPCRel4`:
+                // the latter is reserved for the displacement of `call`/`jmp`
+                // instructions, which relocation consumers may redirect through
+                // a veneer if the target turns out to be out of range. This `lea`
+                // computes the address of the symbol itself, so no such
+                // redirection is possible.
                 asm::inst::leaq_rm::new(*dst, riprel).emit(sink, info, state);
                 let cur = sink.cur_offset();
-                sink.add_reloc_at_offset(cur - 4, Reloc::X86CallPCRel4, name, *offset - 4);
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86PCRel4, name, *offset - 4);
             } else {
                 // The full address can be encoded in the register, with a
                 // relocation.
@@ -1545,16 +1551,18 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128RmwSeq {
-            op,
-            mem,
-            operand_low,
-            operand_high,
-            temp_low,
-            temp_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128RmwSeq { args } => {
+            let Atomic128RmwSeqArgs {
+                op,
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                temp_low,
+                temp_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let temp_low = *temp_low;
@@ -1565,13 +1573,14 @@ pub(crate) fn emit(
             debug_assert_eq!(temp_high.to_reg(), regs::rcx());
             debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
             debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
-            let mem = mem.finalize(state.frame_layout(), sink).clone();
+            let mem_low = mem_low.finalize(state.frame_layout(), sink).clone();
+            let mem_high = mem_high.finalize(state.frame_layout(), sink).clone();
 
             let again_label = sink.get_label();
 
             // Load the initial value.
-            asm::inst::movq_rm::new(dst_old_low, mem.clone()).emit(sink, info, state);
-            asm::inst::movq_rm::new(dst_old_high, mem.offset(8)).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_low, mem_low.clone()).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_high, mem_high).emit(sink, info, state);
 
             // again:
             sink.bind_label(again_label, state.ctrl_plane_mut());
@@ -1657,7 +1666,7 @@ pub(crate) fn emit(
                 PairedGpr::from(dst_old_high),
                 temp_low.to_reg(),
                 temp_high.to_reg(),
-                mem,
+                mem_low,
             )
             .emit(sink, info, state);
 
@@ -1665,13 +1674,15 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128XchgSeq {
-            mem,
-            operand_low,
-            operand_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128XchgSeq { args } => {
+            let Atomic128XchgSeqArgs {
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let dst_old_low = *dst_old_low;
@@ -1680,13 +1691,14 @@ pub(crate) fn emit(
             debug_assert_eq!(operand_high, regs::rcx());
             debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
             debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
-            let mem = mem.finalize(state.frame_layout(), sink).clone();
+            let mem_low = mem_low.finalize(state.frame_layout(), sink).clone();
+            let mem_high = mem_high.finalize(state.frame_layout(), sink).clone();
 
             let again_label = sink.get_label();
 
             // Load the initial value.
-            asm::inst::movq_rm::new(dst_old_low, mem.clone()).emit(sink, info, state);
-            asm::inst::movq_rm::new(dst_old_high, mem.offset(8)).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_low, mem_low.clone()).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_high, mem_high).emit(sink, info, state);
 
             // again:
             sink.bind_label(again_label, state.ctrl_plane_mut());
@@ -1697,7 +1709,7 @@ pub(crate) fn emit(
                 PairedGpr::from(dst_old_high),
                 operand_low,
                 operand_high,
-                mem,
+                mem_low,
             )
             .emit(sink, info, state);
 
@@ -1909,7 +1921,7 @@ fn emit_return_call_common_sequence<T>(
     }
 }
 
-/// Conveniene trait to have an `emit` method on all `asm::inst::*` variants.
+/// Convenience trait to have an `emit` method on all `asm::inst::*` variants.
 trait ExternalEmit {
     fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState);
 }

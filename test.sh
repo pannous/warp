@@ -11,15 +11,19 @@ unset CARGO_TARGET_DIR
 echo "Compiling tests..."
 # Match RustRover's runner injection exactly
 RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
-cargo --offline test --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
+FEATURES="--all-features"
+cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
 
 echo "Running all tests..."
-cargo --offline test --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=16 2>&1 | tee "$TEMP_FILE"
+cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=16 2>&1 | tee "$TEMP_FILE"
+
+# Strip ANSI color codes so the summary greps work on the raw log
+sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
 
 # Count test results
-TOTAL_PASSED=$(grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
-TOTAL_FAILED=$(grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | wc -l | tr -d ' ')
-TOTAL_IGNORED=$(grep -E "^test .* \.\.\. ignored$" "$TEMP_FILE" | wc -l | tr -d ' ')
+TOTAL_PASSED=$(grep -a -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
+TOTAL_FAILED=$(grep -a -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | wc -l | tr -d ' ')
+TOTAL_IGNORED=$(grep -a -E "^test .* \.\.\. ignored$" "$TEMP_FILE" | wc -l | tr -d ' ')
 TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
 TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 
@@ -29,17 +33,16 @@ TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 	echo "=== Test Results ==="
 	echo ""
 	echo "PASSED:"
-	grep -E "^test .* \.\.\. ok$" "$TEMP_FILE" | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//' | tee $OUTPUT_FILE
+	grep -a -E "^test .* \.\.\. ok$" "$TEMP_FILE" | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//' | sort
 
 	echo ""
 	echo "FAILED:"
-	grep -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | tee $OUTPUT_FILE
+	grep -a -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | sort
 
 	echo ""
 	echo "SUMMARY:"
-	echo "${TOTAL_IGNORED} ignored, "
-	echo "  ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_TESTED} total tested" > "$OUTPUT_FILE"
-}
+	echo "${TOTAL_IGNORED} ignored, ${TOTAL_PASSED} passed, ${TOTAL_FAILED} failed, ${TOTAL_TESTED} total tested"
+} > "$OUTPUT_FILE"
 rm "$TEMP_FILE"
 
 echo ""

@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::anon::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -173,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::anon::HostWithStore,
+            D: foo::foo::anon::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::anon::Host,
             T: 'static,
         {
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod anon {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -236,10 +234,10 @@ pub mod foo {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn option_test(
@@ -253,16 +251,15 @@ pub mod foo {
                     Host::option_test(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/anon")?;
                 inst.func_wrap(
                     "option-test",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -273,6 +270,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/anon")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -282,7 +291,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod anon {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]
@@ -338,6 +347,7 @@ pub mod exports {
                         1 == < Error as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     option_test: wasmtime::component::Func,
                 }
@@ -359,14 +369,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/anon")
                             .ok_or_else(|| {
-                                anyhow::anyhow!("no exported instance named `foo:foo/anon`")
+                                wasmtime::format_err!(
+                                    "no exported instance named `foo:foo/anon`"
+                                )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/anon` does \
                       not have export `{name}`"
                                     )
@@ -401,13 +413,13 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub fn call_option_test<S: wasmtime::AsContextMut>(
+                    pub fn func_option_test(
                         &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<
-                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<Option<wasmtime::component::__internal::String>, Error>,),
                     > {
-                        let callee = unsafe {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (
@@ -417,9 +429,16 @@ pub mod exports {
                                     >,
                                 ),
                             >::new_unchecked(self.option_test)
-                        };
+                        }
+                    }
+                    pub fn call_option_test<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<
+                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    > {
+                        let callee = self.func_option_test();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

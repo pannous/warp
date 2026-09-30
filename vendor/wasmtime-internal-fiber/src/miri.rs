@@ -24,7 +24,7 @@ use std::ops::Range;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 
-pub type Error = io::Error;
+pub use wasmtime_environ::error::Error;
 
 pub struct FiberStack(usize);
 
@@ -34,7 +34,7 @@ impl FiberStack {
     }
 
     pub unsafe fn from_raw_parts(_base: *mut u8, _guard_size: usize, _len: usize) -> Result<Self> {
-        Err(io::ErrorKind::Unsupported.into())
+        Err(io::Error::from(io::ErrorKind::Unsupported).into())
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
@@ -42,7 +42,7 @@ impl FiberStack {
     }
 
     pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
-        Err(io::ErrorKind::Unsupported.into())
+        Err(io::Error::from(io::ErrorKind::Unsupported).into())
     }
 
     pub fn top(&self) -> Option<*mut u8> {
@@ -116,13 +116,17 @@ where
     // Execute this fiber through `Suspend::execute` and once that's done
     // deallocate the `state` that we have.
     let state = Arc::into_raw(state);
-    super::Suspend::<A, B, C>::execute(
+    let mut suspend = super::Suspend::<A, B, C>::execute(
         Suspend {
             state: state.cast(),
         },
         init,
         func.0,
     );
+    match suspend.block_until_notified::<A, B, C>() {
+        State::Exiting => {}
+        _ => unreachable!(),
+    }
     unsafe {
         drop(Arc::from_raw(state));
     }
@@ -150,8 +154,7 @@ impl Fiber {
                     let state = state.clone();
                     let func = IgnoreSendSync(func);
                     move || run(state, func)
-                })
-                .unwrap()
+                })?
         };
 
         // Cast the fiber back into a raw pointer to lose the type parameters
@@ -210,7 +213,7 @@ impl Fiber {
 }
 
 impl Suspend {
-    fn suspend<A, B, C>(&mut self, result: RunResult<A, B, C>) -> State<A, B, C> {
+    fn set_result<A, B, C>(&mut self, result: RunResult<A, B, C>) {
         let state = unsafe { self.state() };
         let mut lock = state.state.lock().unwrap();
 
@@ -219,9 +222,11 @@ impl Suspend {
         assert!(matches!(*lock, State::None));
         *lock = State::SuspendWith(result);
         state.cond.notify_one();
+    }
 
-        // Wait for the resumption to come back, which is returned from this
-        // method.
+    fn block_until_notified<A, B, C>(&mut self) -> State<A, B, C> {
+        let state = unsafe { self.state() };
+        let mut lock = state.state.lock().unwrap();
         lock = state
             .cond
             .wait_while(lock, |s| {
@@ -232,17 +237,18 @@ impl Suspend {
     }
 
     pub(crate) fn switch<A, B, C>(&mut self, result: RunResult<A, B, C>) -> A {
-        match self.suspend(result) {
+        self.set_result(result);
+
+        // Wait for the resumption to come back, which is returned from this
+        // method.
+        match self.block_until_notified::<A, B, C>() {
             State::ResumeWith(RunResult::Resuming(a)) => a,
             _ => unreachable!(),
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        match self.suspend(result) {
-            State::Exiting => {}
-            _ => unreachable!(),
-        }
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        self.set_result(result);
     }
 
     unsafe fn state<A, B, C>(&self) -> &SharedFiberState<A, B, C> {

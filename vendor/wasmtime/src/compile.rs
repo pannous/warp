@@ -26,21 +26,17 @@ use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
-use std::{any::Any, borrow::Cow, collections::BTreeMap, mem, ops::Range};
-
-use call_graph::CallGraph;
-#[cfg(feature = "component-model")]
-use wasmtime_environ::component::Translator;
+use std::{any::Any, borrow::Cow, mem, ops::Range};
 use wasmtime_environ::{
-    Abi, BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
-    CompiledFunctionsTableBuilder, CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos,
-    FinishedObject, FuncKey, FunctionBodyData, InliningCompiler, IntraModuleInlining,
-    ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
-    StaticModuleIndex, Tunables,
+    Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
+    CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
+    FunctionBodyData, Inlining, InliningCompiler, ModuleEnvironment, ModuleTranslation,
+    ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex, Tunables,
+    graphs::{EntityGraph, Graph as _},
 };
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{WasmChecksum, component::Translator};
 
-mod call_graph;
-mod scc;
 mod stratify;
 
 mod code_builder;
@@ -89,10 +85,11 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
     )
     .translate(parser, wasm)
     .context("failed to parse WebAssembly module")?;
+    prepare_translation(engine, compiler, &mut translation, &mut types);
     let functions = mem::take(&mut translation.function_body_inputs);
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
-    let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+    let unlinked_compile_outputs = compile_inputs.compile(engine, &types)?;
     let PreLinkOutput {
         needs_gc_heap,
         compiled_funcs,
@@ -123,10 +120,16 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
         dwarf_package,
     )?;
 
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(std::iter::once(wasm));
+    }
+
     let (info, index) = compilation_artifacts.unwrap_as_module_info();
     let types = types.finish();
     object.serialize_info(&(&info, &index, &types));
     let result = T::finish_object(object, obj_state)?;
+
+    compiler.release_caches();
 
     Ok((result, Some((info, index, types))))
 }
@@ -165,6 +168,15 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         .translate(binary)
         .context("failed to parse WebAssembly module")?;
 
+    for (_, translation) in module_translations.iter_mut() {
+        prepare_translation(
+            engine,
+            compiler,
+            translation,
+            types.module_types_builder_mut(),
+        );
+    }
+
     let compile_inputs = CompileInputs::for_component(
         engine,
         &types,
@@ -174,7 +186,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
             (i, &*translation, functions)
         }),
     );
-    let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
+    let unlinked_compile_outputs = compile_inputs.compile(&engine, types.module_types_builder())?;
 
     let PreLinkOutput {
         needs_gc_heap,
@@ -184,6 +196,16 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     for (_, t) in &mut module_translations {
         t.module.needs_gc_heap |= needs_gc_heap
     }
+
+    // Collect bytecode slices here before moving `module_translations` below.
+    let module_wasms = if tunables.debug_guest {
+        module_translations
+            .values()
+            .map(|t| t.wasm)
+            .collect::<Vec<_>>()
+    } else {
+        vec![]
+    };
 
     let mut object = compiler.object(ObjectKind::Component)?;
     engine.append_compiler_info(&mut object)?;
@@ -196,6 +218,11 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         module_translations,
         None, // TODO: Support dwarf packages for components.
     )?;
+
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(module_wasms);
+    }
+
     let (types, ty) = types.finish(&component.component);
 
     let info = CompiledComponentInfo {
@@ -207,11 +234,34 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         ty,
         types,
         static_modules: compilation_artifacts.modules,
+        checksum: WasmChecksum::from_binary(binary, tunables.recording),
     };
     object.serialize_info(&artifacts);
 
+    compiler.release_caches();
+
     let result = T::finish_object(object, obj_state)?;
     Ok((result, Some(artifacts)))
+}
+
+fn prepare_translation(
+    engine: &Engine,
+    compiler: &dyn Compiler,
+    translation: &mut ModuleTranslation<'_>,
+    types: &mut ModuleTypesBuilder,
+) {
+    // If configured attempt to use static memory initialization
+    // which can either at runtime be implemented as a single memcpy
+    // to initialize memory or otherwise enabling
+    // virtual-memory-tricks such as mmap'ing from a file to get
+    // copy-on-write.
+    let align = compiler.page_size_align();
+    let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
+    translation.finalize_memory_init(engine.tunables(), align, max_always_allowed, types);
+
+    // Attempt to convert table initializer segments to FuncTable
+    // representation where possible, to enable table lazy init.
+    translation.finalize_table_init(engine.tunables(), types);
 }
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput<'a>> + Send + 'a>;
@@ -306,6 +356,7 @@ impl<'a> CompileInputs<'a> {
                         match abi {
                             Abi::Wasm => "wasm-call",
                             Abi::Array => "array-call",
+                            Abi::Patchable => "patchable-call",
                         },
                         intrinsic.name(),
                     );
@@ -334,12 +385,13 @@ impl<'a> CompileInputs<'a> {
                         match abi {
                             Abi::Wasm => "wasm-call",
                             Abi::Array => "array-call",
+                            Abi::Patchable => "patchable-call",
                         },
                         trampoline.symbol_name(),
                     );
                     let function = compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, key, abi, tunables, &symbol)
+                        .compile_component_trampoline(component, types, key, abi, tunables, &symbol)
                         .with_context(|| format!("failed to compile {symbol}"))?;
                     Ok(CompileOutput {
                         key,
@@ -360,12 +412,16 @@ impl<'a> CompileInputs<'a> {
         // resources from the embedder and otherwise won't be explicitly
         // requested through initializers above or such.
         if component.component.num_resources > 0 {
-            if let Some(sig) = types.find_resource_drop_signature() {
+            if types
+                .module_types_builder()
+                .find_resource_drop_signature()
+                .is_some()
+            {
                 ret.push_input(move |compiler| {
                     let key = FuncKey::ResourceDropTrampoline;
                     let symbol = "resource_drop_trampoline".to_string();
                     let function = compiler
-                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func(), key, &symbol)
+                        .compile_trampoline(None, key, types.module_types_builder(), &symbol)
                         .with_context(|| format!("failed to compile `{symbol}`"))?;
                     Ok(CompileOutput {
                         key,
@@ -475,12 +531,32 @@ impl<'a> CompileInputs<'a> {
                             func_index.as_u32()
                         );
                         let function = compiler
-                            .compile_array_to_wasm_trampoline(translation, types, key, &symbol)
+                            .compile_trampoline(Some(translation), key, types, &symbol)
                             .with_context(|| format!("failed to compile: {symbol}"))?;
                         Ok(CompileOutput {
                             key,
                             symbol,
                             function,
+                            start_srcloc: FilePos::default(),
+                            translation: None,
+                            func_body: None,
+                        })
+                    });
+                }
+            }
+
+            if !translation.module.startup.is_none() {
+                for abi in [Abi::Wasm, Abi::Array] {
+                    self.push_input(move |compiler| {
+                        let key = FuncKey::ModuleStartup(abi, module);
+                        let symbol = format!("module_start[{}]::{abi:?}", module.as_u32());
+                        let function = compiler
+                            .compile_trampoline(Some(translation), key, types, &symbol)
+                            .with_context(|| format!("failed to compile: {symbol}"))?;
+                        Ok(CompileOutput {
+                            key,
+                            function,
+                            symbol,
                             start_srcloc: FilePos::default(),
                             translation: None,
                             func_body: None,
@@ -496,7 +572,6 @@ impl<'a> CompileInputs<'a> {
             if !is_new {
                 continue;
             }
-            let trampoline_func_ty = types[trampoline_type_index].unwrap_func();
             self.push_input(move |compiler| {
                 let key = FuncKey::WasmToArrayTrampoline(trampoline_type_index);
                 let symbol = format!(
@@ -504,7 +579,7 @@ impl<'a> CompileInputs<'a> {
                     trampoline_type_index.as_u32()
                 );
                 let function = compiler
-                    .compile_wasm_to_array_trampoline(trampoline_func_ty, key, &symbol)
+                    .compile_trampoline(None, key, types, &symbol)
                     .with_context(|| format!("failed to compile: {symbol}"))?;
                 Ok(CompileOutput {
                     key,
@@ -520,7 +595,11 @@ impl<'a> CompileInputs<'a> {
 
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
-    fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs<'a>> {
+    fn compile(
+        self,
+        engine: &Engine,
+        types: &'a ModuleTypesBuilder,
+    ) -> Result<UnlinkedCompileOutputs<'a>> {
         let compiler = engine.try_compiler()?;
 
         if self.inputs.len() > 0 && cfg!(miri) {
@@ -542,7 +621,7 @@ the use case.
         }
 
         let mut raw_outputs = if let Some(inlining_compiler) = compiler.inlining_compiler() {
-            if engine.tunables().inlining {
+            if engine.tunables().inlining != Inlining::No {
                 self.compile_with_inlining(engine, compiler, inlining_compiler)?
             } else {
                 // Inlining compiler but inlining is disabled: compile each
@@ -566,11 +645,10 @@ the use case.
         if cfg!(debug_assertions) {
             let mut symbols: Vec<_> = raw_outputs.iter().map(|i| &i.symbol).collect();
             symbols.sort();
-            for w in symbols.windows(2) {
+            for [a, b] in symbols.array_windows() {
                 assert_ne!(
-                    w[0], w[1],
-                    "should never have duplicate symbols, but found two functions with the symbol `{}`",
-                    w[0]
+                    a, b,
+                    "should never have duplicate symbols, but found two functions with the symbol `{a}`",
                 );
             }
         }
@@ -579,13 +657,12 @@ the use case.
         // wasmtime-builtin functions are necessary. If so those need to be
         // collected and then those trampolines additionally need to be
         // compiled.
-        compile_required_builtins(engine, &mut raw_outputs)?;
+        compile_required_builtins(engine, types, &mut raw_outputs)?;
 
-        // Bucket the outputs by kind.
-        let mut outputs: BTreeMap<FuncKey, CompileOutput> = BTreeMap::new();
-        for output in raw_outputs {
-            outputs.insert(output.key, output);
-        }
+        // Sort the outputs by their `FuncKey` which enables deterministically
+        // linking this output by function kind.
+        let mut outputs = raw_outputs;
+        outputs.sort_unstable_by_key(|output| output.key);
 
         Ok(UnlinkedCompileOutputs { outputs })
     }
@@ -596,59 +673,10 @@ the use case.
         compiler: &dyn Compiler,
         inlining_compiler: &dyn InliningCompiler,
     ) -> Result<Vec<CompileOutput<'a>>, Error> {
-        /// The index of a function (of any kind: Wasm function, trampoline, or
-        /// etc...) in our list of unlinked outputs.
-        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        struct OutputIndex(u32);
-        wasmtime_environ::entity_impl!(OutputIndex);
-
         // Our list of unlinked outputs.
         let mut outputs = PrimaryMap::<OutputIndex, Option<CompileOutput<'_>>>::from(
             engine.run_maybe_parallel(self.inputs, |f| f(compiler).map(Some))?,
         );
-
-        /// Whether a function (as described by the given `FuncKey`) can
-        /// participate in inlining or not (either as a candidate for being
-        /// inlined into a caller or having a callee inlined into a callsite
-        /// within itself).
-        fn is_inlining_function(key: FuncKey) -> bool {
-            match key {
-                // Wasm functions can both be inlined into other functions and
-                // have other functions inlined into them.
-                FuncKey::DefinedWasmFunction(..) => true,
-
-                // Intrinsics can be inlined into other functions.
-                #[cfg(feature = "component-model")]
-                FuncKey::UnsafeIntrinsic(..) => true,
-
-                // Trampolines cannot participate in inlining since our
-                // unwinding and exceptions infrastructure relies on them being
-                // in their own call frames.
-                FuncKey::ArrayToWasmTrampoline(..)
-                | FuncKey::WasmToArrayTrampoline(..)
-                | FuncKey::WasmToBuiltinTrampoline(..) => false,
-                #[cfg(feature = "component-model")]
-                FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
-
-                FuncKey::PulleyHostCall(_) => {
-                    unreachable!("we don't compile artifacts for Pulley host calls")
-                }
-            }
-        }
-
-        /// Get just the output indices of the functions that can participate in
-        /// inlining from our unlinked outputs.
-        fn inlining_functions<'a>(
-            outputs: &'a PrimaryMap<OutputIndex, Option<CompileOutput<'_>>>,
-        ) -> impl Iterator<Item = OutputIndex> + 'a {
-            outputs.iter().filter_map(|(index, output)| {
-                if is_inlining_function(output.as_ref().unwrap().key) {
-                    Some(index)
-                } else {
-                    None
-                }
-            })
-        }
 
         // A map from a `FuncKey` to its index in our unlinked outputs.
         //
@@ -669,13 +697,11 @@ the use case.
         // We only inline Wasm functions, not trampolines, because we rely on
         // trampolines being in their own stack frame when we save the entry and
         // exit SP, FP, and PC for backtraces in trampolines.
-        let call_graph = CallGraph::<OutputIndex>::new(inlining_functions(&outputs), {
+        let call_graph = EntityGraph::<OutputIndex>::new(inlining_functions(&outputs), {
             let mut func_keys = IndexSet::default();
             let outputs = &outputs;
             let key_to_output = &key_to_output;
             move |output_index, calls| {
-                debug_assert!(calls.is_empty());
-
                 let output = outputs[output_index].as_ref().unwrap();
                 debug_assert!(is_inlining_function(output.key));
 
@@ -685,18 +711,20 @@ the use case.
 
                 // Translate each of those to keys to output indices, which is
                 // what we actually need.
+                debug_assert!(calls.is_empty());
                 calls.extend(
                     func_keys
                         .iter()
                         .copied()
-                        .filter_map(|key| key_to_output.get(&key)),
+                        .filter_map(|key| key_to_output.get(&key).copied()),
                 );
 
                 log::trace!(
                     "call graph edges for {output_index:?} = {:?}: {calls:?}",
                     output.key
                 );
-                Ok(())
+
+                crate::error::Ok(())
             }
         })?;
 
@@ -705,8 +733,10 @@ the use case.
         // (because they either do not call each other or are part of a
         // mutual-recursion cycle; either way we won't inline members of the
         // same layer into each other).
-        let strata =
-            stratify::Strata::<OutputIndex>::new(inlining_functions(&outputs), &call_graph);
+        let strata = stratify::Strata::<OutputIndex>::new(&call_graph.filter_nodes(|f| {
+            let key = outputs[*f].as_ref().unwrap().key;
+            is_inlining_function(key)
+        }));
         let mut layer_outputs = vec![];
         for layer in strata.layers() {
             // Temporarily take this layer's outputs out of our unlinked outputs
@@ -832,7 +862,7 @@ the use case.
         );
 
         debug_assert!(
-            tunables.inlining,
+            tunables.inlining != Inlining::No,
             "shouldn't even call this method if we aren't configured for inlining"
         );
         debug_assert_ne!(caller_key, callee_key, "we never inline recursion");
@@ -870,29 +900,30 @@ the use case.
             (
                 FuncKey::DefinedWasmFunction(caller_module, _),
                 FuncKey::DefinedWasmFunction(callee_module, _),
-            ) => {
-                if caller_module == callee_module {
-                    match tunables.inlining_intra_module {
-                        IntraModuleInlining::Yes => {}
+            ) => match tunables.inlining {
+                Inlining::Yes => {}
 
-                        IntraModuleInlining::WhenUsingGc
-                            if caller_needs_gc_heap || callee_needs_gc_heap => {}
-
-                        IntraModuleInlining::WhenUsingGc => {
-                            log::trace!(
-                                "  --> not inlining: intra-module call that does not use GC"
-                            );
-                            return false;
-                        }
-
-                        IntraModuleInlining::No => {
-                            log::trace!("  --> not inlining: intra-module call");
-                            return false;
-                        }
+                Inlining::InterModuleAndIntraGc => {
+                    if caller_module == callee_module && !caller_needs_gc_heap {
+                        log::trace!("  --> not inlining: intra-module call where GC is not used");
+                        return false;
                     }
                 }
-            }
 
+                Inlining::InterModule => {
+                    if caller_module == callee_module {
+                        log::trace!("  --> not inlining: only inter-module calls inlined");
+                        return false;
+                    }
+                }
+
+                Inlining::Intrinsics => {
+                    log::trace!("  --> not inlining: only inlining intrinsics");
+                    return false;
+                }
+
+                Inlining::No => unreachable!(),
+            },
             _ => {}
         }
 
@@ -912,17 +943,77 @@ the use case.
     }
 }
 
-fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {
+/// The index of a function (of any kind: Wasm function, trampoline, or
+/// etc...) in our list of unlinked outputs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct OutputIndex(u32);
+wasmtime_environ::entity_impl!(OutputIndex);
+
+/// Whether a function (as described by the given `FuncKey`) can
+/// participate in inlining or not (either as a candidate for being
+/// inlined into a caller or having a callee inlined into a callsite
+/// within itself).
+fn is_inlining_function(key: FuncKey) -> bool {
+    match key {
+        // Wasm functions can both be inlined into other functions and
+        // have other functions inlined into them.
+        FuncKey::DefinedWasmFunction(..) => true,
+
+        // Intrinsics can be inlined into other functions.
+        FuncKey::UnsafeIntrinsic(..) => true,
+
+        // Trampolines cannot participate in inlining since our
+        // unwinding and exceptions infrastructure relies on them being
+        // in their own call frames.
+        FuncKey::ArrayToWasmTrampoline(..)
+        | FuncKey::WasmToArrayTrampoline(..)
+        | FuncKey::WasmToBuiltinTrampoline(..)
+        | FuncKey::PatchableToBuiltinTrampoline(..)
+        | FuncKey::ModuleStartup(..) => false,
+        FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
+
+        FuncKey::PulleyHostCall(_) => {
+            unreachable!("we don't compile artifacts for Pulley host calls")
+        }
+    }
+}
+
+/// Get just the output indices of the functions that can participate in
+/// inlining from our unlinked outputs.
+fn inlining_functions<'a>(
+    outputs: &'a PrimaryMap<OutputIndex, Option<CompileOutput<'_>>>,
+) -> impl Iterator<Item = OutputIndex> + 'a {
+    outputs.iter().filter_map(|(index, output)| {
+        if is_inlining_function(output.as_ref().unwrap().key) {
+            Some(index)
+        } else {
+            None
+        }
+    })
+}
+
+fn compile_required_builtins<'a>(
+    engine: &Engine,
+    types: &'a ModuleTypesBuilder,
+    raw_outputs: &mut Vec<CompileOutput<'a>>,
+) -> Result<()> {
     let compiler = engine.try_compiler()?;
     let mut builtins = HashSet::new();
     let mut new_inputs: Vec<CompileInput<'_>> = Vec::new();
 
-    let compile_builtin = |builtin: BuiltinFunctionIndex| {
+    let compile_builtin = |key: FuncKey| {
         Box::new(move |compiler: &dyn Compiler| {
-            let key = FuncKey::WasmToBuiltinTrampoline(builtin);
-            let symbol = format!("wasmtime_builtin_{}", builtin.name());
+            let symbol = match key {
+                FuncKey::WasmToBuiltinTrampoline(builtin) => {
+                    format!("wasmtime_builtin_{}", builtin.name())
+                }
+                FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                    format!("wasmtime_patchable_builtin_{}", builtin.name())
+                }
+                _ => unreachable!(),
+            };
             let mut function = compiler
-                .compile_wasm_to_builtin(key, &symbol)
+                .compile_trampoline(None, key, types, &symbol)
                 .with_context(|| format!("failed to compile `{symbol}`"))?;
             if let Some(compiler) = compiler.inlining_compiler() {
                 compiler.finish_compiling(&mut function, None, &symbol)?;
@@ -940,10 +1031,14 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
 
     for output in raw_outputs.iter() {
         for reloc in compiler.compiled_function_relocation_targets(&*output.function.code) {
-            if let FuncKey::WasmToBuiltinTrampoline(builtin) = reloc {
-                if builtins.insert(builtin) {
-                    new_inputs.push(compile_builtin(builtin));
+            match reloc {
+                FuncKey::WasmToBuiltinTrampoline(builtin)
+                | FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                    if builtins.insert(builtin) {
+                        new_inputs.push(compile_builtin(reloc));
+                    }
                 }
+                _ => {}
             }
         }
     }
@@ -953,8 +1048,8 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
 
 #[derive(Default)]
 struct UnlinkedCompileOutputs<'a> {
-    // A map from kind to `CompileOutput`.
-    outputs: BTreeMap<FuncKey, CompileOutput<'a>>,
+    // The compile outputs, sorted by `FuncKey`.
+    outputs: Vec<CompileOutput<'a>>,
 }
 
 impl UnlinkedCompileOutputs<'_> {
@@ -973,14 +1068,16 @@ impl UnlinkedCompileOutputs<'_> {
         // trampolines, are not interspersed between hot Wasm functions, and (b)
         // Wasm functions that are likely to call each other (i.e. are in the
         // same module together) are grouped together.
-        let mut compiled_funcs = vec![];
+        let num_funcs = self.outputs.len();
+        let mut compiled_funcs = Vec::with_capacity(num_funcs);
 
-        let mut indices = FunctionIndices::default();
+        let mut indices = FunctionIndices {
+            start_srclocs: HashMap::with_capacity(num_funcs),
+            indices: HashMap::with_capacity(num_funcs),
+        };
         let mut needs_gc_heap = false;
 
-        // NB: Iteration over this `BTreeMap` ensures that we uphold
-        // `compiled_func`'s sorted property.
-        for output in self.outputs.into_values() {
+        for output in self.outputs {
             needs_gc_heap |= output.function.needs_gc_heap;
 
             let index = compiled_funcs.len();
@@ -1022,7 +1119,7 @@ struct FunctionIndices {
     start_srclocs: HashMap<FuncKey, FilePos>,
 
     // The index of each compiled function in `compiled_funcs`.
-    indices: BTreeMap<FuncKey, usize>,
+    indices: HashMap<FuncKey, usize>,
 }
 
 impl FunctionIndices {
@@ -1070,39 +1167,19 @@ impl FunctionIndices {
         }
 
         let mut table_builder = CompiledFunctionsTableBuilder::new();
-        for (key, compiled_func_index) in &self.indices {
-            let (_, func_loc) = symbol_ids_and_locs[*compiled_func_index];
+        for ((_, key, _), (_, func_loc)) in compiled_funcs.iter().zip(&symbol_ids_and_locs) {
             let src_loc = self
                 .start_srclocs
                 .get(key)
                 .copied()
                 .unwrap_or_else(FilePos::none);
-            table_builder.push_func(*key, func_loc, src_loc);
+            table_builder.push_func(*key, *func_loc, src_loc);
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let modules = translations
             .into_iter()
-            .map(|(_, mut translation)| {
-                // If configured attempt to use static memory initialization
-                // which can either at runtime be implemented as a single memcpy
-                // to initialize memory or otherwise enabling
-                // virtual-memory-tricks such as mmap'ing from a file to get
-                // copy-on-write.
-                if engine.tunables().memory_init_cow {
-                    let align = compiler.page_size_align();
-                    let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
-                    translation.try_static_init(align, max_always_allowed);
-                }
-
-                // Attempt to convert table initializer segments to FuncTable
-                // representation where possible, to enable table lazy init.
-                if engine.tunables().table_lazy_init {
-                    translation.try_func_table_init();
-                }
-
-                obj.append(translation)
-            })
+            .map(|(_, translation)| obj.append(translation))
             .collect::<Result<PrimaryMap<_, _>>>()?;
 
         let artifacts = Artifacts {

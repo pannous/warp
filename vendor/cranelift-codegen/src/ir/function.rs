@@ -9,8 +9,8 @@ use crate::ir::DebugTags;
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, MemoryType, MemoryTypeData, SigRef, Signature, SourceLocs, StackSlot,
-    StackSlotData, StackSlots, Type, pcc::Fact,
+    JumpTableData, Layout, ReplaceBuilder, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
+    StackSlots, Type,
 };
 use crate::isa::CallConv;
 use crate::write::{write_function, write_function_spec};
@@ -173,12 +173,6 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
-    /// Global value proof-carrying-code facts.
-    pub global_value_facts: SecondaryMap<ir::GlobalValue, Option<Fact>>,
-
-    /// Memory types for proof-carrying code.
-    pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
-
     /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
 
@@ -221,8 +215,6 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
-        self.global_value_facts.clear();
-        self.memory_types.clear();
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
@@ -230,19 +222,27 @@ impl FunctionStencil {
         self.stack_limit = None;
     }
 
+    /// Create a `ReplaceBuilder` that will replace `inst` with a new
+    /// instruction in place.
+    ///
+    /// `inst` must be present in the function's layout.
+    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder<'_> {
+        ReplaceBuilder::new(&mut self.dfg, &mut self.layout, inst)
+    }
+
     /// Creates a jump table in the function, to be used by `br_table` instructions.
     pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
         self.dfg.jump_tables.push(data)
     }
 
-    /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store`
-    /// and `stack_addr` instructions.
+    /// Creates a sized stack slot in the function, to be used by the `stack_addr`
+    /// instruction.
     pub fn create_sized_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         self.sized_stack_slots.push(data)
     }
 
-    /// Creates a dynamic stack slot in the function, to be used by `dynamic_stack_load`,
-    /// `dynamic_stack_store` and `dynamic_stack_addr` instructions.
+    /// Creates a dynamic stack slot in the function, to be used by the
+    /// `dynamic_stack_addr` instruction.
     pub fn create_dynamic_stack_slot(&mut self, data: DynamicStackSlotData) -> DynamicStackSlot {
         self.dynamic_stack_slots.push(data)
     }
@@ -255,11 +255,6 @@ impl FunctionStencil {
     /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.global_values.push(data)
-    }
-
-    /// Declares a memory type for use by the function.
-    pub fn create_memory_type(&mut self, data: MemoryTypeData) -> MemoryType {
-        self.memory_types.push(data)
     }
 
     /// Find the global dyn_scale value associated with given DynamicType.
@@ -420,8 +415,6 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
-                global_value_facts: SecondaryMap::new(),
-                memory_types: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),
@@ -479,6 +472,20 @@ impl Function {
     /// Declare an external function import.
     pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
         self.stencil.dfg.ext_funcs.push(data)
+    }
+
+    /// Is the given block marked `cold` or otherwise effectively `cold` in
+    /// practice?
+    pub fn is_effectively_cold(&self, block: Block) -> bool {
+        if self.layout.is_cold(block) {
+            return true;
+        }
+
+        // Blocks that unconditionally trap are effectively
+        // also cold.
+        self.layout
+            .last_inst(block)
+            .is_some_and(|inst| self.dfg.insts[inst].opcode() == ir::Opcode::Trap)
     }
 }
 

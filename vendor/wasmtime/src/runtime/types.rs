@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
@@ -7,10 +8,10 @@ use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::WasmExnType;
 use wasmtime_environ::{
-    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
-    WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
-    WasmSubType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes,
+    PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
+    WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
+    WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
 };
 
 pub(crate) mod matching;
@@ -837,6 +838,60 @@ pub enum HeapType {
     NoExn,
 }
 
+/// A top heap type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum HeapTopType {
+    /// The common supertype of all external references.
+    Extern,
+    /// The common supertype of all internal references.
+    Any,
+    /// The common supertype of all function references.
+    Func,
+    /// The common supertype of all exception references.
+    Exn,
+    /// The common supertype of all continuation references.
+    Cont,
+}
+
+/// A bottom heap type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum HeapBottomType {
+    /// The common subtype of all external references.
+    NoExtern,
+    /// The common subtype of all internal references.
+    None,
+    /// The common subtype of all function references.
+    NoFunc,
+    /// The common subtype of all exception references.
+    NoExn,
+    /// The common subtype of all continuation references.
+    NoCont,
+}
+
+impl From<HeapTopType> for HeapType {
+    fn from(value: HeapTopType) -> Self {
+        match value {
+            HeapTopType::Extern => Self::Extern,
+            HeapTopType::Any => Self::Any,
+            HeapTopType::Func => Self::Func,
+            HeapTopType::Exn => Self::Exn,
+            HeapTopType::Cont => Self::Cont,
+        }
+    }
+}
+
+impl From<HeapBottomType> for HeapType {
+    fn from(value: HeapBottomType) -> Self {
+        match value {
+            HeapBottomType::NoExtern => Self::NoExtern,
+            HeapBottomType::None => Self::None,
+            HeapBottomType::NoFunc => Self::NoFunc,
+            HeapBottomType::NoExn => Self::NoExn,
+            HeapBottomType::NoCont => Self::NoCont,
+        }
+    }
+}
+
 impl Display for HeapType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1067,14 +1122,14 @@ impl HeapType {
 
     /// Get the top type of this heap type's type hierarchy.
     ///
-    /// The returned heap type is a supertype of all types in this heap type's
-    /// type hierarchy.
+    /// The returned type represents a supertype of all types in this heap
+    /// type's type hierarchy.
     #[inline]
-    pub fn top(&self) -> HeapType {
+    pub fn top(&self) -> HeapTopType {
         match self {
-            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapTopType::Func,
 
-            HeapType::Extern | HeapType::NoExtern => HeapType::Extern,
+            HeapType::Extern | HeapType::NoExtern => HeapTopType::Extern,
 
             HeapType::Any
             | HeapType::Eq
@@ -1083,11 +1138,11 @@ impl HeapType {
             | HeapType::ConcreteArray(_)
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
-            | HeapType::None => HeapType::Any,
+            | HeapType::None => HeapTopType::Any,
 
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::Cont,
+            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapTopType::Cont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::Exn,
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapTopType::Exn,
         }
     }
 
@@ -1104,14 +1159,14 @@ impl HeapType {
 
     /// Get the bottom type of this heap type's type hierarchy.
     ///
-    /// The returned heap type is a subtype of all types in this heap type's
+    /// The returned type represents a subtype of all types in this heap type's
     /// type hierarchy.
     #[inline]
-    pub fn bottom(&self) -> HeapType {
+    pub fn bottom(&self) -> HeapBottomType {
         match self {
-            HeapType::Extern | HeapType::NoExtern => HeapType::NoExtern,
+            HeapType::Extern | HeapType::NoExtern => HeapBottomType::NoExtern,
 
-            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::NoFunc,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapBottomType::NoFunc,
 
             HeapType::Any
             | HeapType::Eq
@@ -1120,11 +1175,11 @@ impl HeapType {
             | HeapType::ConcreteArray(_)
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
-            | HeapType::None => HeapType::None,
+            | HeapType::None => HeapBottomType::None,
 
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::NoCont,
+            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapBottomType::NoCont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::NoExn,
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapBottomType::NoExn,
         }
     }
 
@@ -1233,7 +1288,7 @@ impl HeapType {
             (HeapType::Any, _) => false,
 
             (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
-            (HeapType::NoExn, _) => true,
+            (HeapType::NoExn, _) => false,
 
             (HeapType::ConcreteExn(_), HeapType::Exn) => true,
             (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
@@ -1401,10 +1456,8 @@ impl HeapType {
     #[inline]
     pub(crate) fn is_vmgcref_type(&self) -> bool {
         match self.top() {
-            Self::Any | Self::Extern | Self::Exn => true,
-            Self::Func => false,
-            Self::Cont => false,
-            ty => unreachable!("not a top type: {ty:?}"),
+            HeapTopType::Any | HeapTopType::Extern | HeapTopType::Exn => true,
+            HeapTopType::Func | HeapTopType::Cont => false,
         }
     }
 
@@ -1507,8 +1560,9 @@ impl ExternType {
                         engine,
                         subty.is_final,
                         subty.supertype,
-                        subty.unwrap_func().clone(),
+                        subty.unwrap_func().clone_panic_on_oom(),
                     )
+                    .panic_on_oom()
                     .into()
                 }
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
@@ -1565,7 +1619,7 @@ impl From<TagType> for ExternType {
 ///
 /// This is either a packed 8- or -16 bit integer, or else it is some unpacked
 /// Wasm value type.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum StorageType {
     /// `i8`, an 8-bit integer.
     I8,
@@ -1708,24 +1762,6 @@ impl StorageType {
             Self::I8 => WasmStorageType::I8,
             Self::I16 => WasmStorageType::I16,
             Self::ValType(v) => WasmStorageType::Val(v.to_wasm_type()),
-        }
-    }
-
-    /// The byte size of this type, if it has a defined size in the spec.
-    ///
-    /// See
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-fieldtype
-    /// and
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-valtype
-    #[cfg(feature = "gc")]
-    pub(crate) fn data_byte_size(&self) -> Option<u32> {
-        match self {
-            StorageType::I8 => Some(1),
-            StorageType::I16 => Some(2),
-            StorageType::ValType(ValType::I32 | ValType::F32) => Some(4),
-            StorageType::ValType(ValType::I64 | ValType::F64) => Some(8),
-            StorageType::ValType(ValType::V128) => Some(16),
-            StorageType::ValType(ValType::Ref(_)) => None,
         }
     }
 }
@@ -1923,8 +1959,8 @@ impl StructType {
         // from being reclaimed while constructing this struct type.
         let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
 
-        let fields = fields
-            .map(|ty: FieldType| {
+        let fields: Box<[WasmFieldType]> = fields
+            .map(|ty: FieldType| -> Result<_, Error> {
                 assert!(ty.comes_from_same_engine(engine));
 
                 if supertype.is_some() {
@@ -1937,9 +1973,9 @@ impl StructType {
                     }
                 }
 
-                ty.to_wasm_field_type()
+                Ok(ty.to_wasm_field_type())
             })
-            .collect();
+            .try_collect()?;
 
         if let Some(supertype) = supertype {
             ensure!(
@@ -2091,7 +2127,7 @@ impl StructType {
                     inner: WasmCompositeInnerType::Struct(ty),
                 },
             },
-        );
+        )?;
         Ok(Self {
             registered_type: ty,
         })
@@ -2204,7 +2240,7 @@ impl ArrayType {
             finality.is_final(),
             supertype.map(|ty| ty.type_index().into()),
             wasm_ty,
-        ))
+        )?)
     }
 
     /// Get the engine that this array type is associated with.
@@ -2321,7 +2357,7 @@ impl ArrayType {
         is_final: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmArrayType,
-    ) -> ArrayType {
+    ) -> Result<ArrayType> {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
@@ -2332,10 +2368,10 @@ impl ArrayType {
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
-        );
-        Self {
+        )?;
+        Ok(Self {
             registered_type: ty,
-        }
+        })
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
@@ -2409,6 +2445,27 @@ impl FuncType {
             .expect("cannot fail without a supertype")
     }
 
+    /// Like [`FuncType::new`] but returns an
+    /// [`OutOfMemory`][crate::error::OutOfMemory] error on allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    pub fn try_new(
+        engine: &Engine,
+        params: impl IntoIterator<Item = ValType>,
+        results: impl IntoIterator<Item = ValType>,
+    ) -> Result<FuncType, OutOfMemory> {
+        Self::with_finality_and_supertype(engine, Finality::Final, None, params, results).map_err(
+            |e| {
+                e.downcast::<OutOfMemory>()
+                    .expect("cannot fail without a supertype, other than OOM")
+            },
+        )
+    }
+
     /// Create a new function type with the given finality, supertype, parameter
     /// types, and result types.
     ///
@@ -2429,52 +2486,52 @@ impl FuncType {
         let params = params.into_iter();
         let results = results.into_iter();
 
-        let mut wasmtime_params = Vec::with_capacity({
+        let mut wasmtime_params = TryVec::with_capacity({
             let size_hint = params.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Only reserve space if we have a supertype, as that is the only time
             // that this vec is used.
             supertype.is_some() as usize * cap
-        });
+        })?;
 
-        let mut wasmtime_results = Vec::with_capacity({
+        let mut wasmtime_results = TryVec::with_capacity({
             let size_hint = results.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Same as above.
             supertype.is_some() as usize * cap
-        });
+        })?;
 
         // Keep any of our parameters' and results' `RegisteredType`s alive
         // across `Self::from_wasm_func_type`. If one of our given `ValType`s is
         // the only thing keeping a type in the registry, we don't want to
         // unregister it when we convert the `ValType` into a `WasmValType` just
         // before we register our new `WasmFuncType` that will reference it.
-        let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
+        let mut registrations = TryVec::new();
 
-        let mut to_wasm_type = |ty: ValType, vec: &mut Vec<_>| {
-            assert!(ty.comes_from_same_engine(engine));
+        let mut to_wasm_type =
+            |ty: ValType, vec: &mut TryVec<_>| -> Result<WasmValType, OutOfMemory> {
+                assert!(ty.comes_from_same_engine(engine));
 
-            if supertype.is_some() {
-                vec.push(ty.clone());
-            }
-
-            if let Some(r) = ty.as_ref() {
-                if let Some(r) = r.heap_type().as_registered_type() {
-                    registrations.push(r.clone());
+                if supertype.is_some() {
+                    vec.push(ty.clone())?;
                 }
-            }
 
-            ty.to_wasm_type()
-        };
+                if let Some(r) = ty.as_ref() {
+                    if let Some(r) = r.heap_type().as_registered_type() {
+                        registrations.push(r.clone())?;
+                    }
+                }
 
-        let wasm_func_ty = WasmFuncType::new(
-            params
-                .map(|p| to_wasm_type(p, &mut wasmtime_params))
-                .collect(),
-            results
-                .map(|r| to_wasm_type(r, &mut wasmtime_results))
-                .collect(),
-        );
+                Ok(ty.to_wasm_type())
+            };
+
+        let params: Box<[_]> = params
+            .map(|p| to_wasm_type(p, &mut wasmtime_params))
+            .try_collect()?;
+        let results: Box<[_]> = results
+            .map(|p| to_wasm_type(p, &mut wasmtime_results))
+            .try_collect()?;
+        let wasm_func_ty = WasmFuncType::new(params, results)?;
 
         if let Some(supertype) = supertype {
             assert!(supertype.comes_from_same_engine(engine));
@@ -2519,7 +2576,7 @@ impl FuncType {
             finality.is_final(),
             supertype.map(|ty| ty.type_index().into()),
             wasm_func_ty,
-        ))
+        )?)
     }
 
     /// Get the engine that this function type is associated with.
@@ -2572,7 +2629,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
@@ -2583,7 +2640,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .iter()
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
@@ -2673,7 +2730,7 @@ impl FuncType {
         is_final: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmFuncType,
-    ) -> FuncType {
+    ) -> Result<FuncType, OutOfMemory> {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
@@ -2684,10 +2741,10 @@ impl FuncType {
                     inner: WasmCompositeInnerType::Func(ty),
                 },
             },
-        );
-        Self {
+        )?;
+        Ok(Self {
             registered_type: ty,
-        }
+        })
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
@@ -2701,17 +2758,19 @@ impl FuncType {
     }
     /// Construct a func which returns results of default value, if each result type has a default value.
     pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Func> {
-        let dummy_results = self
-            .results()
-            .map(|ty| ty.default_value())
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| anyhow!("function results do not have a default value"))?;
-        Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
+        let mut dummy_results = TryVec::new();
+        for ty in self.results() {
+            let val = ty
+                .default_value()
+                .ok_or_else(|| format_err!("function results do not have a default value"))?;
+            dummy_results.push(val)?;
+        }
+        Func::try_new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
             }
             Ok(())
-        }))
+        })
     }
 }
 
@@ -2800,13 +2859,13 @@ impl ExnType {
     /// signature implies a tag type, and when instantiated at
     /// runtime, it must be associated with a tag of that type.
     pub fn new(engine: &Engine, fields: impl IntoIterator<Item = ValType>) -> Result<ExnType> {
-        let fields = fields.into_iter().collect::<Vec<_>>();
+        let fields: TryVec<_> = fields.into_iter().try_collect()?;
 
         // First, construct/intern a FuncType: we need this to exist
         // so we can hand out a TagType, and it also roots any nested registrations.
-        let func_ty = FuncType::new(engine, fields.clone(), []);
+        let func_ty = FuncType::try_new(engine, fields.iter().cloned(), [])?;
 
-        Ok(Self::_new(engine, fields, func_ty))
+        Self::_new(engine, fields, func_ty)
     }
 
     /// Create a new `ExnType` from an existing `TagType`.
@@ -2824,28 +2883,27 @@ impl ExnType {
             "Cannot create an exception type from a tag type with results in the signature"
         );
 
-        Ok(Self::_new(
-            tag.ty.engine(),
-            func_ty.params(),
-            func_ty.clone(),
-        ))
+        Self::_new(tag.ty.engine(), func_ty.params(), func_ty.clone())
     }
 
     fn _new(
         engine: &Engine,
         fields: impl IntoIterator<Item = ValType>,
         func_ty: FuncType,
-    ) -> ExnType {
-        let fields = fields
-            .into_iter()
-            .map(|ty| {
-                assert!(ty.comes_from_same_engine(engine));
-                WasmFieldType {
-                    element_type: WasmStorageType::Val(ty.to_wasm_type()),
-                    mutable: false,
-                }
-            })
-            .collect();
+    ) -> Result<ExnType> {
+        ensure!(
+            engine.gc_runtime().is_some(),
+            "cannot define `ExnType`s without a GC runtime enabled"
+        );
+
+        let mut wasm_fields = TryVec::new();
+        for ty in fields.into_iter() {
+            assert!(ty.comes_from_same_engine(engine));
+            wasm_fields.push(WasmFieldType {
+                element_type: WasmStorageType::Val(ty.to_wasm_type()),
+                mutable: false,
+            })?;
+        }
 
         let ty = RegisteredType::new(
             engine,
@@ -2856,16 +2914,16 @@ impl ExnType {
                     shared: false,
                     inner: WasmCompositeInnerType::Exn(WasmExnType {
                         func_ty: EngineOrModuleTypeIndex::Engine(func_ty.type_index()),
-                        fields,
+                        fields: wasm_fields.into_boxed_slice()?,
                     }),
                 },
             },
-        );
+        )?;
 
-        Self {
+        Ok(ExnType {
             func_ty,
             registered_type: ty,
-        }
+        })
     }
 
     /// Get the tag type that this exception type is associated with.
@@ -3000,7 +3058,7 @@ impl GlobalType {
         let val = self
             .content()
             .default_value()
-            .ok_or_else(|| anyhow!("global type has no default value"))?;
+            .ok_or_else(|| format_err!("global type has no default value"))?;
         RuntimeGlobal::new(store, self.clone(), val)
     }
 

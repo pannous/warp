@@ -10,7 +10,7 @@
 //! and used without post-processing; this enables efficient
 //! module-loading in runtimes such as Wasmtime.
 
-use object::{Bytes, LittleEndian, U32Bytes};
+use object::{Bytes, LittleEndian, U32};
 
 #[cfg(feature = "cranelift")]
 use alloc::vec;
@@ -19,6 +19,7 @@ use alloc::vec::Vec;
 use cranelift_codegen::{
     ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, binemit::CodeOffset,
 };
+use wasmtime_environ::prelude::*;
 
 /// Collector struct for exception handlers per call site.
 ///
@@ -107,12 +108,12 @@ use cranelift_codegen::{
 #[cfg(feature = "cranelift")]
 #[derive(Clone, Debug, Default)]
 pub struct ExceptionTableBuilder {
-    pub callsites: Vec<U32Bytes<LittleEndian>>,
-    pub frame_offsets: Vec<U32Bytes<LittleEndian>>,
-    pub ranges: Vec<U32Bytes<LittleEndian>>,
-    pub tags: Vec<U32Bytes<LittleEndian>>,
-    pub contexts: Vec<U32Bytes<LittleEndian>>,
-    pub handlers: Vec<U32Bytes<LittleEndian>>,
+    pub callsites: Vec<U32<LittleEndian>>,
+    pub frame_offsets: Vec<U32<LittleEndian>>,
+    pub ranges: Vec<U32<LittleEndian>>,
+    pub tags: Vec<U32<LittleEndian>>,
+    pub contexts: Vec<U32<LittleEndian>>,
+    pub handlers: Vec<U32<LittleEndian>>,
     last_start_offset: CodeOffset,
 }
 
@@ -127,7 +128,7 @@ impl ExceptionTableBuilder {
         &mut self,
         start_offset: CodeOffset,
         call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         // Ensure that we see functions in offset order.
         assert!(start_offset >= self.last_start_offset);
         self.last_start_offset = start_offset;
@@ -144,17 +145,17 @@ impl ExceptionTableBuilder {
             for handler in call_site.exception_handlers {
                 match handler {
                     FinalizedMachExceptionHandler::Tag(tag, offset) => {
-                        self.tags.push(U32Bytes::new(LittleEndian, tag.as_u32()));
-                        self.contexts.push(U32Bytes::new(LittleEndian, context));
-                        self.handlers.push(U32Bytes::new(
+                        self.tags.push(U32::new(LittleEndian, tag.as_u32()));
+                        self.contexts.push(U32::new(LittleEndian, context));
+                        self.handlers.push(U32::new(
                             LittleEndian,
                             offset.checked_add(start_offset).unwrap(),
                         ));
                     }
                     FinalizedMachExceptionHandler::Default(offset) => {
-                        self.tags.push(U32Bytes::new(LittleEndian, u32::MAX));
-                        self.contexts.push(U32Bytes::new(LittleEndian, context));
-                        self.handlers.push(U32Bytes::new(
+                        self.tags.push(U32::new(LittleEndian, u32::MAX));
+                        self.contexts.push(U32::new(LittleEndian, context));
+                        self.handlers.push(U32::new(
                             LittleEndian,
                             offset.checked_add(start_offset).unwrap(),
                         ));
@@ -175,12 +176,12 @@ impl ExceptionTableBuilder {
 
             // Omit empty callsites for compactness.
             if end_idx > start_idx {
-                self.ranges.push(U32Bytes::new(LittleEndian, end_idx));
-                self.frame_offsets.push(U32Bytes::new(
+                self.ranges.push(U32::new(LittleEndian, end_idx));
+                self.frame_offsets.push(U32::new(
                     LittleEndian,
                     call_site.frame_offset.unwrap_or(u32::MAX),
                 ));
-                self.callsites.push(U32Bytes::new(LittleEndian, ret_addr));
+                self.callsites.push(U32::new(LittleEndian, ret_addr));
             }
         }
 
@@ -223,12 +224,12 @@ impl ExceptionTableBuilder {
 /// [`ExceptionTableBuilder::serialize`].
 #[derive(Clone, Debug)]
 pub struct ExceptionTable<'a> {
-    callsites: &'a [U32Bytes<LittleEndian>],
-    ranges: &'a [U32Bytes<LittleEndian>],
-    frame_offsets: &'a [U32Bytes<LittleEndian>],
-    tags: &'a [U32Bytes<LittleEndian>],
-    contexts: &'a [U32Bytes<LittleEndian>],
-    handlers: &'a [U32Bytes<LittleEndian>],
+    callsites: &'a [U32<LittleEndian>],
+    ranges: &'a [U32<LittleEndian>],
+    frame_offsets: &'a [U32<LittleEndian>],
+    tags: &'a [U32<LittleEndian>],
+    contexts: &'a [U32<LittleEndian>],
+    handlers: &'a [U32<LittleEndian>],
 }
 
 /// Wasmtime exception table item, after parsing.
@@ -252,36 +253,33 @@ pub struct ExceptionHandler {
 impl<'a> ExceptionTable<'a> {
     /// Parse exception tables from a byte-slice as produced by
     /// [`ExceptionTableBuilder::serialize`].
-    pub fn parse(data: &'a [u8]) -> anyhow::Result<ExceptionTable<'a>> {
+    pub fn parse(data: &'a [u8]) -> Result<ExceptionTable<'a>> {
         let mut data = Bytes(data);
         let callsite_count = data
-            .read::<U32Bytes<LittleEndian>>()
-            .map_err(|_| anyhow::anyhow!("Unable to read callsite count prefix"))?;
+            .read::<U32<LittleEndian>>()
+            .map_err(|_| format_err!("Unable to read callsite count prefix"))?;
         let callsite_count = usize::try_from(callsite_count.get(LittleEndian))?;
         let handler_count = data
-            .read::<U32Bytes<LittleEndian>>()
-            .map_err(|_| anyhow::anyhow!("Unable to read handler count prefix"))?;
+            .read::<U32<LittleEndian>>()
+            .map_err(|_| format_err!("Unable to read handler count prefix"))?;
         let handler_count = usize::try_from(handler_count.get(LittleEndian))?;
         let (callsites, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data.0, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read callsites slice"))?;
+            object::slice_from_bytes::<U32<LittleEndian>>(data.0, callsite_count)
+                .map_err(|_| format_err!("Unable to read callsites slice"))?;
         let (frame_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read frame_offsets slice"))?;
-        let (ranges, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, callsite_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read ranges slice"))?;
-        let (tags, data) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-            .map_err(|_| anyhow::anyhow!("Unable to read tags slice"))?;
-        let (contexts, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read contexts slice"))?;
-        let (handlers, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
-                .map_err(|_| anyhow::anyhow!("Unable to read handlers slice"))?;
+            object::slice_from_bytes::<U32<LittleEndian>>(data, callsite_count)
+                .map_err(|_| format_err!("Unable to read frame_offsets slice"))?;
+        let (ranges, data) = object::slice_from_bytes::<U32<LittleEndian>>(data, callsite_count)
+            .map_err(|_| format_err!("Unable to read ranges slice"))?;
+        let (tags, data) = object::slice_from_bytes::<U32<LittleEndian>>(data, handler_count)
+            .map_err(|_| format_err!("Unable to read tags slice"))?;
+        let (contexts, data) = object::slice_from_bytes::<U32<LittleEndian>>(data, handler_count)
+            .map_err(|_| format_err!("Unable to read contexts slice"))?;
+        let (handlers, data) = object::slice_from_bytes::<U32<LittleEndian>>(data, handler_count)
+            .map_err(|_| format_err!("Unable to read handlers slice"))?;
 
         if !data.is_empty() {
-            anyhow::bail!("Unexpected data at end of serialized exception table");
+            bail!("Unexpected data at end of serialized exception table");
         }
 
         Ok(ExceptionTable {
@@ -324,46 +322,13 @@ impl<'a> ExceptionTable<'a> {
         )
     }
 
-    /// Look up the frame offset and handler destination if any, for a
-    /// given return address (as an offset into the code section) and
-    /// exception tag.
-    ///
-    /// Note: we use raw `u32` types for code offsets and tags here to
-    /// avoid dependencies on `cranelift-codegen` when this crate is
-    /// built without compiler backend support (runtime-only config).
-    pub fn lookup_pc_tag(&self, pc: u32, tag: u32) -> Option<(u32, u32)> {
-        // First, look up the callsite in the sorted callsites list.
-        let callsite_idx = self
-            .callsites
-            .binary_search_by_key(&pc, |callsite| callsite.get(LittleEndian))
-            .ok()?;
-        let frame_offset =
-            option_from_u32(self.frame_offsets[callsite_idx].get(LittleEndian)).unwrap_or(0);
-
-        let (tags, _, handlers) = self.tags_contexts_handlers_for_callsite(callsite_idx);
-
-        // Is there any handler with an exact tag match?
-        if let Ok(handler_idx) = tags.binary_search_by_key(&tag, |tag| tag.get(LittleEndian)) {
-            return Some((frame_offset, handlers[handler_idx].get(LittleEndian)));
-        }
-
-        // If not, is there a fallback handler? Note that we serialize
-        // it with the tag `u32::MAX`, so it is always last in sorted
-        // order.
-        if tags.last().map(|v| v.get(LittleEndian)) == Some(u32::MAX) {
-            return Some((frame_offset, handlers.last().unwrap().get(LittleEndian)));
-        }
-
-        None
-    }
-
     fn tags_contexts_handlers_for_callsite(
         &self,
         idx: usize,
     ) -> (
-        &[U32Bytes<LittleEndian>],
-        &[U32Bytes<LittleEndian>],
-        &[U32Bytes<LittleEndian>],
+        &[U32<LittleEndian>],
+        &[U32<LittleEndian>],
+        &[U32<LittleEndian>],
     ) {
         let end_idx = self.ranges[idx].get(LittleEndian);
         let start_idx = if idx > 0 {

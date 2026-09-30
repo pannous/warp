@@ -21,29 +21,31 @@ pub async fn create_table(
         wasmtime_table.ref_type
     );
 
-    let table_id = module.tables.push(wasmtime_table);
+    let table_id = module.tables.push(wasmtime_table)?;
+    module.table_initialization.push(Default::default())?;
 
     // TODO: can this `exports.insert` get removed?
-    module
-        .exports
-        .insert(String::new(), EntityIndex::Table(table_id));
+    let name = module.strings.insert("")?;
+    module.exports.insert(name, EntityIndex::Table(table_id))?;
 
     let imports = Imports::default();
+
+    let runtime_info = ModuleRuntimeInfo::bare_with_registered_types(
+        try_new::<Arc<_>>(module)?,
+        store.engine(),
+        table.element().clone().into_registered_type(),
+    )?;
 
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
         store
             .allocate_instance(
                 limiter,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
-                &ModuleRuntimeInfo::bare_with_registered_type(
-                    module,
-                    table.element().clone().into_registered_type(),
-                ),
+                &runtime_info,
                 imports,
             )
             .await

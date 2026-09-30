@@ -1,6 +1,11 @@
+#![cfg(feature = "optimizer")]
+
+/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts)
+const BINARYEN_FEATURES: [&str; 3] = ["--enable-gc", "--enable-reference-types", "--enable-bulk-memory"];
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+use crate::{s, strings};
 
 /// Optimization mode for WASM output
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,8 +34,9 @@ pub enum ExportMode {
 }
 
 impl Default for ExportMode {
+	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
-		ExportMode::Library
+		ExportMode::Executable { entry_points: strings!["main", "wasp_main","_start"] }
 	}
 }
 
@@ -78,9 +84,14 @@ impl WasmOptimizer {
 			return Ok(wasm_bytes.to_vec());
 		}
 
-		// Write input to temp file
-		let input_path = std::env::temp_dir().join("wasp_opt_input.wasm");
-		let output_path = std::env::temp_dir().join("wasp_opt_output.wasm");
+		// Write input to temp file (use unique names to avoid race conditions)
+		let id = std::process::id();
+		let ts = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_nanos())
+			.unwrap_or(0);
+		let input_path = std::env::temp_dir().join(format!("wasp_opt_input_{}_{}.wasm", id, ts));
+		let output_path = std::env::temp_dir().join(format!("wasp_opt_output_{}_{}.wasm", id, ts));
 
 		std::fs::write(&input_path, wasm_bytes)
 			.map_err(|e| format!("Failed to write temp input: {}", e))?;
@@ -116,8 +127,13 @@ impl WasmOptimizer {
 
 	/// Run wasm-metadce for tree-shaking, returns path to output
 	fn run_tree_shaking(&self, input: &Path, entry_points: &[String]) -> Result<std::path::PathBuf, String> {
-		let output = std::env::temp_dir().join("wasp_metadce_output.wasm");
-		let graph_path = std::env::temp_dir().join("wasp_roots.json");
+		let id = std::process::id();
+		let ts = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_nanos())
+			.unwrap_or(0);
+		let output = std::env::temp_dir().join(format!("wasp_metadce_output_{}_{}.wasm", id, ts));
+		let graph_path = std::env::temp_dir().join(format!("wasp_roots_{}_{}.json", id, ts));
 
 		// Build graph JSON for wasm-metadce
 		let graph = self.build_roots_graph(entry_points);
@@ -125,8 +141,7 @@ impl WasmOptimizer {
 			.map_err(|e| format!("Failed to write roots graph: {}", e))?;
 
 		let result = Command::new("wasm-metadce")
-			.arg("--enable-gc")
-			.arg("--enable-reference-types")
+			.args(BINARYEN_FEATURES)
 			.arg(input)
 			.arg("-f")
 			.arg(&graph_path)
@@ -149,7 +164,7 @@ impl WasmOptimizer {
 	}
 
 	/// Build the roots graph JSON for wasm-metadce
-	fn build_roots_graph(&self, entry_points: &[String]) -> String {
+	pub fn build_roots_graph(&self, entry_points: &[String]) -> String {
 		let mut graph = String::from("[\n  {\n    \"name\": \"root\",\n    \"reaches\": [");
 
 		let reaches: Vec<String> = entry_points
@@ -182,8 +197,7 @@ impl WasmOptimizer {
 		};
 
 		let result = Command::new("wasm-opt")
-			.arg("--enable-gc")
-			.arg("--enable-reference-types")
+			.args(BINARYEN_FEATURES)
 			.arg(opt_flag)
 			.arg("--remove-unused-module-elements")
 			.arg(input)
@@ -227,31 +241,5 @@ impl WasmOptimizer {
 			.output()
 			.map(|o| o.status.success())
 			.unwrap_or(false)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_tools_available() {
-		assert!(WasmOptimizer::tools_available(), "wasm-opt not found");
-		assert!(WasmOptimizer::tree_shaking_available(), "wasm-metadce not found");
-	}
-
-	#[test]
-	fn test_roots_graph_generation() {
-		let optimizer = WasmOptimizer::executable(
-			OptimizationMode::Standard,
-			vec!["main".to_string(), "init".to_string()],
-		);
-
-		if let ExportMode::Executable { ref entry_points } = optimizer.export_mode {
-			let graph = optimizer.build_roots_graph(entry_points);
-			assert!(graph.contains("\"export\": \"main\""));
-			assert!(graph.contains("\"export\": \"init\""));
-			assert!(graph.contains("\"root\": true"));
-		}
 	}
 }

@@ -264,7 +264,7 @@ trait PartialEqNum {
 
 impl PartialEqStr for char {
 	fn is(&self, other: &str) -> bool {
-		other.len() == 1 && other.chars().next() == Some(*self)
+		other.len() == 1 && other.starts_with(*self)
 	}
 }
 
@@ -276,7 +276,7 @@ impl PartialEqStr for char {
 
 impl PartialEqChar for str {
 	fn is(&self, other: &char) -> bool {
-		self.len() == 1 && self.chars().next() == Some(*other)
+		self.len() == 1 && self.starts_with(*other)
 	}
 }
 
@@ -285,6 +285,15 @@ impl PartialEqChar for String {
 		self.as_str() == other.to_string()
 	}
 }
+
+#[allow(unused)]
+macro_rules! s {
+	($lit:literal) => {
+		String::from($lit)
+	};
+}
+
+// Test it see tests/string_tests.rs !!
 
 // fn assert<T: PartialEq + Debug>(x: T) {
 //     eq!(x, true);
@@ -297,6 +306,88 @@ impl PartialEqChar for String {
 //         eq!($x, true);
 //     };
 // }
+
+/// Code points that continue the grapheme cluster before them: combining marks, variation selectors,
+/// emoji skin tone modifiers, tags, ZWNJ and ZWJ (UAX #29 Extend, SpacingMark and ZWJ, abridged to common scripts).
+/// The emitted `grapheme_end` runtime and `grapheme_clusters` share this table, so both count the same unit.
+pub const GRAPHEME_EXTEND: [(u32, u32); 27] = [
+	(0x0300, 0x036F), // combining diacritical marks
+	(0x0483, 0x0489), // Cyrillic
+	(0x0591, 0x05BD), // Hebrew points
+	(0x05C1, 0x05C2),
+	(0x05C4, 0x05C5),
+	(0x0610, 0x061A), // Arabic
+	(0x064B, 0x065F),
+	(0x0670, 0x0670),
+	(0x06D6, 0x06DC),
+	(0x0900, 0x0903), // Devanagari signs and vowel marks
+	(0x093A, 0x093C),
+	(0x093E, 0x094F),
+	(0x0951, 0x0957),
+	(0x0962, 0x0963),
+	(0x0E31, 0x0E31), // Thai
+	(0x0E34, 0x0E3A),
+	(0x0E47, 0x0E4E),
+	(0x1AB0, 0x1AFF), // combining marks extended and supplement
+	(0x1DC0, 0x1DFF),
+	(0x200C, 0x200D), // ZWNJ, ZWJ
+	(0x20D0, 0x20FF), // combining marks for symbols
+	(0x3099, 0x309A), // kana voicing marks
+	(0xFE00, 0xFE0F), // variation selectors
+	(0xFE20, 0xFE2F), // combining half marks
+	(0x1F3FB, 0x1F3FF), // emoji skin tone modifiers
+	(0xE0020, 0xE007F), // tags (subdivision flags)
+	(0xE0100, 0xE01EF), // variation selectors supplement
+];
+/// After a ZWJ these join the cluster (emoji ZWJ sequences, abridged Extended_Pictographic)
+pub const GRAPHEME_PICTOGRAPHIC: [(u32, u32); 2] = [(0x2600, 0x27BF), (0x1F000, 0x1FAFF)];
+/// Flags are pairs of regional indicators
+pub const REGIONAL_INDICATORS: (u32, u32) = (0x1F1E6, 0x1F1FF);
+pub const ZERO_WIDTH_JOINER: u32 = 0x200D;
+
+fn in_ranges(c: u32, ranges: &[(u32, u32)]) -> bool {
+	ranges.iter().any(|&(low, high)| c.wrapping_sub(low) <= high - low)
+}
+
+/// Controls end a cluster at once; CR LF is the one pair that stays together
+pub fn is_control(c: u32) -> bool {
+	c < 0x20 || (0x7F..0xA0).contains(&c)
+}
+
+/// Whether `next` continues a cluster whose last code point is `previous`
+pub fn grapheme_joins(previous: u32, next: u32, unpaired_regional_indicator: bool) -> bool {
+	in_ranges(next, &GRAPHEME_EXTEND)
+		|| (previous == ZERO_WIDTH_JOINER && in_ranges(next, &GRAPHEME_PICTOGRAPHIC))
+		|| (unpaired_regional_indicator && in_ranges(next, &[REGIONAL_INDICATORS]))
+}
+
+/// The user-perceived characters of `text` (extended grapheme clusters, abridged): `'👍🏽'` is one,
+/// `"🇩🇪"` is one, `"e\u{301}"` is one. `#`, `count`, `length` count these; `size` counts bytes.
+pub fn grapheme_clusters(text: &str) -> Vec<&str> {
+	let mut clusters = vec![];
+	let mut chars = text.char_indices().peekable();
+	while let Some((start, first)) = chars.next() {
+		let mut previous = first as u32;
+		let mut end = start + first.len_utf8();
+		if previous == 0x0D && matches!(chars.peek(), Some((_, '\n'))) {
+			chars.next();
+			end += 1;
+		} else if !is_control(previous) {
+			let mut unpaired = in_ranges(previous, &[REGIONAL_INDICATORS]);
+			while let Some(&(at, next)) = chars.peek() {
+				if !grapheme_joins(previous, next as u32, unpaired) {
+					break;
+				}
+				chars.next();
+				unpaired = false;
+				previous = next as u32;
+				end = at + next.len_utf8();
+			}
+		}
+		clusters.push(&text[start..end]);
+	}
+	clusters
+}
 
 #[cfg(test)]
 mod tests {
@@ -316,18 +407,4 @@ mod tests {
 		eq!("a".s() + "b", "ab");
 		// eq!("a".s()+2, "a2");
 	}
-}
-
-#[allow(unused)]
-macro_rules! s {
-	($lit:literal) => {
-		String::from($lit)
-	};
-}
-
-// Test it see tests/string_tests.rs !!
-fn main() {
-	let s1 = String::from("RustRover");
-	let s2 = &String::from("RustRover");
-	eq!(s1 == *s2, true);
 }

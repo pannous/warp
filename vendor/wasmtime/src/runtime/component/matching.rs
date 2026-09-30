@@ -1,31 +1,38 @@
 use crate::Module;
 use crate::component::ResourceType;
 use crate::component::func::HostFunc;
-use crate::component::linker::{Definition, Strings};
+use crate::component::linker::Definition;
 use crate::component::types::{FutureType, StreamType};
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::{Engine, prelude::*};
 use alloc::sync::Arc;
-use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
     TypeFutureTableIndex, TypeModule, TypeResourceTable, TypeResourceTableIndex,
     TypeStreamTableIndex,
 };
+use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{Atom, StringPool};
 
 pub struct TypeChecker<'a> {
     pub engine: &'a Engine,
     pub types: &'a Arc<ComponentTypes>,
-    pub strings: &'a Strings,
-    pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    pub strings: &'a StringPool,
+    pub imported_resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 #[derive(Copy, Clone)]
 #[doc(hidden)]
 pub struct InstanceType<'a> {
     pub types: &'a Arc<ComponentTypes>,
-    pub resources: &'a Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    /// Resource type substitutions for resources within `ComponentTypes`, if
+    /// any.
+    ///
+    /// If this isn't present then resource types are considered "abstract" and
+    /// un-intantiated. This doesn't refer to a concrete instantiated component,
+    /// but rather an abstract component type.
+    pub resources: Option<&'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>>,
 }
 
 impl TypeChecker<'_> {
@@ -89,7 +96,7 @@ impl TypeChecker<'_> {
                     // cloned.
                     None => {
                         let resources = Arc::get_mut(&mut self.imported_resources).unwrap();
-                        let id = resources.push(*actual);
+                        let id = resources.push(*actual)?;
                         assert_eq!(id, i);
                     }
 
@@ -119,9 +126,10 @@ impl TypeChecker<'_> {
         // Every export that is expected should be in the actual module we have
         for (name, expected) in expected.exports.iter() {
             let idx = actual
-                .exports
-                .get(name)
-                .ok_or_else(|| anyhow!("module export `{name}` not defined"))?;
+                .strings
+                .get_atom(name)
+                .and_then(|atom| actual.exports.get(&atom))
+                .ok_or_else(|| format_err!("module export `{name}` not defined"))?;
             let actual = actual.type_of(*idx);
             matching::entity_ty(self.engine, expected, &actual)
                 .with_context(|| format!("module export `{name}` has the wrong type"))?;
@@ -136,7 +144,7 @@ impl TypeChecker<'_> {
             let expected = expected
                 .imports
                 .get(&(module.to_string(), name.to_string()))
-                .ok_or_else(|| anyhow!("module import `{module}::{name}` not defined"))?;
+                .ok_or_else(|| format_err!("module import `{module}::{name}` not defined"))?;
             matching::entity_ty(self.engine, &actual, expected)
                 .with_context(|| format!("module import `{module}::{name}` has the wrong type"))?;
         }
@@ -146,7 +154,7 @@ impl TypeChecker<'_> {
     fn instance(
         &mut self,
         expected: &TypeComponentInstance,
-        actual: Option<&NameMap<usize, Definition>>,
+        actual: Option<&NameMap<Atom, Definition>>,
     ) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
@@ -155,11 +163,11 @@ impl TypeChecker<'_> {
             // Interface types may be exported from a component in order to give them a name, but
             // they don't have a definition in the sense that this search is interested in, so
             // ignore them.
-            if let TypeDef::Interface(_) = expected {
+            if let TypeDef::Interface(_) = expected.ty {
                 continue;
             }
-            let actual = actual.and_then(|map| map.get(name, self.strings));
-            self.definition(expected, actual)
+            let actual = actual.and_then(|actual| actual.get(name, self.strings));
+            self.definition(&expected.ty, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }
         Ok(())
@@ -168,7 +176,7 @@ impl TypeChecker<'_> {
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         let instance_type = InstanceType {
             types: self.types,
-            resources: &self.imported_resources,
+            resources: Some(&self.imported_resources),
         };
         actual.typecheck(expected, &instance_type)
     }
@@ -189,7 +197,7 @@ impl<'a> InstanceType<'a> {
     pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
             types: instance.component().types(),
-            resources: instance.resource_types(),
+            resources: Some(instance.resource_types()),
         }
     }
 
@@ -197,8 +205,7 @@ impl<'a> InstanceType<'a> {
         match self.types[index] {
             TypeResourceTable::Concrete { ty, .. } => self
                 .resources
-                .get(ty)
-                .copied()
+                .and_then(|t| t.get(ty).copied())
                 .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, ty)),
             TypeResourceTable::Abstract(ty) => ResourceType::abstract_(&self.types, ty),
         }

@@ -1,0 +1,107 @@
+// JSON Parser
+// Recursive descent parser for JSON
+
+def parse_json(input) {
+    pos = 0
+
+    def peek() := input[pos]
+    def advance() { pos = pos + 1; return input[pos - 1] }
+    def skip_whitespace() { while pos < input.length and peek() in " \t\n\r" { advance() } }
+
+    def parse_value() {
+        skip_whitespace()
+        c = peek()
+        match c {
+            '"' => parse_string()
+            '{' => parse_object()
+            '[' => parse_array()
+            't' => parse_true()
+            'f' => parse_false()
+            'n' => parse_null()
+            _ if c == '-' or c.is_digit() => parse_number()
+            _ => error("Unexpected character: " + c)
+        }
+    }
+
+    def parse_string() {
+        advance()  // skip opening quote
+        result = ""
+        while peek() != '"' {
+            if peek() == '\\' {
+                advance()
+                result = result + match advance() {
+                    'n' => "\n"
+                    't' => "\t"
+                    'r' => "\r"
+                    '"' => '"'
+                    '\\' => "\\"
+                    c => c
+                }
+            } else {
+                result = result + advance()
+            }
+        }
+        advance()  // skip closing quote
+        return result
+    }
+
+    def parse_number() {
+        start = pos
+        if peek() == '-' { advance() }
+        while pos < input.length and peek().is_digit() { advance() }
+        if pos < input.length and peek() == '.' {
+            advance()
+            while pos < input.length and peek().is_digit() { advance() }
+        }
+        return float(input[start..pos])
+    }
+
+    def parse_object() {
+        advance()  // skip {
+        obj = {}
+        skip_whitespace()
+        if peek() != '}' {
+            loop {
+                skip_whitespace()
+                key = parse_string()
+                skip_whitespace()
+                advance()  // skip :
+                value = parse_value()
+                obj[key] = value
+                skip_whitespace()
+                if peek() == '}' { break }
+                advance()  // skip ,
+            }
+        }
+        advance()  // skip }
+        return obj
+    }
+
+    def parse_array() {
+        advance()  // skip [
+        arr = []
+        skip_whitespace()
+        if peek() != ']' {
+            loop {
+                arr.push(parse_value())
+                skip_whitespace()
+                if peek() == ']' { break }
+                advance()  // skip ,
+            }
+        }
+        advance()  // skip ]
+        return arr
+    }
+
+    def parse_true() { pos = pos + 4; return true }
+    def parse_false() { pos = pos + 5; return false }
+    def parse_null() { pos = pos + 4; return null }
+
+    return parse_value()
+}
+
+// Test
+json = '{"name": "Alice", "age": 30, "scores": [95, 87, 92], "active": true}'
+result = parse_json(json)
+print result.name     // Alice
+print result.scores   // [95, 87, 92]

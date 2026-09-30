@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::imports::Imports;
 use crate::runtime::vm::instance::{Instance, InstanceHandle};
 use crate::runtime::vm::memory::Memory;
@@ -7,11 +6,11 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
 use crate::store::{InstanceId, StoreOpaque, StoreResourceLimiter};
-use crate::{OpaqueRootScope, Val};
-use core::{mem, ptr};
+use core::future::Future;
+use core::mem;
+use core::pin::Pin;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryKind, Module, VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -30,8 +29,7 @@ pub use self::on_demand::OnDemandInstanceAllocator;
 mod pooling;
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
+    PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 
 /// Represents a request for a new runtime instance.
@@ -127,7 +125,6 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
-#[async_trait::async_trait]
 pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
@@ -184,12 +181,16 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     fn decrement_core_instance_count(&self);
 
     /// Allocate a memory for an instance.
-    async fn allocate_memory(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Memory,
+    ///
+    /// Returns `Err(OutOfMemory)` if boxing the future fails. The inner
+    /// `Result` covers other allocation errors (e.g. resource limits).
+    fn allocate_memory<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<(MemoryAllocationIndex, Memory)>;
+        memory_kind: MemoryKind,
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>;
 
     /// Deallocate an instance's previously allocated memory.
     ///
@@ -206,12 +207,15 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     );
 
     /// Allocate a table for an instance.
-    async fn allocate_table(
-        &self,
-        req: &mut InstanceAllocationRequest<'_, '_>,
-        table: &wasmtime_environ::Table,
+    ///
+    /// Returns `Err(OutOfMemory)` if boxing the future fails. The inner
+    /// `Result` covers other allocation errors (e.g. resource limits).
+    fn allocate_table<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        req: &'a mut InstanceAllocationRequest<'b, 'c>,
+        table: &'a wasmtime_environ::Table,
         table_index: DefinedTableIndex,
-    ) -> Result<(TableAllocationIndex, Table)>;
+    ) -> Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>;
 
     /// Deallocate an instance's previously allocated table.
     ///
@@ -248,7 +252,6 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
         memory_alloc_index: MemoryAllocationIndex,
-        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)>;
 
     /// Deallocate a GC heap that was previously allocated with
@@ -260,7 +263,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         &self,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
-    ) -> (MemoryAllocationIndex, Memory);
+    ) -> MemoryAllocationIndex;
 
     /// Purges all lingering resources related to `module` from within this
     /// allocator.
@@ -319,45 +322,50 @@ impl dyn InstanceAllocator + '_ {
                 .expect("module should have already been validated before allocation");
         }
 
-        self.increment_core_instance_count()?;
-
         let num_defined_memories = module.num_defined_memories();
         let num_defined_tables = module.num_defined_tables();
 
+        let memories = TryPrimaryMap::with_capacity(num_defined_memories)?;
+        let tables = TryPrimaryMap::with_capacity(num_defined_tables)?;
+
+        // Note that incrementing the instance count here must be done just
+        // before creation of `DeallocateOnDrop`. This is required to ensure
+        // that upon successful increment it'll get paired with a decrement
+        // below should anything fail.
+        self.increment_core_instance_count()?;
         let mut guard = DeallocateOnDrop {
             run_deallocate: true,
-            memories: PrimaryMap::with_capacity(num_defined_memories),
-            tables: PrimaryMap::with_capacity(num_defined_tables),
+            memories,
+            tables,
             allocator: self,
+            // NB: do not add more initialization here if it can fail, move that
+            // above the increment above instead.
         };
 
         self.allocate_memories(&mut request, &mut guard.memories)
             .await?;
         self.allocate_tables(&mut request, &mut guard.tables)
             .await?;
-        guard.run_deallocate = false;
+
         // SAFETY: memories/tables were just allocated from the store within
         // `request` and this function's own contract requires that the
         // imports are valid.
-        return unsafe {
-            Ok(Instance::new(
-                request,
-                mem::take(&mut guard.memories),
-                mem::take(&mut guard.tables),
-                &module.memories,
-            ))
-        };
+        let handle = unsafe { Instance::new(request, &mut guard.memories, &mut guard.tables)? };
+        guard.run_deallocate = false;
+        return Ok(handle);
 
         struct DeallocateOnDrop<'a> {
             run_deallocate: bool,
-            memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
-            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+            memories: TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+            tables: TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
             allocator: &'a (dyn InstanceAllocator + 'a),
         }
 
         impl Drop for DeallocateOnDrop<'_> {
             fn drop(&mut self) {
                 if !self.run_deallocate {
+                    debug_assert!(self.memories.is_empty());
+                    debug_assert!(self.tables.is_empty());
                     return;
                 }
                 // SAFETY: these were previously allocated by this allocator
@@ -395,7 +403,7 @@ impl dyn InstanceAllocator + '_ {
     async fn allocate_memories(
         &self,
         request: &mut InstanceAllocationRequest<'_, '_>,
-        memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+        memories: &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
@@ -410,9 +418,9 @@ impl dyn InstanceAllocator + '_ {
                 .expect("should be a defined memory since we skipped imported ones");
 
             let memory = self
-                .allocate_memory(request, ty, Some(memory_index))
+                .allocate_memory(request, ty, Some(memory_index), MemoryKind::LinearMemory)
                 .await?;
-            memories.push(memory);
+            memories.push(memory)?;
         }
 
         Ok(())
@@ -426,7 +434,7 @@ impl dyn InstanceAllocator + '_ {
     /// `Self::allocate_memories`.
     unsafe fn deallocate_memories(
         &self,
-        memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+        memories: &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) {
         for (memory_index, (allocation_index, memory)) in mem::take(memories) {
             // Because deallocating memory is infallible, we don't need to worry
@@ -448,7 +456,7 @@ impl dyn InstanceAllocator + '_ {
     async fn allocate_tables(
         &self,
         request: &mut InstanceAllocationRequest<'_, '_>,
-        tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+        tables: &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
@@ -463,7 +471,7 @@ impl dyn InstanceAllocator + '_ {
                 .expect("should be a defined table since we skipped imported ones");
 
             let table = self.allocate_table(request, table, def_index).await?;
-            tables.push(table);
+            tables.push(table)?;
         }
 
         Ok(())
@@ -477,7 +485,7 @@ impl dyn InstanceAllocator + '_ {
     /// `Self::allocate_tables`.
     unsafe fn deallocate_tables(
         &self,
-        tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+        tables: &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) {
         for (table_index, (allocation_index, table)) in mem::take(tables) {
             // SAFETY: the tables here were allocated from this allocator per
@@ -487,355 +495,6 @@ impl dyn InstanceAllocator + '_ {
             }
         }
     }
-}
-
-fn check_table_init_bounds(
-    store: &mut StoreOpaque,
-    instance: InstanceId,
-    module: &Module,
-) -> Result<()> {
-    let mut const_evaluator = ConstExprEvaluator::default();
-    let mut store = OpaqueRootScope::new(store);
-
-    for segment in module.table_initialization.segments.iter() {
-        let mut context = ConstEvalContext::new(instance);
-        let start = const_evaluator
-            .eval_int(&mut store, &mut context, &segment.offset)
-            .expect("const expression should be valid");
-        let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
-        let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
-
-        let table = store.instance_mut(instance).get_table(segment.table_index);
-        match end {
-            Some(end) if end <= table.size() => {
-                // Initializer is in bounds
-            }
-            _ => {
-                bail!("table out of bounds: elements segment does not fit")
-            }
-        }
-    }
-
-    Ok(())
-}
-
-async fn initialize_tables(
-    store: &mut StoreOpaque,
-    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-    context: &mut ConstEvalContext,
-    const_evaluator: &mut ConstExprEvaluator,
-    module: &Module,
-) -> Result<()> {
-    let mut store = OpaqueRootScope::new(store);
-    for (table, init) in module.table_initialization.initial_values.iter() {
-        match init {
-            // Tables are always initially null-initialized at this time
-            TableInitialValue::Null { precomputed: _ } => {}
-
-            TableInitialValue::Expr(expr) => {
-                let init = const_evaluator
-                    .eval(&mut store, limiter.as_deref_mut(), context, expr)
-                    .await?;
-                let idx = module.table_index(table);
-                let id = store.id();
-                let table = store
-                    .instance_mut(context.instance)
-                    .get_exported_table(id, idx);
-                let size = table._size(&store);
-                table._fill(&mut store, 0, init.ref_().unwrap(), size)?;
-            }
-        }
-    }
-
-    // Note: if the module's table initializer state is in
-    // FuncTable mode, we will lazily initialize tables based on
-    // any statically-precomputed image of FuncIndexes, but there
-    // may still be "leftover segments" that could not be
-    // incorporated. So we have a unified handler here that
-    // iterates over all segments (Segments mode) or leftover
-    // segments (FuncTable mode) to initialize.
-    for segment in module.table_initialization.segments.iter() {
-        let start = const_evaluator
-            .eval_int(&mut store, context, &segment.offset)
-            .expect("const expression should be valid");
-        let start = get_index(
-            start,
-            store.instance(context.instance).env_module().tables[segment.table_index].idx_type,
-        );
-        Instance::table_init_segment(
-            &mut store,
-            limiter.as_deref_mut(),
-            context.instance,
-            const_evaluator,
-            segment.table_index,
-            &segment.elements,
-            start,
-            0,
-            segment.elements.len(),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-fn get_index(val: &Val, ty: wasmtime_environ::IndexType) -> u64 {
-    match ty {
-        wasmtime_environ::IndexType::I32 => val.unwrap_i32().cast_unsigned().into(),
-        wasmtime_environ::IndexType::I64 => val.unwrap_i64().cast_unsigned(),
-    }
-}
-
-fn get_memory_init_start(
-    store: &mut StoreOpaque,
-    init: &MemoryInitializer,
-    instance: InstanceId,
-) -> Result<u64> {
-    let mut context = ConstEvalContext::new(instance);
-    let mut const_evaluator = ConstExprEvaluator::default();
-    let mut store = OpaqueRootScope::new(store);
-    const_evaluator
-        .eval_int(&mut store, &mut context, &init.offset)
-        .map(|v| {
-            get_index(
-                v,
-                store.instance(instance).env_module().memories[init.memory_index].idx_type,
-            )
-        })
-}
-
-fn check_memory_init_bounds(
-    store: &mut StoreOpaque,
-    instance: InstanceId,
-    initializers: &[MemoryInitializer],
-) -> Result<()> {
-    for init in initializers {
-        let memory = store.instance_mut(instance).get_memory(init.memory_index);
-        let start = get_memory_init_start(store, init, instance)?;
-        let end = usize::try_from(start)
-            .ok()
-            .and_then(|start| start.checked_add(init.data.len()));
-
-        match end {
-            Some(end) if end <= memory.current_length() => {
-                // Initializer is in bounds
-            }
-            _ => {
-                bail!("memory out of bounds: data segment does not fit")
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn initialize_memories(
-    store: &mut StoreOpaque,
-    context: &mut ConstEvalContext,
-    const_evaluator: &mut ConstExprEvaluator,
-    module: &Module,
-) -> Result<()> {
-    // Delegates to the `init_memory` method which is sort of a duplicate of
-    // `instance.memory_init_segment` but is used at compile-time in other
-    // contexts so is shared here to have only one method of memory
-    // initialization.
-    //
-    // This call to `init_memory` notably implements all the bells and whistles
-    // so errors only happen if an out-of-bounds segment is found, in which case
-    // a trap is returned.
-
-    struct InitMemoryAtInstantiation<'a> {
-        module: &'a Module,
-        store: &'a mut StoreOpaque,
-        context: &'a mut ConstEvalContext,
-        const_evaluator: &'a mut ConstExprEvaluator,
-    }
-
-    impl InitMemory for InitMemoryAtInstantiation<'_> {
-        fn memory_size_in_bytes(
-            &mut self,
-            memory: wasmtime_environ::MemoryIndex,
-        ) -> Result<u64, SizeOverflow> {
-            let len = self
-                .store
-                .instance(self.context.instance)
-                .get_memory(memory)
-                .current_length();
-            let len = u64::try_from(len).unwrap();
-            Ok(len)
-        }
-
-        fn eval_offset(
-            &mut self,
-            memory: wasmtime_environ::MemoryIndex,
-            expr: &wasmtime_environ::ConstExpr,
-        ) -> Option<u64> {
-            let mut store = OpaqueRootScope::new(&mut *self.store);
-            let val = self
-                .const_evaluator
-                .eval_int(&mut store, self.context, expr)
-                .expect("const expression should be valid");
-            Some(get_index(
-                val,
-                store.instance(self.context.instance).env_module().memories[memory].idx_type,
-            ))
-        }
-
-        fn write(
-            &mut self,
-            memory_index: wasmtime_environ::MemoryIndex,
-            init: &wasmtime_environ::StaticMemoryInitializer,
-        ) -> bool {
-            // If this initializer applies to a defined memory but that memory
-            // doesn't need initialization, due to something like copy-on-write
-            // pre-initializing it via mmap magic, then this initializer can be
-            // skipped entirely.
-            let instance = self.store.instance_mut(self.context.instance);
-            if let Some(memory_index) = self.module.defined_memory_index(memory_index) {
-                if !instance.memories[memory_index].1.needs_init() {
-                    return true;
-                }
-            }
-            let memory = instance.get_memory(memory_index);
-
-            unsafe {
-                let src = instance.wasm_data(init.data.clone());
-                let offset = usize::try_from(init.offset).unwrap();
-                let dst = memory.base.as_ptr().add(offset);
-
-                assert!(offset + src.len() <= memory.current_length());
-
-                // FIXME audit whether this is safe in the presence of shared
-                // memory
-                // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-                ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len())
-            }
-            true
-        }
-    }
-
-    let ok = module
-        .memory_initialization
-        .init_memory(&mut InitMemoryAtInstantiation {
-            module,
-            store,
-            context,
-            const_evaluator,
-        });
-    if !ok {
-        return Err(Trap::MemoryOutOfBounds.into());
-    }
-
-    Ok(())
-}
-
-fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Module) -> Result<()> {
-    check_table_init_bounds(store, instance, module)?;
-
-    match &module.memory_initialization {
-        MemoryInitialization::Segmented(initializers) => {
-            check_memory_init_bounds(store, instance, initializers)?;
-        }
-        // Statically validated already to have everything in-bounds.
-        MemoryInitialization::Static { .. } => {}
-    }
-
-    Ok(())
-}
-
-async fn initialize_globals(
-    store: &mut StoreOpaque,
-    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-    context: &mut ConstEvalContext,
-    const_evaluator: &mut ConstExprEvaluator,
-    module: &Module,
-) -> Result<()> {
-    assert!(core::ptr::eq(
-        &**store.instance(context.instance).env_module(),
-        module
-    ));
-
-    let mut store = OpaqueRootScope::new(store);
-
-    for (index, init) in module.global_initializers.iter() {
-        // Attempt a simple, synchronous evaluation before hitting the
-        // general-purpose `.await` point below. This benchmarks ~15% faster in
-        // instantiation vs just falling through to `.await` below.
-        let val = if let Some(val) = const_evaluator.try_simple(init) {
-            val
-        } else {
-            const_evaluator
-                .eval(&mut store, limiter.as_deref_mut(), context, init)
-                .await?
-        };
-
-        let id = store.id();
-        let index = module.global_index(index);
-        let mut instance = store.instance_mut(context.instance);
-
-        #[cfg(feature = "wmemcheck")]
-        if index.as_u32() == 0
-            && module.globals[index].wasm_ty == wasmtime_environ::WasmValType::I32
-        {
-            if let Some(wmemcheck) = instance.as_mut().wmemcheck_state_mut() {
-                let size = usize::try_from(val.unwrap_i32()).unwrap();
-                wmemcheck.set_stack_size(size);
-            }
-        }
-
-        let global = instance.as_mut().get_exported_global(id, index);
-
-        // Note that mutability is bypassed here because this is, by definition,
-        // initialization of globals meaning that if it's an immutable global
-        // this is the one and only write.
-        //
-        // SAFETY: this is a valid module so `val` should have the correct type
-        // for this global, and it's safe to write to a global for the first
-        // time as-is happening here.
-        unsafe {
-            global.set_unchecked(&mut store, &val)?;
-        }
-    }
-    Ok(())
-}
-
-pub async fn initialize_instance(
-    store: &mut StoreOpaque,
-    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-    instance: InstanceId,
-    module: &Module,
-    is_bulk_memory: bool,
-) -> Result<()> {
-    // If bulk memory is not enabled, bounds check the data and element segments before
-    // making any changes. With bulk memory enabled, initializers are processed
-    // in-order and side effects are observed up to the point of an out-of-bounds
-    // initializer, so the early checking is not desired.
-    if !is_bulk_memory {
-        check_init_bounds(store, instance, module)?;
-    }
-
-    let mut context = ConstEvalContext::new(instance);
-    let mut const_evaluator = ConstExprEvaluator::default();
-
-    initialize_globals(
-        store,
-        limiter.as_deref_mut(),
-        &mut context,
-        &mut const_evaluator,
-        module,
-    )
-    .await?;
-    initialize_tables(
-        store,
-        limiter.as_deref_mut(),
-        &mut context,
-        &mut const_evaluator,
-        module,
-    )
-    .await?;
-    initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
-
-    Ok(())
 }
 
 #[cfg(test)]

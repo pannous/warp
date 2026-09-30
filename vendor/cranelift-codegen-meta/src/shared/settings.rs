@@ -77,22 +77,8 @@ pub(crate) fn define() -> SettingGroup {
         true,
     );
 
-    settings.add_bool(
-        "enable_pcc",
-        "Enable proof-carrying code translation validation.",
-        r#"
-            This adds a proof-carrying-code mode. Proof-carrying code (PCC) is a strategy to verify
-            that the compiler preserves certain properties or invariants in the compiled code.
-            For example, a frontend that translates WebAssembly to CLIF can embed PCC facts in
-            the CLIF, and Cranelift will verify that the final machine code satisfies the stated
-            facts at each intermediate computed value. Loads and stores can be marked as "checked"
-            and their memory effects can be verified as safe.
-        "#,
-        false,
-    );
-
     // Note that Cranelift doesn't currently need an is_pie flag, because PIE is
-    // just PIC where symbols can't be pre-empted, which can be expressed with the
+    // just PIC where symbols can't be preempted, which can be expressed with the
     // `colocated` flag on external functions and global values.
     settings.add_bool(
         "is_pic",
@@ -169,11 +155,11 @@ pub(crate) fn define() -> SettingGroup {
         vec![
             "isa_default",
             "fast",
-            "cold",
             "system_v",
             "windows_fastcall",
             "apple_aarch64",
             "probestack",
+            "preserve_all",
         ],
     );
 
@@ -368,6 +354,24 @@ pub(crate) fn define() -> SettingGroup {
         "The log2 of the minimum alignment of functions",
         "The bigger of this value and the default alignment will be used as actual alignment.",
         0,
+    );
+
+    settings.add_bool(
+        "enable_compact_unwind_abi",
+        "Enable Mach-O compact unwind compatible code emission.",
+        r#"
+            This constrains function prologues and epilogues to the ABI shape
+            that Mach-O compact unwind can encode. Unwind instructions describe
+            which pairs of callee-save registers are saved and restored, but the
+            canonical stack frame layout is still expected: nonvolatile registers
+            must be placed near the top of the frame, immediately below the
+            return address.
+
+            The unwind encoding only supports register pairs emitted with `stp`;
+            it cannot encode individual registers. This may result in slightly
+            larger stack frames.
+        "#,
+        false,
     );
 
     // When adding new settings please check if they can also be added

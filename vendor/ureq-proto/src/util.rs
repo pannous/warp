@@ -5,11 +5,7 @@ use std::ops::{Deref, DerefMut};
 pub(crate) fn find_crlf(b: &[u8]) -> Option<usize> {
     let cr = b.iter().position(|c| *c == b'\r')?;
     let maybe_lf = b.get(cr + 1)?;
-    if *maybe_lf == b'\n' {
-        Some(cr)
-    } else {
-        None
-    }
+    if *maybe_lf == b'\n' { Some(cr) } else { None }
 }
 
 pub(crate) fn compare_lowercase_ascii(a: &str, lowercased: &str) -> bool {
@@ -130,9 +126,24 @@ const HEX: [&str; 256] = [
 ];
 
 /// Simple impl of an array behaving like a vec.
+#[derive(Clone)]
 pub struct ArrayVec<T, const N: usize> {
     len: usize,
     arr: [T; N],
+}
+
+impl<T: PartialEq, const N: usize> PartialEq for ArrayVec<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self[..] == other[..]
+    }
+}
+
+impl<T: Eq, const N: usize> Eq for ArrayVec<T, N> {}
+
+impl<T: Default, const N: usize> Default for ArrayVec<T, N> {
+    fn default() -> Self {
+        Self::from_fn(|_| T::default())
+    }
 }
 
 impl<T, const N: usize> Deref for ArrayVec<T, N> {
@@ -161,9 +172,22 @@ impl<T, const N: usize> ArrayVec<T, N> {
     }
 
     /// Add a value T.
+    ///
+    /// Panics if the array is already full.
     pub fn push(&mut self, value: T) {
         self.arr[self.len] = value;
         self.len += 1;
+    }
+
+    /// Try to add a value T to the end of the array.
+    ///
+    /// Returns an error if the array is already full.
+    pub fn try_push(&mut self, value: T) -> Result<(), CapacityError<T>> {
+        if self.len >= N {
+            return Err(CapacityError { element: value });
+        }
+        self.push(value);
+        Ok(())
     }
 
     /// Shorten the vec.
@@ -172,6 +196,34 @@ impl<T, const N: usize> ArrayVec<T, N> {
     pub fn truncate(&mut self, len: usize) {
         assert!(len <= self.len);
         self.len = len;
+    }
+}
+
+/// An error returned when capacity of an [`ArrayVec`] is exceeded.
+#[derive(PartialEq, Eq, Clone)]
+pub struct CapacityError<T> {
+    /// The element that triggered this error.
+    element: T,
+}
+
+impl<T> CapacityError<T> {
+    /// Returns the element that triggered this error.
+    pub fn element(self) -> T {
+        self.element
+    }
+}
+
+impl<T> std::error::Error for CapacityError<T> {}
+
+impl<T> fmt::Debug for CapacityError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CapacityError").finish()
+    }
+}
+
+impl<T> fmt::Display for CapacityError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ArrayVec capacity exceeded")
     }
 }
 
@@ -193,5 +245,67 @@ impl<'a, T, const N: usize> IntoIterator for &'a ArrayVec<T, N> {
 
     fn into_iter(self) -> Self::IntoIter {
         self[..self.len].iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ArrayVec, CapacityError};
+
+    #[test]
+    fn array_vec_equality_uses_active_elements() {
+        let mut a = ArrayVec::<_, 4>::from_fn(|_| 0);
+        let mut b = ArrayVec::<_, 4>::from_fn(|_| 99);
+        assert_eq!(a, b);
+
+        a.push(1);
+        b.push(1);
+        assert_eq!(a, b);
+
+        b.push(2);
+        assert_ne!(a, b);
+        b.truncate(1);
+        assert_eq!(a, b);
+
+        b[0] = 3;
+        assert_ne!(a, b);
+
+        fn assert_eq_trait<T: Eq>() {}
+        assert_eq_trait::<ArrayVec<i32, 4>>();
+    }
+
+    #[test]
+    fn array_vec_partial_eq_supports_non_eq_elements() {
+        let mut a = ArrayVec::<f32, 1>::default();
+        a.push(f32::NAN);
+        assert_ne!(a, a);
+    }
+
+    #[test]
+    fn array_vec_default_supports_non_copy_elements_and_large_capacities() {
+        let mut values = ArrayVec::<String, 64>::default();
+        assert!(values.is_empty());
+        for i in 0..64 {
+            values.push(i.to_string());
+        }
+        assert_eq!(values.len(), 64);
+        assert_eq!(values[63], "63");
+    }
+
+    #[test]
+    fn array_vec_default_supports_zero_capacity() {
+        let values = ArrayVec::<String, 0>::default();
+        assert!(values.is_empty());
+        assert_eq!(values, ArrayVec::from_fn(|_| String::from("unused")));
+    }
+
+    #[test]
+    fn array_vec_try_push_checks_capacity() {
+        let mut values = ArrayVec::<_, 4>::default();
+        for i in 0..4 {
+            values.try_push(i).unwrap();
+        }
+        let err = values.try_push(1337).unwrap_err();
+        assert_eq!(err, CapacityError { element: 1337 });
     }
 }

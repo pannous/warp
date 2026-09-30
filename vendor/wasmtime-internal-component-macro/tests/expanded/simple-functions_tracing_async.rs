@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::simple::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -175,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::simple::HostWithStore + Send,
+            D: foo::foo::simple::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::simple::Host + Send,
             T: 'static + Send,
         {
@@ -192,11 +190,11 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn f1(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
@@ -254,16 +252,15 @@ pub mod foo {
                     async move { Host::f6(*self, a, b, c).await }
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("foo:foo/simple")?;
                 inst.func_wrap_async(
                     "f1",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -420,6 +417,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("foo:foo/simple")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -429,7 +438,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     f1: wasmtime::component::Func,
                     f2: wasmtime::component::Func,
@@ -461,16 +471,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/simple")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/simple`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/simple` does \
                             not have export `{name}`"
                                     )
@@ -527,6 +537,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f1(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.f1)
+                        }
+                    }
                     pub async fn call_f1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -539,21 +557,20 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f1",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.f1)
-                        };
+                        let callee = self.func_f1();
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
+                    }
+                    pub fn func_f2(&self) -> wasmtime::component::TypedFunc<(u32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u32,),
+                                (),
+                            >::new_unchecked(self.f2)
+                        }
                     }
                     pub async fn call_f2<S: wasmtime::AsContextMut>(
                         &self,
@@ -568,21 +585,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f2",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u32,),
-                                (),
-                            >::new_unchecked(self.f2)
-                        };
+                        let callee = self.func_f2();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
+                    }
+                    pub fn func_f3(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(u32, u32), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u32, u32),
+                                (),
+                            >::new_unchecked(self.f3)
+                        }
                     }
                     pub async fn call_f3<S: wasmtime::AsContextMut>(
                         &self,
@@ -598,21 +616,20 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f3",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u32, u32),
-                                (),
-                            >::new_unchecked(self.f3)
-                        };
+                        let callee = self.func_f3();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0, arg1))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(())
+                    }
+                    pub fn func_f4(&self) -> wasmtime::component::TypedFunc<(), (u32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u32,),
+                            >::new_unchecked(self.f4)
+                        }
                     }
                     pub async fn call_f4<S: wasmtime::AsContextMut>(
                         &self,
@@ -626,21 +643,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f4",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u32,),
-                            >::new_unchecked(self.f4)
-                        };
+                        let callee = self.func_f4();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_f5(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ((u32, u32),)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                ((u32, u32),),
+                            >::new_unchecked(self.f5)
+                        }
                     }
                     pub async fn call_f5<S: wasmtime::AsContextMut>(
                         &self,
@@ -654,21 +672,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f5",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                ((u32, u32),),
-                            >::new_unchecked(self.f5)
-                        };
+                        let callee = self.func_f5();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_f6(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (u32, u32, u32),
+                        ((u32, u32, u32),),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (u32, u32, u32),
+                                ((u32, u32, u32),),
+                            >::new_unchecked(self.f6)
+                        }
                     }
                     pub async fn call_f6<S: wasmtime::AsContextMut>(
                         &self,
@@ -685,19 +707,10 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/simple", function = "f6",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (u32, u32, u32),
-                                ((u32, u32, u32),),
-                            >::new_unchecked(self.f6)
-                        };
+                        let callee = self.func_f6();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0, arg1, arg2))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }

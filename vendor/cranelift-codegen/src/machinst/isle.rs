@@ -115,6 +115,11 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn opportunistic_def(&mut self, val: Value, regs: ValueRegs) {
+            self.lower_ctx.opportunistic_def(val, regs);
+        }
+
+        #[inline]
         fn put_in_reg(&mut self, val: Value) -> Reg {
             self.put_in_regs(val).only_reg().unwrap()
         }
@@ -132,11 +137,6 @@ macro_rules! isle_lower_prelude_methods {
                     self.put_in_regs(val)
                 })
                 .collect()
-        }
-
-        #[inline]
-        fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
-            self.lower_ctx.ensure_in_vreg(reg, ty)
         }
 
         #[inline]
@@ -203,8 +203,44 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn inst_data_value(&mut self, inst: Inst) -> InstructionData {
-            self.lower_ctx.dfg().insts[inst]
+        fn second_result(&mut self, inst: Inst) -> Option<Value> {
+            self.lower_ctx
+                .dfg()
+                .inst_results(inst)
+                .iter()
+                .skip(1)
+                .next()
+                .copied()
+        }
+
+        #[inline]
+        fn is_second_result(&mut self, val: Value) -> Option<Value> {
+            let inst = self.def_inst(val)?;
+            let is_match = self
+                .lower_ctx
+                .dfg()
+                .inst_results(inst)
+                .iter()
+                .skip(1)
+                .next()
+                == Some(&val);
+            if is_match { Some(val) } else { None }
+        }
+
+        #[inline]
+        fn second_result_used(&mut self, inst: Inst) -> bool {
+            let second_result = self.lower_ctx.dfg().inst_results(inst).get(1).copied();
+            second_result.is_some_and(|value| self.lower_ctx.value_lowered_used(value))
+        }
+
+        #[inline]
+        fn inst_data_value(&mut self, inst: Inst) -> (Type, InstructionData) {
+            let ty = match self.first_result(inst) {
+                Some(v) => self.value_type(v),
+                None => types::INVALID,
+            };
+            let data = self.lower_ctx.dfg().insts[inst];
+            (ty, data)
         }
 
         #[inline]
@@ -218,7 +254,7 @@ macro_rules! isle_lower_prelude_methods {
                 _ => return None,
             };
             let ty = self.lower_ctx.output_ty(inst, 0);
-            let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
+            let shift_amt = core::cmp::max(0, 64 - self.ty_bits(ty));
             Some((constant << shift_amt) >> shift_amt)
         }
 
@@ -329,14 +365,22 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
+        fn func_ref_data(
+            &mut self,
+            func_ref: FuncRef,
+        ) -> (SigRef, ExternalName, RelocDistance, bool) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             let reloc_distance = if funcdata.colocated {
                 RelocDistance::Near
             } else {
                 RelocDistance::Far
             };
-            (funcdata.signature, funcdata.name.clone(), reloc_distance)
+            (
+                funcdata.signature,
+                funcdata.name.clone(),
+                reloc_distance,
+                funcdata.patchable,
+            )
         }
 
         #[inline]
@@ -752,7 +796,7 @@ macro_rules! isle_lower_prelude_methods {
             &mut self,
             targets: &MachLabelSlice,
         ) -> Option<(MachLabel, BoxVecMachLabel)> {
-            use std::boxed::Box;
+            use alloc::boxed::Box;
             if targets.is_empty() {
                 return None;
             }
@@ -766,13 +810,12 @@ macro_rules! isle_lower_prelude_methods {
             targets.len() as u32
         }
 
-        fn add_range_fact(&mut self, reg: Reg, bits: u16, min: u64, max: u64) -> Reg {
-            self.lower_ctx.add_range_fact(reg, bits, min, max);
-            reg
-        }
-
         fn value_is_unused(&mut self, val: Value) -> bool {
             self.lower_ctx.value_is_unused(val)
+        }
+
+        fn value_used(&mut self, val: Value) -> bool {
+            self.lower_ctx.value_lowered_used(val)
         }
 
         fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {

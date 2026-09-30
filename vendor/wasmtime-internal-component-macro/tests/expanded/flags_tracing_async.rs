@@ -103,8 +103,6 @@ pub struct TheFlags {
     interface0: exports::foo::foo::flegs::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheFlagsIndices {
         /// Creates a new copy of `TheFlagsIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -173,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::flegs::HostWithStore + Send,
+            D: foo::foo::flegs::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
             T: 'static + Send,
         {
@@ -190,7 +188,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod flegs {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             wasmtime::component::flags!(Flag1 { #[component(name = "b0")] const B0; });
             const _: () = {
                 assert!(1 == < Flag1 as wasmtime::component::ComponentType >::SIZE32);
@@ -305,10 +303,10 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn roundtrip_flag1(
@@ -384,16 +382,15 @@ pub mod foo {
                     async move { Host::roundtrip_flag64(*self, x).await }
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("foo:foo/flegs")?;
                 inst.func_wrap_async(
                     "roundtrip-flag1",
                     move |
@@ -599,6 +596,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("foo:foo/flegs")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -608,7 +617,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod flegs {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
                 wasmtime::component::flags!(
                     Flag1 { #[component(name = "b0")] const B0; }
                 );
@@ -758,6 +767,7 @@ pub mod exports {
                         4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
+                #[derive(Clone)]
                 pub struct Guest {
                     roundtrip_flag1: wasmtime::component::Func,
                     roundtrip_flag2: wasmtime::component::Func,
@@ -791,16 +801,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/flegs")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/flegs`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/flegs` does \
                               not have export `{name}`"
                                     )
@@ -888,6 +898,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_roundtrip_flag1(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag1,), (Flag1,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag1,),
+                                (Flag1,),
+                            >::new_unchecked(self.roundtrip_flag1)
+                        }
+                    }
                     pub async fn call_roundtrip_flag1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -901,21 +921,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag1",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag1,),
-                                (Flag1,),
-                            >::new_unchecked(self.roundtrip_flag1)
-                        };
+                        let callee = self.func_roundtrip_flag1();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag2,), (Flag2,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag2,),
+                                (Flag2,),
+                            >::new_unchecked(self.roundtrip_flag2)
+                        }
                     }
                     pub async fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
                         &self,
@@ -930,21 +951,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag2",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag2,),
-                                (Flag2,),
-                            >::new_unchecked(self.roundtrip_flag2)
-                        };
+                        let callee = self.func_roundtrip_flag2();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag4(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag4,), (Flag4,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag4,),
+                                (Flag4,),
+                            >::new_unchecked(self.roundtrip_flag4)
+                        }
                     }
                     pub async fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
                         &self,
@@ -959,21 +981,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag4",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag4,),
-                                (Flag4,),
-                            >::new_unchecked(self.roundtrip_flag4)
-                        };
+                        let callee = self.func_roundtrip_flag4();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag8(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag8,), (Flag8,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag8,),
+                                (Flag8,),
+                            >::new_unchecked(self.roundtrip_flag8)
+                        }
                     }
                     pub async fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
                         &self,
@@ -988,21 +1011,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag8",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag8,),
-                                (Flag8,),
-                            >::new_unchecked(self.roundtrip_flag8)
-                        };
+                        let callee = self.func_roundtrip_flag8();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag16(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag16,), (Flag16,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag16,),
+                                (Flag16,),
+                            >::new_unchecked(self.roundtrip_flag16)
+                        }
                     }
                     pub async fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
                         &self,
@@ -1017,21 +1041,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag16",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag16,),
-                                (Flag16,),
-                            >::new_unchecked(self.roundtrip_flag16)
-                        };
+                        let callee = self.func_roundtrip_flag16();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag32(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag32,), (Flag32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag32,),
+                                (Flag32,),
+                            >::new_unchecked(self.roundtrip_flag32)
+                        }
                     }
                     pub async fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
                         &self,
@@ -1046,21 +1071,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag32",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag32,),
-                                (Flag32,),
-                            >::new_unchecked(self.roundtrip_flag32)
-                        };
+                        let callee = self.func_roundtrip_flag32();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag64(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag64,), (Flag64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag64,),
+                                (Flag64,),
+                            >::new_unchecked(self.roundtrip_flag64)
+                        }
                     }
                     pub async fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
                         &self,
@@ -1075,19 +1101,10 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/flegs", function = "roundtrip-flag64",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag64,),
-                                (Flag64,),
-                            >::new_unchecked(self.roundtrip_flag64)
-                        };
+                        let callee = self.func_roundtrip_flag64();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
-                            .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
                             .await?;
                         Ok(ret0)
                     }

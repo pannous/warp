@@ -27,18 +27,19 @@ use crate::error::Result;
 use crate::parse::{Parse, ParseStream};
 #[cfg(feature = "parsing")]
 use crate::token::Token;
+use alloc::boxed::Box;
 #[cfg(all(feature = "fold", any(feature = "full", feature = "derive")))]
-use std::collections::VecDeque;
+use alloc::collections::VecDeque;
+use alloc::vec::{self, Vec};
 #[cfg(feature = "extra-traits")]
-use std::fmt::{self, Debug};
+use core::fmt::{self, Debug};
 #[cfg(feature = "extra-traits")]
-use std::hash::{Hash, Hasher};
+use core::hash::{Hash, Hasher};
 #[cfg(any(feature = "full", feature = "derive"))]
-use std::iter;
-use std::ops::{Index, IndexMut};
-use std::option;
-use std::slice;
-use std::vec;
+use core::iter;
+use core::ops::{Index, IndexMut};
+use core::option;
+use core::slice;
 
 /// **A punctuated sequence of syntax tree nodes of type `T` separated by
 /// punctuation of type `P`.**
@@ -203,13 +204,13 @@ impl<T, P> Punctuated<T, P> {
         self.inner.push((*last, punctuation));
     }
 
-    /// Removes the last punctuated pair from this sequence, or `None` if the
-    /// sequence is empty.
-    pub fn pop(&mut self) -> Option<Pair<T, P>> {
+    /// Removes the last element from this sequence, discarding the trailing
+    /// punctuation if any.
+    pub fn pop(&mut self) -> Option<T> {
         if self.last.is_some() {
-            self.last.take().map(|t| Pair::End(*t))
+            self.last.take().map(|t| *t)
         } else {
-            self.inner.pop().map(|(t, p)| Pair::Punctuated(t, p))
+            self.inner.pop().map(|(t, _p)| t)
         }
     }
 
@@ -222,6 +223,16 @@ impl<T, P> Punctuated<T, P> {
             let (t, p) = self.inner.pop()?;
             self.last = Some(Box::new(t));
             Some(p)
+        }
+    }
+
+    /// Removes the last punctuated pair from this sequence, or `None` if the
+    /// sequence is empty.
+    pub fn pop_pair(&mut self) -> Option<Pair<T, P>> {
+        if self.last.is_some() {
+            self.last.take().map(|t| Pair::End(*t))
+        } else {
+            self.inner.pop().map(|(t, p)| Pair::Punctuated(t, p))
         }
     }
 

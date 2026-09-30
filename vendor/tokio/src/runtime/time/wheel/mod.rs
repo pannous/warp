@@ -1,26 +1,23 @@
 use crate::runtime::time::{TimerHandle, TimerShared};
 use crate::time::error::InsertError;
+use crate::util::linked_list::LinkedList;
 
 mod level;
 pub(crate) use self::level::Expiration;
 use self::level::Level;
 
-use std::{array, ptr::NonNull};
+use std::ptr::NonNull;
 
 use super::entry::STATE_DEREGISTERED;
-use super::EntryList;
 
 /// Timing wheel implementation.
 ///
-/// This type provides the hashed timing wheel implementation that backs `Timer`
-/// and `DelayQueue`.
+/// This type provides the hashed timing wheel implementation that backs
+/// [`Driver`].
 ///
-/// The structure is generic over `T: Stack`. This allows handling timeout data
-/// being stored on the heap or in a slab. In order to support the latter case,
-/// the slab must be passed into each function allowing the implementation to
-/// lookup timer entries.
+/// See [`Driver`] documentation for some implementation notes.
 ///
-/// See `Timer` documentation for some implementation notes.
+/// [`Driver`]: crate::runtime::time::Driver
 #[derive(Debug)]
 pub(crate) struct Wheel {
     /// The number of milliseconds elapsed since the wheel started.
@@ -39,7 +36,7 @@ pub(crate) struct Wheel {
     levels: Box<[Level; NUM_LEVELS]>,
 
     /// Entries queued for firing
-    pending: EntryList,
+    pending: LinkedList<TimerShared>,
 }
 
 /// Number of levels. Each level has 64 slots. By using 6 levels with 64 slots
@@ -53,10 +50,11 @@ pub(super) const MAX_DURATION: u64 = (1 << (6 * NUM_LEVELS)) - 1;
 impl Wheel {
     /// Creates a new timing wheel.
     pub(crate) fn new() -> Wheel {
+        let levels = (0..NUM_LEVELS).map(Level::new).collect::<Box<_>>();
         Wheel {
             elapsed: 0,
-            levels: Box::new(array::from_fn(Level::new)),
-            pending: EntryList::new(),
+            levels: levels.try_into().unwrap(),
+            pending: LinkedList::new(),
         }
     }
 
@@ -91,7 +89,7 @@ impl Wheel {
         &mut self,
         item: TimerHandle,
     ) -> Result<u64, (TimerHandle, InsertError)> {
-        let when = item.sync_when();
+        let when = unsafe { item.sync_when() };
 
         if when <= self.elapsed {
             return Err((item, InsertError::Elapsed));
@@ -265,7 +263,7 @@ impl Wheel {
     }
 
     /// Obtains the list of entries that need processing for the given expiration.
-    fn take_entries(&mut self, expiration: &Expiration) -> EntryList {
+    fn take_entries(&mut self, expiration: &Expiration) -> LinkedList<TimerShared> {
         self.levels[expiration.level].take_slot(expiration.slot)
     }
 

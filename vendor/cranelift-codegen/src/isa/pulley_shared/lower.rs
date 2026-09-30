@@ -3,10 +3,7 @@
 pub mod isle;
 
 use super::{PulleyBackend, PulleyTargetKind, inst::*};
-use crate::{
-    ir,
-    machinst::{lower::*, *},
-};
+use crate::{ir, machinst::*};
 
 impl<P> LowerBackend for PulleyBackend<P>
 where
@@ -31,6 +28,4 @@ where
         // Pulley does not support this feature right now.
         None
     }
-
-    type FactFlowState = ();
 }

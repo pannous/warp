@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::floats::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -175,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::floats::HostWithStore,
+            D: foo::foo::floats::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::floats::Host,
             T: 'static,
         {
@@ -192,11 +190,11 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod floats {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn f32_param(&mut self, x: f32) -> ();
@@ -218,16 +216,15 @@ pub mod foo {
                     Host::f64_result(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/floats")?;
                 inst.func_wrap(
                     "f32-param",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (f32,)| {
@@ -262,6 +259,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/floats")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -271,7 +280,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod floats {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     f32_param: wasmtime::component::Func,
                     f64_param: wasmtime::component::Func,
@@ -299,16 +309,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/floats")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/floats`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/floats` does \
                         not have export `{name}`"
                                     )
@@ -357,62 +367,78 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f32,),
+                                (),
+                            >::new_unchecked(self.f32_param)
+                        }
+                    }
                     pub fn call_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f32,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f32,),
-                                (),
-                            >::new_unchecked(self.f32_param)
-                        };
+                        let callee = self.func_f32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f64,),
+                                (),
+                            >::new_unchecked(self.f64_param)
+                        }
                     }
                     pub fn call_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f64,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f64,),
-                                (),
-                            >::new_unchecked(self.f64_param)
-                        };
+                        let callee = self.func_f64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_f32_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f32,),
+                            >::new_unchecked(self.f32_result)
+                        }
                     }
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f32> {
-                        let callee = unsafe {
+                        let callee = self.func_f32_result();
+                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
+                        Ok(ret0)
+                    }
+                    pub fn func_f64_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f64,)> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (f32,),
-                            >::new_unchecked(self.f32_result)
-                        };
-                        let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
-                        Ok(ret0)
+                                (f64,),
+                            >::new_unchecked(self.f64_result)
+                        }
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f64> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f64,),
-                            >::new_unchecked(self.f64_result)
-                        };
+                        let callee = self.func_f64_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

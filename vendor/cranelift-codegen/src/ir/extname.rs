@@ -99,7 +99,7 @@ pub struct TestcaseName(Box<[u8]>);
 impl fmt::Display for TestcaseName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_char('%')?;
-        f.write_str(std::str::from_utf8(&self.0).unwrap())
+        f.write_str(core::str::from_utf8(&self.0).unwrap())
     }
 }
 
@@ -241,7 +241,6 @@ mod tests {
         LibCall, UserExternalName, entities::UserExternalNameRef, function::FunctionParameters,
     };
     use alloc::string::ToString;
-    use core::u32;
     use cranelift_entity::EntityRef as _;
 
     #[cfg(target_pointer_width = "64")]

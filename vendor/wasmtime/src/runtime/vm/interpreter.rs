@@ -1,3 +1,4 @@
+use crate::error::OutOfMemory;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
     StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
@@ -57,15 +58,15 @@ struct VmState {
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
-    pub fn new(engine: &Engine) -> Interpreter {
+    pub fn new(engine: &Engine) -> Result<Interpreter, OutOfMemory> {
         let ret = Interpreter {
             pulley: StoreBox::new(VmState {
-                vm: Vm::with_stack(engine.config().max_wasm_stack),
+                vm: Vm::with_stack(engine.config().max_wasm_stack)?,
                 resume_at_pc: None,
-            }),
+            })?,
         };
         engine.profiler().register_interpreter(&ret);
-        ret
+        Ok(ret)
     }
 
     /// Returns the `InterpreterRef` structure which can be used to actually
@@ -463,12 +464,12 @@ impl InterpreterRef<'_> {
             match kind {
                 Some(kind) => {
                     let trap = match kind {
-                        TrapKind::IntegerOverflow => Trap::IntegerOverflow,
-                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
-                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
-                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
-                        TrapKind::DisabledOpcode => Trap::DisabledOpcode,
-                        TrapKind::StackOverflow => Trap::StackOverflow,
+                        TrapKind::IntegerOverflow => Trap::IntegerOverflow.into(),
+                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero.into(),
+                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger.into(),
+                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds.into(),
+                        TrapKind::DisabledOpcode => Trap::DisabledOpcode.into(),
+                        TrapKind::StackOverflow => Trap::StackOverflow.into(),
                     };
                     s.set_jit_trap(regs, None, trap);
                     s.entry_trap_handler()
@@ -482,7 +483,7 @@ impl InterpreterRef<'_> {
                         }
 
                         // Not possible with our closure above returning `false`.
-                        #[cfg(has_host_compiler_backend)]
+                        #[cfg(has_native_signals)]
                         TrapTest::HandledByEmbedder => unreachable!(),
 
                         // Trap was handled, yay! Configure interpreter state

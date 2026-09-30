@@ -89,18 +89,17 @@ where
     ///
     /// # Panics
     ///
-    /// This function will panic if it is called when the underlying [`Func`] is
-    /// connected to an asynchronous store.
+    /// Panics if `store` does not contain this function.
     ///
     /// [`Trap`]: crate::Trap
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
-        assert!(
-            !store.0.async_support(),
-            "must use `call_async` with async stores"
-        );
-
+        store.0.validate_sync_call()?;
         let func = self.func.vm_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
     }
@@ -122,6 +121,10 @@ where
     /// connected to a synchronous store.
     ///
     /// [`Trap`]: crate::Trap
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,
@@ -133,10 +136,6 @@ where
         Results: Sync,
     {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "must use `call` with non-async stores"
-        );
 
         store
             .on_fiber(|store| {
@@ -295,10 +294,9 @@ pub unsafe trait WasmTy: Send {
                 // parameters, and fall back to dynamic type checks on the
                 // arguments passed to each invocation, as necessary.
                 (Some(expected_ref), Some(actual_ref)) if actual_ref.heap_type().is_concrete() => {
-                    expected_ref
-                        .heap_type()
-                        .top()
-                        .ensure_matches(engine, &actual_ref.heap_type().top())
+                    let expected_top = HeapType::from(expected_ref.heap_type().top());
+                    let actual_top = HeapType::from(actual_ref.heap_type().top());
+                    expected_top.ensure_matches(engine, &actual_top)
                 }
                 _ => expected.ensure_matches(engine, &actual),
             },

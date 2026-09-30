@@ -59,11 +59,13 @@
 use crate::loom::sync::{Arc, Mutex};
 use crate::runtime;
 use crate::runtime::scheduler::multi_thread::{
-    idle, queue, Counters, Handle, Idle, Overflow, Parker, Stats, TraceStatus, Unparker,
+    idle, park, queue, Counters, Handle, Idle, Overflow, Parker, Stats, TraceStatus, Unparker,
 };
 use crate::runtime::scheduler::{inject, Defer, Lock};
 use crate::runtime::task::OwnedTasks;
-use crate::runtime::{blocking, driver, scheduler, task, Config, SchedulerMetrics, WorkerMetrics};
+use crate::runtime::{
+    blocking, driver, scheduler, task, Config, SchedulerMetrics, TimerFlavor, WorkerMetrics,
+};
 use crate::runtime::{context, TaskHooks};
 use crate::task::coop;
 use crate::util::atomic_cell::AtomicCell;
@@ -72,7 +74,7 @@ use crate::util::rand::{FastRand, RngSeedGenerator};
 use std::cell::RefCell;
 use std::task::Waker;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod metrics;
 
@@ -83,6 +85,16 @@ cfg_taskdump! {
 cfg_not_taskdump! {
     mod taskdump_mock;
 }
+
+#[cfg(all(tokio_unstable, feature = "time"))]
+use crate::loom::sync::atomic::AtomicBool;
+
+#[cfg(all(tokio_unstable, feature = "time"))]
+use crate::runtime::time_alt;
+
+use crate::runtime::metrics::ScheduleLatencyInstant;
+#[cfg(all(tokio_unstable, feature = "time"))]
+use crate::runtime::scheduler::util;
 
 /// A scheduler worker
 pub(super) struct Worker {
@@ -115,6 +127,9 @@ struct Core {
     /// The worker-local run queue.
     run_queue: queue::Local<Arc<Handle>>,
 
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    time_context: time_alt::LocalContext,
+
     /// True if the worker is currently searching for more work. Searching
     /// involves attempting to steal from other workers.
     is_searching: bool,
@@ -124,6 +139,15 @@ struct Core {
 
     /// True if the scheduler is being traced
     is_traced: bool,
+
+    /// Whether or not the worker has just returned from a park in which we
+    /// parked on the I/O driver.
+    had_driver: park::HadDriver,
+
+    /// If `true`, the worker should eagerly notify another worker when polling
+    /// the first task after returning from a park in which it parked on the I/O
+    /// or time driver.
+    enable_eager_driver_handoff: bool,
 
     /// Parker
     ///
@@ -179,6 +203,11 @@ pub(crate) struct Shared {
 
     pub(super) worker_metrics: Box<[WorkerMetrics]>,
 
+    /// Startup time of this scheduler.
+    ///
+    /// This instant is used as the basis of task `scheduled_at` measurements.
+    started_at: Option<Instant>,
+
     /// Only held to trigger some code on drop. This is used to get internal
     /// runtime metrics that can be useful when doing performance
     /// investigations. This does nothing (empty struct, no drop impl) unless
@@ -193,6 +222,12 @@ pub(crate) struct Synced {
 
     /// Synchronized state for `Inject`.
     pub(crate) inject: inject::Synced,
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    /// Timers pending to be registered.
+    /// This is used to register a timer but the [`Core`]
+    /// is not available in the current thread.
+    inject_timers: Vec<time_alt::EntryHandle>,
 }
 
 /// Used to communicate with a worker from other threads.
@@ -234,6 +269,7 @@ type Notified = task::Notified<Arc<Handle>>;
 /// improvements.
 const MAX_LIFO_POLLS_PER_TICK: usize = 3;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn create(
     size: usize,
     park: Parker,
@@ -241,6 +277,8 @@ pub(super) fn create(
     blocking_spawner: blocking::Spawner,
     seed_generator: RngSeedGenerator,
     config: Config,
+    timer_flavor: TimerFlavor,
+    name: Option<String>,
 ) -> (Arc<Handle>, Launch) {
     let mut cores = Vec::with_capacity(size);
     let mut remotes = Vec::with_capacity(size);
@@ -260,9 +298,13 @@ pub(super) fn create(
             lifo_slot: None,
             lifo_enabled: !config.disable_lifo_slot,
             run_queue,
+            #[cfg(all(tokio_unstable, feature = "time"))]
+            time_context: time_alt::LocalContext::new(),
             is_searching: false,
             is_shutdown: false,
             is_traced: false,
+            enable_eager_driver_handoff: config.enable_eager_driver_handoff,
+            had_driver: park::HadDriver::No,
             park: Some(park),
             global_queue_interval: stats.tuned_global_queue_interval(&config),
             stats,
@@ -275,9 +317,14 @@ pub(super) fn create(
 
     let (idle, idle_synced) = Idle::new(size);
     let (inject, inject_synced) = inject::Shared::new();
+    let started_at = config
+        .metrics_schedule_latency_histogram
+        .as_ref()
+        .map(|_| Instant::now());
 
     let remotes_len = remotes.len();
     let handle = Arc::new(Handle {
+        name,
         task_hooks: TaskHooks::from_config(&config),
         shared: Shared {
             remotes: remotes.into_boxed_slice(),
@@ -287,17 +334,23 @@ pub(super) fn create(
             synced: Mutex::new(Synced {
                 idle: idle_synced,
                 inject: inject_synced,
+                #[cfg(all(tokio_unstable, feature = "time"))]
+                inject_timers: Vec::new(),
             }),
             shutdown_cores: Mutex::new(vec![]),
             trace_status: TraceStatus::new(remotes_len),
             config,
             scheduler_metrics: SchedulerMetrics::new(),
             worker_metrics: worker_metrics.into_boxed_slice(),
+            started_at,
             _counters: Counters,
         },
         driver: driver_handle,
         blocking_spawner,
         seed_generator,
+        timer_flavor,
+        #[cfg(all(tokio_unstable, feature = "time"))]
+        is_shutdown: AtomicBool::new(false),
     });
 
     let mut launch = Launch(vec![]);
@@ -395,6 +448,10 @@ where
         }
 
         let cx = maybe_cx.expect("no .is_some() == false cases above should lead here");
+
+        // Since deferred tasks don't stay on `core`, make sure to wake them
+        // before blocking.
+        cx.defer.wake();
 
         // Get the worker core. If none is set, then blocking is fine!
         let mut core = match cx.core.borrow_mut().take() {
@@ -552,11 +609,26 @@ impl Context {
             } else {
                 // Wait for work
                 core = if !self.defer.is_empty() {
-                    self.park_timeout(core, Some(Duration::from_millis(0)))
+                    self.park_yield(core)
                 } else {
                     self.park(core)
                 };
                 core.stats.start_processing_scheduled_tasks();
+            }
+        }
+
+        #[cfg(all(tokio_unstable, feature = "time"))]
+        {
+            match self.worker.handle.timer_flavor {
+                TimerFlavor::Traditional => {}
+                TimerFlavor::Alternative => {
+                    util::time_alt::shutdown_local_timers(
+                        &mut core.time_context.wheel,
+                        &mut core.time_context.canc_rx,
+                        self.worker.handle.take_remote_timers(),
+                        &self.worker.handle.driver,
+                    );
+                }
             }
         }
 
@@ -574,7 +646,30 @@ impl Context {
 
         // Make sure the worker is not in the **searching** state. This enables
         // another idle worker to try to steal work.
-        core.transition_from_searching(&self.worker);
+        let notified_parked_worker = core.transition_from_searching(&self.worker);
+
+        // If the setting to wake eagerly when releasing the I/O driver is
+        // enabled, and this worker had the driver, wake a parked worker to come
+        // grab it from us.
+        //
+        // Note that this is only done when we are *actually* about to poll a
+        // task, rather than whenever the worker has unparked. When the worker
+        // has been unparked, it may not actually have any tasks to poll, and if
+        // it's still holding the I/O driver, it should just go back to polling
+        // the driver again, rather than trying to wake someone else spuriously.
+        //
+        // Note that this explicitly checks `cfg!(tokio_unstable)` in addition,
+        // as that should result in this whole expression being eliminated at
+        // compile-time when unstable features are disabled.
+        if cfg!(tokio_unstable)
+            && core.enable_eager_driver_handoff
+            && core.had_driver == park::HadDriver::Yes
+            && !notified_parked_worker
+        // don't do it a second time
+        {
+            core.had_driver = park::HadDriver::No;
+            self.worker.handle.notify_parked_local();
+        }
 
         self.assert_lifo_enabled_is_correct(&core);
 
@@ -582,7 +677,10 @@ impl Context {
         // tasks under this measurement. In this case, the tasks came from the
         // LIFO slot and are considered part of the current task for scheduling
         // purposes. These tasks inherent the "parent"'s limits.
-        core.stats.start_poll();
+        core.stats.start_poll(
+            task.get_scheduled_at()
+                .prepare(self.worker.handle.shared.started_at),
+        );
 
         // Make the core available to the runtime context
         *self.core.borrow_mut() = Some(core);
@@ -701,7 +799,7 @@ impl Context {
 
             // Call `park` with a 0 timeout. This enables the I/O driver, timer, ...
             // to run without actually putting the thread to sleep.
-            core = self.park_timeout(core, Some(Duration::from_millis(0)));
+            core = self.park_yield(core);
 
             // Run regularly scheduled maintenance
             core.maintenance(&self.worker);
@@ -734,7 +832,7 @@ impl Context {
                 core.stats
                     .submit(&self.worker.handle.shared.worker_metrics[self.worker.index]);
 
-                core = self.park_timeout(core, None);
+                core = self.park_internal(core, None);
 
                 core.stats.unparked();
 
@@ -753,34 +851,70 @@ impl Context {
         core
     }
 
-    fn park_timeout(&self, mut core: Box<Core>, duration: Option<Duration>) -> Box<Core> {
+    fn park_yield(&self, core: Box<Core>) -> Box<Core> {
+        self.park_internal(core, Some(Duration::from_millis(0)))
+    }
+
+    fn park_internal(&self, mut core: Box<Core>, duration: Option<Duration>) -> Box<Core> {
         self.assert_lifo_enabled_is_correct(&core);
 
         // Take the parker out of core
         let mut park = core.park.take().expect("park missing");
-
         // Store `core` in context
         *self.core.borrow_mut() = Some(core);
 
+        #[cfg(feature = "time")]
+        let (duration, auto_advance_duration) = match self.worker.handle.timer_flavor {
+            TimerFlavor::Traditional => (duration, None::<Duration>),
+            #[cfg(tokio_unstable)]
+            TimerFlavor::Alternative => {
+                // Must happens after taking out the parker, as the `Handle::schedule_local`
+                // will delay the notify if the parker taken out.
+                //
+                // See comments in `Handle::schedule_local` for more details.
+                let MaintainLocalTimer {
+                    park_duration: duration,
+                    auto_advance_duration,
+                } = self.maintain_local_timers_before_parking(duration);
+                (duration, auto_advance_duration)
+            }
+        };
+
         // Park thread
-        if let Some(timeout) = duration {
-            park.park_timeout(&self.worker.handle.driver, timeout);
+        let had_driver = if let Some(timeout) = duration {
+            park.park_timeout(&self.worker.handle.driver, timeout)
         } else {
-            park.park(&self.worker.handle.driver);
-        }
+            park.park(&self.worker.handle.driver)
+        };
 
         self.defer.wake();
+
+        #[cfg(feature = "time")]
+        match self.worker.handle.timer_flavor {
+            TimerFlavor::Traditional => {
+                // suppress unused variable warning
+                let _ = auto_advance_duration;
+            }
+            #[cfg(tokio_unstable)]
+            TimerFlavor::Alternative => {
+                // Must happens before placing back the parker, as the `Handle::schedule_local`
+                // will delay the notify if the parker is still in `core`.
+                //
+                // See comments in `Handle::schedule_local` for more details.
+                self.maintain_local_timers_after_parking(auto_advance_duration);
+            }
+        }
 
         // Remove `core` from context
         core = self.core.borrow_mut().take().expect("core missing");
 
         // Place `park` back in `core`
         core.park = Some(park);
+        core.had_driver = had_driver;
 
         if core.should_notify_others() {
             self.worker.handle.notify_parked_local();
         }
-
         core
     }
 
@@ -792,6 +926,143 @@ impl Context {
         } else {
             self.defer.defer(waker);
         }
+    }
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    /// Maintain local timers before parking the resource driver.
+    ///
+    /// * Remove cancelled timers from the local timer wheel.
+    /// * Register remote timers to the local timer wheel.
+    /// * Adjust the park duration based on
+    ///   * the next timer expiration time.
+    ///   * whether auto-advancing is required (feature = "test-util").
+    ///
+    /// # Returns
+    ///
+    /// `(Box<Core>, park_duration, auto_advance_duration)`
+    fn maintain_local_timers_before_parking(
+        &self,
+        park_duration: Option<Duration>,
+    ) -> MaintainLocalTimer {
+        let handle = &self.worker.handle;
+        let mut wake_queue = time_alt::WakeQueue::new();
+
+        let (should_yield, next_timer) = with_current(|maybe_cx| {
+            let cx = maybe_cx.expect("function should be called when core is present");
+            assert_eq!(
+                Arc::as_ptr(&cx.worker.handle),
+                Arc::as_ptr(&self.worker.handle),
+                "function should be called on the exact same worker"
+            );
+
+            let mut maybe_core = cx.core.borrow_mut();
+            let core = maybe_core.as_mut().expect("core missing");
+            let time_cx = &mut core.time_context;
+
+            util::time_alt::process_registration_queue(
+                &mut time_cx.registration_queue,
+                &mut time_cx.wheel,
+                &time_cx.canc_tx,
+                &mut wake_queue,
+            );
+            util::time_alt::insert_inject_timers(
+                &mut time_cx.wheel,
+                &time_cx.canc_tx,
+                handle.take_remote_timers(),
+                &mut wake_queue,
+            );
+            util::time_alt::remove_cancelled_timers(&mut time_cx.wheel, &mut time_cx.canc_rx);
+            let should_yield = !wake_queue.is_empty();
+
+            let next_timer = util::time_alt::next_expiration_time(&time_cx.wheel, &handle.driver);
+
+            (should_yield, next_timer)
+        });
+
+        wake_queue.wake_all();
+
+        if should_yield {
+            MaintainLocalTimer {
+                park_duration: Some(Duration::from_millis(0)),
+                auto_advance_duration: None,
+            }
+        } else {
+            // get the minimum duration
+            let dur = util::time_alt::min_duration(park_duration, next_timer);
+            if util::time_alt::pre_auto_advance(&handle.driver, dur) {
+                MaintainLocalTimer {
+                    park_duration: Some(Duration::ZERO),
+                    auto_advance_duration: dur,
+                }
+            } else {
+                MaintainLocalTimer {
+                    park_duration: dur,
+                    auto_advance_duration: None,
+                }
+            }
+        }
+    }
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    /// Maintain local timers after unparking the resource driver.
+    ///
+    /// * Auto-advance time, if required (feature = "test-util").
+    /// * Process expired timers.
+    fn maintain_local_timers_after_parking(&self, auto_advance_duration: Option<Duration>) {
+        let handle = &self.worker.handle;
+        let mut wake_queue = time_alt::WakeQueue::new();
+
+        with_current(|maybe_cx| {
+            let cx = maybe_cx.expect("function should be called when core is present");
+            assert_eq!(
+                Arc::as_ptr(&cx.worker.handle),
+                Arc::as_ptr(&self.worker.handle),
+                "function should be called on the exact same worker"
+            );
+
+            let mut maybe_core = cx.core.borrow_mut();
+            let core = maybe_core.as_mut().expect("core missing");
+            let time_cx = &mut core.time_context;
+
+            util::time_alt::post_auto_advance(&handle.driver, auto_advance_duration);
+            util::time_alt::process_expired_timers(
+                &mut time_cx.wheel,
+                &handle.driver,
+                &mut wake_queue,
+            );
+        });
+
+        wake_queue.wake_all();
+    }
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    fn with_core<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(Option<&mut Core>) -> R,
+    {
+        match self.core.borrow_mut().as_mut() {
+            Some(core) => f(Some(core)),
+            None => f(None),
+        }
+    }
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    pub(crate) fn with_time_temp_local_context<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(Option<time_alt::TempLocalContext<'_>>) -> R,
+    {
+        self.with_core(|maybe_core| match maybe_core {
+            Some(core) if core.is_shutdown => f(Some(time_alt::TempLocalContext::new_shutdown())),
+            Some(core) => f(Some(time_alt::TempLocalContext::new_running(
+                &mut core.time_context,
+            ))),
+            None => f(None),
+        })
+    }
+
+    #[cfg(tokio_unstable)]
+    pub(crate) fn worker_index(&self) -> usize {
+        self.worker.index
     }
 }
 
@@ -822,12 +1093,27 @@ impl Core {
                 return None;
             }
 
-            // Other threads can only **remove** tasks from the current worker's
-            // `run_queue`. So, we can be confident that by the time we call
-            // `run_queue.push_back` below, there will be *at least* `cap`
-            // available slots in the queue.
             let cap = usize::min(
+                // Other threads can only **remove** tasks from the current
+                // worker's `run_queue`. So, we can be confident that by the
+                // time we call `run_queue.push_back` below, there will be *at
+                // least* `cap` available slots in the queue.
+                //
+                // Note that even though `next_local_task()` just returned
+                // `None`, this may be different from `max_capacity()` if
+                // another worker is currently stealing tasks from us.
                 self.run_queue.remaining_slots(),
+                // We want to make sure that all of the tasks we take end up in
+                // the first half of the local queue. This ensures that the
+                // tasks do not get pushed to the inject queue again if overflow
+                // occurs, as overflow only affects tasks in the second half of
+                // the local queue.
+                //
+                // Note that even if there are concurrent stealers, we do not
+                // need to consider the value of `remaining_slots()` because a
+                // future call to `push_overflow()` can only succeed once that
+                // concurrent stealer has finished stealing, so at that point
+                // the tasks we are adding now will be in the first half.
                 self.run_queue.max_capacity() / 2,
             );
 
@@ -904,13 +1190,13 @@ impl Core {
         self.is_searching
     }
 
-    fn transition_from_searching(&mut self, worker: &Worker) {
+    fn transition_from_searching(&mut self, worker: &Worker) -> bool {
         if !self.is_searching {
-            return;
+            return false;
         }
 
         self.is_searching = false;
-        worker.handle.transition_worker_from_searching();
+        worker.handle.transition_worker_from_searching()
     }
 
     fn has_tasks(&self) -> bool {
@@ -1053,6 +1339,15 @@ impl Worker {
 
 impl Handle {
     pub(super) fn schedule_task(&self, task: Notified, is_yield: bool) {
+        if self
+            .shared
+            .config
+            .metrics_schedule_latency_histogram
+            .is_some()
+        {
+            task.set_scheduled_at(ScheduleLatencyInstant::new(self.shared.started_at));
+        }
+
         with_current(|maybe_cx| {
             if let Some(cx) = maybe_cx {
                 // Make sure the task is part of the **current** scheduler.
@@ -1071,6 +1366,7 @@ impl Handle {
         });
     }
 
+    // Separated case to reduce LLVM codegen in `Handle::bind_new_task`.
     pub(super) fn schedule_option_task_without_yield(&self, task: Option<Notified>) {
         if let Some(task) = task {
             self.schedule_task(task, false);
@@ -1131,6 +1427,27 @@ impl Handle {
         }
     }
 
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    pub(crate) fn push_remote_timer(&self, hdl: time_alt::EntryHandle) {
+        assert_eq!(self.timer_flavor, TimerFlavor::Alternative);
+        {
+            let mut synced = self.shared.synced.lock();
+            synced.inject_timers.push(hdl);
+        }
+        self.notify_parked_remote();
+    }
+
+    #[cfg(all(tokio_unstable, feature = "time"))]
+    pub(crate) fn take_remote_timers(&self) -> Vec<time_alt::EntryHandle> {
+        assert_eq!(self.timer_flavor, TimerFlavor::Alternative);
+        // It's ok to lost the race, as another worker is
+        // draining the inject_timers.
+        match self.shared.synced.try_lock() {
+            Some(mut synced) => std::mem::take(&mut synced.inject_timers),
+            None => Vec::new(),
+        }
+    }
+
     pub(super) fn close(&self) {
         if self
             .shared
@@ -1141,12 +1458,18 @@ impl Handle {
         }
     }
 
-    fn notify_parked_local(&self) {
+    /// Notify a parked worker.
+    ///
+    /// Returns `true` if a worker was notified, `false` otherwise.
+    fn notify_parked_local(&self) -> bool {
         super::counters::inc_num_inc_notify_local();
 
         if let Some(index) = self.shared.idle.worker_to_notify(&self.shared) {
             super::counters::inc_num_unparks_local();
             self.shared.remotes[index].unpark.unpark(&self.driver);
+            true
+        } else {
+            false
         }
     }
 
@@ -1175,11 +1498,14 @@ impl Handle {
         }
     }
 
-    fn transition_worker_from_searching(&self) {
+    /// Returns `true` if another parked worker was notified, `false` otherwise.
+    fn transition_worker_from_searching(&self) -> bool {
         if self.shared.idle.transition_worker_from_searching() {
             // We are the final searching worker. Because work was found, we
             // need to notify another worker.
-            self.notify_parked_local();
+            self.notify_parked_local()
+        } else {
+            false
         }
     }
 
@@ -1247,6 +1573,13 @@ impl<'a> Lock<inject::Synced> for &'a Handle {
             lock: self.shared.synced.lock(),
         }
     }
+}
+
+#[cfg(all(tokio_unstable, feature = "time"))]
+/// Returned by [`Context::maintain_local_timers_before_parking`].
+struct MaintainLocalTimer {
+    park_duration: Option<Duration>,
+    auto_advance_duration: Option<Duration>,
 }
 
 #[track_caller]

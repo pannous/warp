@@ -20,8 +20,8 @@
 //! format.
 
 use crate::entity::entity_impl;
+use crate::ir::AliasRegion;
 use core::fmt;
-use core::u32;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -57,7 +57,6 @@ impl Block {
 /// - [`f64const`](super::InstBuilder::f64const) for 64-bit float constants
 /// - [`f128const`](super::InstBuilder::f128const) for 128-bit float constants
 /// - [`vconst`](super::InstBuilder::vconst) for vector constants
-/// - [`null`](super::InstBuilder::null) for null reference constants
 ///
 /// Any `InstBuilder` instruction that has an output will also return a `Value`.
 ///
@@ -170,8 +169,9 @@ impl DynamicType {
 /// - For any compilation target, it can be registered with
 ///   [`FunctionBuilder::create_global_value`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_global_value).
 ///
-/// `GlobalValue`s can be retrieved with
-/// [`InstBuilder:global_value`](super::InstBuilder::global_value).
+/// `GlobalValue`s can be referenced from a function's body with
+/// [`InstBuilder::symbol_value`](super::InstBuilder::symbol_value) and
+/// [`InstBuilder::tls_value`](super::InstBuilder::tls_value).
 ///
 /// While the order is stable, it is arbitrary.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -181,25 +181,6 @@ entity_impl!(GlobalValue, "gv");
 
 impl GlobalValue {
     /// Create a new global value reference from its number.
-    ///
-    /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX { Some(Self(n)) } else { None }
-    }
-}
-
-/// An opaque reference to a memory type.
-///
-/// A `MemoryType` is a descriptor of a struct layout in memory, with
-/// types and proof-carrying-code facts optionally attached to the
-/// fields.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemoryType(u32);
-entity_impl!(MemoryType, "mt");
-
-impl MemoryType {
-    /// Create a new memory type reference from its number.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
@@ -401,8 +382,6 @@ pub enum AnyEntity {
     DynamicType(DynamicType),
     /// A Global value.
     GlobalValue(GlobalValue),
-    /// A memory type.
-    MemoryType(MemoryType),
     /// A jump table.
     JumpTable(JumpTable),
     /// A constant.
@@ -413,6 +392,8 @@ pub enum AnyEntity {
     SigRef(SigRef),
     /// An exception table.
     ExceptionTable(ExceptionTable),
+    /// An alias region.
+    AliasRegion(AliasRegion),
     /// A function's stack limit
     StackLimit,
 }
@@ -428,12 +409,12 @@ impl fmt::Display for AnyEntity {
             Self::DynamicStackSlot(r) => r.fmt(f),
             Self::DynamicType(r) => r.fmt(f),
             Self::GlobalValue(r) => r.fmt(f),
-            Self::MemoryType(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
             Self::Constant(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
             Self::ExceptionTable(r) => r.fmt(f),
+            Self::AliasRegion(r) => r.fmt(f),
             Self::StackLimit => write!(f, "stack_limit"),
         }
     }
@@ -487,12 +468,6 @@ impl From<GlobalValue> for AnyEntity {
     }
 }
 
-impl From<MemoryType> for AnyEntity {
-    fn from(r: MemoryType) -> Self {
-        Self::MemoryType(r)
-    }
-}
-
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> Self {
         Self::JumpTable(r)
@@ -520,6 +495,12 @@ impl From<SigRef> for AnyEntity {
 impl From<ExceptionTable> for AnyEntity {
     fn from(r: ExceptionTable) -> Self {
         Self::ExceptionTable(r)
+    }
+}
+
+impl From<AliasRegion> for AnyEntity {
+    fn from(r: AliasRegion) -> Self {
+        Self::AliasRegion(r)
     }
 }
 

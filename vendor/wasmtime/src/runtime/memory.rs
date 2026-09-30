@@ -1,8 +1,10 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::{self, ExportMemory, VMStore};
+use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
@@ -106,8 +108,7 @@ impl core::error::Error for MemoryAccessError {}
 /// **unsafe** usages of `Memory`. Do not do these things!
 ///
 /// ```rust
-/// # use anyhow::Result;
-/// use wasmtime::{Memory, Store};
+/// use wasmtime::{Memory, Result, Store};
 ///
 /// // NOTE: All code in this function is not safe to execute and may cause
 /// // segfaults/undefined behavior at runtime. Do not copy/paste these examples
@@ -246,7 +247,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
@@ -259,10 +260,18 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
-            .expect("must use `new_async` when async resource limiters are in use")
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new(store, limiter.as_mut(), ty))
     }
 
     /// Async variant of [`Memory::new`]. You must use this variant with
@@ -273,6 +282,12 @@ impl Memory {
     ///
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
@@ -304,7 +319,7 @@ impl Memory {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1))")?;
@@ -326,6 +341,12 @@ impl Memory {
     ///
     /// If `offset + buffer.len()` exceed the current memory capacity, then the
     /// buffer is left untouched and a [`MemoryAccessError`] is returned.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -351,6 +372,12 @@ impl Memory {
     /// If the `offset + buffer.len()` exceeds the current memory capacity, then
     /// none of the buffer is written to memory and a [`MemoryAccessError`] is
     /// returned.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -574,20 +601,24 @@ impl Memory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     ///
+    /// This function will return an error if the [`Store`](`crate::Store`) has
+    /// a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
+    /// async resource limiter, use [`Memory::grow_async`] instead.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    ///
-    /// This function will panic if the [`Store`](`crate::Store`) has a
-    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
-    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
-    /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
     /// # Examples
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1 2))")?;
@@ -605,9 +636,8 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
-            .expect("must use `grow_async` if an async resource limiter is used")
+        let (mut limiter, store) = store.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(self._grow(store, limiter.as_mut(), delta))
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a
@@ -617,6 +647,12 @@ impl Memory {
     ///
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut();
@@ -667,6 +703,15 @@ impl Memory {
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         store.id() == self.instance.store_id()
+    }
+
+    /// Returns a stable identifier for this memory within its store.
+    ///
+    /// This allows distinguishing memories when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::from(self.instance.instance().as_u32()) << 32 | u64::from(self.index.as_u32())
     }
 
     /// Get a stable hash key for this memory.
@@ -795,7 +840,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 ///
 /// ```
 /// # use wasmtime::*;
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
 /// config.shared_memory(true);
@@ -820,6 +865,12 @@ impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
     /// pages on the system.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "threads")]
     pub fn new(engine: &Engine, ty: MemoryType) -> Result<Self> {
         if !ty.is_shared() {
@@ -912,6 +963,10 @@ impl SharedMemory {
     /// the maximum limits of this memory. A
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn grow(&self, delta: u64) -> Result<u64> {
         match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
@@ -1056,10 +1111,13 @@ mod tests {
         let store = store.as_context();
         let tunables = store.engine().tunables();
         assert_eq!(tunables.memory_guard_size, 0);
-        assert!(
-            !mem.wasmtime_ty(store.0)
-                .can_elide_bounds_check(tunables, 12)
-        );
+        assert!(!mem.wasmtime_ty(store.0).can_elide_bounds_check(
+            &wasmtime_environ::MemoryTunables::new(
+                tunables,
+                wasmtime_environ::MemoryKind::LinearMemory,
+            ),
+            12,
+        ));
     }
 
     #[test]

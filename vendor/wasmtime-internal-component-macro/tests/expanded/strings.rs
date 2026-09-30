@@ -103,8 +103,6 @@ pub struct TheWorld {
     interface0: exports::foo::foo::strings::Guest,
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -175,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::strings::HostWithStore,
+            D: foo::foo::strings::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::strings::Host,
             T: 'static,
         {
@@ -192,11 +190,11 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod strings {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            use wasmtime::component::__internal::Box;
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn a(&mut self, x: wasmtime::component::__internal::String) -> ();
@@ -222,16 +220,15 @@ pub mod foo {
                     Host::c(*self, a, b)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/strings")?;
                 inst.func_wrap(
                     "a",
                     move |
@@ -270,6 +267,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/strings")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
+            }
         }
     }
 }
@@ -279,7 +288,8 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod strings {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::{anyhow, Box};
+                use wasmtime::component::__internal::Box;
+                #[derive(Clone)]
                 pub struct Guest {
                     a: wasmtime::component::Func,
                     b: wasmtime::component::Func,
@@ -305,16 +315,16 @@ pub mod exports {
                             .component()
                             .get_export_index(None, "foo:foo/strings")
                             .ok_or_else(|| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                     "no exported instance named `foo:foo/strings`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!(
+                                    wasmtime::format_err!(
                                         "instance export `foo:foo/strings` does \
                       not have export `{name}`"
                                     )
@@ -355,34 +365,56 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_a(&self) -> wasmtime::component::TypedFunc<(&str,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&str,),
+                                (),
+                            >::new_unchecked(self.a)
+                        }
+                    }
                     pub fn call_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &str,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&str,),
-                                (),
-                            >::new_unchecked(self.a)
-                        };
+                        let callee = self.func_a();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(())
+                    }
+                    pub fn func_b(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.b)
+                        }
                     }
                     pub fn call_b<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::__internal::String> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.b)
-                        };
+                        let callee = self.func_b();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
+                    }
+                    pub fn func_c(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&str, &str),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&str, &str),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.c)
+                        }
                     }
                     pub fn call_c<S: wasmtime::AsContextMut>(
                         &self,
@@ -390,14 +422,8 @@ pub mod exports {
                         arg0: &str,
                         arg1: &str,
                     ) -> wasmtime::Result<wasmtime::component::__internal::String> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&str, &str),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.c)
-                        };
+                        let callee = self.func_c();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0, arg1))?;
-                        callee.post_return(store.as_context_mut())?;
                         Ok(ret0)
                     }
                 }

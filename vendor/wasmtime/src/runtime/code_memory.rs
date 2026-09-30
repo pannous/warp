@@ -5,10 +5,15 @@ use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
-use object::SectionFlags;
-use object::endian::Endianness;
-use object::read::{Object, ObjectSection, elf::ElfFile64};
-use wasmtime_environ::{Trap, lookup_trap_code, obj};
+use object::read::elf::SectionTable;
+use object::{LittleEndian, SectionIndex, U32};
+use object::{
+    elf::{FileHeader64, SectionHeader64},
+    endian::Endianness,
+    read::elf::{FileHeader as _, SectionHeader as _},
+};
+use wasmtime_environ::StaticModuleIndex;
+use wasmtime_environ::{CompiledTrap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -22,6 +27,7 @@ pub struct CodeMemory {
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
+    registered: bool,
     enable_branch_protection: bool,
     needs_executable: bool,
     #[cfg(feature = "debug-builtins")]
@@ -40,12 +46,18 @@ pub struct CodeMemory {
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
+    wasm_bytecode: Range<usize>,
+    wasm_bytecode_ends: Range<usize>,
 }
 
 impl Drop for CodeMemory {
     fn drop(&mut self) {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
+        //
+        // We do this rather than invoking `unpublish()` because we
+        // want to skip the mprotect() if we natively own the mmap and
+        // are going to munmap soon anyway.
         if let Some(mem) = self.custom_code_memory.as_ref() {
             if self.published && self.needs_executable {
                 let text = self.text();
@@ -90,7 +102,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn publish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 
     /// Unpublish a region of memory.
     ///
@@ -101,7 +113,7 @@ pub trait CustomCodeMemory: Send + Sync {
     ///
     /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
     /// per `required_alignment()`.
-    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> crate::Result<()>;
 }
 
 impl CodeMemory {
@@ -111,9 +123,23 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(engine: &Engine, mmap: MmapVec) -> Result<Self> {
-        let obj = ElfFile64::<Endianness>::parse(&mmap[..])
+        let mmap_data = &*mmap;
+        let header = FileHeader64::<Endianness>::parse(mmap_data)
             .map_err(obj::ObjectCrateErrorWrapper)
-            .with_context(|| "failed to parse internal compilation artifact")?;
+            .context("failed to parse precompiled artifact as an ELF")?;
+        let endian = header
+            .endian()
+            .context("failed to parse header endianness")?;
+
+        let section_headers = header
+            .section_headers(endian, mmap_data)
+            .context("failed to parse section headers")?;
+        let strings = header
+            .section_strings(endian, mmap_data, section_headers)
+            .context("failed to parse strings table")?;
+        let sections = header
+            .sections(endian, mmap_data)
+            .context("failed to parse sections table")?;
 
         let mut text = 0..0;
         let mut unwind = 0..0;
@@ -130,42 +156,58 @@ impl CodeMemory {
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
-        for section in obj.sections() {
-            let data = section.data().map_err(obj::ObjectCrateErrorWrapper)?;
-            let name = section.name().map_err(obj::ObjectCrateErrorWrapper)?;
+        let mut wasm_bytecode = 0..0;
+        let mut wasm_bytecode_ends = 0..0;
+        for section_header in sections.iter() {
+            let data = section_header
+                .data(endian, mmap_data)
+                .map_err(obj::ObjectCrateErrorWrapper)?;
+            let name = section_name(endian, strings, section_header)?;
             let range = subslice_range(data, &mmap);
 
             // Double-check that sections are all aligned properly.
-            if section.align() != 0 && data.len() != 0 {
-                if (data.as_ptr() as u64 - mmap.as_ptr() as u64) % section.align() != 0 {
-                    bail!(
-                        "section `{}` isn't aligned to {:#x}",
-                        section.name().unwrap_or("ERROR"),
-                        section.align()
-                    );
-                }
+            let section_align = usize::try_from(section_header.sh_addralign(endian))?;
+            if section_align != 0 && data.len() != 0 {
+                let section_offset = data.as_ptr().addr() - mmap.as_ptr().addr();
+                ensure!(
+                    section_offset % section_align == 0,
+                    "section {name:?} isn't aligned to {section_align:#x}",
+                );
+            }
+
+            // Check that we don't have any relocations, which would make
+            // loading precompiled Wasm modules slower and also force them to
+            // get paged into memory from disk.
+            //
+            // We avoid using things like Cranelift's `floor`, `ceil`,
+            // etc... operators in the Wasm-to-CLIF translator specifically to
+            // avoid having to do any relocations here. This also ensures that
+            // all builtins use the same trampoline mechanism.
+            //
+            // We do, however, allow relocations in `.debug_*` DWARF sections.
+            if let Some(target_section) = reloc_section_target(&sections, section_header, endian)? {
+                let target_name = section_name(endian, strings, target_section)?;
+                ensure!(
+                    target_name.starts_with(".debug_"),
+                    "section {target_name:?} has unexpected relocations \
+                     (defined in section {name:?})",
+                );
             }
 
             match name {
                 obj::ELF_WASM_BTI => match data.len() {
                     1 => enable_branch_protection = Some(data[0] != 0),
-                    _ => bail!("invalid `{name}` section"),
+                    _ => bail!("invalid {name:?} section"),
                 },
                 ".text" => {
                     text = range;
 
-                    if let SectionFlags::Elf { sh_flags } = section.flags() {
-                        if sh_flags & obj::SH_WASMTIME_NOT_EXECUTED != 0 {
-                            needs_executable = false;
-                        }
+                    if section_header
+                        .sh_flags(endian)
+                        .contains(obj::SH_WASMTIME_NOT_EXECUTED)
+                    {
+                        needs_executable = false;
                     }
-
-                    // Assert that Cranelift hasn't inserted any calls that need to be
-                    // relocated. We avoid using things like Cranelift's floor/ceil/etc.
-                    // operators in the Wasm-to-Cranelift translator specifically to
-                    // avoid having to do any relocations here. This also ensures that
-                    // all builtins use the same trampoline mechanism.
-                    assert!(section.relocations().next().is_none());
                 }
                 #[cfg(has_host_compiler_backend)]
                 crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
@@ -178,14 +220,26 @@ impl CodeMemory {
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE => wasm_bytecode = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE_ENDS => wasm_bytecode_ends = range,
+
                 #[cfg(feature = "debug-builtins")]
                 ".debug_info" => has_native_debug_info = true,
 
-                _ => log::debug!("ignoring section {name}"),
+                // These sections are expected, but we do not need to retain any
+                // info about them.
+                "" | ".symtab" | ".strtab" | ".shstrtab" | ".xdata" | obj::ELF_WASM_ENGINE => {
+                    log::debug!("ignoring section {name:?}")
+                }
+                _ if name.starts_with(".debug_") || name.starts_with(".rela.debug_") => {
+                    log::debug!("ignoring debug section {name:?}")
+                }
+
+                _ => bail!("unexpected section {name:?} in Wasm compilation artifact"),
             }
         }
 
-        // require mutability even when this is turned off
+        // Silence unused `mut` warning.
         #[cfg(not(has_host_compiler_backend))]
         let _ = &mut unwind;
 
@@ -207,8 +261,9 @@ impl CodeMemory {
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
             published: false,
+            registered: false,
             enable_branch_protection: enable_branch_protection
-                .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
+                .ok_or_else(|| format_err!("missing `{}` section", obj::ELF_WASM_BTI))?,
             needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,
@@ -224,6 +279,8 @@ impl CodeMemory {
             wasm_dwarf,
             info_data,
             wasm_data,
+            wasm_bytecode,
+            wasm_bytecode_ends,
         })
     }
 
@@ -287,6 +344,17 @@ impl CodeMemory {
         &self.mmap[self.frame_tables_data.clone()]
     }
 
+    /// Returns the concatenated Wasm bytecode section, or an empty slice if
+    /// the artifact was not compiled with `guest-debug` enabled.
+    pub fn wasm_bytecode(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode.clone()]
+    }
+
+    /// Returns the Wasm bytecode section end-offset array.
+    pub fn wasm_bytecode_ends(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode_ends.clone()]
+    }
+
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
     /// slice if it wasn't found.
     #[inline]
@@ -301,17 +369,52 @@ impl CodeMemory {
         &self.mmap[self.trap_data.clone()]
     }
 
+    /// Returns the Wasm bytecode section end-offset for a given core
+    /// module, or `None` if no bytecode is present.
+    ///
+    /// # Panics
+    ///
+    /// Panics if index is out-of-range.
+    fn wasm_bytecode_end_for_module(&self, index: StaticModuleIndex) -> Option<usize> {
+        if self.wasm_bytecode_ends().is_empty() {
+            return None;
+        }
+        let ends = self.wasm_bytecode_ends();
+        let count = ends.len() / core::mem::size_of::<u32>();
+        let (ends, _) = object::slice_from_bytes::<U32<LittleEndian>>(ends, count)
+            .expect("Invalid alignment of `ends` section");
+        let index = usize::try_from(index.as_u32()).unwrap();
+        Some(usize::try_from(ends[index].get(LittleEndian)).unwrap())
+    }
+
+    /// Returns the Wasm bytecode for the a core module in this
+    /// artifact, or `None` if bytecode was not preserved.
+    pub(crate) fn wasm_bytecode_for_module(&self, index: StaticModuleIndex) -> Option<&[u8]> {
+        let start = if index.as_u32() == 0 {
+            0
+        } else {
+            self.wasm_bytecode_end_for_module(StaticModuleIndex::from_u32(index.as_u32() - 1))?
+        };
+        let end = self.wasm_bytecode_end_for_module(index)?;
+        Some(&self.wasm_bytecode()[start..end])
+    }
+
     /// Publishes the internal ELF image to be ready for execution.
     ///
-    /// This method can only be called once and will panic if called twice. This
-    /// will parse the ELF image from the original `MmapVec` and do everything
-    /// necessary to get it ready for execution, including:
+    /// This method can only be when the image is not published (its
+    /// default state) and will panic if called when already
+    /// published. This will parse the ELF image from the original
+    /// `MmapVec` and do everything necessary to get it ready for
+    /// execution, including:
     ///
     /// * Change page protections from read/write to read/execute.
     /// * Register unwinding information with the OS
     /// * Register this image with the debugger if native DWARF is present
     ///
     /// After this function executes all JIT code should be ready to execute.
+    ///
+    /// The action may be reversed by calling [`Self::unpublish`], as long
+    /// as that method's safety requirements are upheld.
     pub fn publish(&mut self) -> Result<()> {
         assert!(!self.published);
         self.published = true;
@@ -358,14 +461,17 @@ impl CodeMemory {
                 }
             }
 
-            // With all our memory set up use the platform-specific
-            // `UnwindRegistration` implementation to inform the general
-            // runtime that there's unwinding information available for all
-            // our just-published JIT functions.
-            self.register_unwind_info()?;
+            if !self.registered {
+                // With all our memory set up use the platform-specific
+                // `UnwindRegistration` implementation to inform the general
+                // runtime that there's unwinding information available for all
+                // our just-published JIT functions.
+                self.register_unwind_info()?;
 
-            #[cfg(feature = "debug-builtins")]
-            self.register_debug_image()?;
+                #[cfg(feature = "debug-builtins")]
+                self.register_debug_image()?;
+                self.registered = true;
+            }
         }
 
         Ok(())
@@ -392,6 +498,78 @@ impl CodeMemory {
         } else {
             Ok(false)
         }
+    }
+
+    /// "Unpublish" code memory (transition it from executable to read/writable).
+    ///
+    /// This may be used to edit the code image, as long as the
+    /// overall size of the memory remains the same. Note the hazards
+    /// inherent in editing code that may have been executed: any
+    /// stack frames with PC still active in this code must be
+    /// suspended (e.g., called into a hostcall that is then invoking
+    /// this method, or async-yielded) and any active PC values must
+    /// point to valid instructions. Thus this is mostly useful for
+    /// patching in-place at particular sites, such as by the use of
+    /// Cranelift's `patchable_call` instruction.
+    ///
+    /// If this fails, then the memory remains executable.
+    pub fn unpublish(&mut self) -> Result<()> {
+        assert!(self.published);
+        self.published = false;
+
+        if self.text().is_empty() {
+            return Ok(());
+        }
+
+        if self.custom_unpublish()? {
+            return Ok(());
+        }
+
+        if !self.mmap.supports_virtual_memory() {
+            bail!("this target requires virtual memory to be enabled");
+        }
+
+        // SAFETY: we are guaranteed by our own safety conditions that
+        // we have exclusive access to this code and can change its
+        // permissions (removing the execute bit) without causing
+        // problems.
+        #[cfg(has_virtual_memory)]
+        unsafe {
+            self.mmap.make_readwrite(0..self.mmap.len())?;
+        }
+
+        // Note that we do *not* unregister: we expect unpublish
+        // to be used for temporary edits, so we want the
+        // registration to "stick" after the initial publish and
+        // not toggle in subsequent unpublish/publish cycles.
+
+        Ok(())
+    }
+
+    fn custom_unpublish(&mut self) -> Result<bool> {
+        if let Some(mem) = self.custom_code_memory.as_ref() {
+            let text = self.text();
+            mem.unpublish_executable(text.as_ptr(), text.len())?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Return a mutable borrow to the code, suitable for editing.
+    ///
+    /// Must not be published.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the code has been published (and not
+    /// subsequently unpublished).
+    pub fn text_mut(&mut self) -> &mut [u8] {
+        assert!(!self.published);
+        // SAFETY: we assert !published, which means we either have
+        // not yet applied readonly + execute permissions, or we have
+        // undone that and flipped back to read-write via unpublish.
+        unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] }
     }
 
     unsafe fn register_unwind_info(&mut self) -> Result<()> {
@@ -438,7 +616,7 @@ impl CodeMemory {
 
     /// Looks up the given offset within this module's text section and returns
     /// the trap code associated with that instruction, if there is one.
-    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
+    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<CompiledTrap> {
         lookup_trap_code(self.trap_data(), text_offset)
     }
 
@@ -458,6 +636,65 @@ impl CodeMemory {
         let mmap = self.mmap.deep_clone()?;
         Self::new(engine, mmap)
     }
+
+    /// Obtain a frame-table parser on this module's frame state slot
+    /// (debug instrumentation) metadata.
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table(&self) -> Option<wasmtime_environ::FrameTable<'_>> {
+        let data = self.frame_tables();
+        if data.is_empty() {
+            None
+        } else {
+            let orig_text = self.text();
+            Some(
+                wasmtime_environ::FrameTable::parse(data, orig_text)
+                    .expect("Frame tables were validated on module load"),
+            )
+        }
+    }
+}
+
+fn section_name<'a>(
+    endian: Endianness,
+    strings: object::StringTable<'a>,
+    section_header: &SectionHeader64<Endianness>,
+) -> Result<&'a str> {
+    let name = section_header
+        .name(endian, strings)
+        .map_err(obj::ObjectCrateErrorWrapper)?;
+    Ok(str::from_utf8(name).context("invalid section name in Wasm compilation artifact")?)
+}
+
+fn is_reloc_section(section_header: &SectionHeader64<Endianness>, endian: Endianness) -> bool {
+    let sh_type = section_header.sh_type(endian);
+    matches!(
+        sh_type,
+        object::elf::SHT_REL | object::elf::SHT_RELA | object::elf::SHT_CREL
+    )
+}
+
+fn reloc_section_target<'a>(
+    sections: &'a SectionTable<'a, FileHeader64<Endianness>, &'a [u8]>,
+    section: &'a SectionHeader64<Endianness>,
+    endian: Endianness,
+) -> Result<Option<&'a SectionHeader64<Endianness>>> {
+    if !is_reloc_section(&section, endian) {
+        return Ok(None);
+    }
+
+    let sh_info = section.info_link(endian);
+
+    // Dynamic relocation.
+    if sh_info == SectionIndex(0) {
+        return Ok(None);
+    }
+
+    ensure!(
+        sh_info.0 < sections.len(),
+        "invalid ELF `sh_info` for relocation section",
+    );
+
+    Ok(Some(sections.section(sh_info)?))
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the

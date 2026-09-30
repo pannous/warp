@@ -7,22 +7,21 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
-use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
-#[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
-use wasmtime_environ::PrimaryMap;
+#[cfg(feature = "component-model-async")]
+use core::pin::Pin;
 use wasmtime_environ::component::{NameMap, NameMapIntern};
+use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
 ///
-/// This type is used to both link components together as well as supply host
-/// functionality to components. Values are defined in a [`Linker`] by their
-/// import name and then components are instantiated with a [`Linker`] using the
-/// names provided for name resolution of the component's imports.
+/// This type is used to supply host functionality to components. Values are
+/// defined in a [`Linker`] by their import name and then components are
+/// instantiated with a [`Linker`] using the names provided for name resolution
+/// of the component's imports.
 ///
 /// # Names and Semver
 ///
@@ -60,9 +59,9 @@ use wasmtime_environ::component::{NameMap, NameMapIntern};
 /// be instantiated.
 pub struct Linker<T: 'static> {
     engine: Engine,
-    strings: Strings,
-    map: NameMap<usize, Definition>,
-    path: Vec<usize>,
+    strings: StringPool,
+    map: NameMap<Atom, Definition>,
+    path: Vec<Atom>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -71,19 +70,13 @@ impl<T: 'static> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
-            strings: self.strings.clone(),
-            map: self.map.clone(),
+            strings: self.strings.clone_panic_on_oom(),
+            map: self.map.clone_panic_on_oom(),
             path: self.path.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
     }
-}
-
-#[derive(Clone, Default)]
-pub struct Strings {
-    string2idx: HashMap<Arc<str>, usize>,
-    strings: Vec<Arc<str>>,
 }
 
 /// Structure representing an "instance" being defined within a linker.
@@ -93,20 +86,31 @@ pub struct Strings {
 /// internally.
 pub struct LinkerInstance<'a, T: 'static> {
     engine: &'a Engine,
-    path: &'a mut Vec<usize>,
+    path: &'a mut Vec<Atom>,
     path_len: usize,
-    strings: &'a mut Strings,
-    map: &'a mut NameMap<usize, Definition>,
+    strings: &'a mut StringPool,
+    map: &'a mut NameMap<Atom, Definition>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) enum Definition {
-    Instance(NameMap<usize, Definition>),
+    Instance(NameMap<Atom, Definition>),
     Func(Arc<HostFunc>),
     Module(Module),
     Resource(ResourceType, Arc<crate::func::HostFunc>),
+}
+
+impl TryClone for Definition {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            Self::Instance(i) => Self::Instance(i.try_clone()?),
+            Self::Func(f) => Self::Func(f.try_clone()?),
+            Self::Module(m) => Self::Module(m.clone()),
+            Self::Resource(r, f) => Self::Resource(*r, f.try_clone()?),
+        })
+    }
 }
 
 impl<T: 'static> Linker<T> {
@@ -115,7 +119,7 @@ impl<T: 'static> Linker<T> {
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
-            strings: Strings::default(),
+            strings: StringPool::default(),
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
@@ -165,7 +169,7 @@ impl<T: 'static> Linker<T> {
             engine: &self.engine,
             types: component.types(),
             strings: &self.strings,
-            imported_resources: Default::default(),
+            imported_resources: try_new::<Arc<_>>(TryPrimaryMap::new())?,
         };
 
         // Walk over the component's list of import names and use that to lookup
@@ -174,21 +178,32 @@ impl<T: 'static> Linker<T> {
         let env_component = component.env_component();
         for (_idx, (name, ty)) in env_component.import_types.iter() {
             let import = self.map.get(name, &self.strings);
-            cx.definition(ty, import)
-                .with_context(|| format!("component imports {desc} `{name}`, but a matching implementation was not found in the linker", desc = ty.desc()))?;
+            cx.definition(&ty.ty, import).with_context(|| {
+                format!(
+                    "component imports {desc} `{name}`, but \
+                     a matching implementation was not found in the linker",
+                    desc = ty.ty.desc()
+                )
+            })?;
         }
         Ok(cx)
     }
 
     /// Returns the [`types::Component`] corresponding to `component` with resource
     /// types imported by it replaced using imports present in [`Self`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn substituted_component_type(&self, component: &Component) -> Result<types::Component> {
         let cx = self.typecheck(&component)?;
         Ok(types::Component::from(
             component.ty(),
             &InstanceType {
                 types: cx.types,
-                resources: &cx.imported_resources,
+                resources: Some(&cx.imported_resources),
             },
         ))
     }
@@ -211,7 +226,18 @@ impl<T: 'static> Linker<T> {
     /// Returns an error if this linker doesn't define a name that the
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
+    ///
+    /// Returns an error if `component` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+        ensure!(
+            Engine::same(&self.engine, component.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
         let cx = self.typecheck(&component)?;
 
         // A successful typecheck resolves all of the imported resources used by
@@ -243,7 +269,7 @@ impl<T: 'static> Linker<T> {
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
                 Definition::Resource(t, dtor) => RuntimeImport::Resource {
                     ty: *t,
-                    _dtor: dtor.clone(),
+                    dtor: dtor.clone(),
                     dtor_funcref: component.resource_drop_func_ref(dtor),
                 },
 
@@ -255,7 +281,11 @@ impl<T: 'static> Linker<T> {
             assert_eq!(i, idx);
         }
         Ok(unsafe {
-            InstancePre::new_unchecked(component.clone(), Arc::new(imports), imported_resources)
+            InstancePre::new_unchecked(
+                component.clone(),
+                try_new::<Arc<_>>(imports)?,
+                imported_resources,
+            )
         })
     }
 
@@ -271,21 +301,24 @@ impl<T: 'static> Linker<T> {
     /// `component` requires or if it is of the wrong type. Additionally this
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate(
         &self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         component: &Component,
     ) -> Result<Instance> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use async instantiation when async support is enabled"
-        );
+        let store = store.as_context_mut();
+        store.0.validate_sync_call()?;
         self.instantiate_pre(component)?.instantiate(store)
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
     ///
-    /// This is exactly like [`Linker::instantiate`] except for async stores.
+    /// This is exactly like [`Linker::instantiate`] except for [asynchronous
+    /// execution](crate#async).
     ///
     /// # Errors
     ///
@@ -293,6 +326,10 @@ impl<T: 'static> Linker<T> {
     /// `component` requires or if it is of the wrong type. Additionally this
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
@@ -302,10 +339,6 @@ impl<T: 'static> Linker<T> {
     where
         T: Send,
     {
-        assert!(
-            store.as_context().async_support(),
-            "must use sync instantiation when async support is disabled"
-        );
         self.instantiate_pre(component)?
             .instantiate_async(store)
             .await
@@ -315,6 +348,12 @@ impl<T: 'static> Linker<T> {
     ///
     /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
     /// This changes this behavior from an instant error to a trap that will happen if the import is called.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
         use wasmtime_environ::component::ComponentTypes;
         use wasmtime_environ::component::TypeDef;
@@ -333,10 +372,45 @@ impl<T: 'static> Linker<T> {
             }
 
             match item_def {
-                TypeDef::ComponentFunc(_) => {
-                    let fully_qualified_name = parent_instance
-                        .map(|parent| format!("{parent}#{item_name}"))
-                        .unwrap_or_else(|| item_name.to_owned());
+                TypeDef::ComponentFunc(_func_idx) => {
+                    let fully_qualified_name = match parent_instance {
+                        Some(parent) => {
+                            let mut s = TryString::new();
+                            s.push_str(parent)?;
+                            s.push('#')?;
+                            s.push_str(item_name)?;
+                            s
+                        }
+                        None => {
+                            let mut s = TryString::new();
+                            s.push_str(item_name)?;
+                            s
+                        }
+                    };
+
+                    // An `async func`-typed import can never be satisfied by
+                    // `func_new` (only a sync-typed import can) — see
+                    // `typecheck_async`'s doc comment. Stub it with
+                    // `func_new_concurrent` instead so unsatisfied async
+                    // imports can be stubbed-as-traps too, not just sync
+                    // ones; if concurrency support isn't enabled there's no
+                    // way to stub it here, so fall through to `func_new` and
+                    // let instantiation fail with that same explanatory
+                    // error.
+                    #[cfg(feature = "component-model-async")]
+                    if types[*_func_idx].async_ && linker.engine.tunables().concurrency_support {
+                        linker.func_new_concurrent(&item_name, move |_, _, _, _| {
+                            let fully_qualified_name = fully_qualified_name.try_clone();
+                            Box::pin(async move {
+                                let fully_qualified_name = fully_qualified_name?;
+                                bail!(
+                                    "unknown import: `{fully_qualified_name}` has not been defined"
+                                )
+                            })
+                        })?;
+                        return Ok(());
+                    }
+
                     linker.func_new(&item_name, move |_, _, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")
                     })?;
@@ -348,7 +422,7 @@ impl<T: 'static> Linker<T> {
                         stub_item(
                             &mut linker_instance,
                             export_name,
-                            export,
+                            &export.ty,
                             Some(item_name),
                             types,
                         )?;
@@ -370,7 +444,7 @@ impl<T: 'static> Linker<T> {
             stub_item(
                 &mut self.root(),
                 import_name,
-                import_type,
+                &import_type.ty,
                 None,
                 component.types(),
             )?;
@@ -412,15 +486,19 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// # Blocking / Async Behavior
     ///
     /// The host function `func` provided here is a blocking function from the
-    /// perspective of WebAssembly, regardless of how [`Config::async_support`]
-    /// is defined. This function can be used both with sync and async stores
-    /// and will always define a blocking function.
+    /// perspective of WebAssembly. WebAssembly, and Rust, will be blocked until
+    /// `func` completes.
     ///
     /// To define a function which is async on the host, but blocking to the
     /// guest, see the [`func_wrap_async`] method.
     ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more words and examples
     pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<()>
@@ -429,7 +507,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::from_closure(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap(func)?))?;
         Ok(())
     }
 
@@ -449,24 +527,19 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// # Blocking / Async Behavior
     ///
-    /// This function can only be called when [`Config::async_support`] is
-    /// enabled. The function defined which WebAssembly calls will still appear
-    /// as blocking from the perspective of WebAssembly itself. The host,
-    /// however, can perform asynchronous operations without blocking the thread
+    /// The function defined which WebAssembly calls will still appear as
+    /// blocking from the perspective of WebAssembly itself. The host, however,
+    /// can perform asynchronous operations without blocking the thread
     /// performing a call.
     ///
-    /// When [`Config::async_support`] is enabled then all WebAssembly is
-    /// invoked on a separate stack within a Wasmtime-managed fiber. This means
-    /// that if the future returned by `F` is not immediately ready then the
-    /// fiber will be suspended to block WebAssembly but not the host. When the
-    /// future becomes ready again the fiber will be resumed to continue
-    /// execution within WebAssembly.
+    /// When defining host functions with this function, WebAssembly is invoked
+    /// on a separate stack within a Wasmtime-managed fiber (through the
+    /// `call_async`-style of invocation). This means that if the future
+    /// returned by `F` is not immediately ready then the fiber will be
+    /// suspended to block WebAssembly but not the host. When the future
+    /// becomes ready again the fiber will be resumed to continue execution
+    /// within WebAssembly.
     ///
-    /// # Panics
-    ///
-    /// This function panics if [`Config::async_support`] is set to `false`.
-    ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
     #[cfg(feature = "async")]
     pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
@@ -481,14 +554,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_async` without enabling async support in the config"
-        );
-        let ff = move |store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
-            store.block_on(|store| f(store, params).into())?
-        };
-        self.func_wrap(name, ff)
+        self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)?))?;
+        Ok(())
     }
 
     /// Defines a new host-provided async function into this [`LinkerInstance`].
@@ -521,14 +588,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// # Blocking / Async Behavior
     ///
-    /// This function can only be called when [`Config::async_support`] is
-    /// enabled. Unlike [`Self::func_wrap`] and [`Self::func_wrap_async`] this
-    /// function is asynchronous even from the perspective of guest WebAssembly.
-    /// This means that if `f` is not immediately resolved then the call from
+    /// Unlike [`Self::func_wrap`] and [`Self::func_wrap_async`] this function
+    /// is asynchronous even from the perspective of guest WebAssembly. This
+    /// means that if `f` is not immediately resolved then the call from
     /// WebAssembly will still return immediately (assuming it was lowered with
-    /// `async`). The closure `f` should not block the current thread and should
-    /// only perform blocking via `async` meaning that `f` won't block either
-    /// WebAssembly nor the host.
+    /// `async`). The closure `f` should not block the current thread and
+    /// should only perform blocking via `async` meaning that `f` won't block
+    /// either WebAssembly nor the host.
     ///
     /// Note that WebAssembly components can lower host functions both with and
     /// without `async`. That means that even if a host function is defined in
@@ -537,11 +603,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// `f` provided here completes. If a guest lowers this function with
     /// `async`, though, then no blocking will happen.
     ///
-    /// # Panics
-    ///
-    /// This function panics if [`Config::async_support`] is set to `false`.
-    ///
-    /// [`Config::async_support`]: crate::Config::async_support
     /// [`Config::wasm_component_model_async`]: crate::Config::wasm_component_model_async
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
     #[cfg(feature = "component-model-async")]
@@ -555,11 +616,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
-        self.insert(name, Definition::Func(HostFunc::from_concurrent(f)))?;
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
+        self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)?))?;
         Ok(())
     }
 
@@ -662,6 +722,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_new(
         &mut self,
         name: &str,
@@ -670,7 +736,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         + Sync
         + 'static,
     ) -> Result<()> {
-        self.insert(name, Definition::Func(HostFunc::new_dynamic(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new(func)?))?;
         Ok(())
     }
 
@@ -681,7 +747,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// For documentation on blocking behavior see [`Self::func_wrap_async`].
     #[cfg(feature = "async")]
-    pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_new_async<F>(&mut self, name: &str, func: F) -> Result<()>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
@@ -693,15 +759,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_new_async` without enabling async support in the config"
-        );
-        let ff = move |store: StoreContextMut<'_, T>, ty, params: &[Val], results: &mut [Val]| {
-            store
-                .with_blocking(|store, cx| cx.block_on(Pin::from(f(store, ty, params, results)))?)
-        };
-        return self.func_new(name, ff);
+        self.insert(name, Definition::Func(HostFunc::func_new_async(func)?))?;
+        Ok(())
     }
 
     /// Define a new host-provided async function using dynamic types.
@@ -725,11 +784,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
-        self.insert(name, Definition::Func(HostFunc::new_dynamic_concurrent(f)))?;
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
+        self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)?))?;
         Ok(())
     }
 
@@ -738,6 +796,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// This can be used to provide a core wasm [`Module`] as an import to a
     /// component. The [`Module`] provided is saved within the linker for the
     /// specified `name` in this instance.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
         self.insert(name, Definition::Module(module.clone()))?;
         Ok(())
@@ -765,16 +829,20 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// The provided `dtor` closure returns an error if something goes wrong
     /// when a guest calls the `dtor` to drop a `Resource<T>` such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn resource(
         &mut self,
         name: &str,
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = try_new::<Arc<_>>(crate::func::HostFunc::wrap(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
-        ));
+        )?)?;
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -783,22 +851,16 @@ impl<T: 'static> LinkerInstance<'_, T> {
     #[cfg(feature = "async")]
     pub fn resource_async<F>(&mut self, name: &str, ty: ResourceType, dtor: F) -> Result<()>
     where
+        T: Send,
         F: Fn(StoreContextMut<'_, T>, u32) -> Box<dyn Future<Output = Result<()>> + Send + '_>
             + Send
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `resource_async` without enabling async support in the config"
-        );
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = try_new::<Arc<_>>(crate::func::HostFunc::wrap_async(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                cx.as_context_mut()
-                    .block_on(|store| dtor(store, param).into())?
-            },
-        ));
+            move |cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.into(), param),
+        )?)?;
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -813,35 +875,31 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `resource_concurrent` without enabling async support in the config"
-        );
+        if !self.engine.tunables().concurrency_support {
+            bail!("concurrent host functions require `Config::concurrency_support`");
+        }
         // TODO: This isn't really concurrent -- it requires exclusive access to
         // the store for the duration of the call, preventing guest code from
         // running until it completes.  We should make it concurrent and clean
         // up the implementation to avoid using e.g. `Accessor::new` and
         // `tls::set` directly.
         let dtor = Arc::new(dtor);
-        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+        let dtor = Arc::new(crate::func::HostFunc::wrap_async(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
                 let dtor = dtor.clone();
-                cx.as_context_mut().block_on(move |mut store| {
-                    Box::pin(async move {
-                        let accessor =
-                            &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
-                        let mut future = std::pin::pin!(dtor(accessor, param));
-                        std::future::poll_fn(|cx| {
-                            crate::component::concurrent::tls::set(store.0, || {
-                                future.as_mut().poll(cx)
-                            })
-                        })
-                        .await
+                Box::new(async move {
+                    let mut store = cx.as_context_mut();
+                    let accessor =
+                        &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
+                    let mut future = core::pin::pin!(dtor(accessor, param));
+                    core::future::poll_fn(|cx| {
+                        crate::component::concurrent::tls::set(store.0, || future.as_mut().poll(cx))
                     })
-                })?
+                    .await
+                })
             },
-        ));
+        )?);
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -857,42 +915,38 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
-        let name = self.insert(name, Definition::Instance(NameMap::default()))?;
-        self.map = match self.map.raw_get_mut(&name) {
+        let atom = self.strings.intern(name)?;
+
+        // If this item is already an instance then don't stomp over it with a
+        // new empty instance (or fail due to shadowing being disallowed).
+        // Instead continue through to below to explicitly allow re-opening an
+        // instance multiple times over separate API calls.
+        //
+        // If this item isn't defined, or is defined as anything other than an
+        // instance, however, the insert a fresh new instance and see what
+        // happens as a result.
+        match self.map.raw_get_mut(&atom) {
+            Some(Definition::Instance(_)) => {}
+            _ => {
+                self.insert(name, Definition::Instance(NameMap::default()))?;
+            }
+        }
+        self.map = match self.map.raw_get_mut(&atom) {
             Some(Definition::Instance(map)) => map,
             _ => unreachable!(),
         };
         self.path.truncate(self.path_len);
-        self.path.push(name);
+        self.path.push(atom);
         self.path_len += 1;
         Ok(self)
     }
 
-    fn insert(&mut self, name: &str, item: Definition) -> Result<usize> {
+    fn insert(&mut self, name: &str, item: Definition) -> Result<Atom> {
         self.map
             .insert(name, self.strings, self.allow_shadowing, item)
     }
 
     fn get(&self, name: &str) -> Option<&Definition> {
         self.map.get(name, self.strings)
-    }
-}
-
-impl NameMapIntern for Strings {
-    type Key = usize;
-
-    fn intern(&mut self, string: &str) -> usize {
-        if let Some(idx) = self.string2idx.get(string) {
-            return *idx;
-        }
-        let string: Arc<str> = string.into();
-        let idx = self.strings.len();
-        self.strings.push(string.clone());
-        self.string2idx.insert(string, idx);
-        idx
-    }
-
-    fn lookup(&self, string: &str) -> Option<usize> {
-        self.string2idx.get(string).cloned()
     }
 }

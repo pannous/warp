@@ -99,8 +99,6 @@ pub struct NeptuneIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Neptune {}
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl NeptuneIndices {
         /// Creates a new copy of `NeptuneIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -167,7 +165,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::green::HostWithStore + foo::foo::red::HostWithStore,
+            D: foo::foo::green::HostWithStore<T> + foo::foo::red::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::green::Host + foo::foo::red::Host,
             T: 'static,
         {
@@ -182,45 +180,56 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod green {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Thing = i32;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/green")?;
-                Ok(())
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
         pub mod red {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             pub type Thing = super::super::super::foo::foo::green::Thing;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn foo(&mut self) -> Thing;
@@ -230,16 +239,15 @@ pub mod foo {
                     Host::foo(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/red")?;
                 inst.func_wrap(
                     "foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
@@ -249,6 +257,18 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/red")?;
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }

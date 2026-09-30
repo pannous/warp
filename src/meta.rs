@@ -1,4 +1,3 @@
-use crate::node::DataType;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
@@ -7,10 +6,11 @@ use log::trace;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct LineInfo {
-	// #cfg(DEBUG!)]{  TODO conditional compilation
+	// #cfg(DEBUG!)]{  DONE conditional compilation
 	pub line_nr: usize,
 	pub column: usize,
-	pub line : String, // debug! expensive but useful
+	#[cfg(debug_assertions)]
+	pub line: String, // debug! expensive but useful
 }
 
 
@@ -35,6 +35,19 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
 			false
 		}
 	}
+}
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum DataType {
+	Primitive, // map to Node(Number) early! get rid? sometimes need f16 vs f32 vs f64?
+	String,    // map to Node(String) early! get rid?
+	Vec,       // map to Node::List(…) early or keep raw for efficiency!
+	Tuple,     // - '' -
+	Reference,
+	Struct, // map to Node(…) early!! (if possible, else interesting Rust objects!)
+	Other,  // <- only interesting cases
+	None,   // <- only interesting cases
 }
 
 pub struct Dada {
@@ -111,6 +124,12 @@ impl fmt::Display for Dada {
 
 impl fmt::Debug for Dada {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		// Special handling for GcObject to show actual values
+		if self.type_name.contains("GcObject") {
+			if let Some(gc_obj) = self.downcast_ref::<crate::gc_traits::GcObject>() {
+				return write!(f, "{:?}", gc_obj);
+			}
+		}
 		write!(f, "Dada({:?}:{})", self.data_type, self.type_name)
 	}
 }

@@ -54,6 +54,9 @@ impl<'a> Module<'a> {
     /// If an error happens during resolution, such a name resolution error or
     /// items are found in the wrong order, then an error is returned.
     pub fn resolve(&mut self) -> std::result::Result<Names<'a>, crate::Error> {
+        // Ensure that each resolution of a module is deterministic in the names
+        // that it generates by resetting our thread-local symbol generator.
+        crate::gensym::reset();
         let names = match &mut self.kind {
             ModuleKind::Text(fields) => crate::core::resolve::resolve(fields)?,
             ModuleKind::Binary(_blobs) => Default::default(),
@@ -130,7 +133,7 @@ impl<'a> Parse<'a> for Module<'a> {
 pub enum ModuleField<'a> {
     Type(Type<'a>),
     Rec(Rec<'a>),
-    Import(Import<'a>),
+    Import(Imports<'a>),
     Func(Func<'a>),
     Table(Table<'a>),
     Memory(Memory<'a>),

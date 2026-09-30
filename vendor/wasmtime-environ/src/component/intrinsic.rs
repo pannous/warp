@@ -1,8 +1,7 @@
 //! Wasmtime compile-time intrinsic definitions.
 
+use crate::prelude::*;
 use core::str::FromStr;
-
-use anyhow::{Result, bail};
 use serde_derive::{Deserialize, Serialize};
 
 /// Invoke a macro for each of our unsafe intrinsics.
@@ -23,6 +22,23 @@ macro_rules! for_each_unsafe_intrinsic {
 
             "u64-native-load" => U64NativeLoad : u64_native_load(address: u64) -> u64;
             "u64-native-store" => U64NativeStore : u64_native_store(address: u64, value: u64);
+
+            "u8-checked-native-load" => U8CheckedNativeLoad : u8_checked_native_load(base_address: u64, offset: u64, length: u64) -> u8;
+            "u8-checked-native-store" => U8CheckedNativeStore : u8_checked_native_store(base_address: u64, offset: u64, length: u64, value: u8);
+
+            "u16-checked-native-load" => U16CheckedNativeLoad : u16_checked_native_load(base_address: u64, offset: u64, length: u64) -> u16;
+            "u16-checked-native-store" => U16CheckedNativeStore : u16_checked_native_store(base_address: u64, offset: u64, length: u64, value: u16);
+
+            "u32-checked-native-load" => U32CheckedNativeLoad : u32_checked_native_load(base_address: u64, offset: u64, length: u64) -> u32;
+            "u32-checked-native-store" => U32CheckedNativeStore : u32_checked_native_store(base_address: u64, offset: u64, length: u64, value: u32);
+
+            "u64-checked-native-load" => U64CheckedNativeLoad : u64_checked_native_load(base_address: u64, offset: u64, length: u64) -> u64;
+            "u64-checked-native-store" => U64CheckedNativeStore : u64_checked_native_store(base_address: u64, offset: u64, length: u64, value: u64);
+
+            "context-get-i32-0" => ContextGetI32_0 : context_get_i32_0() -> u32;
+            "context-set-i32-0" => ContextSetI32_0 : context_set_i32_0(val: u32);
+            "context-get-i32-1" => ContextGetI32_1 : context_get_i32_1() -> u32;
+            "context-set-i32-1" => ContextSetI32_1 : context_set_i32_1(val: u32);
         }
     };
 }
@@ -120,7 +136,7 @@ macro_rules! define_unsafe_intrinsics {
         }
 
         impl FromStr for UnsafeIntrinsic {
-            type Err = anyhow::Error;
+            type Err = Error;
 
             fn from_str(s: &str) -> Result<Self> {
                 match s {

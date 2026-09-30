@@ -14,6 +14,7 @@
     allow(dead_code, reason = "see comment above")
 )]
 
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 
 #[cfg(feature = "std")]
@@ -23,7 +24,12 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 use hashbrown::{HashMap, HashSet, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{HashMap, hash_map};
+use std::collections::{HashMap, HashSet, hash_map};
+
+/// Type alias for a hash map that uses the Fx hashing algorithm.
+pub type FxHashMap<K, V> = HashMap<K, V, rustc_hash::FxBuildHasher>;
+/// Type alias for a hash set that uses the Fx hashing algorithm.
+pub type FxHashSet<V> = HashSet<V, rustc_hash::FxBuildHasher>;
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -54,6 +60,7 @@ pub mod inline;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
+pub mod post_dominator_tree;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;
@@ -64,24 +71,24 @@ pub mod write;
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
     ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, FinalizedMachReloc,
-    FinalizedRelocTarget, MachCallSite, MachSrcLoc, MachTextSectionBuilder, MachTrap,
-    OpenPatchRegion, PatchRegion,
+    FinalizedRelocTarget, MachCallSite, MachExceptionHandler, MachSrcLoc, MachTextSectionBuilder,
+    MachTrap, OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
-    CallInfo, CompiledCode, Final, MachBuffer, MachBufferDebugTagList, MachBufferFinalized,
-    MachBufferFrameLayout, MachDebugTagPos, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
-    RealReg, Reg, RelocDistance, TextSectionBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, Writable,
+    CallInfo, CompiledCode, Final, FrameLayout, MachBuffer, MachBufferDebugTagList,
+    MachBufferFinalized, MachBufferFrameLayout, MachDebugTagPos, MachInst, MachInstEmit,
+    MachInstEmitState, MachLabel, RealReg, Reg, RegClass, RelocDistance, TextSectionBuilder,
+    VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, Writable,
 };
 
 mod alias_analysis;
+mod branch_to_trap;
 mod constant_hash;
 mod context;
 mod ctxhash;
 mod egraph;
 mod inst_predicates;
 mod isle_prelude;
-mod legalizer;
 mod nan_canonicalization;
 mod opts;
 mod ranges;

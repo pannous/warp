@@ -9,8 +9,8 @@ use super::{
     ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
     FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel, MemLabel,
     MoveWideConst, MoveWideOp, NZCV, Opcode, OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
-    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, lower_fp_condcode,
-    stack_reg, writable_link_reg, writable_zero_reg, zero_reg,
+    UImm5, UImm6, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, stack_reg,
+    writable_link_reg, writable_zero_reg, zero_reg,
 };
 use crate::ir::{ArgumentExtension, condcodes};
 use crate::isa;
@@ -20,21 +20,20 @@ use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlagsData, TrapCode, Value,
         ValueList, immediates::*, types::*,
     },
     isa::aarch64::abi::AArch64MachineDeps,
     isa::aarch64::inst::SImm7Scaled,
-    isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::inst::args::{AtomicCAS128Args, ShiftOp, ShiftOpShiftImm},
     machinst::{
         CallArgList, CallRetList, InstOutput, MachInst, VCodeConstant, VCodeConstantData,
         abi::ArgPair, ty_bits,
     },
 };
-use core::u32;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<Reg>>;
@@ -43,6 +42,7 @@ type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;
+type BoxAtomicCAS128Args = Box<AtomicCAS128Args>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -83,6 +83,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
+        patchable: bool,
     ) -> BoxCallInfo {
         let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
         let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
@@ -92,7 +93,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
         )
     }
 
@@ -112,7 +113,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
         Box::new(
             self.lower_ctx
-                .gen_call_info(sig, dest, uses, defs, try_call_info),
+                .gen_call_info(sig, dest, uses, defs, try_call_info, false),
         )
     }
 
@@ -134,6 +135,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             dest,
             uses,
             key,
+            sign_return_address_all: self.backend.isa_flags.sign_return_address_all(),
             new_stack_arg_size,
         })
     }
@@ -156,6 +158,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             dest,
             uses,
             key,
+            sign_return_address_all: self.backend.isa_flags.sign_return_address_all(),
             new_stack_arg_size,
         })
     }
@@ -176,8 +179,51 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
+    fn atomic_cas_128_args(
+        &mut self,
+        rd_lo: WritableReg,
+        rd_hi: WritableReg,
+        rs_lo: Reg,
+        rs_hi: Reg,
+        rt_lo: Reg,
+        rt_hi: Reg,
+        rn: Reg,
+        flags: MemFlagsData,
+    ) -> BoxAtomicCAS128Args {
+        Box::new(AtomicCAS128Args {
+            rd_lo,
+            rd_hi,
+            rs_lo,
+            rs_hi,
+            rt_lo,
+            rt_hi,
+            rn,
+            flags,
+        })
+    }
+
+    fn use_dotprod(&mut self, _: Inst) -> Option<()> {
+        if self.backend.isa_flags.has_dotprod() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    fn use_i8mm(&mut self, _: Inst) -> Option<()> {
+        if self.backend.isa_flags.has_i8mm() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
     fn use_fp16(&mut self) -> bool {
         self.backend.isa_flags.has_fp16()
+    }
+
+    fn use_csdb(&mut self) -> bool {
+        self.backend.isa_flags.use_csdb()
     }
 
     fn move_wide_const_from_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
@@ -219,6 +265,29 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         ImmShift::maybe_from_u64(n.into()).unwrap()
     }
 
+    /// Compute the `immr` value for an `sbfm` instruction,
+    /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
+    fn bfm_immr(&mut self, ty: Type, a: u64, b: u64) -> UImm6 {
+        let w = ty.lane_bits() as u8;
+        debug_assert!(w <= 64);
+
+        let a = (a as u8) & (w - 1);
+        let b = (b as u8) & (w - 1);
+        let result = if a <= b { b - a } else { w - (a - b) };
+        UImm6::maybe_from_u8(result).expect("result is always less than 64")
+    }
+
+    /// Compute the `imms` value for an `sbfm` instruction,
+    /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
+    fn bfm_imms(&mut self, ty: Type, a: u64, _b: u64) -> UImm6 {
+        let w = ty.lane_bits() as u8;
+        debug_assert!(w <= 64);
+
+        let a = (a as u8) & (w - 1);
+        let result = w - 1 - (a & (w - 1));
+        UImm6::maybe_from_u8(result).expect("result is always less than 64")
+    }
+
     fn lshr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         if let Ok(bits) = u8::try_from(ty_bits(ty)) {
@@ -236,7 +305,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= std::u8::MAX as usize {
+        if shiftee_bits <= u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
         } else {
@@ -247,7 +316,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= std::u8::MAX as usize {
+        if shiftee_bits <= u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
         } else {
@@ -380,10 +449,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             },
             size,
         });
-        if self.backend.flags.enable_pcc() {
-            self.lower_ctx
-                .add_range_fact(rd.to_reg(), 64, running_value, running_value);
-        }
 
         // Emit a `movk` instruction for each remaining slice of the desired
         // constant that does not match the initial value constructed above.
@@ -399,10 +464,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     size,
                 });
                 running_value = replace(running_value, bits, shift);
-                if self.backend.flags.enable_pcc() {
-                    self.lower_ctx
-                        .add_range_fact(rd.to_reg(), 64, running_value, running_value);
-                }
             }
         }
 
@@ -583,10 +644,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
-    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
-        lower_fp_condcode(*cc)
-    }
-
     fn cond_code(&mut self, cc: &condcodes::IntCC) -> Cond {
         lower_condcode(*cc)
     }
@@ -748,7 +805,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn vec_extract_imm4_from_immediate(&mut self, imm: Immediate) -> Option<u8> {
         let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
 
-        if bytes.windows(2).all(|a| a[0] + 1 == a[1]) && bytes[0] < 16 {
+        if bytes.array_windows().all(|[a, b]| *a + 1 == *b) && bytes[0] < 16 {
             Some(bytes[0])
         } else {
             None
@@ -821,6 +878,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     }
 
     fn uimm12_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
+        UImm12Scaled::maybe_from_i64(val, ty)
+    }
+
+    /// Like `uimm12_scaled_from_i64`, but rejects a zero value so `base + index
+    /// + 0` keeps its single-instruction `RegExtended` amode.
+    fn uimm12_scaled_nonzero_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
+        if val == 0 {
+            return None;
+        }
         UImm12Scaled::maybe_from_i64(val, ty)
     }
 

@@ -3,6 +3,9 @@ use crate::fallback::{
     TokenStreamBuilder,
 };
 use crate::{Delimiter, Punct, Spacing, TokenTree};
+use alloc::borrow::ToOwned as _;
+use alloc::string::ToString as _;
+use alloc::vec::Vec;
 use core::char;
 use core::str::{Bytes, CharIndices, Chars};
 
@@ -737,7 +740,7 @@ fn float_digits(input: Cursor) -> Result<Cursor, Reject> {
                 chars.next();
                 if chars
                     .peek()
-                    .map_or(false, |&ch| ch == '.' || is_ident_start(ch))
+                    .is_some_and(|&ch| ch == '.' || is_ident_start(ch))
                 {
                     return Err(Reject);
                 }

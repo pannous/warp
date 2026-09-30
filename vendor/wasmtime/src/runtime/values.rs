@@ -1,10 +1,9 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, RefType, Rooted,
-    StructRef, V128, ValType, prelude::*,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
+    RefType, Rooted, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
-use wasmtime_environ::WasmHeapTopType;
 
 pub use crate::runtime::vm::ValRaw;
 
@@ -125,16 +124,6 @@ impl Val {
         Val::AnyRef(None)
     }
 
-    pub(crate) const fn null_top(top: WasmHeapTopType) -> Val {
-        match top {
-            WasmHeapTopType::Func => Val::FuncRef(None),
-            WasmHeapTopType::Extern => Val::ExternRef(None),
-            WasmHeapTopType::Any => Val::AnyRef(None),
-            WasmHeapTopType::Exn => Val::ExnRef(None),
-            WasmHeapTopType::Cont => Val::ContRef(None),
-        }
-    }
-
     /// Returns the default value for the given type, if any exists.
     ///
     /// Returns `None` if there is no default value for the given type (for
@@ -192,7 +181,7 @@ impl Val {
             Val::ExnRef(Some(e)) => ValType::Ref(RefType::new(false, e._ty(store)?.into())),
             Val::ContRef(_) => {
                 // TODO(#10248): Return proper continuation reference type when available
-                return Err(anyhow::anyhow!(
+                return Err(crate::format_err!(
                     "continuation references not yet supported in embedder API"
                 ));
             }
@@ -265,7 +254,12 @@ impl Val {
     /// The returned [`ValRaw`] does not carry type information and is only safe
     /// to use within the context of this store itself. For more information see
     /// [`ExternRef::to_raw`] and [`Func::to_raw`].
-    pub fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<ValRaw> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self.to_raw_(&mut store)
+    }
+
+    pub(crate) fn to_raw_(&self, store: &mut AutoAssertNoGc) -> Result<ValRaw> {
         match self {
             Val::I32(i) => Ok(ValRaw::i32(*i)),
             Val::I64(i) => Ok(ValRaw::i64(*i)),
@@ -274,23 +268,23 @@ impl Val {
             Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
             Val::ExternRef(e) => Ok(ValRaw::externref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::AnyRef(e) => Ok(ValRaw::anyref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::ExnRef(e) => Ok(ValRaw::exnref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::FuncRef(f) => Ok(ValRaw::funcref(match f {
-                Some(f) => f.to_raw(store),
+                Some(f) => f.to_raw_(store),
                 None => ptr::null_mut(),
             })),
             Val::ContRef(_) => {
                 // TODO(#10248): Implement proper continuation reference to_raw conversion
-                Err(anyhow::anyhow!(
+                Err(crate::format_err!(
                     "continuation references not yet supported in to_raw conversion"
                 ))
             }
@@ -864,11 +858,11 @@ impl Ref {
     #[inline]
     pub fn null(heap_type: &HeapType) -> Self {
         match heap_type.top() {
-            HeapType::Any => Ref::Any(None),
-            HeapType::Extern => Ref::Extern(None),
-            HeapType::Func => Ref::Func(None),
-            HeapType::Exn => Ref::Exn(None),
-            ty => unreachable!("not a heap type: {ty:?}"),
+            HeapTopType::Any => Ref::Any(None),
+            HeapTopType::Extern => Ref::Extern(None),
+            HeapTopType::Func => Ref::Func(None),
+            HeapTopType::Exn => Ref::Exn(None),
+            HeapTopType::Cont => unimplemented!("embedding API for `(ref cont)`"),
         }
     }
 

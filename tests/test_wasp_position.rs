@@ -1,6 +1,6 @@
-use wasp::eq;
-use wasp::Node;
-use wasp::wasp_parser::WaspParser;
+use warp::eq;
+use warp::Node;
+use warp::wasp_parser::WaspParser;
 
 #[test]
 fn test_position_tracking() {
@@ -13,13 +13,13 @@ city: "NYC""#;
 
 	if let Node::List(items, _, _) = node {
 		// First item should be at line 1
-		if let Some(first) = items.get(0) {
-			if let Some(meta) = first.get_lineinfo() {
+		if let Some(first) = items.first() {
+			if let Some(info) = first.get_lineinfo() {
 				println!(
 					"First item position: line {:?}, column {:?}",
-					meta.line_nr, meta.column
+					info.line_nr, info.column
 				);
-				eq!(meta.line_nr, 1);
+				eq!(info.line_nr, 1);
 			}
 		}
 
@@ -52,7 +52,7 @@ age: 25"#;
 	println!("Parsed with comments: {:?}", node);
 
 	if let Node::List(items, _, _) = node {
-		if let Some(first) = items.get(0) {
+		if let Some(first) = items.first() {
 			if let Some(meta) = first.get_lineinfo() {
 				println!("First: line={:?}, col={:?}", meta.line_nr, meta.column);
 				eq!(meta.line_nr, 2);
@@ -108,7 +108,7 @@ fn test_column_tracking() {
 	println!("Parsed: {:?}", node);
 
 	if let Node::List(items, _, _) = node {
-		if let Some(first) = items.get(0) {
+		if let Some(first) = items.first() {
 			if let Some(meta) = first.get_lineinfo() {
 				println!("First at: {}:{}", meta.line_nr, meta.column);
 				eq!(meta.line_nr, 1);

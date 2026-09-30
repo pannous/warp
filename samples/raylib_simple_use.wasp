@@ -1,0 +1,13 @@
+#!/usr/bin/env wasp
+import raylib
+// Above should preload/offer ALL functions including:
+#import InitWindow from "raylib"
+#import BeginDrawing from "raylib"
+#import EndDrawing from "raylib"
+#import DrawCircle from "raylib"
+
+InitWindow(800, 600, "Wasp Raylib - Circle Demo")
+BeginDrawing()
+DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON
+EndDrawing()
+sleep(500)

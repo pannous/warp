@@ -4,17 +4,21 @@
 // use extensions::Numbers::*;
 // use extensions::Strings::*;
 
+use crate::node::Bracket;
+use crate::node::Separator;
+use crate::Number::Int;
 use crate::node::Node;
 use crate::wasp_parser::parse;
 
 pub mod lists;
 pub mod numbers;
+pub mod reals;
 pub mod strings; // ⚠️ reexport still needs explicit import:
 pub mod utils;
 // use extensions::Numbers::*;
 
-#[allow(dead_code)]
-mod extensions {}
+// #[allow(dead_code)]
+// mod extensions {}
 
 // fucking s!("to_string")
 // better use "wtf".s() from extensions::strings
@@ -24,6 +28,47 @@ macro_rules! s {
 		$str.to_string()
 	};
 }
+
+#[macro_export]
+macro_rules! strings { // ever used?
+	($($lit:literal),* $(,)?) => {
+		vec![$(String::from($lit)),*]
+	};
+}
+
+#[macro_export]
+macro_rules! Strings { // Texts // boxed list of Text nodes
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Colon)
+	};
+}
+
+#[macro_export]
+macro_rules! symbols { // boxed list of Symbol nodes
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Symbol(($lit).to_string())),*],Bracket::None, Separator::Space)
+	};
+}
+
+
+#[macro_export]
+macro_rules! expression { // boxed list of Symbol nodes
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(Node::Symbol(($lit).to_string())),*],Bracket::None, Separator::Space)
+	};
+}
+
+// #[macro_export]
+// macro_rules! ints { // just use primitive integer vec!
+
+
+#[macro_export]
+macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
+	($($lit:literal),* $(,)?) => {
+		Node::List(vec![$(int($lit)),*], Bracket::None, Separator::Space)
+	};
+}
+
 
 // Modules can reside in a file with the same name as the module,
 // or in a file named mod.rs inside a directory with the same name as the module.
@@ -48,14 +93,31 @@ macro_rules! exists {
 	}};
 }
 
+
 #[macro_export]
-macro_rules! is {
+macro_rules! peq { // parser eq!
 	// Evaluate string expressions like "3+3" and roundtrip through WASM
 	($a:expr, $b:expr) => {{
-		let result = wasp::wasm_gc_emitter::eval($a);
+		let result = parse($a);
 		assert_eq!(result, $b);
 	}};
 }
+
+#[macro_export]
+macro_rules! is {
+	// Evaluate string expressions like "3+3" and roundtrip through WASM
+	// Standard comparison for built-in types
+	($a:expr, $b:expr) => {{
+		let result = $crate::wasm_emitter::eval($a);
+		assert_eq!(result, $b);
+	}};
+	// For wasm_struct! types: use reverse comparison (Person == Node)
+	($a:expr, $b:expr, gc) => {{
+		let result = $crate::wasm_emitter::eval($a);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+	}};
+}
+
 
 #[macro_export]
 macro_rules! skip {
@@ -150,9 +212,15 @@ pub fn prints(msg: String) {
 // use should_panic !
 // e.g. #[should_panic(expected = "Expected error, but code parsed successfully.")]
 pub fn assert_throws(code: &str) {
-	match parse(code) {
-		Node::Error(_) => (), // Test passes if an error is thrown
-		_ => panic!("Expected error, but code parsed successfully."),
+	use crate::analyzer::analyze;
+	let parsed = parse(code);
+	if let Node::Error(_) = &parsed {
+		return; // Parse error - test passes
+	}
+	// Also check for analysis errors (type mismatches, etc.)
+	match analyze(parsed) {
+		Node::Error(_) => (), // Analysis error - test passes
+		_ => panic!("Expected error, but code parsed and analyzed successfully."),
 	}
 }
 

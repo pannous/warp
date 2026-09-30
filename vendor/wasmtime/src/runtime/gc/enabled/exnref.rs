@@ -1,14 +1,17 @@
 //! Implementation of `exnref` in Wasmtime.
 
-use crate::runtime::vm::{VMGcRef, VMStore};
-use crate::store::{StoreId, StoreResourceLimiter};
+use crate::runtime::vm::VMGcRef;
+use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
+#[cfg(feature = "async")]
+use crate::vm::VMStore;
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
-    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Result,
-    Rooted, Val, ValRaw, ValType, WasmTy,
+    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Rooted, Val,
+    ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
 use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
+use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -70,6 +73,11 @@ pub struct ExnRefPre {
 impl ExnRefPre {
     /// Create a new `ExnRefPre` that is associated with the given store
     /// and type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
     pub fn new(mut store: impl AsContextMut, ty: ExnType) -> Self {
         Self::_new(store.as_context_mut().0, ty)
     }
@@ -77,7 +85,6 @@ impl ExnRefPre {
     pub(crate) fn _new(store: &mut StoreOpaque, ty: ExnType) -> Self {
         store.insert_gc_host_alloc_type(ty.registered_type().clone());
         let store_id = store.id();
-
         ExnRefPre { store_id, ty }
     }
 
@@ -191,11 +198,11 @@ impl ExnRef {
     /// error is returned. The allocation might succeed on a second attempt if
     /// you drop some rooted GC references and try again.
     ///
-    /// # Panics
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error
+    /// will be returned because [`ExnRef::new_async`] should be used instead.
     ///
-    /// Panics if your engine is configured for async; use
-    /// [`ExnRef::new_async`][crate::ExnRef::new_async] to perform
-    /// synchronous allocation instead.
+    /// # Panics
     ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
@@ -205,14 +212,17 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        assert!(!store.async_support());
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
         vm::assert_ready(Self::_new_async(
             store,
             limiter.as_mut(),
             allocator,
             tag,
             fields,
+            Asyncness::No,
         ))
     }
 
@@ -238,10 +248,6 @@ impl ExnRef {
     ///
     /// # Panics
     ///
-    /// Panics if your engine is not configured for async; use
-    /// [`ExnRef::new`][crate::ExnRef::new] to perform synchronous
-    /// allocation instead.
-    ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
     #[cfg(feature = "async")]
@@ -252,7 +258,15 @@ impl ExnRef {
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(store, limiter.as_mut(), allocator, tag, fields).await
+        Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            tag,
+            fields,
+            Asyncness::Yes,
+        )
+        .await
     }
 
     pub(crate) async fn _new_async(
@@ -261,10 +275,11 @@ impl ExnRef {
         allocator: &ExnRefPre,
         tag: &Tag,
         fields: &[Val],
+        asyncness: Asyncness,
     ) -> Result<Rooted<ExnRef>> {
         Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
         store
-            .retry_after_gc_async(limiter, (), |store, ()| {
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_unchecked(store, allocator, tag, fields)
             })
             .await
@@ -350,7 +365,7 @@ impl ExnRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, exnref.into())),
             Err(e) => {
-                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref);
+                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref)?;
                 Err(e)
             }
         }
@@ -358,7 +373,7 @@ impl ExnRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
         Ok(header.ty().expect("exnrefs should have concrete types"))
     }
@@ -376,8 +391,8 @@ impl ExnRef {
         debug_assert!(
             store
                 .unwrap_gc_store()
-                .header(&gc_ref)
-                .kind()
+                .kind(&gc_ref)
+                .unwrap()
                 .matches(VMGcKind::ExnRef)
         );
         Rooted::new(store, gc_ref)
@@ -406,13 +421,7 @@ impl ExnRef {
     }
 
     pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = if gc_ref.is_i31() {
-            gc_ref.as_raw_non_zero_u32()
-        } else {
-            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
-        };
-        Ok(raw.get())
+        self.inner.expose_gc_ref_to_wasm(store).map(|r| r.get())
     }
 
     /// Get the type of this reference.
@@ -490,7 +499,7 @@ impl ExnRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
 
         let index = header.ty().expect("exnrefs should have concrete types");
@@ -522,7 +531,7 @@ impl ExnRef {
                     return None;
                 }
                 self.index += 1;
-                Some(self.exnref._field(&mut self.store, i).unwrap())
+                self.exnref._field(&mut self.store, i).ok()
             }
 
             #[inline]
@@ -543,7 +552,7 @@ impl ExnRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.require_gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
     fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
@@ -553,7 +562,7 @@ impl ExnRef {
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
@@ -598,7 +607,7 @@ impl ExnRef {
         let exnref = self.exnref(store)?.unchecked_copy();
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
-        Ok(exnref.read_field(store, &layout, field_ty.element_type(), index))
+        exnref.read_field(store, &layout, field_ty.element_type(), index)
     }
 
     /// Get this exception object's associated tag.

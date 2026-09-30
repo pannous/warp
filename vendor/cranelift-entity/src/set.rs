@@ -5,6 +5,7 @@ use crate::keys::Keys;
 use core::fmt;
 use core::marker::PhantomData;
 use cranelift_bitset::CompoundBitSet;
+use wasmtime_core::error::OutOfMemory;
 
 /// A set of `K` for densely indexed entity references.
 ///
@@ -28,7 +29,7 @@ where
     K: fmt::Debug + EntityRef,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_set().entries(self.keys()).finish()
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 
@@ -67,10 +68,23 @@ where
         }
     }
 
+    /// Like `with_capacity` but returns an error on allocation failure.
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            bitset: CompoundBitSet::try_with_capacity(capacity)?,
+            unused: PhantomData,
+        })
+    }
+
     /// Ensure that the set has enough capacity to hold `capacity` total
     /// elements.
     pub fn ensure_capacity(&mut self, capacity: usize) {
         self.bitset.ensure_capacity(capacity);
+    }
+
+    /// Like `ensure_capacity` but returns an error on allocation failure.
+    pub fn try_ensure_capacity(&mut self, capacity: usize) -> Result<(), OutOfMemory> {
+        self.bitset.try_ensure_capacity(capacity)
     }
 
     /// Get the element at `k` if it exists.
@@ -156,7 +170,7 @@ where
         self.bitset.remove(index)
     }
 
-    /// Removes and returns the entity from the set if it exists.
+    /// Removes and returns the highest-index entity from the set if it exists.
     pub fn pop(&mut self) -> Option<K> {
         let index = self.bitset.pop()?;
         Some(K::new(index))
@@ -185,8 +199,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec::Vec;
-    use core::u32;
+    use alloc::{format, vec::Vec};
 
     // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -292,5 +305,14 @@ mod tests {
         }
 
         assert!(m.is_empty());
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut s = EntitySet::new();
+        s.insert(E(2));
+        s.insert(E(4));
+        // The `Debug` formatting should only show the elements within the set.
+        assert_eq!(format!("{s:?}"), "{E(2), E(4)}");
     }
 }

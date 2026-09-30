@@ -1,0 +1,69 @@
+// Simple ray tracer
+// Renders spheres with lighting
+
+type Vec3: { x: float, y: float, z: float }
+
+def vec(x, y, z) := Vec3 { x: x, y: y, z: z }
+def add(a, b) := vec(a.x + b.x, a.y + b.y, a.z + b.z)
+def sub(a, b) := vec(a.x - b.x, a.y - b.y, a.z - b.z)
+def mul(v, s) := vec(v.x * s, v.y * s, v.z * s)
+def dot(a, b) := a.x * b.x + a.y * b.y + a.z * b.z
+def length(v) := sqrt(dot(v, v))
+def normalize(v) := mul(v, 1.0 / length(v))
+
+type Sphere: { center: Vec3, radius: float, color: Vec3 }
+type Ray: { origin: Vec3, direction: Vec3 }
+
+def intersect(ray, sphere) {
+    oc = sub(ray.origin, sphere.center)
+    a = dot(ray.direction, ray.direction)
+    b = 2.0 * dot(oc, ray.direction)
+    c = dot(oc, oc) - sphere.radius * sphere.radius
+    disc = b * b - 4 * a * c
+    if disc < 0 { return -1.0 }
+    return (-b - sqrt(disc)) / (2.0 * a)
+}
+
+// Scene setup
+spheres = [
+    Sphere { center: vec(0, 0, 5), radius: 1.0, color: vec(1, 0, 0) }
+    Sphere { center: vec(2, 0, 6), radius: 1.0, color: vec(0, 1, 0) }
+    Sphere { center: vec(-2, 0, 6), radius: 1.0, color: vec(0, 0, 1) }
+    Sphere { center: vec(0, -101, 5), radius: 100, color: vec(0.5, 0.5, 0.5) }
+]
+light = normalize(vec(1, 1, -1))
+
+def trace(ray) {
+    closest = 1e10
+    hit_sphere = None
+    for sphere in spheres {
+        t = intersect(ray, sphere)
+        if t > 0 and t < closest {
+            closest = t
+            hit_sphere = sphere
+        }
+    }
+    if hit_sphere == None { return vec(0.2, 0.3, 0.5) }  // sky
+
+    hit_point = add(ray.origin, mul(ray.direction, closest))
+    normal = normalize(sub(hit_point, hit_sphere.center))
+    intensity = max(0, dot(normal, light))
+    return mul(hit_sphere.color, 0.2 + 0.8 * intensity)
+}
+
+// Render
+width = 80
+height = 40
+for y in 0..height {
+    line = ""
+    for x in 0..width {
+        u = (x - width/2) / width * 2
+        v = (height/2 - y) / height
+        ray = Ray { origin: vec(0, 0, 0), direction: normalize(vec(u, v, 1)) }
+        color = trace(ray)
+        brightness = (color.x + color.y + color.z) / 3
+        chars = " .:-=+*#%@"
+        line = line + chars[int(brightness * 9)]
+    }
+    print line
+}

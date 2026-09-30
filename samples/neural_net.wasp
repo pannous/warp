@@ -1,0 +1,75 @@
+// Simple Neural Network
+// XOR problem solver
+
+def sigmoid(x) := 1.0 / (1.0 + exp(-x))
+def sigmoid_derivative(x) := x * (1.0 - x)
+
+// 2 inputs, 4 hidden, 1 output
+hidden_weights = Matrix(2, 4, () => random() * 2 - 1)
+output_weights = Matrix(4, 1, () => random() * 2 - 1)
+hidden_bias = Array(4, () => random() * 2 - 1)
+output_bias = random() * 2 - 1
+
+def forward(input) {
+    hidden = []
+    for j in 0..4 {
+        sum = hidden_bias[j]
+        for i in 0..2 {
+            sum = sum + input[i] * hidden_weights[i, j]
+        }
+        hidden.push(sigmoid(sum))
+    }
+
+    output_sum = output_bias
+    for j in 0..4 {
+        output_sum = output_sum + hidden[j] * output_weights[j, 0]
+    }
+    return (hidden, sigmoid(output_sum))
+}
+
+def train(input, target, learning_rate) {
+    (hidden, output) = forward(input)
+
+    output_error = target - output
+    output_delta = output_error * sigmoid_derivative(output)
+
+    hidden_errors = []
+    for j in 0..4 {
+        hidden_errors.push(output_delta * output_weights[j, 0])
+    }
+
+    for j in 0..4 {
+        output_weights[j, 0] = output_weights[j, 0] + learning_rate * output_delta * hidden[j]
+    }
+    output_bias = output_bias + learning_rate * output_delta
+
+    for j in 0..4 {
+        delta = hidden_errors[j] * sigmoid_derivative(hidden[j])
+        for i in 0..2 {
+            hidden_weights[i, j] = hidden_weights[i, j] + learning_rate * delta * input[i]
+        }
+        hidden_bias[j] = hidden_bias[j] + learning_rate * delta
+    }
+}
+
+// XOR training data
+data = [
+    ([0, 0], 0)
+    ([0, 1], 1)
+    ([1, 0], 1)
+    ([1, 1], 0)
+]
+
+// Train
+for epoch in 0..10000 {
+    for (input, target) in data {
+        train(input, target, 0.5)
+    }
+}
+
+// Test
+print "XOR Neural Network Results:"
+for (input, expected) in data {
+    (_, output) = forward(input)
+    print input + " => " + output.round(3) + " (expected " + expected + ")"
+}

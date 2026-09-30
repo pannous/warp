@@ -79,10 +79,10 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
     }
 }
 pub enum Baz {}
-pub trait HostBazWithStore: wasmtime::component::HasData {}
-impl<_T: ?Sized> HostBazWithStore for _T
+pub trait HostBazWithStore<T>: wasmtime::component::HasData {}
+impl<H: ?Sized, T> HostBazWithStore<T> for H
 where
-    _T: wasmtime::component::HasData,
+    H: wasmtime::component::HasData,
 {}
 pub trait HostBaz {
     fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
@@ -196,10 +196,12 @@ pub struct TheWorldIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
-pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithStore {}
-impl<_T: ?Sized> TheWorldImportsWithStore for _T
+pub trait TheWorldImportsWithStore<
+    T,
+>: wasmtime::component::HasData + HostBazWithStore<T> {}
+impl<H: ?Sized, T> TheWorldImportsWithStore<T> for H
 where
-    _T: wasmtime::component::HasData + HostBazWithStore,
+    H: wasmtime::component::HasData + HostBazWithStore<T>,
 {}
 pub trait TheWorldImports: HostBaz {
     fn foo(&mut self) -> ();
@@ -210,8 +212,6 @@ impl<_T: TheWorldImports + ?Sized> TheWorldImports for &mut _T {
     }
 }
 const _: () = {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
     impl TheWorldIndices {
         /// Creates a new copy of `TheWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
@@ -279,7 +279,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: TheWorldImportsWithStore,
+            D: TheWorldImportsWithStore<T>,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static,
         {
@@ -292,7 +292,9 @@ const _: () = {
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |mut store, rep| -> wasmtime::Result<()> {
                                 let resource = wasmtime::component::Resource::new_own(rep);
-                                HostBaz::drop(&mut host_getter(store.data_mut()), resource)
+                                wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                    HostBaz::drop(&mut host_getter(store.data_mut()), resource),
+                                )
                             },
                         )?;
                 }
@@ -330,7 +332,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::the_interface::HostWithStore + TheWorldImportsWithStore,
+            D: foo::foo::the_interface::HostWithStore<T> + TheWorldImportsWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::the_interface::Host + TheWorldImports,
             T: 'static,
         {
@@ -352,7 +354,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod the_interface {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::{anyhow, Box};
+            use wasmtime::component::__internal::Box;
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {
@@ -393,10 +395,10 @@ pub mod foo {
                 }
             }
             pub enum Bar {}
-            pub trait HostBarWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostBarWithStore for _T
+            pub trait HostBarWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostBarWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostBar {
                 fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
@@ -416,10 +418,12 @@ pub mod foo {
                     HostBar::drop(*self, rep)
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostBarWithStore<T> {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostBarWithStore,
+                H: wasmtime::component::HasData + HostBarWithStore<T>,
             {}
             pub trait Host: HostBar {
                 fn foo(&mut self) -> ();
@@ -429,25 +433,26 @@ pub mod foo {
                     Host::foo(*self)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 options: &LinkOptions,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
                 if options.experimental_interface {
-                    let mut inst = linker.instance("foo:foo/the-interface")?;
                     if options.experimental_interface_resource {
                         inst.resource(
                             "bar",
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |mut store, rep| -> wasmtime::Result<()> {
                                 let resource = wasmtime::component::Resource::new_own(rep);
-                                HostBar::drop(&mut host_getter(store.data_mut()), resource)
+                                wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                    HostBar::drop(&mut host_getter(store.data_mut()), resource),
+                                )
                             },
                         )?;
                     }
@@ -476,6 +481,19 @@ pub mod foo {
                     }
                 }
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                options: &LinkOptions,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore<T>,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/the-interface")?;
+                add_to_linker_instance::<T, D>(&mut inst, options, host_getter)
             }
         }
     }

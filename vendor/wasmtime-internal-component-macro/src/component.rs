@@ -359,6 +359,7 @@ fn expand_record_for_component_type(
     let mut lower_field_declarations = TokenStream::new();
     let mut abi_list = TokenStream::new();
     let mut unique_types = HashSet::new();
+    let mut may_require_realloc = TokenStream::new();
 
     for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
         let generic = format_ident!("T{}", index);
@@ -370,6 +371,9 @@ fn expand_record_for_component_type(
 
         abi_list.extend(quote!(
             <#ty as #wt::component::ComponentType>::ABI,
+        ));
+        may_require_realloc.extend(quote!(
+            <#ty as #wt::component::ComponentType>::MAY_REQUIRE_REALLOC ||
         ));
 
         unique_types.insert(ty);
@@ -408,12 +412,13 @@ fn expand_record_for_component_type(
 
             const ABI: #internal::CanonicalAbiInfo =
                 #internal::CanonicalAbiInfo::record_static(&[#abi_list]);
+            const MAY_REQUIRE_REALLOC: bool = #may_require_realloc false;
 
             #[inline]
             fn typecheck(
                 ty: &#internal::InterfaceType,
                 types: &#internal::InstanceType<'_>,
-            ) -> #internal::anyhow::Result<()> {
+            ) -> #wt::Result<()> {
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
             }
         }
@@ -489,7 +494,7 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     #extract_ty
                     Ok(Self {
                         #lifts
@@ -501,7 +506,7 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     #extract_ty
                     debug_assert!(
                         (bytes.as_ptr() as usize)
@@ -580,11 +585,11 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     #extract_ty
                     Ok(match src.tag.get_u32() {
                         #lifts
-                        discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
+                        discrim => #wt::bail!("unexpected discriminant: {}", discrim),
                     })
                 }
 
@@ -593,7 +598,7 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     let align = <Self as #wt::component::ComponentType>::ALIGN32;
                     debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
                     let discrim = #from_bytes;
@@ -602,7 +607,7 @@ impl Expander for LiftExpander {
                     #extract_ty
                     Ok(match discrim {
                         #loads
-                        discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
+                        discrim => #wt::bail!("unexpected discriminant: {}", discrim),
                     })
                 }
             }
@@ -631,7 +636,7 @@ impl Expander for LiftExpander {
                 quote!(u32),
             ),
         };
-        let discrim_limit = proc_macro2::Literal::usize_unsuffixed(cases.len());
+        let discrim_limit = proc_macro2::Literal::u32_suffixed(cases.len().try_into().unwrap());
 
         let extract_ty = quote! {
             let ty = match ty {
@@ -647,11 +652,11 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     #extract_ty
                     let discrim = src.tag.get_u32();
                     if discrim >= #discrim_limit {
-                        #internal::anyhow::bail!("unexpected discriminant: {discrim}");
+                        #wt::bail!("unexpected discriminant: {discrim}");
                     }
                     Ok(unsafe {
                         #internal::transmute::<#discrim_ty, #name>(discrim as #discrim_ty)
@@ -663,12 +668,12 @@ impl Expander for LiftExpander {
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
-                ) -> #internal::anyhow::Result<Self> {
+                ) -> #wt::Result<Self> {
                     let align = <Self as #wt::component::ComponentType>::ALIGN32;
                     debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
                     let discrim = #from_bytes;
-                    if discrim >= #discrim_limit {
-                        #internal::anyhow::bail!("unexpected discriminant: {discrim}");
+                    if u32::from(discrim) >= #discrim_limit {
+                        #wt::bail!("unexpected discriminant: {discrim}");
                     }
                     Ok(unsafe {
                         #internal::transmute::<#discrim_ty, #name>(discrim)
@@ -728,7 +733,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     dst: &mut core::mem::MaybeUninit<Self::Lower>,
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #extract_ty
                     #lowers
                     Ok(())
@@ -740,7 +745,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     mut offset: usize
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
                     #extract_ty
                     #stores
@@ -826,7 +831,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     dst: &mut core::mem::MaybeUninit<Self::Lower>,
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #extract_ty
                     match self {
                         #lowers
@@ -839,7 +844,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     mut offset: usize
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #extract_ty
                     debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
                     match self {
@@ -883,7 +888,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     dst: &mut core::mem::MaybeUninit<Self::Lower>,
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #extract_ty
                     #internal::map_maybe_uninit!(dst.tag)
                         .write(#wt::ValRaw::u32(*self as u32));
@@ -896,7 +901,7 @@ impl Expander for LowerExpander {
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
                     mut offset: usize
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #extract_ty
                     debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
                     let discrim = *self as #ty;
@@ -961,6 +966,7 @@ impl Expander for ComponentTypeExpander {
         let mut lower_generic_args = TokenStream::new();
         let mut abi_list = TokenStream::new();
         let mut unique_types = HashSet::new();
+        let mut may_require_realloc = TokenStream::new();
 
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
             let rename = find_rename(attrs)?;
@@ -969,6 +975,9 @@ impl Expander for ComponentTypeExpander {
 
             if let Some(ty) = ty {
                 abi_list.extend(quote!(Some(<#ty as #wt::component::ComponentType>::ABI),));
+                may_require_realloc.extend(quote!(
+                    <#ty as #wt::component::ComponentType>::MAY_REQUIRE_REALLOC ||
+                ));
 
                 case_names_and_checks.extend(
                     quote!((#name, Some(<#ty as #wt::component::ComponentType>::typecheck)),),
@@ -1026,12 +1035,13 @@ impl Expander for ComponentTypeExpander {
                 fn typecheck(
                     ty: &#internal::InterfaceType,
                     types: &#internal::InstanceType<'_>,
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #internal::typecheck_variant(ty, types, &[#case_names_and_checks])
                 }
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
+                const MAY_REQUIRE_REALLOC: bool = #may_require_realloc false;
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
@@ -1087,12 +1097,13 @@ impl Expander for ComponentTypeExpander {
                 fn typecheck(
                     ty: &#internal::InterfaceType,
                     types: &#internal::InstanceType<'_>,
-                ) -> #internal::anyhow::Result<()> {
+                ) -> #wt::Result<()> {
                     #internal::typecheck_enum(ty, types, &[#case_names])
                 }
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::enum_(#cases_len);
+                const MAY_REQUIRE_REALLOC: bool = false;
             }
 
             unsafe impl #internal::ComponentVariant for #name {
@@ -1472,7 +1483,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
                 dst: &mut core::mem::MaybeUninit<Self::Lower>,
-            ) -> #internal::anyhow::Result<()> {
+            ) -> #wt::Result<()> {
                 #(
                     self.#field_names.linear_lower_to_flat(
                         cx,
@@ -1488,7 +1499,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
                 mut offset: usize
-            ) -> #internal::anyhow::Result<()> {
+            ) -> #wt::Result<()> {
                 debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
                 #(
                     self.#field_names.linear_lower_to_memory(
@@ -1507,7 +1518,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 src: &Self::Lower,
-            ) -> #internal::anyhow::Result<Self> {
+            ) -> #wt::Result<Self> {
                 Ok(Self {
                     #(
                         #field_names: #wt::component::Lift::linear_lift_from_flat(
@@ -1523,7 +1534,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 bytes: &[u8],
-            ) -> #internal::anyhow::Result<Self> {
+            ) -> #wt::Result<Self> {
                 debug_assert!(
                     (bytes.as_ptr() as usize)
                         % (<Self as #wt::component::ComponentType>::ALIGN32 as usize)

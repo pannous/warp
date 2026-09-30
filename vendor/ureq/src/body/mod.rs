@@ -3,12 +3,12 @@ use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
-use ureq_proto::http::header;
 use ureq_proto::BodyMode;
+use ureq_proto::http::header;
 
+use crate::Error;
 use crate::http;
 use crate::run::BodyHandler;
-use crate::Error;
 
 use self::limit::LimitReader;
 use self::lossy::LossyUtf8Reader;
@@ -28,6 +28,12 @@ mod brotli;
 
 /// Default max body size for read_to_string() and read_to_vec().
 const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Fraction of the read limit under which `read_json()` buffers the body into memory
+/// and parses it from a slice (faster) rather than streaming it through serde_json's
+/// reader. The cutoff leaves some headroom for the parsed value.
+#[cfg(feature = "json")]
+const JSON_BUFFER_DIVISOR: u64 = 3;
 
 /// A response body returned as [`http::Response<Body>`].
 ///
@@ -193,12 +199,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn content_length(&self) -> Option<u64> {
-        match self.info.body_mode {
-            BodyMode::NoBody => None,
-            BodyMode::LengthDelimited(v) => Some(v),
-            BodyMode::Chunked => None,
-            BodyMode::CloseDelimited => None,
-        }
+        self.info.content_length()
     }
 
     /// Handle this body as a shared `impl Read` of the body.
@@ -373,8 +374,28 @@ impl Body {
     ///     .read_json()?;
     /// # Ok::<_, ureq::Error>(())
     /// ```
+    ///
+    /// # Performance
+    ///
+    /// When the response has a `Content-Length` that is comfortably below the limit,
+    /// the body is buffered into memory and parsed from the slice, which is faster
+    /// than streaming it through the reader. For chunked responses, or bodies at least
+    /// a third of the limit, parsing falls back to reading directly from the stream.
     #[cfg(feature = "json")]
     pub fn read_json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error> {
+        // serde_json's from_reader parses one byte at a time from the underlying
+        // reader, which is significantly slower than parsing an in-memory slice. When
+        // the Content-Length tells us the body comfortably fits within the limit, read
+        // it into a Vec first and parse the slice. The 1/3 cutoff leaves some headroom
+        // for the deserialized value. See
+        // https://github.com/algesten/ureq/issues/1151
+        if let Some(len) = self.content_length() {
+            if len <= MAX_BODY_SIZE / JSON_BUFFER_DIVISOR {
+                let vec = self.with_config().limit(MAX_BODY_SIZE).read_to_vec()?;
+                let value: T = serde_json::from_slice(&vec)?;
+                return Ok(value);
+            }
+        }
         let reader = self.with_config().limit(MAX_BODY_SIZE).reader();
         let value: T = serde_json::from_reader(reader)?;
         Ok(value)
@@ -611,6 +632,19 @@ impl<'a> BodyWithConfig<'a> {
     /// ```
     #[cfg(feature = "json")]
     pub fn read_json<T: serde::de::DeserializeOwned>(self) -> Result<T, Error> {
+        // serde_json's from_reader parses one byte at a time from the underlying
+        // reader, which is significantly slower than parsing an in-memory slice. When
+        // the Content-Length tells us the body comfortably fits within the limit, read
+        // it into a Vec first and parse the slice. The 1/3 cutoff leaves some headroom
+        // for the deserialized value. See
+        // https://github.com/algesten/ureq/issues/1151
+        if let Some(len) = self.info.content_length() {
+            if len <= self.limit / JSON_BUFFER_DIVISOR {
+                let vec = self.read_to_vec()?;
+                let value: T = serde_json::from_slice(&vec)?;
+                return Ok(value);
+            }
+        }
         let reader = self.do_build();
         let value: T = serde_json::from_reader(reader)?;
         Ok(value)
@@ -644,6 +678,36 @@ impl ResponseInfo {
             mime_type,
             charset,
             body_mode,
+        }
+    }
+
+    /// Returns true if the body will be decompressed (gzip or brotli).
+    pub(crate) fn is_decompressing(&self) -> bool {
+        match self.content_encoding {
+            #[cfg(feature = "gzip")]
+            ContentEncoding::Gzip => true,
+            #[cfg(feature = "brotli")]
+            ContentEncoding::Brotli => true,
+            _ => false,
+        }
+    }
+
+    /// The known length of the body, if any.
+    ///
+    /// This is the value of the `Content-Length` header. For chunked or close-delimited
+    /// responses, and for bodies that are transparently decompressed (where the original
+    /// `Content-Length` no longer reflects the decoded size), this is `None`.
+    pub(crate) fn content_length(&self) -> Option<u64> {
+        // After transparent decompression, the original Content-Length no longer
+        // reflects the actual body size, so we return None.
+        if self.is_decompressing() {
+            return None;
+        }
+        match self.body_mode {
+            BodyMode::NoBody => None,
+            BodyMode::LengthDelimited(v) => Some(v),
+            BodyMode::Chunked => None,
+            BodyMode::CloseDelimited => None,
         }
     }
 
@@ -926,9 +990,9 @@ impl<'a> io::Read for BodySourceRef<'a> {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
+    use crate::Error;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
-    use crate::Error;
 
     #[test]
     fn content_type_without_charset() {
@@ -976,6 +1040,32 @@ mod test {
         let mut res = crate::get("https://my.test/get").call().unwrap();
         let b = res.body_mut().read_to_string().unwrap();
         assert_eq!(b, "hello world!!!");
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn read_json_buffered() {
+        use serde_json::Value;
+
+        let json = br#"{"hello":"world","nums":[1,2,3]}"#;
+
+        let mut body = crate::Body::builder().data(json.to_vec());
+        let value: Value = body.read_json().unwrap();
+        assert_eq!(value["hello"], "world");
+        assert_eq!(value["nums"][2], 3);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn read_json_streamed() {
+        use serde_json::Value;
+
+        let json = br#"{"hello":"world","nums":[1,2,3]}"#;
+
+        let mut body = crate::Body::builder().data(json.to_vec());
+        let value: Value = body.with_config().limit(40).read_json().unwrap();
+        assert_eq!(value["hello"], "world");
+        assert_eq!(value["nums"][2], 3);
     }
 
     #[test]

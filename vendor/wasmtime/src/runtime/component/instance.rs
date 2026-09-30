@@ -5,14 +5,13 @@ use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
     TypedFunc, types::ComponentItem,
 };
+use crate::component::{ExportLookup, RuntimeInstance};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
-use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
-};
-use crate::runtime::vm::{self, VMFuncRef};
-use crate::store::{AsStoreOpaque, StoreOpaque};
+use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
+use crate::runtime::vm::{self, VMFuncRef, VMStore};
+use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
@@ -153,17 +152,13 @@ impl Instance {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get_func(
-        &self,
-        mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
-    ) -> Option<Func> {
+    pub fn get_func(&self, mut store: impl AsContextMut, name: impl ExportLookup) -> Option<Func> {
         let store = store.as_context_mut().0;
         let instance = self.id.get(store);
         let component = instance.component();
 
         // Validate that `name` exists within `self.`
-        let index = name.lookup(component)?;
+        let index = name.lookup(component, None)?;
 
         // Validate that `index` is indeed a lifted function.
         match &component.env_component().export_items[index] {
@@ -172,7 +167,7 @@ impl Instance {
         }
 
         // And package up the indices!
-        Some(Func::from_lifted_func(*self, index))
+        Some(Func::from_lifted_func(store, *self, index))
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -183,13 +178,17 @@ impl Instance {
     /// Returns an error if `name` isn't a function export or if the export's
     /// type did not match `Params` or `Results`
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
     pub fn get_typed_func<Params, Results>(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: ComponentNamedList + Lower,
@@ -197,7 +196,7 @@ impl Instance {
     {
         let f = self
             .get_func(store.as_context_mut(), name)
-            .ok_or_else(|| anyhow!("failed to find function export"))?;
+            .ok_or_else(|| format_err!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function to given type"))?)
     }
@@ -221,7 +220,7 @@ impl Instance {
     pub fn get_module(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<Module> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -256,7 +255,7 @@ impl Instance {
     pub fn get_resource(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<ResourceType> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -349,10 +348,10 @@ impl Instance {
     fn lookup_export<'a>(
         &self,
         store: &'a StoreOpaque,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
         let data = self.id().get(store);
-        let index = name.lookup(data.component())?;
+        let index = name.lookup(data.component(), None)?;
         Some((data, &data.component().env_component().export_items[index]))
     }
 
@@ -378,13 +377,12 @@ impl Instance {
     pub(crate) fn resource_new32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_new(TypedResource::Component { ty, rep })
+        store
+            .component_resource_tables(Some(self))?
+            .resource_new(TypedResource::Component { ty, rep })
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -392,26 +390,24 @@ impl Instance {
     pub(crate) fn resource_rep32(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<u32> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_rep(TypedResourceIndex::Component { ty, index })
+        store
+            .component_resource_tables(Some(self))?
+            .resource_rep(TypedResourceIndex::Component { ty, index })
     }
 
     /// Implementation of the `resource.drop` intrinsic.
     pub(crate) fn resource_drop(
         self,
         store: &mut StoreOpaque,
-        caller: RuntimeComponentInstanceIndex,
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<Option<u32>> {
-        self.id().get(store).check_may_leave(caller)?;
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_drop(TypedResourceIndex::Component { ty, index })
+        store
+            .component_resource_tables(Some(self))?
+            .resource_drop(TypedResourceIndex::Component { ty, index })
     }
 
     pub(crate) fn resource_transfer_own(
@@ -421,8 +417,7 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
     }
@@ -435,8 +430,7 @@ impl Instance {
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         // Implement `lower_borrow`'s special case here where if a borrow's
         // resource type is owned by `dst` then the destination receives the
@@ -450,16 +444,6 @@ impl Instance {
             return Ok(rep);
         }
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
-    }
-
-    pub(crate) fn resource_enter_call(self, store: &mut StoreOpaque) {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).enter_call()
-    }
-
-    pub(crate) fn resource_exit_call(self, store: &mut StoreOpaque) -> Result<()> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).exit_call()
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
@@ -581,6 +565,19 @@ impl Instance {
             (&*component, store)
         }
     }
+
+    pub(crate) fn runtime_instance(&self, index: RuntimeComponentInstanceIndex) -> RuntimeInstance {
+        RuntimeInstance {
+            instance: self.id.instance(),
+            index,
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn from_runtime_instance(store: &StoreOpaque, instance: RuntimeInstance) -> Self {
+        let id = StoreComponentInstanceId::new(store.id(), instance.instance);
+        Instance { id }
+    }
 }
 
 /// Translates a `CoreDef`, a definition of a core wasm item, to an
@@ -645,63 +642,15 @@ where
         // during that phase so the actual instantiation of an `InstancePre`
         // skips all string lookups. This should probably only be
         // investigated if this becomes a performance issue though.
-        ExportItem::Name(name) => instance.env_module().exports[name],
+        ExportItem::Name(name) => {
+            let module = instance.env_module();
+            let name = module.strings.get_atom(name).unwrap();
+            module.exports[&name]
+        }
     };
     // SAFETY: the `store_id` owns this instance and all exports contained
     // within.
     unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
-}
-
-fn resource_tables<'a>(
-    calls: &'a mut CallContexts,
-    instance: Pin<&'a mut ComponentInstance>,
-) -> ResourceTables<'a> {
-    ResourceTables {
-        host_table: None,
-        calls,
-        guest: Some(instance.guest_tables()),
-    }
-}
-
-/// Trait used to lookup the export of a component instance.
-///
-/// This trait is used as an implementation detail of [`Instance::get_func`]
-/// and related `get_*` methods. Notable implementors of this trait are:
-///
-/// * `str`
-/// * `String`
-/// * [`ComponentExportIndex`]
-///
-/// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
-/// need to be implemented externally.
-pub trait InstanceExportLookup {
-    #[doc(hidden)]
-    fn lookup(&self, component: &Component) -> Option<ExportIndex>;
-}
-
-impl<T> InstanceExportLookup for &T
-where
-    T: InstanceExportLookup + ?Sized,
-{
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        T::lookup(self, component)
-    }
-}
-
-impl InstanceExportLookup for str {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        component
-            .env_component()
-            .exports
-            .get(self, &NameMapNoIntern)
-            .copied()
-    }
-}
-
-impl InstanceExportLookup for String {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        str::lookup(self, component)
-    }
 }
 
 struct Instantiator<'a> {
@@ -726,7 +675,7 @@ pub(crate) enum RuntimeImport {
         // function being used across multiple instances simultaneously. Or
         // otherwise this makes `InstancePre::instantiate` possible to create
         // separate instances all sharing the same host function.
-        _dtor: Arc<crate::func::HostFunc>,
+        dtor: Arc<crate::func::HostFunc>,
 
         // A raw function which is filled out (including `wasm_call`) which
         // points to the internals of the `_dtor` field. This is read and
@@ -735,7 +684,7 @@ pub(crate) enum RuntimeImport {
     },
 }
 
-pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
+pub type ImportedResources = TryPrimaryMap<ResourceIndex, ResourceType>;
 
 impl<'a> Instantiator<'a> {
     fn new(
@@ -744,18 +693,19 @@ impl<'a> Instantiator<'a> {
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        store.register_component(component)?;
+        let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+        modules.register_component(component, engine, breakpoints)?;
         let imported_resources: ImportedResources =
-            PrimaryMap::with_capacity(env_component.imported_resources.len());
+            TryPrimaryMap::with_capacity(env_component.imported_resources.len())?;
 
         let instance = ComponentInstance::new(
             store.store_data().components.next_component_instance_id(),
             component,
-            Arc::new(imported_resources),
+            try_new::<Arc<_>>(imported_resources)?,
             imports,
             store.traitobj(),
-        );
-        let id = store.store_data_mut().push_component_instance(instance);
+        )?;
+        let id = store.store_data_mut().push_component_instance(instance)?;
 
         Ok(Instantiator {
             component,
@@ -765,7 +715,11 @@ impl<'a> Instantiator<'a> {
         })
     }
 
-    async fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    async fn run<T>(
+        &mut self,
+        store: &mut StoreContextMut<'_, T>,
+        asyncness: Asyncness,
+    ) -> Result<()> {
         let env_component = self.component.env_component();
 
         // Before all initializers are processed configure all destructors for
@@ -778,7 +732,7 @@ impl<'a> Instantiator<'a> {
                 } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
             };
-            let i = self.instance_resource_types_mut(store.0).push(ty);
+            let i = self.instance_resource_types_mut(store.0).push(ty)?;
             assert_eq!(i, idx);
             self.instance_mut(store.0)
                 .set_resource_destructor(idx, Some(func_ref));
@@ -830,14 +784,15 @@ impl<'a> Instantiator<'a> {
 
         for initializer in env_component.initializers.iter() {
             match initializer {
-                GlobalInitializer::InstantiateModule(m) => {
+                GlobalInitializer::InstantiateModule(m, component_instance) => {
+                    let instance = self.id;
                     let module;
                     let imports = match m {
                         // Since upvars are statically know we know that the
                         // `args` list is already in the right order.
                         InstantiateModule::Static(idx, args) => {
                             module = self.component.static_module(*idx);
-                            self.build_imports(store.0, module, args.iter())
+                            self.build_imports(store.0, module, args.iter())?
                         }
 
                         // With imports, unlike upvars, we need to do runtime
@@ -856,8 +811,22 @@ impl<'a> Instantiator<'a> {
                             let args = module
                                 .imports()
                                 .map(|import| &args[import.module()][import.name()]);
-                            self.build_imports(store.0, module, args)
+                            self.build_imports(store.0, module, args)?
                         }
+                    };
+
+                    let exit = if let Some(component_instance) = *component_instance {
+                        store.0.enter_guest_sync_call(
+                            None,
+                            false,
+                            RuntimeInstance {
+                                instance,
+                                index: component_instance,
+                            },
+                        )?;
+                        true
+                    } else {
+                        false
                     };
 
                     // Note that the unsafety here should be ok because the
@@ -865,14 +834,61 @@ impl<'a> Instantiator<'a> {
                     // already been performed. This means that the unsafety due
                     // to imports having the wrong type should not happen here.
                     //
-                    // Also note we are calling new_started_impl because we have
-                    // already checked for asyncness and are running on a fiber
-                    // if required.
+                    // Also note we are calling `new_raw` followed by
+                    // `start_raw` and will run the latter on a fiber if
+                    // required per `asyncness`.
 
-                    let i = unsafe {
-                        crate::Instance::new_started(store, module, imports.as_ref()).await?
+                    let (mut instance, needs_startup) = {
+                        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+                        unsafe {
+                            crate::Instance::new_raw(
+                                store,
+                                limiter.as_mut(),
+                                module,
+                                imports.as_ref(),
+                            )
+                            .await?
+                        }
                     };
-                    self.instance_mut(store.0).push_instance_id(i.id());
+
+                    if needs_startup {
+                        if asyncness == Asyncness::No {
+                            instance.start_raw(store)?;
+                        } else {
+                            #[cfg(feature = "async")]
+                            {
+                                #[cfg(feature = "component-model-async")]
+                                {
+                                    if store.0.concurrency_support() {
+                                        // With concurrency support enabled, we must
+                                        // run the start function inside the store's
+                                        // event loop in case it calls async
+                                        // functions or intrinsics, creates and
+                                        // resumes threads, etc.
+                                        instance = store.start_instance(instance).await?;
+                                    } else {
+                                        store.on_fiber(|store| instance.start_raw(store)).await??;
+                                    }
+                                }
+                                #[cfg(not(feature = "component-model-async"))]
+                                {
+                                    _ = &mut instance;
+                                    store.on_fiber(|store| instance.start_raw(store)).await??;
+                                }
+                            }
+                            #[cfg(not(feature = "async"))]
+                            {
+                                _ = &mut instance;
+                                unreachable!();
+                            }
+                        }
+                    }
+
+                    if exit {
+                        store.0.exit_guest_sync_call()?;
+                    }
+
+                    self.instance_mut(store.0).push_instance_id(instance.id())?;
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {
@@ -900,13 +916,13 @@ impl<'a> Instantiator<'a> {
                     self.extract_post_return(store.0, post_return)
                 }
 
-                GlobalInitializer::Resource(r) => self.resource(store.0, r),
+                GlobalInitializer::Resource(r) => self.resource(store.0, r)?,
             }
         }
         Ok(())
     }
 
-    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) -> Result<()> {
         let dtor = resource
             .dtor
             .as_ref()
@@ -923,8 +939,9 @@ impl<'a> Instantiator<'a> {
         let ty = ResourceType::guest(store.id(), instance, resource.index);
         self.instance_mut(store)
             .set_resource_destructor(index, dtor);
-        let i = self.instance_resource_types_mut(store).push(ty);
+        let i = self.instance_resource_types_mut(store).push(ty)?;
         debug_assert_eq!(i, index);
+        Ok(())
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
@@ -979,9 +996,9 @@ impl<'a> Instantiator<'a> {
         store: &mut StoreOpaque,
         module: &Module,
         args: impl Iterator<Item = &'b CoreDef>,
-    ) -> &OwnedImports {
+    ) -> Result<&OwnedImports, OutOfMemory> {
         self.core_imports.clear();
-        self.core_imports.reserve(module);
+        self.core_imports.reserve(module)?;
         let mut imports = module.compiled_module().module().imports();
 
         for arg in args {
@@ -999,11 +1016,11 @@ impl<'a> Instantiator<'a> {
             // directly from an instance which should only give us valid export
             // items.
             let export = lookup_vmdef(store, self.id, arg);
-            self.core_imports.push_export(store, &export);
+            self.core_imports.push_export(store, &export)?;
         }
         debug_assert!(imports.next().is_none());
 
-        &self.core_imports
+        Ok(&self.core_imports)
     }
 
     fn assert_type_matches(
@@ -1040,7 +1057,7 @@ impl<'a> Instantiator<'a> {
             return;
         }
 
-        let val = crate::Extern::from_wasmtime_export(export, store);
+        let val = crate::Extern::from_wasmtime_export(export, store.engine());
         let ty = DefinitionType::from(store, &val);
         crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)
@@ -1082,7 +1099,8 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
+    asyncness: Asyncness,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -1093,6 +1111,7 @@ impl<T: 'static> Clone for InstancePre<T> {
             component: self.component.clone(),
             imports: self.imports.clone(),
             resource_types: self.resource_types.clone(),
+            asyncness: self.asyncness,
             _marker: self._marker,
         }
     }
@@ -1108,12 +1127,22 @@ impl<T: 'static> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
+        let mut asyncness = Asyncness::No;
+        for (_, import) in imports.iter() {
+            asyncness = asyncness
+                | match import {
+                    RuntimeImport::Func(f) => f.asyncness(),
+                    RuntimeImport::Module(_) => Asyncness::No,
+                    RuntimeImport::Resource { dtor, .. } => dtor.asyncness(),
+                };
+        }
         InstancePre {
             component,
             imports,
             resource_types,
+            asyncness,
             _marker: marker::PhantomData,
         }
     }
@@ -1130,7 +1159,7 @@ impl<T: 'static> InstancePre<T> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.component.types(),
-            resources: &self.resource_types,
+            resources: Some(&self.resource_types),
         }
     }
 
@@ -1140,41 +1169,86 @@ impl<T: 'static> InstancePre<T> {
     }
 
     /// Performs the instantiation process into the store specified.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        assert!(
-            !store.as_context().async_support(),
-            "must use async instantiation when async support is enabled"
-        );
-        vm::assert_ready(self._instantiate(store))
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        let store = store.as_context_mut();
+
+        // If this instance requires an async host, set that flag in the store,
+        // and then afterwards assert nothing else in the store, nor this
+        // instance, required async.
+        store.0.set_async_required(self.asyncness);
+        store.0.validate_sync_call()?;
+
+        vm::assert_ready(self._instantiate(store, Asyncness::No))
     }
     /// Performs the instantiation process into the store specified.
     ///
     /// Exactly like [`Self::instantiate`] except for use on async stores.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
     pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        self._instantiate(store).await
+        self._instantiate(store, Asyncness::Yes).await
     }
 
-    async fn _instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        let mut store = store.as_context_mut();
+    async fn _instantiate(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        asyncness: Asyncness,
+    ) -> Result<Instance> {
+        let store = store.as_context_mut();
+        store.0.set_async_required(self.asyncness);
         store
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
-        instantiator.run(&mut store).await.map_err(|e| {
-            store
-                .engine()
-                .allocator()
-                .decrement_component_instance_count();
-            e
-        })?;
-        let instance = Instance::from_wasmtime(store.0, instantiator.id);
-        store.0.push_component_instance(instance);
-        Ok(instance)
+
+        // Helper structure to pair the above increment with a decrement should
+        // anything fail below.
+        let mut decrement = DecrementComponentInstanceCountOnDrop {
+            store,
+            enabled: true,
+        };
+
+        let mut instantiator =
+            Instantiator::new(&self.component, decrement.store.0, &self.imports)?;
+        instantiator.run(&mut decrement.store, asyncness).await?;
+
+        let instance = Instance::from_wasmtime(decrement.store.0, instantiator.id);
+        decrement.store.0.push_component_instance(instance);
+
+        // Everything has passed, don't decrement the instance count and let the
+        // destructor for the `Store` handle that at this point.
+        decrement.enabled = false;
+        return Ok(instance);
+
+        struct DecrementComponentInstanceCountOnDrop<'a, T: 'static> {
+            store: StoreContextMut<'a, T>,
+            enabled: bool,
+        }
+
+        impl<T> Drop for DecrementComponentInstanceCountOnDrop<'_, T> {
+            fn drop(&mut self) {
+                if self.enabled {
+                    self.store
+                        .engine()
+                        .allocator()
+                        .decrement_component_instance_count();
+                }
+            }
+        }
     }
 }

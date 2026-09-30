@@ -4,22 +4,58 @@ version = 4
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.127.0"
+version = "0.136.1"
 dependencies = [
  "cranelift-entity",
+ "wasmtime-internal-core",
 ]
 
 [[package]]
 name = "cranelift-bitset"
-version = "0.127.0"
+version = "0.136.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "769a0d88c2f5539e9c5536a93a7bf164b0dc68d91e3d00723e5b4ffc1440afdc"
+checksum = "76b63a4b0cfea80610150fffda11b1a9c3dc5a835403d9f381bf7d1a2874b4d7"
+dependencies = [
+ "wasmtime-internal-core",
+]
 
 [[package]]
 name = "cranelift-entity"
-version = "0.127.0"
+version = "0.136.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea0f066e07e3bcbe38884cc5c94c32c7a90267d69df80f187d9dfe421adaa7c4"
+checksum = "e73c65538d460b1062cb9a97428ee6bb4b616f5cb17be3b3ac0a3e4f1f789166"
 dependencies = [
  "cranelift-bitset",
+ "wasmtime-internal-core",
+]
+
+[[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
+name = "hashbrown"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+dependencies = [
+ "foldhash",
+]
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
+name = "wasmtime-internal-core"
+version = "49.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64b67114739063bb72bb8ed2b4994b8b22809d354432db68553ad529850f9536"
+dependencies = [
+ "hashbrown",
+ "libm",
 ]

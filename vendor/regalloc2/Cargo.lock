@@ -40,9 +40,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "hashbrown"
-version = "0.15.2"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "log"
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
-version = "0.13.3"
+version = "0.15.2"
 dependencies = [
  "allocator-api2",
  "arbitrary",

@@ -74,8 +74,6 @@ impl Ord for V128 {
     }
 }
 
-// Note that this trait is conditionally implemented which is intentional. See
-// the documentation above in the `cfg_if!` for why this is conditional.
 unsafe impl WasmTy for V128 {
     #[inline]
     fn valtype() -> ValType {
@@ -92,7 +90,7 @@ unsafe impl WasmTy for V128 {
         _: &StoreOpaque,
         _: bool,
         _: &crate::HeapType,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         unreachable!()
     }
 

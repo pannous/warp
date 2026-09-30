@@ -1,0 +1,4 @@
+// Collatz conjecture - count steps to reach 1
+def collatz(n) := n == 1 ? 0 : 1 + collatz(n % 2 == 0 ? n/2 : 3*n+1)
+
+collatz(27)

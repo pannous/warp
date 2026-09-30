@@ -85,15 +85,20 @@ impl<'a> Resolver<'a> {
 
     fn register(&mut self, item: &ModuleField<'a>) -> Result<(), Error> {
         match item {
-            ModuleField::Import(i) => match &i.item.kind {
-                ItemKind::Func(_) | ItemKind::FuncExact(_) => {
-                    self.funcs.register(i.item.id, "func")?
+            ModuleField::Import(imports) => {
+                for sig in imports.item_sigs() {
+                    match &sig.kind {
+                        ItemKind::Func(_) | ItemKind::FuncExact(_) => {
+                            self.funcs.register(sig.id, "func")?
+                        }
+                        ItemKind::Memory(_) => self.memories.register(sig.id, "memory")?,
+                        ItemKind::Table(_) => self.tables.register(sig.id, "table")?,
+                        ItemKind::Global(_) => self.globals.register(sig.id, "global")?,
+                        ItemKind::Tag(_) => self.tags.register(sig.id, "tag")?,
+                    };
                 }
-                ItemKind::Memory(_) => self.memories.register(i.item.id, "memory")?,
-                ItemKind::Table(_) => self.tables.register(i.item.id, "table")?,
-                ItemKind::Global(_) => self.globals.register(i.item.id, "global")?,
-                ItemKind::Tag(_) => self.tags.register(i.item.id, "tag")?,
-            },
+                return Ok(());
+            }
             ModuleField::Global(i) => self.globals.register(i.id, "global")?,
             ModuleField::Memory(i) => self.memories.register(i.id, "memory")?,
             ModuleField::Func(i) => self.funcs.register(i.id, "func")?,
@@ -123,8 +128,10 @@ impl<'a> Resolver<'a> {
 
     fn resolve_field(&self, field: &mut ModuleField<'a>) -> Result<(), Error> {
         match field {
-            ModuleField::Import(i) => {
-                self.resolve_item_sig(&mut i.item)?;
+            ModuleField::Import(imports) => {
+                for sig in imports.unique_sigs_mut() {
+                    self.resolve_item_sig(sig)?;
+                }
                 Ok(())
             }
 
@@ -670,6 +677,10 @@ impl<'a, 'b> ExprResolver<'a, 'b> {
                 self.resolver.resolve(&mut rt.tag_index, Ns::Tag)?;
                 self.resolve_resume_table(&mut rt.table)?;
             }
+            ResumeThrowRef(rt) => {
+                self.resolver.resolve(&mut rt.type_index, Ns::Type)?;
+                self.resolve_resume_table(&mut rt.table)?;
+            }
             Switch(s) => {
                 self.resolver.resolve(&mut s.type_index, Ns::Type)?;
                 self.resolver.resolve(&mut s.tag_index, Ns::Tag)?;
@@ -681,15 +692,15 @@ impl<'a, 'b> ExprResolver<'a, 'b> {
             RefGetDesc(i) => {
                 self.resolver.resolve(i, Ns::Type)?;
             }
-            RefCastDesc(i) => {
+            RefCastDescEq(i) => {
                 self.resolver.resolve_reftype(&mut i.r#type)?;
             }
-            BrOnCastDesc(i) => {
+            BrOnCastDescEq(i) => {
                 self.resolve_label(&mut i.label)?;
                 self.resolver.resolve_reftype(&mut i.to_type)?;
                 self.resolver.resolve_reftype(&mut i.from_type)?;
             }
-            BrOnCastDescFail(i) => {
+            BrOnCastDescEqFail(i) => {
                 self.resolve_label(&mut i.label)?;
                 self.resolver.resolve_reftype(&mut i.to_type)?;
                 self.resolver.resolve_reftype(&mut i.from_type)?;

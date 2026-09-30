@@ -1,7 +1,7 @@
 use crate::module::ModuleRegistry;
-use crate::runtime::vm::{self, GcStore, VMStore};
+use crate::runtime::vm::{self, VMStore};
 use crate::store::StoreOpaque;
-use crate::{StoreContext, StoreContextMut};
+use crate::{Engine, StoreContext, StoreContextMut};
 use core::num::NonZeroU64;
 use core::ops::{Index, IndexMut};
 use core::pin::Pin;
@@ -21,16 +21,32 @@ pub struct StoreData {
 }
 
 impl StoreData {
-    pub fn new() -> StoreData {
+    pub fn new(engine: &Engine) -> StoreData {
+        #[cfg(not(feature = "component-model"))]
+        let _ = engine;
         StoreData {
             id: StoreId::allocate(),
             #[cfg(feature = "component-model")]
-            components: Default::default(),
+            components: crate::component::ComponentStoreData::new(engine),
         }
     }
 
     pub fn id(&self) -> StoreId {
         self.id
+    }
+
+    pub fn run_manual_drop_routines<T>(store: StoreContextMut<T>) {
+        #[cfg(feature = "component-model")]
+        crate::component::ComponentStoreData::run_manual_drop_routines(store);
+        #[cfg(not(feature = "component-model"))]
+        let _ = store;
+    }
+
+    pub fn decrement_allocator_resources(&mut self, allocator: &dyn vm::InstanceAllocator) {
+        #[cfg(feature = "component-model")]
+        self.components.decrement_allocator_resources(allocator);
+        #[cfg(not(feature = "component-model"))]
+        let _ = allocator;
     }
 }
 
@@ -267,16 +283,6 @@ impl StoreInstanceId {
     ) -> (Pin<&'a mut vm::Instance>, &'a ModuleRegistry) {
         self.assert_belongs_to(store.id());
         store.instance_and_module_registry_mut(self.instance)
-    }
-
-    /// Same as [`Self::get_mut`], but also returns the `GcStore`.
-    #[inline]
-    pub(crate) fn get_with_gc_store_mut<'a>(
-        &self,
-        store: &'a mut StoreOpaque,
-    ) -> (Option<&'a mut GcStore>, Pin<&'a mut vm::Instance>) {
-        self.assert_belongs_to(store.id());
-        store.optional_gc_store_and_instance_mut(self.instance)
     }
 }
 
