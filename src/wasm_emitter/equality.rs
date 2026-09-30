@@ -52,15 +52,21 @@ impl WasmGcEmitter {
 	/// An object literal `{a:1 b:2}`, or an instance `point:{x:1 y:2}`: compared by its entries, never read as a number
 	fn is_object_literal(node: &Node) -> bool {
 		match node.drop_meta() {
-			Node::List(items, Bracket::Curly, _) => !items.is_empty(),
-			Node::Key(_, Op::Colon, _) => true,
+			Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _) => true,
 			_ => false,
 		}
 	}
 
+	/// A value that is tested or compared as a Node: a structured value, an object, or either of them in parentheses
+	fn is_structural_operand(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structural_operand(&items[0]),
+			other => self.is_structured_value(other) || Self::is_object_literal(other),
+		}
+	}
+
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		let is_structured = |node: &Node| self.is_structured_value(node) || Self::is_object_literal(node);
-		matches!(op, Op::Eq | Op::Ne) && (is_structured(left) || is_structured(right))
+		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value
@@ -76,7 +82,7 @@ impl WasmGcEmitter {
 
 	/// Push i32 truth value of an if/while condition
 	pub(crate) fn emit_condition(&mut self, func: &mut Function, condition: &Node, emit_number: fn(&mut Self, &mut Function, &Node)) {
-		if self.is_structured_value(condition) {
+		if self.is_structural_operand(condition) {
 			self.emit_node_instructions(func, condition);
 			self.emit_call(func, IS_TRUTHY);
 		} else if self.get_type(condition).is_float() {

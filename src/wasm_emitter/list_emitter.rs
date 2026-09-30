@@ -9,9 +9,9 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 12] = [
+const BUILTIN_CALLS: [&str; 13] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
-	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL,
+	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -193,6 +193,15 @@ impl WasmGcEmitter {
 
 		if self.emit_library_word_call(func, items, bracket, separator) || self.emit_type_test(func, items, bracket, separator) {
 			return;
+		}
+
+		if let [Node::Symbol(call), count, zero] = items {
+			if call == crate::analyzer::ZERO_FILL_CALL {
+				self.emit_numeric_value(func, count);
+				self.emit_node_instructions(func, zero);
+				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
 		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
