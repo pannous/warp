@@ -5,7 +5,7 @@ use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
-use crate::operators::Op;
+use crate::operators::{is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::*;
 use log::warn;
@@ -24,11 +24,13 @@ const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
 
-const DECLARATION_MODIFIERS: [&str; 4] = ["export", "const", "mutable", "mut"];
+const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
 const TIMES_WORD: &str = "times";
+const ELVIS_WORD: &str = "elvis";
+const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
 
@@ -145,6 +147,10 @@ pub struct WaspParser {
 	stops_at_else: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
+	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
+	after_function_keyword: bool,
+	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
+	elvis_operands: usize,
 	/// Names defined with `:=` so far: a braceless call of one may take an identifier argument anywhere (`fac it-1`)
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
@@ -179,6 +185,8 @@ impl WaspParser {
 			equals_compares: false,
 			stops_at_else: false,
 			times_loops: 0,
+			after_function_keyword: false,
+			elvis_operands: 0,
 			functions: Default::default(),
 			functions_with_parameters: Default::default(),
 		}
@@ -280,10 +288,29 @@ impl WaspParser {
 		(had_newline, line_indent)
 	}
 
+	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
 	fn skip_spaces(&mut self) {
-		while self.current_char() == ' ' || self.current_char() == '\t' {
-			self.advance();
+		loop {
+			if self.current_char() == ' ' || self.current_char() == '\t' {
+				self.advance();
+			} else if let Some(continuation_length) = self.line_continuation_length() {
+				self.advance_by(continuation_length);
+			} else {
+				return;
+			}
 		}
+	}
+
+	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line
+	fn line_continuation_length(&self) -> Option<usize> {
+		if self.current_char() != '\\' {
+			return None;
+		}
+		let mut length = 1;
+		while matches!(self.peek_char(length), ' ' | '\t' | '\r') {
+			length += 1;
+		}
+		(self.peek_char(length) == '\n').then_some(length + 1)
 	}
 
 	fn consume_rest_of_line(&mut self) -> String {
@@ -303,12 +330,18 @@ impl WaspParser {
 		line_comment.trim().to_string()
 	}
 
-	/// The text of a `/* … */` comment, the parser standing on its opening
+	/// `/* … */` and `/# … #/` open a block comment
+	fn at_block_comment_start(&self) -> bool {
+		self.current_char() == '/' && matches!(self.peek_char(1), '*' | '#')
+	}
+
+	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening
 	fn consume_block_comment(&mut self) -> String {
+		let closing_mark = if self.peek_char(1) == '#' { '#' } else { '*' };
 		self.advance_by(2);
 		let mut block = String::new();
 		while self.current_char() != '\0' {
-			if self.current_char() == '*' && self.peek_char(1) == '/' {
+			if self.current_char() == closing_mark && self.peek_char(1) == '/' {
 				self.advance_by(2);
 				break;
 			}
@@ -323,7 +356,7 @@ impl WaspParser {
 		loop {
 			self.skip_spaces();
 			match (self.current_char(), self.peek_char(1)) {
-				('/', '*') => { self.consume_block_comment(); }
+				_ if self.at_block_comment_start() => { self.consume_block_comment(); }
 				('#', ' ' | '\t') => {
 					while !matches!(self.current_char(), '\n' | '\0') {
 						self.advance();
@@ -361,8 +394,8 @@ impl WaspParser {
 				had_newline = true;
 				continue;
 			}
-			// /* block comment */
-			if c1 == '/' && c2 == '*' {
+			// /* block comment */ and /# block comment #/
+			if self.at_block_comment_start() {
 				let block = self.consume_block_comment();
 				had_newline |= block.contains('\n');
 				let trimmed = block.trim();
@@ -505,6 +538,9 @@ impl WaspParser {
 	/// Checks longer operators first (greedy matching)
 	fn peek_operator(&self) -> Option<(Op, usize)> {
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
+		if (c1, c2) == ('?', ':') {
+			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
+		}
 
 		// Keywords (4-char)
 		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
@@ -728,6 +764,11 @@ impl WaspParser {
 		}
 	}
 
+	fn parameters_follow_after_blanks(&self) -> bool {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		blanks > 0 && self.peek_char(blanks) == '('
+	}
+
 	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
 	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
 	fn parse_symbol_with_suffix(&mut self) -> Node {
@@ -735,6 +776,12 @@ impl WaspParser {
 			Ok(s) => s,
 			Err(e) => return error(&e),
 		};
+
+		// `def square (n) {…}` names its function like `def square(n) {…}`
+		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
+		if names_function && self.parameters_follow_after_blanks() {
+			self.skip_spaces();
+		}
 
 		// Check for URL pattern: scheme://...
 		// Common schemes: http, https, ftp, file, data, ws, wss
@@ -761,6 +808,12 @@ impl WaspParser {
 		if self.current_char() == '?' && self.ends_optional_type(self.peek_char(1), self.peek_char(2)) {
 			self.advance();
 			return Symbol(format!("{symbol}?"));
+		}
+
+		if symbol == HEX_WORD && !self.options.data_mode {
+			if let Some(number) = self.try_parse_hex_word() {
+				return number;
+			}
 		}
 
 		// Handle "global" keyword: global name = value
@@ -917,7 +970,9 @@ impl WaspParser {
 				continue;
 			}
 
-			if let Some(updated) = self.try_parse_evaluate_bang(&lhs).or_else(|| self.try_parse_control_suffix(&lhs, min_bp)) {
+			if let Some(updated) = self.try_parse_evaluate_bang(&lhs)
+				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_elvis(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
 			}
@@ -1136,7 +1191,7 @@ impl WaspParser {
 		loop {
 			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
 			let word = self.parse_symbol().unwrap_or_default();
-			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
+			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
 				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
@@ -1284,6 +1339,40 @@ impl WaspParser {
 			Op::While => while_do(condition, lhs.clone()),
 			_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(lhs.clone())),
 		})
+	}
+
+	/// `a ?: b` is `a ? a : b`; a left side that is not a plain name is evaluated once, into a hidden variable
+	fn try_parse_elvis(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let (question_bp, _) = Op::Question.binding_power();
+		if self.current_char() != '?' || self.peek_char(1) != ':' || question_bp < min_bp {
+			return None;
+		}
+		self.advance_by(2);
+		self.skip_whitespace();
+		let alternative = self.parse_expr(question_bp + 1); // left-assoc: `a ?: b ?: c` is `(a ?: b) ?: c`, the same value
+		let elvis = |value: Node| Node::Key(Box::new(value.clone()), Op::Question, Box::new(Node::Key(Box::new(value), Op::Colon, Box::new(alternative))));
+		if matches!(lhs.drop_meta(), Node::Symbol(_)) {
+			return Some(elvis(lhs.clone()));
+		}
+		self.elvis_operands += 1;
+		let operand = Symbol(format!("{ELVIS_WORD}·{}", self.elvis_operands));
+		let store = Node::Key(Box::new(operand.clone()), Op::Assign, Box::new(lhs.clone()));
+		Some(Node::List(vec![store, elvis(operand)], Bracket::Round, Separator::Semicolon))
+	}
+
+	/// `hex 1010` is `0x1010`; the digits start with a number, `hex ff` stays a call of `hex` on `ff`
+	fn try_parse_hex_word(&mut self) -> Option<Node> {
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		if blanks == 0 || !self.peek_char(blanks).is_ascii_digit() {
+			return None;
+		}
+		let end = (blanks..).find(|&offset| !self.peek_char(offset).is_ascii_hexdigit())?;
+		if is_identifier_char(self.peek_char(end)) {
+			return None;
+		}
+		let digits: String = (blanks..end).map(|offset| self.peek_char(offset)).collect();
+		self.advance_by(end);
+		Some(i64::from_str_radix(&digits, 16).map(Node::int).unwrap_or_else(|_| error(&format!("Invalid hex: hex {digits}"))))
 	}
 
 	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
