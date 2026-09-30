@@ -50,6 +50,8 @@ pub struct Context {
     pub parameter_conflicts: Vec<String>,
     /// Field names looked up by a constant key (`p.x`, `p["x"]`): each has a runtime error `no_field_x` for the miss
     pub missing_field_names: std::collections::BTreeSet<String>,
+    /// Subjects of a `switch` without default: each has a runtime error `no_case_<subject>` for the miss
+    pub missing_case_labels: std::collections::BTreeSet<String>,
 }
 
 impl Default for Context {
@@ -83,6 +85,7 @@ impl Context {
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),
             missing_field_names: Default::default(),
+            missing_case_labels: Default::default(),
         }
     }
 

@@ -2681,6 +2681,7 @@ impl WasmGcEmitter {
 		};
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
+			|| fn_name == crate::switch::NO_CASE_CALL
 			|| crate::analyzer::counting_function(fn_name, &self.ctx).is_some();
 		if !integer_builtin || !self.emit_introspection_fn(func, fn_name, argument) {
 			return false;
@@ -3413,6 +3414,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
 	let node = crate::min_max::lower(node);
+	let node = crate::switch::lower(node);
 	let node = crate::library_words::lower(node);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
@@ -3530,7 +3532,11 @@ fn failed_run(failure: anyhow::Error) -> Node {
 		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("no field {name}")
 	});
-	let runtime_error = missing_field.or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " ")));
+	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
+		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+		format!("no case for {label}")
+	});
+	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " ")));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
 	crate::node::error(&message)

@@ -36,6 +36,7 @@ pub mod for_loop;
 pub mod type_constructor;
 pub mod library_words;
 pub mod min_max;
+pub mod switch;
 pub mod modules;
 use std::env;
 use std::fs;
