@@ -2742,7 +2742,7 @@ impl WasmGcEmitter {
 	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
 			if text_builtins::text_builtin_kind(fn_name, arguments.len()) == Some(Kind::Int) {
-				self.emit_byte_at(func, arguments);
+				self.emit_integer_text_builtin(func, fn_name, arguments);
 				return true;
 			}
 		}
@@ -3482,10 +3482,13 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = crate::type_tests::lower(node);
+	let node = crate::lambdas::lower(node);
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
 	let node = crate::min_max::lower(node);
+	let node = crate::declarations::lower(node);
 	let node = crate::switch::lower(node);
+	let node = crate::phrase_words::lower(node);
 	let node = crate::library_words::lower(node);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());

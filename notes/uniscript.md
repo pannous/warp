@@ -1,4 +1,5 @@
 # Uniscript in wasp: what it took (lib/uniscript.wasp, data/uniscript/)
+Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
 `use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. Data format: data/uniscript/README.md.
 Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.

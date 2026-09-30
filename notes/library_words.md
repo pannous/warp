@@ -83,3 +83,23 @@ real; `rational` covers int; `list of number` covers every list of numbers; `tex
 A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` is
 not handled (unclear). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
 Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
+
+# Lambdas (compile-time)
+
+`src/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
+`f = x=>x*x`, `f = (x y)->x+y`, `f = (x, y) => x+y`, and `f = {it*2}` (a block only when it uses `it`; `p={a:1}` stays an object) become
+the definition `f(x):=…` at that point, so variables are captured by value there (`n=10; f = x=>x+n; n=20; f 1` is 11). `{x*x}(x=5)` defines
+an anonymous function and calls it (`{x+y}(x=1 y=2)`). `map xs F`, `map(xs, F)`, `xs.map(F)`, `xs.map {it*it}` with F a block, a lambda or a defined function is the loop
+`(out=[]; for item in xs { out.add(F(item)) }; out)` with a literal body inlined. A lambda as the argument of any other call, or `map` over a
+non-function, is the error `functions are not first-class values yet`. Not done: `filter`, `reduce`, `each`, lambdas returned from
+functions (row 22, first-class functions). A user function named like a type word (`double`) is read as the type cast.
+Ignored tests: test_stacked_lambdas (`a{x:1}{y:2}{3}` must parse as three items, a parser question), test_modifiers, test_wit_function are unrelated.
+
+## filter, reduce, fold, each
+
+Same compile-time way as `map` (`lambdas::ITERATIONS`, one loop template per word): `filter xs {it>2}`, `xs.filter(x=>x%2==1)`, `reduce xs (a b)->a+b`
+(first element is the start; an empty list is the error `reduce of an empty list`), `fold xs 10 (a b)->a+b`, `each xs {it*10}`
+(the value is the body of the last item, 0 for an empty list). The function is a literal block/lambda or a defined function; a wrong
+number of parameters is `reduce takes a function of two arguments`, anything else `functions are not first-class values yet`.
+Body `a-b` of a lambda with parameters a and b is the difference (kebab rule). Parser quirks that bite: `{it<k}` reads `it<k}` as a type
+application (write `it < k`), and `reduce [7] (a b)->…` reads `reduce [7]` as a subscript (bind the list first).

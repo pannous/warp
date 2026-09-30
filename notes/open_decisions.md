@@ -89,3 +89,8 @@ D16 overflow contradict Decided rules). Found while implementing:
     Units: no `min`/`d` (clash with the function `min`), `s`/`h` are now unit words. OK?
 32. Stash entries left by workers (the hook blocks `git stash drop`): `stash@{0}` "On text-concat: concat-wip-tag"
     (83a40987, content is merged) plus the older autostash entries. Drop them?
+33. A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
+    closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
+34. `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
+    (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
+    Worth it?

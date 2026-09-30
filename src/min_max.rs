@@ -14,7 +14,8 @@ const MIN_ARGUMENTS: usize = 2;
 
 /// Pseudo-call the emitter turns into the runtime error `<extremum> of an empty list`
 pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
-pub const EMPTY_LIST_ERRORS: [(&str, &str); 2] = [("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list")];
+pub const EMPTY_LIST_ERRORS: [(&str, &str); 3] =
+	[("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list"), ("reduce", "reduce_of_an_empty_list")];
 
 pub fn lower(node: Node) -> Node {
 	let mut context = Context::new();

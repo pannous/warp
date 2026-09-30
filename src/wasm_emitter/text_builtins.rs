@@ -19,14 +19,17 @@ const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
 const ERROR: &str = "error";
+/// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
+const IS_ERROR: &str = "is_error";
+const KIND_MASK: i64 = 0xFF;
 const ERROR_OF: &str = "error_of";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 4] =
-	[(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text)];
+const TEXT_BUILTINS: [(&str, usize, Kind); 5] =
+	[(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int)];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
 	TEXT_BUILTINS.iter().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
@@ -67,8 +70,8 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
-			(BYTE_AT, _) => {
-				self.emit_byte_at(func, arguments);
+			(BYTE_AT | IS_ERROR, _) => {
+				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
 			(BYTE_SLICE, [text, start, end]) => {
@@ -81,12 +84,21 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `byte_at(text, offset)` as raw i64
-	pub(super) fn emit_byte_at(&mut self, func: &mut Function, arguments: &[Node]) {
-		let [text, offset] = arguments else { unreachable!("byte_at takes a text and an offset") };
-		self.emit_node_instructions(func, text);
-		self.emit_numeric_value(func, offset);
-		self.emit_call(func, BYTE_AT);
+	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
+	pub(super) fn emit_integer_text_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+		match (name, arguments) {
+			(BYTE_AT, [text, offset]) => {
+				self.emit_node_instructions(func, text);
+				self.emit_numeric_value(func, offset);
+				self.emit_call(func, BYTE_AT);
+			}
+			(IS_ERROR, [value]) => {
+				self.emit_node_instructions(func, value);
+				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
+				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
+			}
+			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
+		}
 	}
 
 	/// `left + right` of texts or characters: a fresh text holding both

@@ -27,12 +27,21 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
+/// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
+const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+/// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
+/// it is a declaration only when a name and a field block follow
+const RECORD_WORD: &str = "record";
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
 /// Words that test a value for being ø or falsy, sugar for `not x`
 const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
 const EMPTY_WORD: &str = "empty";
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
+/// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
+pub const TRY_MARKER: &str = "try·else";
+pub const ASSERT_MARKER: &str = "assert·else";
+const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
 const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
 const TO_WORD: &str = "to";
@@ -81,6 +90,15 @@ impl ParserOptions {
 fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
 	format!("{name} of {}", arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// The sign of a superscript exponent: ⁺ is +1, ⁻ is -1
+fn superscript_sign(ch: char) -> Option<i64> {
+	match ch {
+		'⁺' => Some(1),
+		'⁻' => Some(-1),
+		_ => None,
+	}
 }
 
 fn superscript_digit(ch: char) -> Option<i64> {
@@ -257,6 +275,24 @@ impl WaspParser {
 
 	fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
+	}
+
+	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
+	fn name_and_block_follow(&self) -> bool {
+		let is_blank = |ch: char| matches!(ch, ' ' | '\t');
+		let mut offset = 0;
+		while is_blank(self.peek_char(offset)) {
+			offset += 1;
+		}
+		let name_start = offset;
+		while is_identifier_char(self.peek_char(offset)) {
+			offset += 1;
+		}
+		let has_name = offset > name_start;
+		while is_blank(self.peek_char(offset)) {
+			offset += 1;
+		}
+		has_name && self.peek_char(offset) == '{'
 	}
 
 	fn advance(&mut self) {
@@ -673,6 +709,38 @@ impl WaspParser {
 			.map(|(word, op, _)| (*op, word.len()))
 	}
 
+	/// `try` or `assert` followed by an operand: the words that guard a statement
+	fn peek_guard_word(&self) -> Option<&'static str> {
+		if self.options.data_mode {
+			return None;
+		}
+		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t'))
+			.map(|(_, marker)| marker)
+	}
+
+	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
+	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	fn parse_guard(&mut self, marker: &'static str) -> Node {
+		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
+		self.advance_by(word_length);
+		self.skip_spaces();
+		let outer = std::mem::replace(&mut self.stops_at_else, true);
+		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_expr(0));
+		self.stops_at_else = outer;
+		self.skip_spaces();
+		let fallback = if self.matches_keyword("else") {
+			self.advance_by("else".len());
+			self.skip_spaces();
+			self.parse_expr(0)
+		} else if marker == TRY_MARKER {
+			return error("`try` needs an `else`: `try X else Y`");
+		} else {
+			Empty
+		};
+		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
@@ -964,7 +1032,10 @@ impl WaspParser {
 		if self.options.wit_mode && self.current_char() == '<' {
 			return self.parse_type_application(symbol);
 		}
-		if !self.options.wit_mode && (symbol == "class" || symbol == "struct" || (symbol == "type" && self.current_char() != '(')) {
+		let declares_type = TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
+			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == "type" && self.current_char() != '(');
+		if !self.options.wit_mode && declares_type {
 			self.skip_whitespace();
 			let type_name = match self.parse_symbol() {
 				Ok(s) => s,
@@ -1056,6 +1127,8 @@ impl WaspParser {
 			self.skip_spaces();
 			let rhs = self.parse_prefix_operand(op);
 			negate_condition(self.finish_prefix(op, rhs))
+		} else if let Some(marker) = self.peek_guard_word() {
+			self.parse_guard(marker)
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -1401,26 +1474,43 @@ impl WaspParser {
 		}
 	}
 
-	/// The exponent written in superscript digits at the cursor and its length in characters: ⁴ → (4, 1), ¹² → (12, 2)
-	fn superscript_exponent(&self) -> Option<(i64, usize)> {
-		let digits: Vec<i64> = self.chars.iter().skip(self.pos).map_while(|ch| superscript_digit(*ch)).collect();
-		let exponent = digits.iter().fold(0i64, |exponent, digit| exponent.saturating_mul(10).saturating_add(*digit));
-		(!digits.is_empty()).then_some((exponent, digits.len()))
+	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
+	/// ⁴ → (4, 1), ¹² → (12, 2), ⁻¹ → (-1, 2), ²⁺³ → (5, 3)
+	fn superscript_exponent(&self) -> Option<(i64, usize, bool)> {
+		let (mut exponent, mut length, mut signed) = (0i64, 0usize, false);
+		loop {
+			let sign = match self.chars.get(self.pos + length).copied().and_then(superscript_sign) {
+				Some(sign) => sign,
+				None if length == 0 => 1,
+				None => break,
+			};
+			let sign_length = self.chars.get(self.pos + length).copied().and_then(superscript_sign).map_or(0, |_| 1);
+			let digits: Vec<i64> = self.chars.iter().skip(self.pos + length + sign_length).map_while(|ch| superscript_digit(*ch)).collect();
+			if digits.is_empty() {
+				break;
+			}
+			let run = digits.iter().fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit));
+			exponent = exponent.saturating_add(sign * run);
+			signed |= sign_length > 0;
+			length += sign_length + digits.len();
+		}
+		(length > 0).then_some((exponent, length, signed))
 	}
 
-	/// `x⁴` is x^4; the single digits ² and ³ keep their dedicated square and cube operators
+	/// `x⁴` is x^4, `x⁻¹` is 1/x; the single digits ² and ³ keep their dedicated square and cube operators
 	fn try_parse_superscript_power(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		let (exponent, length) = self.superscript_exponent()?;
-		let (op, right) = match (exponent, length) {
-			(2, 1) => (Op::Square, Empty),
-			(3, 1) => (Op::Cube, Empty),
-			_ => (Op::Pow, Node::int(exponent)),
+		let (exponent, length, signed) = self.superscript_exponent()?;
+		let (op, right) = match (exponent, length, signed) {
+			(2, 1, false) => (Op::Square, Empty),
+			(3, 1, false) => (Op::Cube, Empty),
+			_ => (Op::Pow, Node::int(exponent.abs())),
 		};
 		if op.binding_power().0 < min_bp {
 			return None;
 		}
 		self.advance_by(length);
-		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(right)))
+		let power = Node::Key(Box::new(lhs.clone()), op, Box::new(right));
+		Some(if exponent < 0 { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power })
 	}
 
 	fn try_parse_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
