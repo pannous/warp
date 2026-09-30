@@ -97,6 +97,18 @@ fn the_marker_is_escaped_by_single_character_entities() {
 	converts("<:less>:", "<:");
 }
 
+/// `<:uniscript version="…">` at the start of a file declares it uniscript; the header and its line break convert to nothing
+#[test]
+fn the_header_declares_uniscript_and_its_version() {
+	let header = "<:uniscript version=\\\"https://uniscript.org/v1\\\">";
+	converts(&format!("{header}\\n<:alpha>"), "α");
+	converts(&format!("{header}\\r\\n<:alpha>"), "α");
+	converts(&format!("{header} <:alpha>"), " α");
+	converts("<:uniscript><:alpha>", "α");
+	warns("<:uniscript version=\\\"https://uniscript.org/v9\\\">A", "A", "uniscript: unsupported uniscript version https://uniscript.org/v9 at byte 0");
+	is!(&format!("use uniscript; uniscript(\"x {header}\")"), error("unknown uniscript entity: uniscript version=\"https://uniscript.org/v1\""));
+}
+
 #[test]
 fn an_unknown_entity_is_an_error() {
 	is!("use uniscript; uniscript(\"<:nosuchthing> x\")", error("unknown uniscript entity: nosuchthing"));

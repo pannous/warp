@@ -11,6 +11,9 @@ const suffixes_table = 2  // suffix control → block type
 const record_size = 20
 const hash_multiplier = 31
 const hash_modulus = 4294967296
+const uniscript_version = "https://uniscript.org/v1"  // the version this reads, declared by the header <:uniscript version="…">
+const header_open = "<:uniscript"
+const version_attribute = "version="
 
 // ---- the index -------------------------------------------------------------------------------------------------
 
@@ -247,10 +250,32 @@ next_marker(source:text, start) := {
 	source.bytes
 }
 
+// bytes of the header <:uniscript version="https://uniscript.org/v1"> at the start of a file and its line break, else 0;
+// another version warns
+header_length(source:text) := {
+	open = header_open.bytes
+	if source.bytes <= open or byte_slice(source, 0, open) != header_open { return 0 }
+	if byte_at(source, open) != 32 and byte_at(source, open) != 62 { return 0 }
+	close = offset_of(source, 62, open)
+	if close == source.bytes { return 0 }
+	attribute = open + 1
+	while attribute + version_attribute.bytes < close and byte_slice(source, attribute, attribute + version_attribute.bytes) != version_attribute { attribute++ }
+	value = attribute + version_attribute.bytes + 1
+	if value < close {
+		version = byte_slice(source, value, offset_of(source, 34, value))
+		if version != uniscript_version { unsupported("unsupported uniscript version " + version, 0) }
+	}
+	end = close + 1
+	if end + 1 < source.bytes and byte_at(source, end) == 13 and byte_at(source, end + 1) == 10 { end += 2 } else {
+		if end < source.bytes and byte_at(source, end) == 10 { end++ }
+	}
+	end
+}
+
 uniscript(source:text) := {
 	out = ""
 	block = ""
-	i = 0
+	i = header_length(source)
 	while i < source.bytes {
 		next = next_marker(source, i)
 		if next > i {
