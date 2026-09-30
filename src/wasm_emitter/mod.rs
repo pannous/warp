@@ -66,7 +66,7 @@ use crate::local::Local;
 use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, Signature};
 use crate::gc_traits::GcObject as ErgonomicGcObject;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
 use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
@@ -2100,7 +2100,24 @@ impl WasmGcEmitter {
 	}
 
 	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
+	/// A cast that makes no sense: a list as a number or character, a number as a list
+	fn cast_refusal(&self, value: &Node, target: &Node) -> Option<String> {
+		let target_name = target.name().to_lowercase();
+		let kind = self.get_type(value);
+		let text_like = matches!(target_name.as_str(), "string" | "str" | "text");
+		let refused = match kind {
+			Kind::List => target_name != "list" && !text_like,
+			Kind::Int | Kind::Float => target_name == "list",
+			_ => false,
+		};
+		refused.then(|| format!("cannot cast {kind} to {target_name}: {} as {target_name}", value.serialize()))
+	}
+
 	fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+		if let Some(refusal) = self.cast_refusal(value, target) {
+			self.emit_type_error(func, refusal);
+			return;
+		}
 		let exact_value = !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
 		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
 			"float" => {
@@ -2108,12 +2125,54 @@ impl WasmGcEmitter {
 				self.emit_type_error(func, message);
 			}
 			"exact" if exact_value => self.emit_numeric_value(func, value),
+			// a character held unboxed is its code point
+			"char" | "character" => match value.drop_meta() {
+				Node::Char(character) => {
+					func.instruction(&Instruction::I64Const(*character as i64));
+				}
+				_ => self.emit_numeric_value(func, value),
+			},
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
 			_ => self.emit_not_a_number(func, located, located.drop_meta()),
 		}
+	}
+
+	/// `text as list` is its characters, a list stays as it is; the characters of a text known only at runtime need a runtime splitter
+	fn emit_list_cast(&mut self, func: &mut Function, value: &Node) {
+		match value {
+			Node::Text(text) => {
+				let characters = text.chars().map(Node::Char).collect();
+				self.emit_node_instructions(func, &Node::List(characters, Bracket::Square, Separator::Space));
+			}
+			Node::Char(_) => self.emit_node_instructions(func, &Node::List(vec![value.clone()], Bracket::Square, Separator::Space)),
+			_ if self.get_type(value) == Kind::List => self.emit_node_instructions(func, value),
+			_ => {
+				let kind = self.get_type(value);
+				self.emit_type_error(func, format!("cannot cast {kind} to list: the characters of {} are known only at runtime", value.serialize()));
+			}
+		}
+	}
+
+	/// `x as string` for a variable: an Int, a Text or a character is the join of the one-element list;
+	/// anything else has no runtime text yet
+	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
+		let join_call = |list: Node, separator: &str| {
+			Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
+		};
+		let one_item_list = |item: Node| Node::List(vec![item], Bracket::Square, Separator::Space);
+		let kind = self.get_type(value);
+		let node = match kind {
+			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+			// a list variable stays a loud error: tests/test_cast_to_string.rs pins it until the decision on a runtime serializer
+			_ => {
+				self.emit_type_error(func, format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()));
+				return;
+			}
+		};
+		self.emit_node_instructions(func, &node);
 	}
 
 	/// Emit type cast: value as type
@@ -2131,8 +2190,13 @@ impl WasmGcEmitter {
 		};
 
 		let value = value.drop_meta();
+		if let Some(refusal) = self.cast_refusal(value, target_type) {
+			self.emit_type_error(func, refusal);
+			return;
+		}
 
 		match crate::type_kinds::canonical_type_name(&type_name) {
+			"list" => self.emit_list_cast(func, value),
 			"i64" | "int64" if !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_)) => {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
@@ -2229,7 +2293,7 @@ impl WasmGcEmitter {
 						func.instruction(&I32Const(len as i32));
 						self.emit_call(func, "new_text");
 					}
-					_ => self.emit_type_error(func, format!("`{} as string`: a value known only at runtime has no text yet", value.serialize())),
+					_ => self.emit_runtime_text_cast(func, value),
 				}
 			}
 			"char" | "character" => {

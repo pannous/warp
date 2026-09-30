@@ -204,6 +204,18 @@ impl WasmGcEmitter {
 
 			let mut func = Function::new(vec![]);
 
+			// a one-character text is held as a Codepoint: its only element is itself
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
+			func.instruction(&Instruction::I64Const(Kind::Codepoint as i64));
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Empty));
+			Self::emit_index_compare(&mut func, Instruction::I64Ne);
+			self.emit_fail_if(&mut func, "index_out_of_range");
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::Return);
+			func.instruction(&Instruction::End);
+
 			// Get node.kind
 			func.instruction(&Instruction::LocalGet(0));
 			func.instruction(&Instruction::StructGet {
