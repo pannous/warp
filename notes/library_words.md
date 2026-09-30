@@ -73,3 +73,13 @@ natural-language forms), test_array_type_generics (expects `list<int>`, decided 
 the subtraction of its parts, with the lint warning "`a-b` is a data key here, but a and b are also variables". Without a key, a hyphenated
 name whose parts are all variables (assigned names and function parameters) is the difference: `a=5; b=1; a-b` is 4, `a-b-c` chains.
 Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it needs `==` on ranges and values with tolerance.
+
+# Type tests
+
+`src/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
+`3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
+name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
+real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).
+A variable or user function named like the type word (`int=3; 3 is int`) keeps equality; `x is y` stays equality. `x is number 9` is
+not handled (unclear). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
+Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.

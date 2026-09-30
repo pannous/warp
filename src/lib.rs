@@ -44,6 +44,7 @@ pub mod units;
 pub mod for_loop;
 pub mod type_constructor;
 pub mod library_words;
+pub mod type_tests;
 pub mod min_max;
 pub mod modules;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
