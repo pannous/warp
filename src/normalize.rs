@@ -173,7 +173,7 @@ impl Default for Style {
             function_def: FunctionStyle::ColonEquals,
             var_def: VarStyle::ColonEquals,
             logical: LogicalStyle::Words,
-            quotes: QuoteStyle::Single,
+            quotes: QuoteStyle::Double,
             index: IndexStyle::Hash,
             conditional: ConditionalStyle::IfThenElse,
             power: PowerStyle::Caret,
