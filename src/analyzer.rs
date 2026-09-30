@@ -1335,6 +1335,10 @@ fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
+pub fn is_append_method(name: &str) -> bool {
+	APPEND_METHODS.contains(&name)
+}
+
 /// The element of `x.add(v)` when x is a variable
 fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 	let Node::Symbol(_) = list.drop_meta() else { return None };

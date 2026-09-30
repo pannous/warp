@@ -239,6 +239,7 @@ impl WasmGcEmitter {
 
 		self.emit_with_at_functions();
 		self.emit_list_concat();
+		self.emit_library_ops();
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
@@ -414,7 +415,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Locals `pointer` and `end` span the bytes of text node local 0
-	fn emit_text_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
+	pub(super) fn emit_text_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
 		self.emit_text_field(func, 0, 0);
 		func.instruction(&I::LocalTee(pointer));
 		self.emit_text_field(func, 0, 1);
@@ -457,9 +458,10 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 7] = [
+pub const RUNTIME_ERRORS: [&str; 13] = [
 	"index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list",
+	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator",
 ];
 
 impl WasmGcEmitter {
@@ -490,13 +492,13 @@ impl WasmGcEmitter {
 		func.instruction(&compare);
 	}
 
-	fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
+	pub(super) fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		func.instruction(&Instruction::LocalGet(local));
 		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index });
 	}
 
 	/// Push field `field_index` (0 ptr, 1 len) of the $String inside text node `local`
-	fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
+	pub(super) fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		self.emit_field(func, local, 1);
 		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)));
 		func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.string_type, field_index });
@@ -524,7 +526,10 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
-	fn emit_text_heap_global(&mut self) {
+	pub(super) fn emit_text_heap_global(&mut self) {
+		if self.text_heap_global != 0 {
+			return;
+		}
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
 		self.text_heap_global = self.next_global_idx;
 		self.next_global_idx += 1;
@@ -532,7 +537,7 @@ impl WasmGcEmitter {
 
 	/// Bump-allocate `length` bytes into local `address`; fresh pages come from memory.grow,
 	/// so runtime texts never overlap the string table at the start of memory
-	fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
+	pub(super) fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
 		const PAGE_BITS: i32 = 16;
 		let heap = self.text_heap_global;
 		func.instruction(&Instruction::GlobalGet(heap));
@@ -568,7 +573,7 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::GlobalSet(heap));
 	}
 
-	fn emit_is_text(&self, func: &mut Function) {
+	pub(super) fn emit_is_text(&self, func: &mut Function) {
 		for kind in [Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);
 			func.instruction(&Instruction::I64Const(kind as i64));
@@ -638,7 +643,7 @@ impl WasmGcEmitter {
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
-	fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
+	pub(super) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		func.instruction(&Instruction::LocalGet(list));
 		func.instruction(&Instruction::RefIsNull);
 		func.instruction(&Instruction::If(BlockType::Empty));

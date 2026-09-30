@@ -10,6 +10,7 @@ mod ffi_emitter;
 mod import_manager;
 mod key_emitter;
 mod list_emitter;
+mod library_ops;
 mod list_ops;
 mod node_emitter;
 mod string_table;
@@ -3374,6 +3375,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
 	let node = crate::min_max::lower(node);
+	let node = crate::library_words::lower(node);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
