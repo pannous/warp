@@ -1274,6 +1274,20 @@ pub fn lower_declarations(node: Node) -> Node {
 			let (name, zeros) = typed_array_declaration(&declaration).expect("guarded");
 			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
 		}
+		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
+		Node::Key(target, Op::Assign, value) if typed_array_value(&value).is_some() => {
+			Node::Key(target, Op::Assign, Box::new(typed_array_value(&value).expect("guarded")))
+		}
+		// `x:[number]=v` is `x:list of number=v`
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if bracketed_list_type(type_node).is_some()) => {
+			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
+			let typed = Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")));
+			lower_declarations(Node::Key(Box::new(typed), Op::Assign, value))
+		}
+		// `x:[number]` is `x:list of number`
+		Node::Key(name, Op::Colon, type_node) if bracketed_list_type(&type_node).is_some() => {
+			Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")))
+		}
 		// `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header
 		Node::Key(target, Op::Assign, value) if range_elements(&value).is_some() => {
 			Node::Key(target, Op::Assign, Box::new(range_elements(&value).expect("guarded")))
@@ -1452,11 +1466,31 @@ fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 	}
 }
 
+/// `int[100]` or `100 * int`: the zero-filled list of that many elements
+fn typed_array_value(value: &Node) -> Option<Node> {
+	match value.drop_meta() {
+		Node::Key(count, Op::Mul, element) => match (count.drop_meta(), element.drop_meta()) {
+			(Node::Number(Number::Int(count)), Node::Symbol(word)) => zero_list(*count, word),
+			_ => None,
+		},
+		other => subscripted_array_type(other),
+	}
+}
+
+/// The type `[number]`: `list of number` for one element type word
+fn bracketed_list_type(type_node: &Node) -> Option<Node> {
+	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
+	let [element] = items.as_slice() else { return None };
+	let Node::Symbol(word) = element.drop_meta() else { return None };
+	type_word_kind(word)?;
+	Some(Node::Symbol(format!("list of {word}")))
+}
+
 /// `x:int[100]` as the variable and its zero-filled list
 fn typed_array_declaration(node: &Node) -> Option<(Node, Node)> {
 	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else { return None };
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	Some((name.drop_meta().clone(), subscripted_array_type(type_node)?))
+	Some((name.drop_meta().clone(), typed_array_value(type_node)?))
 }
 
 /// `x : 100` followed by the element type `int`: the declaration `x = [0 … 0]`
@@ -1485,7 +1519,7 @@ fn declared_type(target: &Node) -> Option<&Node> {
 
 /// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (see `canonical_type_name`)
 fn is_declaration_type(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some())
+	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some() || plural_element_type(name).is_some())
 }
 
 /// `(fast x)` as the target of `fast x=v`: the type and the name

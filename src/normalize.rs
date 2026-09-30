@@ -194,6 +194,8 @@ pub enum ListTypeStyle {
     Generic,
     /// `list of int`
     Of,
+    /// `[int]`
+    Bracket,
 }
 
 /// Global style configuration
@@ -496,6 +498,10 @@ pub mod hints {
                 Some(format!("{LIST_TYPE_HEAD}<{arguments}>"))
             }
             (ListTypeStyle::Of, words) => Some(format!("{LIST_TYPE_HEAD} {OF_WORD} {}", words.join(" of "))),
+            (ListTypeStyle::Bracket, words) => {
+                let (last, nested) = words.split_last()?;
+                Some(nested.iter().rev().fold(format!("[{last}]"), |inner, _| format!("[{inner}]")))
+            }
         }
     }
 
@@ -510,6 +516,7 @@ pub mod hints {
                 ListTypeStyle::Plural => "a plural type word is a list of that type",
                 ListTypeStyle::Generic => "angle brackets apply the list type to its element type",
                 ListTypeStyle::Of => "'list of' reads as a phrase",
+                ListTypeStyle::Bracket => "square brackets around the element type read as a list",
             };
             hint(&original, &canonical, reason);
         }
@@ -708,6 +715,15 @@ pub fn check_style(program: &Node) {
     walk(program, &mut |node, positioned| match node {
         Node::List(items, _, _) => check_items(items, positioned),
         Node::Key(_, Op::Colon, right) => {
+            if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
+                if let [element] = items.as_slice() {
+                    if let Some(word) = word_of(element) {
+                        set_position_of(right);
+                        hints::list_type(ListTypeStyle::Bracket, &[word]);
+                    }
+                }
+                return;
+            }
             let Some(type_word) = word_of(right) else { return };
             set_position_of(right);
             if let Some(element) = crate::analyzer::plural_element_type(type_word) {
