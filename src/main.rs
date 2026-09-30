@@ -77,6 +77,12 @@ fn main() {
         args.drain(flag..flag + 2);
     }
 
+    // `--strict`: warnings are errors (as `use strict` in the program)
+    if let Some(flag) = args.iter().position(|arg| arg == "--strict") {
+        diagnostic::set_warning_mode(diagnostic::WarningMode::Error);
+        args.remove(flag);
+    }
+
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
         println!("Content-Type: text/plain\n");

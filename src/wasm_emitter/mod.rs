@@ -3505,7 +3505,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}
-	crate::analyzer::lint(&node).iter().for_each(|warning| eprintln!("warning: {warning}"));
+	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
 	Ok(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)))
 }
 
@@ -3533,7 +3533,7 @@ fn write_debug_module(bytes: &[u8]) {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
-	choose_module(&lower_for_emission(lawful_program(code)?)?)
+	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&lower_for_emission(program)?))
 }
 
 /// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
@@ -3553,6 +3553,10 @@ fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
 pub fn eval_parsed(node: Node, _code: &str) -> Node {
+	crate::diagnostic::in_program_mode(node, eval_program)
+}
+
+fn eval_program(node: Node) -> Node {
 	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 
 	let node = match lower_for_emission(node) {
