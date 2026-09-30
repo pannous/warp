@@ -94,6 +94,21 @@ fn is_identifier_char(c: char) -> bool {
 }
 
 /// Read and parse a WASP file
+/// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
+/// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
+fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, Node)> {
+	match header.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 => match items[1].drop_meta() {
+			Node::List(_, Bracket::Curly, _) => Some((items[0].clone(), items[1].clone())),
+			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
+			_ => None,
+		},
+		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() => split_trailing_block(right, empty_is_block)
+			.map(|(operand, block)| (Node::Key(left.clone(), op.clone(), Box::new(operand)), block)),
+		_ => None,
+	}
+}
+
 pub fn parse_file(path: &str) -> Node {
 	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {
@@ -1143,17 +1158,11 @@ impl WaspParser {
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
-		if let Node::List(items, _, _) = rhs.drop_meta() {
-			if items.len() == 2 {
-				if let Node::List(_, Bracket::Curly, _) = items[1].drop_meta() {
-					let condition = items[0].clone();
-					let then_block = items[1].clone();
-					self.skip_spaces();
-					let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-					let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-					return self.parse_optional_else(if_then, ElseParseMode::Atom);
-				}
-			}
+		if let Some((condition, then_block)) = split_trailing_block(&rhs, false) {
+			self.skip_spaces();
+			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
+			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
+			return self.parse_optional_else(if_then, ElseParseMode::Atom);
 		}
 
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
@@ -1247,12 +1256,8 @@ impl WaspParser {
 			return while_do(rhs, body);
 		}
 
-		if let Node::List(items, _, _) = rhs.drop_meta() {
-			if items.len() == 2 {
-				if let Node::List(_, Bracket::Curly, _) | Empty = items[1].drop_meta() { // `{}` parses as ø
-					return while_do(items[0].clone(), items[1].clone());
-				}
-			}
+		if let Some((condition, body)) = split_trailing_block(&rhs, true) { // `{}` parses as ø
+			return while_do(condition, body);
 		}
 
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))

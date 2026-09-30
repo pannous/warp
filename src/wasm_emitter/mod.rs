@@ -368,15 +368,19 @@ impl WasmGcEmitter {
 			self.scope.define(param.name.clone(), None, param_kind(param));
 		}
 
-		// Collect any additional variables in the body
-		collect_variables(&user_fn.body, &mut self.scope);
+		// Collect any additional variables in the body, and the temp locals its loops need
+		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
 
-		// Declare locals (parameters are already accounted for)
+		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
 		let num_locals = self.scope.local_count();
 
-		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals);
+		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals + temp_locals);
+		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
 		let mut locals = self.local_declarations(num_params as usize);
+		if temp_locals > 0 {
+			locals.push((temp_locals, ValType::I64));
+		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		let mut func = Function::new(locals);
 
@@ -407,6 +411,7 @@ impl WasmGcEmitter {
 		// Restore scope
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
+		self.next_temp_local = saved_temp_local;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
