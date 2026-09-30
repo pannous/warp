@@ -16,6 +16,8 @@ use std::cell::Cell;
 
 pub const NOT_FIRST_CLASS: &str = "functions are not first-class values yet";
 const IMPLICIT_PARAMETER: &str = "it";
+const ON_WORD: &str = "on";
+const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
 const CALL_PLACEHOLDER: &str = "loop_call";
@@ -48,10 +50,51 @@ struct Lambda {
 	body: Node,
 }
 
+/// Lower the lambdas and iteration words whose function is known; an iteration word over a parameter is left for the
+/// specialisation of its function (function_values.rs)
 pub fn lower(node: Node) -> Node {
+	lowering(node, false)
+}
+
+/// The final run: an iteration word over a function that is still unknown is the error `functions are not first-class values yet`
+pub fn lower_strict(node: Node) -> Node {
+	lowering(node, true)
+}
+
+fn lowering(node: Node, strict: bool) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
-	Lowering { context, counter: Cell::new(0) }.expand(node)
+	Lowering { context, counter: Cell::new(0), strict }.expand(node)
+}
+
+/// Binary operators that can stand alone as a value: `fold xs 0 +`
+const OPERATOR_VALUES: [(Op, &str); 13] = [
+	(Op::Add, "+"), (Op::Sub, "-"), (Op::Mul, "*"), (Op::Div, "/"), (Op::Mod, "%"), (Op::Pow, "^"),
+	(Op::Eq, "=="), (Op::Ne, "!="), (Op::Lt, "<"), (Op::Gt, ">"), (Op::Le, "<="), (Op::Ge, ">="), (Op::And, "and"),
+];
+const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
+/// The value of an operator applied to nothing: the start of a fold that leaves the list empty
+const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
+
+fn operator_symbol(op: Op) -> Option<Node> {
+	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| Node::Symbol(text.to_string()))
+}
+
+/// `+` as the function `(a b)->a+b`
+fn operator_lambda(node: &Node) -> Option<Lambda> {
+	let Node::Symbol(text) = node.drop_meta() else { return None };
+	let (op, _) = OPERATOR_VALUES.iter().find(|(_, known)| known == text)?;
+	let [left, right] = OPERATOR_PARAMETERS.map(|name| Node::Symbol(name.to_string()));
+	Some(Lambda { params: OPERATOR_PARAMETERS.map(String::from).to_vec(), body: Node::Key(Box::new(left), *op, Box::new(right)) })
+}
+
+/// `x +` at the end of an operand list is the item `x` and the operator `+`: an operator as a value has nothing after it
+fn dangling_operator(node: &Node) -> Option<(Node, Node)> {
+	let Node::Key(operand, op, nothing) = node.drop_meta() else { return None };
+	if !matches!(nothing.drop_meta(), Node::Empty) || matches!(operand.drop_meta(), Node::Empty) {
+		return None;
+	}
+	Some((operand.as_ref().clone(), operator_symbol(*op)?))
 }
 
 fn mentions(node: &Node, name: &str) -> bool {
@@ -124,6 +167,12 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 	Some(Lambda { params, body })
 }
 
+/// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
+pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
+	let lambda = arrow_lambda(function).or_else(|| block_lambda(function).filter(|lambda| !lambda.params.is_empty())).or_else(|| operator_lambda(function))?;
+	Some(definition(name, lambda))
+}
+
 fn definition(name: &str, lambda: Lambda) -> Node {
 	let head = Node::List([vec![Node::Symbol(name.to_string())], lambda.params.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None);
 	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
@@ -136,6 +185,7 @@ fn call(name: &str, arguments: Vec<Node>) -> Node {
 struct Lowering {
 	context: Context,
 	counter: Cell<usize>,
+	strict: bool,
 }
 
 impl Lowering {
@@ -153,14 +203,36 @@ impl Lowering {
 				let lambda = arrow_lambda(&value).expect("guarded");
 				definition(name, Lambda { body: self.expand(lambda.body), ..lambda })
 			}
+			// `sum := fold +`: the iteration word with only its function is a function of the list
+			Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && self.partial_application(&value).is_some() => {
+				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
+				let body = self.partial_application(&value).expect("guarded");
+				definition(name, Lambda { params: vec![PARTIAL_LIST.to_string()], body: self.expand(body) })
+			}
 			Node::Key(receiver, Op::Dot, method) if self.iteration_method(&method).is_some() => {
 				let (iteration, mut arguments) = self.iteration_method(&method).expect("guarded");
 				let function = arguments.pop().expect("a function");
-				let extras = arguments.into_iter().map(|argument| self.expand(argument)).collect();
-				self.iterate(iteration, self.expand(*receiver), extras, self.expand(function))
+				let extras: Vec<Node> = arguments.into_iter().map(|argument| self.expand(argument)).collect();
+				let (receiver, function) = (self.expand(*receiver), self.expand(function));
+				match self.iterate(iteration, receiver.clone(), extras.clone(), function.clone()) {
+					Some(loop_node) => loop_node,
+					None => Node::Key(Box::new(receiver), Op::Dot, Box::new(call(iteration.word, [extras, vec![function]].concat()))),
+				}
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::List(items, bracket, separator) => {
+				let items = flatten_prefix_application(items, &bracket, &separator);
+				let items: Vec<Node> = if separator == Separator::Space {
+					items
+						.into_iter()
+						.flat_map(|item| match dangling_operator(&item) {
+							Some((operand, operator)) => vec![operand, operator],
+							None => vec![item],
+						})
+						.collect()
+				} else {
+					items
+				};
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.immediate_call(&items).or_else(|| self.iteration_call(&items, &bracket, &separator)).or_else(|| self.escaping_lambda(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
 			}
@@ -217,21 +289,71 @@ impl Lowering {
 		}
 		let (head, rest) = items.split_first()?;
 		if let Some(iteration) = self.iteration_of(head) {
-			let [list, extras @ .., function] = rest else { return None };
-			(extras.len() == iteration.extra_arguments).then(|| self.iterate(iteration, list.clone(), extras.to_vec(), function.clone()))
+			// `map square on xs`, `map &square xs`: the function may come first
+			let rest: Vec<Node> = rest.iter().filter(|item| !matches!(item.drop_meta(), Node::Symbol(word) if word == ON_WORD)).cloned().collect();
+			let rest = match rest.as_slice() {
+				[first, second] if iteration.extra_arguments == 0 && self.is_function_value(first) && !self.is_function_value(second) => vec![second.clone(), first.clone()],
+				_ => rest,
+			};
+			let [list, extras @ .., function] = rest.as_slice() else { return None };
+			if extras.len() != iteration.extra_arguments {
+				return None;
+			}
+			self.iterate(iteration, list.clone(), extras.to_vec(), function.clone())
 		} else if let Node::Key(receiver, Op::Dot, word) = head.drop_meta() {
 			let iteration = self.iteration_of(word)?;
 			let [extras @ .., function] = rest else { return None };
-			(is_prefix && extras.len() == iteration.extra_arguments).then(|| self.iterate(iteration, receiver.as_ref().clone(), extras.to_vec(), function.clone()))
+			if !is_prefix || extras.len() != iteration.extra_arguments {
+				return None;
+			}
+			self.iterate(iteration, receiver.as_ref().clone(), extras.to_vec(), function.clone())
 		} else {
 			None
 		}
 	}
 
+	/// `fold +`, `map square`, `reduce (a b)->a+b`: the call of the iteration word over the parameter `partial_list`
+	fn partial_application(&self, value: &Node) -> Option<Node> {
+		let (word, function) = match dangling_operator(value) {
+			Some((word, operator)) => (word, operator),
+			None => match value.drop_meta() {
+				Node::List(items, _, Separator::Space) => match items.as_slice() {
+					[word, function] => (word.clone(), function.clone()),
+					_ => return None,
+				},
+				_ => return None,
+			},
+		};
+		let iteration = self.iteration_of(&word)?;
+		if !self.is_function_value(&function) {
+			return None;
+		}
+		let list = Node::Symbol(PARTIAL_LIST.to_string());
+		let identity = match function.drop_meta() {
+			Node::Symbol(text) => OPERATOR_IDENTITIES.iter().find(|(known, _)| known == text).map(|(_, identity)| Node::int(*identity)),
+			_ => None,
+		};
+		Some(match (iteration.extra_arguments, identity) {
+			(0, _) => call(iteration.word, vec![list, function]),
+			// a fold without a start: the identity of its operator, else the first item starts (reduce)
+			(_, Some(identity)) => call(iteration.word, vec![list, identity, function]),
+			(_, None) => call("reduce", vec![list, function]),
+		})
+	}
+
+	/// A function given as a value: a lambda or block, an operator, or the name of a defined function
+	fn is_function_value(&self, node: &Node) -> bool {
+		arrow_lambda(node).is_some()
+			|| block_lambda(node).is_some()
+			|| operator_lambda(node).is_some()
+			|| matches!(node.drop_meta(), Node::Symbol(name) if self.context.user_functions.contains_key(name))
+	}
+
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
 	/// defined function; anything else cannot be inlined
-	fn applied(&self, iteration: &Iteration, function: &Node, arguments: &[Node]) -> Result<Node, Node> {
-		match arrow_lambda(function).or_else(|| block_lambda(function)) {
+	/// `Err(None)` when the function is not known yet (a parameter of a function that is specialised later)
+	fn applied(&self, iteration: &Iteration, function: &Node, arguments: &[Node]) -> Result<Node, Option<Node>> {
+		match arrow_lambda(function).or_else(|| block_lambda(function)).or_else(|| operator_lambda(function)) {
 			Some(lambda) if lambda.params.len() == arguments.len() => {
 				Ok(lambda.params.iter().zip(arguments).fold(lambda.body, |body, (param, argument)| substitute(body, param, argument)))
 			}
@@ -239,17 +361,18 @@ impl Lowering {
 			Some(lambda) if lambda.params.is_empty() && arguments.len() == 1 => Ok(lambda.body),
 			Some(_) => {
 				let count = if iteration.function_arguments == 1 { "one argument" } else { "two arguments" };
-				Err(Diagnostic::at(function, format!("{} takes a function of {count}", iteration.word)).into_error())
+				Err(Some(Diagnostic::at(function, format!("{} takes a function of {count}", iteration.word)).into_error()))
 			}
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => Ok(call(name, arguments.to_vec())),
-				_ => Err(Diagnostic::at(function, NOT_FIRST_CLASS).into_error()),
+				Node::Symbol(_) if !self.strict => Err(None),
+				_ => Err(Some(Diagnostic::at(function, NOT_FIRST_CLASS).into_error())),
 			},
 		}
 	}
 
 	/// The loop of an iteration word with the body of a literal function inlined
-	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Node {
+	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Option<Node> {
 		let names: Vec<(&str, String)> = ["out", "item", "acc", "list", "index", "value"].into_iter().map(|name| (name, self.fresh(&format!("loop_{name}")))).collect();
 		let symbol = |name: &str| Node::Symbol(names.iter().find(|(prefix, _)| *prefix == name).expect("a loop name").1.clone());
 		let arguments: Vec<Node> = if iteration.function_arguments == 2 { vec![symbol("acc"), symbol("item")] } else { vec![symbol("item")] };
@@ -265,14 +388,34 @@ impl Lowering {
 		if let Some(start) = extras.first() {
 			program = substitute(program, START_PLACEHOLDER, start);
 		}
-		program
+		Some(program)
 	}
 
 	/// A lambda given as an argument of a call that is not inlined
 	fn escaping_lambda(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		if !self.strict {
+			return None; // a function that takes it as a parameter is specialised for it first
+		}
 		call_name(items, bracket, separator)?;
 		let escaped = items[1..].iter().find(|argument| arrow_lambda(argument).is_some())?;
 		Some(Diagnostic::at(escaped, NOT_FIRST_CLASS).into_error())
+	}
+}
+
+/// `map xs f` with names only is read as `(map xs) f`: a braceless application whose head is a braceless application continues it
+fn flatten_prefix_application(items: Vec<Node>, bracket: &Bracket, separator: &Separator) -> Vec<Node> {
+	if *bracket != Bracket::None || *separator != Separator::Space {
+		return items;
+	}
+	match items.split_first() {
+		Some((head, rest)) => match head.drop_meta() {
+			Node::List(inner, Bracket::None, Separator::Space) if !rest.is_empty() => {
+				let flattened = flatten_prefix_application(inner.clone(), &Bracket::None, &Separator::Space);
+				[flattened, rest.to_vec()].concat()
+			}
+			_ => items,
+		},
+		None => items,
 	}
 }
 
