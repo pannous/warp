@@ -1,0 +1,5 @@
+// Package registry: `use package <name>` fetches the git repository named here into packages/<name> (a shallow clone)
+// and loads packages/<name>/<name>.wasp if the package has one; a package without it is data other modules read.
+// A local checkout can stand in for a fetch: ln -s ~/dev/uniscript packages/uniscript
+
+uniscript: "https://github.com/pannous/uniscript.git"

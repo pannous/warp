@@ -1,9 +1,12 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
+//! `use package <name>`: the git repository the registry packages.wasp names, fetched into packages/<name>.
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::wasp_parser::WaspParser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Mutex;
 
 /// Where modules are looked for, in this order: the current directory, the samples, the library
 pub const SEARCH_DIRECTORIES: [&str; 6] = [".", "include", "lib", "src", "source", "samples"];
@@ -13,6 +16,14 @@ const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
+/// `use package x`: the repository of x, fetched on first use
+const PACKAGE_KEYWORD: &str = "package";
+/// name: "git url" for every package, compiled in so warp finds it from any directory
+const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
+/// where packages are fetched to, below the working directory
+pub const PACKAGES_DIRECTORY: &str = "packages";
+/// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
+static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
 const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
 
@@ -67,6 +78,14 @@ impl Loader<'_> {
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
 	/// the `use` itself for a native library
 	fn import(&mut self, import: Import, name: &str, statement: &Node) -> Result<Vec<Node>, Node> {
+		if import == Import::Package {
+			let directory = fetch_package(name).map_err(|failure| error(&failure))?;
+			let module = MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file());
+			return match module {
+				Some(path) => self.load(Import::Use, name, path),
+				None => Ok(vec![]),
+			};
+		}
 		if import == Import::Use && is_builtin_library(name) {
 			return Ok(vec![as_use(statement)]);
 		}
@@ -76,9 +95,13 @@ impl Loader<'_> {
 				false => Err(self.not_found(name, import)),
 			};
 		};
+		self.load(import, name, path)
+	}
+
+	fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {
 		let loaded = match import {
-			Import::Use => &mut self.loaded,
 			Import::Include => &mut self.included,
+			_ => &mut self.loaded,
 		};
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
@@ -93,8 +116,8 @@ impl Loader<'_> {
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
 		Ok(match import {
-			Import::Use => statements.into_iter().filter(is_declaration).collect(),
 			Import::Include => statements,
+			_ => statements.into_iter().filter(is_declaration).collect(),
 		})
 	}
 
@@ -144,11 +167,51 @@ enum Import {
 	Use,
 	/// the whole file
 	Include,
+	/// a registered repository, and the declarations of its module file if it has one
+	Package,
+}
+
+/// The git url of a package in the registry
+pub fn package_repository(name: &str) -> Option<String> {
+	statements(WaspParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| match entry.drop_meta() {
+		Node::Key(key, Op::Colon, url) => match (key.drop_meta(), url.drop_meta()) {
+			(Node::Symbol(key), Node::Text(url)) if key == name => Some(url.clone()),
+			_ => None,
+		},
+		_ => None,
+	})
+}
+
+/// The directory of a package, cloned from its registered repository unless it is already there
+pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
+	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
+	let directory = Path::new(PACKAGES_DIRECTORY).join(name);
+	let _fetching = FETCHING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if directory.exists() {
+		return Ok(directory);
+	}
+	let staging = Path::new(PACKAGES_DIRECTORY).join(format!(".{name}.fetching.{}", std::process::id()));
+	let clone = Command::new("git").args(["clone", "--quiet", "--depth", "1", &url]).arg(&staging).output()
+		.map_err(|failure| format!("package {name} not fetched: git: {failure}"))?;
+	if !clone.status.success() {
+		return Err(format!("package {name} not fetched from {url}: {}", String::from_utf8_lossy(&clone.stderr).trim()));
+	}
+	if std::fs::rename(&staging, &directory).is_err() && directory.exists() {
+		std::fs::remove_dir_all(&staging).ok(); // another process fetched it first
+	}
+	Ok(directory)
 }
 
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`
 fn used_module(node: &Node) -> Option<(Import, String)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	if let [keyword, package, name] = items.as_slice() {
+		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word);
+		return match is_word(keyword, USE_KEYWORD) && is_word(package, PACKAGE_KEYWORD) {
+			true => Some((Import::Package, path_of(name)?)),
+			false => None,
+		};
+	}
 	let [keyword, argument] = items.as_slice() else { return None };
 	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
 	let import = if USE_KEYWORDS.contains(&keyword.as_str()) {
