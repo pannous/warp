@@ -26,3 +26,9 @@ fn the_extremum_of_a_decimal_list() {
 	is!("xs=[1.5 2.5]; min(xs)+1", 2.5);
 	is!("max([1.5 2.5])", 2.5);
 }
+
+#[test]
+fn a_loop_walks_decimal_elements() {
+	is!("for i in [1.5 2] {i}", 2);
+	is!("n=0; for i in [1.5 2.5] {n=n+i}; n", 4);
+}

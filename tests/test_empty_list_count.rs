@@ -17,3 +17,19 @@ fn a_loop_over_an_empty_list_does_not_run() {
 fn a_one_element_list_still_counts_one() {
 	is!("xs=[7]; size xs", 1);
 }
+
+#[test]
+#[ignore = "needs the user's decision: probe_footguns test_null_needs_a_check pins `x=ø; x.size` as a null-check error"]
+fn the_counting_properties_of_an_empty_list_need_no_null_check() {
+	for property in ["size", "count", "length", "number"] {
+		is!(&format!("xs=[]; xs.{property}"), 0);
+	}
+	is!("xs=[]; xs.size + 1", 1);
+}
+
+#[test]
+fn a_counting_property_is_a_number_in_arithmetic() {
+	is!("xs=[4 5 6]; xs.size + 1", 4);
+	is!("xs=[4 5 6]; 2 * xs.count", 6);
+	is!("t='héllo'; t.length - 1", 4);
+}
