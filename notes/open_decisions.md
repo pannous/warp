@@ -61,3 +61,25 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     ../warp-semicolon-survey; delete probes/review_target, probes/head_check; agent helper scripts in probes/*.py.
 19. Old `stash@{0}: autostash` (2026-09-27, README.md + test_results.txt) — keep or drop?
 20. CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
+
+## New questions 2026-09-30 (supervisor warp-e0), none blocking
+Wiki survey: the 16 questions D1–D16 are in notes/wiki_features.md section 2 (D6 `|`/`&` as pipe, D7 lazy `:=` and
+D16 overflow contradict Decided rules). Found while implementing:
+21. `type(2.0)` is `int` (a decimal with zero fraction normalizes to an integer), `type(1.5f)` float, `type(π)` real,
+    but `x=π; type(x)` still float. OK? Add `rat` as an abbreviation of `rational`?
+22. `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
+    (`i=5; i++ while i<3` never runs); `a = 2 if c` guards the whole assignment. Keep?
+23. `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
+24. `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
+25. `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
+    Should a known prefix word followed by a space make `[…]` its argument?
+26. Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
+    Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
+27. Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
+    `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
+28. `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
+    (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
+    that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
+29. The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
+    warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
+    files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
