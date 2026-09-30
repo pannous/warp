@@ -2346,7 +2346,8 @@ impl WaspParser {
 			let item = self.parse_value();
 
 			let consumed_input = self.pos != pos_before;
-			if item == Empty && !(consumed_input && close.is_some()) {
+			// `==` is loose (false equals ø): only a real ø is skipped
+			if matches!(item, Empty) && !(consumed_input && close.is_some()) {
 				if !consumed_input {
 					self.advance();
 				}

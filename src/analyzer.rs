@@ -2336,19 +2336,19 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 								add_ffi_lib(ctx, &lib);
 								return;
 							}
-							let func_name = items[1].name();
+							let func_names = imported_names(&items[1]);
 							if items.len() >= 3 {
 								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
 									if key.name() == "from" {
 										let lib = value.name();
-										add_ffi_import(ctx, &func_name, &lib);
+										func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 										return;
 									}
 								}
 							}
 							if items.len() >= 4 && items[2].name() == "from" {
 								let lib = items[3].name();
-								add_ffi_import(ctx, &func_name, &lib);
+								func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 								return;
 							}
 						} else if first_sym == "use" && items.len() >= 2 {
@@ -2390,6 +2390,14 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 			extract_ffi_imports(ctx, node);
 		}
 		_ => {}
+	}
+}
+
+/// The function names of `import sin from 'm'` and of the group `import (sin, floor, fabs) from 'm'`
+fn imported_names(names: &Node) -> Vec<String> {
+	match names.drop_meta() {
+		Node::List(items, _, _) => items.iter().map(Node::name).collect(),
+		single => vec![single.name()],
 	}
 }
 

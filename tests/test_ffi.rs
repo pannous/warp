@@ -31,7 +31,6 @@ use warp::{eq, is, parse};
 use warp::ffi_parser::{find_library_headers, parse_header_file};
 
 #[test]
-#[ignore = "use keyword with ceil/floor conflicts with builtins"]
 fn test_dynlib_import_emit() {
 	// Test FFI import and usage with 'use' keyword
 	// These are actual C library functions, not WASM builtins
@@ -48,7 +47,6 @@ fn test_dynlib_import_emit() {
 // Basic FFI Tests - Core functionality
 // ============================================================================
 #[test]
-#[ignore = "floor is a built-in WASM instruction, FFI import is shadowed"]
 fn test_ffi_floor() {
 	// Test: float64 . float64 (floor from libm);
 	is!("import floor from 'm'\nfloor(3.7)", 3.0);
@@ -84,7 +82,6 @@ fn test_ffi_fmin() {
 }
 
 #[test]
-#[ignore = "floor builtin conflicts with FFI floor"]
 fn test_ffi_combined() {
 	// Combined tests using multiple FFI functions together
 	// sqrt(abs(-16)) = sqrt(16) = 4.0
@@ -115,7 +112,6 @@ fn test_ffi_strncmp() {
 // ============================================================================
 
 #[test]
-#[ignore = "ceil is a built-in WASM instruction, FFI import is shadowed"]
 fn test_ffi_ceil() {
 	// Test: double ceil(double x);
 	is!("import ceil from 'm'\nceil(3.2)", 4.0);
@@ -179,7 +175,6 @@ fn test_ffi_fmod() {
 // ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_atoi() {
 	// Test: int atoi(const char* str);
 	is!("import atoi from \"c\"\natoi(\"42\")", 42);
@@ -189,7 +184,6 @@ fn test_ffi_atoi() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_atol() {
 	// Test: long atol(const char* str);
 	is!("import atol from \"c\"\natol(\"1234567\")", 1234567);
@@ -201,7 +195,6 @@ fn test_ffi_atol() {
 // ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_rand() {
 	// Test: int rand(void);
 	is!("import rand from \"c\"\nx=rand();x>=0", 1);
@@ -213,7 +206,6 @@ fn test_ffi_rand() {
 // ============================================================================
 
 #[test]
-#[ignore]
 fn test_ffi_trigonometry_combined() {
 	// Test: sin²(x) + cos²(x) = 1 (Pythagorean identity);
 	is!(
@@ -230,7 +222,6 @@ fn test_ffi_trigonometry_combined() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_string_math_combined() {
 	// Test: Parse string numbers and do math
 	is!(
@@ -248,7 +239,6 @@ fn test_ffi_string_math_combined() {
 }
 
 #[test]
-#[ignore]
 fn test_ffi_string_comparison_logic() {
 	// Test: Use strcmp for conditional logic
 	is!(
@@ -267,7 +257,6 @@ if result < 0 then 1 else 0"#,
 }
 
 #[test]
-#[ignore]
 fn test_ffi_math_pipeline() {
 	// Test: Chain multiple math functions
 	is!(r#"import (sin,floor,fabs) from 'm'; fabs(floor(sin(3.14159)))"#, 0.0);
@@ -608,7 +597,6 @@ fn test_ffi_sqrt_works() {
 }
 
 #[test]
-#[ignore = "abs is now a builtin keyword, use fabs from m for C import"]
 fn test_ffi_abs_from_c() {
 	// abs from libc takes i32 and returns i32
 	is!("import abs from \"c\"\nabs(-42)", 42);

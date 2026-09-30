@@ -595,7 +595,6 @@ fn test_wasm_increment() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_unary_variables() {
 	is!("i=0.0; !i", true);
 	is!("i=false; !i", true);
@@ -626,7 +625,6 @@ fn test_self_modifying() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_unary() {
 	is!("not 0.0", true);
 	is!("not ø", true);
@@ -707,7 +705,6 @@ fn test_wasm_logic() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_negated() {
 	is!("not true and !true", !true);
 	is!("not true and !false", !true);
@@ -950,7 +947,6 @@ fn test_string_concat_wasm() {
 
 
 #[test]
-#[ignore]
 fn test_object_properties_wasm() {
 	is!("x={a:3,b:4,c:{d:true}};x.a", 3);
 	is!("x={a:3,b:true};x.b", 1);
@@ -1313,7 +1309,6 @@ fn test_smart_return() {
 fn test_multi_value() {}
 
 #[test]
-#[ignore]
 fn test_is() {
 	// all these have been tested with is!
 	// before. now assert! that it works with runtime
@@ -1372,7 +1367,6 @@ fn test_logarithm2() {
 }
 
 #[test]
-#[ignore]
 fn test_for_loop_classic() {
 	is!("for(i=0;i<10;i++){puti i};i", 10);
 	is!("sum = 0; for(i=0;i<10;i++){sum+=i};sum", 45);
