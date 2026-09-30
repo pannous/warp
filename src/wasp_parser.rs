@@ -6,7 +6,7 @@ use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::normalize::{hints as norm, set_hint_position};
+use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::*;
 use log::warn;
 use std::fs::read_to_string;
@@ -180,6 +180,13 @@ impl WaspParser {
 		set_hint_position(self.line_nr, self.column);
 	}
 
+	/// Hint when the operator written at the cursor is not the canonical one; call once when the operator is consumed
+	fn hint_operator(&self, chars: usize, is_prefix: bool) {
+		let written: String = (0..chars).map(|offset| self.peek_char(offset)).collect();
+		self.set_hint_pos();
+		norm::operator(&written, is_prefix);
+	}
+
 	pub fn parse(input: &str) -> Node {
 		Self::parse_with_options(input, ParserOptions::default())
 	}
@@ -187,6 +194,9 @@ impl WaspParser {
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		let mut parser = WaspParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
+		if options == ParserOptions::default() {
+			crate::normalize::check_style(&program);
+		}
 		if program.is_nothing() { Empty } else { program }
 	}
 
@@ -513,7 +523,7 @@ impl WaspParser {
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
-			('*', '*') => { self.set_hint_pos(); norm::power_operator("**"); return Some((Op::Pow, 2)); }
+			('*', '*') => return Some((Op::Pow, 2)),
 			('+', '=') => return Some((Op::AddAssign, 2)),
 			('-', '=') => return Some((Op::SubAssign, 2)),
 			('*', '=') => return Some((Op::MulAssign, 2)),
@@ -531,8 +541,8 @@ impl WaspParser {
 			('-', '-') => return Some((Op::Dec, 2)),
 			('.', '.') => return Some((Op::Range, 2)),
 			('+', '-') if c3.is_whitespace() && self.prev_char().is_whitespace() => return Some((Op::PlusMinus, 2)),
-			('&', '&') => { self.set_hint_pos(); norm::and_operator("&&"); return Some((Op::And, 2)); }
-			('|', '|') => { self.set_hint_pos(); norm::or_operator("||"); return Some((Op::Or, 2)); }
+			('&', '&') => return Some((Op::And, 2)),
+			('|', '|') => return Some((Op::Or, 2)),
 			_ => {}
 		}
 		// Keywords (2-char)
@@ -564,15 +574,15 @@ impl WaspParser {
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
-			'!' => { self.set_hint_pos(); norm::not_operator("!"); Some((Op::Not, 1)) }
+			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
-			'&' => { self.set_hint_pos(); norm::and_operator("&"); Some((Op::And, 1)) }
-			'|' => { self.set_hint_pos(); norm::or_operator("|"); Some((Op::Or, 1)) }
+			'&' => Some((Op::And, 1)),
+			'|' => Some((Op::Or, 1)),
 			'∧' => Some((Op::And, 1)),
 			'⋁' => Some((Op::Or, 1)),
 			'⊻' => Some((Op::Xor, 1)),
 			'#' => Some((Op::Hash, 1)),
-			'?' => { self.set_hint_pos(); norm::conditional(true); Some((Op::Question, 1)) }
+			'?' => Some((Op::Question, 1)),
 			'…' => Some((Op::To, 1)),
 			_ => None,
 		}
@@ -783,6 +793,11 @@ impl WaspParser {
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
 				let length = self.type_application_length().expect("guarded");
 				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
+				if symbol == "list" && !arguments.contains(',') {
+					let element_words: Vec<&str> = arguments.split(|c: char| c == '<' || c == '>' || c.is_whitespace()).filter(|word| !word.is_empty()).collect();
+					set_hint_position(self.line_nr, self.column.saturating_sub(symbol.chars().count()));
+					norm::list_type(ListTypeStyle::Generic, &element_words);
+				}
 				self.advance_by(length);
 				Symbol(type_application_name(&symbol, &arguments))
 			}
@@ -835,12 +850,18 @@ impl WaspParser {
 
 		// Step 1: Prefix (nud)
 		let mut lhs = if let Some((op, chars)) = self.peek_prefix_operator() {
+			let (prefix_line, prefix_column) = self.get_position();
+			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
 			if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
 				let rhs = self.parse_prefix_operand(op);
+				if op == Op::Hash {
+					set_hint_position(prefix_line, prefix_column);
+					norm::length_operator(&crate::normalize::operand_text(&rhs), false);
+				}
 				self.finish_prefix(op, rhs)
 			}
 		} else {
@@ -923,6 +944,7 @@ impl WaspParser {
 			}
 
 			// Consume the operator
+			self.hint_operator(chars, false);
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			self.advance_by(chars);
@@ -952,6 +974,11 @@ impl WaspParser {
 					previous_comparand = None;
 					continue;
 				}
+			}
+
+			if op == Op::Hash {
+				crate::normalize::set_position_of(&lhs);
+				norm::index_operator(&crate::normalize::operand_text(&lhs), &crate::normalize::operand_text(&rhs), false);
 			}
 
 			if op.is_equality() && ungrouped_equality(&lhs) {
@@ -1220,6 +1247,8 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
+		crate::normalize::set_position_of(lhs);
+		norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 
 		Some(indices.into_iter().fold(lhs.clone(), subscript))
 	}
@@ -1311,8 +1340,7 @@ impl WaspParser {
 
 	fn parse_string(&mut self) -> Node {
 		let quote = self.current_char();
-		// let is_double_quote = quote == '"';
-		let is_single_quote = quote == '\'';
+		let (quote_line, quote_column) = self.get_position();
 		self.advance(); // skip opening quote
 
 		let mut s = String::new();
@@ -1323,10 +1351,10 @@ impl WaspParser {
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
-				// Hint for double quotes (only for multi-char strings)
-				if is_single_quote && s.len() > 1 {
-					self.set_hint_pos();
-					norm::single_quotes(&s);
+				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
+				if s.chars().count() > 1 {
+					set_hint_position(quote_line, quote_column);
+					norm::quotes(quote, &s);
 				}
 				// quotes with exactly one character become Codepoint
 				let mut chars = s.chars();

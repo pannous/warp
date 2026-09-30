@@ -139,10 +139,6 @@ impl WasmGcEmitter {
 				let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 				if !is_typed_decl {
 					if type_word_kind(&type_name.to_lowercase()).is_some() {
-						norm::type_constructor(type_name, &items[1].to_string());
-						if type_name == "str" || type_name == "String" {
-							norm::string_type(type_name);
-						}
 						self.emit_cast(func, &items[1], &items[0]);
 						return;
 					}
@@ -196,8 +192,8 @@ impl WasmGcEmitter {
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
-			// Check for pure numeric expressions
-			let has_arithmetic = items.iter().any(|item| {
+			// Check for pure numeric expressions; a square list keeps all its items, whatever they compute
+			let has_arithmetic = *bracket != Bracket::Square && items.iter().any(|item| {
 				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
 			});
 			if has_arithmetic {
@@ -238,8 +234,9 @@ impl WasmGcEmitter {
 					literal @ Node::Number(_) => literal.kind(),
 					_ => self.get_type(arg),
 				};
-				let type_name = match kind {
-					crate::type_kinds::Kind::List => crate::analyzer::list_type_name(arg, &self.scope),
+				let type_name = match (kind, crate::analyzer::literal_number_type_word(arg)) {
+					(_, Some(number_word)) => number_word.to_string(),
+					(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
 					_ => kind.to_string(),
 				};
 				let (ptr, len) = self.allocate_string(&type_name);

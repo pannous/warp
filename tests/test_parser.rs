@@ -11,7 +11,7 @@ pub fn test_parser_serialize() {
 	let ast: Node = parse(code);
 	let serial = ast.serialize();
 	// Now serialization preserves the operator (: vs =)
-	let right = "{key:[value, {key2:value2, num:123, text:'yeah'}]}";
+	let right = "{key:[value, {key2:value2, num:123, text:\"yeah\"}]}";
 	eq!(serial, right);
 	eq!(ast.size(), 1);
 }

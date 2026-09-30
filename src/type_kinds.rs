@@ -104,7 +104,7 @@ impl std::fmt::Display for Kind {
 /// `exact` (alias `real`: strictly the rationals ℚ for now, √2 is not exact) and `float` (aliases `fast`, `f64`, `double`)
 pub fn canonical_type_name(name: &str) -> &str {
 	match name {
-		"exact" | "real" => "exact",
+		"exact" | "real" | "rational" => "exact",
 		"float" | "fast" | "f64" | "double" => "float",
 		other => other,
 	}
