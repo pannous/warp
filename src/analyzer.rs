@@ -303,8 +303,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, Op::Do, right) => {
-			// While loop needs a temp local for result
-			1 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
+			// While loop needs temp locals for the result and for "the body ran"
+			2 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
 			// Integer abs needs a temp local for the if-then-else pattern
@@ -1189,17 +1189,22 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
 			lower_declarations(unit_count(&counted).expect("guarded"))
 		}
+		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
+		declaration if typed_array_declaration(&declaration).is_some() => {
+			let (name, zeros) = typed_array_declaration(&declaration).expect("guarded");
+			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
+		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
 			let (type_name, name) = number_type_prefix(&target).expect("guarded");
 			lower_declarations(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
 		}
-		Node::List(items, bracket, separator) if items.windows(2).any(|pair| prefixed_declaration(&pair[0], &pair[1]).is_some()) => {
+		Node::List(items, bracket, separator) if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) => {
 			let mut lowered = Vec::with_capacity(items.len());
 			let mut items = items.into_iter().peekable();
 			while let Some(item) = items.next() {
-				match items.peek().and_then(|next| prefixed_declaration(&item, next)) {
+				match items.peek().and_then(|next| paired_declaration(&item, next)) {
 					Some(declaration) => {
 						items.next();
 						lowered.push(lower_declarations(declaration));
@@ -1277,6 +1282,58 @@ fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) => Some(&items[1]),
 		_ => None,
 	}
+}
+
+/// The zero value of an element type word (`int`, `ints`, `float`, `text` …)
+fn zero_element(type_word: &str) -> Option<Node> {
+	let element = plural_element_type(type_word).unwrap_or(type_word);
+	Some(match type_word_kind(element)? {
+		Kind::Int => Node::int(0),
+		Kind::Float => Node::float(0.0),
+		Kind::Text => Node::Text(String::new()),
+		Kind::Codepoint => Node::Char('\0'),
+		_ => return None,
+	})
+}
+
+/// The zero-filled list of `count` elements of the type word
+fn zero_list(count: i64, type_word: &str) -> Option<Node> {
+	let zero = zero_element(type_word)?;
+	Some(Node::List(vec![zero; usize::try_from(count).ok()?], Bracket::Square, Separator::Space))
+}
+
+/// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)
+fn subscripted_array_type(type_node: &Node) -> Option<Node> {
+	match type_node.drop_meta() {
+		Node::Key(element, Op::Hash, one_based) => match (element.drop_meta(), one_based.drop_meta()) {
+			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => zero_list(one_based - 1, word),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `x:int[100]` as the variable and its zero-filled list
+fn typed_array_declaration(node: &Node) -> Option<(Node, Node)> {
+	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else { return None };
+	let Node::Symbol(_) = name.drop_meta() else { return None };
+	Some((name.drop_meta().clone(), subscripted_array_type(type_node)?))
+}
+
+/// `x : 100` followed by the element type `int`: the declaration `x = [0 … 0]`
+fn counted_array_declaration(declared_count: &Node, type_word: &Node) -> Option<Node> {
+	let Node::Key(name, Op::Colon, count) = declared_count.drop_meta() else { return None };
+	match (name.drop_meta(), count.drop_meta(), type_word.drop_meta()) {
+		(Node::Symbol(_), Node::Number(Number::Int(count)), Node::Symbol(word)) => {
+			Some(Node::Key(Box::new(name.drop_meta().clone()), Op::Assign, Box::new(zero_list(*count, word)?)))
+		}
+		_ => None,
+	}
+}
+
+/// Two neighbouring statements that together form one declaration
+fn paired_declaration(first: &Node, second: &Node) -> Option<Node> {
+	prefixed_declaration(first, second).or_else(|| counted_array_declaration(first, second))
 }
 
 /// The type a lowered declaration `x:T = v` attached to its target x
