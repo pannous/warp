@@ -27,6 +27,11 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
+/// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
+const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+/// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
+/// it is a declaration only when a name and a field block follow
+const RECORD_WORD: &str = "record";
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
 /// Words that test a value for being ø or falsy, sugar for `not x`
 const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
@@ -252,6 +257,24 @@ impl WaspParser {
 
 	fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
+	}
+
+	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
+	fn name_and_block_follow(&self) -> bool {
+		let is_blank = |ch: char| matches!(ch, ' ' | '\t');
+		let mut offset = 0;
+		while is_blank(self.peek_char(offset)) {
+			offset += 1;
+		}
+		let name_start = offset;
+		while is_identifier_char(self.peek_char(offset)) {
+			offset += 1;
+		}
+		let has_name = offset > name_start;
+		while is_blank(self.peek_char(offset)) {
+			offset += 1;
+		}
+		has_name && self.peek_char(offset) == '{'
 	}
 
 	fn advance(&mut self) {
@@ -869,7 +892,10 @@ impl WaspParser {
 		if self.options.wit_mode && self.current_char() == '<' {
 			return self.parse_type_application(symbol);
 		}
-		if !self.options.wit_mode && (symbol == "class" || symbol == "struct" || (symbol == "type" && self.current_char() != '(')) {
+		let declares_type = TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
+			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == "type" && self.current_char() != '(');
+		if !self.options.wit_mode && declares_type {
 			self.skip_whitespace();
 			let type_name = match self.parse_symbol() {
 				Ok(s) => s,

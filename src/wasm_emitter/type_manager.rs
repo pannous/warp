@@ -205,6 +205,8 @@ impl TypeManager {
 				nullable: true,
 				heap_type: HeapType::Concrete(self.node_type),
 			})),
+			// an untyped field (`class contact {name email?}`) holds any Node, ø included
+			other if other.trim_end_matches('?') == crate::type_kinds::UNTYPED_FIELD => Val(Ref(self.node_ref(true))),
 			// User-defined types
 			other => {
 				if let Some(&type_idx) = self.user_type_indices.get(other) {
