@@ -584,7 +584,7 @@ fn test_date_and_time_types_are_distinct() {
 #[test]
 fn test_type_annotation_is_enforced() {
 	fails_with("x:int=5;x=\"five\";x", "x is declared int"); // was a compiler panic
-	fails_with("x:int=\"five\"", "fix: x=int('five')"); // was silently 0
+	fails_with("x:int=\"five\"", "fix: x=int(\"five\")"); // was silently 0
 	fails_with("x:int=5\nx=2.5", "at 2:1"); // a lossy conversion is never inserted silently
 	is!("x:float=5;x", 5.0); // widening is fine
 }
