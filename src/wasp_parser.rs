@@ -33,6 +33,11 @@ const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefin
 const EMPTY_WORD: &str = "empty";
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
+/// `nand` and its glyph pair, both `not (a and b)`
+const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
+const TO_WORD: &str = "to";
+/// Articles that start a typed verb phrase in `to square a number:`
+const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
 const ELVIS_WORD: &str = "elvis";
 const HEX_WORD: &str = "hex";
@@ -790,6 +795,90 @@ impl WaspParser {
 		}
 	}
 
+	/// The word of `length` characters just parsed is the first thing of its statement: nothing, a newline, `;` or `{` before it
+	fn word_starts_statement(&self, length: usize) -> bool {
+		let word_start = self.pos.saturating_sub(length);
+		let before = self.chars[..word_start].iter().rev().find(|ch| !matches!(ch, ' ' | '\t' | '\r'));
+		matches!(before, None | Some('\n' | ';' | '{'))
+	}
+
+	/// `to name params: body`, after the word `to`: the function `name(params) := body`.
+	/// The body is the rest of the statement, a `{…}` block or an indented block. Plain parameter names only: an article
+	/// (`to square a number:`) starts a typed phrase, which is not supported yet. Anything else is no definition.
+	fn try_parse_to_definition(&mut self) -> Option<Node> {
+		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
+		self.skip_spaces();
+		let Some(name) = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() else {
+			restore(self);
+			return None;
+		};
+		let mut parameters = Vec::new();
+		loop {
+			self.skip_spaces();
+			if self.current_char() == ':' && self.peek_char(1) != '=' {
+				break;
+			}
+			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
+				Some(parameter) => parameters.push(parameter),
+				None => {
+					restore(self);
+					return None;
+				}
+			}
+		}
+		let is_typed_phrase = parameters.windows(2).any(|pair| PHRASE_ARTICLES.contains(&pair[0].as_str()) && crate::analyzer::type_word_kind(&pair[1]).is_some());
+		if is_typed_phrase {
+			return Some(error("typed phrase parameters are not supported yet"));
+		}
+		self.advance(); // the colon
+		self.skip_spaces();
+		let body = self.parse_definition_body();
+		self.functions.insert(name.clone());
+		let head = if parameters.is_empty() {
+			Symbol(name)
+		} else {
+			self.functions_with_parameters.insert(name.clone());
+			Node::List([vec![Symbol(name)], parameters.into_iter().map(Symbol).collect()].concat(), Bracket::Round, Separator::None)
+		};
+		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// Move back to the end of the last thing before the whitespace run behind the cursor
+	fn seek_back_over_whitespace(&mut self) {
+		let mut position = self.pos.min(self.chars.len());
+		while position > 0 && self.chars[position - 1].is_whitespace() {
+			position -= 1;
+		}
+		let line_start = self.chars[..position].iter().rposition(|ch| *ch == '\n').map_or(0, |newline| newline + 1);
+		self.pos = position;
+		self.line_nr = 1 + self.chars[..position].iter().filter(|ch| **ch == '\n').count();
+		self.column = position - line_start + 1;
+		self.current_line = self.chars[line_start..].iter().take_while(|ch| **ch != '\n').collect();
+	}
+
+	/// The rest of the line, or the indented lines below it, or a `{…}` block
+	fn parse_definition_body(&mut self) -> Node {
+		if self.current_char() == '{' {
+			return self.parse_atom();
+		}
+		if !self.only_blanks_before_newline() {
+			return self.parse_expr(0);
+		}
+		let (_, indent) = self.skip_whitespace();
+		if indent <= self.base_indent {
+			return error("a definition needs a body: `to name params: body`");
+		}
+		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
+		let block = self.parse_list_with_separators(None, Bracket::None);
+		self.base_indent = outer_indent;
+		self.seek_back_over_whitespace(); // the newline after the block still separates the next statement
+		match block {
+			Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Curly, separator),
+			single => Node::List(vec![single], Bracket::Curly, Separator::None),
+		}
+	}
+
 	fn parameters_follow_after_blanks(&self) -> bool {
 		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		blanks > 0 && self.peek_char(blanks) == '('
@@ -848,6 +937,12 @@ impl WaspParser {
 		if symbol == HEX_WORD && !self.options.data_mode {
 			if let Some(number) = self.try_parse_hex_word() {
 				return number;
+			}
+		}
+
+		if symbol == TO_WORD && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
+			if let Some(definition) = self.try_parse_to_definition() {
+				return definition;
 			}
 		}
 
@@ -1008,6 +1103,7 @@ impl WaspParser {
 			if let Some(updated) = self.try_parse_evaluate_bang(&lhs)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
+				.or_else(|| self.try_parse_nand(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
@@ -1398,6 +1494,27 @@ impl WaspParser {
 			Op::While => while_do(condition, lhs.clone()),
 			_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(lhs.clone())),
 		})
+	}
+
+	/// `a nand b` and `a ¬& b` are `not (a and b)`
+	fn try_parse_nand(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let spelling = NAND_SPELLINGS.iter().find(|spelling| self.matches_operator_word(spelling))?;
+		let (and_bp, right_bp) = Op::And.binding_power();
+		if and_bp < min_bp || matches!(lhs.drop_meta(), Empty) {
+			return None;
+		}
+		self.set_hint_pos();
+		norm::operator(spelling, false);
+		self.advance_by(spelling.chars().count());
+		self.skip_spaces();
+		let rhs = self.parse_expr(right_bp);
+		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(Node::Key(Box::new(lhs.clone()), Op::And, Box::new(rhs)))))
+	}
+
+	/// The word or glyph pair `spelling` at the cursor; a word must not run into an identifier
+	fn matches_operator_word(&self, spelling: &str) -> bool {
+		let matches = spelling.chars().enumerate().all(|(index, letter)| self.peek_char(index) == letter);
+		matches && (!spelling.chars().all(char::is_alphabetic) || !is_identifier_char(self.peek_char(spelling.chars().count())))
 	}
 
 	/// `a ?: b` is `a ? a : b`; a left side that is not a plain name is evaluated once, into a hidden variable
