@@ -11,8 +11,8 @@ fn test_angle_and_of_forms_are_the_same_type() {
 
 #[test]
 fn test_nested_type_applications() {
-	is!("x:list<list<int>>=[[1] [2]]; type(x)", "list of list of int");
-	is!("x:list of list of int=[[1] [2]]; type(x)", "list of list of int");
+	is!("x:list<list<int>>=[[1], [2]]; type(x)", "list of list of int");
+	is!("x:list of list of int=[[1], [2]]; type(x)", "list of list of int");
 }
 
 #[test]
