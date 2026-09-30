@@ -142,7 +142,7 @@ fn collect_assigned_objects(node: &Node, objects: &mut HashMap<String, Option<No
 	}
 }
 
-fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
+pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {

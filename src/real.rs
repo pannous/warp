@@ -81,6 +81,11 @@ pub fn lower(node: Node) -> Node {
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
+		// `π is real`: answered before π becomes a float
+		Node::List(items, _, _) if is_type_test_of_real(&items) => {
+			let Node::Text(spec) = items[2].drop_meta() else { unreachable!("guarded") };
+			if crate::type_tests::type_matches(&type_name_before_lowering(&items[1]), spec) { Node::True } else { Node::False }
+		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
@@ -90,6 +95,11 @@ pub fn lower(node: Node) -> Node {
 /// `type(π)` asks for the type before lowering makes π a float: the type name is `real`, whatever the representation
 fn is_type_of_real(items: &[Node]) -> bool {
 	matches!(items, [head, argument] if matches!(head.drop_meta(), Node::Symbol(name) if name == "type") && mentions_real(argument))
+}
+
+fn is_type_test_of_real(items: &[Node]) -> bool {
+	matches!(items, [head, argument, spec] if matches!(head.drop_meta(), Node::Symbol(name) if name == crate::type_tests::IS_TYPE)
+		&& matches!(spec.drop_meta(), Node::Text(_)) && mentions_real(argument))
 }
 
 fn type_name_before_lowering(argument: &Node) -> String {

@@ -28,6 +28,7 @@ impl WasmGcEmitter {
 			|| name == PRINT
 			|| BUILTIN_CALLS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
+			|| name == crate::type_tests::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
@@ -190,7 +191,7 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if self.emit_library_word_call(func, items, bracket, separator) {
+		if self.emit_library_word_call(func, items, bracket, separator) || self.emit_type_test(func, items, bracket, separator) {
 			return;
 		}
 
@@ -229,6 +230,32 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// The name `type(x)` reports: `int`, `rational`, `text`, `list of int` …
+	fn static_type_name(&self, arg: &Node) -> String {
+		let kind = match arg.drop_meta() {
+			literal @ Node::Number(_) => literal.kind(),
+			_ => self.get_type(arg),
+		};
+		match (kind, crate::analyzer::literal_number_type_word(arg)) {
+			(_, Some(number_word)) => number_word.to_string(),
+			(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
+			_ => kind.to_string(),
+		}
+	}
+
+	/// `is_type(x, "spec")`: 1 when the static type of x is the spec, else 0
+	fn emit_type_test(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
+			return false;
+		}
+		let [_, subject, spec] = items else { return false };
+		let Node::Text(spec) = spec.drop_meta() else { return false };
+		let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
+		func.instruction(&Instruction::I64Const(answer as i64));
+		self.emit_call(func, "new_int");
+		true
+	}
+
 	/// Emit introspection functions: type, count, length, size, ceil, floor, round
 	/// Returns true if the function was handled
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
@@ -253,15 +280,7 @@ impl WasmGcEmitter {
 				true
 			}
 			"type" => {
-				let kind = match arg.drop_meta() {
-					literal @ Node::Number(_) => literal.kind(),
-					_ => self.get_type(arg),
-				};
-				let type_name = match (kind, crate::analyzer::literal_number_type_word(arg)) {
-					(_, Some(number_word)) => number_word.to_string(),
-					(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
-					_ => kind.to_string(),
-				};
+				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
 				func.instruction(&Instruction::I32Const(ptr as i32));
 				func.instruction(&Instruction::I32Const(len as i32));

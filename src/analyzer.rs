@@ -1328,6 +1328,12 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::Key(target, Op::Assign, value) if typed_array_value(&value).is_some() => {
 			Node::Key(target, Op::Assign, Box::new(typed_array_value(&value).expect("guarded")))
 		}
+		// `x as number = 9` declares `x:number=9`
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
+			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) => {
+			let Node::Key(name, Op::As, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
+			lower_declarations(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
+		}
 		// `x:[number]=v` is `x:list of number=v`
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if bracketed_list_type(type_node).is_some()) => {
 			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };

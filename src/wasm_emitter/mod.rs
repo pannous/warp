@@ -3417,6 +3417,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
+	let node = crate::type_tests::lower(node);
 	let node = crate::real::lower(node);
 	let node = crate::type_constructor::lower(node);
 	let node = crate::min_max::lower(node);
