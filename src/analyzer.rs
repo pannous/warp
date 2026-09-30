@@ -110,6 +110,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			if crate::host::fetch_call(node).is_some() {
 				return Kind::Text; // or an Error value, see check_unchecked_use
 			}
+			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == ZERO_FILL_CALL) {
+				return Kind::List;
+			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
@@ -761,6 +764,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				},
 				None => PLAIN.to_string(),
 			}
+		}
+		// `zero_fill(count, zero)`: a list of the zero's type
+		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == ZERO_FILL_CALL)) => {
+			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
 		}
 		Node::List(items, _, _) => {
 			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
@@ -1508,17 +1515,21 @@ fn zero_element(type_word: &str) -> Option<Node> {
 	})
 }
 
-/// The zero-filled list of `count` elements of the type word
-fn zero_list(count: i64, type_word: &str) -> Option<Node> {
+/// Pseudo-call `zero_fill(count, zero)`: the emitter builds the zero-filled list of `count` elements with a runtime loop,
+/// so neither the program nor the compiler grows with the size of the array
+pub const ZERO_FILL_CALL: &str = "zero_fill";
+
+/// The zero-filled list of `count` (any number expression) elements of the type word
+fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 	let zero = zero_element(type_word)?;
-	Some(Node::List(vec![zero; usize::try_from(count).ok()?], Bracket::Square, Separator::Space))
+	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, zero], Bracket::Round, Separator::None))
 }
 
 /// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)
 fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 	match type_node.drop_meta() {
 		Node::Key(element, Op::Hash, one_based) => match (element.drop_meta(), one_based.drop_meta()) {
-			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => zero_list(one_based - 1, word),
+			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => zero_list(Node::int(one_based - 1), word),
 			_ => None,
 		},
 		_ => None,
@@ -1528,8 +1539,8 @@ fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 /// `int[100]` or `100 * int`: the zero-filled list of that many elements
 fn typed_array_value(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
-		Node::Key(count, Op::Mul, element) => match (count.drop_meta(), element.drop_meta()) {
-			(Node::Number(Number::Int(count)), Node::Symbol(word)) => zero_list(*count, word),
+		Node::Key(count, Op::Mul, element) => match element.drop_meta() {
+			Node::Symbol(word) => zero_list(count.as_ref().clone(), word),
 			_ => None,
 		},
 		other => subscripted_array_type(other),
@@ -1557,7 +1568,7 @@ fn counted_array_declaration(declared_count: &Node, type_word: &Node) -> Option<
 	let Node::Key(name, Op::Colon, count) = declared_count.drop_meta() else { return None };
 	match (name.drop_meta(), count.drop_meta(), type_word.drop_meta()) {
 		(Node::Symbol(_), Node::Number(Number::Int(count)), Node::Symbol(word)) => {
-			Some(Node::Key(Box::new(name.drop_meta().clone()), Op::Assign, Box::new(zero_list(*count, word)?)))
+			Some(Node::Key(Box::new(name.drop_meta().clone()), Op::Assign, Box::new(zero_list(Node::int(*count), word)?)))
 		}
 		_ => None,
 	}
@@ -2248,6 +2259,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				return;
 			}
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
+				if fn_name == ZERO_FILL_CALL {
+					ctx.required_functions.insert(ZERO_FILL_CALL);
+				}
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
 				}

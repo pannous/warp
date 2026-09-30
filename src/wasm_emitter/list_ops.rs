@@ -21,6 +21,7 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(false);
 		let node_ref_nullable = self.node_ref(true);
 		self.emit_runtime_errors();
+		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			self.emit_text_units();
 		}
@@ -488,6 +489,31 @@ pub const RUNTIME_ERRORS: [&str; 15] = [
 ];
 
 impl WasmGcEmitter {
+	/// zero_fill(count, zero): a square list of `count` times the node `zero`, ø when count is not positive
+	fn emit_zero_fill(&mut self) {
+		if !self.should_emit_function(crate::analyzer::ZERO_FILL_CALL) {
+			return;
+		}
+		let node = self.type_manager.node_type;
+		let node_ref = Ref(self.node_ref(false));
+		let nullable_node_ref = Ref(self.node_ref(true));
+		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
+		self.runtime_function(crate::analyzer::ZERO_FILL_CALL, vec![ValType::I64, node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
+			let rest = 2;
+			Self::emit_list(f, &[
+				I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(0), I::I64Const(0), I::I64LeS, I::BrIf(1),
+				I::I64Const(square_list_kind), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
+				I::LocalGet(0), I::I64Const(1), I::I64Sub, I::LocalSet(0),
+				I::Br(0), I::End, I::End,
+				I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
+			]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
+		});
+	}
+
 	fn emit_runtime_errors(&mut self) {
 		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
 		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
@@ -848,6 +874,9 @@ impl WasmGcEmitter {
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
 const STRUCT_BODY: &str = "struct_body";
+/// A list node's kind is `Kind::List | bracket_info << KIND_BITS`, bracket_info 1 for `[…]` (see the serialization notes in CLAUDE.md)
+const KIND_BITS: i64 = 8;
+const SQUARE_BRACKET_INFO: i64 = 1;
 const KEY_KIND: i64 = 6;
 const KIND_MASK: i64 = 0xFF;
 
