@@ -38,6 +38,15 @@ impl WasmGcEmitter {
 			}
 		}
 
+		// text += more → text = text + more
+		if op.is_compound_assign() && op.base_op() == Op::Add {
+			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
+			if self.get_type(&concatenation) == crate::type_kinds::Kind::Text {
+				self.emit_key_node(func, left, &Op::Assign, &concatenation);
+				return;
+			}
+		}
+
 		// Skip user function definitions - they're already compiled
 		if *op == Op::Define {
 			if let Node::Symbol(name) = left.drop_meta() {

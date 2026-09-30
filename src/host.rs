@@ -6,6 +6,10 @@
 
 use std::time::Duration;
 
+/// The module's bump pointer for runtime texts; texts the host returns are allocated from it too, so they never overlap
+pub const TEXT_HEAP_EXPORT: &str = "text_heap";
+const PAGE_BITS: u32 = 16;
+
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -56,25 +60,64 @@ pub fn read_string_from_memory(memory: &Memory, store: &impl wasmtime::AsContext
 }
 
 /// Write a string to WASM linear memory using Caller, returns (ptr, len)
-fn write_string_to_caller(
-	memory: &Memory,
-	caller: &mut Caller<'_, HostState>,
-	s: &str,
-) -> Result<(u32, u32)> {
-	let bytes = s.as_bytes();
-	let len = bytes.len() as u32;
-	let ptr = caller.data_mut().alloc(len);
+fn write_string_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, s: &str) -> Result<(u32, u32)> {
+	write_bytes_to_caller(memory, caller, s.as_bytes())
+}
 
-	// Grow memory if needed
-	let pages_needed = ((ptr + len) as usize).div_ceil(65536);
+/// Copy bytes into the module's memory: from its text heap when it exports one (the same rule as its own
+/// emit_text_allocation: fresh pages past the current memory when the heap is unset or full), else from HostState
+fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
+	let heap = match caller.get_export(TEXT_HEAP_EXPORT) {
+		Some(Extern::Global(global)) => Some(global),
+		_ => None,
+	};
+	let ptr = match &heap {
+		Some(global) => {
+			let top = global.get(&mut *caller).i32().unwrap_or(0) as u32;
+			let memory_end = (memory.size(&*caller) as u32) << PAGE_BITS;
+			if top == 0 || top + len > memory_end {
+				memory.grow(&mut *caller, ((len >> PAGE_BITS) + 1) as u64)?;
+				memory_end
+			} else {
+				top
+			}
+		}
+		None => caller.data_mut().alloc(len),
+	};
+	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
 	let current_pages = memory.size(&*caller) as usize;
 	if pages_needed > current_pages {
-		let grow = (pages_needed - current_pages) as u64;
-		memory.grow(&mut *caller, grow)?;
+		memory.grow(&mut *caller, (pages_needed - current_pages) as u64)?;
 	}
-
 	memory.write(&mut *caller, ptr as usize, bytes)?;
+	if let Some(global) = heap {
+		global.set(&mut *caller, Val::I32((ptr + len) as i32))?;
+	}
 	Ok((ptr, len))
+}
+
+/// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
+fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+		trace!("host.read: no memory export");
+		return (0, 0);
+	};
+	let (bytes, failed) = match read_string_from_memory(&memory, &*caller, path_ptr as u32, path_len as u32) {
+		Ok(path) => match std::fs::read(&path) {
+			Ok(bytes) => (bytes, false),
+			Err(reason) => (format!("read {path} failed: {reason}").into_bytes(), true),
+		},
+		Err(e) => (format!("read failed: unreadable path: {e}").into_bytes(), true),
+	};
+	match write_bytes_to_caller(&memory, caller, &bytes) {
+		Ok((ptr, len)) if failed => (ptr as i32, -(len as i32)),
+		Ok((ptr, len)) => (ptr as i32, len as i32),
+		Err(e) => {
+			trace!("host.read: failed to write result: {}", e);
+			(0, 0)
+		}
+	}
 }
 
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
@@ -193,6 +236,15 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		"fetch_within",
 		|mut caller: Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout_ms: i64| -> (i32, i32) {
 			fetch_into_memory(&mut caller, url_ptr, url_len, Duration::from_millis(timeout_ms.max(1) as u64))
+		},
+	)?;
+
+	// host.read(path_ptr: i32, path_len: i32) -> (result_ptr: i32, result_len: i32), the file's bytes
+	linker.func_wrap(
+		"host",
+		"read",
+		|mut caller: Caller<'_, HostState>, path_ptr: i32, path_len: i32| -> (i32, i32) {
+			read_into_memory(&mut caller, path_ptr, path_len)
 		},
 	)?;
 

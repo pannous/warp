@@ -526,12 +526,14 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
+	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
 	pub(super) fn emit_text_heap_global(&mut self) {
-		if self.text_heap_global != 0 {
+		if self.text_heap_global.is_some() {
 			return;
 		}
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.text_heap_global = self.next_global_idx;
+		self.text_heap_global = Some(self.next_global_idx);
+		self.exports.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, self.next_global_idx);
 		self.next_global_idx += 1;
 	}
 
@@ -539,7 +541,7 @@ impl WasmGcEmitter {
 	/// so runtime texts never overlap the string table at the start of memory
 	pub(super) fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
 		const PAGE_BITS: i32 = 16;
-		let heap = self.text_heap_global;
+		let heap = self.text_heap_global.expect("emit_text_heap_global before allocating texts");
 		func.instruction(&Instruction::GlobalGet(heap));
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::GlobalGet(heap));
@@ -612,6 +614,10 @@ impl WasmGcEmitter {
 	/// Returns true when it emitted the whole expression (a Node, or a trap after a recorded type error).
 	pub(super) fn emit_typed_arithmetic(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node) -> bool {
 		match self.arithmetic_type(left, op, right) {
+			Kind::Text => {
+				self.emit_text_concat(func, left, right);
+				true
+			}
 			Kind::List => {
 				self.emit_node_instructions(func, left);
 				self.emit_node_instructions(func, right);
@@ -625,7 +631,7 @@ impl WasmGcEmitter {
 
 	/// In a numeric context any collection or text operand is a type error
 	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
-		if !matches!(kind, Kind::Error | Kind::List) {
+		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
 			return false;
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));

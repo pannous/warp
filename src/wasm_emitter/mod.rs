@@ -12,6 +12,7 @@ mod key_emitter;
 mod list_emitter;
 mod library_ops;
 mod list_ops;
+pub(crate) mod text_builtins;
 mod node_emitter;
 mod string_table;
 mod type_manager;
@@ -133,7 +134,8 @@ pub struct WasmGcEmitter {
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
 	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
-	text_heap_global: u32,     // bump pointer for texts built at runtime, in memory grown past the string table
+	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
+	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
@@ -169,7 +171,8 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			int_remainder_global: 0,
-			text_heap_global: 0,
+			returns_node: true,
+			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
 		}
@@ -377,6 +380,7 @@ impl WasmGcEmitter {
 
 		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals + temp_locals);
 		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
+		let saved_returns_node = std::mem::replace(&mut self.returns_node, returns_node);
 		let mut locals = self.local_declarations(num_params as usize);
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
@@ -412,6 +416,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
+		self.returns_node = saved_returns_node;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -491,6 +496,9 @@ impl WasmGcEmitter {
 				return;
 			}
 			self.emit_value_of_kind(func, argument, expected);
+			if expected == Kind::Text && given == Kind::Codepoint { // f("a") for f(t:text): "a" lexes as a character
+				self.emit_call(func, text_builtins::TEXT_OF);
+			}
 		}
 
 		// Call the function
@@ -702,6 +710,7 @@ impl WasmGcEmitter {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) => None,
 		}));
+		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -885,6 +894,7 @@ impl WasmGcEmitter {
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
+		self.emit_text_builtins();
 	}
 
 	fn emit_getters(&mut self) {
@@ -1651,32 +1661,12 @@ impl WasmGcEmitter {
 			func.instruction(&I32Const(ptr as i32));
 			func.instruction(&I32Const(-(len as i32)));
 		}
-		// (ptr, len) → Node{kind: len < 0 ? Error : Text, data: $String(ptr, |len|)}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));
 		func.instruction(&Instruction::I64ExtendI32S);
 		func.instruction(&Instruction::LocalSet(len));
 		func.instruction(&Instruction::I64ExtendI32U);
 		func.instruction(&Instruction::LocalSet(ptr));
-		func.instruction(&Instruction::I64Const(Kind::Error as i64));
-		func.instruction(&Instruction::I64Const(Kind::Text as i64));
-		func.instruction(&Instruction::LocalGet(len));
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::I64LtS);
-		func.instruction(&Instruction::Select);
-		func.instruction(&Instruction::LocalGet(ptr));
-		func.instruction(&Instruction::I32WrapI64);
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::LocalGet(len));
-		func.instruction(&Instruction::I64Sub);
-		func.instruction(&Instruction::LocalGet(len));
-		func.instruction(&Instruction::LocalGet(len));
-		func.instruction(&Instruction::I64Const(0));
-		func.instruction(&Instruction::I64LtS);
-		func.instruction(&Instruction::Select);
-		func.instruction(&Instruction::I32WrapI64);
-		func.instruction(&Instruction::StructNew(self.type_manager.string_type));
-		func.instruction(&Instruction::RefNull(HeapType::Concrete(self.type_manager.node_type)));
-		func.instruction(&Instruction::StructNew(self.type_manager.node_type));
+		self.emit_host_text_result(func, len, ptr);
 	}
 
 
@@ -1981,7 +1971,9 @@ impl WasmGcEmitter {
 		};
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
-		let is_node_valued = |emitter: &Self, value: &Node| !matches!(value.drop_meta(), Node::Empty) && emitter.is_structured_value(value);
+		let is_node_valued = |emitter: &Self, value: &Node| {
+			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || crate::analyzer::branch_kind(value, &emitter.scope).is_ref())
+		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
 			self.emit_condition(func, condition, Self::emit_block_value);
 			func.instruction(&Instruction::If(BlockType::Result(Ref(self.node_ref(true))))); // a local holds a nullable ref
@@ -2042,7 +2034,11 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
 
-		if !body.is_nothing() { // `while c {}` only spins: nothing to evaluate
+		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
+		} else if self.get_type(body).is_ref() { // `while c { s += "a" }`: a text or list update, its value is not a number
+			self.emit_node_instructions(func, body);
+			func.instruction(&Instruction::Drop);
+		} else {
 			self.emit_block_value(func, body);
 			func.instruction(&Instruction::LocalSet(result_local));
 		}
@@ -2603,8 +2599,12 @@ impl WasmGcEmitter {
 				if items.len() == 2 {
 					if let Node::Symbol(keyword) = items[0].drop_meta() {
 						if keyword == "return" {
-							// Emit the return value
-							self.emit_numeric_value(func, &items[1]);
+							// Emit the return value, as the Node a Node-returning function gives back
+							if self.returns_node {
+								self.emit_node_instructions(func, &items[1]);
+							} else {
+								self.emit_numeric_value(func, &items[1]);
+							}
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
@@ -2649,6 +2649,12 @@ impl WasmGcEmitter {
 
 	/// `floor(x)`, `count(list)`…: the builtin builds a node, its Int (raw i64 on the stack) is the number
 	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		if let [Node::Symbol(fn_name), arguments @ ..] = items {
+			if text_builtins::text_builtin_kind(fn_name, arguments.len()) == Some(Kind::Int) {
+				self.emit_byte_at(func, arguments);
+				return true;
+			}
+		}
 		let [Node::Symbol(fn_name), argument] = items else {
 			return false;
 		};

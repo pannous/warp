@@ -28,6 +28,7 @@ impl WasmGcEmitter {
 			|| crate::library_words::is_runtime_word(name)
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
+			|| super::text_builtins::is_text_builtin(name)
 			|| crate::ffi::get_ffi_signature(name).is_some()
 	}
 
@@ -180,6 +181,10 @@ impl WasmGcEmitter {
 					self.emit_ffi_call(func, fn_name, &items[1..], None);
 					return;
 				}
+				if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+					self.emit_text_builtin(func, fn_name, &items[1..]);
+					return;
+				}
 			}
 		}
 
@@ -320,12 +325,14 @@ impl WasmGcEmitter {
 				Node::Key(_, Op::Assign | Op::Define, _) => true,
 				Node::Key(_, Op::Hash, _) => true,
 				Node::Key(_, op, _) if op.is_compound_assign() => true,
+				// control flow: `if c {…}`, `while c {…}`, `i++`
+				Node::Key(_, Op::Then | Op::Else | Op::Do | Op::Inc | Op::Dec, _) => true,
 				Node::Key(left, Op::Colon, _) => {
 					matches!(left.drop_meta(), Node::Symbol(s) if s == "global")
 				}
 				Node::List(list_items, _, _) if list_items.len() >= 2 => {
 					if let Node::Symbol(s) = list_items[0].drop_meta() {
-						is_function_keyword(s) || s == "use" || s == "import"
+						is_function_keyword(s) || s == "use" || s == "import" || s == "return"
 					} else {
 						false
 					}
@@ -368,12 +375,26 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// A statement whose value is dropped: an assignment to a float variable keeps its own f64 instead of being forced into an exact Int
+	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
+	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if self.is_float_assignment(item) {
 			self.emit_float_value(func, item);
+		} else if self.is_ref_update(item) {
+			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
+		}
+	}
+
+	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update
+	fn is_ref_update(&self, item: &Node) -> bool {
+		match item.drop_meta() {
+			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
+				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_ref()))
+			}
+			Node::Key(_, Op::Then | Op::Else, _) => self.get_type(item).is_ref(),
+			_ => false,
 		}
 	}
 
