@@ -1082,11 +1082,11 @@ impl WasmGcEmitter {
 					self.emit_int_literal(func, &num.to_bigint());
 					self.emit_call(func, "new_int");
 				}
-				Number::Float(f) => {
+				Number::Float(f) if !Number::is_exact_decimal(*f) => {
 					func.instruction(&Instruction::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
-				Number::Quotient(..) => {
+				Number::Float(_) | Number::Quotient(..) => {
 					self.emit_numeric_value(func, node);
 					self.emit_call(func, "new_int");
 				}
