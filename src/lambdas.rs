@@ -1,6 +1,6 @@
 //! Compile-time lambdas. Functions are not first-class values yet, so a lambda is lowered where it stands:
-//! - `f = x=>x*x`, `f = (x y)->x+y`, `f = {it*2}` define the function `f` at that point (captured variables by value, like every
-//!   definition); `f 3` calls it
+//! - `f = x=>x*x`, `f = (x y)->x+y` define the function `f` at that point (captured variables by value, like every
+//!   definition); `f 3` calls it; the parser itself reads `f = {it*2}` as the definition `f := {it*2}`
 //! - `{x*x}(x=5)` defines an anonymous function and calls it at once
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else (an argument of another call, `map` over a non-function) is the error `functions are not first-class values yet`
@@ -100,9 +100,10 @@ impl Lowering {
 
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && self.is_definable(&value) => {
+			// the parser already reads `f = {it*2}` as the definition `f := {it*2}`
+			Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && arrow_lambda(&value).is_some() => {
 				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
-				let lambda = arrow_lambda(&value).or_else(|| block_lambda(&value)).expect("guarded");
+				let lambda = arrow_lambda(&value).expect("guarded");
 				definition(name, Lambda { body: self.expand(lambda.body), ..lambda })
 			}
 			Node::Key(receiver, Op::Dot, method) if self.map_method_argument(&method).is_some() => {
@@ -117,11 +118,6 @@ impl Lowering {
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
-	}
-
-	/// `f = x=>…` and `f = {it…}` (a block only when it uses `it`: `p={a:1}` is an object)
-	fn is_definable(&self, value: &Node) -> bool {
-		arrow_lambda(value).is_some() || block_lambda(value).is_some_and(|lambda| !lambda.params.is_empty())
 	}
 
 	fn map_method_argument(&self, method: &Node) -> Option<Node> {
