@@ -43,6 +43,13 @@ const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
+/// Library words whose result is always a text
+const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
+
+pub fn text_result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
+	TEXT_RESULT_WORDS.contains(&word).then_some(crate::type_kinds::Kind::Text)
+}
+
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
 }

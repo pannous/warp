@@ -1177,7 +1177,7 @@ impl WasmGcEmitter {
 
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			self.emit_node_instructions(func, &assignment);
 			return;
 		}
@@ -1728,9 +1728,10 @@ impl WasmGcEmitter {
 
 	/// `x += y` and `x++` on a declared global (not shadowed by a local) as the plain assignment `x = x + y`,
 	/// so globals resolve exactly like in plain assignment
-	fn global_update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
+	fn update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
 		let Node::Symbol(name) = target.drop_meta() else { return None };
-		if self.scope.lookup(name).is_some() || !self.ctx.user_globals.contains_key(name) {
+		let is_text_append = *op == Op::AddAssign && [target, operand].iter().all(|side| matches!(self.get_type(side), Kind::Text | Kind::Codepoint));
+		if !is_text_append && (self.scope.lookup(name).is_some() || !self.ctx.user_globals.contains_key(name)) {
 			return None;
 		}
 		let (base_op, operand) = match op {
@@ -2444,7 +2445,7 @@ impl WasmGcEmitter {
 			}
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => {
-				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+				if let Some(assignment) = self.update_as_assignment(left, op, right) {
 					self.emit_numeric_value(func, &assignment);
 					return;
 				}
@@ -2462,7 +2463,7 @@ impl WasmGcEmitter {
 				if self.emit_compound_index_assignment(func, left, op, right) {
 					return;
 				}
-				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+				if let Some(assignment) = self.update_as_assignment(left, op, right) {
 					self.emit_numeric_value(func, &assignment);
 					return;
 				}
