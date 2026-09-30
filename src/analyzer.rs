@@ -886,8 +886,36 @@ fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
 /// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
-	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
-	resolve_blocks(program, &variables)
+	let mut variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	let mut context = Context::new();
+	extract_user_functions(&mut context, &program);
+	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
+	let resolved = resolve_blocks(program, &variables);
+	subtract_kebab_variables(resolved, &variables)
+}
+
+/// A hyphenated name that is no data key and whose parts are all variables is their difference: `a=5; b=1; a-b` is 4.
+/// The names of data keys and assignment targets stay as they are.
+fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) -> Node {
+	match node {
+		Node::Symbol(name) => {
+			let parts: Vec<&str> = name.split('-').collect();
+			if parts.len() > 1 && parts.iter().all(|part| variables.contains(*part)) {
+				let mut terms = parts.into_iter().map(|part| Node::Symbol(part.to_string()));
+				let first = terms.next().expect("split gives a part");
+				terms.fold(first, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(term)))
+			} else {
+				Node::Symbol(name)
+			}
+		}
+		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => {
+			Node::Key(left, op, Box::new(subtract_kebab_variables(*right, variables)))
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(subtract_kebab_variables(*left, variables)), op, Box::new(subtract_kebab_variables(*right, variables))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_variables(item, variables)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_variables(*node, variables)), data },
+		other => other,
+	}
 }
 
 fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
@@ -916,6 +944,7 @@ fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				None => Node::List(resolved, bracket, separator),
 			}
 		}
+		Node::Key(left, op, right) => Node::Key(Box::new(resolve_blocks(*left, variables)), op, Box::new(resolve_blocks(*right, variables))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(resolve_blocks(*node, variables)), data },
 		other => other,
 	}

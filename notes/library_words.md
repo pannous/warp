@@ -64,3 +64,12 @@ Ignored tests that still cannot pass unedited: test_array_creation (`pixel=[];pi
 `pixel array`), test_array_initialization_basics (`analyze(parse(..))` on `x : 100 numbers` counts the parse tree, not the lowered list),
 test_array_initialization (`x : 100 * ints;[ x.length` is a typo, and `x is array of size 100`, `x is a 100 integer array` are
 natural-language forms), test_array_type_generics (expects `list<int>`, decided `list of int`).
+
+
+# Data as scope (Decided #6)
+
+`resolve_data_scope` (analyzer.rs): a symbol that is no variable reads the data key of that name given earlier in the same block
+(`a-b:2 c-d:4 a-b` is 2; inside an object literal too: `{c:4 b:c}` is `{c:4 b:4}`, also when the literal is assigned). A key wins over
+the subtraction of its parts, with the lint warning "`a-b` is a data key here, but a and b are also variables". Without a key, a hyphenated
+name whose parts are all variables (assigned names and function parameters) is the difference: `a=5; b=1; a-b` is 4, `a-b-c` chains.
+Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it needs `==` on ranges and values with tolerance.
