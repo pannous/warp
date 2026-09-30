@@ -49,8 +49,18 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, Diagnostic::at(left, message).to_string());
 	}
 
+	/// An object literal `{a:1 b:2}`, or an instance `point:{x:1 y:2}`: compared by its entries, never read as a number
+	fn is_object_literal(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => !items.is_empty(),
+			Node::Key(_, Op::Colon, _) => true,
+			_ => false,
+		}
+	}
+
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		matches!(op, Op::Eq | Op::Ne) && (self.is_structured_value(left) || self.is_structured_value(right))
+		let is_structured = |node: &Node| self.is_structured_value(node) || Self::is_object_literal(node);
+		matches!(op, Op::Eq | Op::Ne) && (is_structured(left) || is_structured(right))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value
@@ -141,15 +151,73 @@ impl WasmGcEmitter {
 		func.instruction(&I::I32Or);
 	}
 
+	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.
+	/// Locals: 7 and 8 walk the cells of the list being checked and of the other, 9 flags that the entry was found.
+	fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32) {
+		let (walked, other, found) = (7, 8, 9);
+		let cell_field = |f: &mut Function, local: u32, field_index: u32| {
+			f.instruction(&I::LocalGet(local));
+			f.instruction(&I::RefAsNonNull);
+			f.instruction(&I::StructGet { struct_type_index: node, field_index });
+		};
+		for (from, against) in [(0, 1), (1, 0)] {
+			for (local, list) in [(walked, from), (other, against)] {
+				f.instruction(&I::LocalGet(list));
+				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
+				f.instruction(&I::LocalSet(local));
+			}
+			f.instruction(&I::Block(BlockType::Empty));
+			f.instruction(&I::Loop(BlockType::Empty));
+			f.instruction(&I::LocalGet(walked));
+			f.instruction(&I::RefIsNull);
+			f.instruction(&I::BrIf(1));
+			f.instruction(&I::I32Const(0));
+			f.instruction(&I::LocalSet(found));
+			f.instruction(&I::LocalGet(against));
+			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
+			f.instruction(&I::LocalSet(other));
+			f.instruction(&I::Block(BlockType::Empty));
+			f.instruction(&I::Loop(BlockType::Empty));
+			f.instruction(&I::LocalGet(other));
+			f.instruction(&I::RefIsNull);
+			f.instruction(&I::BrIf(1));
+			cell_field(f, walked, 1);
+			cell_field(f, other, 1);
+			f.instruction(&I::Call(recurse));
+			f.instruction(&I::If(BlockType::Empty));
+			f.instruction(&I::I32Const(1));
+			f.instruction(&I::LocalSet(found));
+			f.instruction(&I::Br(2));
+			f.instruction(&I::End);
+			cell_field(f, other, 2);
+			f.instruction(&I::LocalSet(other));
+			f.instruction(&I::Br(0));
+			f.instruction(&I::End);
+			f.instruction(&I::End);
+			f.instruction(&I::LocalGet(found));
+			f.instruction(&I::I32Eqz);
+			Self::return_if(f, 0);
+			cell_field(f, walked, 2);
+			f.instruction(&I::LocalSet(walked));
+			f.instruction(&I::Br(0));
+			f.instruction(&I::End);
+			f.instruction(&I::End);
+		}
+		f.instruction(&I::I32Const(1));
+		f.instruction(&I::Return);
+	}
+
 	/// values_equal(a: anyref, b: anyref) -> i32; locals: kind a, kind b, ptr a, ptr b, remaining bytes
 	fn emit_values_equal(&mut self) {
 		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
 		let string = self.type_manager.string_type;
 		let (i64_box, big_int) = (self.type_manager.i64_box_type, self.type_manager.big_int_type);
+		let ratio = self.type_manager.ratio_type;
 		let int_runtime = self.int_runtime();
 		let (i64t, i32t) = (ValType::I64, ValType::I32);
-		let locals = vec![i64t, i64t, i32t, i32t, i32t];
+		let cell = Ref(self.node_ref(true));
+		let locals = vec![i64t, i64t, i32t, i32t, i32t, cell, cell, i32t];
 		self.runtime_function(VALUES_EQUAL, vec![Self::any_ref(), Self::any_ref()], vec![i32t], locals, |s, f| {
 			// null equals only null
 			f.instruction(&I::LocalGet(0));
@@ -182,6 +250,16 @@ impl WasmGcEmitter {
 			f.instruction(&I::I32And);
 			f.instruction(&I::I32Eqz);
 			Self::return_if(f, 0);
+			f.instruction(&I::End);
+			// `{…}` objects are maps: their entries may come in any order
+			for kind in [2, 3] {
+				f.instruction(&I::LocalGet(kind));
+				f.instruction(&I::I64Const(Kind::List as i64));
+				f.instruction(&I::I64Eq);
+			}
+			f.instruction(&I::I32And);
+			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_unordered_entries_equal(f, node, recurse);
 			f.instruction(&I::End);
 			Self::field(f, 0, node, 1);
 			Self::field(f, 1, node, 1);
@@ -271,20 +349,22 @@ impl WasmGcEmitter {
 			f.instruction(&I::Return);
 			f.instruction(&I::End);
 
-			// BigInts are normalized, so only two BigInts can be equal
+			// BigInts and ratios are normalized (a ratio is never integral), so only two of the same kind can be equal
 			if int_runtime {
-				Self::test(f, 0, HeapType::Concrete(big_int));
-				Self::test(f, 1, HeapType::Concrete(big_int));
-				f.instruction(&I::I32And);
-				f.instruction(&I::If(BlockType::Empty));
-				for local in [0, 1] {
-					f.instruction(&I::LocalGet(local));
-					s.call(f, "int_from_payload");
+				for heap in [big_int, ratio] {
+					Self::test(f, 0, HeapType::Concrete(heap));
+					Self::test(f, 1, HeapType::Concrete(heap));
+					f.instruction(&I::I32And);
+					f.instruction(&I::If(BlockType::Empty));
+					for local in [0, 1] {
+						f.instruction(&I::LocalGet(local));
+						s.call(f, "int_from_payload");
+					}
+					s.call(f, "exact_cmp");
+					f.instruction(&I::I32Eqz);
+					f.instruction(&I::Return);
+					f.instruction(&I::End);
 				}
-				s.call(f, "int_cmp");
-				f.instruction(&I::I32Eqz);
-				f.instruction(&I::Return);
-				f.instruction(&I::End);
 			}
 			f.instruction(&I::I32Const(0));
 		});

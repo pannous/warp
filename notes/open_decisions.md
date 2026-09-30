@@ -94,3 +94,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 34. `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
+35. `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
+    a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
+    that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
+36. Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
