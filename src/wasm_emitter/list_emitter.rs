@@ -191,8 +191,8 @@ impl WasmGcEmitter {
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
-			// Check for pure numeric expressions
-			let has_arithmetic = items.iter().any(|item| {
+			// Check for pure numeric expressions; a square list keeps all its items, whatever they compute
+			let has_arithmetic = *bracket != Bracket::Square && items.iter().any(|item| {
 				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
 			});
 			if has_arithmetic {

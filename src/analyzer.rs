@@ -25,6 +25,7 @@ fn is_data_node(node: &Node) -> bool {
 		Node::Symbol(s) => !is_function_keyword(s),
 		Node::List(items, bracket, separator) => !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
+		Node::Key(left, op, right) if op.is_arithmetic() => is_data_node(left) && is_data_node(right), // `[1+2, 3]` keeps both items
 		_ => false,
 	}
 }
