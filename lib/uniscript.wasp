@@ -94,64 +94,109 @@ hyphenated(name:text) := {
 
 // ---- uniscript → Unicode ---------------------------------------------------------------------------------------
 
-// the control a block puts after a character of its script or after any character, "" for none
-suffix_of(block:text, character:text) := {
+// a warning (warp --strict or `use strict`: an error) about a character or combination Unicode has no counterpart for
+unsupported(message:text, at) := warning("uniscript: " + message + " at byte " + join([at], ""))
+
+// the record of the control a block puts after a character of its script or after any character, -1 for none;
+// an empty control means the effect cannot apply to that script
+suffix_record(block:text, character:text) := {
 	script = script_of(character)
 	suffix = -1
 	if script.bytes > 0 { suffix = find(names_table, block + " *suffix " + script) }
 	if suffix < 0 { suffix = find(names_table, block + " *suffix") }
-	if suffix >= 0 { value_of(suffix) } else { "" }
+	suffix
+}
+
+// the control of an effect after one character, "" with a warning when it has none for it
+effect_suffix(block:text, character:text, at) := {
+	suffix = suffix_record(block, character)
+	if suffix >= 0 and u32(suffix + 16) > 0 { return value_of(suffix) }
+	unsupported(block + " does not apply to " + character, at)
 }
 
 // the suffixes of the stacked effect words ("mirror " in <:mirror red A>) for one character
-effect_suffixes(effects:text, character:text) := {
+effect_suffixes(effects:text, character:text, at) := {
 	out = ""
 	i = 0
 	while i < effects.bytes {
 		end = offset_of(effects, 32, i)
-		out += suffix_of(byte_slice(effects, i, end), character)
+		out += effect_suffix(byte_slice(effects, i, end), character, at)
 		i = end + 1
 	}
 	out
 }
 
-// one character in a block: its own entry (greek a → α), else followed by the block's suffix; then the stacked effects
-styled(block:text, character:text, effects:text) := {
+// one character in a block: its own entry (greek a → α), else followed by the block's suffix; then the stacked effects;
+// a character the block has neither for stays plain, with a warning
+styled(block:text, character:text, effects:text, at) := {
 	own = find(names_table, block + " " + character)
-	if own >= 0 { return value_of(own) + effect_suffixes(effects, character) }
-	character + suffix_of(block, character) + effect_suffixes(effects, character)
+	if own >= 0 { return value_of(own) + effect_suffixes(effects, character, at) }
+	if suffix_record(block, character) < 0 {
+		return unsupported("no " + block + " form of " + character, at) + character + effect_suffixes(effects, character, at)
+	}
+	character + effect_suffix(block, character, at) + effect_suffixes(effects, character, at)
 }
 
-// one operand in a block: its own entry (red circle → 🔴), else each character of the operand, or of the entity it names
-operand(block:text, token:text, effects:text) := {
+// the entry of the next one or two characters in a block (greek th → θ), or the styled first character; with its width
+styled_prefix(block:text, characters:text, i, effects:text, at) := {
+	width = utf8_width(byte_at(characters, i))
+	if i + width < characters.bytes {
+		pair = byte_slice(characters, i, i + width + utf8_width(byte_at(characters, i + width)))
+		own = find(names_table, block + " " + pair)
+		if own >= 0 { return value_of(own) + effect_suffixes(effects, pair, at) }
+	}
+	styled(block, byte_slice(characters, i, i + width), effects, at)
+}
+
+// how many bytes styled_prefix consumed: two characters when the pair has an entry
+prefix_width(block:text, characters:text, i) := {
+	width = utf8_width(byte_at(characters, i))
+	if i + width < characters.bytes {
+		pair_width = width + utf8_width(byte_at(characters, i + width))
+		if find(names_table, block + " " + byte_slice(characters, i, i + pair_width)) >= 0 { return pair_width }
+	}
+	width
+}
+
+// one operand in a block: its own entry (red circle → 🔴, greek eta → η), else each character (or pair: th) of the
+// operand, or of the entity it names
+operand(block:text, token:text, effects:text, at) := {
 	own = find(names_table, block + " " + token)
-	if own >= 0 { return value_of(own) + effect_suffixes(effects, value_of(own)) }
+	if own >= 0 { return value_of(own) + effect_suffixes(effects, value_of(own), at) }
 	characters = token
 	named = find(names_table, token)
 	if named >= 0 and token.bytes > 1 { characters = value_of(named) }
 	out = ""
 	i = 0
 	while i < characters.bytes {
-		width = utf8_width(byte_at(characters, i))
-		out += styled(block, byte_slice(characters, i, i + width), effects)
-		i += width
+		out += styled_prefix(block, characters, i, effects, at)
+		i += prefix_width(block, characters, i)
 	}
 	out
 }
 
-// the space separated operands of a block, spaces dropped; groups get their prefix before and infix between the parts
-operands(block:text, content:text, effects:text) := {
+// the space separated operands of a block, spaces dropped; a group (above, beside) joins its parts unstyled with the
+// prefix before or the infix between them that the script of the first part has
+operands(block:text, content:text, effects:text, at) := {
 	out = ""
 	script = ""
 	parts = 0
+	group = find(names_table, block + " *group") >= 0
 	i = 0
 	while i < content.bytes {
 		if byte_at(content, i) == 32 { i++ } else {
 			end = offset_of(content, 32, i)
-			part = operand(block, byte_slice(content, i, end), effects)
+			token = byte_slice(content, i, end)
+			part = token
+			named = find(names_table, token)
+			if group and named >= 0 and token.bytes > 1 { part = value_of(named) }
+			if not group { part = operand(block, token, effects, at) }
 			if parts == 0 {
 				script = script_of(part)
 				out += entry(block + " *prefix " + script)
+				if group and find(names_table, block + " *prefix " + script) < 0 and find(names_table, block + " *infix " + script) < 0 {
+					out += unsupported("no " + block + " group of " + part, at)
+				}
 			} else {
 				out += entry(block + " *infix " + script)
 			}
@@ -163,8 +208,8 @@ operands(block:text, content:text, effects:text) := {
 	out
 }
 
-// the text of <:content>, or the block it opens (as "<block>"), or "" for a closing tag; an Error when nothing matches
-tag(content:text) := {
+// the text of <:content> at byte `at` of the source, or the block it opens (as "<block>"), or "" for a closing tag; an Error when nothing matches
+tag(content:text, at) := {
 	if content.bytes == 0 or byte_at(content, 0) == 47 { return "" }
 	if content.bytes == 1 { return content }
 	record = find(names_table, hyphenated(content))
@@ -185,7 +230,7 @@ tag(content:text) := {
 				rest = byte_slice(rest, next + 1, rest.bytes)
 				next = offset_of(rest, 32, 0)
 			}
-			return operands(block, rest, effects)
+			return operands(block, rest, effects, at)
 		}
 	}
 	error("unknown uniscript entity: " + content)
@@ -210,7 +255,7 @@ uniscript(source:text) := {
 		next = next_marker(source, i)
 		if next > i {
 			run = byte_slice(source, i, next)
-			if block.bytes > 0 { out += operands(block, run, "") } else { out += run }
+			if block.bytes > 0 { out += operands(block, run, "", i) } else { out += run }
 			i = next
 		} else {
 			if byte_at(source, i) == 92 {
@@ -225,7 +270,7 @@ uniscript(source:text) := {
 				close = offset_of(source, 62, i + 2)
 				if close == source.bytes { return error("unclosed <: at byte " + byte_slice(source, i, source.bytes)) }
 				content = byte_slice(source, i + 2, close)
-				text = tag(content)
+				text = tag(content, i)
 				if content.bytes == 0 or byte_at(content, 0) == 47 { block = "" } else {
 					if is_block(content) { block = content } else { out += text }
 				}

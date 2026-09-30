@@ -61,8 +61,13 @@ NAME_BLOCKS = [
 # Unicode leaves holes in Mathematical Alphanumeric Symbols where a Letterlike Symbol already existed
 LETTERLIKE_HOLES = {("italic", "h"): "PLANCK CONSTANT"}
 # the standard Greek keyboard layout (ELOT 1000 / Windows Greek) as block type 'greek'
-GREEK_KEYBOARD = dict(zip("abgdezhuiklmnjoprstyfxcvw", "αβγδεζηθικλμνξοπρστυφχψως"))
-GREEK_KEYBOARD.update(zip("ABGDEZHUIKLMNJOPRSTYFXCV", "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ"))
+# block type 'greek': phonetic transliteration; letters without a clear counterpart (c h j q v w y) have none,
+# so uniscript warns about them instead of guessing; the other letters by name: <:greek eta>, <:greek Omega>
+GREEK_LETTERS = dict(zip("abgdezikl" "mnxoprstuf", "αβγδεζικλ" "μνξοπρστυφ"))
+GREEK_DIGRAPHS = {"th": "θ", "ch": "χ", "ps": "ψ"}
+GREEK_NAMED = re.compile(r"GREEK (SMALL|CAPITAL) LETTER ([A-Z]+(?: [A-Z]+)?)$")
+GREEK_NAMED_RANGE = range(0x391, 0x3CA)
+GREEK_SPELLINGS = {"lamda": "lambda"}  # Unicode spells it lamda
 COLORS = {"red": "r", "green": "g", "blue": "b", "brown": "n", "pink": "p", "purple": "v", "orange": "o",
           "yellow": "y", "black": "k", "white": "w", "gray": "a"}
 GEOMETRIES = {"mirror": "M", "flip": "F", "turn": "T", "left": "L", "right": "R"}
@@ -75,9 +80,10 @@ IDS_ABOVE_TO_BELOW = "\u2FF1"
 IDS_LEFT_TO_RIGHT = "\u2FF0"
 VARIATION_SUFFIXES = {"iconic": "\uFE0F", "plain": "\uFE0E"}
 BLOCK_ALIASES = {"fraktur": "fracture", "double-struck": "double", "superscript": "upper", "subscript": "lower",
-                 "reverseInPlace": "reversed", "grey": "gray", "emoji": "iconic", "text": "plain"}
+                 "reverseInPlace": "reversed", "reverse": "mirror", "grey": "gray", "emoji": "iconic", "text": "plain"}
 SUFFIX_KEY = "*suffix"  # follows any character without its own entry; "*suffix egyptian" only hieroglyphs
 PREFIX_KEY = "*prefix"  # "*prefix cjk": goes before the parts of a group (an IDS operator)
+GROUP_KEY = "*group"    # the block joins its operands (above, beside) instead of styling them
 INFIX_KEY = "*infix"    # "*infix egyptian": goes between the parts of a group (a hieroglyph joiner)
 PLAIN_CATEGORIES = "LNPS"  # letters, numbers, punctuation, symbols: no marks, controls or separators in block tables
 LETTER_LIGATURES = "AE|DZ|LJ|NJ"  # Unicode calls these LETTER, not LIGATURE
@@ -106,6 +112,20 @@ def plain_character(rest):
 		if character:
 			return character
 	return None
+
+
+def greek_transliteration():
+	table = dict(GREEK_LETTERS)
+	table.update({latin.upper(): greek.upper() for latin, greek in GREEK_LETTERS.items()})
+	for latin, greek in GREEK_DIGRAPHS.items():
+		table.update({latin: greek, latin.capitalize(): greek.upper(), latin.upper(): greek.upper()})
+	for code in GREEK_NAMED_RANGE:
+		match = GREEK_NAMED.match(unicodedata.name(chr(code), ""))
+		if match:
+			name = match.group(2).lower().replace(" ", "-")
+			for spelling in [name] + ([GREEK_SPELLINGS[name]] if name in GREEK_SPELLINGS else []):
+				table.setdefault(spelling if match.group(1) == "SMALL" else spelling.capitalize(), chr(code))
+	return table
 
 
 def is_plain(character):
@@ -175,18 +195,21 @@ def html_names():
 def seed_sections():
 	named = [(chr(cp), unicodedata.name(chr(cp))) for cp in range(0x110000) if unicodedata.name(chr(cp), None)]
 	named_plain = [(c, n) for c, n in named if not ALGORITHMIC_NAMES.match(n)]
-	blocks = {"greek": dict(GREEK_KEYBOARD)}
+	blocks = {"greek": greek_transliteration()}
 	blocks.update(styled_blocks(named))
 	blocks["ligature"] = ligatures(named)
+	# an empty suffix: the fonts cannot apply the effect to that script (fonts/README.md), uniscript warns
 	for geometry, letter in GEOMETRIES.items():
-		blocks[geometry] = {SUFFIX_KEY: tag(letter)}
+		blocks[geometry] = {SUFFIX_KEY: tag(letter), f"{SUFFIX_KEY} egyptian": "", f"{SUFFIX_KEY} cjk": ""}
 	blocks["mirror"][f"{SUFFIX_KEY} egyptian"] = EGYPTIAN_MIRROR
+	del blocks["mirror"][f"{SUFFIX_KEY} cjk"]
 	for color, letter in COLORS.items():
-		blocks[color] = {SUFFIX_KEY: tag(letter), **colored(named, color)}
+		blocks[color] = {SUFFIX_KEY: tag(letter), f"{SUFFIX_KEY} egyptian": "", f"{SUFFIX_KEY} cjk": "", **colored(named, color)}
 	for block, suffix in VARIATION_SUFFIXES.items():
 		blocks[block] = {SUFFIX_KEY: suffix}
-	blocks["above"] = {f"{PREFIX_KEY} cjk": IDS_ABOVE_TO_BELOW, f"{INFIX_KEY} egyptian": EGYPTIAN_VERTICAL_JOINER}
-	blocks["beside"] = {f"{PREFIX_KEY} cjk": IDS_LEFT_TO_RIGHT, f"{INFIX_KEY} egyptian": EGYPTIAN_HORIZONTAL_JOINER}
+	# groups keep their parts unstyled; a script without prefix or infix cannot be grouped, uniscript warns
+	blocks["above"] = {GROUP_KEY: "", f"{PREFIX_KEY} cjk": IDS_ABOVE_TO_BELOW, f"{INFIX_KEY} egyptian": EGYPTIAN_VERTICAL_JOINER}
+	blocks["beside"] = {GROUP_KEY: "", f"{PREFIX_KEY} cjk": IDS_LEFT_TO_RIGHT, f"{INFIX_KEY} egyptian": EGYPTIAN_HORIZONTAL_JOINER}
 	return {
 		"uniscript": dict(UNISCRIPT_NAMES),
 		"names": {name_key(n): c for c, n in named_plain},
@@ -331,7 +354,7 @@ def suffix_entries(sections):
 	suffixes = {}
 	for block, table in sections["blocks"].items():
 		for key, text in table.items():
-			if key.split()[0] == SUFFIX_KEY:
+			if key.split()[0] == SUFFIX_KEY and text:
 				suffixes.setdefault(text, block)
 	return suffixes
 

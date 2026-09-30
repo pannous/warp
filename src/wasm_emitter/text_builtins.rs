@@ -23,13 +23,18 @@ const ERROR: &str = "error";
 const IS_ERROR: &str = "is_error";
 const KIND_MASK: i64 = 0xFF;
 const ERROR_OF: &str = "error_of";
+const WARNING: &str = "warning";
+const WARN_TEXT: &str = "warn_text";
+const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 5] =
-	[(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int)];
+const TEXT_BUILTINS: [(&str, usize, Kind); 6] = [
+	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+	(WARNING, 1, Kind::Text),
+];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
 	TEXT_BUILTINS.iter().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
@@ -46,7 +51,7 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	if required.contains(TEXT_CONCAT) || required.contains(ERROR_OF) {
+	if required.contains(TEXT_CONCAT) || required.contains(ERROR_OF) || required.contains(WARN_TEXT) {
 		required.insert(TEXT_OF);
 	}
 	if required.contains(TEXT_OF) {
@@ -64,6 +69,19 @@ impl WasmGcEmitter {
 			}
 			(READ, [path]) => {
 				let reason = format!("read {} failed: host imports are not available", path.serialize());
+				self.emit_runtime_error_value(func, &reason);
+			}
+			// warnings are errors: the message is an Error value, which text concatenation propagates
+			(WARNING, [message]) if crate::diagnostic::warning_mode() == crate::diagnostic::WarningMode::Error => {
+				self.emit_node_instructions(func, message);
+				self.emit_call(func, ERROR_OF);
+			}
+			(WARNING, [message]) if self.ctx.func_registry.get(HOST_WARN).is_some() => {
+				self.emit_node_instructions(func, message);
+				self.emit_call(func, WARN_TEXT);
+			}
+			(WARNING, [message]) => {
+				let reason = format!("warning {} not reported: host imports are not available", message.serialize());
 				self.emit_runtime_error_value(func, &reason);
 			}
 			(ERROR, [message]) => {
@@ -196,6 +214,21 @@ impl WasmGcEmitter {
 				f.instruction(&I::RefNull(HeapType::Concrete(s.type_manager.node_type)));
 				f.instruction(&I::StructNew(s.type_manager.node_type));
 			});
+		}
+
+		// warn_text(message): reports the message through the host, yields ""
+		if self.should_emit_function(WARN_TEXT) {
+			if let Some(host_warn) = self.ctx.func_registry.get(HOST_WARN).map(|f| f.call_index as u32) {
+				self.runtime_function(WARN_TEXT, vec![node_ref], vec![node_ref], vec![], |s, f| {
+					f.instruction(&I::LocalGet(0));
+					s.call(f, TEXT_OF);
+					f.instruction(&I::LocalSet(0));
+					s.emit_text_field(f, 0, 0);
+					s.emit_text_field(f, 0, 1);
+					Self::emit_list(f, &[I::Call(host_warn), I::I32Const(0), I::I32Const(0)]);
+					s.call(f, "new_text");
+				});
+			}
 		}
 
 		// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors propagate

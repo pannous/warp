@@ -37976,49 +37976,98 @@ blocks {
 		d: "δ"
 		e: "ε"
 		z: "ζ"
-		h: "η"
-		u: "θ"
 		i: "ι"
 		k: "κ"
 		l: "λ"
 		m: "μ"
 		n: "ν"
-		j: "ξ"
+		x: "ξ"
 		o: "ο"
 		p: "π"
 		r: "ρ"
 		s: "σ"
 		t: "τ"
-		y: "υ"
+		u: "υ"
 		f: "φ"
-		x: "χ"
-		c: "ψ"
-		v: "ω"
-		w: "ς"
 		A: "Α"
 		B: "Β"
 		G: "Γ"
 		D: "Δ"
 		E: "Ε"
 		Z: "Ζ"
-		H: "Η"
-		U: "Θ"
 		I: "Ι"
 		K: "Κ"
 		L: "Λ"
 		M: "Μ"
 		N: "Ν"
-		J: "Ξ"
+		X: "Ξ"
 		O: "Ο"
 		P: "Π"
 		R: "Ρ"
 		S: "Σ"
 		T: "Τ"
-		Y: "Υ"
+		U: "Υ"
 		F: "Φ"
-		X: "Χ"
-		C: "Ψ"
-		V: "Ω"
+		th: "θ"
+		Th: "Θ"
+		TH: "Θ"
+		ch: "χ"
+		Ch: "Χ"
+		CH: "Χ"
+		ps: "ψ"
+		Ps: "Ψ"
+		PS: "Ψ"
+		Alpha: "Α"
+		Beta: "Β"
+		Gamma: "Γ"
+		Delta: "Δ"
+		Epsilon: "Ε"
+		Zeta: "Ζ"
+		Eta: "Η"
+		Theta: "Θ"
+		Iota: "Ι"
+		Kappa: "Κ"
+		Lamda: "Λ"
+		Lambda: "Λ"
+		Mu: "Μ"
+		Nu: "Ν"
+		Xi: "Ξ"
+		Omicron: "Ο"
+		Pi: "Π"
+		Rho: "Ρ"
+		Sigma: "Σ"
+		Tau: "Τ"
+		Upsilon: "Υ"
+		Phi: "Φ"
+		Chi: "Χ"
+		Psi: "Ψ"
+		Omega: "Ω"
+		alpha: "α"
+		beta: "β"
+		gamma: "γ"
+		delta: "δ"
+		epsilon: "ε"
+		zeta: "ζ"
+		eta: "η"
+		theta: "θ"
+		iota: "ι"
+		kappa: "κ"
+		lamda: "λ"
+		lambda: "λ"
+		mu: "μ"
+		nu: "ν"
+		xi: "ξ"
+		omicron: "ο"
+		pi: "π"
+		rho: "ρ"
+		final-sigma: "ς"
+		sigma: "σ"
+		tau: "τ"
+		upsilon: "υ"
+		phi: "φ"
+		chi: "χ"
+		psi: "ψ"
+		omega: "ω"
 	}
 	bold {
 		A: "𝐀"
@@ -39800,18 +39849,28 @@ blocks {
 	}
 	flip {
 		"*suffix": "\u{E0046}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 	}
 	turn {
 		"*suffix": "\u{E0054}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 	}
 	left {
 		"*suffix": "\u{E004C}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 	}
 	right {
 		"*suffix": "\u{E0052}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 	}
 	red {
 		"*suffix": "\u{E0072}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		mahjong-tile-dragon: "🀄"
 		playing-card-joker: "🂿"
 		apple: "🍎"
@@ -39833,6 +39892,8 @@ blocks {
 	}
 	green {
 		"*suffix": "\u{E0067}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		mahjong-tile-dragon: "🀅"
 		apple: "🍏"
 		heart: "💚"
@@ -39844,6 +39905,8 @@ blocks {
 	}
 	blue {
 		"*suffix": "\u{E0062}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		heart: "💙"
 		book: "📘"
 		circle: "🔵"
@@ -39854,22 +39917,30 @@ blocks {
 	}
 	brown {
 		"*suffix": "\u{E006E}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		circle: "🟤"
 		square: "🟫"
 		heart: "🤎"
 	}
 	pink {
 		"*suffix": "\u{E0070}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		heart: "🩷"
 	}
 	purple {
 		"*suffix": "\u{E0076}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		heart: "💜"
 		circle: "🟣"
 		square: "🟪"
 	}
 	orange {
 		"*suffix": "\u{E006F}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		book: "📙"
 		diamond: "🔶"
 		small-diamond: "🔸"
@@ -39879,12 +39950,16 @@ blocks {
 	}
 	yellow {
 		"*suffix": "\u{E0079}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		heart: "💛"
 		circle: "🟡"
 		square: "🟨"
 	}
 	black {
 		"*suffix": "\u{E006B}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		playing-card-joker: "🃏"
 		droplet: "🌢"
 		pennant: "🏲"
@@ -39989,6 +40064,8 @@ blocks {
 	}
 	white {
 		"*suffix": "\u{E0077}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 		mahjong-tile-dragon: "🀆"
 		playing-card-joker: "🃟"
 		sun: "🌣"
@@ -40091,6 +40168,8 @@ blocks {
 	}
 	gray {
 		"*suffix": "\u{E0061}"
+		"*suffix egyptian": ""
+		"*suffix cjk": ""
 	}
 	iconic {
 		"*suffix": "\u{FE0F}"
@@ -40099,10 +40178,12 @@ blocks {
 		"*suffix": "\u{FE0E}"
 	}
 	above {
+		"*group": ""
 		"*prefix cjk": "⿱"
 		"*infix egyptian": "\u{13430}"
 	}
 	beside {
+		"*group": ""
 		"*prefix cjk": "⿰"
 		"*infix egyptian": "\u{13431}"
 	}
@@ -40114,6 +40195,7 @@ block-aliases {
 	superscript: upper
 	subscript: lower
 	reverseInPlace: reversed
+	reverse: mirror
 	grey: gray
 	emoji: iconic
 	text: plain

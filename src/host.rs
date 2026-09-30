@@ -248,6 +248,16 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		},
 	)?;
 
+	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
+	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
+		if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
+			match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
+				Ok(message) => crate::diagnostic::report_runtime_warning(&message),
+				Err(e) => trace!("host.warn: unreadable message: {e}"),
+			}
+		}
+	})?;
+
 	// host.run(wasm_ptr: i32, wasm_len: i32) -> i64
 	// Runs WASM bytes and returns result as an i64 (simplified for now)
 	// Full GC object return requires more complex setup

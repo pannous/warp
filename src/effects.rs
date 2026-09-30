@@ -27,6 +27,7 @@ const STATE_KEYWORD: &str = "global";
 const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("fetch", Host, &[IO]),
 	("read", Host, &[IO]),
+	("warning", Host, &[IO]),
 	("print", Wasi, &[IO]),
 	("puts", Wasi, &[IO]),
 	("puti", Wasi, &[IO]),
