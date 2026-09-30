@@ -2,3 +2,4 @@ data/
 fonts/
 !uniscript.wasm
 packages/
+__pycache__/

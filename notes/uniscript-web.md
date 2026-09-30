@@ -6,7 +6,7 @@ compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicod
 ## Build and deploy
 
 ```
-web/uniscript/build.sh           # warp compile → uniscript.wasm, copies packages/uniscript/data/entities.idx, fonts → woff2
+web/uniscript/build.sh           # warp compile → uniscript.wasm, copies packages/uniscript/data/entities.idx, fonts → slices
 web/uniscript/build.sh deploy    # … and rsync to pannous.com:/var/www/pannous/uniscript/
 cd web/uniscript && python3 -m http.server 8765   # local
 ```
@@ -16,8 +16,8 @@ to WebAssembly, deployed by its `docs/make_demo.sh deploy`). The two pages link 
 from this page's `fonts/`. No deploy script into /var/www/pannous uses `rsync --delete`: one wiped the other's files.
 
 Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `data/` (a copy of the
-3.4 MB index) and `fonts/` (woff2 of UniscriptSans, UniscriptCJK, NewGardinerOmni2d4, all OFL; from `fonts/dist` or
-`~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.
+3.4 MB index) and `fonts/` (slice_fonts.py: UniscriptSans whole, UniscriptCJK and NewGardinerOmni2d4 sliced, all OFL; from
+`fonts/dist` or `~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.
 
 ## How the JS host works (`uniscript.js`)
 
@@ -43,4 +43,24 @@ Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not commi
 - Nested tags (`<:above 木 <:beside 木 木>>`) are not supported by uniscript.wasp: a tag ends at the first `>`.
 - Greek blocks join their words (spaces separate operands): one word per `<:greek> … <:/greek>`; no final sigma (θεοσ).
 - A repeated warning reports the operand's byte, not the character's: `<:greek> philosophia` warns twice "no greek form of h at byte 8".
-- The CJK font is 10.8 MB as woff2; it loads only when CJK or IDS characters appear (`unicode-range`).
+
+## Sliced fonts (slice_fonts.py, sequence_fonts.js)
+
+The whole CJK font is 10.6 MB as woff2, Gardiner 1.5 MB. `slice_fonts.py` (fonttools, wordfreq) writes `fonts/fonts.css`
+with ~100 unicode-range slices per font (frequency-ordered zh/ja/ko first, then code point order) and `fonts/fonts.json`.
+- Chrome shapes each unicode-range face on its own and maps only the characters its range declares (tested:
+  a face whose cmap has 犭 but whose range does not, shows notdef). It tries every face whose range intersects the text,
+  last declared first, and downloads each one it tries. So pure CSS cannot keep a sequence in one face: declaring the
+  IDS components in the ⿰ face downloads it for plain text, and declaring TAG in every slice downloads all 91 slices.
+- Sequences therefore get faces outside fonts.css, assigned by `sequence_fonts.js` (`watchSequences(elements)`: wraps each
+  sequence in a span whose first font is one unranged FontFace, re-wrapping on DOM changes):
+  - IDS: faces of 50 ligatures per operator, sorted by operands (1112 faces, median 21 KB). Few ligatures per face matter:
+    a face holds every ligature its components can form, so 400 per face gave 2.6 MB faces. Nested IDS: the shortest
+    ligature is the arity; JS parses operands recursively. Aliases: a component glyph has several code points
+    (犭 U+72AD, ⺨ U+2EA8); faces contain all, JS maps operands to the first.
+  - hieroglyph runs containing a format control (13430–1345F, mirror 13440 too): one face with every sign (1.4 MB).
+  - base + TAG (你 mirror/color): the base's plain slice file as an unranged face (cached); slices carry TAG undeclared.
+- Verified with the uniscript repository's probes/font_slices/shaping.html: sliced = whole font for all cases.
+- Cold load of pannous.com/uniscript/rust/: 12.8 MB → 2.3 MB. The main page with every example clicked: fonts 12.6 → 2.2 MB.
+- pannous.com gzips application/json since 2026-09-30 (fonts.json 55 → 13 KB).
+- Not handled: text in textareas (no spans), and a TAG effect on a composed IDS character.

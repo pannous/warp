@@ -4,16 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Uniscript</title>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-	@font-face { font-family: "Uniscript Sans"; src: url("fonts/UniscriptSans-Regular.woff2") format("woff2"); font-display: swap; }
-	@font-face {
-		font-family: "Uniscript CJK"; src: url("fonts/UniscriptCJK-Regular.woff2") format("woff2"); font-display: swap;
-		unicode-range: U+2E80-2FFF, U+3000-9FFF, U+F900-FAFF, U+20000-3FFFF, U+E0000-E007F;
-	}
-	@font-face {
-		font-family: "NewGardinerOmni"; src: url("fonts/NewGardinerOmni2d4.woff2") format("woff2"); font-display: swap;
-		unicode-range: U+13000-1345F;
-	}
 	:root {
 		--ground: #f7f5f0; --panel: #fffdf8; --ink: #1d1b16; --muted: #6b665c; --line: #d9d3c6; --accent: #7a3b12; --error: #b00020;
 		--uniscript: "Uniscript Sans", "Uniscript CJK", "NewGardinerOmni", system-ui, sans-serif;
@@ -94,5 +86,9 @@
 	</footer>
 </main>
 <script src="uniscript.js"></script>
+<script type="module">
+import { watchSequences } from "./sequence_fonts.js";
+watchSequences(...document.querySelectorAll(".output"));
+</script>
 </body>
 </html>
