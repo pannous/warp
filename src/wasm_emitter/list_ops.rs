@@ -108,6 +108,15 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::Return);
 			func.instruction(&Instruction::End);
 
+			// ø is the empty list
+			self.emit_field(&mut func, 0, 0);
+			func.instruction(&Instruction::I64Const(Kind::Empty as i64));
+			func.instruction(&Instruction::I64Eq);
+			func.instruction(&Instruction::If(BlockType::Empty));
+			func.instruction(&Instruction::I64Const(0));
+			func.instruction(&Instruction::Return);
+			func.instruction(&Instruction::End);
+
 			// count = 0
 			func.instruction(&Instruction::I64Const(0));
 			func.instruction(&Instruction::LocalSet(1));
@@ -448,7 +457,10 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 5] = ["index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range"];
+pub const RUNTIME_ERRORS: [&str; 7] = [
+	"index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
+	"min_of_an_empty_list", "max_of_an_empty_list",
+];
 
 impl WasmGcEmitter {
 	fn emit_runtime_errors(&mut self) {

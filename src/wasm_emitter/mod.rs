@@ -2645,7 +2645,9 @@ impl WasmGcEmitter {
 		let [Node::Symbol(fn_name), argument] = items else {
 			return false;
 		};
-		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str()) || crate::analyzer::counting_function(fn_name, &self.ctx).is_some();
+		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
+			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
+			|| crate::analyzer::counting_function(fn_name, &self.ctx).is_some();
 		if !integer_builtin || !self.emit_introspection_fn(func, fn_name, argument) {
 			return false;
 		}

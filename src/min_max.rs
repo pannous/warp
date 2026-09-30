@@ -1,14 +1,20 @@
 //! Builtins `min(a, b, …)` and `max(a, b, …)`: lowered to comparisons, so exact and float operands
 //! share the arithmetic emitters. Arguments are evaluated twice, so only side-effect free ones are accepted.
+//! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
+use crate::wasp_parser::parse;
 use crate::operators::Op;
 
 const EXTREMA: [(&str, Op); 2] = [("min", Op::Lt), ("max", Op::Gt)];
 const MIN_ARGUMENTS: usize = 2;
+
+/// Pseudo-call the emitter turns into the runtime error `<extremum> of an empty list`
+pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
+pub const EMPTY_LIST_ERRORS: [(&str, &str); 2] = [("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list")];
 
 pub fn lower(node: Node) -> Node {
 	let mut context = Context::new();
@@ -33,10 +39,16 @@ fn expand(node: Node, builtins: &[(&str, Op)]) -> Node {
 }
 
 fn extremum(items: &[Node], bracket: &Bracket, separator: &Separator, builtins: &[(&str, Op)]) -> Option<Node> {
-	let name = call_name(items, bracket, separator)?;
+	let name = call_name(items, bracket, separator).or_else(|| call_without_arguments(items, bracket))?;
 	let (_, better) = builtins.iter().find(|(builtin, _)| *builtin == name)?;
-	let arguments = &items[1..];
-	if arguments.len() < MIN_ARGUMENTS {
+	if let [Node::Symbol(list)] = items.get(1..).unwrap_or_default().iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
+		return Some(fold_list_at_runtime(name, list, better));
+	}
+	let arguments = candidates(&items[1..]);
+	if arguments.is_empty() {
+		return Some(Diagnostic::at(&items[0], format!("{name} of an empty list")).into_error());
+	}
+	if arguments.len() < MIN_ARGUMENTS && !is_list_literal(&items[1..]) {
 		return Some(Diagnostic::at(&items[0], format!("{name} takes at least {MIN_ARGUMENTS} arguments, got {}", arguments.len())).into_error());
 	}
 	if !arguments.iter().all(is_side_effect_free) {
@@ -48,6 +60,39 @@ fn extremum(items: &[Node], bracket: &Bracket, separator: &Separator, builtins: 
 		Node::Key(Box::new(comparison), Op::Question, Box::new(branches))
 	});
 	Some(chosen)
+}
+
+/// `max()` and `max([])` parse alike, as the round list `(max)`
+fn call_without_arguments<'a>(items: &'a [Node], bracket: &Bracket) -> Option<&'a str> {
+	match (items, bracket) {
+		([head], Bracket::Round) => match head.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// The arguments, or the items of the one list literal given instead
+fn candidates(arguments: &[Node]) -> &[Node] {
+	match arguments {
+		[single] => match single.drop_meta() {
+			Node::List(items, Bracket::Square, _) => items,
+			_ => arguments,
+		},
+		_ => arguments,
+	}
+}
+
+fn is_list_literal(arguments: &[Node]) -> bool {
+	matches!(arguments, [single] if matches!(single.drop_meta(), Node::List(_, Bracket::Square, _)))
+}
+
+/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
+fn fold_list_at_runtime(name: &str, list: &str, better: &Op) -> Node {
+	parse(&format!(
+		"(if count({list}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else (extremum_best={list}#1; for extremum_item in {list} {{ extremum_best = if extremum_item {better} extremum_best then extremum_item else extremum_best }}; extremum_best))"
+	))
 }
 
 fn is_side_effect_free(node: &Node) -> bool {
