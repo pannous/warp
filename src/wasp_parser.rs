@@ -976,11 +976,30 @@ impl WaspParser {
 
 	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
 	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
+	/// The soft keyword `version` before digits takes them as written: `version 1.10` is one value, not the float 1.1
+	fn version_operand(&mut self, symbol: &str) -> Option<Node> {
+		if symbol != crate::versions::VERSION_KEYWORD || self.options.data_mode {
+			return None;
+		}
+		let blanks = self.chars[self.pos..].iter().take_while(|c| **c == ' ').count();
+		let length = crate::versions::operand_len(&self.chars[self.pos + blanks..]);
+		if blanks == 0 || length == 0 {
+			return None;
+		}
+		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length].iter().collect();
+		self.advance_by(blanks + length);
+		Some(Node::List(vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)], Bracket::None, Separator::Space))
+	}
+
 	fn parse_symbol_with_suffix(&mut self) -> Node {
 		let symbol = match self.parse_symbol() {
 			Ok(s) => s,
 			Err(e) => return error(&e),
 		};
+
+		if let Some(version) = self.version_operand(&symbol) {
+			return version;
+		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
 		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
@@ -1919,6 +1938,12 @@ impl WaspParser {
 			let literal: String = self.chars[self.pos..self.pos + literal_len].iter().collect();
 			self.advance_by(literal_len);
 			return Node::data(crate::time::TimeLiteral(literal));
+		}
+		let version_len = crate::versions::literal_len(&self.chars[self.pos..]);
+		if version_len > 0 {
+			let literal: String = self.chars[self.pos..self.pos + version_len].iter().collect();
+			self.advance_by(version_len);
+			return Node::Symbol(literal);
 		}
 		let mut num_str = String::new();
 

@@ -43,6 +43,7 @@ pub mod switch;
 pub mod phrase_words;
 pub mod declarations;
 pub mod modules;
+pub mod versions;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
