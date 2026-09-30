@@ -278,7 +278,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 						let declared = declared_type(left);
 						let kind = declared.and_then(|type_name| declared_kind(&type_name.name())).unwrap_or_else(|| binding_kind(right, scope));
-						scope.define(name.clone(), declared.map(|type_name| Box::new(type_name.clone())), kind);
+						let list_type = || Box::new(Node::Symbol(list_type_name(right, scope)));
+						let type_node = declared.map(|type_name| Box::new(type_name.clone())).or_else(|| (kind == Kind::List).then(list_type));
+						scope.define(name.clone(), type_node, kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
@@ -702,6 +704,38 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	})
 }
 
+/// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
+pub fn plural_element_type(word: &str) -> Option<&str> {
+	let singular = word.strip_suffix('s')?;
+	type_word_kind(singular).map(|_| singular)
+}
+
+/// The type name of a list: `list of int` when all items share a kind (or the variable is declared `ints`), else `list`
+pub fn list_type_name(list: &Node, scope: &Scope) -> String {
+	const PLAIN: &str = "list";
+	match list.drop_meta() {
+		Node::Symbol(name) => {
+			let type_name = scope.lookup(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
+			match type_name {
+				Some(word) => match plural_element_type(&word) {
+					Some(element) => format!("{PLAIN} of {element}"),
+					None if word.starts_with(PLAIN) => word,
+					None => PLAIN.to_string(),
+				},
+				None => PLAIN.to_string(),
+			}
+		}
+		Node::List(items, _, _) => {
+			let mut kinds = items.iter().map(|item| infer_type(item, scope));
+			match kinds.next() {
+				Some(first) if kinds.all(|kind| kind == first) => format!("{PLAIN} of {first}"),
+				_ => PLAIN.to_string(),
+			}
+		}
+		_ => PLAIN.to_string(),
+	}
+}
+
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_parameter_annotations(program)
@@ -717,6 +751,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
+	warnings.extend(kebab_ambiguities(program));
 	warnings
 }
 
@@ -739,6 +774,93 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| lint_into(item, warnings)),
 		_ => {}
+	}
+}
+
+/// `name:literal` as a data binding: the name and its value
+fn data_binding(item: &Node) -> Option<(&str, &Node)> {
+	let Node::Key(key, Op::Colon, value) = item.drop_meta() else { return None };
+	let (Node::Symbol(name), Node::Number(_) | Node::Text(_) | Node::Char(_)) = (key.drop_meta(), value.drop_meta()) else { return None };
+	Some((name, value.drop_meta()))
+}
+
+fn assigned_names(program: &Node) -> HashSet<&str> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.as_str());
+			}
+		}
+	});
+	names
+}
+
+/// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
+fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
+	let variables = assigned_names(program);
+	let mut warnings = vec![];
+	program.visit(&mut |item| {
+		let Some((name, _)) = data_binding(item) else { return };
+		let parts: Vec<&str> = name.split('-').collect();
+		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(part)) {
+			return;
+		}
+		let message = format!("`{name}` is a data key here, but {} are also variables: `{}` would subtract", parts.join(" and "), parts.join(" - "));
+		warnings.push(Diagnostic::at(item, message).fix(format!("write {} for the subtraction", parts.join(" - "))));
+	});
+	warnings
+}
+
+/// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
+/// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
+pub fn resolve_data_scope(program: Node) -> Node {
+	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	resolve_blocks(program, &variables)
+}
+
+fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut keys: HashMap<String, Node> = HashMap::new();
+			let mut resolved = Vec::with_capacity(items.len());
+			let mut ends_in_lookup = false;
+			for item in items {
+				let item = resolve_blocks(item, variables);
+				ends_in_lookup = matches!(item.drop_meta(), Node::Symbol(name) if keys.contains_key(name));
+				let item = substitute_keys(item, &keys);
+				if let Some((name, value)) = data_binding(&item) {
+					if !variables.contains(name) {
+						keys.insert(name.to_string(), value.clone());
+					}
+				}
+				resolved.push(item);
+			}
+			match resolved.pop() {
+				Some(value) if ends_in_lookup => value,
+				Some(last) => {
+					resolved.push(last);
+					Node::List(resolved, bracket, separator)
+				}
+				None => Node::List(resolved, bracket, separator),
+			}
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(resolve_blocks(*node, variables)), data },
+		other => other,
+	}
+}
+
+fn substitute_keys(node: Node, keys: &HashMap<String, Node>) -> Node {
+	if keys.is_empty() {
+		return node;
+	}
+	match node {
+		Node::Symbol(name) => keys.get(&name).cloned().unwrap_or(Node::Symbol(name)),
+		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => Node::Key(left, op, Box::new(substitute_keys(*right, keys))),
+		Node::Key(left, op, right) => Node::Key(Box::new(substitute_keys(*left, keys)), op, Box::new(substitute_keys(*right, keys))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_keys(item, keys)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_keys(*node, keys)), data },
+		other => other,
 	}
 }
 
@@ -1061,6 +1183,9 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
 			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
 		}
+		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
+			lower_declarations(hashed_unit_count(&items).expect("guarded"))
+		}
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
 			lower_declarations(unit_count(&counted).expect("guarded"))
 		}
@@ -1262,6 +1387,51 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
 	infer_parameters_from_calls(ctx, node);
 	refine_return_kinds(ctx);
+}
+
+/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
+/// A built-in name that the program also binds as a variable or parameter (`exp-1`) stays a subtraction.
+pub fn lower_negated_calls(node: Node) -> Node {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, &node);
+	let mut bound: HashSet<String> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
+	collect_assigned_names(&node, &mut bound);
+	negate_calls(node, &ctx.user_functions, &bound)
+}
+
+fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.clone());
+			}
+			collect_assigned_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			collect_assigned_names(left, names);
+			collect_assigned_names(right, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
+		_ => {}
+	}
+}
+
+fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
+	let is_function = |operand: &Node| match operand.drop_meta() {
+		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
+			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),
+		_ => false,
+	};
+	match node {
+		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
+			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions, bound)));
+			Node::List(vec![*function, negated], Bracket::Round, Separator::None)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions, bound)), op, Box::new(negate_calls(*right, functions, bound))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions, bound)), data },
+		other => other,
+	}
 }
 
 /// `a List`, `an Int`
@@ -1555,24 +1725,23 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 	None
 }
 
-/// `count x`, `length x`, `size x`: the runtime function counting x in its unit. A text counts graphemes
-/// (user-perceived characters) except for `size`, which counts bytes; a user function of that name wins.
+/// `count x`, `length x`, `size x`: the runtime function counting the elements of x; a text counts its graphemes
+/// (user-perceived characters). Bytes are only counted by an explicit unit (`x.bytes`); a user function of that name wins.
 pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if ctx.user_functions.contains_key(name) {
 		return None;
 	}
 	match name {
-		"count" | "length" => Some("node_count"),
-		"size" => Some("node_size"),
+		"count" | "length" | "size" => Some("node_count"),
 		_ => None,
 	}
 }
 
-/// `x.count`, `x.length`, `x.size`, and the explicit text units `x.bytes`, `x.chars` (code points), `x.graphemes`
+/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		"number" => Some("node_count"),
-		"bytes" => Some("text_byte_count"),
+		"bytes" => Some("node_bytes"),
 		"chars" | "codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
@@ -1618,14 +1787,31 @@ fn unit_count(node: &Node) -> Option<Node> {
 	}
 }
 
-/// `number of x`, `count of x`, `length of x` → `count x`; `size of x` → `size x`;
-/// of a text unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`)
+/// `#bytes in t`, parsed as the items `#bytes`, `in`, `t`: the count of that unit, `t.bytes`
+fn hashed_unit_count(items: &[Node]) -> Option<Node> {
+	let [hashed, keyword, _, ..] = items else { return None };
+	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else { return None };
+	if !matches!(empty.drop_meta(), Node::Empty) || !is_word(keyword, "in") {
+		return None;
+	}
+	let Node::Symbol(word) = unit.drop_meta() else { return None };
+	let counted = rest_of(items, 2, &Bracket::None, &Separator::Space);
+	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
+}
+
+/// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
+/// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	if let [unit, count, of, _, ..] = items {
+		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
+			let counted = rest_of(items, 3, bracket, separator);
+			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
+		}
+	}
 	let [word, of, _, ..] = items else { return None };
 	let Node::Symbol(word) = word.drop_meta() else { return None };
 	let counter = match word.as_str() {
-		"number" | "count" | "length" => "count",
-		"size" => "size",
+		"number" | "count" | "length" | "size" => "count",
 		_ => return None,
 	};
 	if !is_word(of, "of") {
@@ -1636,7 +1822,7 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 }
 
 fn require_counter(ctx: &mut Context, counter: &'static str) {
-	if counter == "node_size" {
+	if counter == "node_bytes" {
 		ctx.required_functions.insert("node_count");
 	}
 	ctx.required_functions.insert(counter);
@@ -1661,6 +1847,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			if op.is_arithmetic()
+				|| op.is_shift()
 				|| op.is_compound_assign()
 				|| matches!(op, Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor)
 			{
@@ -1756,6 +1943,18 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Error(inner) => {
 			analyze_required_functions(ctx, inner);
 		}
+	}
+}
+
+/// The callee of `name(args)`: a call is a symbol applied with round brackets and no space before the arguments.
+/// `(name args)`, `(name, args)` and `[name args]` are data.
+pub fn call_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	match (items, bracket, separator) {
+		([head, _, ..], Bracket::Round, Separator::None) => match head.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 

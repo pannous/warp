@@ -408,7 +408,7 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
 ### String length: bytes, code points or graphemes?
 `"👍🏽"` is 8 bytes (Go `len`), 4 UTF-16 units (JS `.length`), 2 code points (Python `len`), 1 grapheme (Swift `.count`).
 **Warp (solved):** the unit is named when it matters. `#t`, `count t`, `length t`, `number of t` count graphemes, the same
-unit `t#i` indexes by; `size t` counts bytes. Explicit units: `number of bytes in t` / `#(byte in t)` / `#(t as bytes)` /
+unit `t#i` indexes by; `size` is a synonym of `count` (2026-09-29, was: bytes). Bytes only by explicit unit: `byte count of t` / `number of bytes in t` / `#(byte in t)` / `#(t as bytes)` /
 `t.bytes`; `number of chars in t` = `number of codepoints in t` = `t.chars`; `number of graphemes in t` = `t.graphemes`.
 `number of chars in "héllo"` → 5, `number of bytes in "héllo"` → 6, `number of codepoints in "👍🏽"` → 2,
 `number of graphemes in "👍🏽"` → 1. A `char` is a code point; a user-perceived character is a grapheme.
@@ -490,3 +490,9 @@ in useful fragments, and Warp answers only there: never a guess, never a panic.
   (`f(x):=x%2; g(x):=x%3`). For more, state a `law` or prove it in Lean.
 - Tests: test_function_equality_up_to_renaming, test_polynomial_function_equality,
   test_finite_domain_function_equality, test_undecidable_function_equality_is_an_error (tests/probe_footguns.rs).
+
+## Decision update (2026-09-29): `size` = `count`
+`size` (function, `size of x`, `x.size`) counts elements, of a text its characters (graphemes), exactly like `count`. This replaces
+the earlier "size counts bytes" decision (wiki/Footguns.md is not part of this repository; the record is here). Bytes are counted
+only by an explicit unit: `byte count of x`, `number of bytes in x`, `#bytes in x`, `x.bytes` (8 per list element).
+Tests still pinning the old rule (not edited, supervisor decides): tests/probe_footguns.rs lines ~366, 370, 411; tests/test_todo.rs:103.

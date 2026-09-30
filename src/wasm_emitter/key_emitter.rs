@@ -89,6 +89,7 @@ impl WasmGcEmitter {
 		} else if op.is_logical() && !both_numeric {
 			self.emit_truthy_logical(func, left, op, right);
 		} else if op.is_arithmetic()
+			|| op.is_shift()
 			|| op.is_comparison()
 			|| op.is_logical()
 			|| is_numeric_define
@@ -258,7 +259,7 @@ impl WasmGcEmitter {
 
 		if let Some(ref method) = method_name {
 			if let Some(counter) = crate::analyzer::counting_method(method, &self.ctx) {
-				// obj.count, obj.length: elements, or graphemes of a text; obj.size: bytes; obj.bytes/chars/graphemes
+				// obj.count, obj.length: elements, or graphemes of a text; obj.bytes/chars/graphemes
 				self.emit_node_instructions(func, left);
 				self.emit_call(func, counter);
 				self.emit_call(func, "new_int");

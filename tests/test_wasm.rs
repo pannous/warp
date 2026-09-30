@@ -63,7 +63,6 @@ const PI: f64 = std::f64::consts::PI;
 // const E: f64 = std::f64::consts::E;
 
 #[test]
-#[ignore]
 fn test_implicit_multiplication() {
 	is!("x=3;2x", 6);
 	is!("2π", 2.0 * PI);
@@ -191,7 +190,6 @@ fn test_const_return() {
 }
 
 #[test]
-#[ignore]
 fn test_print() {
 	// does wasm print? (visual control!!);
 	is!("print 42", 42);
@@ -380,6 +378,7 @@ fn test_math_operators() {
 }
 
 #[test]
+#[ignore]
 fn test_math_operators_runtime() {
 	is!("3^2", 9);
 	is!("3^1", 3);
@@ -1436,10 +1435,8 @@ fn test_assert() {
 }
 // test once by looking at the output wasm/wat
 #[test]
-#[ignore]
 fn test_named_data_sections() {
 	is!("fest='def';test='abc'", "abc");
-	exit(0);
 }
 
 #[test]

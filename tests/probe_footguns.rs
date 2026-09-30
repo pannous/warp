@@ -54,9 +54,8 @@ fn test_zero_string_is_truthy() {
 }
 
 #[test]
-#[should_panic(expected = "Undefined variable")]
 fn test_undefined_variable_is_an_error() {
-	eval("a+1"); // JS: NaN (or an implicit global on assignment)
+	fails_with("a+1", "undefined variable: a"); // JS: NaN (or an implicit global on assignment)
 }
 
 #[test]
@@ -361,14 +360,16 @@ fn test_text_is_indexed_by_grapheme() {
 	assert_eq!(warp::grapheme_clusters("e\u{301}👨\u{200d}👩\u{200d}👧🇩🇪\r\n"), ["e\u{301}", "👨\u{200d}👩\u{200d}👧", "🇩🇪", "\r\n"]);
 }
 
-#[test] // the unit is explicit: size counts bytes (memory), .bytes .chars .graphemes name the unit
+#[test] // size is a synonym for count; bytes only via byte count / .bytes, .chars .graphemes name the unit
 fn test_text_units_are_explicit() {
-	is!("size \"👍🏽\"", 8);
-	is!("x=\"👍🏽\";x.size", 8);
+	is!("size \"👍🏽\"", 1);
+	is!("x=\"👍🏽\";x.size", 1);
+	is!("byte count of \"👍🏽\"", 8);
 	is!("x=\"👍🏽\";x.bytes", 8);
 	is!("x=\"👍🏽\";x.chars", 2);
 	is!("x=\"👍🏽\";x.graphemes", 1);
-	is!("pixels=(1,2,3);size(pixels)", 24); // lists keep 8 bytes per element
+	is!("pixels=(1,2,3);size(pixels)", 3); // size is a synonym for count
+	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
 #[test] // Swift: s.unicodeScalars.count; a char is a code point, as x.chars and Rust's chars()
@@ -404,12 +405,12 @@ fn test_number_of_codepoints_in_text() {
 	is!("#(\"👍🏽\" as codepoints)", 2);
 }
 
-#[test] // without a unit: number/count/length of a text count graphemes, size counts bytes, as #x and size x
+#[test] // without a unit: number/count/length of a text count graphemes, size is count, as #x and size x
 fn test_count_of_text_without_unit() {
 	is!("count of \"👍🏽\"", 1);
 	is!("t=\"héllo\";number of t", 5);
 	is!("t=\"héllo\";length of t", 5);
-	is!("t=\"héllo\";size of t", 6);
+	is!("t=\"héllo\";size of t", 5);
 	is!("pixels=[1 2 4];number of pixels", 3);
 }
 

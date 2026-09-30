@@ -1,14 +1,47 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
-use crate::analyzer::{is_unbracketed_block, type_word_kind};
+use crate::analyzer::{call_name, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
 use wasm_encoder::*;
 
-use super::WasmGcEmitter;
+use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
+
+/// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
+const BUILTIN_CALLS: [&str; 10] = ["return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use"];
+
+const PRINT: &str = "print";
 
 impl WasmGcEmitter {
+	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
+	/// A variable is not callable.
+	pub(super) fn resolves_call(&self, name: &str) -> bool {
+		self.ctx.user_functions.contains_key(name)
+			|| self.ctx.ffi_imports.contains_key(name)
+			|| self.ctx.type_registry.get_by_name(name).is_some()
+			|| type_word_kind(&name.to_lowercase()).is_some()
+			|| is_function_keyword(name)
+			|| name == PRINT
+			|| BUILTIN_CALLS.contains(&name)
+			|| ROUNDING_FUNCTIONS.contains(&name)
+			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
+			|| crate::ffi::get_ffi_signature(name).is_some()
+	}
+
+	/// A call nothing resolves is an error value at the call; returns whether it was one
+	pub(super) fn reject_unresolved_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(name) = call_name(items, bracket, separator) else {
+			return false;
+		};
+		if self.resolves_call(name) {
+			return false;
+		}
+		let diagnostic = crate::diagnostic::Diagnostic::at(&items[0], format!("undefined function: {name}"));
+		self.emit_type_error(func, diagnostic.to_string());
+		true
+	}
+
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
@@ -51,6 +84,11 @@ impl WasmGcEmitter {
 					return;
 				}
 			}
+		}
+
+		if items.len() == 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
+			self.emit_print(func, &items[1]);
+			return;
 		}
 
 		// WASI calls: puts, puti, putl, putf, fd_write — their i64 result is boxed like any value
@@ -140,6 +178,10 @@ impl WasmGcEmitter {
 			}
 		}
 
+		if self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
+		}
+
 		// Check if this list contains type definitions
 		let has_type_def = items.iter().any(|item| matches!(item.drop_meta(), Node::Type { .. }));
 		if has_type_def {
@@ -177,7 +219,7 @@ impl WasmGcEmitter {
 	/// Returns true if the function was handled
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
-			// count, length: elements, or graphemes of a text; size: bytes
+			// count, length, size: elements, or graphemes of a text
 			self.emit_node_instructions(func, arg);
 			self.emit_call(func, counter);
 			self.emit_call(func, "new_int");
@@ -189,7 +231,10 @@ impl WasmGcEmitter {
 					literal @ Node::Number(_) => literal.kind(),
 					_ => self.get_type(arg),
 				};
-				let type_name = kind.to_string();
+				let type_name = match kind {
+					crate::type_kinds::Kind::List => crate::analyzer::list_type_name(arg, &self.scope),
+					_ => kind.to_string(),
+				};
 				let (ptr, len) = self.allocate_string(&type_name);
 				func.instruction(&Instruction::I32Const(ptr as i32));
 				func.instruction(&Instruction::I32Const(len as i32));

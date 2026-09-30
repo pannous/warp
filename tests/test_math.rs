@@ -75,7 +75,6 @@ fn test_variable_minus() {
 }
 
 #[test]
-#[ignore]
 fn test_hypen_versus_minus() {
 	test_variable_minus();
 	is!("a-b:2 c-d:4 a-b", 2); // kebab
@@ -105,25 +104,25 @@ fn test_modulo_with_variables() {
 
 // One of the few tests which can be removed because who will ever change the sin routine?
 #[test]
-#[ignore = "internal sinus implementation testing - sin/cos/pi not defined"]
 fn test_sin() {
-	use warp::eq;
+	const TOLERANCE: f64 = 1e-12;
+	macro_rules! near { ($actual:expr, $expected:expr) => { assert!(($actual - $expected).abs() < TOLERANCE, "{} != {}", $actual, $expected) }; }
 	use std::f64::consts::PI as pi;
 	fn sin(x: f64) -> f64 { x.sin() }
 	fn cos(x: f64) -> f64 { x.cos() }
-	eq!(sin(0.), 0.);
-	eq!(sin(pi / 2.), 1.);
-	eq!(sin(-pi / 2.), -1.);
-	eq!(sin(pi), 0.);
-	eq!(sin(2. * pi), 0.);
-	eq!(sin(3. * pi / 2.), -1.);
+	near!(sin(0.), 0.);
+	near!(sin(pi / 2.), 1.);
+	near!(sin(-pi / 2.), -1.);
+	near!(sin(pi), 0.);
+	near!(sin(2. * pi), 0.);
+	near!(sin(3. * pi / 2.), -1.);
 
-	eq!(cos(-pi / 2. + 0.), 0.);
-	eq!(cos(0.), 1.);
-	eq!(cos(-pi / 2. + pi), 0.);
-	eq!(cos(-pi / 2. + 2. * pi), 0.);
-	eq!(cos(pi), -1.);
-	eq!(cos(-pi), -1.);
+	near!(cos(-pi / 2. + 0.), 0.);
+	near!(cos(0.), 1.);
+	near!(cos(-pi / 2. + pi), 0.);
+	near!(cos(-pi / 2. + 2. * pi), 0.);
+	near!(cos(pi), -1.);
+	near!(cos(-pi), -1.);
 }
 
 #[test]
@@ -172,7 +171,6 @@ fn test_logarithm_in_runtime() {
 }
 
 #[test]
-#[ignore]
 fn test_sinus_wasp_import() {
 	// using sin.wasp, not sin.wasm
 	// todo: compile and reuse sin.wasm if unmodified
@@ -184,7 +182,6 @@ fn test_sinus_wasp_import() {
 }
 
 #[test]
-#[ignore]
 fn test_units() {
 	is!("1 m + 1km", 1001); // todo m
 }
