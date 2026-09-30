@@ -41,3 +41,25 @@ Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/t
   Not supported: nested tags.
 - Reverse prefers: own name, a well known short name (same in HTML and LaTeX, or the HTML name is the last word of the Unicode
   name: alpha), the block form (`<:fracture A>`), else the Unicode name.
+
+## Porting note: meta information (TAG sequences), done in Rust and Swift, open in lib/uniscript.wasp
+Reference: github.com/pannous/uniscript `src/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
+`tests/meta_test.rs`, Swift `Sources/Uniscript/Meta.swift`; spec wiki/uniscript.md "Meta information".
+- Data: copy `data/entities.wasp` and `data/entities.idx` from the uniscript repo. The index grows from 3 to 5 tables,
+  appended, so the existing `names_table`/`chars_table`/`suffixes_table` offsets stay valid: `fonts_table = 3`
+  (`han-japanese ` → "", `han-japanese lang` → ja, `… families`, `… features`), `meta_table = 4` (key → CSS template,
+  `{}` is the value; `lang` → "" means the HTML lang attribute). data/uniscript/uniscript_index.py needs the same
+  `FONTS`, `META` and `index_tables` changes (byte-identical builders).
+- Sequence: TAG characters U+E0020+ascii spell the text, CANCEL TAG U+E007F ends it. `<key value` opens a span,
+  `</key` closes the innermost open span of that key, `:key value` attaches to the character before it. key:
+  [a-z][a-z0-9-]*, value: one word of [A-Za-z0-9#.%+-_,()/], else `Error::InvalidMeta`.
+- Forward, in `tag()` after the entity lookup (entity names win: `<:angle>` ∠, `<:angle with s inside>` ⦞): while the
+  first word is a meta key take key + value; nothing left → open sequences; else convert the rest as a tag (fallback:
+  space separated tokens, names looked up, other text literal) and put the attached sequences after each character
+  and its marks/joiners/suffix TAGs. `<:/key>` with a meta key → close sequence, checked before the block closer.
+  `font` with a value that is no font style warns ("… used as a font family").
+- Reverse: a known open/close sequence → `<:key value>` / `<:/key>`; after a character first an emoji tag sequence
+  (only letters/digits before CANCEL: 🏴 gbsct) is copied unchanged, else the single-letter suffixes, then attached
+  sequences → `<:key value [effects] X>`. Unknown keys fall through to the character-by-character spelling.
+- HTML (`uniscript --html`): parse tagged text to plain text + nested runs (a close over later-opened spans closes and
+  reopens them), unknown keys and unmatched closes warn; font style → lang + font-family list + font-feature-settings.
