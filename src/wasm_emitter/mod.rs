@@ -2397,6 +2397,17 @@ impl WasmGcEmitter {
 							self.emit_type_error(func, message);
 							return;
 						}
+						if kind.is_ref() {
+							// a variable holding ø, a list or a text: the value lives in the local, a number is also the value of the assignment
+							self.emit_node_instructions(func, right);
+							func.instruction(&Instruction::LocalSet(position));
+							if self.get_type(right) == Kind::Int {
+								self.emit_numeric_value(func, left);
+							} else {
+								func.instruction(&Instruction::I64Const(0));
+							}
+							return;
+						}
 						self.emit_value_of_kind(func, right, kind);
 						func.instruction(&Instruction::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
