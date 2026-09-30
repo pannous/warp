@@ -35,7 +35,8 @@ Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/t
   `mirror`/`turn` round-trip: e + U+E004D stays that and never becomes ɘ.
 - Spaces inside `<:type …>` and inside `<:type> … <:/type>` separate operands and are dropped (spec "Spaces"); text outside tags is kept.
 - `<:greek> a b c <:/greek>` gives αβψ (Greek keyboard layout), the wiki example says α β ζ.
-- Not supported: two suffixes on one character from uniscript (`<:mirror red A>` mirrors r, e, d and A); nested tags.
-  Reverse spells a second suffix by its Unicode name (`<:tag-latin-small-letter-r>`), which still round-trips.
+- Effect words stack: in `<:mirror red A>` the last block word (red) takes the operands, the words before it add their
+  suffixes after each character: A U+E0072 U+E004D. Reverse spells suffixes s1 s2 as `<:s2 s1 X>`, so it round-trips.
+  Not supported: nested tags.
 - Reverse prefers: own name, a well known short name (same in HTML and LaTeX, or the HTML name is the last word of the Unicode
   name: alpha), the block form (`<:fracture A>`), else the Unicode name.

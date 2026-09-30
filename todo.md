@@ -4,5 +4,5 @@
 - `i<n {…}` without spaces lexes `<n` as a tag (`while i<n {i++}` → garbage); with spaces it works (seen writing lib/uniscript.wasp).
 - `global g = read("f")` → "undefined variable: read"; `global g = "abc"` used in a function → "cannot extract a numeric value"; `const` works.
 - A variable first assigned a one-character literal (`s="x"`) is a codepoint variable; `s = s + "ab"` is then a type error.
-- Uniscript: two suffix controls on one character (`<:mirror red A>`) are not expressible; nested tags are not supported.
+- DONE: Uniscript: two suffix controls on one character (`<:mirror red A>`) are not expressible; nested tags are not supported. (effect words stack now; nested tags still open)
 - tests/test_wasm.rs `test_string_concat_wasm` passes now but is still `#[ignore]`.

@@ -94,22 +94,38 @@ hyphenated(name:text) := {
 
 // ---- uniscript → Unicode ---------------------------------------------------------------------------------------
 
-// one character in a block: its own entry (greek a → α), else followed by the block's suffix for its script or any character
-styled(block:text, character:text) := {
-	own = find(names_table, block + " " + character)
-	if own >= 0 { return value_of(own) }
+// the control a block puts after a character of its script or after any character, "" for none
+suffix_of(block:text, character:text) := {
 	script = script_of(character)
 	suffix = -1
 	if script.bytes > 0 { suffix = find(names_table, block + " *suffix " + script) }
 	if suffix < 0 { suffix = find(names_table, block + " *suffix") }
-	if suffix >= 0 { return character + value_of(suffix) }
-	character
+	if suffix >= 0 { value_of(suffix) } else { "" }
+}
+
+// the suffixes of the stacked effect words ("mirror " in <:mirror red A>) for one character
+effect_suffixes(effects:text, character:text) := {
+	out = ""
+	i = 0
+	while i < effects.bytes {
+		end = offset_of(effects, 32, i)
+		out += suffix_of(byte_slice(effects, i, end), character)
+		i = end + 1
+	}
+	out
+}
+
+// one character in a block: its own entry (greek a → α), else followed by the block's suffix; then the stacked effects
+styled(block:text, character:text, effects:text) := {
+	own = find(names_table, block + " " + character)
+	if own >= 0 { return value_of(own) + effect_suffixes(effects, character) }
+	character + suffix_of(block, character) + effect_suffixes(effects, character)
 }
 
 // one operand in a block: its own entry (red circle → 🔴), else each character of the operand, or of the entity it names
-operand(block:text, token:text) := {
+operand(block:text, token:text, effects:text) := {
 	own = find(names_table, block + " " + token)
-	if own >= 0 { return value_of(own) }
+	if own >= 0 { return value_of(own) + effect_suffixes(effects, value_of(own)) }
 	characters = token
 	named = find(names_table, token)
 	if named >= 0 and token.bytes > 1 { characters = value_of(named) }
@@ -117,14 +133,14 @@ operand(block:text, token:text) := {
 	i = 0
 	while i < characters.bytes {
 		width = utf8_width(byte_at(characters, i))
-		out += styled(block, byte_slice(characters, i, i + width))
+		out += styled(block, byte_slice(characters, i, i + width), effects)
 		i += width
 	}
 	out
 }
 
 // the space separated operands of a block, spaces dropped; groups get their prefix before and infix between the parts
-operands(block:text, content:text) := {
+operands(block:text, content:text, effects:text) := {
 	out = ""
 	script = ""
 	parts = 0
@@ -132,7 +148,7 @@ operands(block:text, content:text) := {
 	while i < content.bytes {
 		if byte_at(content, i) == 32 { i++ } else {
 			end = offset_of(content, 32, i)
-			part = operand(block, byte_slice(content, i, end))
+			part = operand(block, byte_slice(content, i, end), effects)
 			if parts == 0 {
 				script = script_of(part)
 				out += entry(block + " *prefix " + script)
@@ -158,7 +174,19 @@ tag(content:text) := {
 	if space == content.bytes { space = offset_of(content, 45, 0) }
 	if space < content.bytes {
 		block = byte_slice(content, 0, space)
-		if is_block(block) { return operands(block, byte_slice(content, space + 1, content.bytes)) }
+		if is_block(block) {
+			// <:mirror red A>: effect words stack, the last one takes the operands, the others add their suffixes
+			effects = ""
+			rest = byte_slice(content, space + 1, content.bytes)
+			next = offset_of(rest, 32, 0)
+			while next < rest.bytes and is_block(byte_slice(rest, 0, next)) {
+				effects += block + " "
+				block = byte_slice(rest, 0, next)
+				rest = byte_slice(rest, next + 1, rest.bytes)
+				next = offset_of(rest, 32, 0)
+			}
+			return operands(block, rest, effects)
+		}
 	}
 	error("unknown uniscript entity: " + content)
 }
@@ -182,7 +210,7 @@ uniscript(source:text) := {
 		next = next_marker(source, i)
 		if next > i {
 			run = byte_slice(source, i, next)
-			if block.bytes > 0 { out += operands(block, run) } else { out += run }
+			if block.bytes > 0 { out += operands(block, run, "") } else { out += run }
 			i = next
 		} else {
 			if byte_at(source, i) == 92 {
@@ -210,20 +238,19 @@ uniscript(source:text) := {
 
 // ---- Unicode → uniscript ---------------------------------------------------------------------------------------
 
-// "<:alpha>" → "alpha"; a block form "<:fracture A>" is no name
-name_in(form:text) := if offset_of(form, 32, 0) == form.bytes { byte_slice(form, 2, form.bytes - 1) } else { "" }
-
-// one character, and the block type of the suffix control after it ("" for none)
-spelled(character:text, block:text) := {
+// one character, and the block types of the suffix controls after it ("" for none): <:mirror red A>, <:mirror red circle>
+spelled(character:text, blocks:text) := {
 	own = find(chars_table, character)
-	if block.bytes == 0 {
+	if blocks.bytes == 0 {
 		if own >= 0 { return value_of(own) }
 		return character
 	}
-	name = ""
-	if own >= 0 { name = name_in(value_of(own)) }
-	if name.bytes == 0 { name = character }
-	"<:" + block + " " + name + ">"
+	inner = character
+	if own >= 0 {
+		form = value_of(own)
+		inner = byte_slice(form, 2, form.bytes - 1)
+	}
+	"<:" + blocks + " " + inner + ">"
 }
 
 unicode_to_uniscript(text:text) := {
@@ -238,16 +265,19 @@ unicode_to_uniscript(text:text) := {
 			width = utf8_width(b)
 			character = byte_slice(text, i, i + width)
 			i += width
-			block = ""
-			if i < text.bytes {
+			// suffixes s1 s2 … are spelled "s2 … s1": the last word styles first, the others follow in order
+			first = ""
+			others = ""
+			suffix = 0
+			while suffix >= 0 and i < text.bytes {
 				next = utf8_width(byte_at(text, i))
 				suffix = find(suffixes_table, byte_slice(text, i, i + next))
 				if suffix >= 0 {
-					block = value_of(suffix)
+					if first.bytes == 0 { first = value_of(suffix) } else { others += value_of(suffix) + " " }
 					i += next
 				}
 			}
-			out += spelled(character, block)
+			out += spelled(character, others + first)
 		}
 	}
 	out

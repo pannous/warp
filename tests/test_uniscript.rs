@@ -45,6 +45,16 @@ fn colors_and_geometry_are_suffix_controls() {
 }
 
 #[test]
+fn effect_words_stack_on_one_operand() {
+	// fonts/README.md: one geometry and one color combine in either order
+	converts("<:mirror red A>", "A\u{E0072}\u{E004D}");
+	converts("<:red mirror A>", "A\u{E004D}\u{E0072}");
+	converts("<:mirror red A b>", "A\u{E0072}\u{E004D}b\u{E0072}\u{E004D}");
+	converts("<:mirror red circle>", "🔴\u{E004D}");
+	spells("A\u{E0072}\u{E004D} 🔴\u{E004D}", "<:mirror red A> <:mirror red circle>");
+}
+
+#[test]
 fn groups_join_hieroglyphs_and_compose_ideographs() {
 	converts("<:above 𓀀 𓁐>", "𓀀\u{13430}𓁐");
 	converts("<:beside 犭 句>", "⿰犭句");
