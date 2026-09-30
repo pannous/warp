@@ -98,3 +98,6 @@ D16 overflow contradict Decided rules). Found while implementing:
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
 36. Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
+37. First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
+    not a funcref table: functions chosen at run time and capturing lambdas remain loud errors. A table needs one
+    uniform (boxed) signature. Enough for now?
