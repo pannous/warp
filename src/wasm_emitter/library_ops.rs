@@ -15,6 +15,8 @@ const ASCII_CASE_OFFSET: i32 = 32;
 /// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;
+const CURLY_BRACKET_INFO: i64 = 0;
+const KEY_KIND: i64 = Kind::Key as i64;
 /// An i64 has at most 19 digits, plus the sign
 const MAX_INT_BYTES: i32 = 20;
 const DECIMAL_BASE: i64 = 10;
@@ -23,7 +25,8 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 6] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 7] = [
+	("field_with", "field_with"),
 	("reverse", "list_reverse"),
 	("sort", "list_sort"),
 	("upper", "text_upper"),
@@ -352,6 +355,67 @@ impl WasmGcEmitter {
 			end_loop(f);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 			s.call(f, "new_text");
+		});
+	}
+
+	/// field_with(object, name, value): a copy of the object with the field `name` set to `value`, added at the end when it is
+	/// new (value semantics: the object itself never changes). A one-entry object `{a:1}` is the entry node itself.
+	pub(super) fn emit_field_with(&mut self) {
+		if !self.should_emit_function("field_with") {
+			return;
+		}
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+		let curly_list = (CURLY_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
+		let colon = crate::operators::op_to_code(&crate::operators::Op::Colon);
+
+		// replace_entry(cells, name, entry): the cells with the entry of that name replaced, or `entry` added at the end
+		let replace_entry = next_index(self);
+		self.runtime_function("map_replace_entry", vec![nullable, node_ref, node_ref], vec![node_ref], vec![nullable], |s, f| {
+			let (cells, name, entry, head) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::I64Const(curly_list), I::LocalGet(entry)]);
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
+			s.emit_field(f, cells, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head), I::LocalGet(head), I::RefAsNonNull, I::LocalGet(name)]);
+			s.call(f, "map_entry_has_key");
+			f.instruction(&I::If(BlockType::Result(node_ref)));
+			s.emit_field(f, cells, 0);
+			Self::emit_list(f, &[I::LocalGet(entry)]);
+			s.emit_field(f, cells, 2);
+			f.instruction(&I::StructNew(node_type));
+			f.instruction(&I::Else);
+			s.emit_field(f, cells, 0);
+			s.emit_field(f, cells, 1);
+			s.emit_field(f, cells, 2);
+			Self::emit_list(f, &[I::LocalGet(name), I::LocalGet(entry), I::Call(replace_entry), I::StructNew(node_type), I::End]);
+		});
+		assert_eq!(self.func_index("map_replace_entry"), replace_entry, "recursive call index");
+
+		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64], |s, f| {
+			let (entry, kind) = (3, 4);
+			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
+			// the entry `name:value`, with the name as a symbol like the names of an object literal
+			s.emit_text_field(f, 1, 0);
+			s.emit_text_field(f, 1, 1);
+			s.call(f, "new_symbol");
+			Self::emit_list(f, &[I::LocalGet(2), I::I64Const(colon)]);
+			s.call(f, "new_key");
+			f.instruction(&I::LocalSet(entry));
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
+			// a single entry: replaced when it has the name, else the two entries as an object
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "map_entry_has_key");
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(entry), I::RefAsNonNull, I::Else, I::LocalGet(0), I::LocalGet(entry), I::RefNull(HeapType::Concrete(node_type))]);
+			Self::emit_list(f, &[I::I64Const(0)]);
+			s.call(f, "new_list");
+			Self::emit_list(f, &[I::I64Const(0)]);
+			s.call(f, "new_list");
+			Self::emit_list(f, &[I::End, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty)]);
+			s.call(f, "not_an_object");
+			Self::emit_list(f, &[I::End, I::LocalGet(0), I::LocalGet(1), I::LocalGet(entry), I::RefAsNonNull, I::Call(replace_entry)]);
 		});
 	}
 }

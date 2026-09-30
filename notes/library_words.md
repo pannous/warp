@@ -40,3 +40,15 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
 - The possessive is a parser rule: an identifier directly followed by `'s ` and an identifier (`p's name`).
 - Not done: `a in {a:1 b:2}` (the word `in` has no meaning yet), assignment to a field (row 8).
 - Quirk found: `{a:1}.length` counts 2 (the single entry is the Key node itself, counted as a pair), `{a:1 b:2}.length` is 2.
+
+## Field assignment and `?.`
+
+- `p.a = v` and `p["a"] = v` lower to `p = field_with(p, "a", v)`; `p.b.c = 4` to `p = field_with(p, "b", field_with(p.b, "c", 4))`.
+  `field_with` (runtime function, also callable) copies the object: value semantics, `q=p; p.a=9; q.a` stays. A new name is added
+  at the end. Only a variable that is an object (assigned an object literal, or another such variable) can be assigned to; any
+  other target is `undefined function: a` at the lowering.
+- `a?.name` is `(t=a; if t == ø then ø else t.name)` (`Op::SafeDot`, lexed only before a letter, so `x ?.5 : 1` stays a ternary);
+  on a non-ø receiver that is no object the miss is `no field name`. `y = x?.a` with a ø result into a variable still fails
+  ("cannot extract a numeric value from ø"): a variable cannot hold the ø of an if-branch yet.
+- `count {a:1}` and `{a:1}.length` are 1: a key:value node counts as one item.
+- Nested objects are square lists in memory and print as `{a:1 b:[c:3]}` (existing: emit_default_key converts the inner braces).

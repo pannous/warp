@@ -28,7 +28,10 @@ const SYNONYMS: [(&str, &[&str]); 8] = [
 const SUM: &str = "sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 6] = [("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2)];
+pub const RUNTIME_WORDS: [(&str, usize); 7] =
+	[("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), (FIELD_WITH, 3)];
+/// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
+pub const FIELD_WITH: &str = "field_with";
 
 /// Source of the words expanded here; `word_argument` is the receiver, `word_tmp` a temporary that holds it once
 const EXPANDED_WORDS: [(&str, &str); 3] = [
@@ -37,6 +40,7 @@ const EXPANDED_WORDS: [(&str, &str); 3] = [
 	(SUM, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
 ];
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
+const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
 pub fn is_runtime_word(name: &str) -> bool {
@@ -112,7 +116,11 @@ fn collect_assigned_objects(node: &Node, objects: &mut HashMap<String, Option<No
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {
-				let literal = object_entries(value).map(|_| value.as_ref().clone());
+				let copied = match value.drop_meta() {
+					Node::Symbol(other) => objects.get(other).cloned().flatten(), // `q=p` is the same object
+					_ => None,
+				};
+				let literal = copied.or_else(|| object_entries(value).map(|_| value.as_ref().clone()));
 				let both_objects = literal.is_some() && objects.get(name).is_none_or(|earlier| earlier.is_some());
 				objects.insert(name.clone(), if both_objects { literal } else { None });
 			}
@@ -161,6 +169,14 @@ impl Lowering {
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
+			}
+			Node::Key(left, Op::Assign, right) => {
+				let (left, right) = (self.expand(*left), self.expand(*right));
+				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
+			}
+			Node::Key(left, Op::SafeDot, right) => {
+				let (receiver, word) = (self.expand(*left), *right);
+				self.safe_lookup(receiver, word)
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
@@ -237,6 +253,36 @@ impl Lowering {
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		(!is_known && is_value).then(|| Diagnostic::at(word_node, format!("undefined function: {name}")).into_error())
+	}
+
+	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way
+	/// (`p.b.c = 4` is `p = field_with(p, "b", field_with(p.b, "c", 4))`)
+	fn field_assignment(&self, target: &Node, value: &Node) -> Option<Node> {
+		let Node::Key(base, Op::Hash, index) = target.drop_meta() else { return None };
+		let name = match crate::wasp_parser::subscript_key(index)?.drop_meta() {
+			Node::Text(name) => name.clone(),
+			Node::Char(letter) => letter.to_string(),
+			_ => return None,
+		};
+		let updated = Node::List(vec![Node::Symbol(FIELD_WITH.to_string()), base.as_ref().clone(), Node::Text(name), value.clone()], Bracket::Round, Separator::None);
+		match base.drop_meta() {
+			Node::Symbol(_) => Some(Node::Key(base.clone(), Op::Assign, Box::new(updated))),
+			_ if is_field_lookup(base) => self.field_assignment(base, &updated),
+			_ => None,
+		}
+	}
+
+	/// `receiver?.name`: ø when the receiver is ø, else the field
+	fn safe_lookup(&self, receiver: Node, word: Node) -> Node {
+		let Node::Symbol(name) = word.drop_meta() else {
+			return Diagnostic::at(&word, "?. needs a field name after it").into_error();
+		};
+		let number = self.temporaries.get();
+		self.temporaries.set(number + 1);
+		let temporary = format!("safe_tmp_{number}");
+		let program = parse(&format!("({temporary}={RECEIVER_PLACEHOLDER}; if {temporary} == ø then ø else {LOOKUP_PLACEHOLDER})"));
+		let lookup = field_lookup(&Node::Symbol(temporary), name, &word);
+		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
 	}
 
 	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object

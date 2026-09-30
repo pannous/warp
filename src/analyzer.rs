@@ -2058,6 +2058,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				return;
 			}
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
+				if fn_name == crate::library_words::FIELD_WITH {
+					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
+				}
 				if ctx.ffi_imports.contains_key(fn_name.as_str()) {
 					for item in items.iter().skip(1) {
 						analyze_required_functions(ctx, item);
