@@ -12,8 +12,8 @@ cd web/uniscript && python3 -m http.server 8765   # local
 ```
 
 https://pannous.com/uniscript/rust/ is the uniscript repository's second page (its `docs/demo.html`, the Rust crate compiled
-to WebAssembly, deployed by its `docs/make_demo.sh deploy`). The two pages link to each other; the rsync of `deploy` excludes
-`/rust/` so `--delete` keeps it, and that page loads its fonts from this page's `fonts/`.
+to WebAssembly, deployed by its `docs/make_demo.sh deploy`). The two pages link to each other, and that page loads its fonts
+from this page's `fonts/`. No deploy script into /var/www/pannous uses `rsync --delete`: one wiped the other's files.
 
 Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `data/` (a copy of the
 3.4 MB index) and `fonts/` (woff2 of UniscriptSans, UniscriptCJK, NewGardinerOmni2d4, all OFL; from `fonts/dist` or
@@ -21,7 +21,7 @@ Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not commi
 
 ## How the JS host works (`uniscript.js`)
 
-- The module's `main` is its init: it calls `host.read("data/uniscript/entities.idx")` synchronously. Host calls are
+- The module's `main` is its init: it calls `host.read("packages/uniscript/data/entities.idx")` synchronously. Host calls are
   synchronous, so the page fetches the index before instantiating; any other path falls back to a synchronous XHR
   (charset `x-user-defined` keeps the bytes).
 - Imports come from `WebAssembly.Module.imports()`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real

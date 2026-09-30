@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds web/uniscript: lib/uniscript.wasp compiled to uniscript.wasm by warp, the entity index, and the OFL fonts as woff2.
+# Builds web/uniscript: lib/uniscript.wasp compiled to uniscript.wasm by warp, the entity index of the uniscript package, and the OFL fonts as woff2.
 # Usage: web/uniscript/build.sh [deploy]   (deploy: copy the page to the server afterwards)
 set -euo pipefail
 
@@ -17,8 +17,8 @@ cargo build --offline --bin warp
 "${CARGO_TARGET_DIR:-target}/debug/warp" compile lib/uniscript.wasp
 mv lib/uniscript.wasm "$page/uniscript.wasm"
 
-mkdir -p "$page/data/uniscript" "$page/fonts"
-cp data/uniscript/entities.idx "$page/data/uniscript/"
+mkdir -p "$page/packages/uniscript/data" "$page/fonts"
+cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile: lib/uniscript.wasp uses package uniscript
 
 find_font() {
 	for directory in $FONT_DIRS; do
@@ -38,6 +38,6 @@ done
 
 if [ "${1:-}" = "deploy" ]; then
 	ssh "$SERVER" "mkdir -p $SERVER_DIR"
-	# rust/ is the uniscript repository's demo (its docs/make_demo.sh deploy), not part of this page
-	rsync -av --delete --exclude build.sh --exclude .gitignore --exclude /rust/ "$page/" "$SERVER:$SERVER_DIR/"
+	# no --delete: the directory also holds rust/, the uniscript repository's demo (its docs/make_demo.sh deploy)
+	rsync -av --exclude build.sh --exclude .gitignore "$page/" "$SERVER:$SERVER_DIR/"
 fi
