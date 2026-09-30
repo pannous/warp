@@ -226,6 +226,16 @@ fn test_function_definition() {
 }
 
 #[test]
+fn test_function_hint_quotes_the_body_form_actually_written() {
+	expect_hint("def f(x){x*2}", "def f(x) { ... }", "f(x) := ...", "1:1");
+	expect_hint("def f(x) { x*2 }", "def f(x) { ... }", "f(x) := ...", "1:1");
+	expect_hint("fn f(x): x*2", "fn f(x): ...", "f(x) := ...", "1:1");
+	expect_hint("function f(x) = x*2", "function f(x) = ...", "f(x) := ...", "1:1");
+	let style = Style { function_def: FunctionStyle::Function, ..Style::default() };
+	expect_styled_hint(style, "def f(x): x*2", "def f(x): ...", "function f(x) { ... }", "1:1");
+}
+
+#[test]
 fn test_function_definition_def_style() {
 	let style = Style { function_def: FunctionStyle::Def, ..Style::default() };
 	expect_styled_hint(style.clone(), "f(x) := x*2", "f(x) := ...", "def f(x): ...", "1:1");

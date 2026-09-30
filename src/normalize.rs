@@ -118,6 +118,17 @@ pub enum FunctionStyle {
     Define,
 }
 
+/// How the body of a function definition was written after its signature
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BodyForm {
+    /// `def f(x): x*2`
+    Colon,
+    /// `fn f(x) = x*2`
+    Assign,
+    /// `def f(x) { x*2 }`
+    Block,
+}
+
 /// Preferred style for variable definitions
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VarStyle {
@@ -493,7 +504,7 @@ pub mod hints {
     }
 
     /// Function definition keywords
-    pub fn function_keyword(used: &str, name: &str, params: &str) {
+    pub fn function_keyword(used: &str, name: &str, params: &str, written_body: BodyForm) {
         let preferred = style().function_def;
         let used_style = match used {
             "def" => FunctionStyle::Def,
@@ -504,13 +515,25 @@ pub mod hints {
             ":=" => FunctionStyle::ColonEquals,
             _ => return,
         };
-        let spell = |function_style: FunctionStyle| match function_style {
-            FunctionStyle::ColonEquals => format!("{name}({params}) := ..."),
-            FunctionStyle::Def => format!("def {name}({params}): ..."),
-            FunctionStyle::Define => format!("define {name}({params}): ..."),
-            FunctionStyle::Fn => format!("fn {name}({params}) = ..."),
-            FunctionStyle::Fun => format!("fun {name}({params}) = ..."),
-            FunctionStyle::Function => format!("function {name}({params}) {{ ... }}"),
+        let spell = |function_style: FunctionStyle, body: BodyForm| {
+            let body_text = match body {
+                BodyForm::Colon => ": ...",
+                BodyForm::Assign => " = ...",
+                BodyForm::Block => " { ... }",
+            };
+            match function_style {
+                FunctionStyle::ColonEquals => format!("{name}({params}) := ..."),
+                FunctionStyle::Def => format!("def {name}({params}){body_text}"),
+                FunctionStyle::Define => format!("define {name}({params}){body_text}"),
+                FunctionStyle::Fn => format!("fn {name}({params}){body_text}"),
+                FunctionStyle::Fun => format!("fun {name}({params}){body_text}"),
+                FunctionStyle::Function => format!("function {name}({params}){body_text}"),
+            }
+        };
+        let conventional_body = |function_style: FunctionStyle| match function_style {
+            FunctionStyle::Def | FunctionStyle::Define => BodyForm::Colon,
+            FunctionStyle::Fn | FunctionStyle::Fun | FunctionStyle::ColonEquals => BodyForm::Assign,
+            FunctionStyle::Function => BodyForm::Block,
         };
         let reason = match preferred {
             FunctionStyle::ColonEquals => "short := form preferred",
@@ -521,7 +544,7 @@ pub mod hints {
             FunctionStyle::Function => "'function' keyword preferred",
         };
         if used_style != preferred {
-            hint(&spell(used_style), &spell(preferred), reason);
+            hint(&spell(used_style, written_body), &spell(preferred, conventional_body(preferred)), reason);
         }
     }
 
@@ -579,13 +602,18 @@ const LIST_TYPE_HEAD: &str = "list";
 const OF_WORD: &str = "of";
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
-/// Source text of an operand for a hint: texts in the canonical quote
+/// The quote character of the canonical string style
+pub fn text_quote() -> char {
+    match style().quotes {
+        QuoteStyle::Single => '\'',
+        QuoteStyle::Double => '"',
+    }
+}
+
+/// Source text of an operand for a hint
 pub fn operand_text(node: &Node) -> String {
     match node.drop_meta() {
-        Node::Text(text) => {
-            let quote = if style().quotes == QuoteStyle::Double { '"' } else { '\'' };
-            format!("{quote}{text}{quote}")
-        }
+        Node::Text(text) => format!("{0}{text}{0}", text_quote()),
         other => other.serialize(),
     }
 }
@@ -650,16 +678,17 @@ fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 }
 
 /// The name and parameter list of a definition after its keyword: `def (f x):…`, `fn (f x)=…`, `function ((f (x)) {…})`
-fn signature_of(definition: &Node) -> Option<(String, String)> {
-    let signature = match definition.drop_meta() {
-        Node::Key(signature, _, _) => signature.as_ref(),
-        Node::List(parts, _, _) => parts.first()?,
+fn signature_of(definition: &Node) -> Option<(String, String, BodyForm)> {
+    let (signature, body_form) = match definition.drop_meta() {
+        Node::Key(signature, Op::Colon, _) => (signature.as_ref(), BodyForm::Colon),
+        Node::Key(signature, _, _) => (signature.as_ref(), BodyForm::Assign),
+        Node::List(parts, _, _) => (parts.first()?, BodyForm::Block),
         _ => return None,
     };
     let Node::List(words, _, _) = signature.drop_meta() else { return None };
     let (name, parameters) = words.split_first()?;
     let parameters: Vec<String> = parameters.iter().map(|parameter| parameter.serialize().trim_matches(|c| c == '(' || c == ')').to_string()).collect();
-    Some((word_of(name)?.to_string(), parameters.join(", ")))
+    Some((word_of(name)?.to_string(), parameters.join(", "), body_form))
 }
 
 /// Emit the hints for every non-canonical form in the parsed program that the parser cannot see while reading characters
@@ -687,9 +716,9 @@ pub fn check_style(program: &Node) {
             hints::var_keyword(":=",&operand_text(target), &operand_text(value));
         }
         Node::Key(_, Op::Define, _) => {
-            if let Some((name, parameters)) = signature_of(node) {
+            if let Some((name, parameters, _)) = signature_of(node) {
                 set_position_of(positioned);
-                hints::function_keyword(":=", &name, &parameters);
+                hints::function_keyword(":=", &name, &parameters, BodyForm::Assign);
             }
         }
         Node::Key(target, Op::Dot, call) => {
@@ -719,8 +748,8 @@ fn check_items(items: &[Node], positioned: &Node) {
             }
         }
         (word, [definition, ..]) if crate::operators::is_function_keyword(word) => {
-            if let Some((name, parameters)) = signature_of(definition) {
-                hints::function_keyword(word, &name, &parameters);
+            if let Some((name, parameters, body_form)) = signature_of(definition) {
+                hints::function_keyword(word, &name, &parameters, body_form);
             }
         }
         (type_word, [argument]) if crate::analyzer::type_word_kind(&type_word.to_lowercase()).is_some() => {
