@@ -230,6 +230,9 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 # Important
 Don't cargo clean unless absolutely necessary!
 
+The /probes/ folder is NOT a place to doublicate worktrees!
+put them into /worktrees/ or work On the same branch for small changes 
+
 Before and after each task run git status and ./test.sh to ensure we are in a clean state and all tests pass.
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back
@@ -243,3 +246,7 @@ nothing to commit
 use `cargo fix` after each commit and commit again
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
+un-ignore everything once it passes 
+
+Add [profile.dev] debug = "line-tables-only" and incremental = false for probe builds!!
+Never create a local target/ or *_target dir. Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). Remove worktrees when done.
