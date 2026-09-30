@@ -49,6 +49,7 @@ pub mod type_tests;
 pub mod min_max;
 pub mod switch;
 pub mod phrase_words;
+pub mod declarations;
 pub mod modules;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 

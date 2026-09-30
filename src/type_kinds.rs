@@ -132,6 +132,22 @@ pub struct TypeDef {
 	pub wasm_type_idx: Option<u32>, // WASM GC type index when emitted
 }
 
+const OPTIONAL_SUFFIX: char = '?';
+pub const UNTYPED_FIELD: &str = "any";
+
+impl FieldDef {
+	/// A field written as a bare word, `name`, optional as `email?`
+	pub fn untyped(word: &str) -> FieldDef {
+		let type_name = if word.ends_with(OPTIONAL_SUFFIX) { format!("{UNTYPED_FIELD}{OPTIONAL_SUFFIX}") } else { UNTYPED_FIELD.to_string() };
+		FieldDef { name: word.trim_end_matches(OPTIONAL_SUFFIX).to_string(), type_name }
+	}
+
+	/// A field declared `email?` or `x:int?` may be left out of the constructor call (it is then ø)
+	pub fn is_optional(&self) -> bool {
+		self.type_name.ends_with(OPTIONAL_SUFFIX)
+	}
+}
+
 impl TypeDef {
 	/// Extract TypeDef from a parsed class definition Node
 	/// Expected structure: Type { name: Symbol("Person"), body: List([Key(name, :, Type), ...]) }
@@ -173,6 +189,8 @@ impl TypeDef {
 					other => other.to_string(),
 				};
 				fields.push(FieldDef { name: field_name, type_name });
+			} else if let Node::Symbol(word) = item.drop_meta() {
+				fields.push(FieldDef::untyped(word));
 			}
 		}
 		fields
@@ -359,6 +377,7 @@ impl TypeRegistry {
 				};
 				Some(FieldDef { name, type_name })
 			}
+			Node::Symbol(word) => Some(FieldDef::untyped(word)),
 			_ => None,
 		}
 	}
@@ -394,6 +413,10 @@ pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValTy
 			heap_type: HeapType::Concrete(emitter.type_manager.string_type),
 		}),
 		"Node" => Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(emitter.type_manager.node_type),
+		}),
+		other if other.trim_end_matches(OPTIONAL_SUFFIX) == UNTYPED_FIELD => Ref(RefType {
 			nullable: true,
 			heap_type: HeapType::Concrete(emitter.type_manager.node_type),
 		}),
