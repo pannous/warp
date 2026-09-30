@@ -86,6 +86,14 @@ impl ParserOptions {
 	}
 }
 
+/// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
+fn names_a_type(word: &str) -> bool {
+	word.chars().next().is_some_and(char::is_uppercase)
+		|| crate::analyzer::type_word_kind(&word.to_lowercase()).is_some()
+		|| crate::analyzer::plural_element_type(word).is_some()
+		|| GENERIC_TYPE_HEADS.contains(&word)
+}
+
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
@@ -1074,9 +1082,9 @@ impl WaspParser {
 				self.advance_by(length);
 				Symbol(type_application_name(&symbol, &arguments))
 			}
-			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' => {
-				// Only treat as generic if immediately after symbol (no space)
-				// and NOT followed by a number (that would be comparison: i<9)
+			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' && names_a_type(&symbol) => {
+				// Only treat as generic if immediately after a type name (no space)
+				// and NOT followed by a number (that would be comparison: i<9); `it<k` and `a<b` compare
 				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}
