@@ -178,31 +178,37 @@ operand(block:text, token:text, effects:text, at) := {
 	out
 }
 
-// an operand that is one letter of the block: one character, its own entry (greek th, greek eta) or an entity name
-is_letter(block:text, token:text) := utf8_width(byte_at(token, 0)) == token.bytes or find(names_table, block + " " + token) >= 0 or find(names_table, token) >= 0
+// whitespace, which a full block keeps as written
+is_space(b) := b == 32 or b == 9 or b == 10 or b == 13
 
-// the space separated operands of a block; spaces between letters only separate them, spaces next to a word stay;
-// a group (above, beside) joins its parts unstyled with the prefix before or the infix between them that the script of
-// the first part has
+// the text inside a full block (<:greek> filosofia kosmos<:/greek>) as written: its whitespace stays, each word is an
+// operand; a group block joins its parts
+block_text(block:text, text:text, at) := {
+	if find(names_table, block + " *group") >= 0 { return operands(block, text, "", at) }
+	out = ""
+	i = 0
+	while i < text.bytes {
+		end = i
+		while end < text.bytes and not is_space(byte_at(text, end)) { end++ }
+		if end > i { out += operand(block, byte_slice(text, i, end), "", at) }
+		if end < text.bytes { out += byte_slice(text, end, end + 1) }
+		i = end + 1
+	}
+	out
+}
+
+// the space separated operands of an inline tag, spaces dropped; a group (above, beside) joins its parts unstyled with the
+// prefix before or the infix between them that the script of the first part has
 operands(block:text, content:text, effects:text, at) := {
 	out = ""
 	script = ""
 	parts = 0
-	spaces = 0
-	previous_is_letter = true
 	group = find(names_table, block + " *group") >= 0
 	i = 0
 	while i < content.bytes {
-		if byte_at(content, i) == 32 {
-			spaces++
-			i++
-		} else {
+		if byte_at(content, i) == 32 { i++ } else {
 			end = offset_of(content, 32, i)
 			token = byte_slice(content, i, end)
-			letter = is_letter(block, token)
-			if not group and parts > 0 and not (previous_is_letter and letter) { out += byte_slice(content, i - spaces, i) }
-			spaces = 0
-			previous_is_letter = letter
 			part = token
 			named = find(names_table, token)
 			if group and named >= 0 and token.bytes > 1 { part = value_of(named) }
@@ -293,7 +299,7 @@ uniscript(source:text) := {
 		next = next_marker(source, i)
 		if next > i {
 			run = byte_slice(source, i, next)
-			if block.bytes > 0 { out += operands(block, run, "", i) } else { out += run }
+			if block.bytes > 0 { out += block_text(block, run, i) } else { out += run }
 			i = next
 		} else {
 			if byte_at(source, i) == 92 {
