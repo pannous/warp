@@ -1,0 +1,254 @@
+// Uniscript (wiki/uniscript.md): ASCII names for Unicode text, and back
+//   uniscript("<:alpha> <:fracture A> \:infinity")  →  "α 𝔄 ∞"
+//   unicode_to_uniscript("α 𝔄 ∞")                  →  "<:alpha> <:fracture A> <:infinity>"
+// Names and block types live in data/uniscript/entities.wasp; this reads its binary index entities.idx,
+// whose format data/uniscript/README.md documents: tables of 20-byte records sorted by a hash of the key.
+
+const uniscript_index = read("data/uniscript/entities.idx")
+const names_table = 0     // name → text, block entries as "block operand"
+const chars_table = 1     // text → its uniscript
+const suffixes_table = 2  // suffix control → block type
+const record_size = 20
+const hash_multiplier = 31
+const hash_modulus = 4294967296
+
+// ---- the index -------------------------------------------------------------------------------------------------
+
+u32(offset) := byte_at(uniscript_index, offset) + 256 * byte_at(uniscript_index, offset + 1) + 65536 * byte_at(uniscript_index, offset + 2) + 16777216 * byte_at(uniscript_index, offset + 3)
+
+text_hash(key:text) := {
+	hash = 0
+	i = 0
+	while i < key.bytes {
+		hash = (hash * hash_multiplier + byte_at(key, i)) % hash_modulus
+		i++
+	}
+	hash
+}
+
+// the record of key in table, or -1: binary search for the first record of its hash, then compare the keys
+find(table, key:text) := {
+	wanted = text_hash(key)
+	first = u32(8 + 8 * table)
+	count = u32(12 + 8 * table)
+	low = 0
+	high = count
+	while low < high {
+		middle = (low + high) >> 1
+		if u32(first + middle * record_size) < wanted { low = middle + 1 } else { high = middle }
+	}
+	found = -1
+	while found < 0 and low < count and u32(first + low * record_size) == wanted {
+		record = first + low * record_size
+		if byte_slice(uniscript_index, u32(record + 4), u32(record + 4) + u32(record + 8)) == key { found = record }
+		low++
+	}
+	found
+}
+
+value_of(record) := byte_slice(uniscript_index, u32(record + 12), u32(record + 12) + u32(record + 16))
+
+// the text of an entry, "" when there is none
+entry(key:text) := {
+	record = find(names_table, key)
+	if record >= 0 { value_of(record) } else { "" }
+}
+
+is_block(name:text) := find(names_table, name + " ") >= 0
+
+// ---- characters ----------------------------------------------------------------------------------------------
+
+utf8_width(lead) := if lead < 128 {1} else { if lead < 224 {2} else { if lead < 240 {3} else {4} } }
+
+// the script a character needs its own controls for: hieroglyphs (U+13000…) and CJK ideographs (U+2E80…U+9FFF, U+20000…)
+script_of(character:text) := {
+	lead = byte_at(character, 0)
+	second = 0
+	if character.bytes > 1 { second = byte_at(character, 1) }
+	if lead == 240 and second == 147 { return "egyptian" }
+	if (lead == 226 and second >= 186) or (lead >= 227 and lead <= 233) or (lead == 240 and second >= 160 and second <= 179) { return "cjk" }
+	""
+}
+
+is_name_byte(b) := (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 45 or b == 95
+
+// offset of the first occurrence of byte in text at or after start, else text.bytes
+offset_of(text:text, byte, start) := {
+	i = start
+	while i < text.bytes and byte_at(text, i) != byte { i++ }
+	i
+}
+
+// spaces become hyphens: <:greek small letter alpha> names greek-small-letter-alpha
+hyphenated(name:text) := {
+	out = ""
+	i = 0
+	while i < name.bytes {
+		space = offset_of(name, 32, i)
+		out += byte_slice(name, i, space)
+		if space < name.bytes { out += "-" }
+		i = space + 1
+	}
+	out
+}
+
+// ---- uniscript → Unicode ---------------------------------------------------------------------------------------
+
+// one character in a block: its own entry (greek a → α), else followed by the block's suffix for its script or any character
+styled(block:text, character:text) := {
+	own = find(names_table, block + " " + character)
+	if own >= 0 { return value_of(own) }
+	script = script_of(character)
+	suffix = -1
+	if script.bytes > 0 { suffix = find(names_table, block + " *suffix " + script) }
+	if suffix < 0 { suffix = find(names_table, block + " *suffix") }
+	if suffix >= 0 { return character + value_of(suffix) }
+	character
+}
+
+// one operand in a block: its own entry (red circle → 🔴), else each character of the operand, or of the entity it names
+operand(block:text, token:text) := {
+	own = find(names_table, block + " " + token)
+	if own >= 0 { return value_of(own) }
+	characters = token
+	named = find(names_table, token)
+	if named >= 0 and token.bytes > 1 { characters = value_of(named) }
+	out = ""
+	i = 0
+	while i < characters.bytes {
+		width = utf8_width(byte_at(characters, i))
+		out += styled(block, byte_slice(characters, i, i + width))
+		i += width
+	}
+	out
+}
+
+// the space separated operands of a block, spaces dropped; groups get their prefix before and infix between the parts
+operands(block:text, content:text) := {
+	out = ""
+	script = ""
+	parts = 0
+	i = 0
+	while i < content.bytes {
+		if byte_at(content, i) == 32 { i++ } else {
+			end = offset_of(content, 32, i)
+			part = operand(block, byte_slice(content, i, end))
+			if parts == 0 {
+				script = script_of(part)
+				out += entry(block + " *prefix " + script)
+			} else {
+				out += entry(block + " *infix " + script)
+			}
+			out += part
+			parts++
+			i = end
+		}
+	}
+	out
+}
+
+// the text of <:content>, or the block it opens (as "<block>"), or "" for a closing tag; an Error when nothing matches
+tag(content:text) := {
+	if content.bytes == 0 or byte_at(content, 0) == 47 { return "" }
+	if content.bytes == 1 { return content }
+	record = find(names_table, hyphenated(content))
+	if record >= 0 { return value_of(record) }
+	if is_block(content) { return "<" + content + ">" }
+	space = offset_of(content, 32, 0)
+	if space == content.bytes { space = offset_of(content, 45, 0) }
+	if space < content.bytes {
+		block = byte_slice(content, 0, space)
+		if is_block(block) { return operands(block, byte_slice(content, space + 1, content.bytes)) }
+	}
+	error("unknown uniscript entity: " + content)
+}
+
+// offset of the next "<:" or "\:" at or after start, else source.bytes
+next_marker(source:text, start) := {
+	i = start
+	while i + 1 < source.bytes {
+		b = byte_at(source, i)
+		if (b == 60 or b == 92) and byte_at(source, i + 1) == 58 { return i }
+		i++
+	}
+	source.bytes
+}
+
+uniscript(source:text) := {
+	out = ""
+	block = ""
+	i = 0
+	while i < source.bytes {
+		next = next_marker(source, i)
+		if next > i {
+			run = byte_slice(source, i, next)
+			if block.bytes > 0 { out += operands(block, run) } else { out += run }
+			i = next
+		} else {
+			if byte_at(source, i) == 92 {
+				end = i + 2
+				while end < source.bytes and is_name_byte(byte_at(source, end)) { end++ }
+				name = byte_slice(source, i + 2, end)
+				record = find(names_table, name)
+				if record < 0 { return error("unknown uniscript entity: " + name) }
+				out += value_of(record)
+				i = end
+			} else {
+				close = offset_of(source, 62, i + 2)
+				if close == source.bytes { return error("unclosed <: at byte " + byte_slice(source, i, source.bytes)) }
+				content = byte_slice(source, i + 2, close)
+				text = tag(content)
+				if content.bytes == 0 or byte_at(content, 0) == 47 { block = "" } else {
+					if is_block(content) { block = content } else { out += text }
+				}
+				i = close + 1
+			}
+		}
+	}
+	out
+}
+
+// ---- Unicode → uniscript ---------------------------------------------------------------------------------------
+
+// "<:alpha>" → "alpha"; a block form "<:fracture A>" is no name
+name_in(form:text) := if offset_of(form, 32, 0) == form.bytes { byte_slice(form, 2, form.bytes - 1) } else { "" }
+
+// one character, and the block type of the suffix control after it ("" for none)
+spelled(character:text, block:text) := {
+	own = find(chars_table, character)
+	if block.bytes == 0 {
+		if own >= 0 { return value_of(own) }
+		return character
+	}
+	name = ""
+	if own >= 0 { name = name_in(value_of(own)) }
+	if name.bytes == 0 { name = character }
+	"<:" + block + " " + name + ">"
+}
+
+unicode_to_uniscript(text:text) := {
+	out = ""
+	i = 0
+	while i < text.bytes {
+		b = byte_at(text, i)
+		if (b == 60 or b == 92) and i + 1 < text.bytes and byte_at(text, i + 1) == 58 {
+			out += byte_slice(text, i, i + 1) + "<::>"
+			i += 2
+		} else {
+			width = utf8_width(b)
+			character = byte_slice(text, i, i + width)
+			i += width
+			block = ""
+			if i < text.bytes {
+				next = utf8_width(byte_at(text, i))
+				suffix = find(suffixes_table, byte_slice(text, i, i + next))
+				if suffix >= 0 {
+					block = value_of(suffix)
+					i += next
+				}
+			}
+			out += spelled(character, block)
+		}
+	}
+	out
+}

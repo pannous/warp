@@ -1,0 +1,82 @@
+//! Uniscript (wiki/uniscript.md) in wasp: lib/uniscript.wasp over data/uniscript/entities.idx
+
+use std::process::Command;
+use warp::{error, is};
+
+fn converts(uniscript: &str, unicode: &str) {
+	is!(&format!("use uniscript; uniscript(\"{uniscript}\")"), unicode);
+}
+
+fn spells(unicode: &str, uniscript: &str) {
+	is!(&format!("use uniscript; unicode_to_uniscript(\"{unicode}\")"), uniscript);
+}
+
+#[test]
+fn entities_become_characters() {
+	converts("<:alpha>", "α");
+	converts("\\\\:infinity", "∞");
+	converts("<:greek small letter alpha>", "α");
+	converts("<:dopf>", "𝕕"); // HTML name, backwards compatible
+	converts("<:alpha> > <:beta>", "α > β");
+	converts("<:forall> x <:in> <:double R>", "∀ x ∈ ℝ");
+}
+
+#[test]
+fn block_types_style_their_operands() {
+	converts("<:fracture A>", "𝔄");
+	converts("<:fracture A b c >", "𝔄𝔟𝔠");
+	converts("<:fracture> A b c <:>", "𝔄𝔟𝔠");
+	converts("<:greek> a b c <:/greek>", "αβψ"); // Greek keyboard layout: c is ψ
+	converts("<:double d>", "𝕕");
+	converts("<:double-d>", "𝕕");
+	converts("x<:upper a>", "xᵃ");
+	converts("<:ligature ae>", "æ");
+	converts("<:reverseInPlace e>", "ɘ");
+	converts("<:iconic ⚠>", "⚠\u{FE0F}");
+}
+
+#[test]
+fn colors_and_geometry_are_suffix_controls() {
+	converts("<:red circle>", "🔴");
+	converts("<:brown heart>", "🤎");
+	converts("<:red A>", "A\u{E0072}");
+	converts("<:mirror e>", "e\u{E004D}");
+	converts("<:mirror 𓀀>", "𓀀\u{13440}");
+}
+
+#[test]
+fn groups_join_hieroglyphs_and_compose_ideographs() {
+	converts("<:above 𓀀 𓁐>", "𓀀\u{13430}𓁐");
+	converts("<:beside 犭 句>", "⿰犭句");
+}
+
+#[test]
+fn the_marker_is_escaped_by_single_character_entities() {
+	converts("<:<> <::> <<::>", "< : <:");
+	converts("<:less>:", "<:");
+}
+
+#[test]
+fn an_unknown_entity_is_an_error() {
+	is!("use uniscript; uniscript(\"<:nosuchthing> x\")", error("unknown uniscript entity: nosuchthing"));
+}
+
+#[test]
+fn unicode_spells_back_as_uniscript() {
+	spells("α Ω 𝔄 ∞ ℝ", "<:alpha> <:Omega> <:fracture A> <:infinity> <:double R>");
+	spells("A\u{E0072} 🔴 xᵃ", "<:red A> <:red circle> x<:upper a>");
+	spells("a <: b", "a <<::> b");
+}
+
+#[test]
+fn spelling_back_round_trips() {
+	let text = "∀x∈ℝ: 𝔄 A\u{E0072} 𓀀\u{13440} <: é";
+	is!(&format!("use uniscript; t=\"{text}\"; uniscript(unicode_to_uniscript(t)) == t"), true);
+}
+
+/// The binary index and the readable entity file agree entry by entry
+#[test]
+fn the_index_matches_the_readable_entities() {
+	let check = Command::new("python3").args(["data/uniscript/uniscript_index.py", "check"]).output().expect("python3");
+	assert!(check.status.success(), "{}{}", String::from_utf8_lossy(&check.stdout), String::from_utf8_lossy(&check.stderr));
+}
