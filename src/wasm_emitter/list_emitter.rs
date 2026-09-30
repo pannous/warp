@@ -9,8 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 11] =
-	["return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use", crate::min_max::EMPTY_EXTREMUM_CALL];
+const BUILTIN_CALLS: [&str; 12] = [
+	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
+	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL,
+];
 
 const PRINT: &str = "print";
 
@@ -29,6 +31,7 @@ impl WasmGcEmitter {
 			|| name == crate::type_tests::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
+			|| super::text_builtins::is_text_builtin(name)
 			|| crate::ffi::get_ffi_signature(name).is_some()
 	}
 
@@ -181,6 +184,10 @@ impl WasmGcEmitter {
 					self.emit_ffi_call(func, fn_name, &items[1..], None);
 					return;
 				}
+				if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+					self.emit_text_builtin(func, fn_name, &items[1..]);
+					return;
+				}
 			}
 		}
 
@@ -260,6 +267,12 @@ impl WasmGcEmitter {
 			return true;
 		}
 		match fn_name {
+			crate::switch::NO_CASE_CALL => {
+				let Node::Text(label) = arg.drop_meta() else { return false };
+				let error: &'static str = Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str());
+				self.emit_runtime_error(func, error);
+				true
+			}
 			crate::min_max::EMPTY_EXTREMUM_CALL => {
 				let Node::Symbol(extremum) = arg.drop_meta() else { return false };
 				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS.iter().find(|(name, _)| name == extremum) else { return false };
@@ -337,12 +350,14 @@ impl WasmGcEmitter {
 				Node::Key(_, Op::Assign | Op::Define, _) => true,
 				Node::Key(_, Op::Hash, _) => true,
 				Node::Key(_, op, _) if op.is_compound_assign() => true,
+				// control flow: `if c {…}`, `while c {…}`, `i++`
+				Node::Key(_, Op::Then | Op::Else | Op::Do | Op::Inc | Op::Dec, _) => true,
 				Node::Key(left, Op::Colon, _) => {
 					matches!(left.drop_meta(), Node::Symbol(s) if s == "global")
 				}
 				Node::List(list_items, _, _) if list_items.len() >= 2 => {
 					if let Node::Symbol(s) = list_items[0].drop_meta() {
-						is_function_keyword(s) || s == "use" || s == "import"
+						is_function_keyword(s) || s == "use" || s == "import" || s == "return"
 					} else {
 						false
 					}
@@ -382,12 +397,26 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// A statement whose value is dropped: an assignment to a float variable keeps its own f64 instead of being forced into an exact Int
+	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
+	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if self.is_float_assignment(item) {
 			self.emit_float_value(func, item);
+		} else if self.is_ref_update(item) {
+			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
+		}
+	}
+
+	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update
+	fn is_ref_update(&self, item: &Node) -> bool {
+		match item.drop_meta() {
+			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
+				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_ref()))
+			}
+			Node::Key(_, Op::Then | Op::Else, _) => self.get_type(item).is_ref(),
+			_ => false,
 		}
 	}
 

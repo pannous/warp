@@ -321,6 +321,11 @@ impl Node {
 				}
 			}
 
+			t if t == Kind::Error as u8 => match obj.text() {
+				Ok(reason) => Node::Error(Box::new(Text(reason))),
+				Err(e) => Node::Error(Box::new(Text(format!("Error reading error: {}", e)))),
+			},
+
 			t if t == Kind::Codepoint as u8 => {
 				// data field contains i31ref with codepoint
 				match obj.read_i31() {

@@ -6,7 +6,7 @@ use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
 use crate::type_kinds::Kind;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
@@ -477,7 +477,9 @@ pub const RUNTIME_ERRORS: [&str; 14] = [
 
 impl WasmGcEmitter {
 	fn emit_runtime_errors(&mut self) {
-		for name in RUNTIME_ERRORS {
+		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
+		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
+		for name in RUNTIME_ERRORS.into_iter().chain(no_case_errors) {
 			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
 				f.instruction(&Instruction::Unreachable);
 			});
@@ -537,12 +539,14 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
+	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
 	pub(super) fn emit_text_heap_global(&mut self) {
-		if self.text_heap_global != 0 {
+		if self.text_heap_global.is_some() {
 			return;
 		}
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.text_heap_global = self.next_global_idx;
+		self.text_heap_global = Some(self.next_global_idx);
+		self.exports.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, self.next_global_idx);
 		self.next_global_idx += 1;
 	}
 
@@ -550,7 +554,7 @@ impl WasmGcEmitter {
 	/// so runtime texts never overlap the string table at the start of memory
 	pub(super) fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
 		const PAGE_BITS: i32 = 16;
-		let heap = self.text_heap_global;
+		let heap = self.text_heap_global.expect("emit_text_heap_global before allocating texts");
 		func.instruction(&Instruction::GlobalGet(heap));
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::GlobalGet(heap));
@@ -623,6 +627,10 @@ impl WasmGcEmitter {
 	/// Returns true when it emitted the whole expression (a Node, or a trap after a recorded type error).
 	pub(super) fn emit_typed_arithmetic(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node) -> bool {
 		match self.arithmetic_type(left, op, right) {
+			Kind::Text => {
+				self.emit_text_concat(func, left, right);
+				true
+			}
 			Kind::List => {
 				self.emit_node_instructions(func, left);
 				self.emit_node_instructions(func, right);
@@ -630,25 +638,13 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::RefAsNonNull);
 				true
 			}
-			Kind::Text => {
-				self.emit_text_concatenation(func, left, right);
-				true
-			}
 			kind => self.emit_arithmetic_type_error(func, left, op, right, kind),
 		}
 	}
 
-	/// `left + right` of two texts: the runtime join of the pair with no separator
-	fn emit_text_concatenation(&mut self, func: &mut Function, left: &Node, right: &Node) {
-		let pair = Node::List(vec![left.clone(), right.clone()], Bracket::Square, Separator::Space);
-		self.emit_node_instructions(func, &pair);
-		self.emit_node_instructions(func, &Node::Text(String::new()));
-		self.emit_call(func, "list_join");
-	}
-
 	/// In a numeric context any collection or text operand is a type error
 	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
-		if !matches!(kind, Kind::Error | Kind::List) {
+		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
 			return false;
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));

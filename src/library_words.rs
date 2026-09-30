@@ -10,7 +10,7 @@ use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
@@ -39,6 +39,15 @@ const EXPANDED_WORDS: [(&str, &str); 3] = [
 	("last", "word_tmp#(count(word_tmp))"),
 	(SUM, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
 ];
+/// Hidden variables and placeholders of the `try`/`assert` templates
+const TRY_TEMPORARY: &str = "try_tmp";
+const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
+const TRY_FALLBACK_PLACEHOLDER: &str = "try_placeholder_fallback";
+const LIST_PLACEHOLDER: &str = "try_placeholder_list";
+const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
+const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
+const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
+const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
@@ -169,6 +178,12 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], TRY_MARKER) => {
+				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
+			}
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
+				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
+			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
@@ -341,6 +356,53 @@ impl Lowering {
 		}
 	}
 
+	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
+	fn from_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
+		let number = self.temporaries.get();
+		self.temporaries.set(number + 1);
+		let mut program = parse(&template.replace(TRY_TEMPORARY, &format!("{TRY_TEMPORARY}_{number}")));
+		for (placeholder, replacement) in replacements {
+			program = substitute(program, placeholder, replacement);
+		}
+		program
+	}
+
+	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
+	/// division or modulo by zero directly under `try` are checked before they trap; a trap deeper inside X stays a trap.
+	fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
+		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
+		match guarded.drop_meta() {
+			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
+				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
+			}
+			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.from_template(
+				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
+				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
+			),
+			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.from_template(
+				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{{DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}})"),
+				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
+			),
+			_ => self.from_template(
+				&format!("(try_tmp_value={value}; if is_error(try_tmp_value) {{{fallback_placeholder}}} else {{try_tmp_value}})"),
+				&[(value, &guarded), (fallback_placeholder, &fallback)],
+			),
+		}
+	}
+
+	/// `assert C else X` is 1 when C holds and the Error X otherwise; without a message the error says the assertion failed
+	fn lower_assert(&self, condition: Node, message: Node) -> Node {
+		let message = match message.drop_meta() {
+			Node::Empty => Node::Text(format!("assertion failed: {}", condition.serialize())),
+			_ => message,
+		};
+		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
+		self.from_template(
+			&format!("(if {condition_placeholder} {{1}} else {{error({TRY_FALLBACK_PLACEHOLDER})}})"),
+			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
+		)
+	}
+
 	fn expanded(&self, template: &str, receiver: Node) -> Node {
 		let number = self.temporaries.get();
 		self.temporaries.set(number + 1);
@@ -369,4 +431,8 @@ pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> N
 		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
 		other => other,
 	}
+}
+
+fn is_marker(node: &Node, marker: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if name == marker)
 }
