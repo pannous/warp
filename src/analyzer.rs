@@ -2014,7 +2014,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
 		Node::Number(number) => {
-			if !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
+			let exact_decimal = matches!(number, Number::Float(value) if Number::is_exact_decimal(*value));
+			if exact_decimal || !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
 		}
