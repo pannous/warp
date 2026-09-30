@@ -1,4 +1,4 @@
-//! `use package <name>`: registered git repositories (packages.wasp), fetched into packages/<name>
+//! `use <name>` without a local module: registered git repositories (packages.wasp), fetched into packages/<name>
 
 use warp::modules::{fetch_package, package_repository};
 use warp::{error, is};
@@ -17,7 +17,13 @@ fn a_package_is_fetched_once_into_packages() {
 }
 
 #[test]
-fn a_package_module_without_wasp_code_contributes_nothing() {
-	is!("use package uniscript; 42", 42);
-	is!("use package nosuchpackage; 42", error("unknown package: nosuchpackage"));
+fn use_loads_the_module_of_a_package() {
+	is!("use uniscript; uniscript(\"<:alpha>\")", "α");
+	is!("use nosuchpackage; 42", error("module not found: nosuchpackage"));
+}
+
+/// `module_directory`: the directory of the file it is written in, so a package finds its own files
+#[test]
+fn module_directory_is_where_the_module_lives() {
+	is!("module_directory", ".");
 }

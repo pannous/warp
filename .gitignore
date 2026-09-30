@@ -23,5 +23,5 @@ probes
 fonts/dist/
 fonts/sources/
 
-# fetched by `use package <name>`, see packages.wasp
+# packages fetched by `use <name>`, see packages.wasp
 /packages/

@@ -1,5 +1,5 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
-//! `use package <name>`: the git repository the registry packages.wasp names, fetched into packages/<name>.
+//! A name found nowhere locally but in the registry packages.wasp is a package: its git repository, fetched into packages/<name>.
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::wasp_parser::WaspParser;
@@ -16,10 +16,10 @@ const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
-/// `use package x`: the repository of x, fetched on first use
-const PACKAGE_KEYWORD: &str = "package";
 /// name: "git url" for every package, compiled in so warp finds it from any directory
 const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
+/// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
+const MODULE_DIRECTORY: &str = "module_directory";
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
@@ -39,7 +39,11 @@ pub fn resolve(program: Node) -> Node {
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: None };
-	loader.resolve(program).unwrap_or_else(|failure| failure)
+	loader.resolve(with_module_directory(program, Path::new("."))).unwrap_or_else(|failure| failure)
+}
+
+fn with_module_directory(module: Node, directory: &Path) -> Node {
+	crate::library_words::substitute(module, MODULE_DIRECTORY, &Node::Text(directory.display().to_string()))
 }
 
 struct Loader<'a> {
@@ -78,18 +82,13 @@ impl Loader<'_> {
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
 	/// the `use` itself for a native library
 	fn import(&mut self, import: Import, name: &str, statement: &Node) -> Result<Vec<Node>, Node> {
-		if import == Import::Package {
-			let directory = fetch_package(name).map_err(|failure| error(&failure))?;
-			let module = MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file());
-			return match module {
-				Some(path) => self.load(Import::Use, name, path),
-				None => Ok(vec![]),
-			};
-		}
 		if import == Import::Use && is_builtin_library(name) {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
+			if import == Import::Use && package_repository(name).is_some() {
+				return self.use_package(name);
+			}
 			return match import == Import::Use && crate::ffi::is_ffi_library(name) {
 				true => Ok(vec![as_use(statement)]),
 				false => Err(self.not_found(name, import)),
@@ -98,10 +97,20 @@ impl Loader<'_> {
 		self.load(import, name, path)
 	}
 
+	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data
+	fn use_package(&mut self, name: &str) -> Result<Vec<Node>, Node> {
+		let directory = fetch_package(name).map_err(|failure| error(&failure))?;
+		let module = MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file());
+		match module {
+			Some(path) => self.load(Import::Use, name, path),
+			None => Ok(vec![]),
+		}
+	}
+
 	fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {
 		let loaded = match import {
+			Import::Use => &mut self.loaded,
 			Import::Include => &mut self.included,
-			_ => &mut self.loaded,
 		};
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
@@ -111,13 +120,15 @@ impl Loader<'_> {
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
-		let outer_directory = std::mem::replace(&mut self.including_directory, path.parent().map(Path::to_path_buf));
+		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
+		let module = with_module_directory(module, &directory);
+		let outer_directory = std::mem::replace(&mut self.including_directory, Some(directory));
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
 		Ok(match import {
+			Import::Use => statements.into_iter().filter(is_declaration).collect(),
 			Import::Include => statements,
-			_ => statements.into_iter().filter(is_declaration).collect(),
 		})
 	}
 
@@ -167,8 +178,6 @@ enum Import {
 	Use,
 	/// the whole file
 	Include,
-	/// a registered repository, and the declarations of its module file if it has one
-	Package,
 }
 
 /// The git url of a package in the registry
@@ -205,13 +214,6 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`
 fn used_module(node: &Node) -> Option<(Import, String)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	if let [keyword, package, name] = items.as_slice() {
-		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word);
-		return match is_word(keyword, USE_KEYWORD) && is_word(package, PACKAGE_KEYWORD) {
-			true => Some((Import::Package, path_of(name)?)),
-			false => None,
-		};
-	}
 	let [keyword, argument] = items.as_slice() else { return None };
 	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
 	let import = if USE_KEYWORDS.contains(&keyword.as_str()) {
