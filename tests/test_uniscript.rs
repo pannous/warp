@@ -1,4 +1,4 @@
-//! Uniscript (wiki/uniscript.md) in wasp: lib/uniscript.wasp over data/uniscript/entities.idx
+//! Uniscript (wiki/uniscript.md) in wasp: lib/uniscript.wasp over the index of the uniscript package (packages.wasp)
 
 use std::process::Command;
 use warp::diagnostic::take_runtime_warnings;
@@ -139,6 +139,7 @@ fn spelling_back_round_trips() {
 /// The binary index and the readable entity file agree entry by entry
 #[test]
 fn the_index_matches_the_readable_entities() {
-	let check = Command::new("python3").args(["data/uniscript/uniscript_index.py", "check"]).output().expect("python3");
+	let package = warp::modules::fetch_package("uniscript").unwrap();
+	let check = Command::new("cargo").args(["run", "--quiet", "--release", "--", "check"]).current_dir(package).output().expect("cargo");
 	assert!(check.status.success(), "{}{}", String::from_utf8_lossy(&check.stdout), String::from_utf8_lossy(&check.stderr));
 }

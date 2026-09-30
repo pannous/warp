@@ -6,7 +6,7 @@ compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicod
 ## Build and deploy
 
 ```
-web/uniscript/build.sh           # warp compile → uniscript.wasm, copies data/uniscript/entities.idx, fonts → woff2
+web/uniscript/build.sh           # warp compile → uniscript.wasm, copies packages/uniscript/data/entities.idx, fonts → woff2
 web/uniscript/build.sh deploy    # … and rsync to pannous.com:/var/www/pannous/uniscript/
 cd web/uniscript && python3 -m http.server 8765   # local
 ```

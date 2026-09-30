@@ -1,7 +1,7 @@
-# Uniscript in wasp: what it took (lib/uniscript.wasp, data/uniscript/)
+# Uniscript in wasp: what it took (lib/uniscript.wasp, package uniscript)
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
-`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. Data format: data/uniscript/README.md.
+`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. Data: `use package uniscript` fetches github.com/pannous/uniscript into packages/uniscript (notes/packages.md); index format: its src/index.rs.
 Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.
 
 ## Language features added for it (Rust)
@@ -45,11 +45,9 @@ Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/t
 ## Porting note: meta information (TAG sequences), done in Rust and Swift, open in lib/uniscript.wasp
 Reference: github.com/pannous/uniscript `src/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
 `tests/meta_test.rs`, Swift `Sources/Uniscript/Meta.swift`; spec wiki/uniscript.md "Meta information".
-- Data: copy `data/entities.wasp` and `data/entities.idx` from the uniscript repo. The index grows from 3 to 5 tables,
-  appended, so the existing `names_table`/`chars_table`/`suffixes_table` offsets stay valid: `fonts_table = 3`
-  (`han-japanese ` → "", `han-japanese lang` → ja, `… families`, `… features`), `meta_table = 4` (key → CSS template,
-  `{}` is the value; `lang` → "" means the HTML lang attribute). data/uniscript/uniscript_index.py needs the same
-  `FONTS`, `META` and `index_tables` changes (byte-identical builders).
+- Data: the package's index already has the 5 tables, appended, so `names_table`/`chars_table`/`suffixes_table` stay
+  valid: `fonts_table = 3` (`han-japanese ` → "", `han-japanese lang` → ja, `… families`, `… features`), `meta_table = 4`
+  (key → CSS template, `{}` is the value; `lang` → "" means the HTML lang attribute).
 - Sequence: TAG characters U+E0020+ascii spell the text, CANCEL TAG U+E007F ends it. `<key value` opens a span,
   `</key` closes the innermost open span of that key, `:key value` attaches to the character before it. key:
   [a-z][a-z0-9-]*, value: one word of [A-Za-z0-9#.%+-_,()/], else `Error::InvalidMeta`.

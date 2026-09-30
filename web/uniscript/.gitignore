@@ -1,3 +1,4 @@
 data/
 fonts/
 !uniscript.wasm
+packages/

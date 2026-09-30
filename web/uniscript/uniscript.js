@@ -2,7 +2,7 @@
 // the host: the "host" imports (src/host.rs), texts into and out of wasm memory, and the page.
 
 const MODULE_URL = "uniscript.wasm";
-const PRELOADED_FILES = ["data/uniscript/entities.idx"]; // read by the module's init, fetched before it runs
+const PRELOADED_FILES = ["packages/uniscript/data/entities.idx"]; // read by the module's init, fetched before it runs
 const TEXT_HEAP_EXPORT = "text_heap";
 const PAGE_BITS = 16;
 const KIND_MASK = 0xffn;

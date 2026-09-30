@@ -1,10 +1,12 @@
 // Uniscript (wiki/uniscript.md): ASCII names for Unicode text, and back
 //   uniscript("<:alpha> <:fracture A> \:infinity")  →  "α 𝔄 ∞"
 //   unicode_to_uniscript("α 𝔄 ∞")                  →  "<:alpha> <:fracture A> <:infinity>"
-// Names and block types live in data/uniscript/entities.wasp; this reads its binary index entities.idx,
-// whose format data/uniscript/README.md documents: tables of 20-byte records sorted by a hash of the key.
+// Names and block types live in the uniscript package (github.com/pannous/uniscript, data/entities/*.wasp); this reads
+// its binary index data/entities.idx, whose format that repository's src/index.rs documents: tables of 20-byte records
+// sorted by a hash of the key.
 
-const uniscript_index = read("data/uniscript/entities.idx")
+use package uniscript
+const uniscript_index = read("packages/uniscript/data/entities.idx")
 const names_table = 0     // name → text, block entries as "block operand"
 const chars_table = 1     // text → its uniscript
 const suffixes_table = 2  // suffix control → block type
