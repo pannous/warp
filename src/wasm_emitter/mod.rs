@@ -29,6 +29,9 @@ enum Need {
 	MathImport(&'static str),
 }
 
+/// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
+const OUTPUT_CALLS: [&str; 5] = ["print", "puts", "puti", "putl", "putf"];
+
 /// Builtins that round a float to an exact Int
 const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up", "round_half_even"];
 
@@ -566,7 +569,11 @@ impl WasmGcEmitter {
 			Node::Number(_) | Node::True | Node::False => true,
 			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_shift() || op.is_comparison() => true,
 			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
+			// `not x` is always 1 or 0
+			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
+			// grouping: `(1==2)` is the number it computes
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),
 			Node::Symbol(name) => {
 				// Check if symbol is a known numeric variable
 				if let Some(local) = self.scope.lookup(name) {
@@ -2725,6 +2732,12 @@ impl WasmGcEmitter {
 				}
 				// Rounding and counting builtins build a node: its Int is the number
 				if self.emit_integer_builtin(func, items) || self.reject_unresolved_call(func, items, bracket, separator) {
+					return;
+				}
+				// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
+				if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))) {
+					self.emit_node_instructions(func, node);
+					self.emit_call(func, "get_int_value");
 					return;
 				}
 				self.emit_statement_sequence(func, items, Self::emit_numeric_value);

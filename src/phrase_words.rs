@@ -36,8 +36,13 @@ impl Phrases {
 	}
 
 	fn phrase(&self, items: &[Node]) -> Option<Node> {
-		let [word, argument] = items else { return None };
+		let (word, rest) = items.split_first()?;
 		let Node::Symbol(word) = word.drop_meta() else { return None };
+		// `do add 4 to pixel`: the phrase after `do` is lowered first
+		if word == DO_WORD && self.do_is_free && rest.len() > 1 {
+			return self.phrase(rest);
+		}
+		let [argument] = rest else { return None };
 		match word.as_str() {
 			DO_WORD if self.do_is_free => evaluated_block(argument),
 			ADD_WORD if self.add_is_free => appended_to(argument),
