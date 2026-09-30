@@ -26,6 +26,7 @@ fn is_data_node(node: &Node) -> bool {
 		Node::List(items, bracket, separator) => !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
 		Node::Key(left, op, right) if op.is_arithmetic() => is_data_node(left) && is_data_node(right), // `[1+2, 3]` keeps both items
+		Node::Key(value, Op::As, _) => is_data_node(value), // `[1.5f 2.5f]`
 		_ => false,
 	}
 }
@@ -730,14 +731,69 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			}
 		}
 		Node::List(items, _, _) => {
-			let mut kinds = items.iter().map(|item| infer_type(item, scope));
-			match kinds.next() {
-				Some(first) if kinds.all(|kind| kind == first) => format!("{PLAIN} of {first}"),
-				_ => PLAIN.to_string(),
+			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
+			match common_type_word(&words) {
+				Some(word) => format!("{PLAIN} of {word}"),
+				None => PLAIN.to_string(),
 			}
 		}
 		_ => PLAIN.to_string(),
 	}
+}
+
+const INT_WORD: &str = "int";
+const RATIONAL_WORD: &str = "rational";
+const FLOAT_WORD: &str = "float";
+const NUMBER_WORD: &str = "number";
+/// Irrational constants are `real`, although the underlying representation may still be exact or float: the type name is
+/// the contract, the representation may change
+const REAL_WORD: &str = "real";
+const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
+
+/// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,
+/// approximations (`1.5f`, √2, complex) `float`
+pub fn number_type_word(number: &Number) -> &'static str {
+	match number {
+		Number::Int(_) | Number::BigInt(_) => INT_WORD,
+		Number::Quotient(..) => RATIONAL_WORD,
+		Number::Real(_) => REAL_WORD,
+		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
+		_ => FLOAT_WORD,
+	}
+}
+
+/// The type word of a number written as a literal or as a quotient of integer literals (`3/4`); `None` for any other node
+pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
+	match node.drop_meta() {
+		Node::Number(number) => Some(number_type_word(number)),
+		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(REAL_WORD),
+		Node::Key(numerator, Op::Div, denominator) => match (numerator.drop_meta(), denominator.drop_meta()) {
+			(Node::Number(Number::Int(numerator)), Node::Number(Number::Int(denominator))) if *denominator != 0 => {
+				Some(if numerator % denominator == 0 { INT_WORD } else { RATIONAL_WORD })
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn element_type_word(item: &Node, scope: &Scope) -> String {
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
+}
+
+/// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
+/// case of rational), `number` for any other mix of numbers; `None` when the elements are not all numbers or all alike
+fn common_type_word(words: &[String]) -> Option<String> {
+	let first = words.first()?;
+	if words.iter().all(|word| word == first) {
+		return Some(first.clone());
+	}
+	let is_number = |word: &String| [INT_WORD, RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&word.as_str());
+	let is_exact = |word: &String| word == INT_WORD || word == RATIONAL_WORD;
+	if !words.iter().all(is_number) {
+		return None;
+	}
+	Some(if words.iter().all(is_exact) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
 }
 
 /// Semantic checks run before emission; the first violation comes back as an error value

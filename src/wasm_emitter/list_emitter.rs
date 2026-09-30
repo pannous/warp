@@ -227,8 +227,9 @@ impl WasmGcEmitter {
 					literal @ Node::Number(_) => literal.kind(),
 					_ => self.get_type(arg),
 				};
-				let type_name = match kind {
-					crate::type_kinds::Kind::List => crate::analyzer::list_type_name(arg, &self.scope),
+				let type_name = match (kind, crate::analyzer::literal_number_type_word(arg)) {
+					(_, Some(number_word)) => number_word.to_string(),
+					(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
 					_ => kind.to_string(),
 				};
 				let (ptr, len) = self.allocate_string(&type_name);

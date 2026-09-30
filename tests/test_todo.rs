@@ -55,7 +55,7 @@ fn test_index_assign_in_loop() {
 fn test_type() {
 	// type() returns a Symbol with the type name
 	is!("type(42)", Node::Symbol("int".to_string()));
-	is!("type(3.14)", Node::Symbol("float".to_string()));
+	is!("type(3.14)", Node::Symbol("rational".to_string()));
 	is!("type('hello')", Node::Symbol("text".to_string()));
 	// Type of inferred variable
 	is!("x=42;type(x)", Node::Symbol("int".to_string()));

@@ -44,7 +44,7 @@ fn expect_styled_no_hint(style: Style, code: &str) {
 
 // ---- generic list types: `ints` is canonical for every element type word
 
-const ELEMENT_TYPE_WORDS: [&str; 7] = ["int", "text", "float", "number", "string", "char", "exact"];
+const ELEMENT_TYPE_WORDS: [&str; 8] = ["int", "text", "float", "number", "string", "char", "exact", "rational"];
 
 #[test]
 fn test_generic_list_type_hints_plural() {
