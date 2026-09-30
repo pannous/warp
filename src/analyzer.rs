@@ -1131,30 +1131,39 @@ fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
 	})
 }
 
+/// The declared name and type of the target `x:int` or `int x`
+fn declaring_name_and_type(target: &Node) -> Option<(String, String)> {
+	let (name, type_name) = match target {
+		Node::Key(name, Op::Colon, type_name) => (name.drop_meta().clone(), type_name.drop_meta().clone()),
+		prefixed => number_type_prefix(prefixed)?,
+	};
+	match (name, type_name) {
+		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
+		_ => None,
+	}
+}
+
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
 fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let declaration = match target.drop_meta() {
-				Node::Key(name, Op::Colon, type_name) => match (name.drop_meta(), type_name.drop_meta()) {
-					(Node::Symbol(name), Node::Symbol(type_name)) => {
-						declared.insert(name.clone(), type_name.clone());
-						Some((name, type_name))
-					}
-					_ => None,
-				},
-				Node::Symbol(name) => declared.get_key_value(name),
-				_ => None,
+				Node::Symbol(name) => declared.get_key_value(name).map(|(name, type_name)| (name.clone(), type_name.clone())),
+				declaring => declaring_name_and_type(declaring),
 			};
 			if let Some((name, type_name)) = declaration {
-				if let Some(mismatch) = assignment_mismatch(node, name, type_name, value) {
+				declared.insert(name.clone(), type_name.clone());
+				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value) {
 					return Some(mismatch);
 				}
 			}
 			check_declared_types(value, declared)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
-		Node::List(items, _, _) => items.iter().find_map(|item| check_declared_types(item, declared)),
+		Node::List(items, _, _) => {
+			let prefixed = items.windows(2).filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
+			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared))
+		}
 		_ => None,
 	}
 }
@@ -1395,15 +1404,15 @@ fn declared_type(target: &Node) -> Option<&Node> {
 	}
 }
 
-/// A number type written before a declaration: `real`, `exact`, `float`, `fast` … (see `canonical_type_name`)
-fn is_number_type(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if matches!(canonical_type_name(name), "exact" | "float"))
+/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (see `canonical_type_name`)
+fn is_declaration_type(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some())
 }
 
 /// `(fast x)` as the target of `fast x=v`: the type and the name
 fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 	match target.drop_meta() {
-		Node::List(items, bracket, _) if *bracket != Bracket::Round && items.len() == 2 && is_number_type(&items[0]) && matches!(items[1].drop_meta(), Node::Symbol(_)) => {
+		Node::List(items, bracket, _) if *bracket != Bracket::Round && items.len() == 2 && is_declaration_type(&items[0]) && matches!(items[1].drop_meta(), Node::Symbol(_)) => {
 			Some((items[0].drop_meta().clone(), items[1].drop_meta().clone()))
 		}
 		_ => None,
@@ -1413,7 +1422,7 @@ fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 /// The statement pair `fast`, `x=v` as the declaration `x:fast=v`
 fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
 	match next.drop_meta() {
-		Node::Key(name, op @ (Op::Assign | Op::Define), value) if is_number_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) => {
+		Node::Key(name, op @ (Op::Assign | Op::Define), value) if is_declaration_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) => {
 			let target = Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(type_name.drop_meta().clone()));
 			Some(Node::Key(Box::new(target), *op, value.clone()))
 		}
@@ -1552,7 +1561,7 @@ pub fn kind_with_article(kind: Kind) -> String {
 /// The kind a call argument certainly has, judged from the literal alone
 fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		_ => None,
 	}
 }
