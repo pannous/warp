@@ -37,7 +37,21 @@ const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 const LIBM_POW: &str = "m.pow";
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
-const EXACT_TRAP_MESSAGES: [(&str, &str); 1] = [("exact_pow", "an exact power needs an integer exponent")];
+const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
+	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
+	("exact_pow", "an exact power needs an integer exponent"),
+];
+
+const TERNARY_BRANCHES: &str = "`condition ? then : else`";
+const IF_THEN: &str = "`if condition then ...`";
+
+/// The condition and the then-branch of `if condition then branch`
+fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else { return None };
+	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else { return None };
+	Some((condition, then_branch))
+}
+
 pub use equality::{IS_TRUTHY, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
@@ -400,9 +414,9 @@ impl WasmGcEmitter {
 
 	/// Emit a call to a user-defined function (returns Node)
 	fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let user_fn = match self.ctx.user_functions.get(fn_name) {
-			Some(f) => f.clone(),
-			None => panic!("Unknown user function: {}", fn_name),
+		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
+			self.emit_type_error(func, format!("undefined function: {fn_name}"));
+			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();
 
@@ -434,9 +448,9 @@ impl WasmGcEmitter {
 	/// Emit a call to a user-defined function (returns raw i64)
 	/// Note: For Node-returning functions, this extracts the integer value from the Node
 	fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let user_fn = match self.ctx.user_functions.get(fn_name) {
-			Some(f) => f.clone(),
-			None => panic!("Unknown user function: {}", fn_name),
+		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
+			self.emit_type_error(func, format!("undefined function: {fn_name}"));
+			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();
 
@@ -444,7 +458,7 @@ impl WasmGcEmitter {
 		self.emit_user_function_call_inner(func, &user_fn, args);
 
 		if user_fn.return_kind.is_float() {
-			panic!("{fn_name} returns a float where an exact number is required, use `as int` to truncate explicitly");
+			self.emit_float_in_exact_context(func, fn_name);
 		} else if returns_node {
 			self.emit_call(func, "get_int_value");
 		}
@@ -452,15 +466,17 @@ impl WasmGcEmitter {
 
 	/// Inner helper for emitting user function calls
 	fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
-		let func_index = match user_fn.func_index {
-			Some(idx) => idx,
-			None => panic!("User function not yet compiled: {}", user_fn.name),
+		let Some(func_index) = user_fn.func_index else {
+			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
+			return;
 		};
 
 		// Emit arguments; a missing argument evaluates its default anew at every call
 		for (i, param) in user_fn.params.iter().enumerate() {
-			let argument = args.get(i).or(param.default.as_ref())
-				.unwrap_or_else(|| panic!("Missing argument {} for function {} (no default)", i, user_fn.name));
+			let Some(argument) = args.get(i).or(param.default.as_ref()) else {
+				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", user_fn.name, param.name));
+				return;
+			};
 			let expected = param_kind(param);
 			let given = self.get_type(argument);
 			if !expected.is_ref() && matches!(given, Kind::List | Kind::Text) && given != expected {
@@ -534,7 +550,7 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(_) | Node::True | Node::False => true,
-			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_comparison() => true,
+			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_shift() || op.is_comparison() => true,
 			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
 			Node::Symbol(name) => {
@@ -711,12 +727,18 @@ impl WasmGcEmitter {
 
 	/// The first type error found while emitting; the module must not run then
 	pub fn type_error(&self) -> Option<Node> {
-		self.type_errors.first().map(|message| crate::node::error(message))
+		self.type_errors.first().or(self.type_manager.type_errors.first()).map(|message| crate::node::error(message))
 	}
 
 	/// A value used as a number that has none (ø, a list, a type…): an error value at its source position, not a panic
 	fn emit_not_a_number(&mut self, func: &mut Function, located: &Node, value: &Node) {
 		let diagnostic = crate::diagnostic::Diagnostic::at(located, format!("cannot extract a numeric value from {}", value.serialize()));
+		self.emit_type_error(func, diagnostic.to_string());
+	}
+
+	/// A construct whose shape the emitter cannot handle: an error value at its source position, not a panic
+	fn emit_malformed(&mut self, func: &mut Function, located: &Node, expected: &str) {
+		let diagnostic = crate::diagnostic::Diagnostic::at(located, format!("expected {expected}, got {}", located.serialize()));
 		self.emit_type_error(func, diagnostic.to_string());
 	}
 
@@ -1152,6 +1174,11 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, &assignment);
 			return;
 		}
+		if op.is_shift() {
+			self.emit_shift(func, left, op, right);
+			self.emit_call(func, "new_int");
+			return;
+		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
@@ -1242,7 +1269,7 @@ impl WasmGcEmitter {
 				self.emit_undefined_variable(func, name);
 			}
 		} else {
-			panic!("Expected symbol in definition, got {:?}", left);
+			self.emit_malformed(func, left, "a variable to assign to");
 		}
 		true
 	}
@@ -1261,7 +1288,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
 		} else {
-			panic!("Expected symbol for increment/decrement, got {:?}", left);
+			self.emit_malformed(func, left, "a variable to increment or decrement");
+			true
 		}
 	}
 
@@ -1294,13 +1322,7 @@ impl WasmGcEmitter {
 			}
 			// Apply base operation
 			if use_float {
-				match base_op {
-					Op::Add => func.instruction(&Instruction::F64Add),
-					Op::Sub => func.instruction(&Instruction::F64Sub),
-					Op::Mul => func.instruction(&Instruction::F64Mul),
-					Op::Div => func.instruction(&Instruction::F64Div),
-					_ => func.instruction(&Instruction::F64Mul), // fallback
-				};
+				self.emit_float_arithmetic(func, &base_op);
 			} else {
 				self.emit_int_compound_op(func, &base_op, right);
 			}
@@ -1308,7 +1330,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
 		} else {
-			panic!("Expected symbol in compound assignment, got {:?}", left);
+			self.emit_malformed(func, left, "a variable to update");
+			true
 		}
 	}
 
@@ -1326,7 +1349,7 @@ impl WasmGcEmitter {
 				let right_range = self.int_range(right);
 				self.emit_int_op(func, op, None, right_range);
 			}
-			_ => panic!("Unexpected compound assignment operator: {:?}", op),
+			_ => self.emit_type_error(func, format!("`{op}=` is not an operator on exact numbers")),
 		}
 	}
 
@@ -1423,7 +1446,7 @@ impl WasmGcEmitter {
 			}
 			Op::Mod | Op::Rem => self.emit_float_remainder(func, *op == Op::Mod),
 			Op::Pow => self.emit_float_power(func),
-			_ => unreachable!("Unsupported float operator: {:?}", op),
+			_ => self.emit_type_error(func, format!("`{op}` is not an operator on floats")),
 		}
 	}
 
@@ -1723,19 +1746,22 @@ impl WasmGcEmitter {
 	}
 
 	/// `global x=7` declares x with the value 7; `global x` declares x zero-initialized
-	fn global_declaration_parts(decl: &Node) -> (String, Node) {
+	fn global_declaration_parts(decl: &Node) -> Option<(String, Node)> {
 		match decl.drop_meta() {
-			Node::Symbol(name) => (name.clone(), Node::int(0)),
+			Node::Symbol(name) => Some((name.clone(), Node::int(0))),
 			Node::Key(left, Op::Define | Op::Assign, right) => match left.drop_meta() {
-				Node::Symbol(name) => (name.clone(), right.as_ref().clone()),
-				_ => panic!("Expected symbol in global declaration, got {:?}", left),
+				Node::Symbol(name) => Some((name.clone(), right.as_ref().clone())),
+				_ => None,
 			},
-			_ => panic!("Expected a name or an assignment in global declaration, got {:?}", decl),
+			_ => None,
 		}
 	}
 
 	fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
-		let (name, value) = Self::global_declaration_parts(decl);
+		let Some((name, value)) = Self::global_declaration_parts(decl) else {
+			self.emit_malformed(func, decl, "`global name` or `global name = value`");
+			return;
+		};
 
 		let kind = self.get_type(&value);
 
@@ -1811,7 +1837,10 @@ impl WasmGcEmitter {
 
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
 	fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
-		let (name, value) = Self::global_declaration_parts(decl);
+		let Some((name, value)) = Self::global_declaration_parts(decl) else {
+			self.emit_malformed(func, decl, "`global name` or `global name = value`");
+			return;
+		};
 
 		let kind = self.get_type(&value);
 
@@ -1850,9 +1879,9 @@ impl WasmGcEmitter {
 	/// Returns a Node reference, handling mixed-type branches (numbers, strings, etc.)
 	fn emit_ternary(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
 		// Structure: condition ? Key(then, Colon, else)
-		let (then_expr, else_expr) = match then_else.drop_meta() {
-			Node::Key(then_node, Op::Colon, else_node) => (then_node, else_node),
-			_ => panic!("Ternary operator expects then:else structure, got {:?}", then_else),
+		let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() else {
+			self.emit_malformed(func, then_else, TERNARY_BRANCHES);
+			return;
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
@@ -1875,9 +1904,9 @@ impl WasmGcEmitter {
 	/// Emit ternary expression returning i64: condition ? then_expr : else_expr
 	fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
 		// Structure: condition ? Key(then, Colon, else)
-		let (then_expr, else_expr) = match then_else.drop_meta() {
-			Node::Key(then_node, Op::Colon, else_node) => (then_node, else_node),
-			_ => panic!("Ternary operator expects then:else structure, got {:?}", then_else),
+		let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() else {
+			self.emit_malformed(func, then_else, TERNARY_BRANCHES);
+			return;
 		};
 
 		// Evaluate condition and convert to i32 for if instruction
@@ -1901,15 +1930,9 @@ impl WasmGcEmitter {
 	fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
-		let (condition, then_expr) = match left.drop_meta() {
-			Node::Key(if_condition, Op::Then, then_node) => {
-				let cond = match if_condition.drop_meta() {
-					Node::Key(_, Op::If, c) => c,
-					other => panic!("Expected if condition, got {:?}", other),
-				};
-				(cond, then_node)
-			}
-			other => panic!("Expected if-then structure, got {:?}", other),
+		let Some((condition, then_expr)) = if_then_parts(left) else {
+			self.emit_malformed(func, left, IF_THEN);
+			return;
 		};
 
 		// Evaluate condition
@@ -1940,15 +1963,9 @@ impl WasmGcEmitter {
 	fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
-		let (condition, then_expr) = match left.drop_meta() {
-			Node::Key(if_condition, Op::Then, then_node) => {
-				let cond = match if_condition.drop_meta() {
-					Node::Key(_, Op::If, c) => c,
-					other => panic!("Expected if condition, got {:?}", other),
-				};
-				(cond, then_node)
-			}
-			other => panic!("Expected if-then structure, got {:?}", other),
+		let Some((condition, then_expr)) = if_then_parts(left) else {
+			self.emit_malformed(func, left, IF_THEN);
+			return;
 		};
 
 		// A branch yielding a text, list or error (`if x {x} else {"offline"}`): both branches are Node values
@@ -1996,9 +2013,9 @@ impl WasmGcEmitter {
 	/// Emit while loop: (while condition) do body
 	/// If wrap_result is true, wraps result in Node; otherwise returns raw i64
 	fn emit_while_loop_impl(&mut self, func: &mut Function, left: &Node, body: &Node, wrap_result: bool) {
-		let condition = match left.drop_meta() {
-			Node::Key(_, Op::While, cond) => cond,
-			other => panic!("Expected while condition, got {:?}", other),
+		let Node::Key(_, Op::While, condition) = left.drop_meta() else {
+			self.emit_malformed(func, left, "`while condition`");
+			return;
 		};
 
 		let result_local = self.next_temp_local;
@@ -2374,7 +2391,7 @@ impl WasmGcEmitter {
 						self.emit_undefined_variable(func, name);
 					}
 				} else {
-					panic!("Expected symbol in definition, got {:?}", left);
+					self.emit_malformed(func, left, "a variable to assign to");
 				}
 			}
 			// Increment/decrement: i++ or i--
@@ -2389,7 +2406,7 @@ impl WasmGcEmitter {
 					// Store and return new value
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
-					panic!("Expected symbol for increment/decrement, got {:?}", left);
+					self.emit_malformed(func, left, "a variable to increment or decrement");
 				}
 			}
 			// Compound assignment: x += y → x = x + y
@@ -2413,7 +2430,7 @@ impl WasmGcEmitter {
 					// Store result and leave on stack
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
-					panic!("Expected symbol in compound assignment, got {:?}", left);
+					self.emit_malformed(func, left, "a variable to update");
 				}
 			}
 			// Arithmetic operators
@@ -2424,6 +2441,7 @@ impl WasmGcEmitter {
 				}
 				self.emit_int_operands_op(func, left, op, right);
 			}
+			Node::Key(left, op, right) if op.is_shift() => self.emit_shift(func, left, op, right),
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
@@ -2475,7 +2493,7 @@ impl WasmGcEmitter {
 						let range = self.int_range(right);
 						self.emit_int_abs(func, range);
 					}
-					_ => panic!("Unhandled prefix operator: {:?}", op),
+					_ => self.emit_type_error(func, format!("`{op}` of an exact number is not supported yet")),
 				}
 			}
 			// Prefix # means count/length: #list returns element count
@@ -2669,13 +2687,20 @@ impl WasmGcEmitter {
 						self.emit_undefined_variable(func, name);
 					}
 				} else {
-					panic!("Expected symbol in definition, got {:?}", left);
+					self.emit_malformed(func, left, "a variable to assign to");
 				}
 			}
 			// Arithmetic operators with float
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
+					return;
+				}
+				if kind == Kind::Int {
+					// a wholly exact expression is computed exactly and rounded once: `float y = 0.1+0.2` is 0.3
+					self.emit_numeric_value(func, node);
+					let range = self.int_range(node);
+					self.emit_int_to_f64(func, range);
 					return;
 				}
 				self.emit_float_value(func, left);
@@ -2789,14 +2814,12 @@ impl WasmGcEmitter {
 	/// Emit a range as a list of integers
 	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
 	fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
-		let start_val = match start.drop_meta() {
-			Node::Number(Number::Int(i)) => *i,
-			_ => panic!("Range start must be a constant integer, got {:?}", start),
+		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) = (start.drop_meta(), end.drop_meta()) else {
+			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) { end } else { start };
+			self.emit_malformed(func, bound, "a constant integer as range bound");
+			return;
 		};
-		let end_val = match end.drop_meta() {
-			Node::Number(Number::Int(i)) => *i,
-			_ => panic!("Range end must be a constant integer, got {:?}", end),
-		};
+		let (start_val, end_val) = (*start_val, *end_val);
 		let actual_end = if inclusive { end_val + 1 } else { end_val };
 		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
 		if items.is_empty() {
@@ -2862,14 +2885,8 @@ impl WasmGcEmitter {
 		// We need: kind, first, rest
 		// This requires locals or restructuring.
 
-		// For now, panic - caller should ensure new_list is available
-		panic!("new_list function required but not available");
-	}
-
-	fn validate_wasm(bytes: &[u8]) {
-		if let Err(e) = Self::try_validate_wasm(bytes) {
-			panic!("WASM validation failed: {}", e);
-		}
+		// new_list is always emitted; reaching this is a compiler bug, reported as an error value
+		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 
 	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
@@ -2886,7 +2903,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub fn finish(mut self) -> Vec<u8> {
+	/// The module bytes; a module that fails validation is a compiler bug, only test helpers may treat it as a panic
+	pub fn finish(self) -> Vec<u8> {
+		self.try_finish().unwrap_or_else(|message| panic!("{message}"))
+	}
+
+	/// The module bytes, or the validation failure as an error message
+	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
 		self.module.section(self.type_manager.types());
 		if self.ctx.func_registry.import_count() > 0 {
@@ -2905,9 +2928,9 @@ impl WasmGcEmitter {
 		self.module.section(&self.names);
 
 		let bytes = self.module.finish();
-		std::fs::write("test.wasm", &bytes).expect("Failed to write test.wasm");
-		Self::validate_wasm(&bytes);
-		bytes
+		write_debug_module(&bytes);
+		Self::try_validate_wasm(&bytes).map_err(|message| format!("internal error: WASM validation failed: {message}"))?;
+		Ok(bytes)
 	}
 
 	fn emit_names(&mut self) {
@@ -3195,7 +3218,7 @@ impl WasmGcEmitter {
 		module.section(&names);
 
 		let bytes = module.finish();
-		std::fs::write("test.wasm", &bytes).expect("Failed to write test.wasm");
+		write_debug_module(&bytes);
 		bytes
 	}
 }
@@ -3366,7 +3389,15 @@ fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 	let needs_host = emitter.imports(Capability::Host);
 	let needs_wasi = emitter.imports(Capability::Wasi);
 	let needs_ffi = emitter.imports(Capability::Ffi);
-	Ok(CompiledModule { bytes: emitter.finish(), needs_host, needs_wasi, needs_ffi })
+	let bytes = emitter.try_finish().map_err(|message| crate::node::error(&message))?;
+	Ok(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi })
+}
+
+/// Leave the last module in `test.wasm` for inspection; a read-only directory must not fail the program
+fn write_debug_module(bytes: &[u8]) {
+	if let Err(failure) = std::fs::write("test.wasm", bytes) {
+		warn!("could not write test.wasm: {failure}");
+	}
 }
 
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant

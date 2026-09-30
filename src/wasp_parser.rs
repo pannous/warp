@@ -457,6 +457,15 @@ impl WaspParser {
 		ch.is_ascii_digit() || (ch == '.' && self.peek_char(offset + 1).is_ascii_digit())
 	}
 
+	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
+	fn operand_follows(&self, offset: usize) -> bool {
+		let mut position = offset;
+		while matches!(self.peek_char(position), ' ' | '\t') {
+			position += 1;
+		}
+		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
+	}
+
 	/// Check if character terminates a URL
 	fn is_url_terminator(&self, ch: char) -> bool {
 		ch == '\0' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
@@ -502,6 +511,9 @@ impl WaspParser {
 			('/', '=') => return Some((Op::DivAssign, 2)),
 			('%', '=') => return Some((Op::ModAssign, 2)),
 			('^', '=') => return Some((Op::PowAssign, 2)),
+			('<', '<') if !self.options.wit_mode => return Some((Op::Shl, 2)),
+			// `list<list<int>>` closes two generics, a shift has an operand behind it
+			('>', '>') if !self.options.wit_mode && self.operand_follows(2) => return Some((Op::Shr, 2)),
 			('<', '=') => return Some((Op::Le, 2)),
 			('>', '=') => return Some((Op::Ge, 2)),
 			('=', '=') => return Some((Op::Eq, 2)),
@@ -759,7 +771,7 @@ impl WaspParser {
 				let block = self.parse_bracketed('{');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
 			}
-			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() => {
+			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' => {
 				// Only treat as generic if immediately after symbol (no space)
 				// and NOT followed by a number (that would be comparison: i<9)
 				let generic = self.parse_bracketed('<');
