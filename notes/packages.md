@@ -11,4 +11,12 @@
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.wasp
   and data/uniscript/. warp's tests/test_uniscript.rs still tests it (through `use uniscript`).
-- Open: registry as its own repository; version pinning (`url#ref`); an update command.
+- Versions (src/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
+  The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
+  requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.
+  A local module named in a versioned `use` must declare a satisfying version.
+- `version` is a soft keyword (like Python's `match`): only before digits or a text; `version = 2` stays a variable.
+  `1.2.3` (two dots or more) lexes as a version literal; `version 1.10` keeps 1.10. Versions compare part by part at
+  compile time (`1.9 < version 1.10`, `1.2.0 == 1.2`), otherwise they are their text.
+- Command line: `warp use uniscript >= 0.2` is just the program, fetching like any other.
+- Open: registry as its own repository (later); an update command.

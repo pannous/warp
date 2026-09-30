@@ -6,3 +6,5 @@
 - A variable first assigned a one-character literal (`s="x"`) is a codepoint variable; `s = s + "ab"` is then a type error.
 - DONE: Uniscript: two suffix controls on one character (`<:mirror red A>`) are not expressible; nested tags are not supported. (effect words stack now; nested tags still open)
 - tests/test_wasm.rs `test_string_concat_wasm` passes now but is still `#[ignore]`.
+- `use x from 1.10` / `use x >= 1.10` read 1.10 as the float 1.1 (only `version 1.10` and literals with two dots keep their text): write `from 1.10.0` or `from version 1.10`.
+- uniscript has no git tag v0.2.0 yet (only the stale v0.1.0): `use uniscript version 0.2.0` works through the default branch's declared version only.

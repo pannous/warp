@@ -2,6 +2,7 @@
 //! A name found nowhere locally but in the registry packages.wasp is a package: its git repository, fetched into packages/<name>.
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
 use crate::wasp_parser::WaspParser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -57,8 +58,8 @@ struct Loader<'a> {
 
 impl Loader<'_> {
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
-		if let Some((import, name)) = used_module(&node) {
-			return Ok(match self.import(import, &name, &node)? {
+		if let Some(used) = used_module(&node) {
+			return Ok(match self.import(&used, &node)? {
 				imported if imported.is_empty() => Node::Empty,
 				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
 			});
@@ -68,7 +69,7 @@ impl Loader<'_> {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
 					match used_module(&item) {
-						Some((import, name)) => resolved.extend(self.import(import, &name, &item)?),
+						Some(used) => resolved.extend(self.import(&used, &item)?),
 						None => resolved.push(self.resolve(item)?),
 					}
 				}
@@ -81,27 +82,37 @@ impl Loader<'_> {
 
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
 	/// the `use` itself for a native library
-	fn import(&mut self, import: Import, name: &str, statement: &Node) -> Result<Vec<Node>, Node> {
+	fn import(&mut self, used: &Used, statement: &Node) -> Result<Vec<Node>, Node> {
+		let (import, name) = (used.import, used.name.as_str());
 		if import == Import::Use && is_builtin_library(name) {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
 			if import == Import::Use && package_repository(name).is_some() {
-				return self.use_package(name);
+				return self.use_package(name, used.requirement.as_ref());
 			}
 			return match import == Import::Use && crate::ffi::is_ffi_library(name) {
 				true => Ok(vec![as_use(statement)]),
 				false => Err(self.not_found(name, import)),
 			};
 		};
+		if let Some(requirement) = &used.requirement {
+			check_version(name, &path, requirement)?;
+		}
 		self.load(import, name, path)
 	}
 
-	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data
-	fn use_package(&mut self, name: &str) -> Result<Vec<Node>, Node> {
-		let directory = fetch_package(name).map_err(|failure| error(&failure))?;
-		let module = MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file());
-		match module {
+	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data.
+	/// A required version the default branch does not declare comes from the matching git tag.
+	fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
+		let mut directory = fetch_package(name).map_err(|failure| error(&failure))?;
+		if let Some(requirement) = requirement {
+			let declared = package_module(&directory, name).and_then(|path| module_version(&path));
+			if !declared.is_some_and(|version| requirement.allows(&version)) {
+				directory = fetch_package_version(name, requirement).map_err(|failure| error(&failure))?;
+			}
+		}
+		match package_module(&directory, name) {
 			Some(path) => self.load(Import::Use, name, path),
 			None => Ok(vec![]),
 		}
@@ -194,14 +205,47 @@ pub fn package_repository(name: &str) -> Option<String> {
 /// The directory of a package, cloned from its registered repository unless it is already there
 pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
-	let directory = Path::new(PACKAGES_DIRECTORY).join(name);
+	clone(name, &url, name, None)
+}
+
+/// The directory of the version of a package a requirement picks among its git tags (`v1.2.3` or `1.2.3`):
+/// that version, or the latest from the minimum on; cloned into packages/<name>@<version>
+pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
+	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
+	let tags = version_tags(&url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+	let Some((tag, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
+		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
+		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
+	};
+	clone(name, &url, &format!("{name}@{version}"), Some(tag))
+}
+
+/// The tags of a repository that name versions, with their versions
+fn version_tags(url: &str) -> Result<Vec<(String, Version)>, String> {
+	let listing = Command::new("git").args(["ls-remote", "--tags", "--refs", url]).output().map_err(|failure| failure.to_string())?;
+	if !listing.status.success() {
+		return Err(String::from_utf8_lossy(&listing.stderr).trim().to_string());
+	}
+	Ok(String::from_utf8_lossy(&listing.stdout).lines()
+		.filter_map(|line| line.split("refs/tags/").nth(1))
+		.filter_map(|tag| Some((tag.to_string(), Version::parse(tag)?)))
+		.collect())
+}
+
+/// A shallow clone of a repository, of a tag or the default branch, into packages/<directory_name> unless it is there
+fn clone(name: &str, url: &str, directory_name: &str, tag: Option<&str>) -> Result<PathBuf, String> {
+	let directory = Path::new(PACKAGES_DIRECTORY).join(directory_name);
 	let _fetching = FETCHING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	if directory.exists() {
 		return Ok(directory);
 	}
-	let staging = Path::new(PACKAGES_DIRECTORY).join(format!(".{name}.fetching.{}", std::process::id()));
-	let clone = Command::new("git").args(["clone", "--quiet", "--depth", "1", &url]).arg(&staging).output()
-		.map_err(|failure| format!("package {name} not fetched: git: {failure}"))?;
+	let staging = Path::new(PACKAGES_DIRECTORY).join(format!(".{directory_name}.fetching.{}", std::process::id()));
+	let mut command = Command::new("git");
+	command.args(["clone", "--quiet", "--depth", "1"]);
+	if let Some(tag) = tag {
+		command.args(["--branch", tag]);
+	}
+	let clone = command.arg(url).arg(&staging).output().map_err(|failure| format!("package {name} not fetched: git: {failure}"))?;
 	if !clone.status.success() {
 		return Err(format!("package {name} not fetched from {url}: {}", String::from_utf8_lossy(&clone.stderr).trim()));
 	}
@@ -211,10 +255,36 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 	Ok(directory)
 }
 
-/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`
-fn used_module(node: &Node) -> Option<(Import, String)> {
+fn package_module(directory: &Path, name: &str) -> Option<PathBuf> {
+	MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file())
+}
+
+/// The version a module file declares with a top level `version 1.2.3`
+fn module_version(path: &Path) -> Option<Version> {
+	let source = std::fs::read_to_string(path).ok()?;
+	declared_version(&statements(WaspParser::parse(&source)))
+}
+
+/// A local module a `use … version` names must declare a version the requirement allows
+fn check_version(name: &str, path: &Path, requirement: &Requirement) -> Result<(), Node> {
+	match module_version(path) {
+		Some(version) if requirement.allows(&version) => Ok(()),
+		Some(version) => Err(error(&format!("module {name} is version {version}, {requirement} required"))),
+		None => Err(error(&format!("module {name} declares no version, {requirement} required"))),
+	}
+}
+
+struct Used {
+	import: Import,
+	name: String,
+	requirement: Option<Requirement>,
+}
+
+/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.
+/// A version may follow: `use name version 1.2.3` exactly that one, `use name from 1.2.3` / `use name >= 1.2.3` that or later
+fn used_module(node: &Node) -> Option<Used> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let [keyword, argument] = items.as_slice() else { return None };
+	let [keyword, argument, rest @ ..] = items.as_slice() else { return None };
 	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
 	let import = if USE_KEYWORDS.contains(&keyword.as_str()) {
 		Import::Use
@@ -223,7 +293,24 @@ fn used_module(node: &Node) -> Option<(Import, String)> {
 	} else {
 		return None;
 	};
-	Some((import, path_of(argument)?))
+	let (name, requirement) = match (argument.drop_meta(), rest) {
+		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement::Minimum(version_of(minimum)?))),
+		(name, []) => (path_of(name)?, None),
+		(name, [version]) if version_of(version).is_some() && is_version_list(version) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
+		(name, [word, version]) if is_word(word, MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
+		(name, [word, version]) if is_version_keyword(word) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
+		_ => return None,
+	};
+	Some(Used { import, name, requirement })
+}
+
+/// `version 1.2.3`, as the parser binds it
+fn is_version_list(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_version_keyword))
+}
+
+fn is_word(node: &Node, word: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 fn path_of(node: &Node) -> Option<String> {
