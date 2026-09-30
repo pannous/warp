@@ -52,3 +52,15 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
   ("cannot extract a numeric value from ø"): a variable cannot hold the ø of an if-branch yet.
 - `count {a:1}` and `{a:1}.length` are 1: a key:value node counts as one item.
 - Nested objects are square lists in memory and print as `{a:1 b:[c:3]}` (existing: emit_default_key converts the inner braces).
+
+# Typed and fixed arrays
+
+`x : 100 int`, `x : 100 * int`, `pixel:int[100]`, `letters = char[3]`, `upcases = 26 * char` (also `x = int[4]`) are zero-filled
+lists (`analyzer::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
+(a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
+(`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
+
+Ignored tests that still cannot pass unedited: test_array_creation (`pixel=[];pixel[1]=15` assigns past the end, Decided an error;
+`pixel array`), test_array_initialization_basics (`analyze(parse(..))` on `x : 100 numbers` counts the parse tree, not the lowered list),
+test_array_initialization (`x : 100 * ints;[ x.length` is a typo, and `x is array of size 100`, `x is a 100 integer array` are
+natural-language forms), test_array_type_generics (expects `list<int>`, decided `list of int`).
