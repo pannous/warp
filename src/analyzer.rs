@@ -1264,7 +1264,7 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	refine_return_kinds(ctx);
 }
 
-/// `f -x` with a user function `f` is the call `f(-x)`: a function is never an operand of a subtraction
+/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction
 pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
@@ -1272,7 +1272,7 @@ pub fn lower_negated_calls(node: Node) -> Node {
 }
 
 fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>) -> Node {
-	let is_function = |operand: &Node| matches!(operand.drop_meta(), Node::Symbol(name) if functions.get(name).is_some_and(|function| !function.params.is_empty()));
+	let is_function = |operand: &Node| matches!(operand.drop_meta(), Node::Symbol(name) if crate::real::FUNCTIONS.contains(&name.as_str()) || functions.get(name).is_some_and(|function| !function.params.is_empty()));
 	match node {
 		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
 			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions)));
