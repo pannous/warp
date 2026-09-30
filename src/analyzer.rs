@@ -1264,23 +1264,47 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	refine_return_kinds(ctx);
 }
 
-/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction
+/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
+/// A built-in name that the program also binds as a variable or parameter (`exp-1`) stays a subtraction.
 pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
-	negate_calls(node, &ctx.user_functions)
+	let mut bound: HashSet<String> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
+	collect_assigned_names(&node, &mut bound);
+	negate_calls(node, &ctx.user_functions, &bound)
 }
 
-fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>) -> Node {
-	let is_function = |operand: &Node| matches!(operand.drop_meta(), Node::Symbol(name) if crate::real::FUNCTIONS.contains(&name.as_str()) || functions.get(name).is_some_and(|function| !function.params.is_empty()));
+fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.clone());
+			}
+			collect_assigned_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			collect_assigned_names(left, names);
+			collect_assigned_names(right, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
+		_ => {}
+	}
+}
+
+fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
+	let is_function = |operand: &Node| match operand.drop_meta() {
+		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
+			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),
+		_ => false,
+	};
 	match node {
 		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
-			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions)));
+			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions, bound)));
 			Node::List(vec![*function, negated], Bracket::Round, Separator::None)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions)), op, Box::new(negate_calls(*right, functions))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions, bound)), op, Box::new(negate_calls(*right, functions, bound))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions, bound)), data },
 		other => other,
 	}
 }
