@@ -51,7 +51,8 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	if required.contains(TEXT_CONCAT) || required.contains(ERROR_OF) || required.contains(WARN_TEXT) {
+	let calls_text_of = [TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
+	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
 	if required.contains("text_chars") {
