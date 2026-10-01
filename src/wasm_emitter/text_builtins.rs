@@ -54,6 +54,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(TEXT_CONCAT) || required.contains(ERROR_OF) || required.contains(WARN_TEXT) {
 		required.insert(TEXT_OF);
 	}
+	if required.contains("text_chars") {
+		required.extend(["list_reverse", "text_reverse"]); // the characters are collected backwards, and list_reverse hands texts on
+	}
+	if required.contains("list_reverse") {
+		required.insert("text_reverse");
+	}
 	if required.contains(TEXT_OF) {
 		required.insert(CHARACTER_ENCODER);
 	}

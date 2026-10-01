@@ -49,6 +49,19 @@ impl StringTable {
 		(offset, bytes.len() as u32)
 	}
 
+	/// Store binary data (a lookup table) under a name that no text can have, returning its offset
+	pub fn allocate_bytes(&mut self, name: &str, bytes: &[u8]) -> u32 {
+		let key = format!("\0{name}");
+		if let Some(&offset) = self.table.get(&key) {
+			return offset;
+		}
+		let offset = self.next_offset;
+		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
+		self.table.insert(key, offset);
+		self.next_offset += bytes.len() as u32;
+		offset
+	}
+
 	/// Recursively collect and allocate all strings from a Node tree
 	/// Also updates scope with string variable data (for WASI puts)
 	pub fn collect_from_node(&mut self, node: &Node, scope: &mut crate::analyzer::Scope) {

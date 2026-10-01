@@ -15,7 +15,8 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 8] = [
+const SYNONYMS: [(&str, &[&str]); 9] = [
+	("chars", &[]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	("reverse", &[]),
@@ -28,8 +29,8 @@ const SYNONYMS: [(&str, &[&str]); 8] = [
 const SUM: &str = "sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 7] =
-	[("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), (FIELD_WITH, 3)];
+pub const RUNTIME_WORDS: [(&str, usize); 8] =
+	[("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3)];
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
@@ -52,11 +53,17 @@ const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
-/// Library words whose result is always a text
+/// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
+const LIST_RESULT_WORDS: [&str; 1] = ["chars"];
 
-pub fn text_result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
-	TEXT_RESULT_WORDS.contains(&word).then_some(crate::type_kinds::Kind::Text)
+pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
+	use crate::type_kinds::Kind;
+	if TEXT_RESULT_WORDS.contains(&word) {
+		Some(Kind::Text)
+	} else {
+		LIST_RESULT_WORDS.contains(&word).then_some(Kind::List)
+	}
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
@@ -265,7 +272,8 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if let Some(word) = self.library_word(name) {
+		// `x.chars` stays the count of characters; only `chars x` and `chars(x)` are the list
+		if let Some(word) = self.library_word(name).filter(|_| counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);

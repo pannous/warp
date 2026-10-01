@@ -263,7 +263,6 @@ impl WasmGcEmitter {
 
 		self.emit_with_at_functions();
 		self.emit_list_concat();
-		self.emit_library_ops();
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
