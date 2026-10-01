@@ -155,7 +155,7 @@ def find(file, directories):
 		path = os.path.join(os.path.expanduser(directory), file)
 		if os.path.isfile(path):
 			return path
-	sys.exit(f"missing font {file}: run python3 fonts/uniscript_fonts.py all")
+	sys.exit(f"missing font {file}: run python3 fonts/uniscript_fonts.py all in the uniscript repository (github.com/pannous/uniscript)")
 
 
 def main(source_directories, out):

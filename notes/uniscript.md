@@ -31,7 +31,7 @@ Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/t
 - The ignored test `test_string_concat_wasm` (tests/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
 
 ## Design decisions
-- Controls follow their character (fonts/README.md): `<:red A>` → A U+E0072. A block's own entry wins over the suffix,
+- Controls follow their character (uniscript repository, fonts/README.md): `<:red A>` → A U+E0072. A block's own entry wins over the suffix,
   so `<:red circle>` → 🔴. Unicode's precomposed letters are separate blocks (`reversed`/`reverseInPlace`, `turned`) so that
   `mirror`/`turn` round-trip: e + U+E004D stays that and never becomes ɘ.
 - Spaces inside `<:type …>` and inside `<:type> … <:/type>` separate operands and are dropped (spec "Spaces"); text outside tags is kept.

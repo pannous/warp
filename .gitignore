@@ -20,8 +20,6 @@ probes/warp-parser_target
 
 probes
 
-fonts/dist/
-fonts/sources/
 
 # packages fetched by `use <name>`, see packages.wasp
 /packages/

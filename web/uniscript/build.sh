@@ -5,8 +5,8 @@ set -euo pipefail
 
 SERVER="pannous.com"
 SERVER_DIR="/var/www/pannous/uniscript"
-# slice_fonts.py serves only the OFL fonts: the Monaco/Menlo mirror fonts of fonts/dist are Apple fonts
-FONT_DIRS="fonts/dist $HOME/Library/Fonts"
+# slice_fonts.py serves only the OFL fonts: the Monaco/Menlo mirror fonts of the uniscript repository's fonts/dist are Apple fonts
+FONT_DIRS="${UNISCRIPT_FONTS:-$HOME/dev/uniscript/fonts/dist} $HOME/Library/Fonts"
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"

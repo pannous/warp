@@ -17,7 +17,7 @@ from this page's `fonts/`. No deploy script into /var/www/pannous uses `rsync --
 
 Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `data/` (a copy of the
 3.4 MB index) and `fonts/` (slice_fonts.py: UniscriptSans whole, UniscriptCJK and NewGardinerOmni2d4 sliced, all OFL; from
-`fonts/dist` or `~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.
+the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.
 
 ## How the JS host works (`uniscript.js`)
 
