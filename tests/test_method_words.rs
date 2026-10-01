@@ -107,7 +107,7 @@ fn test_join_and_split_edge_cases() {
 #[test]
 fn test_library_words_refuse_what_they_cannot_do() {
 	fails_with("split(\"a\", \"\")", "empty separator");
-	fails_with("upper(\"é\")", "non ascii text");
+	assert_eq!(printed("upper(\"é\")"), "\"É\"");
 	fails_with("sort [\"b\" \"a\"]", "not an int");
 	fails_with("reverse 5", "not a list");
 	fails_with("join([[1], [2]], \",\")", "not a joinable item");
