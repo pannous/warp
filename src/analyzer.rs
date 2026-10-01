@@ -149,7 +149,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(name) = items[0].drop_meta() {
-					return crate::library_words::text_result_kind(name).unwrap_or(Kind::Int);
+					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 				}
 			}
 			// Zero-arg function call: (funcname) with no args
@@ -2200,6 +2200,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
 				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
+			}
+			if *op == Op::As && value.name().to_lowercase() == "list" {
+				ctx.required_functions.extend(["text_chars", "list_reverse", "text_reverse"]); // `x as list` of a text
 			}
 			if *op == Op::Pow {
 				ctx.required_functions.insert("i64_pow");

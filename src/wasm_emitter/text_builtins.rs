@@ -46,8 +46,15 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	if required.contains(TEXT_CONCAT) || required.contains(ERROR_OF) {
+	let calls_text_of = [TEXT_CONCAT, ERROR_OF, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
+	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
+	}
+	if required.contains("text_chars") {
+		required.extend(["list_reverse", "text_reverse"]); // the characters are collected backwards, and list_reverse hands texts on
+	}
+	if required.contains("list_reverse") {
+		required.insert("text_reverse");
 	}
 	if required.contains(TEXT_OF) {
 		required.insert(CHARACTER_ENCODER);

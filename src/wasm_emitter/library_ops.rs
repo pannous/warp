@@ -10,8 +10,6 @@ use ValType::Ref;
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
 const KIND_MASK: i64 = 0xFF;
-const ASCII_LIMIT: i32 = 0x80;
-const ASCII_CASE_OFFSET: i32 = 32;
 /// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;
@@ -25,7 +23,8 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 7] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 8] = [
+	("chars", "text_chars"),
 	("field_with", "field_with"),
 	("reverse", "list_reverse"),
 	("sort", "list_sort"),
@@ -37,7 +36,9 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 7] = [
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
+		self.emit_text_reverse(); // list_reverse hands a text to it
 		self.emit_list_reverse();
+		self.emit_text_chars(); // and it ends with list_reverse
 		self.emit_list_sort();
 		self.emit_text_case("text_upper", true);
 		self.emit_text_case("text_lower", false);
@@ -63,19 +64,11 @@ impl WasmGcEmitter {
 		self.emit_fail_if(func, error);
 	}
 
-	/// A one-character string is a Codepoint node: local `text` becomes the equivalent one-byte Text node (ASCII only),
-	/// using the locals `length`, `address` and `code` as scratch
-	fn emit_codepoint_as_text(&self, func: &mut Function, text: u32, length: u32, address: u32, code: u32) {
-		let i31 = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
-		self.emit_field(func, text, 0);
-		Self::emit_list(func, &[I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Empty), I32Const(1), I::LocalSet(length)]);
-		self.emit_text_allocation(func, length, address);
-		self.emit_field(func, text, 1);
-		Self::emit_list(func, &[I::RefCastNonNull(i31), I::I31GetU, I::LocalTee(code), I32Const(ASCII_LIMIT), I::I32GeU]);
-		self.emit_fail_if(func, "non_ascii_text");
-		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(code), I::I32Store8(BYTE), I::LocalGet(address), I::LocalGet(length)]);
-		self.call(func, "new_text");
-		Self::emit_list(func, &[I::LocalSet(text), I::End]);
+	/// A one-character string is a Codepoint node: local `text` becomes the equivalent Text node of its UTF-8 bytes
+	pub(super) fn emit_codepoint_as_text(&self, func: &mut Function, text: u32) {
+		Self::emit_list(func, &[I::LocalGet(text), I::RefAsNonNull]);
+		self.call(func, crate::wasm_emitter::text_builtins::TEXT_OF);
+		func.instruction(&I::LocalSet(text));
 	}
 
 	/// Trap unless local 0 is a list (or ø, which `emit_empty_as_null` turned into null)
@@ -104,6 +97,16 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		self.runtime_function("list_reverse", vec![nullable], vec![node_ref], vec![nullable], |s, f| {
 			let reversed = 1;
+			// a text reverses by characters
+			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+			for kind in [Kind::Text, Kind::Codepoint] {
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				Self::emit_list(f, &[I::LocalGet(0), I::RefAsNonNull]);
+				s.call(f, "text_reverse");
+				Self::emit_list(f, &[I::Return, I::End]);
+			}
+			f.instruction(&I::End);
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
@@ -162,41 +165,6 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// text_upper(text) / text_lower(text): a fresh text with the ASCII letters mapped; other bytes are refused
-	/// rather than silently kept, because case mapping beyond ASCII needs Unicode tables
-	fn emit_text_case(&mut self, name: &'static str, is_upper: bool) {
-		if !self.should_emit_function(name) {
-			return;
-		}
-		self.emit_text_heap_global();
-		let node_ref = Ref(self.node_ref(false));
-		let (node_type, string_type) = (self.type_manager.node_type, self.type_manager.string_type);
-		let (first, last) = if is_upper { (b'a', b'z') } else { (b'A', b'Z') };
-		let shift = if is_upper { -ASCII_CASE_OFFSET } else { ASCII_CASE_OFFSET };
-		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
-			let (pointer, end, length, copy, index, byte) = (1, 2, 3, 4, 5, 6);
-			s.emit_codepoint_as_text(f, 0, length, copy, byte);
-			s.emit_is_text(f);
-			f.instruction(&I::I32Eqz);
-			s.emit_fail_if(f, "not_a_text");
-			s.emit_text_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(length)]);
-			s.emit_text_allocation(f, length, copy);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(length), I::I32GeU, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::LocalTee(byte)]);
-			Self::emit_list(f, &[I32Const(ASCII_LIMIT), I::I32GeU]);
-			s.emit_fail_if(f, "non_ascii_text");
-			// the byte is shifted when it is a letter of the other case
-			Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(index), I::I32Add]);
-			Self::emit_list(f, &[I::LocalGet(byte), I32Const(shift), I::I32Add, I::LocalGet(byte)]);
-			Self::emit_list(f, &[I::LocalGet(byte), I32Const(first as i32), I::I32Sub, I32Const((last - first + 1) as i32), I::I32LtU, I::Select]);
-			Self::emit_list(f, &[I::I32Store8(BYTE), I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
-			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(length), I::StructNew(string_type), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
-		});
-	}
-
 	/// text_split(text, separator): the pieces between the separators as a list of texts that share the bytes of the text
 	fn emit_text_split(&mut self) {
 		if !self.should_emit_function("text_split") {
@@ -207,12 +175,11 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let square_list = (SQUARE_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let mut locals = vec![nullable];
-		locals.extend([ValType::I32; 11]);
+		locals.extend([ValType::I32; 8]);
 		self.runtime_function("text_split", vec![node_ref, node_ref], vec![node_ref], locals, |s, f| {
 			let (pieces, pointer, end, separator, separator_end, start, index, matched, offset) = (2, 3, 4, 5, 6, 7, 8, 9, 10);
-			let (length, address, code) = (11, 12, 13);
-			s.emit_codepoint_as_text(f, 0, length, address, code);
-			s.emit_codepoint_as_text(f, 1, length, address, code);
+			s.emit_codepoint_as_text(f, 0);
+			s.emit_codepoint_as_text(f, 1);
 			s.emit_require_kind(f, 0, Kind::Text, "not_a_text");
 			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
 			s.emit_text_bounds(f, pointer, end);
@@ -281,12 +248,11 @@ impl WasmGcEmitter {
 		self.emit_int_to_decimal();
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let i31 = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
 		let mut locals = vec![nullable, nullable];
-		locals.extend([ValType::I32; 6]);
+		locals.extend([ValType::I32; 4]);
 		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, code, length) = (4, 5, 6, 7, 8, 9);
+			let (bound, address, position, is_first) = (4, 5, 6, 7);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -294,6 +260,7 @@ impl WasmGcEmitter {
 			let next_element = |f: &mut Function| {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
+				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
 			};
 			let loop_over_cells = |f: &mut Function| {
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
@@ -314,7 +281,7 @@ impl WasmGcEmitter {
 			};
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
-			s.emit_codepoint_as_text(f, 1, length, address, code);
+			s.emit_codepoint_as_text(f, 1);
 			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
 			// pass 1: an upper bound of the bytes: every item, and a separator after it
 			loop_over_cells(f);
@@ -324,10 +291,8 @@ impl WasmGcEmitter {
 			f.instruction(&I::Else);
 			is_kind(f, Kind::Int);
 			Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else]);
-			is_kind(f, Kind::Codepoint);
-			Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(1), I::Else]);
 			s.call(f, "not_a_joinable_item");
-			Self::emit_list(f, &[I32Const(0), I::End, I::End, I::End]);
+			Self::emit_list(f, &[I32Const(0), I::End, I::End]);
 			Self::emit_list(f, &[I::LocalGet(bound), I::I32Add]);
 			s.emit_text_field(f, 1, 1);
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);
@@ -343,15 +308,9 @@ impl WasmGcEmitter {
 			f.instruction(&I::If(BlockType::Empty));
 			append_text(f, element);
 			f.instruction(&I::Else);
-			is_kind(f, Kind::Int);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(position), I::LocalGet(position)]);
+			Self::emit_list(f, &[I::LocalGet(position), I::LocalGet(position)]);
 			s.emit_int_value_of(f, element);
-			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::I32Add, I::LocalSet(position), I::Else]);
-			// a character: only ASCII, which is one byte
-			s.emit_field(f, element, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(i31), I::I31GetU, I::LocalTee(code), I32Const(ASCII_LIMIT), I::I32GeU]);
-			s.emit_fail_if(f, "non_ascii_text");
-			Self::emit_list(f, &[I::LocalGet(position), I::LocalGet(code), I::I32Store8(BYTE), I::LocalGet(position), I32Const(1), I::I32Add, I::LocalSet(position), I::End, I::End]);
+			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::I32Add, I::LocalSet(position), I::End]);
 			end_loop(f);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 			s.call(f, "new_text");

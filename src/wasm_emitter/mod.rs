@@ -11,6 +11,7 @@ mod import_manager;
 mod key_emitter;
 mod list_emitter;
 mod library_ops;
+mod text_unicode;
 mod list_ops;
 pub(crate) mod text_builtins;
 mod node_emitter;
@@ -511,11 +512,7 @@ impl WasmGcEmitter {
 
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self.string_table
-			.table()
-			.get(s)
-			.map(|&offset| (offset, s.len() as u32))
-			.unwrap_or((0, s.len() as u32));
+		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
 		func.instruction(&I32Const(ptr as i32));
 		func.instruction(&I32Const(len as i32));
 		self.emit_call(func, constructor);
@@ -902,6 +899,7 @@ impl WasmGcEmitter {
 		self.emit_getters();
 		self.emit_math_helpers();
 		self.emit_text_builtins();
+		self.emit_library_ops(); // after the text builtins: the library words call text_of
 	}
 
 	fn emit_getters(&mut self) {
@@ -996,6 +994,11 @@ impl WasmGcEmitter {
 			let idx = self.register_func("i64_pow");
 			self.exports.export("i64_pow", ExportKind::Func, idx);
 		}
+	}
+
+	/// Allocate a binary lookup table in linear memory
+	fn allocate_bytes(&mut self, name: &str, bytes: &[u8]) -> u32 {
+		self.string_table.allocate_bytes(name, bytes)
 	}
 
 	/// Allocate a string in linear memory
@@ -2149,9 +2152,13 @@ impl WasmGcEmitter {
 			}
 			Node::Char(_) => self.emit_node_instructions(func, &Node::List(vec![value.clone()], Bracket::Square, Separator::Space)),
 			_ if self.get_type(value) == Kind::List => self.emit_node_instructions(func, value),
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, "text_chars");
+			}
 			_ => {
 				let kind = self.get_type(value);
-				self.emit_type_error(func, format!("cannot cast {kind} to list: the characters of {} are known only at runtime", value.serialize()));
+				self.emit_type_error(func, format!("cannot cast {kind} to list: {} as list", value.serialize()));
 			}
 		}
 	}
