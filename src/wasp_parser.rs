@@ -206,6 +206,60 @@ pub struct WaspParser {
 	functions: std::collections::HashSet<String>,
 	/// Those of them declared with named parameters (`f x y := …`), the rest take the implicit `it`
 	functions_with_parameters: std::collections::HashSet<String>,
+	/// Operators the program declares (`suffix operator ‼ := it*2`), longest glyph first, found by a pre-scan of the source
+	user_operators: Vec<UserOperator>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum UserOperatorKind {
+	Prefix,
+	Suffix,
+	Infix,
+}
+
+#[derive(Clone, Debug)]
+struct UserOperator {
+	glyph: Vec<char>,
+	kind: UserOperatorKind,
+}
+
+const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
+const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
+/// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
+const USER_SUFFIX_BP: u8 = 200;
+const USER_PREFIX_RIGHT_BP: u8 = 155;
+const USER_INFIX_BP: (u8, u8) = (140, 141);
+
+/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit
+fn is_operator_glyph(glyph: &str) -> bool {
+	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && glyph.chars().any(|c| !c.is_ascii())
+}
+
+fn is_plain_name(word: &str) -> bool {
+	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+fn scan_user_operators(source: &str) -> Vec<UserOperator> {
+	let mut found: Vec<UserOperator> = Vec::new();
+	for statement in source.lines().flat_map(|line| line.split(';')) {
+		let words: Vec<&str> = statement.split_whitespace().collect();
+		let declared = match words.as_slice() {
+			[kind, "operator", glyph, ":=", ..] => OPERATOR_KINDS.iter().find(|(word, _)| word == kind).map(|(_, kind)| (*glyph, *kind)),
+			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) => Some((*glyph, UserOperatorKind::Infix)),
+			_ => None,
+		};
+		if let Some((glyph, kind)) = declared.filter(|(glyph, _)| is_operator_glyph(glyph)) {
+			found.push(UserOperator { glyph: glyph.chars().collect(), kind });
+		}
+	}
+	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
+	found
+}
+
+fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
+	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
+	Node::List([vec![Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 enum ElseParseMode {
@@ -223,7 +277,9 @@ impl WaspParser {
 		let input: String = input.nfc().collect();
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
+		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
 		WaspParser {
+			user_operators,
 			input,
 			chars,
 			pos: 0,
@@ -246,6 +302,78 @@ impl WaspParser {
 	/// Set the hint position to current parser position
 	fn set_hint_pos(&self) {
 		set_hint_position(self.line_nr, self.column);
+	}
+
+	/// The declared operator written at the cursor, of one of the kinds
+	fn user_operator_at(&self, kinds: &[UserOperatorKind]) -> Option<UserOperator> {
+		self.user_operators.iter().find(|operator| kinds.contains(&operator.kind) && self.chars[self.pos..].starts_with(&operator.glyph)).cloned()
+	}
+
+	/// `3‼`: the call of the suffix operator on the left operand
+	fn try_parse_user_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let operator = self.user_operator_at(&[UserOperatorKind::Suffix])?;
+		if min_bp > USER_SUFFIX_BP {
+			return None;
+		}
+		self.advance_by(operator.glyph.len());
+		Some(operator_call(&operator.glyph, vec![lhs.clone()]))
+	}
+
+	/// `2 ⊕ 3`: the call of the infix operator on both operands
+	fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
+		let (left_bp, right_bp) = USER_INFIX_BP;
+		if left_bp < min_bp {
+			return None;
+		}
+		self.advance_by(operator.glyph.len());
+		self.skip_whitespace();
+		let rhs = self.parse_expr(right_bp);
+		Some(operator_call(&operator.glyph, vec![lhs.clone(), rhs]))
+	}
+
+	/// `∆3`: the call of the prefix operator on the operand after it
+	fn try_parse_user_prefix(&mut self) -> Option<Node> {
+		let operator = self.user_operator_at(&[UserOperatorKind::Prefix])?;
+		self.advance_by(operator.glyph.len());
+		self.skip_spaces();
+		let operand = self.parse_expr(USER_PREFIX_RIGHT_BP);
+		Some(operator_call(&operator.glyph, vec![operand]))
+	}
+
+	/// `prefix|suffix|infix operator ⊕ := body` defines the function `operator_⊕`: its parameter is `it` (prefix, suffix) or `a b` (infix).
+	/// `operator ⊕ has precedence above +` is not supported.
+	fn try_parse_operator_declaration(&mut self, word: &str) -> Option<Node> {
+		if self.options != ParserOptions::default() {
+			return None;
+		}
+		let rest: String = self.chars[self.pos..].iter().take_while(|c| **c != '\n' && **c != ';').collect();
+		let words: Vec<&str> = rest.split_whitespace().collect();
+		if word == "operator" && words.get(1) == Some(&"has") && words.get(2) == Some(&"precedence") {
+			while !matches!(self.current_char(), '\n' | ';' | '\0') {
+				self.advance();
+			}
+			return Some(error("operator precedence declarations are not supported yet"));
+		}
+		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
+		let [operator_word, glyph, ":=", ..] = words.as_slice() else { return None };
+		if *operator_word != "operator" || !is_operator_glyph(glyph) {
+			return None;
+		}
+		let glyph: Vec<char> = glyph.chars().collect();
+		self.skip_spaces();
+		self.advance_by("operator".chars().count());
+		self.skip_spaces();
+		self.advance_by(glyph.len());
+		self.skip_spaces();
+		self.advance_by(":=".len());
+		let body = self.parse_expr(0);
+		let parameters = match kind {
+			UserOperatorKind::Infix => vec![Symbol("a".to_string()), Symbol("b".to_string())],
+			_ => vec![Symbol("it".to_string())],
+		};
+		let head = operator_call(&glyph, parameters);
+		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}
 
 	/// Hint when the operator written at the cursor is not the canonical one; call once when the operator is consumed
@@ -1009,6 +1137,10 @@ impl WaspParser {
 			return constant; // if true {} fall through :?
 		}
 
+		if let Some(declaration) = self.try_parse_operator_declaration(&symbol) {
+			return declaration;
+		}
+
 		// Possessive: `p's name` is the field `p.name`
 		if !self.options.data_mode && self.current_char() == '\'' && self.peek_char(1) == 's' && self.peek_char(2) == ' ' && self.is_identifier_start(3) {
 			self.advance_by(3);
@@ -1151,6 +1283,8 @@ impl WaspParser {
 			negate_condition(self.finish_prefix(op, rhs))
 		} else if let Some(marker) = self.peek_guard_word() {
 			self.parse_guard(marker)
+		} else if let Some(call) = self.try_parse_user_prefix() {
+			call
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -1184,7 +1318,11 @@ impl WaspParser {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// Step 2: Suffix (led)
-			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp) {
+			if let Some(updated) = self.try_parse_suffix(&lhs, min_bp).or_else(|| self.try_parse_user_suffix(&lhs, min_bp)) {
+				lhs = updated;
+				continue;
+			}
+			if let Some(updated) = self.try_parse_user_infix(&lhs, min_bp) {
 				lhs = updated;
 				continue;
 			}
