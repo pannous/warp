@@ -24,8 +24,7 @@ fn is_data_node(node: &Node) -> bool {
 /// it reads as statements: run them in order and yield the last one (`'hello';(1 2 3 4);10` → 10).
 /// Inside brackets the semicolon always separates data, `(1;2;3)` and `(1,2; 3,4)` are lists.
 pub fn is_semicolon_sequence(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-	*separator == Separator::Semicolon && *bracket == Bracket::None
-		&& items.iter().any(|item| matches!(item.drop_meta(), Node::List(_, Bracket::Round | Bracket::Square | Bracket::Curly, _)))
+	matches!(separator, Separator::Semicolon | Separator::Newline) && items.len() > 1 && matches!(bracket, Bracket::None | Bracket::Curly)
 }
 
 /// Infer the Kind for an expression
