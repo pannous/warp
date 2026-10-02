@@ -54,6 +54,10 @@ use extensions::numbers::Number;
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Answers to the compiler's questions (Asks), remembered per project: one `topic = explicit form` per line
+const ANSWERS_FILE: &str = ".wasp-answers";
+/// Never ask, every ambiguity falls back to its warning or error (as in CI or a pipe)
+const NO_ASK_FLAG: &str = "--no-ask";
 
 fn node_to_i32(node: &Node) -> i32 {
     match node {
@@ -84,6 +88,13 @@ fn main() {
         diagnostic::set_warning_mode(diagnostic::WarningMode::Error);
         args.remove(flag);
     }
+
+    // Ambiguities are asked on the terminal unless nobody is there to answer
+    let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
+    if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
+        diagnostic::set_asker(Some(std::rc::Rc::new(diagnostic::TerminalAsker)));
+    }
+    diagnostic::use_answers_file(ANSWERS_FILE);
 
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
@@ -276,6 +287,7 @@ fn usage() {
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
+    println!("  --no-ask             Never ask about ambiguities: take their default with a warning (or fail)");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

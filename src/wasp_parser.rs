@@ -1,4 +1,4 @@
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
@@ -32,6 +32,11 @@ const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
 /// it is a declaration only when a name and a field block follow
 const RECORD_WORD: &str = "record";
+/// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
+const UPTO: &str = "upto";
+const EXCLUSIVE_DOTS: &str = "..";
+/// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
+const KOTLIN_RANGE: &str = "kotlin-range";
 const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
 /// Words that test a value for being ø or falsy, sugar for `not x`
 const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefined"];
@@ -402,10 +407,28 @@ impl WaspParser {
 	}
 
 	/// Hint when the operator written at the cursor is not the canonical one; call once when the operator is consumed
-	fn hint_operator(&self, chars: usize, is_prefix: bool) {
+	/// The operator as written, after hinting at its preferred spelling
+	fn hint_operator(&self, chars: usize, is_prefix: bool) -> String {
 		let written: String = (0..chars).map(|offset| self.peek_char(offset)).collect();
 		self.set_hint_pos();
 		norm::operator(&written, is_prefix);
+		written
+	}
+
+	/// Ranges whose end readers expect either way are Asks, by default read as wasp does (exclusive):
+	/// `a upto b` (wiki/range.md: excludes b) and the loop bound `for i in 0..n-1` (Kotlin's `..` includes n-1)
+	fn range_reading(&self, op: Op, written: &str, end: &Node, line: usize, column: usize) -> Result<Op, Node> {
+		let question = match written {
+			UPTO => "does `a upto b` include b? (`..<` or `..` exclude it, `to` or `...` include it)",
+			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
+				"does the loop bound `..n-1` include n-1? (wasp's `..` excludes it, Kotlin's includes it)"
+			}
+			_ => return Ok(op),
+		};
+		let topic = if written == UPTO { UPTO } else { KOTLIN_RANGE };
+		let readings = vec![reading("exclusive", "..<"), reading("inclusive", "...")];
+		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning).written(written).at(line, column))?;
+		Ok(if chosen == 0 { Op::Range } else { Op::To })
 	}
 
 	pub fn parse(input: &str) -> Node {
@@ -1516,7 +1539,7 @@ impl WaspParser {
 			}
 
 			// Consume the operator
-			self.hint_operator(chars, false);
+			let written = self.hint_operator(chars, false);
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			self.advance_by(chars);
@@ -1547,6 +1570,15 @@ impl WaspParser {
 					continue;
 				}
 			}
+
+			let op = match self.range_reading(op, &written, &rhs, op_line, op_column) {
+				Ok(op) => op,
+				Err(unanswered) => {
+					lhs = unanswered;
+					previous_comparand = None;
+					continue;
+				}
+			};
 
 			if op == Op::Hash {
 				crate::normalize::set_position_of(&lhs);
@@ -2907,6 +2939,11 @@ fn defined_function_name(target: &Node) -> Option<String> {
 		},
 		_ => None,
 	}
+}
+
+/// `n-1`, the end a Kotlin writer gives an inclusive `..`
+fn is_minus_one(end: &Node) -> bool {
+	matches!(end.drop_meta(), Node::Key(_, Op::Sub, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))))
 }
 
 fn mentions(node: &Node, name: &str) -> bool {

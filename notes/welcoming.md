@@ -29,3 +29,25 @@ User decisions from that round:
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
 - `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
+
+## Ask: how it works (src/diagnostic.rs)
+- `Ask { topic, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
+  `ask(&Ask) -> Result<usize, Node>` returns the chosen reading. The is-a-warning/error relation is the `fallback` field.
+- Order: a remembered answer (per topic) → the asker → the fallback. Fallback Warning prints
+  `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default (an error under `--strict` or
+  a `use strict` line); fallback Error returns `Node::Error`.
+- Askers are pluggable (`trait Asker`, `set_asker` / `with_asker`): `TerminalAsker` (numbered readings, default marked,
+  Enter = default, end of input = no answer), `ScriptedAnswers` for tests; later web/IDE. The library default is no asker,
+  so tests and embedders never block on a prompt.
+- CLI: asks on the terminal when stdin and stderr are terminals, `CI` is unset and `--no-ask` is absent. Answers persist in
+  `.wasp-answers` in the working directory (`topic = explicit form` per line); an answered Ask hints the explicit form
+  (educate channel `normalize::hint`), so writing it removes the question for good.
+- Users so far (src/wasp_parser.rs `range_reading`): `a upto b` (topic `upto`) and the for-header bound `0..n-1`
+  (topic `kotlin-range`, Kotlin's `..` is inclusive), both default exclusive (wasp's documented reading), fallback Warning.
+  Explicit `..<`, `...`, `to` never ask. tests/test_welcoming_ask.rs.
+- An unanswered Error-fallback Ask names every explicit form in its fix (`` `a` for first or `b` for second``).
+- Educate with acknowledge-once: `educate_once(topic, written, preferred, reason)` shows the hint once per run until
+  the user acknowledges it (`Asker::acknowledge`; terminal: `y`; scripted: answer `ACKNOWLEDGED`), then never again:
+  remembered as `ack:<topic> = acknowledged` next to the answers. Non-interactive runs just show it, never block.
+- New Asks: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form), map the
+  chosen index to the reading, pick Error as fallback only when a wrong guess would silently corrupt results.

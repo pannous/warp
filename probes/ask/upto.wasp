@@ -1,0 +1,4 @@
+// `upto` is ambiguous: exclusive by default (wiki/range.md), inclusive if the user answers so
+sum = 0
+for i in 1 upto 4 { sum += i }
+sum
