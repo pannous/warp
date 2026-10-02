@@ -38,6 +38,16 @@ const TEST_WORDS: [&str; 5] = ["empty", "missing", "absent", "unknown", "undefin
 const EMPTY_WORD: &str = "empty";
 /// Words that may follow a test word and so end the condition
 const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
+/// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
+const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
+const RETURN_KEYWORD: &str = "return";
+const IN_KEYWORD: &str = "in";
+/// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
+const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
+
+fn is_unindexable_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
+}
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
@@ -139,6 +149,11 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
 			_ => None,
 		},
+		// `if x in xs {…}`: the block after the collection is the body
+		Node::List(items, bracket, separator) if items.len() == 3 && matches!(items[1].drop_meta(), Node::Symbol(word) if word == IN_KEYWORD) => {
+			split_trailing_block(&items[2], empty_is_block)
+				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
+		}
 		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => split_trailing_block(right, empty_is_block)
 			.map(|(operand, block)| (Node::Key(left.clone(), op.clone(), Box::new(operand)), block)),
 		_ => None,
@@ -1311,6 +1326,8 @@ impl WaspParser {
 			self.parse_guard(marker)
 		} else if let Some(call) = self.try_parse_user_prefix() {
 			call
+		} else if let Some(statement) = self.try_parse_return() {
+			statement
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -1331,6 +1348,23 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
+	fn try_parse_return(&mut self) -> Option<Node> {
+		if !self.matches_keyword(RETURN_KEYWORD) {
+			return None;
+		}
+		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.advance_by(RETURN_KEYWORD.len());
+		self.skip_spaces();
+		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
+		if !self.at_body_start() || names_a_variable {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // bare `return`, or `return := …` as a name
+			return None;
+		}
+		let value = self.parse_expr(0);
+		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
 	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
@@ -1383,9 +1417,26 @@ impl WaspParser {
 				continue;
 			}
 
+			// Step 3c: membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`
+			// a unit word stays in the flat counting phrase: `number of chars in t`
+			let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
+			if self.matches_keyword(IN_KEYWORD) && !counts_units {
+				let (l_bp, r_bp) = Op::Eq.binding_power();
+				if l_bp < min_bp {
+					break;
+				}
+				self.advance_by(IN_KEYWORD.len());
+				self.skip_whitespace();
+				let collection = self.parse_expr(r_bp);
+				lhs = Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), collection], Bracket::None, Separator::Space);
+				previous_comparand = None;
+				continue;
+			}
+
 			// Step 3: Check for infix operator
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
+				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
 				None => {
 					// Step 3b: Check for implicit function application (space between atoms)
 					// This makes `x = f y` parse as `x = (f y)` and `252 > f y` as `252 > (f y)`
@@ -1591,11 +1642,33 @@ impl WaspParser {
 		}
 	}
 
+	/// The name of `for x in …`, or the names each element destructures into: `for (r, c) in …`, `for k, v in …`
+	fn parse_loop_variable(&mut self) -> Option<Node> {
+		let bracket = if self.current_char() == '(' { self.advance(); Bracket::Round } else { Bracket::None };
+		let mut names = vec![];
+		loop {
+			self.skip_spaces();
+			names.push(Symbol(self.parse_symbol().ok()?));
+			self.skip_spaces();
+			if self.current_char() != ',' {
+				break;
+			}
+			self.advance();
+		}
+		if bracket == Bracket::Round {
+			if self.current_char() != ')' {
+				return None;
+			}
+			self.advance();
+		}
+		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
+	}
+
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.skip_spaces();
-		let variable = self.parse_symbol().ok().map(Symbol);
+		let variable = self.parse_loop_variable();
 		self.skip_spaces();
 		let Some(variable) = variable.filter(|_| self.matches_keyword("in")) else {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_header;
@@ -1645,19 +1718,40 @@ impl WaspParser {
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
 	}
 
+	/// `else body`, and `else if` / `elif` / `elsif` / `elseif` chaining a whole new `if … {…} else …`
 	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
 		self.skip_spaces();
-		if self.matches_keyword("else") {
-			self.advance_by(4);
+		let else_expr = if let Some(word) = self.at_else_if_word() {
+			self.advance_by(word.len());
+			self.parse_else_if()
+		} else if self.matches_keyword("else") {
+			self.advance_by("else".len());
 			self.skip_spaces();
-			let else_expr = match mode {
+			match mode {
+				_ if self.matches_keyword("if") => {
+					self.advance_by("if".len());
+					self.parse_else_if()
+				}
+				_ if self.current_char() == ':' => {
+					self.advance(); // Python's `else: body`
+					self.parse_expr(0)
+				}
 				ElseParseMode::Atom => self.parse_atom(),
 				ElseParseMode::Expr => self.parse_expr(0),
-			};
-			Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
+			}
 		} else {
-			if_then
-		}
+			return if_then;
+		};
+		Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
+	}
+
+	fn at_else_if_word(&self) -> Option<&'static str> {
+		ELSE_IF_WORDS.into_iter().find(|word| self.matches_keyword(word))
+	}
+
+	fn parse_else_if(&mut self) -> Node {
+		let condition = self.parse_prefix_operand(Op::If);
+		self.finish_if_prefix(condition)
 	}
 
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -1845,7 +1939,8 @@ impl WaspParser {
 	}
 
 	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
-		if self.current_char() != '[' || min_bp > subscript_bp {
+		// a space before the bracket makes it a list, `f [1, 2]`; only `xs[1]` indexes
+		if self.current_char() != '[' || min_bp > subscript_bp || self.prev_char().is_whitespace() || is_unindexable_keyword(lhs) {
 			return None;
 		}
 		let before_bracket = (self.pos, self.line_nr, self.column, self.current_line.clone());
