@@ -32,6 +32,15 @@ pub struct HintPosition {
 thread_local! {
     static HINT_POSITION: RefCell<HintPosition> = RefCell::new(HintPosition::default());
     static CAPTURED_HINTS: RefCell<Option<Vec<CapturedHint>>> = const { RefCell::new(None) };
+    static HINTS_MUTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `action` without hints on this thread: a stage that repeats work already hinted (the emitter's rerun) says nothing twice
+pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
+    let muted = HINTS_MUTED.with(|cell| cell.replace(true));
+    let result = action();
+    HINTS_MUTED.with(|cell| cell.set(muted));
+    result
 }
 
 /// A hint recorded instead of only printed, see `capture_hints`
@@ -292,7 +301,7 @@ pub fn clear_shown_hints() {
 /// Emit a normalization hint to stderr
 pub fn hint(original: &str, canonical: &str, reason: &str) {
     let mode = hint_mode();
-    if mode == HintMode::Off {
+    if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
         return;
     }
 

@@ -72,3 +72,9 @@ fn a_fractional_index_in_a_variable_must_be_an_integer() {
 	is!("xs=[1,2,3]; m=4/2; xs[m]", 3);
 }
 
+/// The emitter compiles a program again when it needs more runtime functions; that rerun repeats no hint
+#[test]
+fn a_hint_is_given_once_per_compilation() {
+	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("xs=[1,2,3]; reverse(xs)#(3/2)"));
+	assert_eq!(hints.iter().filter(|hint| hint.canonical == "3//2").count(), 1, "{hints:?}");
+}

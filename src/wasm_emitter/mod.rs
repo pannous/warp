@@ -747,7 +747,7 @@ impl WasmGcEmitter {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
-			rerun.emit_for_node(node);
+			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
 			*self = rerun;
 		}
 	}
