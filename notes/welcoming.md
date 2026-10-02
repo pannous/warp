@@ -51,5 +51,9 @@ User decisions from that round:
 - Educate with acknowledge-once: `educate_once(topic, written, preferred, reason)` shows the hint once per run until
   the user acknowledges it (`Asker::acknowledge`; terminal: `y`; scripted: answer `ACKNOWLEDGED`), then never again:
   remembered as `ack:<topic> = acknowledged` next to the answers. Non-interactive runs just show it, never block.
+- A wrong guess fails far away, so `eval` names it: a runtime error lists the defaults unanswered Asks took
+  (`assumed at 23:13, 24:15: …; fix: ..<`, diagnostic::take_assumptions), and an index out of range in a program with an
+  exclusive range adds "hint: `..` excludes the end; `...` or `to` include it". The kotlin-range Ask fires for every
+  for-header `a..b-1` form, also `(0..n-1)`, `0..(n-1)`, `do` bodies and loops inside functions.
 - New Asks: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form), map the
   chosen index to the reading, pick Error as fallback only when a wrong guess would silently corrupt results.
