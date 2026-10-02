@@ -420,10 +420,11 @@ impl WaspParser {
 	/// Ranges whose end readers expect either way are Asks, by default read as wasp does (exclusive):
 	/// `a upto b` (wiki/range.md: excludes b) and the loop bound `for i in 0..n-1` (Kotlin's `..` includes n-1)
 	fn range_reading(&self, op: Op, written: &str, end: &Node, line: usize, column: usize) -> Result<Op, Node> {
+		let end_text = crate::normalize::operand_text(end);
 		let question = match written {
-			UPTO => "does `a upto b` include b? (`..<` or `..` exclude it, `to` or `...` include it)",
+			UPTO => format!("does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"),
 			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
-				"does the loop bound `..n-1` include n-1? (wasp's `..` excludes it, Kotlin's includes it)"
+				format!("does the loop bound `..{end_text}` include {end_text}? (wasp's `..` excludes it, Kotlin's includes it)")
 			}
 			_ => return Ok(op),
 		};
@@ -2516,7 +2517,9 @@ impl WaspParser {
 		};
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
-		let outer_header = std::mem::replace(&mut self.in_for_header, false);
+		// `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
+		let inner_header = self.in_for_header && bracket_type == Bracket::Round;
+		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
 		let list = self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
 		self.in_for_header = outer_header;
 		list
@@ -2958,7 +2961,11 @@ fn defined_function_name(target: &Node) -> Option<String> {
 
 /// `n-1`, the end a Kotlin writer gives an inclusive `..`
 fn is_minus_one(end: &Node) -> bool {
-	matches!(end.drop_meta(), Node::Key(_, Op::Sub, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))))
+	match end.drop_meta() {
+		Node::Key(_, Op::Sub, one) => matches!(one.drop_meta(), Node::Number(Number::Int(1))),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_minus_one(&items[0]),
+		_ => false,
+	}
 }
 
 fn mentions(node: &Node, name: &str) -> bool {

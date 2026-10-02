@@ -254,6 +254,7 @@ thread_local! {
 	static ANSWERS: std::cell::RefCell<std::collections::HashMap<String, String>> = std::cell::RefCell::new(Default::default());
 	static ANSWERS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Who answers the Asks of later compilations on this thread; `None` (the default) never asks, every Ask falls back
@@ -341,9 +342,19 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 		return Ok(chosen);
 	}
 	match question.fallback {
-		Fallback::Warning => report(&[question.unanswered()]).map(|_| question.default),
+		Fallback::Warning => {
+			let assumption = question.unanswered();
+			ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().push(assumption.clone()));
+			report(&[assumption]).map(|_| question.default)
+		}
 		Fallback::Error => Err(question.unanswered().into_error()),
 	}
+}
+
+/// The defaults unanswered Asks took on this thread since the last call: a later runtime error names them,
+/// since a wrong guess there typically fails far away from the ambiguous source
+pub fn take_assumptions() -> Vec<Diagnostic> {
+	ASSUMPTIONS.with(|assumptions| std::mem::take(&mut *assumptions.borrow_mut()))
 }
 
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,

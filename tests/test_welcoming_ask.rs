@@ -86,3 +86,29 @@ fn an_educating_note_shows_until_acknowledged() {
 	});
 	std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn every_for_header_bound_minus_one_asks() {
+	let forms = "probes/ask/kotlin_range_forms.wasp"; // 7 loops of n-1 forms, nested in parentheses, `do`, a function
+	is!(forms, 21);
+	with_asker(answers("kotlin-range", "inclusive"), || is!(forms, 28));
+}
+
+#[test]
+fn a_runtime_error_names_the_range_hint_and_the_guesses_behind_it() {
+	let failure = format!("{:?}", eval("samples/life.wasp"));
+	assert!(failure.contains("index out of range"), "{failure}");
+	assert!(failure.contains("`..` excludes the end; `...` or `to` include it"), "{failure}");
+	assert!(failure.contains("assumed at 23:13, 24:15") && failure.contains("loop bound `..size-1`"), "{failure}");
+	is!("a=[1,2]; a#3", warp::error("index out of range"));
+}
+
+#[test]
+fn questions_quote_prefix_operators_as_written() {
+	let value_text = |code: &str| match warp::wasp_parser::WaspParser::parse(code).drop_meta() {
+		warp::Node::Key(_, _, value) => warp::normalize::operand_text(value),
+		other => panic!("not an assignment: {other:?}"),
+	};
+	assert_eq!(value_text("k=#a-1"), "#a-1");
+	assert_eq!(value_text("k=n-1"), "n-1");
+}

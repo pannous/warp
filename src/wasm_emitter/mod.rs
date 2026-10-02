@@ -50,6 +50,10 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 	("exact_pow", "an exact power needs an integer exponent"),
 ];
 
+/// An index out of range in a program with an exclusive range is often an end the writer meant to include
+const INDEX_OUT_OF_RANGE: &str = "index out of range";
+const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
+
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
 
@@ -3493,9 +3497,47 @@ pub fn eval(code: &str) -> Node {
 		code.to_string()
 	};
 
+	crate::diagnostic::take_assumptions(); // only the guesses made for this program explain its errors
 	match lawful_program(&code) {
-		Ok(program) => eval_parsed(program, &code),
+		Ok(program) => {
+			let exclusive_range = has_exclusive_range(&program);
+			explain_runtime_error(eval_parsed(program, &code), exclusive_range)
+		}
 		Err(violation) => violation,
+	}
+}
+
+fn has_exclusive_range(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Range, _) => true,
+		Node::Key(left, _, right) => has_exclusive_range(left) || has_exclusive_range(right),
+		Node::List(items, _, _) => items.iter().any(has_exclusive_range),
+		_ => false,
+	}
+}
+
+/// A runtime error fails far from its cause: it names the range hint and the defaults unanswered Asks took
+fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
+	let assumptions = crate::diagnostic::take_assumptions();
+	let Node::Error(reason) = &result else { return result };
+	let Node::Text(message) = reason.drop_meta() else { return result };
+	let mut lines = vec![message.clone()];
+	if exclusive_range && message.starts_with(INDEX_OUT_OF_RANGE) {
+		lines.push(RANGE_END_HINT.to_string());
+	}
+	let mut assumed: Vec<(String, Vec<String>)> = Vec::new();
+	for assumption in assumptions {
+		let guess = format!("{}; fix: {}", assumption.message, assumption.fix.unwrap_or_default());
+		let position = format!("{}:{}", assumption.line, assumption.column);
+		match assumed.iter_mut().find(|(known, _)| *known == guess) {
+			Some((_, positions)) => positions.push(position),
+			None => assumed.push((guess, vec![position])),
+		}
+	}
+	lines.extend(assumed.into_iter().map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))));
+	match lines.len() {
+		1 => result,
+		_ => crate::node::error(&lines.join("\n  ")),
 	}
 }
 
