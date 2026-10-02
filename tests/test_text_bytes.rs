@@ -21,7 +21,7 @@ fn plus_equals_appends_to_a_text() {
 
 #[test]
 fn text_plus_number_stays_a_type_error() {
-	is!("x=\"ab\"; x + 3", warp::error("type error: text + int: no implicit conversion, convert explicitly, e.g. int(\"5\") + 3"));
+	is!("x=\"ab\"; x + 3", "ab3"); // user decision 2026-10-02: a number joins a text in its text form
 }
 
 #[test]

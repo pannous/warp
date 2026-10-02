@@ -44,9 +44,14 @@ pub fn is_text_builtin(name: &str) -> bool {
 	TEXT_BUILTINS.iter().any(|(builtin, _, _)| *builtin == name)
 }
 
-/// `+` of two texts or characters is a text; a character alone is not text (`'a' + 1` stays a type error)
+/// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
 pub fn concatenates(left: Kind, right: Kind) -> bool {
-	[left, right].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint))
+	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind))
+}
+
+fn is_number(kind: Kind) -> bool {
+	matches!(kind, Kind::Int | Kind::Float)
 }
 
 /// Runtime functions the text builtins call
@@ -128,9 +133,20 @@ impl WasmGcEmitter {
 
 	/// `left + right` of texts or characters: a fresh text holding both
 	pub(super) fn emit_text_concat(&mut self, func: &mut Function, left: &Node, right: &Node) {
-		self.emit_node_instructions(func, left);
-		self.emit_node_instructions(func, right);
+		self.emit_concatenated(func, left);
+		self.emit_concatenated(func, right);
 		self.emit_call(func, TEXT_CONCAT);
+	}
+
+	/// A text operand as is, a number in its text form; the implicit conversion is hinted
+	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
+		if !is_number(self.get_type(operand)) {
+			self.emit_node_instructions(func, operand);
+			return;
+		}
+		let written = crate::normalize::operand_text(operand);
+		crate::normalize::hint(&written, &format!("str({written})"), "the number joins the text in its text form");
+		self.emit_cast(func, operand, &Node::Symbol("str".to_string()));
 	}
 
 	/// An Error node carrying `reason`, the way a failed fetch reports

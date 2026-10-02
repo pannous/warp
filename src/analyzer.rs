@@ -17,7 +17,16 @@ fn is_constant_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
 }
 
-const COUNTING_PROPERTIES: [&str; 4] = ["number", "count", "length", "size"];
+/// `var x = 1` announces a reassignable variable, plain `x = 1`
+const VAR_KEYWORD: &str = "var";
+/// `let x = 1` binds once, as wiki/variable.md says (unlike JS): check_constants refuses a reassignment
+const IMMUTABLE_LET: &str = "let";
+
+fn is_declaration_keyword(node: &Node) -> bool {
+	is_constant_keyword(node) || is_word(node, VAR_KEYWORD) || is_word(node, IMMUTABLE_LET)
+}
+
+const COUNTING_PROPERTIES: [&str; 5] = ["number", "count", "length", "size", "len"];
 /// The counting properties that are also functions: `number x` is the type conversion, not a count
 const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
 
@@ -110,7 +119,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			if crate::host::fetch_call(node).is_some() {
 				return Kind::Text; // or an Error value, see check_unchecked_use
 			}
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == ZERO_FILL_CALL) {
+			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name.as_str())) {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
@@ -839,7 +848,7 @@ fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_parameter_annotations(program)
 		.or_else(|| check_declared_types(program, &mut HashMap::new()))
-		.or_else(|| check_constants(program, &mut HashSet::new()))
+		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
@@ -1175,11 +1184,13 @@ fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Opt
 			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
 		}
 		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`)
-		Node::Key(list, Op::Dot, call) if appended_element(list, call).is_some() && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
+		Node::Key(list, Op::Dot, call) if updates_list(list, call) && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
 			let found = check_null_use(call, nullable);
 			nullable.remove(&list.name()); // no longer empty
 			found
 		}
+		// ø is the empty list: it counts 0 (`b=[]; b.count`)
+		Node::Key(list, Op::Dot, property) if matches!(list.drop_meta(), Node::Symbol(_)) && is_counting_property(&property.name()) && nullable.get(&list.name()) != Some(&Unchecked::Error) => None,
 		Node::Key(left, Op::Add, right) if [left, right].iter().any(|side| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))) => {
 			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
 		}
@@ -1202,18 +1213,19 @@ fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Opt
 }
 
 /// `const x=…` binds x once; any later assignment, compound assignment, increment or element assignment is rejected
-fn check_constants(node: &Node, constants: &mut HashSet<String>) -> Option<Diagnostic> {
+fn check_constants(node: &Node, constants: &mut HashMap<String, String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
-				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) => {
+				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || is_word(keyword, IMMUTABLE_LET) => {
+					let keyword = keyword.name();
 					let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() else {
-						return Some(Diagnostic::at(declaration, format!("const needs a value: {}", declaration.serialize())).fix("const x = 5".to_string()));
+						return Some(Diagnostic::at(declaration, format!("{keyword} needs a value: {}", declaration.serialize())).fix(format!("{keyword} x = 5")));
 					};
 					if let Some(found) = check_constants(value, constants) {
 						return Some(found);
 					}
-					constants.insert(target.name());
+					constants.insert(target.name(), keyword);
 					rest
 				}
 				_ => items.as_slice(),
@@ -1225,9 +1237,15 @@ fn check_constants(node: &Node, constants: &mut HashSet<String>) -> Option<Diagn
 				Node::Key(name, Op::Hash, _) => name.name(),
 				other => other.name(),
 			};
-			if constants.contains(&place) {
-				let message = format!("{place} is const, cannot assign it again: {}", node.drop_meta().serialize());
-				return Some(Diagnostic::at(node, message).fix(format!("use a new name instead of {place}, or declare it without const")));
+			if let Some(keyword) = constants.get(&place) {
+				let assignment = node.drop_meta().serialize();
+				return Some(if keyword == IMMUTABLE_LET {
+					Diagnostic::at(node, format!("{place} is let (immutable), cannot assign it again: {assignment}"))
+						.fix(format!("declare it with var or plain `{place} =` if it changes"))
+				} else {
+					Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
+						.fix(format!("use a new name instead of {place}, or declare it without const"))
+				});
 			}
 			check_constants(value, constants)
 		}
@@ -1395,6 +1413,7 @@ pub fn lower_declarations(node: Node) -> Node {
 				_ => Node::Key(target, op, value),
 			}
 		}
+		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
 		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
 			let element = lower_declarations(appended_element(&list, &call).expect("guarded").clone());
 			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
@@ -1406,8 +1425,8 @@ pub fn lower_declarations(node: Node) -> Node {
 			Node::Key(Box::new(lower_declarations(*base)), Op::Pow, Box::new(Node::int(exponent)))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
-		// `const x=v` → `x=v`; check_constants already enforced the single assignment
-		Node::List(items, bracket, separator) if items.len() >= 2 && is_constant_keyword(&items[0]) => {
+		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
+		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
 			let mut declaration = items.into_iter().skip(1).map(lower_declarations).collect::<Vec<_>>();
 			if declaration.len() == 1 {
 				declaration.remove(0)
@@ -1476,7 +1495,14 @@ fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 }
 
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
-const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
+const INSERT_METHOD: &str = "insert";
+
+/// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
+pub const INSERT_AT_CALL: &str = "list_insert_at";
+/// Pseudo-call `insert_in_either_order(list, a, b)`: `xs.insert(a, b)` before the kinds decide which is the position
+pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
+const AT_WORD: &str = "at";
 
 /// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits and `_`:
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
@@ -1503,6 +1529,48 @@ fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 	}
 }
 
+/// `xs.insert(a, b)` when xs is a variable. Wasp writes `insert(value, position)`, Python `insert(position, value)`:
+/// the order is never guessed (wiki/Footguns.md "Guessing intent"), `at:` or the kinds decide
+fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
+	let Node::Symbol(_) = list.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [method, first, second] = items.as_slice() else { return None };
+	if !is_word(method, INSERT_METHOD) {
+		return None;
+	}
+	let position_of = |node: &Node| match node.drop_meta() {
+		Node::Key(word, Op::Colon, position) if is_word(word, AT_WORD) => Some(position.as_ref().clone()),
+		_ => None,
+	};
+	Some(match (position_of(first), position_of(second)) {
+		(None, Some(position)) => Inserted::At(position, first.clone()),
+		(Some(position), None) => Inserted::At(position, second.clone()),
+		_ => Inserted::EitherOrder(first.clone(), second.clone()),
+	})
+}
+
+/// The arguments of `xs.insert(…)`: `insert(x, at: i)` names the position, `insert(a, b)` leaves the order to the kinds
+enum Inserted {
+	At(Node, Node),
+	EitherOrder(Node, Node),
+}
+
+/// `xs = list_insert_at(xs, position, value)`, or `insert_in_either_order(xs, a, b)` that the emitter resolves by the
+/// kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and wasp order differ)
+fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
+	let (pseudo_call, first, second) = match inserted_element(&list, call).expect("guarded") {
+		Inserted::At(position, value) => (INSERT_AT_CALL, position, value),
+		Inserted::EitherOrder(first, second) => (INSERT_EITHER_CALL, first, second),
+	};
+	let arguments = vec![Node::Symbol(pseudo_call.to_string()), *list.clone(), lower_declarations(first), lower_declarations(second)];
+	Node::Key(list, Op::Assign, Box::new(Node::List(arguments, Bracket::Round, Separator::None)))
+}
+
+/// `xs.add(v)`, `xs.insert(i, v)`: an update of the list variable that ø (the empty list) allows
+fn updates_list(list: &Node, call: &Node) -> bool {
+	appended_element(list, call).is_some() || inserted_element(list, call).is_some()
+}
+
 /// The zero value of an element type word (`int`, `ints`, `float`, `text` …)
 fn zero_element(type_word: &str) -> Option<Node> {
 	let element = plural_element_type(type_word).unwrap_or(type_word);
@@ -1523,6 +1591,13 @@ pub const ZERO_FILL_CALL: &str = "zero_fill";
 fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 	let zero = zero_element(type_word)?;
 	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, zero], Bracket::Round, Separator::None))
+}
+
+/// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
+pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
+	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
+	let [element] = items.as_slice() else { return None };
+	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, element.clone()], Bracket::Round, Separator::None))
 }
 
 /// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)
@@ -2264,6 +2339,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if fn_name == ZERO_FILL_CALL {
 					ctx.required_functions.insert(ZERO_FILL_CALL);
+				}
+				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
+					ctx.required_functions.insert(INSERT_AT_CALL);
 				}
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));

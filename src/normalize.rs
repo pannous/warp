@@ -482,8 +482,12 @@ pub mod hints {
             VarStyle::Let => "use 'let' for definition",
             VarStyle::Var => "use 'var' for definition",
         };
-        if used_style != preferred {
-            hint(&spell(used_style), &spell(preferred), reason);
+        if used_style == preferred {
+            return;
+        }
+        match used_style {
+            VarStyle::Let => hint(&spell(used_style), &spell(preferred), &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
+            _ => hint(&spell(used_style), &spell(preferred), reason),
         }
     }
 
@@ -775,6 +779,11 @@ fn check_items(items: &[Node], positioned: &Node) {
             if let Node::Key(name, Op::Assign | Op::Define, value) = declaration.drop_meta() {
                 hints::var_keyword(keyword_word, &operand_text(name), &operand_text(value));
             }
+        }
+        ("len", [argument]) => {
+            let counted = operand_text(argument);
+            let counted = counted.trim_matches(|c| c == '(' || c == ')');
+            hint(&format!("len({counted})"), &format!("#{counted}"), "use # prefix for length");
         }
         (word, [definition, ..]) if crate::operators::is_function_keyword(word) => {
             if let Some((name, parameters, body_form)) = signature_of(definition) {

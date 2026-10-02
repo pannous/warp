@@ -9,9 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 13] = [
+const BUILTIN_CALLS: [&str; 15] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
-	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL,
+	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
+	crate::analyzer::INSERT_EITHER_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -203,6 +204,16 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
+		if let [Node::Symbol(call), list, first, second] = items {
+			if call == crate::analyzer::INSERT_AT_CALL || call == crate::analyzer::INSERT_EITHER_CALL {
+				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else { return };
+				self.emit_node_instructions(func, list);
+				self.emit_numeric_value(func, position);
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, crate::analyzer::INSERT_AT_CALL);
+				return;
+			}
+		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
 			return;
@@ -390,6 +401,8 @@ impl WasmGcEmitter {
 	/// Function definitions leave no value; they snapshot the variables they capture.
 	pub(super) fn emit_statement_sequence(&mut self, func: &mut Function, items: &[Node], emit: fn(&mut Self, &mut Function, &Node)) {
 		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
+		// `a;b;c` is data; among code (`x=1; foo; x`) a word that names nothing would be silently dropped
+		let is_code = items.iter().any(|item| !matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)));
 		for (i, item) in items.iter().enumerate() {
 			if self.is_definition(item) {
 				if let Some(name) = self.defined_function_name(item) {
@@ -399,11 +412,38 @@ impl WasmGcEmitter {
 			}
 			if Some(i) == last_statement {
 				emit(self, func, item);
+			} else if let Some(name) = self.unknown_word(item).filter(|_| is_code) {
+				self.emit_undefined_variable(func, &name);
 			} else {
 				self.emit_discarded_statement(func, item, emit);
 				func.instruction(&Instruction::Drop);
 			}
 		}
+	}
+
+	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
+	/// two Ints are ambiguous (Python `insert(i, x)` vs wasp `insert(x, i)`) and a type error naming both readings
+	fn insert_position_and_value<'a>(&mut self, func: &mut Function, call: &str, first: &'a Node, second: &'a Node) -> Option<(&'a Node, &'a Node)> {
+		if call == crate::analyzer::INSERT_AT_CALL {
+			return Some((first, second));
+		}
+		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
+		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {
+			(true, false) => Some((first, second)),
+			(false, true) => Some((second, first)),
+			_ => {
+				let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
+				self.emit_type_error(func, format!("ambiguous: insert({a}, {b}) inserts {b} at {a} in Python, {a} at {b} in wasp; write insert({b}, at: {a}) or insert({a}, at: {b})"));
+				None
+			}
+		}
+	}
+
+	/// A bare word that is no variable, global or function
+	fn unknown_word(&self, item: &Node) -> Option<String> {
+		let Node::Symbol(name) = item.drop_meta() else { return None };
+		let known = self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name) || self.ctx.user_functions.contains_key(name);
+		(!known).then(|| name.clone())
 	}
 
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:

@@ -33,7 +33,7 @@ fn concatenation_takes_results_of_functions_and_library_words() {
 
 #[test]
 fn text_plus_number_stays_an_error() {
-	fails_loudly("\"a\"+1");
-	fails_loudly("1+\"a\"");
-	fails_loudly("\"ab\"+1");
+	is!("\"a\"+1", "a1"); // user decision 2026-10-02: a number joins a text in its text form
+	is!("1+\"a\"", "1a");
+	is!("\"ab\"+1", "ab1");
 }

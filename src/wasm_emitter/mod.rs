@@ -2653,6 +2653,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, "get_int_value");
 					return;
 				}
+				self.emit_integral_index_check(func, index);
 				// Emit the list as a Node reference
 				self.emit_node_instructions(func, list);
 				// Emit the index

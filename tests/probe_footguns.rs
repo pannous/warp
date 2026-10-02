@@ -252,10 +252,10 @@ fn test_compound_index_assignment() {
 
 #[test]
 fn test_text_plus_number_is_a_type_error() {
-	fails_with("\"5\"+3", "type error"); // JS: "53", C: '5'+3 = 56
+	is!("\"5\"+3", "53"); // JS: "53", C: '5'+3 = 56; user decision 2026-10-02: a number joins a text in its text form
 	fails_with("\"5\"*3", "type error"); // JS: 15
-	fails_with("3 + \"4\"", "type error");
-	fails_with("\"ab\"+3", "type error");
+	is!("3 + \"4\"", "34");
+	is!("\"ab\"+3", "ab3");
 	is!("int(\"5\") + 3", 8);
 }
 
@@ -631,7 +631,7 @@ fn test_and_or_ternary_is_linted() {
 #[test]
 fn test_null_needs_a_check() {
 	fails_with("x=ø; x+1", "x may be ø"); // Java NPE, JS TypeError; was a compiler panic
-	fails_with("x=ø; x.size", "fix: if x {");
+	is!("x=ø; x.size", 0); // ø is the empty list: its size is 0 (decided 2026-10-02, open_decisions #28)
 	let accepted = |code: &str| warp::analyzer::diagnose(&warp::parse(code)).is_none();
 	assert!(accepted("x=ø; if x {x+1} else {2}")); // checked: narrowed inside the branch
 	assert!(accepted("x=ø; x=3; x+1"));
