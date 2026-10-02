@@ -109,3 +109,15 @@ fun dijkstra(graph, start) {
 }
 dijkstra(graph, "A")"#, 13);
 }
+
+#[test]
+fn test_list_returned_by_a_function_holds_maps() {
+	is!(r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; "x:" + d["F"]"#, "x:13");
+	is!(r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; x = d["F"]; x + 1"#, 14);
+}
+
+#[test]
+fn test_one_character_argument_is_a_text() {
+	is!(r#"fun p(prev, t) { n = t; n = prev[n]; n }; p({B: "A"}, "B")"#, 'A');
+	is!(r#"fun p(t) { n = t; n = "AB"; n }; p("B")"#, "AB");
+}

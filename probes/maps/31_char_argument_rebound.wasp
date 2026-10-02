@@ -1,0 +1,2 @@
+fun p(prev, t) { n = t; n = prev[n]; n }
+p({B: "A"}, "B")

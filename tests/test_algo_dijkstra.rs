@@ -1,7 +1,6 @@
 use warp::is;
 
 #[test]
-#[ignore = "next"]
 fn test_dijkstra() { is!("samples/dijkstra.wasp", "ACBDEF:13"); }
 
 #[test]

@@ -294,7 +294,7 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
 	}
 	let list_type = list_type_name(indexed, scope);
-	if list_type == MAP_TYPE || infer_type(indexed, scope) == Kind::Empty {
+	if list_type == MAP_TYPE || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}
 	match list_type.strip_prefix("list of ").or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))? { // `m[k]` of a map is a value
@@ -997,6 +997,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 					None if word.starts_with(PLAIN) || word.starts_with(MAP_TYPE) => word,
 					None => PLAIN.to_string(),
 				},
+				// `r = f()`: the list a function returns, its elements unknown until runtime
+				None if scope.binding(name).is_none() && scope.function_kind(name) == Some(Kind::List) => NODE_LIST_TYPE.to_string(),
 				None => PLAIN.to_string(),
 			}
 		}
@@ -1014,6 +1016,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
 			}
 		}
+		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
 		Node::List(entries, Bracket::Curly, _) if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => {
 			let value_word = |value: &Node| match infer_type(value, scope) {
@@ -1053,6 +1057,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 /// The type name of a map literal, `map of <value type>` when its values share one
 const MAP_TYPE: &str = "map";
 const MAP_TYPE_PREFIX: &str = "map of ";
+/// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
+const NODE_LIST_TYPE: &str = "list of node";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 fn map_word(call: &Node) -> Option<&'static str> {
@@ -2036,15 +2042,24 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		_ => infer_type(body, &scope),
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
-	let mut returns_node = false;
+	// (`return [dist, prev]`: a List when every returned Node is one)
+	let mut returned_nodes: Vec<Kind> = vec![];
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
-				returns_node |= infer_type(&items[1], &scope).is_ref();
+				let kind = infer_type(&items[1], &scope);
+				if kind.is_ref() && !returned_nodes.contains(&kind) {
+					returned_nodes.push(kind);
+				}
 			}
 		}
 	});
-	if returns_node && !last_kind.is_ref() { Kind::Text } else { last_kind }
+	match returned_nodes.as_slice() {
+		_ if last_kind.is_ref() => last_kind,
+		[] => last_kind,
+		[Kind::List] => Kind::List,
+		_ => Kind::Text,
+	}
 }
 
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
@@ -2226,8 +2241,10 @@ pub fn kind_with_article(kind: Kind) -> String {
 /// The kind a call argument certainly has, judged from the literal alone
 fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
+		Node::Number(_) | Node::Text(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
+		Node::Char(_) => Some(Kind::Text), // `f("F")`: a one-character text, held as a node like the variables of binding_kind
 		Node::Empty => Some(Kind::List),
+		Node::List(entries, Bracket::Curly, _) if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => Some(Kind::List), // a map
 		_ => None,
 	}
 }
