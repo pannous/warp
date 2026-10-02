@@ -45,6 +45,8 @@ User decisions from that round:
 - Users so far (src/wasp_parser.rs `range_reading`): `a upto b` (topic `upto`) and the for-header bound `0..n-1`
   (topic `kotlin-range`, Kotlin's `..` is inclusive), both default exclusive (wasp's documented reading), fallback Warning.
   Explicit `..<`, `...`, `to` never ask. tests/test_welcoming_ask.rs.
+- `local-or-global` (src/analyzer.rs `resolve_main_variable_assignments`): `n = …` fresh inside a function while main has an
+  n: a new local (default, `let n = …`) or main's n (`global n`), fallback Warning. tests/test_welcoming_globals.rs.
 - An unanswered Error-fallback Ask names every explicit form in its fix (`` `a` for first or `b` for second``).
 - Educate with acknowledge-once: `educate_once(topic, written, preferred, reason)` shows the hint once per run until
   the user acknowledges it (`Asker::acknowledge`; terminal: `y`; scripted: answer `ACKNOWLEDGED`), then never again:

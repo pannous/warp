@@ -68,7 +68,16 @@ impl WasmGcEmitter {
 			&& matches!(left.drop_meta(), Node::Symbol(s) if {
 				self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
 			});
+		let is_ref_global_assign = (*op == Op::Assign || *op == Op::Define)
+			&& matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_none()
+				&& self.ctx.user_globals.get(s).is_some_and(|(_, kind)| kind.is_ref()));
 
+		if is_ref_global_assign {
+			if let Node::Symbol(name) = left.drop_meta() {
+				self.emit_global_store(func, name, right);
+			}
+			return;
+		}
 		if is_ref_assign {
 			if let Node::Symbol(name) = left.drop_meta() {
 				// Emit the right side as a Node reference

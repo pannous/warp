@@ -43,6 +43,8 @@ pub struct Context {
     pub user_type_indices: HashMap<String, u32>,
     pub type_registry: TypeRegistry,
     pub user_globals: HashMap<String, (u32, Kind)>,
+    /// The program's `global` declarations with kind and type, which every function body sees
+    pub declared_globals: HashMap<String, crate::local::Local>,
     pub user_functions: HashMap<String, UserFunctionDef>,
     /// Per function: captured outer variable → (global holding its value at definition time, kind)
     pub captures: HashMap<String, Vec<(String, (u32, Kind))>>,
@@ -81,6 +83,7 @@ impl Context {
             user_type_indices: HashMap::new(),
             type_registry: TypeRegistry::new(),
             user_globals: HashMap::new(),
+            declared_globals: HashMap::new(),
             captures: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),

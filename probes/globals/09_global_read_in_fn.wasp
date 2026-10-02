@@ -1,0 +1,1 @@
+global limit=10; def ok(x){x<limit}; ok(3)

@@ -1,0 +1,1 @@
+def f(){ total = 5; total }; total = f(); total

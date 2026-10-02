@@ -706,15 +706,22 @@ impl WasmGcEmitter {
 		self.emit_numeric_value(func, value);
 		func.instruction(&Instruction::LocalTee(assigned));
 		self.emit_call(func, "node_with_at");
-		let variable = match target.drop_meta() {
-			Node::Symbol(name) => self.scope.lookup(name).filter(|local| local.kind.is_ref()),
-			_ => None,
-		};
-		match variable {
-			Some(local) => func.instruction(&Instruction::LocalSet(local.position)),
-			None => func.instruction(&Instruction::Drop),
-		};
+		self.emit_store_updated(func, target);
 		func.instruction(&Instruction::LocalGet(assigned));
+	}
+
+	/// A variable target (local or declared global) gets the updated copy on the stack, any other target drops it
+	fn emit_store_updated(&mut self, func: &mut Function, target: &Node) {
+		let Node::Symbol(name) = target.drop_meta() else {
+			func.instruction(&Instruction::Drop);
+			return;
+		};
+		let global = self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref());
+		match (self.scope.lookup(name), global) {
+			(Some(local), _) if local.kind.is_ref() => func.instruction(&Instruction::LocalSet(local.position)),
+			(None, Some(&(index, _))) => func.instruction(&Instruction::GlobalSet(index)),
+			_ => func.instruction(&Instruction::Drop),
+		};
 	}
 
 	/// Arithmetic without an implicit conversion: `"5"+3` and `[1 2]*2` are type errors, `list + list` concatenates.
