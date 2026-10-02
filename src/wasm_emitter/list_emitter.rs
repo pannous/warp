@@ -366,7 +366,6 @@ impl WasmGcEmitter {
 			let item = item.drop_meta();
 			match item {
 				Node::Key(_, Op::Assign | Op::Define, _) => true,
-				Node::Key(_, Op::Hash, _) => true,
 				Node::Key(_, op, _) if op.is_compound_assign() => true,
 				// control flow: `if c {…}`, `while c {…}`, `i++`
 				Node::Key(_, Op::Then | Op::Else | Op::Do | Op::Inc | Op::Dec, _) => true,
