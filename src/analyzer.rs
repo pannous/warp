@@ -12,6 +12,8 @@ use std::collections::{HashMap, HashSet};
 /// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
 /// Words that declare a name assignable once: `const x=5`, `final x=5`
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
+/// Statement words whose argument is never their property: `return count` is no `return.count`
+const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", "print", "println", "puts", "not"];
 
 fn is_constant_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
@@ -1363,22 +1365,29 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal
 pub fn lower_declarations(node: Node) -> Node {
+	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
+	lower_declarations_among(node, &variables)
+}
+
+/// `variables` are the names the program assigns: `return count` returns the variable, it is no `return.count`
+fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
+	let lower = |node| lower_declarations_among(node, variables);
 	let node = match crate::for_loop::lower(node) {
-		Ok(loop_as_while) => return lower_declarations(loop_as_while),
+		Ok(loop_as_while) => return lower(loop_as_while),
 		Err(node) => node,
 	};
 	match node {
-		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator).is_some() => {
-			lower_declarations(counting_phrase(&items, &bracket, &separator).expect("guarded"))
+		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator, variables).is_some() => {
+			lower(counting_phrase(&items, &bracket, &separator, variables).expect("guarded"))
 		}
 		Node::List(items, bracket, separator) if of_type_declaration(&items, &bracket, &separator).is_some() => {
-			lower_declarations(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
+			lower(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
 		}
 		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
-			lower_declarations(hashed_unit_count(&items).expect("guarded"))
+			lower(hashed_unit_count(&items).expect("guarded"))
 		}
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
-			lower_declarations(unit_count(&counted).expect("guarded"))
+			lower(unit_count(&counted).expect("guarded"))
 		}
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
 		declaration if typed_array_declaration(&declaration).is_some() => {
@@ -1393,13 +1402,13 @@ pub fn lower_declarations(node: Node) -> Node {
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
 			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) => {
 			let Node::Key(name, Op::As, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
-			lower_declarations(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
+			lower(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
 		}
 		// `x:[number]=v` is `x:list of number=v`
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if bracketed_list_type(type_node).is_some()) => {
 			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")));
-			lower_declarations(Node::Key(Box::new(typed), Op::Assign, value))
+			lower(Node::Key(Box::new(typed), Op::Assign, value))
 		}
 		// `x:[number]` is `x:list of number`
 		Node::Key(name, Op::Colon, type_node) if bracketed_list_type(&type_node).is_some() => {
@@ -1413,7 +1422,7 @@ pub fn lower_declarations(node: Node) -> Node {
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
 			let (type_name, name) = number_type_prefix(&target).expect("guarded");
-			lower_declarations(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
+			lower(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) => {
 			let mut lowered = Vec::with_capacity(items.len());
@@ -1422,9 +1431,9 @@ pub fn lower_declarations(node: Node) -> Node {
 				match items.peek().and_then(|next| paired_declaration(&item, next)) {
 					Some(declaration) => {
 						items.next();
-						lowered.push(lower_declarations(declaration));
+						lowered.push(lower(declaration));
 					}
-					None => lowered.push(lower_declarations(item)),
+					None => lowered.push(lower(item)),
 				}
 			}
 			if lowered.len() == 1 {
@@ -1434,7 +1443,7 @@ pub fn lower_declarations(node: Node) -> Node {
 			}
 		}
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
-			let value = Box::new(lower_declarations(*value));
+			let value = Box::new(lower(*value));
 			match target.drop_meta() {
 				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
@@ -1448,19 +1457,19 @@ pub fn lower_declarations(node: Node) -> Node {
 		}
 		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
 		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
-			let element = lower_declarations(appended_element(&list, &call).expect("guarded").clone());
+			let element = lower(appended_element(&list, &call).expect("guarded").clone());
 			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if op.suffix_exponent().is_some() => {
 			let exponent = op.suffix_exponent().expect("guarded");
-			Node::Key(Box::new(lower_declarations(*base)), Op::Pow, Box::new(Node::int(exponent)))
+			Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent)))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_declarations(*left)), op, Box::new(lower_declarations(*right))),
+		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
-			let mut declaration = items.into_iter().skip(1).map(lower_declarations).collect::<Vec<_>>();
+			let mut declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
 			if declaration.len() == 1 {
 				declaration.remove(0)
 			} else {
@@ -1469,10 +1478,10 @@ pub fn lower_declarations(node: Node) -> Node {
 		}
 		Node::List(items, Bracket::None, _) if applied_object(&items).is_some() => {
 			let (object, key) = applied_object(&items).expect("guarded");
-			lower_declarations(crate::wasp_parser::subscript(object, key))
+			lower(crate::wasp_parser::subscript(object, key))
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_declarations).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_declarations(*node)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
 	}
 }
@@ -2166,7 +2175,7 @@ pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 
 /// The counting method of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
 /// A char is a code point, as `x.chars` and the `char` type; the user-perceived character is a grapheme.
-fn text_unit(word: &str) -> Option<&'static str> {
+pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
 		"byte" | "bytes" => Some("bytes"),
 		"char" | "chars" | "codepoint" | "codepoints" => Some("codepoints"),
@@ -2220,11 +2229,13 @@ fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 }
 
-/// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`
-fn property_of_name(items: &[Node], separator: &Separator) -> Option<Node> {
+/// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`,
+/// unless the name is a keyword (`return count`) or the word a variable of the program
+fn property_of_name(items: &[Node], separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
 	let [name, property] = items else { return None };
 	let (Node::Symbol(name_text), Node::Symbol(property_text)) = (name.drop_meta(), property.drop_meta()) else { return None };
-	if *separator != Separator::Space || is_counting_property(name_text) || !is_counting_property(property_text) {
+	let names_no_object = is_counting_property(name_text) || PROPERTYLESS_KEYWORDS.contains(&name_text.as_str());
+	if *separator != Separator::Space || names_no_object || !is_counting_property(property_text) || variables.contains(property_text) {
 		return None;
 	}
 	Some(Node::Key(Box::new(name.clone()), Op::Dot, Box::new(property.clone())))
@@ -2232,7 +2243,7 @@ fn property_of_name(items: &[Node], separator: &Separator) -> Option<Node> {
 
 /// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
 /// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
-fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
 	if let [unit, count, of, _, ..] = items {
 		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
 			let counted = rest_of(items, 3, bracket, separator);
@@ -2246,7 +2257,7 @@ fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator) -> 
 			}
 		}
 	}
-	if let Some(property) = property_of_name(items, separator) {
+	if let Some(property) = property_of_name(items, separator, variables) {
 		return Some(property);
 	}
 	let [word, of, _, ..] = items else { return None };
