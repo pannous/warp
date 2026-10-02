@@ -1,4 +1,4 @@
 #!/usr/bin/env wasp
-#fun	ok(){
+# fun	ok(){
 # 	return 42;
 # }

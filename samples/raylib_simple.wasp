@@ -24,5 +24,5 @@ DrawText("Wasp Raylib Demo", 280, 20, 30, 0xFF505050)  // DARKGRAY
 DrawText("Press Ctrl+C to close", 260, 560, 20, 0xFF505050)  // DARKGRAY
 DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON
 EndDrawing()
-#sleep(2000)
+# sleep(2000)
 42

@@ -32,8 +32,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
-- `#name` as a whole statement (`#s` alone on a line, `{ #s }`, `#s;`) counts name; `# note`, `#use lib`, `#f(x)`,
-  `#!` stay comments.
+- `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
+  (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
+  `##` (doc comment) and the directives in wasp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
+  Side effect: commented-out code written `#code` in samples (samples/raylib_*.wasp `#while(1>0){`, `#sleep(2000)`,
+  samples/main.wasp `#print …`, `#fun …`, samples/lib.wasp `#fun ok(){`, tests/wasp/ffi/*/*.wasp) is now live code
+  when run; test_all_samples still parses all 72 samples.
 - `let x = …` / `var x = …` declare a variable in any block. USER DECISION (fix-sugar-2): `let` is immutable as
   wiki/variable.md says: `let x=1; x=2` (also `+=`, `++`, `x#i=`) → "x is let (immutable), cannot assign it again;
   fix: declare it with var or plain `x =` if it changes" (check_constants, like const). `var` stays mutable. The `let`
