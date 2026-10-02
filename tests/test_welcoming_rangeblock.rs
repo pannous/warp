@@ -14,6 +14,8 @@ fn a_variable_range_end_keeps_the_block_as_loop_body() {
 	is!("a=1; b=4; s=0; for i in a..b { s += i }; s", 6);
 	is!("count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)", 5);
 	is!("xs=[1,2,3]; s=0; for x in xs { s += x }; s", 6);
+	is!("n=4; s=0; for i in 0..n do s += i; s", 6);
+	is!("n=4; s=0; for i in 0..n do { s += i }; s", 6);
 }
 
 #[test]

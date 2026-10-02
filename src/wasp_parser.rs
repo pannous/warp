@@ -1611,8 +1611,9 @@ impl WaspParser {
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
 		self.in_for_header = outer_header;
 		self.skip_spaces();
-		let body = if self.current_char() == ':' {
-			self.advance();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let body = if let Some(word) = body_word { // `for i in 0..n: body`, `for i in 0..n do body`
+			self.advance_by(word.len());
 			self.with_equals_comparing(false, |parser| parser.parse_expr(0))
 		} else {
 			self.parse_atom()
