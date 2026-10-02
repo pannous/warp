@@ -387,6 +387,7 @@ impl WasmGcEmitter {
 			}
 			if Some(i) == last_statement {
 				emit(self, func, item);
+			} else if self.emit_loop_jump(func, item) { // `break`, `continue`: a jump, or its own error outside a loop
 			} else if let Some(name) = self.unknown_word(item).filter(|_| is_code) {
 				self.emit_undefined_variable(func, &name);
 			} else {
