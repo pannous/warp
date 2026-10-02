@@ -1,0 +1,4 @@
+x = 0
+n = 3
+if n == 2 { x = 1 } elif n == 3 { x = 2 } else { x = 3 }
+x
