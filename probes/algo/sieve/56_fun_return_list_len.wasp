@@ -1,0 +1,6 @@
+fun f(n) {
+  a = []
+  for k in 0...(n) { a.push(k) }
+  a
+}
+f(4).length

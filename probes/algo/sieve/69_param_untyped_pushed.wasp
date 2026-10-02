@@ -1,0 +1,10 @@
+fun g(items) {
+  items[1]
+}
+fun mk() {
+  a = []
+  a.push(4)
+  a.push(5)
+  a
+}
+g(mk())

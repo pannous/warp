@@ -1,0 +1,3 @@
+n = 5
+r = 0..n
+r.length

@@ -1,0 +1,6 @@
+def g(items) {
+  y = items[1]
+  y
+}
+xs = [4,5,6]
+g(xs)

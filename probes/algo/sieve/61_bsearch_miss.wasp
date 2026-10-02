@@ -1,0 +1,12 @@
+fun binary_search(list, target) {
+    low = 0
+    high = list.length - 1
+    while low <= high {
+        mid = (low + high) / 2 as int
+        if list[mid] == target { return mid }
+        if list[mid] < target { low = mid + 1 } else { high = mid - 1 }
+    }
+    -1
+}
+
+binary_search([2,3,5,7,11], 4)

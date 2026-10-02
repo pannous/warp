@@ -1,0 +1,4 @@
+n = 5
+s = 0
+for k in 1 to n { s += k }
+s

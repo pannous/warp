@@ -1,0 +1,7 @@
+fun f(n) {
+  p = []
+  for k in 0..n { if k > 2 { p.push(k) } }
+  return p
+}
+q = f(5)
+q.length

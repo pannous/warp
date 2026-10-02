@@ -1,0 +1,5 @@
+fun f(n) {
+  a = (n + 1) times [true]
+  a.length
+}
+f(4)
