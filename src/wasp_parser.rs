@@ -194,6 +194,8 @@ pub struct WaspParser {
 	options: ParserOptions,
 	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
 	equals_compares: bool,
+	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
+	in_for_header: bool,
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -290,6 +292,7 @@ impl WaspParser {
 			base_indent: 0,
 			options,
 			equals_compares: false,
+			in_for_header: false,
 			stops_at_else: false,
 			times_loops: 0,
 			after_function_keyword: false,
@@ -805,6 +808,8 @@ impl WaspParser {
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
 		if self.matches_keyword("upto") { return Some((Op::To, 4)); }
+		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
+		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
 		// 1-char operators
 		match c1 {
@@ -1265,7 +1270,7 @@ impl WaspParser {
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
-				if self.current_char() == '{' && !self.equals_compares {
+				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
 					let signature = Node::List(
@@ -1602,21 +1607,15 @@ impl WaspParser {
 			return None;
 		};
 		self.advance_by("in".len());
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
-		let (iterable, block) = match iterable.drop_meta() {
-			Node::List(applied, Bracket::None, Separator::Space) if applied.len() == 2 && matches!(applied[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-				(applied[0].clone(), Some(applied[1].clone())) // `for x in xs {…}` reads as the call `xs {…}`
-			}
-			_ => (iterable, None),
-		};
+		self.in_for_header = outer_header;
 		self.skip_spaces();
-		let body = match block {
-			Some(block) => block,
-			None if self.current_char() == ':' => {
-				self.advance();
-				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
-			}
-			None => self.parse_atom(),
+		let body = if self.current_char() == ':' {
+			self.advance();
+			self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+		} else {
+			self.parse_atom()
 		};
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
 	}
@@ -1905,7 +1904,7 @@ impl WaspParser {
 		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application {
 			return None;
 		}
-		if !lhs_is_callable || !self.can_start_atom() || !should_apply {
+		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.in_for_header) {
 			return None;
 		}
 
@@ -2309,7 +2308,10 @@ impl WaspParser {
 		};
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
-		self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type))
+		let outer_header = std::mem::replace(&mut self.in_for_header, false);
+		let list = self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
+		self.in_for_header = outer_header;
+		list
 	}
 
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
