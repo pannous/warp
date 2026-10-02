@@ -375,6 +375,8 @@ impl WasmGcEmitter {
 		// Create function scope with parameters
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds());
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
+		// declared globals are changed in place, never shadowed by a local of the same name
+		self.scope.globals = self.ctx.declared_globals.clone();
 		for param in user_fn.params.iter() {
 			self.scope.define(param.name.clone(), None, param_kind(param));
 		}
@@ -559,6 +561,9 @@ impl WasmGcEmitter {
 				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
 				self.ctx.user_functions[name].return_kind
 			}
+			// `floor(x)`, `round(x)` build an Int (emit_introspection_fn) unless libm's f64 version is imported
+			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name)
+				if ROUNDING_FUNCTIONS.contains(&name.as_str()) && !self.ctx.ffi_imports.contains_key(name))) => Kind::Int,
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				self.arithmetic_type(left, op, right)
@@ -733,6 +738,7 @@ impl WasmGcEmitter {
 		self.emit();
 		// Pre-allocate strings from user function bodies before compiling
 		self.collect_user_function_strings();
+		self.allocate_declared_globals(node);
 		self.allocate_closure_captures(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
@@ -1777,6 +1783,9 @@ impl WasmGcEmitter {
 		self.emit_value_of_kind(func, value, kind);
 		func.instruction(&Instruction::GlobalSet(index));
 		func.instruction(&Instruction::GlobalGet(index));
+		if kind.is_ref() {
+			func.instruction(&Instruction::RefAsNonNull);
+		}
 		Some(kind)
 	}
 
@@ -1792,45 +1801,43 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `global x = value`: x is declared ahead of all code (`allocate_declared_globals`), so this stores the value
 	fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
 		let Some((name, value)) = Self::global_declaration_parts(decl) else {
 			self.emit_malformed(func, decl, "`global name` or `global name = value`");
 			return;
 		};
-
-		let kind = self.get_type(&value);
-
-		// Check if global already exists (reassignment)
-		if let Some(&(global_idx, existing_kind)) = self.ctx.user_globals.get(&name) {
-			if existing_kind.is_float() {
-				self.emit_float_value(func, &value);
-				func.instruction(&Instruction::GlobalSet(global_idx));
-				func.instruction(&Instruction::GlobalGet(global_idx));
-				self.emit_call(func, "new_float");
-			} else {
-				self.emit_numeric_value(func, &value);
-				func.instruction(&Instruction::GlobalSet(global_idx));
-				func.instruction(&Instruction::GlobalGet(global_idx));
-				self.emit_call(func, "new_int");
-			}
-			return;
+		let kind = self.declare_global(&name, &value);
+		self.emit_global_store(func, &name, &value);
+		if !kind.is_ref() {
+			self.emit_primitive_as_node(func, kind);
 		}
+	}
 
+	/// The global named `name`, declared with the kind of its first value unless it already exists
+	fn declare_global(&mut self, name: &str, value: &Node) -> Kind {
+		match self.ctx.user_globals.get(name) {
+			Some(&(_, kind)) => kind,
+			None => self.allocate_global(name, crate::analyzer::held_kind(value, || self.get_type(value))),
+		}
+	}
+
+	fn allocate_global(&mut self, name: &str, kind: Kind) -> Kind {
 		let global_idx = self.declare_mutable_global(kind);
-		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
+		self.ctx.user_globals.insert(name.to_string(), (global_idx, kind));
+		kind
+	}
 
-		// Emit value computation and store to global
-		if kind.is_float() {
-			self.emit_float_value(func, &value);
-			func.instruction(&Instruction::GlobalSet(global_idx));
-			func.instruction(&Instruction::GlobalGet(global_idx));
-			self.emit_call(func, "new_float");
-		} else {
-			self.emit_numeric_value(func, &value);
-			func.instruction(&Instruction::GlobalSet(global_idx));
-			func.instruction(&Instruction::GlobalGet(global_idx));
-			self.emit_call(func, "new_int");
+	/// Every `global` of the program exists before any function is compiled, so function bodies can change it
+	fn allocate_declared_globals(&mut self, program: &Node) {
+		let mut main = Scope::new();
+		collect_variables(program, &mut main);
+		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
+		names.sort();
+		for name in names {
+			self.allocate_global(name, main.globals[name].kind);
 		}
+		self.ctx.declared_globals = main.globals;
 	}
 
 	/// The primitive on the stack (i64 or f64 as stored, see `storage_type`) as a Node of its kind
@@ -1888,37 +1895,12 @@ impl WasmGcEmitter {
 			self.emit_malformed(func, decl, "`global name` or `global name = value`");
 			return;
 		};
-
-		let kind = self.get_type(&value);
-
-		// Check if global already exists (reassignment)
-		if let Some(&(global_idx, existing_kind)) = self.ctx.user_globals.get(&name) {
-			if existing_kind.is_float() {
-				self.emit_float_value(func, &value);
-				func.instruction(&Instruction::GlobalSet(global_idx));
-				func.instruction(&Instruction::GlobalGet(global_idx));
-				self.emit_float_in_exact_context(func, &name);
-			} else {
-				self.emit_numeric_value(func, &value);
-				func.instruction(&Instruction::GlobalSet(global_idx));
-				func.instruction(&Instruction::GlobalGet(global_idx));
-			}
-			return;
-		}
-
-		let global_idx = self.declare_mutable_global(kind);
-		self.ctx.user_globals.insert(name.clone(), (global_idx, kind));
-
-		// Emit value, store to global, and return value on stack
-		if kind.is_float() {
-			self.emit_float_value(func, &value);
-			func.instruction(&Instruction::GlobalSet(global_idx));
-			func.instruction(&Instruction::GlobalGet(global_idx));
+		let kind = self.declare_global(&name, &value);
+		self.emit_global_store(func, &name, &value);
+		if kind.is_ref() {
+			self.emit_call(func, "get_int_value");
+		} else if kind.is_float() {
 			self.emit_float_in_exact_context(func, &name);
-		} else {
-			self.emit_numeric_value(func, &value);
-			func.instruction(&Instruction::GlobalSet(global_idx));
-			func.instruction(&Instruction::GlobalGet(global_idx));
 		}
 	}
 
@@ -2480,6 +2462,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit the numeric value of a node onto the stack (as i64)
+	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
+	pub(super) fn is_output_call(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
+			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+	}
+
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
 		if self.emit_loop_jump(func, node) {
 			return;
@@ -2792,7 +2780,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
-				if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))) {
+				if self.is_output_call(node) {
 					self.emit_node_instructions(func, node);
 					self.emit_call(func, "get_int_value");
 					return;
@@ -3577,7 +3565,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(crate::node::error(&format!(
 			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
 	}
-	let node = without_constraints(node);
+	let node = crate::analyzer::resolve_main_variable_assignments(without_constraints(node))?;
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}

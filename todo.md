@@ -11,6 +11,8 @@
 
 - DONE: tests/test_method_words.rs test_library_words_refuse_what_they_cannot_do expects upper("é") to fail with "non ascii text", but the merged text-runtime branch (src/wasm_emitter/text_unicode.rs) now maps Latin/Greek/Cyrillic case, so upper("é") = "É". Decide: drop that expectation or keep the ASCII-only refusal. (2026-10-01 branch consolidation)
 - A runtime ratio has no text form: `y=2.5; y as string`, `str(y)` and now `"x" + y` give "-9223372036854775807" (list_join only knows texts, ints, characters). (fix-sugar 2026-10-02)
-- `x=10; x = floor(x/2)` → WASM validation failure "expected i64, found f64": analyzer::infer_type takes floor's kind from the libm FFI signature (Float) while the builtin floor emits an Int. (fix-sugar 2026-10-02)
+- DONE: `x=10; x = floor(x/2)` → WASM validation failure "expected i64, found f64": analyzer::infer_type takes floor's kind from the libm FFI signature (Float) while the builtin floor emits an Int. (fix-sugar 2026-10-02)
 - `count of []` parses as `count (of[])` (a subscript of `of`); `count ()` returns the symbol `count`. (fix-sugar 2026-10-02)
 - `xs.insert 4 at 0`, `insert 4 at start of xs`, `x is 100 times [0]` (tests/test_lists.rs ignored tests) are not parsed yet. (fix-sugar 2026-10-02)
+- `import floor from "m"; x=10.0; x=floor(2.5)` fails WASM validation (expected i64, found f64): reassigning a float variable from an imported libm call. The builtin (non-imported) floor/ceil/round reassignments work since fix-globals. (2026-10-02)
+- `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)

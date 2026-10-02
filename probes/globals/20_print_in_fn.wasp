@@ -1,0 +1,1 @@
+f(x) := { print("called"); x }; f(3)

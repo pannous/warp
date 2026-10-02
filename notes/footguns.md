@@ -496,3 +496,32 @@ in useful fragments, and Warp answers only there: never a guess, never a panic.
 the earlier "size counts bytes" decision (wiki/Footguns.md is not part of this repository; the record is here). Bytes are counted
 only by an explicit unit: `byte count of x`, `number of bytes in x`, `#bytes in x`, `x.bytes` (8 per list element).
 Tests still pinning the old rule (not edited, supervisor decides): tests/probe_footguns.rs lines ~366, 370, 411; tests/test_todo.rs:103.
+
+## Work area "globals" (2026-10-02)
+- Fixed: a function changes a main-level variable declared `global`: `global n=0; def f(x){n+=1;x}; f(3); n` → 1, for
+  fn/def/:= bodies, `=`, `+=`, `++` and element assignment (`counts[i]+=1`), ints, floats, lists and texts.
+  Mechanism: `allocate_declared_globals` gives every `global` of the program its WASM global before any function is
+  compiled; `Scope::globals` holds each declaration's kind and type (`Scope::binding`), so `xs[1]*2` on a global list
+  knows its element type; function scopes start with `ctx.declared_globals`, so assignments never create a shadowing local.
+- Fixed: `print "called"` as a statement in a numeric function body trapped (cast of the printed text to an Int);
+  `x=10; x=floor(x/2)` failed validation (the rounding builtins build an Int, but libm's signature said f64).
+- Left open: `import floor from "m"; x=10.0; x=floor(2.5)` still fails validation; `print` of a runtime value or a
+  one-character text (`print("c")`) is "literal numbers and text only so far".
+
+## For wiki/Footguns.md
+
+### Assigning a main-level variable from a function
+- **Elsewhere:** Python makes `n += 1` inside a function a new local and fails with UnboundLocalError (or silently
+  shadows with `n = 5`); JavaScript/Ruby blocks silently mutate the outer variable; PHP sees no outer variables at all.
+- **Warp:** a function reads main-level variables by value (captured where it is defined, see Closures). Changing one
+  needs the `global` declaration (a State effect, wiki/effects.md): `global n=0; def f(x){n+=1;x}`. Without it,
+  `n=0; def f(x){n+=1;x}` is an error that educates:
+  `n is a main-level variable: declare it `global n` to change it from a function, or use a new local name; fix: global n`.
+  The error applies when the function reads or updates the name before (or without) binding it: `n += 1`, `n++`,
+  `xs#i = v`, `y = n; n = y+1`. A body whose first mention is a fresh `name = value` not reading it (`primes = []`)
+  is ambiguous and asks (topic `local-or-global`, analyzer::resolve_main_variable_assignments): "a new local of f"
+  (default, explicit form `let n = …`) or "the main-level n" (`global n`, which turns main's first `n = …` into the
+  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.wasp relies on
+  this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
+  not use, is the function's own without a question.
+- Tests: tests/test_welcoming_globals.rs.

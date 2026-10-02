@@ -1,0 +1,1 @@
+global s="a"; def f(x){s=s+"b";x}; f(1); s

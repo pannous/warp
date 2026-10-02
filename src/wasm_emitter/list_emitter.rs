@@ -444,7 +444,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if self.is_float_assignment(item) {
 			self.emit_float_value(func, item);
-		} else if self.is_ref_update(item) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
@@ -455,7 +455,8 @@ impl WasmGcEmitter {
 	fn is_ref_update(&self, item: &Node) -> bool {
 		match item.drop_meta() {
 			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
-				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_ref()))
+				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).map(|local| local.kind)
+					.or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind)).is_some_and(|kind| kind.is_ref()))
 			}
 			Node::Key(_, Op::Then | Op::Else, _) => self.get_type(item).is_ref(),
 			_ => false,

@@ -126,7 +126,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Char(_) => Kind::Codepoint,
 		// Symbol (identifier)
 		Node::Symbol(name) => {
-			if let Some(local) = scope.lookup(name) {
+			if let Some(local) = scope.binding(name) {
 				local.kind
 			} else {
 				Kind::Symbol  // Unknown symbol defaults to Symbol
@@ -301,13 +301,24 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 	collect_variables_inner(node, scope, false, false)
 }
 
-/// The name a `global` declaration introduces: `global x` and `global x=7`
-fn global_declared_name(declaration: &Node) -> Option<String> {
-	match declaration.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(target, Op::Assign | Op::Define, _) => global_declared_name(target),
-		_ => None,
-	}
+/// The binding a `global` declaration introduces: `global x` (an Int) and `global x=7`; it has no local slot
+fn global_binding(declaration: &Node, scope: &Scope) -> Option<Local> {
+	let (name, value) = match declaration.drop_meta() {
+		Node::Symbol(name) => (name, &Node::Number(Number::Int(0))),
+		Node::Key(target, Op::Assign | Op::Define, value) => match target.drop_meta() {
+			Node::Symbol(name) => (name, value.as_ref()),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let (kind, type_node) = value_binding(value, scope);
+	Some(Local { type_node, ..Local::new(0, name.clone(), kind) })
+}
+
+/// Kind and type of a variable bound to `value` without a declared type; a list keeps its element type
+fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<Node>>) {
+	let kind = binding_kind(value, scope);
+	(kind, (kind == Kind::List).then(|| Box::new(Node::Symbol(list_type_name(value, scope)))))
 }
 
 /// The body of a function definition `f(x) = …`, `f(x) := …`, `def f(x) {…}`: its variables are the function's own
@@ -333,7 +344,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				if kw == "global" {
 					// Don't define local for global variable
 					// But still count any variables in the value expression
-					scope.globals.extend(global_declared_name(right));
+					if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
+						scope.globals.insert(global.name.clone(), global);
+					}
 					return collect_variables_inner(right, scope, true, false);
 				}
 				// Symbol:body is a tag/structure - right side is structure context
@@ -362,9 +375,10 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 				match left.drop_meta() {
 					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 						let declared = declared_type(left);
-						let kind = declared.and_then(|type_name| declared_kind(&type_name.name())).unwrap_or_else(|| binding_kind(right, scope));
-						let list_type = || Box::new(Node::Symbol(list_type_name(right, scope)));
-						let type_node = declared.map(|type_name| Box::new(type_name.clone())).or_else(|| (kind == Kind::List).then(list_type));
+						let (kind, type_node) = match declared {
+							Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
+							None => value_binding(right, scope),
+						};
 						scope.define(name.clone(), type_node, kind);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
@@ -407,11 +421,16 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 
 /// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
 fn binding_kind(value: &Node, scope: &Scope) -> Kind {
+	held_kind(value, || infer_type(value, scope))
+}
+
+/// Kind of a variable or global holding `value`, whose expression kind is `inferred`
+pub(crate) fn held_kind(value: &Node, inferred: impl FnOnce() -> Kind) -> Kind {
 	match value.drop_meta() {
 		Node::Empty => Kind::Empty,
 		Node::List(items, Bracket::Curly, _) if items.is_empty() => Kind::Empty, // the empty block is ø as well
 		Node::Char(_) => Kind::Text, // a variable holding "a" may later hold "ab": one-character texts are held as nodes
-		_ => infer_type(value, scope),
+		_ => inferred(),
 	}
 }
 
@@ -443,13 +462,144 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 	captured
 }
 
+/// A function may change a main-level variable only when it is declared `global` (wiki/effects.md: State effect).
+/// Assigning one from a function would otherwise silently either shadow it (Python) or mutate it (JavaScript):
+/// reading or updating it first (`n += 1`) is an error that educates; a fresh `n = value` is ambiguous and asks
+/// (`local-or-global`). Names the user means as main's variable become `global` declarations of the program.
+pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, &program);
+	let mut main = Scope::new();
+	collect_variables(&program, &mut main);
+	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
+	functions.sort_by(|a, b| a.name.cmp(&b.name));
+	let mut meant_global: Vec<String> = vec![];
+	for function in functions {
+		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
+			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
+		let mut decided: HashSet<&String> = HashSet::new();
+		for (node, name) in find_assignments(&function.body, &is_main_variable) {
+			if !decided.insert(name) {
+				continue;
+			}
+			if !starts_with_fresh_binding(&function.body, name) {
+				return Err(Diagnostic::at(node, format!(
+					"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"))
+					.fix(format!("global {name}")).into_error());
+			}
+			if ask_local_or_global(node, name, &function.name)? == MAIN_LEVEL_READING && !meant_global.contains(name) {
+				meant_global.push(name.clone());
+			}
+		}
+	}
+	Ok(declare_global(program, &meant_global))
+}
+
+const LOCAL_OR_GLOBAL: &str = "local-or-global";
+const LOCAL_KEYWORDS: [&str; 2] = ["let", "var"];
+const MAIN_LEVEL_READING: usize = 1;
+
+/// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n?
+fn ask_local_or_global(assignment: &Node, name: &str, function: &str) -> Result<usize, Node> {
+	use crate::diagnostic::{ask, reading, Ask, Fallback};
+	let question = format!("does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}?");
+	let readings = vec![
+		reading(&format!("a new local of {function}"), &format!("let {name} = …")),
+		reading(&format!("the main-level {name}"), &format!("global {name}")),
+	];
+	ask(&Ask::new(LOCAL_OR_GLOBAL, question, readings, Fallback::Warning).written(&format!("{name} = …")).at_node(assignment))
+}
+
+/// `let n = …` / `var n = …` in `body`: n is explicitly the function's own
+fn declares_local(body: &Node, name: &str) -> bool {
+	let mut declared = false;
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			if let [keyword, declaration] = items.as_slice() {
+				declared |= matches!(keyword.drop_meta(), Node::Symbol(word) if LOCAL_KEYWORDS.contains(&word.as_str()))
+					&& global_binding(declaration, &Scope::new()).is_some_and(|binding| binding.name == name);
+			}
+		}
+	});
+	declared
+}
+
+/// The program's first main-level assignment of each name becomes its `global` declaration (`global n` if none)
+fn declare_global(program: Node, names: &[String]) -> Node {
+	if names.is_empty() {
+		return program;
+	}
+	let as_global = |declaration: Node| Node::Key(Box::new(Node::Symbol("global".to_string())), Op::Colon, Box::new(declaration));
+	let (mut items, bracket, separator) = match program {
+		Node::List(items, bracket, separator) => (items, bracket, separator),
+		single => (vec![single], Bracket::None, Separator::Newline),
+	};
+	for name in names {
+		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(target) if target == name));
+		match items.iter().position(assigns) {
+			Some(index) => items[index] = as_global(items[index].clone()),
+			None => items.insert(0, as_global(Node::Symbol(name.clone()))),
+		}
+	}
+	Node::List(items, bracket, separator)
+}
+
+/// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
+/// binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's variable.
+fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
+	let mut first_mention = None;
+	body.visit(&mut |node| {
+		if first_mention.is_some() {
+			return;
+		}
+		match node {
+			Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(target) if target == name) => {
+				let mut reads = false;
+				value.visit(&mut |part| reads |= matches!(part, Node::Symbol(symbol) if symbol == name));
+				first_mention = Some(!reads);
+			}
+			Node::Symbol(symbol) if symbol == name => first_mention = Some(false),
+			_ => {}
+		}
+	});
+	first_mention.unwrap_or(false)
+}
+
+/// The assignments (kept with their positions) whose changed variable satisfies `wanted`, in source order
+fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
+	let mut found: Vec<(&'a Node, &'a String)> = assignment_target_root(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
+	match node.drop_meta() {
+		Node::Key(left, _, right) => found.extend(find_assignments(left, wanted).into_iter().chain(find_assignments(right, wanted))),
+		Node::List(items, _, _) => found.extend(items.iter().flat_map(|item| find_assignments(item, wanted))),
+		_ => {}
+	}
+	found
+}
+
+/// The variable an assignment changes: `n` in `n = …`, `n += …`, `n++` and `xs#i = …`
+fn assignment_target_root(node: &Node) -> Option<&String> {
+	let target = match node {
+		Node::Key(target, Op::Assign | Op::Inc | Op::Dec, _) => target,
+		Node::Key(target, op, _) if op.is_compound_assign() => target,
+		_ => return None,
+	};
+	let mut target = target.drop_meta();
+	while let Node::Key(container, Op::Hash | Op::Dot, _) = target {
+		target = container.drop_meta();
+	}
+	match target {
+		Node::Symbol(name) => Some(name),
+		_ => None,
+	}
+}
+
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
 	pub locals: HashMap<String, Local>,
 	pub types: HashMap<String, Node>,  // User-defined types
 	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
-	pub globals: HashSet<String>,  // Names declared `global`: assigning them later must not create a shadowing local
+	pub globals: HashMap<String, Local>,  // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	pub parent: Option<Box<Scope>>,
 }
 
@@ -463,7 +613,7 @@ impl Scope {
 			locals: HashMap::new(),
 			types: HashMap::new(),
 			function_kinds: HashMap::new(),
-			globals: HashSet::new(),
+			globals: HashMap::new(),
 			parent: Some(Box::new(self.clone())),
 		}
 	}
@@ -473,7 +623,16 @@ impl Scope {
 	}
 
 	pub fn is_global(&self, name: &str) -> bool {
-		self.globals.contains(name) || self.parent.as_ref().is_some_and(|parent| parent.is_global(name))
+		self.global(name).is_some()
+	}
+
+	pub fn global(&self, name: &str) -> Option<&Local> {
+		self.globals.get(name).or_else(|| self.parent.as_ref().and_then(|parent| parent.global(name)))
+	}
+
+	/// The local or declared global a name refers to, for its kind and type
+	pub fn binding(&self, name: &str) -> Option<&Local> {
+		self.lookup(name).or_else(|| self.global(name))
 	}
 
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
@@ -799,7 +958,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 	const PLAIN: &str = "list";
 	match list.drop_meta() {
 		Node::Symbol(name) => {
-			let type_name = scope.lookup(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
+			let type_name = scope.binding(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
 			match type_name {
 				Some(word) => match plural_element_type(&word) {
 					Some(element) => format!("{PLAIN} of {element}"),

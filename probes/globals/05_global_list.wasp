@@ -1,0 +1,1 @@
+global xs=[1,2,3]; def f(i){xs[i]=9;i}; f(1); xs[1]
