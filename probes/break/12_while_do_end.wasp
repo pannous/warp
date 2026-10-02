@@ -1,0 +1,2 @@
+// parser issue: the do…end body stops at the first `;`, so break lands outside the loop (now a loud error)
+i = 0; while i < 10 do i += 1; if i == 3 then break end; i

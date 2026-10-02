@@ -1,0 +1,2 @@
+first_over(limit) := { r=0; for x in [3,8,12,20] { if x>limit { r=x; break } }; r }
+first_over(10)

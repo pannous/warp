@@ -1,0 +1,1 @@
+found=0; for i in 1..5 { for j in 1..5 { if j==i { continue }; if i*j==6 { found=i*10+j; break } }; if found>0 { break } }; found

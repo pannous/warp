@@ -1,0 +1,6 @@
+// parser issue: a tab-indented `while c:` body keeps only its first line; lower_versions panics on this file
+i = 0
+while i < 10:
+	i += 1
+	if i == 3: break
+i

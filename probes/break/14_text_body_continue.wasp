@@ -1,0 +1,1 @@
+s=""; for c in ["a","b","c","d"] { if c=="c" { continue }; s += c }; s

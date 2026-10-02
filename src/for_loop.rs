@@ -6,6 +6,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::wasm_emitter::mark_step;
 use crate::wasp_parser::while_do;
 
 const FOR_KEYWORD: &str = "for";
@@ -68,7 +69,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let mut statements = block_items(body);
-	statements.push(step.clone());
+	statements.push(mark_step(step.clone()));
 	Some(block(vec![init.clone(), while_do(test.clone(), block(statements, Bracket::Curly))], Bracket::None))
 }
 
@@ -117,7 +118,7 @@ fn for_it(items: &[Node]) -> Option<Node> {
 
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
-	body.push(key(variable.clone(), Op::Inc, Node::Empty));
+	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
 	block(vec![
 		key(variable.clone(), Op::Assign, start.clone()),
 		while_do(key(variable.clone(), test_op, end.clone()), block(body, Bracket::Curly)),
@@ -130,7 +131,7 @@ fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, number(1)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
 	statements.append(&mut body);
-	statements.push(key(index.clone(), Op::Inc, Node::Empty));
+	statements.push(mark_step(key(index.clone(), Op::Inc, Node::Empty)));
 	let test = key(index.clone(), Op::Lt, key(Node::Empty, Op::Hash, items.clone()));
 	block(vec![
 		key(items, Op::Assign, iterable),
