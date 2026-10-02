@@ -1,6 +1,6 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
-use crate::analyzer::{call_name, is_unbracketed_block, type_word_kind};
+use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
@@ -214,7 +214,7 @@ impl WasmGcEmitter {
 		}
 
 		// Check if this is a statement sequence
-		let is_statement_sequence = is_unbracketed_block(items, bracket, separator) || self.is_statement_sequence(items);
+		let is_statement_sequence = is_unbracketed_block(items, bracket, separator) || items.iter().any(|item| is_statement(item, bracket));
 
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
@@ -349,31 +349,6 @@ impl WasmGcEmitter {
 	fn emit_integral_float_as_int(&mut self, func: &mut Function) {
 		self.emit_truncating_cast(func);
 		self.emit_call(func, "new_int");
-	}
-
-	/// Check if items form a statement sequence
-	fn is_statement_sequence(&self, items: &[Node]) -> bool {
-		items.iter().any(|item| {
-			let item = item.drop_meta();
-			match item {
-				Node::Key(_, Op::Assign | Op::Define, _) => true,
-				Node::Key(_, Op::Hash, _) => true,
-				Node::Key(_, op, _) if op.is_compound_assign() => true,
-				// control flow: `if c {…}`, `while c {…}`, `i++`
-				Node::Key(_, Op::Then | Op::Else | Op::Do | Op::Inc | Op::Dec, _) => true,
-				Node::Key(left, Op::Colon, _) => {
-					matches!(left.drop_meta(), Node::Symbol(s) if s == "global")
-				}
-				Node::List(list_items, _, _) if list_items.len() >= 2 => {
-					if let Node::Symbol(s) = list_items[0].drop_meta() {
-						is_function_keyword(s) || s == "use" || s == "import" || s == "return"
-					} else {
-						false
-					}
-				}
-				_ => false,
-			}
-		})
 	}
 
 	/// A type definition declares and runs nothing (types are registered beforehand): emit the other items

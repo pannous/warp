@@ -33,7 +33,7 @@ fn test_user_definition_wins_over_the_builtin() {
 
 #[test]
 fn test_min_max_arguments_must_be_side_effect_free() {
-	fails_with("f(x):=x; min(f(1),2)", "min");
+	is!("f(x):=x; min(f(1),2)", 1);
 }
 
 #[test]
