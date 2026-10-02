@@ -43,10 +43,11 @@ fn n_times_a_one_element_list_repeats_it() {
 	is!("3 times [0]", ints(vec![0, 0, 0]));
 	is!("x = 100 times [0]; x.length", 100);
 	is!("def f(n){ xs = n times [0]; xs#2=5; xs }; f(3)", ints(vec![0, 5, 0]));
-	// wiki/Footguns.md "Lists and arithmetic": Python repeats, NumPy multiplies, so `*` is refused with both readings
-	fails_with("[0]*3", "ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]`");
-	fails_with("3*[1]", "write `n times [x]` to repeat");
-	fails_with("[1 2]*2", "type error");
+	// wiki/Footguns.md "Lists and arithmetic": Python repeats, NumPy multiplies, so `*` is an Ask; unanswered an error
+	fails_with("[0]*3", "type error: list * number: does `[0]*3` repeat the list or multiply each element? (too ambiguous to guess)");
+	fails_with("3*[1]", "`3 times [1]` for repeat the list or `[1].map(x => x*3)` for multiply each element");
+	fails_with("[1 2]*2", "too ambiguous to guess");
+	fails_with("xs=[1 2]; xs*2", "type error"); // a list variable: no Ask yet
 }
 
 #[test]
@@ -68,8 +69,19 @@ fn insert_never_guesses_the_argument_order() {
 	is!("xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs", strings(vec!["z", "a", "b"]));
 	is!("xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs", strings(vec!["a", "z", "b"]));
 	// two Ints: Python `insert(i, x)` and wasp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
-	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "ambiguous: insert(0, 4) inserts 4 at 0 in Python, 0 at 4 in wasp");
-	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "write insert(v, at: i) or insert(i, at: v)");
+	// unanswered the Ask is an error naming both explicit forms
+	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "does insert(0, 4) put 4 at 0 (Python) or 0 at 4 (wasp)? (too ambiguous to guess)");
+	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "`insert(v, at: i)` for position first, as Python or `insert(i, at: v)` for value first, as wasp");
+}
+
+#[test]
+fn an_answered_ask_compiles_the_chosen_reading() {
+	use warp::diagnostic::{with_asker, ScriptedAnswers};
+	let answer = |topic: &str, meaning: &str| ScriptedAnswers(vec![(topic.to_string(), meaning.to_string())]);
+	with_asker(answer("list-times", "repeat the list"), || is!("[0]*3", ints(vec![0, 0, 0])));
+	with_asker(answer("list-times", "multiply each element"), || is!("[1 2]*3", ints(vec![3, 6])));
+	with_asker(answer("insert-order", "position first, as Python"), || is!("xs=[1 2]; xs.insert(0, 4); xs", ints(vec![4, 1, 2])));
+	with_asker(answer("insert-order", "value first, as wasp"), || is!("xs=[1 2]; xs.insert(4, 0); xs", ints(vec![4, 1, 2])));
 }
 
 #[test]
@@ -106,4 +118,23 @@ fn a_glued_hash_name_statement_counts() {
 	is!("xs=[1 2 3]\n#xs", 3);
 	is!("x=4 # a comment\nx", 4);
 	is!("x=4\n#use lib\nx", 4); // a directive line stays a comment
+}
+
+#[test]
+fn the_let_note_is_shown_until_acknowledged() {
+	use warp::diagnostic::{use_answers_file, with_asker, ScriptedAnswers, ACKNOWLEDGED};
+	use warp::normalize::capture_hints;
+	let let_hints = || capture_hints(|| warp::wasm_emitter::eval("let x = 3; x")).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
+	let path = "scratch/test_welcoming_sugar.acknowledged";
+	std::fs::create_dir_all("scratch").unwrap();
+	let _ = std::fs::remove_file(path);
+	with_asker(ScriptedAnswers(vec![("let".to_string(), ACKNOWLEDGED.to_string())]), || {
+		use_answers_file(path);
+		assert_eq!(let_hints(), 1);
+	});
+	with_asker(ScriptedAnswers(vec![]), || {
+		use_answers_file(path);
+		assert_eq!(let_hints(), 0, "acknowledged in an earlier run");
+	});
+	std::fs::remove_file(path).unwrap();
 }

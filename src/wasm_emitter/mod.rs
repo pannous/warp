@@ -3555,6 +3555,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = crate::type_tests::lower(node);
+	let node = crate::analyzer::lower_list_times(node);
 	let node = crate::lambdas::lower(node);
 	let node = crate::function_values::lower(node);
 	let node = crate::lambdas::lower_strict(node);
