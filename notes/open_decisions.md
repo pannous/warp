@@ -18,6 +18,32 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
+- Text + number concatenates, the number in its text form (`"F:" + 13` → `"F:13"`, `"5"+3` → `"53"`, JS/Kotlin), with a
+  hint `str(13)`. Reversed: the 2026-09 "no implicit conversion" rule (DESIGN.md "Dangerous implicitness", wiki/Footguns.md
+  "String + number"), which was there because one-character strings used to add as code points (`"5"+3` → 56). `"5"*3`
+  stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
+  probe_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
+  Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
+- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, lowered to `(a - a%b)/b` (`%` is Euclidean: exact
+  for a positive divisor, `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment.
+  `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
+  division is exact, with the hint `n//2`.
+- #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
+  are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
+  (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
+- `#name` as a whole statement (`#s` alone on a line, `{ #s }`, `#s;`) counts name; `# note`, `#use lib`, `#f(x)`,
+  `#!` stay comments.
+- `let x = …` / `var x = …` declare an ordinary (reassignable, JS intent) variable in any block; wiki/variable.md's
+  "`let person be…` cannot be reassigned" is the English `be` form and not implemented. `const`/`final`/`val` stay single assignment.
+- A bare word statement that names nothing (`x=1; foo; x`, `foo x = 3`) is `undefined variable: foo` (was silently dropped).
+- `len(x)` counts like `#x` (hint `#x`); `[x]*n`, `n*[x]` and `n times [x]` fill a list (`[1 2]*2` stays a type error);
+  `b=[]; b.count` is 0.
+- `xs.insert(a, b)`: a literal 0/negative second is the wasp position (`insert(4, 0)`, `insert(4, -1)` appends); else a
+  literal first is the Python position (`insert(0, x)`, `insert(0, 4)`); else a literal second is the wasp position; two
+  variables are Python order (`insert(i, x)`). Positions are 0-based slots, past the end appends. `xs.insert(v)` appends.
+  Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
+
 ## Original questions
 ## Blocking finished work
 1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
@@ -77,7 +103,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
 27. Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
-28. `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
+28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
     that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
 29. The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from

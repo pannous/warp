@@ -776,6 +776,11 @@ fn check_items(items: &[Node], positioned: &Node) {
                 hints::var_keyword(keyword_word, &operand_text(name), &operand_text(value));
             }
         }
+        ("len", [argument]) => {
+            let counted = operand_text(argument);
+            let counted = counted.trim_matches(|c| c == '(' || c == ')');
+            hint(&format!("len({counted})"), &format!("#{counted}"), "use # prefix for length");
+        }
         (word, [definition, ..]) if crate::operators::is_function_keyword(word) => {
             if let Some((name, parameters, body_form)) = signature_of(definition) {
                 hints::function_keyword(word, &name, &parameters, body_form);

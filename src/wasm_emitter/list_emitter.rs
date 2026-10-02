@@ -9,9 +9,9 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 13] = [
+const BUILTIN_CALLS: [&str; 14] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
-	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL,
+	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -203,6 +203,15 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
+		if let [Node::Symbol(call), list, position, value] = items {
+			if call == crate::analyzer::INSERT_AT_CALL {
+				self.emit_node_instructions(func, list);
+				self.emit_numeric_value(func, position);
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, crate::analyzer::INSERT_AT_CALL);
+				return;
+			}
+		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
 			return;
@@ -390,6 +399,8 @@ impl WasmGcEmitter {
 	/// Function definitions leave no value; they snapshot the variables they capture.
 	pub(super) fn emit_statement_sequence(&mut self, func: &mut Function, items: &[Node], emit: fn(&mut Self, &mut Function, &Node)) {
 		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
+		// `a;b;c` is data; among code (`x=1; foo; x`) a word that names nothing would be silently dropped
+		let is_code = items.iter().any(|item| !matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)));
 		for (i, item) in items.iter().enumerate() {
 			if self.is_definition(item) {
 				if let Some(name) = self.defined_function_name(item) {
@@ -399,11 +410,20 @@ impl WasmGcEmitter {
 			}
 			if Some(i) == last_statement {
 				emit(self, func, item);
+			} else if let Some(name) = self.unknown_word(item).filter(|_| is_code) {
+				self.emit_undefined_variable(func, &name);
 			} else {
 				self.emit_discarded_statement(func, item, emit);
 				func.instruction(&Instruction::Drop);
 			}
 		}
+	}
+
+	/// A bare word that is no variable, global or function
+	fn unknown_word(&self, item: &Node) -> Option<String> {
+		let Node::Symbol(name) = item.drop_meta() else { return None };
+		let known = self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name) || self.ctx.user_functions.contains_key(name);
+		(!known).then(|| name.clone())
 	}
 
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:

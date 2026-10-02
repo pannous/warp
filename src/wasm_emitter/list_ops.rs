@@ -263,6 +263,38 @@ impl WasmGcEmitter {
 
 		self.emit_with_at_functions();
 		self.emit_list_concat();
+		self.emit_list_insert_at();
+	}
+
+	/// list_insert_at(list, position, value): copies the cells before the 0-based position, puts value there and shares
+	/// the rest; a position past the end (or negative) appends
+	fn emit_list_insert_at(&mut self) {
+		if !self.should_emit_function(crate::analyzer::INSERT_AT_CALL) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_type = self.type_manager.node_type;
+		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
+		let list_insert_at = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
+		let params = vec![node_ref_nullable, ValType::I64, node_ref];
+		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![], |s, f| {
+			s.emit_empty_as_null(f, 0);
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::RefIsNull, I::LocalGet(1), I::I64Eqz, I::I32Or,
+				I::If(BlockType::Result(node_ref)),
+				I::I64Const(square_list_kind), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
+				I::Else,
+			]);
+			s.emit_field(f, 0, 0);
+			s.emit_field(f, 0, 1);
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[
+				I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(2), I::Call(list_insert_at),
+				I::StructNew(node_type), I::End,
+			]);
+		});
+		assert_eq!(self.func_index(crate::analyzer::INSERT_AT_CALL), list_insert_at, "recursive call index");
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),
@@ -481,8 +513,21 @@ impl WasmGcEmitter {
 }
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub const RUNTIME_ERRORS: [&str; 15] = [
-	"index_out_of_range", "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
+const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
+
+/// The division in an index `n/2`, also behind the 0-based shift of `xs[n/2]` (`xs#(n/2 + 1)`)
+fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
+	use crate::operators::Op;
+	match index.drop_meta() {
+		Node::Key(dividend, Op::Div, divisor) => Some((dividend, divisor)),
+		Node::Key(shifted, Op::Add | Op::Sub, offset) if matches!(offset.drop_meta(), Node::Number(_)) => divided_index(shifted),
+		Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => divided_index(&items[0]),
+		_ => None,
+	}
+}
+
+pub const RUNTIME_ERRORS: [&str; 16] = [
+	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 ];
@@ -534,6 +579,18 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::If(BlockType::Empty));
 		self.call(func, error);
 		func.instruction(&Instruction::End);
+	}
+
+	/// `xs[n/2]`: an index that divides traps unless the division is exact; floor division (`n//2`) or `n/2 as int` is hinted
+	pub(super) fn emit_integral_index_check(&mut self, func: &mut Function, index: &Node) {
+		let Some((dividend, divisor)) = divided_index(index) else { return };
+		let (dividend_text, divisor_text) = (crate::normalize::operand_text(dividend), crate::normalize::operand_text(divisor));
+		crate::normalize::hint(&format!("{dividend_text}/{divisor_text}"), &format!("{dividend_text}//{divisor_text}"), "an index must be an integer: floor division, or `as int`");
+		let remainder = Node::Key(Box::new(dividend.clone()), crate::operators::Op::Mod, Box::new(divisor.clone()));
+		self.emit_numeric_value(func, &remainder);
+		func.instruction(&Instruction::I64Const(0));
+		func.instruction(&Instruction::I64Ne);
+		self.emit_fail_if(func, INDEX_NOT_INTEGRAL);
 	}
 
 	fn emit_index_compare(func: &mut Function, compare: Instruction) {
@@ -924,6 +981,7 @@ impl WasmGcEmitter {
 				}
 			},
 			None => {
+				self.emit_integral_index_check(func, index);
 				self.emit_node_instructions(func, target);
 				self.emit_numeric_value(func, index);
 				self.emit_call(func, "node_index_at");

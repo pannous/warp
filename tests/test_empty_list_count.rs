@@ -19,7 +19,6 @@ fn a_one_element_list_still_counts_one() {
 }
 
 #[test]
-#[ignore = "needs the user's decision: probe_footguns test_null_needs_a_check pins `x=ø; x.size` as a null-check error"]
 fn the_counting_properties_of_an_empty_list_need_no_null_check() {
 	for property in ["size", "count", "length", "number"] {
 		is!(&format!("xs=[]; xs.{property}"), 0);

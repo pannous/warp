@@ -129,6 +129,13 @@ fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_'
 }
 
+/// `a // b` (Python) as `(a - a % b) / b`: `%` is Euclidean, so this is floor(a/b) for a positive divisor
+fn floor_division(dividend: Node, divisor: Node) -> Node {
+	let remainder = Node::Key(Box::new(dividend.clone()), Op::Mod, Box::new(divisor.clone()));
+	let multiple = Node::Key(Box::new(dividend), Op::Sub, Box::new(remainder));
+	Node::Key(Box::new(multiple), Op::Div, Box::new(divisor))
+}
+
 /// Read and parse a WASP file
 /// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
 /// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
@@ -464,6 +471,22 @@ impl WaspParser {
 			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
+	/// `#s` as a whole statement (`#s` alone on its line, `{ #s }`, `#s;`) counts s; `# note`, `#use lib`, `#f(x)` stay comments
+	fn at_counted_name(&self) -> bool {
+		if !(self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_') {
+			return false;
+		}
+		let name_end = (1..).find(|&offset| !is_identifier_char(self.peek_char(offset))).expect("text ends with \\0");
+		let statement_end = (name_end..).find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t')).expect("text ends with \\0");
+		matches!(self.peek_char(statement_end), '\n' | '\r' | '\0' | '}' | ';')
+	}
+
+	/// `//` right behind an operand (`7//2`, `x//=2`, `f(x)//2`) divides; after a space or `:` (URLs) it starts a comment
+	fn at_floor_division(&self) -> bool {
+		let previous = self.prev_char();
+		self.current_char() == '/' && self.peek_char(1) == '/' && self.pos > 0 && (is_identifier_char(previous) || matches!(previous, ')' | ']'))
+	}
+
 	fn is_at_line_start(&self) -> bool {
 		// Check if we're at the very beginning or right after whitespace/newline
 		self.pos == 0 || self.prev_char().is_whitespace()
@@ -581,7 +604,7 @@ impl WaspParser {
 			let (c1, c2) = (self.current_char(), self.peek_char(1));
 
 			// # line comment (shell-style) - only at line start; `#(…)` counts, as `#x` does after a statement
-			if c1 == '#' && c2 != '(' && self.is_at_line_start() {
+			if c1 == '#' && c2 != '(' && self.is_at_line_start() && !self.at_counted_name() {
 				self.advance();
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() { comments.push(text); }
@@ -589,7 +612,7 @@ impl WaspParser {
 				continue;
 			}
 			// // line comment (but not :// URL scheme)
-			if c1 == '/' && c2 == '/' && self.prev_char() != ':' {
+			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
 				self.advance_by(2);
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() { comments.push(text); }
@@ -1383,6 +1406,24 @@ impl WaspParser {
 				continue;
 			}
 
+			// Step 3b: Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`
+			let word_division = self.matches_keyword("div");
+			if word_division || self.at_floor_division() {
+				let compound = !word_division && self.peek_char(2) == '=';
+				let op = if compound { Op::Assign } else { Op::Div };
+				let (l_bp, r_bp) = op.binding_power();
+				if l_bp < min_bp {
+					break;
+				}
+				self.advance_by(if compound || word_division { 3 } else { 2 });
+				self.skip_whitespace();
+				let divisor = self.parse_expr(r_bp);
+				let quotient = floor_division(lhs.clone(), divisor);
+				lhs = if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient };
+				previous_comparand = None;
+				continue;
+			}
+
 			// Step 3: Check for infix operator
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
@@ -1754,7 +1795,7 @@ impl WaspParser {
 		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
 			return None;
 		}
-		if min_bp <= TIMES_BP && self.matches_keyword(TIMES_WORD) {
+		if (min_bp <= TIMES_BP || self.times_fills_list()) && self.matches_keyword(TIMES_WORD) {
 			self.advance_by(TIMES_WORD.len());
 			return Some(self.parse_times_loop(lhs.clone()));
 		}
@@ -1827,6 +1868,13 @@ impl WaspParser {
 		Some(i64::from_str_radix(&digits, 16).map(Node::int).unwrap_or_else(|_| error(&format!("Invalid hex: hex {digits}"))))
 	}
 
+	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
+	fn times_fills_list(&self) -> bool {
+		let after_word = TIMES_WORD.len();
+		let blanks = (after_word..).take_while(|&offset| self.peek_char(offset) == ' ').count();
+		self.peek_char(after_word + blanks) == '['
+	}
+
 	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
 	fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
@@ -1836,6 +1884,7 @@ impl WaspParser {
 				self.advance();
 				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
 			}
+			'[' => return Node::Key(Box::new(self.parse_atom()), Op::Mul, Box::new(count)), // `100 times [0]` fills a list like `[0]*100`
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
