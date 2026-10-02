@@ -1,0 +1,66 @@
+// Dijkstra shortest path, restricted to constructs warp currently compiles:
+// integer node ids instead of string keys, lists instead of maps,
+// inline double indexing instead of edge variables, a done flag instead of break,
+// and the path encoded as digits (node id + 1) because text list elements can't be bound to variables
+graph = [
+    [[1, 4], [2, 2]],
+    [[3, 5]],
+    [[1, 1], [3, 8], [4, 10]],
+    [[4, 2], [5, 6]],
+    [[5, 3]],
+    []
+]
+infinity = 999999
+node_count = 6
+
+dist = []
+prev = []
+visited = []
+i = 0
+while i < node_count {
+    dist.push(infinity)
+    prev.push(-1)
+    visited.push(0)
+    i = i + 1
+}
+dist[0] = 0
+
+done = false
+while !done {
+    current = -1
+    best = infinity
+    i = 0
+    while i < node_count {
+        if visited[i] == 0 && dist[i] < best {
+            best = dist[i]
+            current = i
+        }
+        i = i + 1
+    }
+    if current == -1 {
+        done = true
+    } else {
+        visited[current] = 1
+        j = 0
+        while j < graph[current].length {
+            neighbor = graph[current][j][0]
+            candidate = dist[current] + graph[current][j][1]
+            if candidate < dist[neighbor] {
+                dist[neighbor] = candidate
+                prev[neighbor] = current
+            }
+            j = j + 1
+        }
+    }
+}
+
+target = 5
+path_code = target + 1
+digit_weight = 10
+node = target
+while prev[node] != -1 {
+    node = prev[node]
+    path_code = (node + 1) * digit_weight + path_code
+    digit_weight = digit_weight * 10
+}
+path_code * 100 + dist[target]  // A C B D E F = 1 3 2 4 5 6, distance 13
