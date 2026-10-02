@@ -1,0 +1,36 @@
+// N-Queens: count placements of n mutually non-attacking queens (backtracking)
+fn is_safe(queens, row, col) {
+    for r in range(row) {
+        c = queens[r]
+        if c == col or abs(c - col) == row - r {
+            return false
+        }
+    }
+    return true
+}
+
+fn place(queens, row, n) {
+    if row == n { return 1 }
+    count = 0
+    for col in range(n) {
+        if is_safe(queens, row, col) {
+            queens[row] = col
+            count += place(queens, row + 1, n)
+        }
+    }
+    return count
+}
+
+fn count_queens(n) {
+    board = [0] * n
+    return place(board, 0, n)
+}
+
+// Towers of Hanoi: number of moves to shift n disks from one peg to another
+fn hanoi(n, from, to, via) {
+    if n == 0 { return 0 }
+    return hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
+}
+
+// 4 + 92 + 1023
+count_queens(6) + count_queens(8) + hanoi(10, "A", "C", "B")

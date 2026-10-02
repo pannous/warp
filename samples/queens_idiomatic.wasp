@@ -1,0 +1,31 @@
+// N-Queens: count placements of n mutually non-attacking queens (backtracking)
+// queens[r] is the column of the queen in row r; lists have value semantics, so each call extends its own copy
+is_safe(queens, row, col) := {
+    for r in 0 to row-1 {
+        c = queens[r]
+        if c == col or abs(c - col) == row - r { return false }
+    }
+    true
+}
+
+place(queens, row, n) := {
+    if row == n { return 1 }
+    count = 0
+    for col in 0 to n-1 {
+        if is_safe(queens, row, col) {
+            count += place(queens + [col], row + 1, n)
+        }
+    }
+    count
+}
+
+count_queens(n) := place([], 0, n)
+
+// Towers of Hanoi: number of moves to shift n disks from one peg to another
+hanoi(n, from, to, via) := {
+    if n == 0 { return 0 }
+    hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
+}
+
+// 4 + 92 + 1023
+count_queens(6) + count_queens(8) + hanoi(10, "A", "C", "B")
