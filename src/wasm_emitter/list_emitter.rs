@@ -16,6 +16,8 @@ const BUILTIN_CALLS: [&str; 15] = [
 ];
 
 const PRINT: &str = "print";
+/// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
+const INSERT_ORDER_TOPIC: &str = "insert-order";
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -398,19 +400,34 @@ impl WasmGcEmitter {
 	}
 
 	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
-	/// two Ints are ambiguous (Python `insert(i, x)` vs wasp `insert(x, i)`) and a type error naming both readings
+	/// two Ints are ambiguous (Python `insert(i, x)` vs wasp `insert(x, i)`): the user is asked, unanswered it is an error
 	fn insert_position_and_value<'a>(&mut self, func: &mut Function, call: &str, first: &'a Node, second: &'a Node) -> Option<(&'a Node, &'a Node)> {
+		use crate::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::analyzer::INSERT_AT_CALL {
 			return Some((first, second));
 		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
+		let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
 		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {
 			(true, false) => Some((first, second)),
 			(false, true) => Some((second, first)),
-			_ => {
-				let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
-				self.emit_type_error(func, format!("ambiguous: insert({a}, {b}) inserts {b} at {a} in Python, {a} at {b} in wasp; write insert({b}, at: {a}) or insert({a}, at: {b})"));
+			(false, false) => {
+				self.emit_type_error(func, format!("insert({a}, {b}) needs an integer position: insert(value, at: position)"));
 				None
+			}
+			(true, true) => {
+				let question = Ask::new(INSERT_ORDER_TOPIC, format!("does insert({a}, {b}) put {b} at {a} (Python) or {a} at {b} (wasp)?"),
+					vec![reading("position first, as Python", &format!("insert({b}, at: {a})")), reading("value first, as wasp", &format!("insert({a}, at: {b})"))],
+					Fallback::Error).written(&format!("insert({a}, {b})")).at_node(first);
+				match ask(&question) {
+					Ok(0) => Some((first, second)),
+					Ok(_) => Some((second, first)),
+					Err(error) => {
+						let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+						self.emit_type_error(func, message);
+						None
+					}
+				}
 			}
 		}
 	}

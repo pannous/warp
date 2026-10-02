@@ -38,7 +38,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   wiki/variable.md says: `let x=1; x=2` (also `+=`, `++`, `x#i=`) → "x is let (immutable), cannot assign it again;
   fix: declare it with var or plain `x =` if it changes" (check_constants, like const). `var` stays mutable. The `let`
   style hint carries the education "in wasp `let` is immutable (unlike JS) …" (one hint, test_normalization pins one).
-  Not yet: show it only until acknowledged — needs the persisted answers of fix-ask (warp-62, `.wasp-answers`).
+  fix-sugar-3: the note is `diagnostic::educate_once("let", …)`: shown once per run until the user acknowledges it,
+  then remembered as `ack:let` (.wasp-answers) and never shown again.
 - A bare word statement that names nothing (`x=1; foo; x`, `foo x = 3`) is `undefined variable: foo` (was silently dropped).
 - `len(x)` counts like `#x` (hint `#x`); `n times [x]` fills a list; `b=[]; b.count` is 0.
 - Rule (user, via warp-f3): newcomer forms are eaten only where they do not clash with a known footgun (text + number
@@ -50,8 +51,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     (`insert(0, 4)`, `insert(i, v)`) are an error listing both readings, `insert(v, at: i)` / `insert(i, at: v)`.
     So the ignored wasp test form `pixel.insert(4,0)` is refused too. Positions are 0-based slots, past the end or
     negative appends. `xs.insert(v)` appends.
-  - Both are plain errors with the fix in the message; switch them to Ask (src/diagnostic.rs, fallback Error) once
-    fix-ask is merged.
+  - fix-sugar-3: both are Asks with fallback Error (src/diagnostic.rs). Topic `list-times` (analyzer::lower_list_times,
+    a list literal times a number): answers "repeat the list" → `n times [x]`, "multiply each element" →
+    `[x].map(x => x*n)`; a list variable times a number stays the plain type error. Topic `insert-order`
+    (list_emitter insert_position_and_value, two Int arguments): "position first, as Python" / "value first, as wasp".
+    Unanswered (tests, CI, pipes): "<question> (too ambiguous to guess); fix: <both explicit forms>". The list-times
+    question starts with "type error: list * number:" so probe_footguns' `[1 2 3]*2` → "type error" still holds.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
 

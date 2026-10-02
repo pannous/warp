@@ -486,7 +486,9 @@ pub mod hints {
             return;
         }
         match used_style {
-            VarStyle::Let => hint(&spell(used_style), &spell(preferred), &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
+            // shown until the user acknowledges it once (diagnostic::educate_once)
+            VarStyle::Let => crate::diagnostic::educate_once(LET_TOPIC, &spell(used_style), &spell(preferred),
+                &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
             _ => hint(&spell(used_style), &spell(preferred), reason),
         }
     }
@@ -624,6 +626,8 @@ pub mod hints {
 /// Type word of the list types; `list<int>`, `list of int` and `ints` all denote a list of int
 const LIST_TYPE_HEAD: &str = "list";
 const OF_WORD: &str = "of";
+/// The acknowledge-once note that `let` is immutable in wasp
+pub const LET_TOPIC: &str = "let";
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
 /// The quote character of the canonical string style

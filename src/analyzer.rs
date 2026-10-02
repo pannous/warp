@@ -1635,6 +1635,51 @@ fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, zero], Bracket::Round, Separator::None))
 }
 
+/// `[x]*n` and `n*[x]` with a list literal: Python repeats the list, NumPy multiplies each element (wiki/Footguns.md
+/// "Lists and arithmetic"), so the user is asked; unanswered it is an error naming both explicit forms
+pub fn lower_list_times(node: Node) -> Node {
+	match node {
+		Node::Meta { node: inner, data } => {
+			let positioned = Node::Meta { node: inner.clone(), data: data.clone() };
+			list_times(&inner, &positioned).unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
+		}
+		Node::Key(left, op, right) => {
+			let key = Node::Key(Box::new(lower_list_times(*left)), op, Box::new(lower_list_times(*right)));
+			list_times(&key, &key).unwrap_or(key)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_list_times).collect(), bracket, separator),
+		other => other,
+	}
+}
+
+const LIST_TIMES_TOPIC: &str = "list-times";
+
+fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
+	let is_list = |side: &Node| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _));
+	let (list, count) = match (is_list(left), is_list(right)) {
+		(true, false) => (left.as_ref(), right.as_ref()),
+		(false, true) => (right.as_ref(), left.as_ref()),
+		_ => return None,
+	};
+	let written = key.drop_meta().serialize();
+	let (list_text, count_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(count));
+	let readings = vec![
+		crate::diagnostic::reading("repeat the list", &format!("{count_text} times {list_text}")),
+		crate::diagnostic::reading("multiply each element", &format!("{list_text}.map(x => x*{count_text})")),
+	];
+	let question = crate::diagnostic::Ask::new(LIST_TIMES_TOPIC, format!("type error: list * number: does `{written}` repeat the list or multiply each element?"),
+		readings, crate::diagnostic::Fallback::Error).written(&written).at_node(positioned);
+	Some(match crate::diagnostic::ask(&question) {
+		Ok(0) => filled_list(count.clone(), list).unwrap_or_else(|| crate::node::error("`n times [x]` repeats one element: `3 times [0]`")),
+		Ok(_) => {
+			let mapped = crate::wasp_parser::parse(&format!("({}).map(item => item * ({}))", list.serialize(), count.serialize()));
+			lower_list_times(mapped)
+		}
+		Err(error) => error,
+	})
+}
+
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
 pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
