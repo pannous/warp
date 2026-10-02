@@ -399,6 +399,7 @@ pub mod hints {
         }
         match (written, is_prefix) {
             ("¬&", false) => hint(written, "nand", "standard spelling of the operator"),
+            ("upto", false) => hint(written, "..<", "upto excludes the end: `..<` or `..` exclude it, `to` or `...` include it"),
             ("&&" | "&" | "and", false) => and_operator(written),
             ("||" | "|" | "or", false) => or_operator(written),
             ("!" | "not", true) => not_operator(written),

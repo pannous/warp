@@ -807,7 +807,7 @@ impl WaspParser {
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
-		if self.matches_keyword("upto") { return Some((Op::To, 4)); }
+		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 

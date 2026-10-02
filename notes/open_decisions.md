@@ -18,6 +18,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-02
+- `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
+  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
+
 ## Original questions
 ## Blocking finished work
 1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
