@@ -462,6 +462,11 @@ pub(crate) fn held_kind(value: &Node, inferred: impl FnOnce() -> Kind) -> Kind {
 		Node::Empty => Kind::Empty,
 		Node::List(items, Bracket::Curly, _) if items.is_empty() => Kind::Empty, // the empty block is ø as well
 		Node::Char(_) => Kind::Text, // a variable holding "a" may later hold "ab": one-character texts are held as nodes
+		// so does a copy of a character: `f(t) { n = t; n = prev[n] }` called with `f("F")`
+		Node::Symbol(_) => match inferred() {
+			Kind::Codepoint => Kind::Text,
+			kind => kind,
+		},
 		_ => inferred(),
 	}
 }
@@ -2241,8 +2246,7 @@ pub fn kind_with_article(kind: Kind) -> String {
 /// The kind a call argument certainly has, judged from the literal alone
 fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
-		Node::Char(_) => Some(Kind::Text), // `f("F")`: a one-character text, held as a node like the variables of binding_kind
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
 		Node::List(entries, Bracket::Curly, _) if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => Some(Kind::List), // a map
 		_ => None,
