@@ -138,3 +138,13 @@ fn the_let_note_is_shown_until_acknowledged() {
 	});
 	std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn a_hash_glued_to_an_expression_counts_at_line_start() {
+	is!("a=[1 2 3]\n#a-1", 2);
+	is!("def f(x){[x x]}\n#f(2)", 2);
+	is!("x=4\n# a note\nx", 4); // `# ` with a space is a comment
+	is!("x=4\n## doc comment\nx", 4);
+	is!("#!/usr/bin/env warp\n3", 3);
+	is!("x=4\n#include lib\nx", 4); // a directive line stays a comment
+}

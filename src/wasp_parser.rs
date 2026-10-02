@@ -65,6 +65,9 @@ const SLICE_WORD: &str = "slice";
 /// Articles that start a typed verb phrase in `to square a number:`
 const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
+/// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
+/// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
+const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
 const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
@@ -514,14 +517,14 @@ impl WaspParser {
 			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
-	/// `#s` as a whole statement (`#s` alone on its line, `{ #s }`, `#s;`) counts s; `# note`, `#use lib`, `#f(x)` stay comments
-	fn at_counted_name(&self) -> bool {
-		if !(self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_') {
-			return false;
+	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`) starts a comment;
+	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
+	fn at_hash_comment(&self) -> bool {
+		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
+			return true;
 		}
-		let name_end = (1..).find(|&offset| !is_identifier_char(self.peek_char(offset))).expect("text ends with \\0");
-		let statement_end = (name_end..).find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t')).expect("text ends with \\0");
-		matches!(self.peek_char(statement_end), '\n' | '\r' | '\0' | '}' | ';' | ')' | ']' | ',') // an argument: `range(1, #a)`
+		let word: String = (1..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		HASH_DIRECTIVES.contains(&word.as_str())
 	}
 
 	/// `//` right behind an operand (`7//2`, `x//=2`, `f(x)//2`) divides; after a space or `:` (URLs) it starts a comment
@@ -646,8 +649,8 @@ impl WaspParser {
 
 			let (c1, c2) = (self.current_char(), self.peek_char(1));
 
-			// # line comment (shell-style) - only at line start; `#(…)` counts, as `#x` does after a statement
-			if c1 == '#' && c2 != '(' && self.is_at_line_start() && !self.at_counted_name() {
+			// # line comment (shell-style) at line start: `# note`, `#!`, `##`, `#use …`; `#x`, `#(…)`, `#a-1` count
+			if c1 == '#' && self.is_at_line_start() && self.at_hash_comment() {
 				self.advance();
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() { comments.push(text); }
