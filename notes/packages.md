@@ -21,7 +21,8 @@
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
-  An existing packages/<name> (directory or link outside the cache) always wins over the pin.
+  For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
+  packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.wasp
   and data/uniscript/. warp's tests/test_uniscript.rs still tests it (through `use uniscript`).
 - Versions (src/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.

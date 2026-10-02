@@ -25,6 +25,8 @@ const MODULE_DIRECTORY: &str = "module_directory";
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
 const PACKAGE_CACHE: &str = ".cache/warp/packages";
+/// where an unpinned clone in packages/ goes when a pin takes its place
+const REPLACED_DIRECTORY: &str = ".replaced";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
@@ -224,10 +226,15 @@ pub fn package_repository(name: &str) -> Option<String> {
 /// The directory of a package, packages/<name>: the pinned version, or a clone of the default branch;
 /// whatever is there already stays, so a local checkout linked there stands in for the package
 pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
+	fetch_package_into(Path::new(PACKAGES_DIRECTORY), name)
+}
+
+/// fetch_package with another packages directory than packages/
+pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String> {
 	let package = registered(name).ok_or(format!("unknown package: {name}"))?;
 	match &package.pinned {
-		Some(version) => fetch_tagged(name, &package.url, version, name),
-		None => clone(name, &package.url, &Path::new(PACKAGES_DIRECTORY).join(name), None),
+		Some(version) => fetch_tagged(packages, name, &package.url, version, name),
+		None => clone(name, &package.url, &packages.join(name), None),
 	}
 }
 
@@ -240,20 +247,29 @@ pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<Pa
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
 		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
 	};
-	fetch_tagged(name, &url, version, &format!("{name}@{version}"))
+	fetch_tagged(Path::new(PACKAGES_DIRECTORY), name, &url, version, &format!("{name}@{version}"))
 }
 
 /// packages/<link_name>, a link to the version's shallow clone in the machine's package cache: fetched once per machine,
 /// never again per checkout, export or test run. A link into the cache to another version (the pin moved) or to a
-/// removed clone is replaced.
-fn fetch_tagged(name: &str, url: &str, version: &Version, link_name: &str) -> Result<PathBuf, String> {
+/// removed clone is replaced. A clean clone of the repository there (an unpinned fetch) moves to packages/.replaced;
+/// anything else there (a local checkout, a clone with changes) stands in for the pin, with a warning.
+fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_name: &str) -> Result<PathBuf, String> {
+	static LINKING: Mutex<()> = Mutex::new(()); // clone() takes FETCHING itself
+	let _linking = LINKING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	let cached = package_cache().join(format!("{name}@{version}"));
-	let link = Path::new(PACKAGES_DIRECTORY).join(link_name);
+	let link = packages.join(link_name);
 	let stale = |target: PathBuf| target.starts_with(package_cache()) && (target != cached || !cached.exists());
 	if std::fs::read_link(&link).is_ok_and(stale) {
 		std::fs::remove_file(&link).map_err(|failure| format!("package {name}: stale link {}: {failure}", link.display()))?;
 	}
+	if is_clean_clone(&link, url) {
+		set_aside(packages, name, version, &link)?;
+	}
 	if link.exists() {
+		if std::fs::read_link(&link).map_or(true, |target| target != cached) {
+			warn_overridden(name, version, &link);
+		}
 		return Ok(link);
 	}
 	if !cached.exists() {
@@ -262,10 +278,49 @@ fn fetch_tagged(name: &str, url: &str, version: &Version, link_name: &str) -> Re
 			.ok_or(format!("package {name} has no tag of version {version} at {url}"))?;
 		clone(name, url, &cached, Some(tag))?;
 	}
-	std::fs::create_dir_all(PACKAGES_DIRECTORY).map_err(|failure| format!("package {name}: {failure}"))?;
+	std::fs::create_dir_all(packages).map_err(|failure| format!("package {name}: {failure}"))?;
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
 		_ => Ok(link),
+	}
+}
+
+/// A directory (not a link) holding a git clone of url without any change: what an unpinned fetch left there
+fn is_clean_clone(directory: &Path, url: &str) -> bool {
+	let git = |arguments: &[&str]| Command::new("git").arg("-C").arg(directory).args(arguments).output().ok()
+		.filter(|output| output.status.success()).map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+	is_real_directory(directory)
+		&& directory.join(".git").exists()
+		&& git(&["remote", "get-url", "origin"]).as_deref() == Some(url)
+		&& git(&["status", "--porcelain"]).is_some_and(|changes| changes.is_empty())
+}
+
+fn is_real_directory(path: &Path) -> bool {
+	std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+/// Moves an unpinned clone out of the pin's way into packages/.replaced, never deleting it
+fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
+	let replaced = packages.join(REPLACED_DIRECTORY);
+	std::fs::create_dir_all(&replaced).map_err(|failure| format!("package {name}: {failure}"))?;
+	let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
+	let destination = replaced.join(format!("{}.{seconds}.{}", clone.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
+	match std::fs::rename(clone, &destination) {
+		Ok(()) => eprintln!("package {name}: {} was an unpinned clone, moved to {}; now the pinned {version}", clone.display(), destination.display()),
+		Err(_) if !is_real_directory(clone) => {} // another process moved it first
+		Err(failure) => return Err(format!("package {name}: {} not moved out of the pin's way: {failure}", clone.display())),
+	}
+	Ok(())
+}
+
+/// A local checkout or a changed clone in packages/ wins over the pin, loudly, once per package and process
+fn warn_overridden(name: &str, version: &Version, directory: &Path) {
+	static WARNED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+	let mut warned = WARNED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	let key = directory.display().to_string();
+	if !warned.contains(&key) {
+		eprintln!("warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}");
+		warned.push(key);
 	}
 }
 
