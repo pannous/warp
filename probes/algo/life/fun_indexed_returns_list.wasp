@@ -1,0 +1,8 @@
+fun f(g) {
+  n = []
+  for i in 0 to 2 { n.push(g[i] * 2) }
+  return n
+}
+g = [1, 2, 3]
+g = f(g)
+g[2]

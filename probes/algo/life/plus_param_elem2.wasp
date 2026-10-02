@@ -1,0 +1,6 @@
+fun f(grid, i) {
+  count = 0
+  count = count + grid[i]
+  return count
+}
+f([0, 5, 0, 0], 1)

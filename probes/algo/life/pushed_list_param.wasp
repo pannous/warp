@@ -1,0 +1,5 @@
+fun f(grid, i) { return grid[i] }
+grid = []
+for i in 0 to 3 { grid.push(0) }
+grid[2] = 5
+f(grid, 2)

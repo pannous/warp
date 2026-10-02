@@ -1,0 +1,3 @@
+size = 3
+fun f(n) { return n * size }
+f(2)

@@ -1,0 +1,5 @@
+fun f(g, i) { return g[i] }
+cells = []
+cells.push(0)
+cells.push(5)
+f(cells, 1)

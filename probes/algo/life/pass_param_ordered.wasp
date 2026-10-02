@@ -1,0 +1,7 @@
+fun f2(grid, k) { grid[k] }
+fun f(grid) {
+  out = 0
+  for k in [0, 1] { out += f2(grid, k) }
+  out
+}
+f([3, 4])

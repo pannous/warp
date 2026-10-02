@@ -1,0 +1,12 @@
+size = 3
+fun f(grid, r, c) {
+  live = 0
+  for dr in [-1, 0, 1] {
+    rr = r + dr
+    if rr >= 0 and rr < size {
+      live += grid[rr * size + c]
+    }
+  }
+  return live
+}
+f([1, 0, 0, 1, 0, 0, 1, 0, 0], 1, 0)

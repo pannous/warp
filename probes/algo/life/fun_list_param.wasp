@@ -1,0 +1,2 @@
+fun f(g, i) { return g[i] }
+f([4, 5, 6], 1)
