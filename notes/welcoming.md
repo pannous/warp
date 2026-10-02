@@ -5,7 +5,13 @@ Mantra:
 - If there is an ambiguity, ask the user.
 - If the preferred syntax is different, educate the user.
 
-"Ask" means a warning or hint at compile time; "educate" means a hint naming the preferred wasp form, never a refusal.
+"Educate" is a hint naming the preferred wasp form, never a refusal.
+
+"Ask" is a diagnostic category of its own and a new programming paradigm: by default the compiler really
+pops up a question to the user (which interpretation did you mean?) and compiles the answer. Only when the
+question cannot be escalated to a user (tests, CI, piped/non-interactive runs, a special no-ask mode) does an
+Ask degrade to its fallback, which each ambiguity declares: a warning (take the default reading, continue) or
+an error (too dangerous to guess).
 
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
