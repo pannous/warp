@@ -1,0 +1,1 @@
+fun f(items = []) { items.push(4); items[0] }; f()

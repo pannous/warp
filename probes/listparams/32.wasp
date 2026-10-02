@@ -1,0 +1,1 @@
+fun f(xs) { s=0; for x in xs { s+=x }; s }; fun mk() { return [1 3] }; f(mk())

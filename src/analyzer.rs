@@ -1766,9 +1766,18 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	if returns_node && !last_kind.is_ref() { Kind::Text } else { last_kind }
 }
 
-/// `number` is the exact numeric tower (Int); the other builtin type names have their own kind
+/// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
+/// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
-	type_word_kind(&type_node.name())
+	let type_name = type_node.name();
+	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
+		return Some(Kind::List);
+	}
+	type_word_kind(&type_name)
+}
+
+fn names_list_type(type_name: &str) -> bool {
+	type_name == "list" || type_name.starts_with("list of ") || plural_element_type(type_name).is_some()
 }
 
 /// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
@@ -1784,27 +1793,83 @@ pub fn param_kind(param: &Param) -> Kind {
 	if let Some(kind) = param.annotation.as_ref().and_then(annotated_kind) {
 		return kind;
 	}
-	match param.default.as_ref().map(|value| infer_type(value, &Scope::new())) {
+	match param.default.as_ref().map(|value| argument_literal_kind(value).unwrap_or_else(|| infer_type(value, &Scope::new()))) {
 		Some(kind @ (Kind::Float | Kind::Text | Kind::List)) => kind,
 		_ => param.used_as.unwrap_or(Kind::Int),
 	}
 }
 
+/// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
+fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
+	let params = with_usage_kinds(params, body);
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
+	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
+}
+
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) take a list
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
+	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
-		if let Node::Key(list, Op::Hash, counted) = node {
-			let sequence = if list.is_nothing() { counted } else { list };
-			if let Node::Symbol(name) = sequence.drop_meta() {
-				indexed.insert(name.clone());
+		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
+			indexed.insert(name.clone());
+		}
+		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {
+			if let (Node::Symbol(alias), Node::Symbol(source)) = (alias.drop_meta(), source.drop_meta()) {
+				aliases.push((alias.clone(), source.clone()));
 			}
 		}
 	});
+	// `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
+	while let Some((_, source)) = aliases.iter().find(|(alias, source)| indexed.contains(alias) && !indexed.contains(source)) {
+		indexed.insert(source.clone());
+	}
 	params.into_iter().map(|param| {
 		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
 		Param { used_as, ..param }
 	}).collect()
+}
+
+/// The sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`
+fn used_sequence(node: &Node) -> Option<&Node> {
+	let is_counting_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name.as_str()));
+	match node {
+		Node::Key(list, Op::Hash, counted) => Some(if list.is_nothing() { counted } else { list }),
+		Node::Key(list, Op::Dot, property) if is_counting_word(property) => Some(list),
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, counted] if is_counting_word(word) => Some(counted),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// A parameter forwarded to another function's parameter takes its kind: `f(grid) { g(grid) }` with g indexing grid
+fn infer_forwarded_parameters(ctx: &mut Context) {
+	loop {
+		let mut forwarded: Vec<(String, usize, Kind)> = vec![];
+		for function in ctx.user_functions.values() {
+			function.body.visit(&mut |node| {
+				let Node::List(items, _, _) = node else { return };
+				let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) else { return };
+				let Some(called) = ctx.user_functions.get(callee) else { return };
+				for (argument, called_param) in items[1..].iter().zip(&called.params) {
+					let Node::Symbol(name) = argument.drop_meta() else { continue };
+					let Some(index) = function.params.iter().position(|param| &param.name == name) else { continue };
+					let (param, kind) = (&function.params[index], param_kind(called_param));
+					if kind != Kind::Int && param_kind(param) == Kind::Int && param.annotation.is_none() && param.default.is_none() {
+						forwarded.push((function.name.clone(), index, kind));
+					}
+				}
+			});
+		}
+		if forwarded.is_empty() {
+			return;
+		}
+		for (name, index, kind) in forwarded {
+			ctx.user_functions.get_mut(&name).expect("collected from user functions").params[index].used_as = Some(kind);
+		}
+	}
 }
 
 /// Recognizes patterns:
@@ -1813,6 +1878,7 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
 	infer_parameters_from_calls(ctx, node);
+	infer_forwarded_parameters(ctx);
 	refine_return_kinds(ctx);
 }
 
@@ -1877,17 +1943,39 @@ fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	}
 }
 
-/// An undeclared parameter takes the kind of its arguments when every call agrees; calls that disagree are a
-/// reported conflict. Parameters that only get Int arguments (or none) stay Int. Arguments that are not literals
-/// are not judged here: a wrong one is still refused at the call by the emitter.
+/// The kinds of variables only ever assigned literals of one kind: `s="abcd"; f(s)` passes a Text.
+/// A parameter of the same name shadows the variable (wiki/Footguns.md "Parameter shadowing"), so it is not judged.
+fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<String, Kind> {
+	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
+	for param in ctx.user_functions.values().flat_map(|function| &function.params) {
+		kinds.insert(param.name.clone(), None);
+	}
+	program.visit(&mut |node| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+		let Node::Symbol(name) = target.drop_meta() else { return };
+		let kind = argument_literal_kind(value);
+		kinds.entry(name.clone()).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
+	});
+	kinds.into_iter().filter_map(|(name, kind)| Some((name, kind?))).collect()
+}
+
+/// An undeclared parameter takes the kind of its arguments when every call agrees, over the kind its use suggests
+/// (an indexed parameter is a List unless it is passed a Text); calls that disagree are a reported conflict.
+/// Parameters that only get Int arguments (or none) keep their usage kind. Arguments that are neither literals nor
+/// literal variables are not judged here: a wrong one is still refused at the call by the emitter.
 fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
+	let variable_kinds = literal_variable_kinds(program, ctx);
+	let argument_kind = |argument: &Node| argument_literal_kind(argument).or_else(|| match argument.drop_meta() {
+		Node::Symbol(name) => variable_kinds.get(name).copied(),
+		_ => None,
+	});
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
 	program.visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
 		let Some(function) = ctx.user_functions.get(name) else { return };
 		for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
-			if let Some(kind) = argument_literal_kind(argument) {
+			if let Some(kind) = argument_kind(argument) {
 				let kinds = argument_kinds.entry((name.clone(), index)).or_default();
 				if !kinds.contains(&kind) {
 					kinds.push(kind);
@@ -1898,7 +1986,7 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 	for ((name, index), kinds) in argument_kinds {
 		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
 		let param = &mut function.params[index];
-		if param.annotation.is_some() || param.default.is_some() || param.used_as.is_some() {
+		if param.annotation.is_some() || param.default.is_some() {
 			continue;
 		}
 		match kinds.as_slice() {
@@ -1939,17 +2027,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, _, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params: Vec<Param> =
-							with_usage_kinds(extract_params(items), body);
-						let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
-						let func_def = UserFunctionDef {
-							name: name.clone(),
-							params,
-							body: body.clone(),
-							return_kind,
-							func_index: None,
-						};
-						ctx.user_functions.insert(name.clone(), func_def);
+						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items), body));
 						return;
 					}
 				}
@@ -1962,23 +2040,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, _, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params: Vec<Param> =
-							with_usage_kinds(extract_params(items), body);
+						let params = extract_params(items);
 						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
-							let actual_params = if params.is_empty() {
-								with_usage_kinds(vec![Param::untyped("it")], body)
-							} else {
-								params
-							};
-							let return_kind = infer_function_return_kind(&actual_params, body, &HashMap::new());
-							let func_def = UserFunctionDef {
-								name: name.clone(),
-								params: actual_params,
-								body: body.clone(),
-								return_kind,
-								func_index: None,
-							};
-							ctx.user_functions.insert(name.clone(), func_def);
+							let params = if params.is_empty() { vec![Param::untyped("it")] } else { params };
+							ctx.user_functions.insert(name.clone(), user_function(name, params, body));
 							return;
 						}
 					}
@@ -1987,16 +2052,8 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					let params = if is_statement_block(body) { vec![] } else { with_usage_kinds(vec![Param::untyped("it")], body) };
-					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
-					let func_def = UserFunctionDef {
-						name: name.clone(),
-						params,
-						body: body.clone(),
-						return_kind,
-						func_index: None,
-					};
-					ctx.user_functions.insert(name.clone(), func_def);
+					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
+					ctx.user_functions.insert(name.clone(), user_function(name, params, body));
 					return;
 				}
 			}
@@ -2103,16 +2160,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		if let Node::List(sig_items, _, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					let params: Vec<Param> =
-						extract_params(sig_items);
-					let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
-					return Some(UserFunctionDef {
-						name: name.clone(),
-						params,
-						body: body.clone(),
-						return_kind,
-						func_index: None,
-					});
+					return Some(user_function(name, extract_params(sig_items), body));
 				}
 			}
 		}
@@ -2136,15 +2184,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 								}
 							})
 							.collect();
-						let body = inner_items[1].clone();
-						let return_kind = infer_function_return_kind(&params, &body, &HashMap::new());
-						return Some(UserFunctionDef {
-							name: name.clone(),
-							params,
-							body: Box::new(body),
-							return_kind,
-							func_index: None,
-						});
+						return Some(user_function(name, params, &inner_items[1]));
 					}
 				}
 			}

@@ -1,0 +1,1 @@
+get(xs:list) := xs[1]; get([0 4 0])

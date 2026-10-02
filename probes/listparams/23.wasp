@@ -1,0 +1,1 @@
+fun f(a: string) { a#2 }; s="abcd"; f(s)

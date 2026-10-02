@@ -1,0 +1,1 @@
+fun f2(grid) { grid[1] }; fun f(grid) { f2(grid) }; f([0 4 0])
