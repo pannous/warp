@@ -1,6 +1,5 @@
 //! Uniscript (wiki/uniscript.md) in wasp: the uniscript package (packages.wasp): its uniscript.wasp over its data/entities.idx
 
-use std::process::Command;
 use warp::diagnostic::take_runtime_warnings;
 use warp::{error, is};
 
@@ -136,10 +135,10 @@ fn spelling_back_round_trips() {
 	is!(&format!("use uniscript; t=\"{text}\"; uniscript(unicode_to_uniscript(t)) == t"), true);
 }
 
-/// The binary index and the readable entity file agree entry by entry
+/// The binary index and the readable entity file agree entry by entry: the package's own checker, its prebuilt
+/// uniscript.wasm (never `cargo run` in the package: that built it into the shared cargo target directory)
 #[test]
 fn the_index_matches_the_readable_entities() {
-	let package = warp::modules::fetch_package("uniscript").unwrap();
-	let check = Command::new("cargo").args(["run", "--quiet", "--release", "--", "check"]).current_dir(package).output().expect("cargo");
-	assert!(check.status.success(), "{}{}", String::from_utf8_lossy(&check.stdout), String::from_utf8_lossy(&check.stderr));
+	let check = warp::package_tools::run_package_tool("uniscript", &["check"]).unwrap();
+	assert!(check.success(), "{}{}", check.stdout, check.stderr);
 }
