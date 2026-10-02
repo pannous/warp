@@ -1,0 +1,2 @@
+fun f(xs, i) { return xs[i] }
+f([5, 6, 7], 2)

@@ -1,0 +1,5 @@
+prev = [-1, 0]
+node = 1
+c = 0
+while prev[node] != -1 { node = prev[node]; c = c + 1 }
+c

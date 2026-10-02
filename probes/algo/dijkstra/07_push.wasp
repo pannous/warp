@@ -1,0 +1,4 @@
+v = []
+v.push("A")
+v.push("B")
+v.length
