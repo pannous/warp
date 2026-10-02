@@ -27,6 +27,8 @@ PASSED:
   ✓ a_field_of_a_constructor_call
   ✓ a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ a_float_equals_the_same_exact_number
+  ✓ a_fractional_bound_must_be_an_integer_like_an_index
+  ✓ a_fractional_index_in_a_variable_must_be_an_integer
   ✓ a_fractional_index_says_so
   ✓ a_function_local_does_not_leak_into_the_caller
   ✓ a_function_receives_the_empty_list
@@ -34,6 +36,7 @@ PASSED:
   ✓ a_group_of_three_names_is_imported
   ✓ a_group_with_spaces_is_imported
   ✓ a_grouped_comparison_is_the_left_operand_of_and
+  ✓ a_hint_is_given_once_per_compilation
   ✓ a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ a_large_zero_list_has_its_size
   ✓ a_list_is_not_equal_to_a_number
@@ -49,6 +52,7 @@ PASSED:
   ✓ a_negated_condition_in_a_loop
   ✓ a_negated_condition_takes_its_block
   ✓ a_negation_is_the_left_operand_of_and_and_or
+  ✓ a_negative_index_or_bound_is_an_error_that_names_last
   ✓ a_negative_superscript_is_a_reciprocal_power
   ✓ a_negative_superscript_on_a_variable
   ✓ a_nested_include_is_found_next_to_the_including_file
@@ -126,6 +130,7 @@ PASSED:
   ✓ compiled_uniscript_converts_like_the_browser_page
   ✓ concatenation_takes_results_of_functions_and_library_words
   ✓ continue_skips_to_the_next_pass_and_keeps_the_for_step
+  ✓ copy_and_clone_are_the_value_itself
   ✓ count_unit_of_text
   ✓ counting_a_parameter_makes_it_a_list
   ✓ dash_glyphs_subtract
@@ -276,8 +281,10 @@ PASSED:
   ✓ probe_test2_check
   ✓ probe_while_execution
   ✓ push_takes_any_expression
+  ✓ python_slices_of_a_list
   ✓ quantities_compare_in_the_finer_unit
   ✓ range_calls_are_exclusive_ranges
+  ✓ range_slices_of_a_list
   ✓ ranges_in_for_headers_stay_ranges
   ✓ read_loads_a_file_as_bytes
   ✓ record_stays_usable_as_a_variable_name
@@ -290,6 +297,7 @@ PASSED:
   ✓ semicolon_at_line_end_separates_statements_like_the_newline
   ✓ semicolon_inside_a_line_still_groups
   ✓ size_of_text_in_unit
+  ✓ slices_of_a_text_are_texts_of_characters
   ✓ spelling_back_round_trips
   ✓ struct_instances_compare_by_their_fields
   ✓ superscript_digits_without_sign_still_work
@@ -523,7 +531,7 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write_raw
+  ✓ test_fd_write
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -1261,6 +1269,7 @@ PASSED:
   ✓ the_marker_is_escaped_by_single_character_entities
   ✓ the_registry_names_repositories
   ✓ the_rust_setting_turns_a_runtime_warning_into_an_error
+  ✓ the_slice_method_takes_an_optional_end
   ✓ the_strict_flag_turns_warnings_into_errors
   ✓ the_sum_of_decimal_elements
   ✓ to_defines_a_function_with_a_body_to_the_end_of_the_statement
@@ -1318,4 +1327,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-68 ignored, 1313 passed, 0 failed, 1313 total tested
+68 ignored, 1322 passed, 0 failed, 1322 total tested
