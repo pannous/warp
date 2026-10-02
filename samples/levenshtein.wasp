@@ -2,7 +2,9 @@
 fun levenshtein(a, b) {
     let m = a.length
     let n = b.length
+    // wasp: `let` binds once (error "prev is let (immutable)"); a reassigned variable is `var prev = []` or plain `prev = []`
     let prev = []
+    // wasp: `..` excludes the end (`0..n` is 0…n-1); Kotlin-style inclusive ranges are `0...n` or `0 to n`
     for j in 0..n {
         prev.push(j)
     }
@@ -20,6 +22,7 @@ fun levenshtein(a, b) {
     return prev[n]
 }
 
+// wasp: `let` binds once (error "prev is let (immutable)"); a changing variable is plain `total = 0` or `var total = 0`
 let total = 0
 total += levenshtein("kitten", "sitting")   // 3
 total += levenshtein("flaw", "lawn")        // 2

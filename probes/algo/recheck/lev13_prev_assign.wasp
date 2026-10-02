@@ -1,0 +1,1 @@
+fun f() { var prev = [1]; var curr = [2]; prev = curr; return prev[0] }; f()

@@ -1,0 +1,1 @@
+fun g(n) { var xs = []; xs.push(n); return xs[0] }; g(2) + g(3)

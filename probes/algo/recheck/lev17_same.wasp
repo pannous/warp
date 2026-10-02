@@ -1,0 +1,21 @@
+fun levenshtein(a, b) {
+    var m = a.length
+    var n = b.length
+    var prev = []
+    for j in 0...n {
+        prev.push(j)
+    }
+    for i in 1...m {
+        var curr = [i]
+        for j in 1...n {
+            var cost = a[i - 1] == b[j - 1] ? 0 : 1
+            var deletion = prev[j] + 1
+            var insertion = curr[j - 1] + 1
+            var substitution = prev[j - 1] + cost
+            curr.push(min(deletion, insertion, substitution))
+        }
+        prev = curr
+    }
+    return prev[n]
+}
+levenshtein("abc", "abc")

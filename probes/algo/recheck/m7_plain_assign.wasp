@@ -1,0 +1,1 @@
+fun g() { xs = []; xs.push(5); return xs[0] }; g() + 1

@@ -1,8 +1,7 @@
 // Sieve of Eratosthenes, then binary search over the primes found
 
 fun sieve(limit) {
-    // wasp: `[true] * n` is refused as ambiguous (repeat or multiply?); repeating a list is `(limit + 1) times [true]`
-    is_prime = [true] * (limit + 1)
+    is_prime = (limit + 1) times [true]
     is_prime[0] = false
     is_prime[1] = false
     for i in 2..limit {
@@ -26,8 +25,7 @@ fun binary_search(list, target) {
     low = 0
     high = list.length - 1
     while low <= high {
-        // wasp: `/` divides exactly ((0+3)/2 is 1.5, "index must be an integer"); integer halving is `(low + high) / 2 as int`
-        mid = (low + high) / 2
+        mid = (low + high) / 2 as int
         if list[mid] == target { return mid }
         if list[mid] < target { low = mid + 1 } else { high = mid - 1 }
     }

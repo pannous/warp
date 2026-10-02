@@ -1,0 +1,1 @@
+fun f(a, b) { var cost = a[0] == b[1] ? 0 : 1; return cost + 1 }; f("ab", "ba")

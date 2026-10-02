@@ -19,9 +19,8 @@ fun neighbors(grid, r, c) {
 
 fun step(grid) {
   next = []
-  // wasp: `..` excludes the end, so `0..size-1` stops at size-2 ("index out of range" later); write `0..size` or `0...size-1`
-  for r in 0..size-1 {
-    for c in 0..size-1 {
+  for r in 0...size-1 {
+    for c in 0...size-1 {
       n = neighbors(grid, r, c)
       alive = grid[r * size + c] == 1
       if alive and (n == 2 or n == 3) {
@@ -37,19 +36,19 @@ fun step(grid) {
 }
 
 grid = []
-for i in 0..size*size-1 { grid.push(0) }
+for i in 0...size*size-1 { grid.push(0) }
 for (r, c) in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {
   grid[r * size + c] = 1
 }
 
-for gen in 1..4 {
+for gen in 1...4 {
   grid = step(grid)
 }
 
 // checksum: sum of r*10+c over live cells; the glider moved by (1,1)
 checksum = 0
-for r in 0..size-1 {
-  for c in 0..size-1 {
+for r in 0...size-1 {
+  for c in 0...size-1 {
     if grid[r * size + c] == 1 { checksum += r * 10 + c }
   }
 }

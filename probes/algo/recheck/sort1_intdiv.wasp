@@ -40,8 +40,7 @@ fun merge(left, right) {
 
 fun merge_sort(items) {
   if len(items) <= 1 { return items }
-  // wasp: `/` divides exactly (5/2 is 2.5, "index must be an integer"); integer halving is `len(items) / 2 as int`
-  mid = len(items) / 2
+  mid = len(items) / 2 as int
   left = merge_sort(items[0:mid])
   right = merge_sort(items[mid:])
   return merge(left, right)
