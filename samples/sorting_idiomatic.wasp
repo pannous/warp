@@ -1,7 +1,8 @@
 // insertion sort and merge sort over a list of integers, in the forms warp accepts today
 
 insertion_sort(items) := {
-  for i in 1..count(items) {
+  i = 1
+  while i < count(items) {
     key = items[i]
     j = i - 1
     while j >= 0 and items[j] > key {
@@ -9,6 +10,7 @@ insertion_sort(items) := {
       j -= 1
     }
     items[j + 1] = key
+    i += 1
   }
   return items
 }
@@ -46,9 +48,11 @@ merge_sort(items) := {
   mid = n / 2 as int
   left = []
   right = []
-  for i in 0..n {
+  i = 0
+  while i < n {
     item = items[i]
     if i < mid { left.add(item) } else { right.add(item) }
+    i += 1
   }
   merge(merge_sort(left), merge_sort(right))
 }
