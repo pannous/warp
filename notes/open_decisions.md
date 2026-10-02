@@ -34,14 +34,24 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
 - `#name` as a whole statement (`#s` alone on a line, `{ #s }`, `#s;`) counts name; `# note`, `#use lib`, `#f(x)`,
   `#!` stay comments.
-- `let x = …` / `var x = …` declare an ordinary (reassignable, JS intent) variable in any block; wiki/variable.md's
-  "`let person be…` cannot be reassigned" is the English `be` form and not implemented. `const`/`final`/`val` stay single assignment.
+- `let x = …` / `var x = …` declare a variable in any block. USER DECISION (fix-sugar-2): `let` is immutable as
+  wiki/variable.md says: `let x=1; x=2` (also `+=`, `++`, `x#i=`) → "x is let (immutable), cannot assign it again;
+  fix: declare it with var or plain `x =` if it changes" (check_constants, like const). `var` stays mutable. The `let`
+  style hint carries the education "in wasp `let` is immutable (unlike JS) …" (one hint, test_normalization pins one).
+  Not yet: show it only until acknowledged — needs the persisted answers of fix-ask (warp-62, `.wasp-answers`).
 - A bare word statement that names nothing (`x=1; foo; x`, `foo x = 3`) is `undefined variable: foo` (was silently dropped).
-- `len(x)` counts like `#x` (hint `#x`); `[x]*n`, `n*[x]` and `n times [x]` fill a list (`[1 2]*2` stays a type error);
-  `b=[]; b.count` is 0.
-- `xs.insert(a, b)`: a literal 0/negative second is the wasp position (`insert(4, 0)`, `insert(4, -1)` appends); else a
-  literal first is the Python position (`insert(0, x)`, `insert(0, 4)`); else a literal second is the wasp position; two
-  variables are Python order (`insert(i, x)`). Positions are 0-based slots, past the end appends. `xs.insert(v)` appends.
+- `len(x)` counts like `#x` (hint `#x`); `n times [x]` fills a list; `b=[]; b.count` is 0.
+- Rule (user, via warp-f3): newcomer forms are eaten only where they do not clash with a known footgun (text + number
+  is the one exception). So, revised in fix-sugar-2:
+  - `[x]*n` / `n*[x]` / `[1 2]*2` are refused (wiki/Footguns.md "Lists and arithmetic": Python repeats, NumPy multiplies):
+    "ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply".
+  - `xs.insert(a, b)` never guesses the order (Footguns "Guessing intent"): `insert(x, at: i)` names the position;
+    otherwise the kinds decide (the one Int is the position, `insert(0, "z")`, `insert("z", 1)`); two Ints
+    (`insert(0, 4)`, `insert(i, v)`) are an error listing both readings, `insert(v, at: i)` / `insert(i, at: v)`.
+    So the ignored wasp test form `pixel.insert(4,0)` is refused too. Positions are 0-based slots, past the end or
+    negative appends. `xs.insert(v)` appends.
+  - Both are plain errors with the fix in the message; switch them to Ask (src/diagnostic.rs, fallback Error) once
+    fix-ask is merged.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
 ## Original questions

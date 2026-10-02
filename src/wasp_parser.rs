@@ -1884,7 +1884,10 @@ impl WaspParser {
 				self.advance();
 				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
 			}
-			'[' => return Node::Key(Box::new(self.parse_atom()), Op::Mul, Box::new(count)), // `100 times [0]` fills a list like `[0]*100`
+			'[' => {
+				let list = self.parse_atom();
+				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
+			}
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;

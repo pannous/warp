@@ -9,9 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 14] = [
+const BUILTIN_CALLS: [&str; 15] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
+	crate::analyzer::INSERT_EITHER_CALL,
 ];
 
 const PRINT: &str = "print";
@@ -203,8 +204,9 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
-		if let [Node::Symbol(call), list, position, value] = items {
-			if call == crate::analyzer::INSERT_AT_CALL {
+		if let [Node::Symbol(call), list, first, second] = items {
+			if call == crate::analyzer::INSERT_AT_CALL || call == crate::analyzer::INSERT_EITHER_CALL {
+				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else { return };
 				self.emit_node_instructions(func, list);
 				self.emit_numeric_value(func, position);
 				self.emit_node_instructions(func, value);
@@ -415,6 +417,24 @@ impl WasmGcEmitter {
 			} else {
 				self.emit_discarded_statement(func, item, emit);
 				func.instruction(&Instruction::Drop);
+			}
+		}
+	}
+
+	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
+	/// two Ints are ambiguous (Python `insert(i, x)` vs wasp `insert(x, i)`) and a type error naming both readings
+	fn insert_position_and_value<'a>(&mut self, func: &mut Function, call: &str, first: &'a Node, second: &'a Node) -> Option<(&'a Node, &'a Node)> {
+		if call == crate::analyzer::INSERT_AT_CALL {
+			return Some((first, second));
+		}
+		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
+		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {
+			(true, false) => Some((first, second)),
+			(false, true) => Some((second, first)),
+			_ => {
+				let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
+				self.emit_type_error(func, format!("ambiguous: insert({a}, {b}) inserts {b} at {a} in Python, {a} at {b} in wasp; write insert({b}, at: {a}) or insert({a}, at: {b})"));
+				None
 			}
 		}
 	}

@@ -4,6 +4,7 @@
 mod common;
 use common::fails_with;
 use warp::*;
+use warp::node::strings;
 
 #[test]
 fn let_var_and_const_declare_inside_any_block() {
@@ -13,7 +14,12 @@ fn let_var_and_const_declare_inside_any_block() {
 	is!("s=0; for i in 1…3 { let t = i; s += t }; s", 6);
 	is!("if 1 { let y = 2; y } else { 0 }", 2);
 	is!("let x = 3; x", 3);
-	is!("let x = 0; x += 1; x", 1); // JS intent: let is reassignable
+	// wiki/variable.md: `let` binds once (unlike JS); `var` and plain `=` change
+	is!("var x = 0; x += 1; x", 1);
+	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot assign it again");
+	fails_with("let x = 1; x = 2", "fix: declare it with var or plain `x =` if it changes");
+	fails_with("let x = 1; x++", "x is let (immutable)");
+	fails_with("let xs = [1 2]; xs#1 = 5", "xs is let (immutable)");
 }
 
 #[test]
@@ -33,14 +39,14 @@ fn len_counts() {
 }
 
 #[test]
-fn a_one_element_list_times_n_repeats_it() {
-	is!("[0]*3", ints(vec![0, 0, 0]));
-	is!("3*[1]", ints(vec![1, 1, 1]));
-	is!("n=4; xs=[0]*n; xs.length", 4);
-	is!("def f(n){ xs=[0]*n; xs#2=5; xs }; f(3)", ints(vec![0, 5, 0]));
+fn n_times_a_one_element_list_repeats_it() {
 	is!("3 times [0]", ints(vec![0, 0, 0]));
 	is!("x = 100 times [0]; x.length", 100);
-	fails_with("[1 2]*2", "type error"); // a longer list is no repetition
+	is!("def f(n){ xs = n times [0]; xs#2=5; xs }; f(3)", ints(vec![0, 5, 0]));
+	// wiki/Footguns.md "Lists and arithmetic": Python repeats, NumPy multiplies, so `*` is refused with both readings
+	fails_with("[0]*3", "ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]`");
+	fails_with("3*[1]", "write `n times [x]` to repeat");
+	fails_with("[1 2]*2", "type error");
 }
 
 #[test]
@@ -52,13 +58,18 @@ fn the_empty_list_counts_zero_and_grows() {
 }
 
 #[test]
-fn insert_takes_wasp_and_python_argument_orders() {
-	is!("xs=[1 2]; xs.insert(0, 4); xs", ints(vec![4, 1, 2])); // Python: position, value
-	is!("xs=[1 2]; xs.insert(4, 0); xs", ints(vec![4, 1, 2])); // wasp: value, position
-	is!("pixel=[1 2 3]; pixel.insert(4,-1); pixel", ints(vec![1, 2, 3, 4]));
+fn insert_never_guesses_the_argument_order() {
+	is!("xs=[1 2]; xs.insert(4, at: 0); xs", ints(vec![4, 1, 2]));
+	is!("xs=[1 2]; i=1; xs.insert(9, at: i); xs", ints(vec![1, 9, 2]));
+	is!("pixel=[1 2 3]; pixel.insert(4, at: -1); pixel", ints(vec![1, 2, 3, 4]));
 	is!("pixel=[1 2 3]; pixel.insert(4); pixel", ints(vec![1, 2, 3, 4]));
-	is!("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", ints(vec![1, 9, 2]));
-	is!("b=[]; b.insert(0, 5); b", ints(vec![5]));
+	is!("b=[]; b.insert(5, at: 0); b", ints(vec![5]));
+	// the kinds decide: the one Int is the position, in either order
+	is!("xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs", strings(vec!["z", "a", "b"]));
+	is!("xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs", strings(vec!["a", "z", "b"]));
+	// two Ints: Python `insert(i, x)` and wasp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
+	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "ambiguous: insert(0, 4) inserts 4 at 0 in Python, 0 at 4 in wasp");
+	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "write insert(v, at: i) or insert(i, at: v)");
 }
 
 #[test]

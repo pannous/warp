@@ -482,8 +482,12 @@ pub mod hints {
             VarStyle::Let => "use 'let' for definition",
             VarStyle::Var => "use 'var' for definition",
         };
-        if used_style != preferred {
-            hint(&spell(used_style), &spell(preferred), reason);
+        if used_style == preferred {
+            return;
+        }
+        match used_style {
+            VarStyle::Let => hint(&spell(used_style), &spell(preferred), &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
+            _ => hint(&spell(used_style), &spell(preferred), reason),
         }
     }
 

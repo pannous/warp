@@ -742,7 +742,11 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
-		let fix = if left_kind == Kind::List || right_kind == Kind::List {
+		let is_number = |kind: Kind| matches!(kind, Kind::Int | Kind::Float);
+		let repeats_or_scales = *op == crate::operators::Op::Mul && ((left_kind == Kind::List && is_number(right_kind)) || (is_number(left_kind) && right_kind == Kind::List));
+		let fix = if repeats_or_scales {
+			"ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply"
+		} else if left_kind == Kind::List || right_kind == Kind::List {
 			"lists only concatenate with lists (+), element-wise arithmetic needs an explicit map"
 		} else {
 			"no implicit conversion, convert explicitly, e.g. int(\"5\") + 3"
