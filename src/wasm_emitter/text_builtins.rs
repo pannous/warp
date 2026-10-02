@@ -56,7 +56,7 @@ fn is_number(kind: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	let calls_text_of = [TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT,ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -176,6 +176,28 @@ impl WasmGcEmitter {
 		]);
 	}
 
+	/// text_of(node): a character as a text of its UTF-8 bytes, anything else unchanged; emitted before values_equal, which calls it
+	pub(super) fn emit_text_of(&mut self) {
+		if !self.should_emit_function(TEXT_OF) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let (placeholder, _) = self.allocate_string(" ");
+		self.runtime_function(TEXT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
+				I::I32Const(placeholder as i32), I::I32Const(1),
+			]);
+			s.call(f, "new_text");
+			f.instruction(&I::I64Const(1));
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::I31), I::I31GetU, I::I64ExtendI32U]);
+			s.call(f, "text_with_char_at");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
+		});
+	}
+
 	pub(super) fn emit_text_builtins(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let (int, long) = (ValType::I32, ValType::I64);
@@ -205,24 +227,6 @@ impl WasmGcEmitter {
 					I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
 				]);
 				s.call(f, "new_text");
-			});
-		}
-
-		// text_of(node): a character as a text of its UTF-8 bytes, anything else unchanged
-		if self.should_emit_function(TEXT_OF) {
-			let (placeholder, _) = self.allocate_string(" ");
-			self.runtime_function(TEXT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
-				s.emit_field(f, 0, 0);
-				Self::emit_list(f, &[
-					I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
-					I::I32Const(placeholder as i32), I::I32Const(1),
-				]);
-				s.call(f, "new_text");
-				f.instruction(&I::I64Const(1));
-				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::I31), I::I31GetU, I::I64ExtendI32U]);
-				s.call(f, "text_with_char_at");
-				Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
 			});
 		}
 

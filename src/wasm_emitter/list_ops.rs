@@ -948,7 +948,7 @@ impl WasmGcEmitter {
 
 	fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
-		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
+		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint); // "x" is a codepoint, also as a parameter
 		is_name.then(|| key.clone())
 	}
 
@@ -1017,8 +1017,9 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(local));
 				f.instruction(&I::StructGet { struct_type_index: node, field_index: index });
 			};
-			// the node on the stack, with the kind Symbol when it was Text
-			let as_symbol = |f: &mut Function| {
+			// the node on the stack, with the kind Symbol when it was Text or a character (`{"A": 1}` lexes the key as 'A')
+			let as_symbol = |s: &Self, f: &mut Function| {
+				s.call(f, crate::wasm_emitter::text_builtins::TEXT_OF);
 				f.instruction(&I::LocalSet(tmp));
 				field(f, tmp, 0);
 				Self::emit_list(f, &[I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Result(nullable_node_ref)), I::I64Const(Kind::Symbol as i64)]);
@@ -1029,9 +1030,9 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Result(ValType::I32))]);
 			field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
-			as_symbol(f);
+			as_symbol(s, f);
 			f.instruction(&I::LocalGet(1));
-			as_symbol(f);
+			as_symbol(s, f);
 			s.call(f, VALUES_EQUAL);
 			Self::emit_list(f, &[I::Else, I::I32Const(0), I::End]);
 		});

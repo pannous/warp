@@ -65,6 +65,8 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::Key(_, op, _) if op.is_compound_assign() => true,
 		Node::Key(_, Op::Then | Op::Else | Op::Do, _) => *bracket != Bracket::Square,
 		Node::Key(left, Op::Colon, _) => matches!(left.drop_meta(), Node::Symbol(s) if s == "global"),
+		// a lowered `for` loop: `i=a; while …`
+		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return"].contains(&s.as_str()))
 		}
@@ -271,8 +273,28 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
 			branches_kind(branch_kind(then_expr, scope), Kind::Int)
 		}
+		// An element: `xs#i`, `xs[i]`, `text#i`
+		Node::Key(indexed, Op::Hash, _) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or(Kind::Int),
 		// Default to Int for other cases
 		_ => Kind::Int,
+	}
+}
+
+/// Kind of an element of `indexed`: a list's common element type (`list of text` → Text), the character of a text;
+/// `None` when unknown (a mixed list, a map)
+fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
+	if matches!(infer_type(indexed, scope), Kind::Text | Kind::Symbol) {
+		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
+	}
+	let list_type = list_type_name(indexed, scope);
+	match list_type.strip_prefix("list of ")? {
+		word if word.starts_with("list") => Some(Kind::List),
+		RATIONAL_WORD => Some(Kind::Int),
+		REAL_WORD => Some(Kind::Float),
+		word => match type_word_kind(word)? {
+			Kind::Codepoint => Some(Kind::Text),
+			kind => Some(kind),
+		},
 	}
 }
 
@@ -809,6 +831,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				None => PLAIN.to_string(),
 			}
 		}
+		// Grouping: `([1 2])` has the type of `[1 2]`, as in infer_type
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => list_type_name(&items[0], scope),
 		// `zero_fill(count, zero)`: a list of the zero's type
 		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == ZERO_FILL_CALL)) => {
 			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
@@ -2082,12 +2106,14 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 		}
 		// Pattern: name x := body (with explicit parameter x using $0 or `it`)
 		Node::Key(left, Op::Define, body) => {
-			if let Node::List(items, _, _) = left.drop_meta() {
+			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
 						let params = extract_params(items);
-						if !params.is_empty() || uses_dollar_param(body) || uses_it(body) {
-							let params = if params.is_empty() { vec![Param::untyped("it")] } else { params };
+						let implicit_param = uses_dollar_param(body) || uses_it(body);
+						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
+						if !params.is_empty() || implicit_param || written_call {
+							let params = if params.is_empty() && implicit_param { vec![Param::untyped("it")] } else { params };
 							ctx.user_functions.insert(name.clone(), user_function(name, params, body));
 							return;
 						}

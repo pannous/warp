@@ -124,6 +124,32 @@ impl WasmGcEmitter {
 		func.instruction(&I::StructGet { struct_type_index: struct_type, field_index });
 	}
 
+	/// `"A"` lexes as the character 'A': a character equals the one-character text of it, compared as that text.
+	/// The kinds of the two Nodes (locals 0, 1) are in locals 2, 3.
+	fn emit_character_equals_text(&self, func: &mut Function, node: u32, recurse: u32) {
+		for (character, text) in [(0, 1), (1, 0)] {
+			let has_kind = |func: &mut Function, local: u32, kind: Kind| {
+				func.instruction(&I::LocalGet(local + 2));
+				func.instruction(&I::I64Const(kind as i64));
+				func.instruction(&I::I64Eq);
+			};
+			has_kind(func, character, Kind::Codepoint);
+			has_kind(func, text, Kind::Text);
+			func.instruction(&I::I32And);
+			func.instruction(&I::If(BlockType::Empty));
+			for local in [0, 1] {
+				func.instruction(&I::LocalGet(local));
+				if local == character {
+					func.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
+					self.call(func, crate::wasm_emitter::text_builtins::TEXT_OF);
+				}
+			}
+			func.instruction(&I::Call(recurse));
+			func.instruction(&I::Return);
+			func.instruction(&I::End);
+		}
+	}
+
 	fn return_if(func: &mut Function, result: i32) {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::I32Const(result));
@@ -247,6 +273,7 @@ impl WasmGcEmitter {
 				Self::field(f, from, node, 0);
 				f.instruction(&I::LocalSet(to));
 			}
+			s.emit_character_equals_text(f, node, recurse);
 			f.instruction(&I::LocalGet(2));
 			f.instruction(&I::LocalGet(3));
 			f.instruction(&I::I64Ne);

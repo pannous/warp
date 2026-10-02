@@ -909,6 +909,7 @@ impl WasmGcEmitter {
 		self.emit_int_runtime();
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_text_of();
 		self.emit_equality_ops();
 		self.emit_map_get();
 		// Emit helper functions

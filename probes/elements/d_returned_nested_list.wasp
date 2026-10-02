@@ -1,0 +1,4 @@
+fun d() { return [[1, 2], [3]] }
+result = d()
+r = result[0]
+r[1]

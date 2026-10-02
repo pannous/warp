@@ -1,0 +1,2 @@
+fun lookup(m, k) { return m[k] }
+lookup({"AB": 7}, "AB")

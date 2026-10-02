@@ -1,0 +1,2 @@
+ins(items) := { for i in 1..3 { x = 1 }; items }
+count(ins([3, 1, 2]))
