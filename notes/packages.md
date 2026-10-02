@@ -31,7 +31,8 @@
   ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary
   and rlib (Sublime lost completions; its main.rs compiled against that rlib). With CARGO_TARGET_DIR set, the same
   `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
-  Open: uniscript's v1.0.0 release has no uniscript.wasm asset yet, so the first run builds it (~5 s) once per machine.
+  uniscript's v1.0.0 release ships uniscript.wasm (4.2 MB): the first run downloads it once per machine, no build.
+  A package publishes its tool with `cargo build --release --target wasm32-wasip1 --bin <name>` as release asset <name>.wasm.
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
   For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
