@@ -1,2 +1,2 @@
-// parser issue: the do…end body stops at the first `;`, so break lands outside the loop (now a loud error)
+// one `end` for both `then` and `do` is ambiguous (Ruby/Lua need one each): an Ask error naming both forms; see probes/indent/07
 i = 0; while i < 10 do i += 1; if i == 3 then break end; i

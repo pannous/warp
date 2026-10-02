@@ -47,6 +47,11 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
 const IN_KEYWORD: &str = "in";
+/// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
+const END_KEYWORD: &str = "end";
+const ELSE_KEYWORD: &str = "else";
+const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
+const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
@@ -220,6 +225,8 @@ pub struct WaspParser {
 	char: char,
 	pub current_line: String,
 	base_indent: usize,
+	/// Inside a block indented with spaces below a trailing `:` spaces count as indent too (elsewhere only tabs do)
+	indent_counts_spaces: bool,
 	options: ParserOptions,
 	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
 	equals_compares: bool,
@@ -227,6 +234,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// Inside `do … end`: the `end` keyword closes the statement list
+	stops_at_end: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -319,10 +328,12 @@ impl WaspParser {
 			char: '\0',
 			current_line,
 			base_indent: 0,
+			indent_counts_spaces: false,
 			options,
 			equals_compares: false,
 			in_for_header: false,
 			stops_at_else: false,
+			stops_at_end: false,
 			times_loops: 0,
 			after_function_keyword: false,
 			elvis_operands: 0,
@@ -549,8 +560,8 @@ impl WaspParser {
 			if ch == '\n' {
 				had_newline = true;
 				line_indent = 0; // reset for new line
-			} else if ch == '\t' {
-				line_indent += 1; // only tabs count as indent
+			} else if ch == '\t' || (ch == ' ' && self.indent_counts_spaces) {
+				line_indent += 1; // tabs count as indent, spaces only inside a space-indented block
 			}
 			self.advance();
 		}
@@ -1152,18 +1163,89 @@ impl WaspParser {
 		if !self.only_blanks_before_newline() {
 			return self.parse_expr(0);
 		}
+		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
+	}
+
+	/// Offside rule: the lines indented (by tabs or spaces) below a line ending in `:` are its `{…}` block;
+	/// None, with nothing consumed, when the next line is not indented deeper
+	fn parse_indented_block(&mut self) -> Option<Node> {
+		let next_line = self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').skip(1);
+		let indented_by_spaces = next_line.take_while(|ch| matches!(ch, ' ' | '\t')).any(|ch| *ch == ' ');
+		let before_block = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let outer_counts_spaces = self.indent_counts_spaces;
+		self.indent_counts_spaces |= indented_by_spaces;
 		let (_, indent) = self.skip_whitespace();
 		if indent <= self.base_indent {
-			return error("a definition needs a body: `to name params: body`");
+			self.indent_counts_spaces = outer_counts_spaces;
+			(self.pos, self.line_nr, self.column, self.current_line) = before_block;
+			return None;
 		}
 		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
 		let block = self.parse_list_with_separators(None, Bracket::None);
 		self.base_indent = outer_indent;
+		self.indent_counts_spaces = outer_counts_spaces;
 		self.seek_back_over_whitespace(); // the newline after the block still separates the next statement
-		match block {
-			Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Curly, separator),
-			single => Node::List(vec![single], Bracket::Curly, Separator::None),
+		Some(curly_block(block))
+	}
+
+	/// Ruby/Lua `do … end`, `then … end`, `else … end`: an `end` closes the statements opened here,
+	/// counting the `do`/`then` openers in between; an `end` that closes nothing leaves the one-statement body
+	fn closing_end_follows(&self, openers: &[&str]) -> bool {
+		let mut open = 1;
+		let mut position = self.pos;
+		while position < self.chars.len() {
+			let ch = self.chars[position];
+			if ch == '"' || ch == '\'' {
+				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+				continue;
+			}
+			if !is_identifier_char(ch) {
+				position += 1;
+				continue;
+			}
+			let word_start = position;
+			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
+				position += 1;
+			}
+			if word_start > 0 && self.chars[word_start - 1] == '.' {
+				continue; // `range.end` is a property
+			}
+			let word: String = self.chars[word_start..position].iter().collect();
+			match word.as_str() {
+				END_KEYWORD => open -= 1,
+				opener if openers.contains(&opener) => open += 1,
+				_ => {}
+			}
+			if open == 0 {
+				return true;
+			}
 		}
+		false
+	}
+
+	/// The statements up to the closing `end` (consumed) as a `{…}` block; a `then` block also ends at its `else`
+	fn parse_end_block(&mut self, stops_at_else: bool) -> Node {
+		let outer_else = std::mem::replace(&mut self.stops_at_else, stops_at_else);
+		let outer_end = std::mem::replace(&mut self.stops_at_end, true);
+		let outer_indent = self.base_indent;
+		let before_first_line = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let (_, indent) = self.skip_whitespace();
+		(self.pos, self.line_nr, self.column, self.current_line) = before_first_line;
+		self.base_indent = self.base_indent.max(indent); // its lines may be indented, the `end` line not
+		let block = self.parse_list_with_separators(None, Bracket::None);
+		self.base_indent = outer_indent;
+		self.stops_at_else = outer_else;
+		self.stops_at_end = outer_end;
+		self.skip_whitespace();
+		if self.matches_keyword(END_KEYWORD) {
+			self.advance_by(END_KEYWORD.len());
+		}
+		curly_block(block)
+	}
+
+	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
+	fn at_block_close(&self) -> bool {
+		self.stops_at_end && (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
 	}
 
 	fn parameters_follow_after_blanks(&self) -> bool {
@@ -1509,6 +1591,7 @@ impl WaspParser {
 			let (op, chars) = match self.peek_operator() {
 				Some(pair) => pair,
 				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
+				None if self.at_block_close() => break, // `do x end`: the `end` is no argument of x
 				None => {
 					// Step 3b: Check for implicit function application (space between atoms)
 					// This makes `x = f y` parse as `x = (f y)` and `252 > f y` as `252 > (f y)`
@@ -1546,7 +1629,17 @@ impl WaspParser {
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			self.advance_by(chars);
-			self.skip_whitespace();
+			let block_body = match op {
+				Op::Colon if self.only_blanks_before_newline() => {
+					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` assigns
+				}
+				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
+				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`
+				_ => None,
+			};
+			if block_body.is_none() {
+				self.skip_whitespace();
+			}
 			if op == Op::Define {
 				if let Some(name) = defined_function_name(&lhs) {
 					if matches!(lhs.drop_meta(), Node::List(..)) {
@@ -1560,7 +1653,7 @@ impl WaspParser {
 			if op == Op::Colon {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
-			let rhs = self.parse_expr(r_bp);
+			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -1636,7 +1729,7 @@ impl WaspParser {
 		}
 	}
 
-	fn with_equals_comparing(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> Node) -> Node {
+	fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {
 		let outer = std::mem::replace(&mut self.equals_compares, compares);
 		let node = parse(self);
 		self.equals_compares = outer;
@@ -1763,7 +1856,8 @@ impl WaspParser {
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let body = if let Some(word) = body_word { // `for i in 0..n: body`, `for i in 0..n do body`
 			self.advance_by(word.len());
-			self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+			let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
+			indented_block.unwrap_or_else(|| self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
 		} else {
 			self.parse_atom()
 		};
@@ -2716,7 +2810,7 @@ impl WaspParser {
 			let ch = self.current_char();
 			let at_end = match close {
 				Some(c) => ch == c || ch == '\0',
-				None => self.end_of_input(),
+				None => self.end_of_input() || self.at_block_close(),
 			};
 			if at_end {
 				if close.is_some() {
@@ -2761,7 +2855,7 @@ impl WaspParser {
 			let ch = self.current_char();
 			let at_end = match close {
 				Some(c) => ch == c || ch == '\0',
-				None => self.end_of_input(),
+				None => self.end_of_input() || self.at_block_close(),
 			};
 			let sep = if at_end {
 				Separator::None
@@ -3075,6 +3169,14 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 }
 
 /// `while condition body`: the loop head `ø while condition` applied `do` to its body
+/// Statements as a `{…}` block body
+fn curly_block(statements: Node) -> Node {
+	match statements {
+		Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Curly, separator),
+		single => Node::List(vec![single], Bracket::Curly, Separator::None),
+	}
+}
+
 pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))

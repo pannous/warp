@@ -1,4 +1,4 @@
-// parser issue: a tab-indented `while c:` body keeps only its first line; lower_versions panics on this file
+// solved (fix-indent): a tab-indented `while c:` body is the whole indented block (offside rule)
 i = 0
 while i < 10:
 	i += 1
