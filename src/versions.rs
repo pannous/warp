@@ -149,7 +149,7 @@ pub fn is_version_keyword(node: &Node) -> bool {
 /// `1.2.3` and `v1.2.3` as the lexer reads them; `v2` stays a name
 fn is_version_literal(text: &str) -> bool {
 	let chars: Vec<char> = text.chars().collect();
-	chars.len() == literal_len(&chars).max(tagged_literal_len(&chars))
+	!chars.is_empty() && chars.len() == literal_len(&chars).max(tagged_literal_len(&chars))
 }
 
 /// The version a module declares with a top level `version 1.2.3`
