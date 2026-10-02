@@ -481,7 +481,7 @@ impl WaspParser {
 		}
 		let name_end = (1..).find(|&offset| !is_identifier_char(self.peek_char(offset))).expect("text ends with \\0");
 		let statement_end = (name_end..).find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t')).expect("text ends with \\0");
-		matches!(self.peek_char(statement_end), '\n' | '\r' | '\0' | '}' | ';')
+		matches!(self.peek_char(statement_end), '\n' | '\r' | '\0' | '}' | ';' | ')' | ']' | ',') // an argument: `range(1, #a)`
 	}
 
 	/// `//` right behind an operand (`7//2`, `x//=2`, `f(x)//2`) divides; after a space or `:` (URLs) it starts a comment

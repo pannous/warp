@@ -42,6 +42,7 @@ fn is_data_node(node: &Node) -> bool {
 		Node::List(items, bracket, separator) => !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node),
 		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
 		Node::Key(left, op, right) if op.is_arithmetic() => is_data_node(left) && is_data_node(right), // `[1+2, 3]` keeps both items
+		Node::Key(left, Op::Hash, right) => is_data_node(left) && is_data_node(right), // a count or element: `[#a, a#1]`
 		Node::Key(value, Op::As, _) => is_data_node(value), // `[1.5f 2.5f]`
 		_ => false,
 	}

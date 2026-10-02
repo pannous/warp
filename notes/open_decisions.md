@@ -54,7 +54,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     fix-ask is merged.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
-||||||| c7308419
 
 ## Decided 2026-10-02
 - `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
