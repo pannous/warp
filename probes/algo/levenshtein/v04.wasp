@@ -1,0 +1,11 @@
+def g(n) {
+    prev = [0]
+    for i in 1...(n) {
+        curr = [i]
+        prev = curr
+    }
+    prev#1
+}
+t = 0
+t += g(5)
+t

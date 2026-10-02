@@ -1,0 +1,2 @@
+fun f(a: string) { return a[1] }
+f("abcd")

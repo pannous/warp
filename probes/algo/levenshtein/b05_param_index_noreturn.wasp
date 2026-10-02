@@ -1,0 +1,2 @@
+fun f(a, i) { a[i] }
+f("abcd", 1)

@@ -1,0 +1,2 @@
+fun f(a) { return a }
+f("abcd")
