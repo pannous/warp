@@ -19,7 +19,7 @@ pub(crate) mod text_builtins;
 mod node_emitter;
 mod string_table;
 mod type_manager;
-mod wasi_emitter;
+pub(crate) mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
 
@@ -457,8 +457,11 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Result kinds of the user functions, and of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
+	/// unless libm's f64 version is imported
 	fn user_function_kinds(&self) -> HashMap<String, Kind> {
-		self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect()
+		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
+		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -565,9 +568,6 @@ impl WasmGcEmitter {
 				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
 				self.ctx.user_functions[name].return_kind
 			}
-			// `floor(x)`, `round(x)` build an Int (emit_introspection_fn) unless libm's f64 version is imported
-			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name)
-				if ROUNDING_FUNCTIONS.contains(&name.as_str()) && !self.ctx.ffi_imports.contains_key(name))) => Kind::Int,
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				self.arithmetic_type(left, op, right)

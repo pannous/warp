@@ -505,8 +505,20 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/probe_f
   knows its element type; function scopes start with `ctx.declared_globals`, so assignments never create a shadowing local.
 - Fixed: `print "called"` as a statement in a numeric function body trapped (cast of the printed text to an Int);
   `x=10; x=floor(x/2)` failed validation (the rounding builtins build an Int, but libm's signature said f64).
-- Left open: `import floor from "m"; x=10.0; x=floor(2.5)` still fails validation; `print` of a runtime value or a
-  one-character text (`print("c")`) is "literal numbers and text only so far".
+- Left open then, fixed in fix-print: `print` of a runtime value and of `print("c")`, and `import floor from "m";
+  x=10.0; x=floor(2.5)` (see Work area "print").
+
+## Work area "print" (2026-10-02)
+- Fixed: `print(x)` of any number, text or character prints its runtime text form (runtime `print_value`: list_join of
+  `[x]`, as `x as string` does), the value is x; `print("c")` is the text "c" (analyzer::held_kind), `print x` is worth x
+  in infer_type. Lists and floats stay "print of a List has no runtime text yet", like `xs as string`.
+- Fixed: exact numbers that are no fixnum have a runtime text form (`exact_text` in wasm_emitter/exact.rs, used by
+  list_join): ratios with a terminating decimal as decimals (`2.5`, `-0.125`), others as `1/3`, ±∞ and NaN as the host
+  prints them, big integers in full (`int_text`, digits by int_quot/int_rem). Before, the handle printed as
+  -9223372036854775807. Required with list_join whenever the int runtime is (text_builtins::add_dependencies).
+- Fixed: an exact variable later assigned an f64 (`import floor from "m"; x=10.0; x=floor(2.5)`, `x=1; x=2.5 as float`)
+  holds an f64 throughout (analyzer `widen_to_float`), as expressions mixing in an f64 do; before, WASM validation failed.
+- Tests: tests/test_welcoming_print.rs, probes/print/.
 
 ## For wiki/Footguns.md
 

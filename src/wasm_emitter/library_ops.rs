@@ -51,6 +51,7 @@ impl WasmGcEmitter {
 		self.emit_text_case("text_lower", false);
 		self.emit_text_split();
 		self.emit_list_join();
+		self.emit_print_value(); // after list_join, which gives the text
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
 	}
 
@@ -254,13 +255,16 @@ impl WasmGcEmitter {
 		}
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
+		self.emit_exact_text();
+		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
+		locals.push(ValType::I64);
 		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first) = (4, 5, 6, 7);
+			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -269,6 +273,16 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
+					is_kind(f, Kind::Int);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_int_value_of(f, element);
+					f.instruction(&I::LocalSet(number));
+					s.emit_fixnum_test(f, &[number]);
+					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(number)]);
+					s.call(f, crate::wasm_emitter::exact::EXACT_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End, I::End]);
+				}
 			};
 			let loop_over_cells = |f: &mut Function| {
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
