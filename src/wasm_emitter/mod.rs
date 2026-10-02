@@ -500,8 +500,11 @@ impl WasmGcEmitter {
 			};
 			let expected = param_kind(param);
 			let given = self.get_type(argument);
-			if !expected.is_ref() && matches!(given, Kind::List | Kind::Text) && given != expected {
-				let message = format!("{} needs {} for parameter {}, got {}", user_fn.name, kind_with_article(expected), param.name, argument.serialize());
+			// a declared list (`xs:list`, `xs:ints`) refuses a number or text loudly (wiki/Footguns.md "Type annotations not enforced loudly")
+			let declared_list = expected == Kind::List && param.annotation.is_some();
+			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
+			if (!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected {
+				let message = format!("{} needs {} for parameter {}, got {} ({})", user_fn.name, kind_with_article(expected), param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;
 			}

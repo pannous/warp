@@ -1,0 +1,1 @@
+function get(xs) { xs#2 }; q=[0 4 0]; get(q)

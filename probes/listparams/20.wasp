@@ -1,0 +1,1 @@
+fun f(a) { return a[1] }; f("abcd")

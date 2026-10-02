@@ -1,0 +1,1 @@
+fn total(xs) { s=0; for x in xs { s+=x }; s }; total([1 3 0])

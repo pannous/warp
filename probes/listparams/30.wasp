@@ -1,0 +1,1 @@
+fun f(xs) { xs.length }; fun mk() { return [1 2 3 4] }; f(mk())

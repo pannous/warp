@@ -1900,6 +1900,9 @@ impl WaspParser {
 		if self.current_char() != '[' || min_bp > subscript_bp {
 			return None;
 		}
+		if let Some(list_type) = self.try_parse_array_type_suffix(lhs) {
+			return Some(list_type);
+		}
 		let before_bracket = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.advance(); // skip '['
 		self.skip_whitespace();
@@ -1923,6 +1926,16 @@ impl WaspParser {
 		norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 
 		Some(indices.into_iter().fold(lhs.clone(), subscript))
+	}
+
+	/// The Java/C array type `int[]` is the list type `[int]`
+	fn try_parse_array_type_suffix(&mut self, lhs: &Node) -> Option<Node> {
+		let Node::Symbol(word) = lhs.drop_meta() else { return None };
+		if !is_identifier_char(self.prev_char()) || self.peek_char(1) != ']' || !names_a_type(word) {
+			return None;
+		}
+		self.advance_by(2);
+		Some(Node::List(vec![lhs.clone()], Bracket::Square, Separator::Space))
 	}
 
 	fn try_parse_implicit_application(

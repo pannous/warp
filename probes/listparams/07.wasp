@@ -1,0 +1,1 @@
+fn get(xs, i) { xs[i] }; q=[0 4 0]; get(q, 1)
