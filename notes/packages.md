@@ -20,6 +20,18 @@
   `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/test_uniscript.rs 335 s → 24 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
+- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/package_tools.rs):
+  `run_package_tool(name, args)` / `warp tool <name> args…` runs `<name>.wasm`, a wasm32-wasip1 command, in-process
+  under wasmtime-wasi with the package directory preopened as `.`. One artifact for every OS, no per-platform binaries.
+  It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
+  else (loudly) `cargo build --target wasm32-wasip1 --bin <name>` with CARGO_TARGET_DIR in the package's own build
+  directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).
+  Why: on 2026-10-02 16:54 tests/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
+  -- check` inside the fetched ~/.cache/warp/packages/uniscript@1.0.0 without CARGO_TARGET_DIR, so cargo used
+  ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary
+  and rlib (Sublime lost completions; its main.rs compiled against that rlib). With CARGO_TARGET_DIR set, the same
+  `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
+  Open: uniscript's v1.0.0 release has no uniscript.wasm asset yet, so the first run builds it (~5 s) once per machine.
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
   For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.

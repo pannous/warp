@@ -43,6 +43,7 @@ pub mod switch;
 pub mod phrase_words;
 pub mod declarations;
 pub mod modules;
+pub mod package_tools;
 pub mod versions;
 use std::env;
 use std::fs;
@@ -53,6 +54,8 @@ use extensions::numbers::Number;
 
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
+/// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
+const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Answers to the compiler's questions (Asks), remembered per project: one `topic = explicit form` per line
 const ANSWERS_FILE: &str = ".wasp-answers";
@@ -138,6 +141,19 @@ fn main() {
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+    } else if args[1] == TOOL_COMMAND && args.len() >= 3 {
+        let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
+        match package_tools::run_package_tool(&args[2], &arguments) {
+            Ok(run) => {
+                print!("{}", run.stdout);
+                eprint!("{}", run.stderr);
+                std::process::exit(run.status);
+            }
+            Err(failure) => {
+                eprintln!("{failure}");
+                std::process::exit(1);
+            }
+        }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = if file_exists(target) { load_file(target) } else { target.to_string() };
         println!("{}", wasp_parser::parse_data(&text).serialize());
@@ -285,6 +301,7 @@ fn usage() {
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
+    println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never ask about ambiguities: take their default with a warning (or fail)");

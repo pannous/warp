@@ -223,6 +223,16 @@ pub fn package_repository(name: &str) -> Option<String> {
 	registered(name).map(|package| package.url)
 }
 
+/// The version a package is pinned to in the registry, None for one that follows its default branch
+pub fn pinned_version(name: &str) -> Option<Version> {
+	registered(name).and_then(|package| package.pinned)
+}
+
+/// Where the pinned version of a package is cloned once per machine: ~/.cache/warp/packages/<name>@<version>
+pub fn cached_package(name: &str, version: &Version) -> PathBuf {
+	package_cache().join(format!("{name}@{version}"))
+}
+
 /// The directory of a package, packages/<name>: the pinned version, or a clone of the default branch;
 /// whatever is there already stays, so a local checkout linked there stands in for the package
 pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
@@ -257,7 +267,7 @@ pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<Pa
 fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_name: &str) -> Result<PathBuf, String> {
 	static LINKING: Mutex<()> = Mutex::new(()); // clone() takes FETCHING itself
 	let _linking = LINKING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	let cached = package_cache().join(format!("{name}@{version}"));
+	let cached = cached_package(name, version);
 	let link = packages.join(link_name);
 	let stale = |target: PathBuf| target.starts_with(package_cache()) && (target != cached || !cached.exists());
 	if std::fs::read_link(&link).is_ok_and(stale) {
