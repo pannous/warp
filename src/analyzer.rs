@@ -417,6 +417,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 						};
 						scope.define(name.clone(), type_node, kind);
 					}
+					Node::Symbol(name) => type_list_by_first_append(name, right, scope),
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
 						if let Node::Symbol(name) = var_name.drop_meta() {
@@ -452,6 +453,20 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}
 		_ => 0,
+	}
+}
+
+/// `xs = []; xs.push(5)`, lowered to `xs = xs + [5]`: the empty list takes the type of its first appended elements
+fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Scope) {
+	let Node::Key(list, Op::Add, appended) = value.drop_meta() else { return };
+	let appends_to_itself = matches!(list.drop_meta(), Node::Symbol(target) if target == name);
+	if !appends_to_itself || !matches!(appended.drop_meta(), Node::List(_, Bracket::Square, _)) {
+		return;
+	}
+	let appended_type = list_type_name(appended, scope);
+	if let Some(local) = scope.locals.get_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none()) {
+		local.kind = Kind::List;
+		local.type_node = Some(Box::new(Node::Symbol(appended_type)));
 	}
 }
 
