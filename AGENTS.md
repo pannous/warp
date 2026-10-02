@@ -243,7 +243,7 @@ git status before and after each task should show
 Your branch is up to date with 'origin/main'.
 nothing to commit
 
-use `cargo fix` after each commit and commit again
+use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commit again (`--lib --bins` keeps it out of tests/, `--allow-dirty` because cargo flags git-ignored non-.rs files as dirty)
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
 un-ignore everything once it passes 
