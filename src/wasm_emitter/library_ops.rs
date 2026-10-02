@@ -23,7 +23,7 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 13] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 14] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
@@ -37,7 +37,9 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 13] = [
 	("lower", "text_lower"),
 	("split", "text_split"),
 	("join", "list_join"),
+	(crate::library_words::SLICE, NODE_SLICE),
 ];
+pub const NODE_SLICE: &str = "node_slice";
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
@@ -49,6 +51,7 @@ impl WasmGcEmitter {
 		self.emit_text_case("text_lower", false);
 		self.emit_text_split();
 		self.emit_list_join();
+		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
 	}
 
 	/// Push the i64 of the Int node in local `node`
@@ -319,6 +322,69 @@ impl WasmGcEmitter {
 			end_loop(f);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 			s.call(f, "new_text");
+		});
+	}
+
+	/// node_slice(x, start, end): the items start…end-1 of a list, or the characters of a text as a text. Indexes are 0-based
+	/// and clamped to the length; a negative one is out of range; ø is the start or the end itself.
+	fn emit_node_slice(&mut self) {
+		if !self.should_emit_function(NODE_SLICE) {
+			return;
+		}
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		let locals = vec![ValType::I32, ValType::I64, ValType::I64, ValType::I64, ValType::I64, nullable, nullable];
+		self.runtime_function(NODE_SLICE, vec![nullable, nullable, nullable], vec![node_ref], locals, |s, f| {
+			let (list, start, end) = (0, 1, 2);
+			let (is_text, length, from, to, index, cell, sliced) = (3, 4, 5, 6, 7, 8, 9);
+			let walk_cells = |f: &mut Function| {
+				Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::I64Const(0), I::LocalSet(index)]);
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+			};
+			let next_cell = |f: &mut Function| {
+				s.emit_field(f, cell, 2);
+				Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(index), I::I64Const(1), I::I64Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
+			};
+			// bound = the int in `bound`, or `default` for ø; never negative (no wrap around, Footguns.md); at most length
+			let clamped_bound = |f: &mut Function, bound: u32, default: u32, target: u32| {
+				s.emit_empty_as_null(f, bound);
+				Self::emit_list(f, &[I::LocalGet(bound), I::RefIsNull, I::If(BlockType::Result(ValType::I64)), I::LocalGet(default), I::Else]);
+				s.emit_int_value_of(f, bound);
+				Self::emit_list(f, &[I::End, I::LocalSet(target), I::LocalGet(target), I::I64Const(0), I::I64LtS]);
+				s.emit_fail_if(f, "index_out_of_range");
+				Self::emit_list(f, &[I::LocalGet(target), I::LocalGet(length), I::LocalGet(target), I::LocalGet(length), I::I64LtS, I::Select, I::LocalSet(target)]);
+			};
+			// a text slices its characters
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+			for kind in [Kind::Text, Kind::Codepoint] {
+				s.emit_field(f, list, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
+				s.call(f, "text_chars");
+				Self::emit_list(f, &[I::LocalSet(list), I::I32Const(1), I::LocalSet(is_text), I::End]);
+			}
+			f.instruction(&I::End);
+			s.emit_empty_as_null(f, list);
+			s.emit_require_list(f);
+			walk_cells(f);
+			next_cell(f);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalSet(length), I::I64Const(0), I::LocalSet(from)]);
+			clamped_bound(f, start, from, from);
+			clamped_bound(f, end, length, to);
+			// the cells from…to-1, collected backwards
+			walk_cells(f);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(to), I::I64GeS, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(from), I::I64GeS, I::If(BlockType::Empty)]);
+			s.emit_field(f, cell, 0);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::LocalGet(sliced), I::StructNew(node_type), I::LocalSet(sliced), I::End]);
+			next_cell(f);
+			f.instruction(&I::LocalGet(sliced));
+			s.call(f, "list_reverse");
+			Self::emit_list(f, &[I::LocalSet(sliced), I::LocalGet(is_text), I::If(BlockType::Result(node_ref)), I::LocalGet(sliced), I::I32Const(0), I::I32Const(0)]);
+			s.call(f, "new_text");
+			s.call(f, "list_join");
+			Self::emit_list(f, &[I::Else, I::LocalGet(sliced), I::RefAsNonNull, I::End]);
 		});
 	}
 

@@ -27,7 +27,7 @@ const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 14] = [
+const SYNONYMS: [(&str, &[&str]); 16] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -42,14 +42,22 @@ const SYNONYMS: [(&str, &[&str]); 14] = [
 	("join", &[]),
 	("first", &[]),
 	("last", &[]),
+	(SLICE, &[]),
+	(COPY, &["clone"]),
 ];
 const SUM: &str = "sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 13] = [
+pub const RUNTIME_WORDS: [(&str, usize); 14] = [
 	("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
-	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (MAP_GET_OR, 3),
+	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (MAP_GET_OR, 3), (SLICE, 3),
 ];
+/// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
+pub const SLICE: &str = "slice";
+/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end
+const OPTIONAL_ARGUMENTS: [(&str, usize); 2] = [(MAP_GET_OR, 1), (SLICE, 1)];
+/// `b = a.copy()`: values are never shared, so the copy is the value itself
+const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
@@ -424,10 +432,15 @@ impl Lowering {
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
 		let mut arguments = if is_prefix { merge_prefix_arguments(word, arguments) } else { arguments };
-		if word == MAP_GET_OR && arguments.len() == 2 {
-			arguments.push(Node::Empty); // `m.get(k)`: ø for a missing key
-		}
 		let wanted = arity(word);
+		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+		if arguments.len() < wanted && arguments.len() + optional >= wanted {
+			arguments.resize(wanted, Node::Empty);
+		}
+		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
+			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
+			return receiver.clone();
+		}
 		if arguments.len() != wanted {
 			let plural = if wanted == 1 { "" } else { "s" };
 			return Diagnostic::at(head, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();

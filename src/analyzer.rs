@@ -183,6 +183,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(name) = items[0].drop_meta() {
+					if name == crate::library_words::SLICE {
+						// a slice of a text is a text, of anything else a list
+						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 				}
 			}

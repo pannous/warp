@@ -56,6 +56,9 @@ fn is_number(kind: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
+	if required.contains(super::library_ops::NODE_SLICE) {
+		required.extend(["text_chars", "list_join", "list_reverse"]);
+	}
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
 	}

@@ -60,6 +60,8 @@ const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT
 /// `nand` and its glyph pair, both `not (a and b)`
 const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
 const TO_WORD: &str = "to";
+/// `a[start:end]` calls the library word `slice`
+const SLICE_WORD: &str = "slice";
 /// Articles that start a typed verb phrase in `to square a number:`
 const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
@@ -2034,7 +2036,7 @@ impl WaspParser {
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
-		let mut indices = vec![self.parse_expr(0)];
+		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
 		self.skip_whitespace();
 
 		while self.current_char() == ',' {
@@ -2049,10 +2051,23 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
-		crate::normalize::set_position_of(lhs);
-		norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
+		if slice_bounds(&indices[0]).is_none() {
+			crate::normalize::set_position_of(lhs);
+			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
+		}
 
 		Some(indices.into_iter().fold(lhs.clone(), subscript))
+	}
+
+	/// `[:end]` and `[:]`, a slice from the start: `ø:end`
+	fn parse_slice_from_start(&mut self) -> Option<Node> {
+		if self.current_char() != ':' {
+			return None;
+		}
+		self.advance(); // skip ':'
+		self.skip_whitespace();
+		let end = if self.current_char() == ']' { Empty } else { self.parse_expr(0) };
+		Some(Node::Key(Box::new(Empty), Op::Colon, Box::new(end)))
 	}
 
 	/// The Java/C array type `int[]` is the list type `[int]`
@@ -3000,14 +3015,48 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 }
 
 
-/// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time
+/// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
+/// A slice `target[start:end]`, `target[start..end]`, `target[start...last]` is the call `slice(target, start, end)`.
+/// A negative index is an error that names the way to the last element: wasp never wraps around (Footguns.md).
 pub fn subscript(target: Node, index: Node) -> Node {
-	let one = Node::Number(crate::extensions::numbers::Number::Int(1));
+	let positions = match index.drop_meta() {
+		Node::Key(start, _, end) if slice_bounds(&index).is_some() => vec![start.as_ref(), end.as_ref()],
+		_ => vec![&index],
+	};
+	if let Some(negative) = positions.into_iter().find(|position| counts_from_the_end(position)) {
+		let message = format!("index out of range: negative index {} does not wrap around, the last element is last({})", negative.serialize(), target.serialize());
+		return Diagnostic::at(negative, message).into_error();
+	}
+	if let Some((start, end)) = slice_bounds(&index) {
+		return Node::List(vec![Symbol(SLICE_WORD.to_string()), target, start, end], Bracket::Round, Separator::None);
+	}
+	let one = Node::Number(Number::Int(1));
 	let one_based = match index.drop_meta() {
-		Node::Number(n) => Node::Number(*n + crate::extensions::numbers::Number::Int(1)),
+		Node::Number(n) => Node::Number(*n + Number::Int(1)),
 		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
 	};
 	Node::Key(Box::new(target), Op::Hash, Box::new(one_based))
+}
+
+/// A negative number or a negated expression: `-1`, `-k`
+fn counts_from_the_end(index: &Node) -> bool {
+	match index.drop_meta() {
+		Node::Number(n) => f64::from(*n) < 0.0,
+		Node::Key(empty, Op::Sub, _) => matches!(empty.drop_meta(), Empty),
+		_ => false,
+	}
+}
+
+/// The 0-based start and exclusive end of a slice index, ø where omitted (Python's `a[1:]`, `a[:2]`);
+/// an inclusive range `start...last` ends after last
+fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
+	let Node::Key(start, op, end) = index.drop_meta() else { return None };
+	let end = match op {
+		Op::Colon | Op::Range => end.as_ref().clone(),
+		Op::To => Node::Key(end.clone(), Op::Add, Box::new(Node::Number(Number::Int(1)))),
+		_ => return None,
+	};
+	Some((start.as_ref().clone(), end))
 }
 
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)
