@@ -78,3 +78,12 @@ fn a_hint_is_given_once_per_compilation() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("xs=[1,2,3]; reverse(xs)#(3/2)"));
 	assert_eq!(hints.iter().filter(|hint| hint.canonical == "3//2").count(), 1, "{hints:?}");
 }
+
+/// The trap knows no source, so the message itself names the fix of a fractional index (samples/sorting.wasp: `mid = len(items)/2`)
+#[test]
+fn a_fractional_index_error_names_the_fix() {
+	let fix = "index must be an integer; fix: compute it with // (floor division) or `… as int`";
+	is!("items=[1,2,3]; mid = len(items)/2; items[0:mid]", warp::error(fix));
+	is!("items=[1,2,3]; mid = len(items)/2; items[mid]", warp::error(fix));
+	is!("items=[1,2,3]; mid = len(items)//2; items[0:mid]#1", 1);
+}

@@ -530,6 +530,18 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
+/// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
+const RUNTIME_ERROR_FIXES: [(&str, &str); 1] = [(INDEX_NOT_INTEGRAL, "fix: compute it with // (floor division) or `… as int`")];
+
+/// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
+pub fn runtime_error_message(name: &str) -> String {
+	let words = name.replace('_', " ");
+	match RUNTIME_ERROR_FIXES.iter().find(|(error, _)| *error == name) {
+		Some((_, fix)) => format!("{words}; {fix}"),
+		None => words,
+	}
+}
+
 pub const RUNTIME_ERRORS: [&str; 16] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",

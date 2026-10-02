@@ -3685,7 +3685,7 @@ fn failed_run(failure: anyhow::Error) -> Node {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("no case for {label}")
 	});
-	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| name.replace('_', " ")));
+	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
 	crate::node::error(&message)
