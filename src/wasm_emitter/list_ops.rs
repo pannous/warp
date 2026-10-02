@@ -38,6 +38,7 @@ impl WasmGcEmitter {
 
 			// Locals: 0=list, 1=index, 2=current (loop variable)
 			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+			self.emit_require_integral(&mut func, 1);
 
 			self.emit_list_walk(&mut func, 2);
 
@@ -73,6 +74,7 @@ impl WasmGcEmitter {
 
 			// Locals: 0=list, 1=index, 2=current (loop variable)
 			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
+			self.emit_require_integral(&mut func, 1);
 
 			self.emit_list_walk(&mut func, 2);
 
@@ -204,6 +206,7 @@ impl WasmGcEmitter {
 			self.functions.function(func_type);
 
 			let mut func = Function::new(vec![]);
+			self.emit_require_integral(&mut func, 1);
 
 			// a one-character text is held as a Codepoint: its only element is itself
 			func.instruction(&Instruction::LocalGet(0));
@@ -582,14 +585,18 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
-	/// An index held in a variable (`m = n/2; xs[0:m]`) traps at run time when it is a ratio, as `xs[n/2]` does
-	pub(super) fn emit_require_integral(&self, func: &mut Function, local: u32) {
+	/// An index held in a variable (`m = n/2; xs[m]`, `xs[0:m]`) traps at run time when the Int in i64 local `index` is a
+	/// ratio, as `xs[n/2]` does: a value outside the fixnum range is a handle into the number heap (big_int.rs)
+	pub(super) fn emit_require_integral(&self, func: &mut Function, index: u32) {
 		if !self.int_runtime() {
-			return; // without the big-int runtime an Int is always an i64
+			return; // without the big-int runtime an Int is always a plain i64
 		}
-		self.emit_field(func, local, 1);
-		func.instruction(&Instruction::RefTestNonNull(HeapType::Concrete(self.type_manager.ratio_type)));
+		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
+		Self::emit_list(func, &[Instruction::LocalGet(index), Instruction::I64Const(fixnum_offset), Instruction::I64Add, Instruction::I64Const(0), Instruction::I64LtS, Instruction::If(BlockType::Empty)]);
+		self.emit_heap_get(func, index);
+		func.instruction(&Instruction::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
 		self.emit_fail_if(func, INDEX_NOT_INTEGRAL);
+		func.instruction(&Instruction::End);
 	}
 
 	/// `xs[n/2]`: an index that divides traps unless the division is exact; floor division (`n//2`) or `n/2 as int` is hinted

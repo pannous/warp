@@ -62,3 +62,13 @@ fn a_fractional_bound_must_be_an_integer_like_an_index() {
 	is!("a=[1,2,3,4]; m=4/2; b=a[m:]; b#1", 3);
 	is!("a=[1,2,3]; b=a[0:3//2]; count(b)", 1);
 }
+
+/// A fractional index held in a variable fails like a written one, in brackets, with # and in a text
+#[test]
+fn a_fractional_index_in_a_variable_must_be_an_integer() {
+	fails_with("xs=[1,2,3]; m=3/2; xs[m]", "index must be an integer");
+	fails_with("xs=[1,2,3]; m=3/2; xs#m", "index must be an integer");
+	fails_with("s=\"hello\"; m=5/2; s[m]", "index must be an integer");
+	is!("xs=[1,2,3]; m=4/2; xs[m]", 3);
+}
+
