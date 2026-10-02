@@ -14,8 +14,25 @@ use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
+/// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
+/// JavaScript's spellings too) and `m.get(k)`/`m.get(k, default)`. A key is found by its letters, quoted or not.
+pub const MAP_KEYS: &str = "map_keys";
+pub const MAP_VALUES: &str = "map_values";
+/// map_entries(xs): the `key:value` entries of a map as a list (a one-entry map `{a:1}` is the entry itself), else xs
+pub const MAP_ENTRIES: &str = "map_entries";
+pub const COLLECTION_CONTAINS: &str = "collection_contains";
+pub const MAP_GET_OR: &str = "map_get_or";
+pub const MAP_WORD_FUNCTIONS: [&str; 5] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, MAP_GET_OR];
+const IN_WORD: &str = "in";
+const FOR_WORD: &str = "for";
+
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 9] = [
+const SYNONYMS: [(&str, &[&str]); 14] = [
+	(MAP_KEYS, &["keys"]),
+	(MAP_VALUES, &["values"]),
+	(MAP_ENTRIES, &[]),
+	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
+	(MAP_GET_OR, &["get"]),
 	("chars", &[]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
@@ -29,8 +46,10 @@ const SYNONYMS: [(&str, &[&str]); 9] = [
 const SUM: &str = "sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 8] =
-	[("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3)];
+pub const RUNTIME_WORDS: [(&str, usize); 13] = [
+	("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
+	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (MAP_GET_OR, 3),
+];
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
@@ -55,7 +74,7 @@ const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
-const LIST_RESULT_WORDS: [&str; 1] = ["chars"];
+const LIST_RESULT_WORDS: [&str; 4] = ["chars", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
@@ -111,7 +130,7 @@ fn is_field_lookup(node: &Node) -> bool {
 fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let single;
 	let items: &[Node] = match node.drop_meta() {
-		Node::List(items, Bracket::Curly, _) if !items.is_empty() => items,
+		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
 		Node::Key(_, Op::Colon, _) => {
 			single = [node.clone()];
 			&single
@@ -130,6 +149,7 @@ fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 fn field_name(key: &Node) -> Option<String> {
 	match key.drop_meta() {
 		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
+		Node::Char(letter) => Some(letter.to_string()), // `{"A": 1}`: a quoted one-letter key
 		_ => None,
 	}
 }
@@ -193,6 +213,9 @@ impl Lowering {
 			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
+				if let Some(walk) = self.for_over_map(&items) {
+					return walk;
+				}
 				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, Op::Dot, right) => {
@@ -235,6 +258,9 @@ impl Lowering {
 		if let Some(lookup) = self.of_lookup(items) {
 			return Some(lookup);
 		}
+		if let Some(membership) = self.membership(items) {
+			return Some(membership);
+		}
 		let head = match items.first()?.drop_meta() {
 			Node::Symbol(name) => name,
 			_ => return None,
@@ -256,6 +282,54 @@ impl Lowering {
 			return None;
 		}
 		Some(self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call))
+	}
+
+	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:
+	/// `for k in map_keys(m) {v = m[k]; …}`
+	fn for_over_map(&self, items: &[Node]) -> Option<Node> {
+		let [keyword, names, in_word, rest @ ..] = items else { return None };
+		if !is_marker(keyword, FOR_WORD) || !is_marker(in_word, IN_WORD) {
+			return None;
+		}
+		let (map, body) = match rest {
+			[map, body] => (map.clone(), body.clone()),
+			[colon] => match colon.drop_meta() {
+				Node::Key(map, Op::Colon, body) => (map.as_ref().clone(), body.as_ref().clone()),
+				_ => return None,
+			},
+			_ => return None,
+		};
+		self.object_literal(&map)?;
+		let (key, value) = match names.drop_meta() {
+			Node::Symbol(_) => (names.clone(), None),
+			Node::List(parts, Bracket::Round | Bracket::None, _) => match parts.as_slice() {
+				[key, value] if [key, value].iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => (key.clone(), Some(value.clone())),
+				_ => return None,
+			},
+			_ => return None,
+		};
+		let body = match value {
+			None => body,
+			Some(value) => {
+				let lookup = Node::Key(Box::new(value), Op::Assign, Box::new(crate::wasp_parser::subscript(map.clone(), key.clone())));
+				Node::List([vec![lookup], crate::for_loop::block_items(&body)].concat(), Bracket::Curly, Separator::Semicolon)
+			}
+		};
+		let keys = self.call(MAP_KEYS, keyword, vec![map], false);
+		Some(Node::List(vec![keyword.clone(), key, in_word.clone(), keys, body], Bracket::None, Separator::Space))
+	}
+
+	/// `x in xs`: whether a map has the key x or a list the element x; `byte in t` and `"äb" in bytes` count text units
+	fn membership(&self, items: &[Node]) -> Option<Node> {
+		let [element, in_word, collection] = items else { return None };
+		let names_unit = |side: &Node| match side.drop_meta() {
+			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
+			other => crate::analyzer::text_unit(&other.name()).is_some(),
+		};
+		if !is_marker(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
+			return None;
+		}
+		Some(self.call(COLLECTION_CONTAINS, in_word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
@@ -349,7 +423,10 @@ impl Lowering {
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
-		let arguments = if is_prefix { merge_prefix_arguments(word, arguments) } else { arguments };
+		let mut arguments = if is_prefix { merge_prefix_arguments(word, arguments) } else { arguments };
+		if word == MAP_GET_OR && arguments.len() == 2 {
+			arguments.push(Node::Empty); // `m.get(k)`: ø for a missing key
+		}
 		let wanted = arity(word);
 		if arguments.len() != wanted {
 			let plural = if wanted == 1 { "" } else { "s" };

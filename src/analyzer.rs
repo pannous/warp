@@ -87,6 +87,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::List // concatenation
 	} else if *op == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left, right) {
 		Kind::Text // concatenation
+	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
+		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -274,7 +276,12 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			branches_kind(branch_kind(then_expr, scope), Kind::Int)
 		}
 		// An element: `xs#i`, `xs[i]`, `text#i`
-		Node::Key(indexed, Op::Hash, _) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or(Kind::Int),
+		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
+		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
+			let by_name = crate::wasp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
+				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
+			if by_name { Kind::Empty } else { Kind::Int }
+		}),
 		// Default to Int for other cases
 		_ => Kind::Int,
 	}
@@ -287,7 +294,10 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
 	}
 	let list_type = list_type_name(indexed, scope);
-	match list_type.strip_prefix("list of ")? {
+	if list_type == MAP_TYPE || infer_type(indexed, scope) == Kind::Empty {
+		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
+	}
+	match list_type.strip_prefix("list of ").or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))? { // `m[k]` of a map is a value
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
 		REAL_WORD => Some(Kind::Float),
@@ -984,7 +994,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			match type_name {
 				Some(word) => match plural_element_type(&word) {
 					Some(element) => format!("{PLAIN} of {element}"),
-					None if word.starts_with(PLAIN) => word,
+					None if word.starts_with(PLAIN) || word.starts_with(MAP_TYPE) => word,
 					None => PLAIN.to_string(),
 				},
 				None => PLAIN.to_string(),
@@ -996,6 +1006,39 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == ZERO_FILL_CALL)) => {
 			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
 		}
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && map_word(&items[0]).is_some() => {
+			use crate::library_words::{MAP_ENTRIES, MAP_KEYS};
+			match map_word(&items[0]) {
+				Some(MAP_KEYS) => format!("{PLAIN} of text"), // the keys of a map are read as texts
+				Some(MAP_ENTRIES) => list_type_name(&items[1], scope),
+				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
+			}
+		}
+		// a `{key:value …}` map, `map of int` when all its values are ints
+		Node::List(entries, Bracket::Curly, _) if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => {
+			let value_word = |value: &Node| match infer_type(value, scope) {
+				Kind::List => list_type_name(value, scope),
+				_ => element_type_word(value, scope),
+			};
+			let values: Vec<&Node> = entries.iter().filter_map(|entry| match entry.drop_meta() {
+				Node::Key(_, _, value) => Some(value.as_ref()),
+				_ => None,
+			}).collect();
+			// an empty `[]` fits any type of list: `{A:[["B", 4]], B:[]}` is a `map of list of list`
+			let is_empty_list = |value: &&Node| matches!(value.drop_meta(), Node::Empty) || matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty());
+			let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
+			let words: Vec<String> = if typed.is_empty() { &values } else { &typed }.iter().map(|value| value_word(value)).collect();
+			let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(PLAIN));
+			match common_type_word(&words) {
+				Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
+				_ => MAP_TYPE.to_string(),
+			}
+		}
+		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`
+		Node::Key(map, Op::Hash, _) => match list_type_name(map, scope).strip_prefix(MAP_TYPE_PREFIX) {
+			Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
+			_ => PLAIN.to_string(),
+		},
 		Node::List(items, _, _) => {
 			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
 			match common_type_word(&words) {
@@ -1005,6 +1048,16 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		}
 		_ => PLAIN.to_string(),
 	}
+}
+
+/// The type name of a map literal, `map of <value type>` when its values share one
+const MAP_TYPE: &str = "map";
+const MAP_TYPE_PREFIX: &str = "map of ";
+
+/// The map word a call names: `map_keys`, `map_values` or `map_entries`
+fn map_word(call: &Node) -> Option<&'static str> {
+	use crate::library_words::{MAP_ENTRIES, MAP_KEYS, MAP_VALUES};
+	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES].into_iter().find(|word| matches!(call.drop_meta(), Node::Symbol(name) if name == word))
 }
 
 const INT_WORD: &str = "int";
@@ -2034,11 +2087,19 @@ fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
 }
 
-/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) take a list
+/// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
+		if let Node::List(items, Bracket::Round, _) = node {
+			if let [word, map, ..] = items.as_slice() {
+				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
+				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
+					indexed.insert(name.clone());
+				}
+			}
+		}
 		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
 			indexed.insert(name.clone());
 		}

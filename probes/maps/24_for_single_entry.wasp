@@ -1,0 +1,4 @@
+m = {A: 5}
+s = ""
+for k in m { s = s + k }
+s

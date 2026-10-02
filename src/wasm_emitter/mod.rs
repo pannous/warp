@@ -917,11 +917,11 @@ impl WasmGcEmitter {
 		self.emit_list_ops();
 		self.emit_text_of();
 		self.emit_equality_ops();
-		self.emit_map_get();
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_math_helpers();
 		self.emit_text_builtins();
+		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 	}
 
@@ -2782,6 +2782,12 @@ impl WasmGcEmitter {
 				}
 				// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
 				if self.is_output_call(node) {
+					self.emit_node_instructions(func, node);
+					self.emit_call(func, "get_int_value");
+					return;
+				}
+				// a library word gives a node too: `m.get(k, 0) + 1`, `xs.has(x) + 1`
+				if crate::analyzer::call_name(items, bracket, separator).is_some_and(crate::library_words::is_runtime_word) {
 					self.emit_node_instructions(func, node);
 					self.emit_call(func, "get_int_value");
 					return;

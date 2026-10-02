@@ -1,0 +1,6 @@
+graph = {"A": [["B", 4], ["C", 1]], "B": [], "C": [["B", 2]]}
+dist = {}
+dist["A"] = 0
+best = 99
+for edge in graph["A"] { if edge[1] < best { best = edge[1] } }
+dist["A"] + best
