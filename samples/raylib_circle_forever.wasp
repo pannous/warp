@@ -26,7 +26,7 @@ SetTargetFPS(60)
 // Draw a few frames to keep window responsive (no spinning cursor)
 // NOTE: Full event loops with while(!WindowShouldClose()) don't work yet due to WASM compiler issue
 // Simple approach: draw a few frames with small delays between them
-#while(1>0){
+# while(1>0){
 while(!WindowShouldClose()){
     BeginDrawing()
     ClearBackground(0xFFF5F5F5)  // RAYWHITE
