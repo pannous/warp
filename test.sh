@@ -5,6 +5,9 @@
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 
+# agents commit via git commit-tree (no hooks), so the probes/ layout is enforced here
+"$(dirname "$0")/probes/check_layout.sh" || exit 1
+
 # Match IDE: unset CARGO_TARGET_DIR to use ./target
 unset CARGO_TARGET_DIR
 

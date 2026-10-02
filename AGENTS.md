@@ -233,6 +233,13 @@ Don't cargo clean unless absolutely necessary!
 The /probes/ folder is NOT a place to doublicate worktrees!
 put them into /worktrees/ or work On the same branch for small changes 
 
+## Folders
+- `probes/` = hand-written probe sources only (.wasp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
+- `scratch/` = disposable, ignored: repo exports/copies, worktrees, cargo homes, private index files (`scratch/<topic>.index`), temp builds. Deletable any time.
+- `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
+- Rust build output goes to `/opt/cargo/warp-<topic>` (CARGO_TARGET_DIR), never into the repo.
+- `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
+
 Before and after each task run git status and ./test.sh to ensure we are in a clean state and all tests pass.
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back
