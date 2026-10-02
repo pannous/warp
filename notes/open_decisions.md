@@ -54,6 +54,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     fix-ask is merged.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
+||||||| c7308419
+
+## Decided 2026-10-02
+- `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
+  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
+
 ## Original questions
 ## Blocking finished work
 1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.

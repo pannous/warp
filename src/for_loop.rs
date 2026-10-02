@@ -11,6 +11,7 @@ use crate::wasp_parser::while_do;
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
+const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 
 /// The `while` lowering of a `for` loop, or the node itself when it is not one
@@ -86,10 +87,23 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		_ => return None,
 	};
 	let body = block_items(&body);
-	Some(match iterable.drop_meta() {
+	Some(match counting_range(&iterable).drop_meta() {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => counting_loop(variable, start, *op, end, body),
 		_ => walking_loop(variable, iterable, body),
 	})
+}
+
+/// The range an iterable spells: `(a..b)` is `a..b`, Python's `range(n)` is `0..n` and `range(a, b)` is `a..b`
+fn counting_range(iterable: &Node) -> Node {
+	match iterable.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
+		Node::List(items, _, _) if is_word(&items[0], RANGE_CALL) => match &items[1..] {
+			[end] => key(number(FIRST_INDEX), Op::Range, end.clone()),
+			[start, end] => key(start.clone(), Op::Range, end.clone()),
+			_ => iterable.clone(),
+		},
+		_ => iterable.clone(),
+	}
 }
 
 /// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`

@@ -8,8 +8,8 @@ fn for_without_variable_binds_it() {
 }
 
 #[test]
-fn upto_is_an_inclusive_to() {
-	is!("x=0; for i in 1 upto 4 {x+=i}; x", 10);
+fn upto_excludes_the_end_unlike_to() {
+	is!("x=0; for i in 1 upto 4 {x+=i}; x", 6);
 	is!("x=0; for i in 1 to 4 {x+=i}; x", 10);
 }
 
