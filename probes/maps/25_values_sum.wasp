@@ -1,0 +1,4 @@
+m = {"A": 3, B: 4}
+s = 0
+for v in m.values() { s = s + v }
+s

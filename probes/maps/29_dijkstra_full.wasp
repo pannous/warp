@@ -1,0 +1,57 @@
+// Dijkstra shortest path on a small weighted graph
+graph = {
+    "A": [["B", 4], ["C", 2]],
+    "B": [["D", 5]],
+    "C": [["B", 1], ["D", 8], ["E", 10]],
+    "D": [["E", 2], ["F", 6]],
+    "E": [["F", 3]],
+    "F": []
+}
+
+fun dijkstra(graph, start) {
+    dist = {}
+    prev = {}
+    for node in graph.keys() {
+        dist[node] = 999999
+    }
+    dist[start] = 0
+    visited = [""]
+    while visited.length < graph.keys().length + 1 {
+        // pick the unvisited node with the smallest distance
+        current = ""
+        best = 999999
+        for node in graph.keys() {
+            if !visited.contains(node) && dist[node] < best {
+                best = dist[node]
+                current = node
+            }
+        }
+        if current == "" { break }
+        visited.push(current)
+        for edge in graph[current] {
+            neighbor = edge[0]
+            weight = edge[1]
+            candidate = dist[current] + weight
+            if candidate < dist[neighbor] {
+                dist[neighbor] = candidate
+                prev[neighbor] = current
+            }
+        }
+    }
+    return [dist, prev]
+}
+
+fun path_to(prev, target) {
+    path = [target]
+    node = target
+    while prev.has(node) {
+        node = prev[node]
+        path = [node] + path
+    }
+    return path.join("")
+}
+
+result = dijkstra(graph, "A")
+dist = result[0]
+prev = result[1]
+path_to(prev, "F") + ":" + string(dist["F"])

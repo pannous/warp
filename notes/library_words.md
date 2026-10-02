@@ -38,7 +38,26 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
   codepoint and is a key only as a literal (`p["x"]`).
 - `p[k]` with a symbol `k` keeps the old meaning: the variable `k` if there is one, else the name; its miss is `key not found`.
 - The possessive is a parser rule: an identifier directly followed by `'s ` and an identifier (`p's name`).
-- Not done: `a in {a:1 b:2}` (the word `in` has no meaning yet), assignment to a field (row 8).
+- Not done: assignment to a field (row 8).
+
+## Map words (fix-maps, Dijkstra field test)
+
+One map path for every spelling (tests/test_welcoming_maps.rs, probes/maps/):
+- Keys compare by name at runtime: `map_key_name` turns a text or a character (`"A"` is a Codepoint) into the symbol of the
+  same letters, used by `map_entry_has_key` and `field_with`. So `{"A":1}`, `{A:1}`, `m["A"]`, `m.A`, `k="A"; m[k]` are one key.
+- `{}` is the empty object: `d["A"]=5` grows it (`field_with` on ø returns the entry), `d[k]=v` with a variable key too.
+- Words (runtime functions named like the canonical word): `m.keys()`→`map_keys` (keys read as texts), `m.values()`→`map_values`,
+  `xs.has/contains/includes(x)` and `x in xs`→`collection_contains` (a map's keys, a list's elements), `m.get(k[, default])`
+  →`map_get_or` (ø by default). `m["Z"]` stays the error `no field Z` (Python's KeyError).
+- `for k in m` walks the keys of a known map (`library_words::for_over_map` → `for k in map_keys(m)`); `for k, v in m` and
+  `for (k, v) in m` add `v = m[k]`. Any other destructuring loop (`for (r, c) in pairs`) binds `r = e#1; c = e#2` of
+  `map_entries(xs)` (`for_loop::destructuring_loop`); a pair `k:v` indexes as k #1 and v #2.
+- Typing: a `{k:v}` literal is a `map of <value type>` (`[]`/ø values fit any list type); values of mixed type, a lookup by a
+  name in a map of unknown values (a parameter) and anything indexed out of such a value are `Kind::Empty`, held as a Node;
+  `d[k]`/`d[k]=v` with such a key dispatches at runtime (`node_at_key`, `node_with_key`: an Int indexes, else a key).
+  A parameter read as a map (`g.keys()`) is a List. Text + such a Node concatenates.
+- Open: the elements of a list returned by a function (`result[0]`) are still typed Int; `x in xs` as an if-condition needs
+  the infix `in` of the parser (fix-parse).
 - Quirk found: `{a:1}.length` counts 2 (the single entry is the Key node itself, counted as a pair), `{a:1 b:2}.length` is 2.
 
 ## Field assignment and `?.`

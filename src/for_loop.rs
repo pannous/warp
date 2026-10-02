@@ -47,7 +47,7 @@ fn is_word(node: &Node, word: &str) -> bool {
 }
 
 /// The statements of a body: `{a;b}` and `{a⏎b}` hold several, `{x}` and `{for i in xs {…}}` one
-fn block_items(body: &Node) -> Vec<Node> {
+pub(crate) fn block_items(body: &Node) -> Vec<Node> {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => items.clone(),
 		Node::List(items, Bracket::Curly, separator) if items.len() > 1 => vec![Node::List(items.clone(), Bracket::None, separator.clone())],
@@ -74,9 +74,10 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 /// `for x in iterable {body}` and `for x in iterable: body`
 fn for_in(items: &[Node]) -> Option<Node> {
 	let [keyword, variable, in_word, rest @ ..] = items else { return None };
-	if !is_word(keyword, FOR_KEYWORD) || !is_word(in_word, IN_KEYWORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+	if !is_word(keyword, FOR_KEYWORD) || !is_word(in_word, IN_KEYWORD) {
 		return None;
 	}
+	let names = loop_names(variable)?;
 	let (iterable, body) = match rest {
 		[iterable, body] => (iterable.clone(), body.clone()),
 		[colon] => match colon.drop_meta() {
@@ -86,10 +87,33 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		_ => return None,
 	};
 	let body = block_items(&body);
+	if names.len() > 1 {
+		return Some(destructuring_loop(&names, iterable, body));
+	}
 	Some(match iterable.drop_meta() {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => counting_loop(variable, start, *op, end, body),
 		_ => walking_loop(variable, iterable, body),
 	})
+}
+
+/// The names a loop binds: `x`, or the parts of each element in `for (r, c) in …` and `for k, v in …`
+fn loop_names(variable: &Node) -> Option<Vec<Node>> {
+	match variable.drop_meta() {
+		Node::Symbol(_) => Some(vec![variable.clone()]),
+		Node::List(names, Bracket::Round | Bracket::None, _) if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
+			Some(names.clone())
+		}
+		_ => None,
+	}
+}
+
+/// `for (r, c) in pairs {body}` → `for r·c in map_entries(pairs) {r = r·c#1; c = r·c#2; body}`:
+/// each name is bound to its part of the element; the elements of a map are its `key:value` entries
+fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
+	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
+	let entries = Node::List(vec![symbol(crate::library_words::MAP_ENTRIES), iterable], Bracket::Round, Separator::None);
+	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, number(position as i64 + 1))));
+	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
 /// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`

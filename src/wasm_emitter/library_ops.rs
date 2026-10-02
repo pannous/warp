@@ -23,7 +23,12 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 8] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 13] = [
+	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
+	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
+	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
+	(crate::library_words::COLLECTION_CONTAINS, crate::library_words::COLLECTION_CONTAINS),
+	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
 	("reverse", "list_reverse"),
@@ -353,16 +358,18 @@ impl WasmGcEmitter {
 
 		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64], |s, f| {
 			let (entry, kind) = (3, 4);
-			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
 			// the entry `name:value`, with the name as a symbol like the names of an object literal
-			s.emit_text_field(f, 1, 0);
-			s.emit_text_field(f, 1, 1);
-			s.call(f, "new_symbol");
-			Self::emit_list(f, &[I::LocalGet(2), I::I64Const(colon)]);
+			f.instruction(&I::LocalGet(1));
+			s.call(f, super::list_ops::MAP_KEY_NAME);
+			f.instruction(&I::LocalSet(1));
+			s.emit_require_kind(f, 1, Kind::Symbol, "not_a_text");
+			Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64Const(colon)]);
 			s.call(f, "new_key");
 			f.instruction(&I::LocalSet(entry));
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
+			// the empty object `{}` grows its first entry
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(entry), I::RefAsNonNull, I::Return, I::End]);
 			// a single entry: replaced when it has the name, else the two entries as an object
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "map_entry_has_key");

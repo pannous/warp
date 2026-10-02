@@ -51,6 +51,19 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
+	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
+		required.insert("map_find");
+	}
+	if required.contains(super::list_ops::NODE_AT_KEY) {
+		required.extend(["node_index_at", "map_get"]);
+	}
+	if required.contains(super::list_ops::NODE_WITH_KEY) {
+		required.extend(["node_with_at", crate::library_words::FIELD_WITH]);
+	}
+	// maps compare keys by name: map_key_name reads a character key as its text
+	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
+		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
+	}
 	let calls_text_of = [TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);

@@ -1,0 +1,3 @@
+m = {AB: 1}
+k = "AB"
+if k in m then 1 else 0
