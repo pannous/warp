@@ -466,6 +466,7 @@ PASSED:
   ✓ test_descending_range_is_an_error
   ✓ test_different_modules_not_cached
   ✓ test_digit_separators
+  ✓ test_dijkstra
   ✓ test_dijkstra_core
   ✓ test_dijkstra_idiomatic
   ✓ test_division_by_zero_is_extended_rational
@@ -759,6 +760,7 @@ PASSED:
   ✓ test_list_of_lists_has_no_plural_spelling
   ✓ test_list_operations
   ✓ test_list_plus_concatenates
+  ✓ test_list_returned_by_a_function_holds_maps
   ✓ test_list_type_hint_is_emitted_once_when_evaluated
   ✓ test_list_type_hint_with_values_and_position
   ✓ test_list_type_style_generic
@@ -889,6 +891,7 @@ PASSED:
   ✓ test_of_and_possessive
   ✓ test_of_list_type_hints_plural
   ✓ test_old_random_bugs
+  ✓ test_one_character_argument_is_a_text
   ✓ test_one_character_strings_have_no_canonical_quote
   ✓ test_operations_with_primitives_mixed
   ✓ test_operators_as_values
@@ -1315,4 +1318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-68 ignored, 1310 passed, 0 failed, 1310 total tested
+68 ignored, 1313 passed, 0 failed, 1313 total tested
