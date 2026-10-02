@@ -13,6 +13,8 @@ mod list_emitter;
 mod library_ops;
 mod text_unicode;
 mod list_ops;
+mod loop_control;
+pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
 mod node_emitter;
 mod string_table;
@@ -143,6 +145,7 @@ pub struct WasmGcEmitter {
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
+	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 }
 
 impl Default for WasmGcEmitter {
@@ -179,6 +182,7 @@ impl WasmGcEmitter {
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
+			loop_labels: Vec::new(),
 		}
 	}
 
@@ -385,6 +389,7 @@ impl WasmGcEmitter {
 		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals + temp_locals);
 		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
 		let saved_returns_node = std::mem::replace(&mut self.returns_node, returns_node);
+		let saved_loop_labels = self.take_loop_labels();
 		let mut locals = self.local_declarations(num_params as usize);
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
@@ -421,6 +426,7 @@ impl WasmGcEmitter {
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
+		self.restore_loop_labels(saved_loop_labels);
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -1119,6 +1125,9 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
+		if self.emit_loop_jump(func, node) {
+			return;
+		}
 		let node = node.drop_meta();
 
 		match node {
@@ -2067,22 +2076,28 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalSet(ran_local));
 
 		func.instruction(&Instruction::Block(BlockType::Empty));
+		let break_frame = loop_control::open_control_frames(func);
 		func.instruction(&Instruction::Loop(BlockType::Empty));
 
 		self.emit_condition(func, condition, Self::emit_block_value);
 		func.instruction(&Instruction::I32Eqz);
 		func.instruction(&Instruction::BrIf(1));
 
-		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
-		} else if self.get_type(body).is_ref() { // `while c { s += "a" }`: a text or list update, its value is not a number
-			self.emit_node_instructions(func, body);
-			func.instruction(&Instruction::Drop);
-		} else {
-			self.emit_block_value(func, body);
-			func.instruction(&Instruction::LocalSet(result_local));
-		}
 		func.instruction(&Instruction::I64Const(1));
 		func.instruction(&Instruction::LocalSet(ran_local));
+		if loop_control::has_jump(body) {
+			let (statements, step) = loop_control::split_step(body);
+			func.instruction(&Instruction::Block(BlockType::Empty));
+			self.enter_loop(break_frame, loop_control::open_control_frames(func));
+			self.emit_loop_body(func, &statements, result_local);
+			self.leave_loop();
+			func.instruction(&Instruction::End);
+			if let Some(step) = step {
+				self.emit_loop_body(func, &step, result_local);
+			}
+		} else {
+			self.emit_loop_body(func, body, result_local);
+		}
 		func.instruction(&Instruction::Br(0));
 
 		func.instruction(&Instruction::End);
@@ -2100,6 +2115,18 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::End);
 		} else {
 			func.instruction(&Instruction::LocalGet(result_local));
+		}
+	}
+
+	/// One pass of a loop body; a numeric value becomes the loop's value
+	fn emit_loop_body(&mut self, func: &mut Function, body: &Node, result_local: u32) {
+		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
+		} else if self.get_type(body).is_ref() { // `while c { s += "a" }`: a text or list update, its value is not a number
+			self.emit_node_instructions(func, body);
+			func.instruction(&Instruction::Drop);
+		} else {
+			self.emit_block_value(func, body);
+			func.instruction(&Instruction::LocalSet(result_local));
 		}
 	}
 
@@ -2451,6 +2478,9 @@ impl WasmGcEmitter {
 
 	/// Emit the numeric value of a node onto the stack (as i64)
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		if self.emit_loop_jump(func, node) {
+			return;
+		}
 		let located = node;
 		let node = node.drop_meta();
 		// Handle global declaration: global:Key(name, =, value)
@@ -2799,6 +2829,9 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		if self.emit_loop_jump(func, node) {
+			return;
+		}
 		let located = node;
 		let node = node.drop_meta();
 		match node {

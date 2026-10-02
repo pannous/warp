@@ -1,0 +1,1 @@
+next=5; s=0; for i in 0..3 { s += next }; s

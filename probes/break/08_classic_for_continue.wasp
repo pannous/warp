@@ -1,0 +1,1 @@
+s=0; for(i=0;i<6;i++){ if i==2 { continue }; s+=i }; s
