@@ -349,6 +349,7 @@ impl WasmGcEmitter {
 			let clamped_bound = |f: &mut Function, bound: u32, default: u32, target: u32| {
 				s.emit_empty_as_null(f, bound);
 				Self::emit_list(f, &[I::LocalGet(bound), I::RefIsNull, I::If(BlockType::Result(ValType::I64)), I::LocalGet(default), I::Else]);
+				s.emit_require_integral(f, bound);
 				s.emit_int_value_of(f, bound);
 				Self::emit_list(f, &[I::End, I::LocalSet(target), I::LocalGet(target), I::I64Const(0), I::I64LtS]);
 				s.emit_fail_if(f, "index_out_of_range");

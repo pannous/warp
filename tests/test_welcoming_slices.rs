@@ -52,3 +52,13 @@ fn a_negative_index_or_bound_is_an_error_that_names_last() {
 	fails_with("a=[1,2,3]; k=-2; a[k:]", "index out of range");
 	fails_with("a=[1,2,3]; a.slice(0, -1)", "index out of range");
 }
+
+/// `/` never truncates (Footguns.md, Integer division): a fractional bound fails like a fractional index, `n//2` is hinted
+#[test]
+fn a_fractional_bound_must_be_an_integer_like_an_index() {
+	fails_with("a=[1,2,3]; a[0:3/2]", "index must be an integer");
+	fails_with("a=[1,2,3]; m=3/2; a[0:m]", "index must be an integer");
+	fails_with("s=\"hello\"; m=5/2; s[m:]", "index must be an integer");
+	is!("a=[1,2,3,4]; m=4/2; b=a[m:]; b#1", 3);
+	is!("a=[1,2,3]; b=a[0:3//2]; count(b)", 1);
+}

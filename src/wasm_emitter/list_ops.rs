@@ -582,6 +582,16 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::End);
 	}
 
+	/// An index held in a variable (`m = n/2; xs[0:m]`) traps at run time when it is a ratio, as `xs[n/2]` does
+	pub(super) fn emit_require_integral(&self, func: &mut Function, local: u32) {
+		if !self.int_runtime() {
+			return; // without the big-int runtime an Int is always an i64
+		}
+		self.emit_field(func, local, 1);
+		func.instruction(&Instruction::RefTestNonNull(HeapType::Concrete(self.type_manager.ratio_type)));
+		self.emit_fail_if(func, INDEX_NOT_INTEGRAL);
+	}
+
 	/// `xs[n/2]`: an index that divides traps unless the division is exact; floor division (`n//2`) or `n/2 as int` is hinted
 	pub(super) fn emit_integral_index_check(&mut self, func: &mut Function, index: &Node) {
 		let Some((dividend, divisor)) = divided_index(index) else { return };
