@@ -28,6 +28,7 @@ PASSED:
   ✓ a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ a_float_equals_the_same_exact_number
   ✓ a_fractional_bound_must_be_an_integer_like_an_index
+  ✓ a_fractional_index_error_names_the_fix
   ✓ a_fractional_index_in_a_variable_must_be_an_integer
   ✓ a_fractional_index_says_so
   ✓ a_function_local_does_not_leak_into_the_caller
@@ -36,6 +37,7 @@ PASSED:
   ✓ a_group_of_three_names_is_imported
   ✓ a_group_with_spaces_is_imported
   ✓ a_grouped_comparison_is_the_left_operand_of_and
+  ✓ a_hash_glued_to_an_expression_counts_at_line_start
   ✓ a_hint_is_given_once_per_compilation
   ✓ a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ a_large_zero_list_has_its_size
@@ -62,11 +64,15 @@ PASSED:
   ✓ a_one_letter_text_can_be_reassigned
   ✓ a_one_letter_text_variable_reads_back_as_a_letter
   ✓ a_package_is_fetched_once_into_packages
+  ✓ a_package_tool_lives_in_the_package_build_directory
+  ✓ a_package_tool_runs_in_the_package_directory
+  ✓ a_package_without_a_tool_says_so
   ✓ a_parenthesized_switch_takes_part_in_arithmetic
   ✓ a_pinned_package_links_its_cached_version
   ✓ a_program_that_is_only_an_empty_block_is_empty
   ✓ a_range_is_a_list_in_a_variable
   ✓ a_record_is_a_struct
+  ✓ a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
   ✓ a_runtime_value_as_string
   ✓ a_runtime_warning_is_reported_and_yields_nothing
   ✓ a_space_before_a_bracket_makes_a_list
@@ -99,9 +105,11 @@ PASSED:
   ✓ an_empty_block_can_be_bound
   ✓ an_empty_block_inside_a_statement_is_a_value
   ✓ an_empty_list_inside_a_list_is_an_item
+  ✓ an_empty_list_is_typed_by_its_first_push
   ✓ an_empty_list_literal_is_a_call_argument
   ✓ an_enum_names_its_cases_by_index
   ✓ an_if_with_text_branches_makes_a_text_function
+  ✓ an_indented_block_after_a_trailing_colon_is_the_body
   ✓ an_object_is_truthy
   ✓ an_object_literal_as_string_is_its_text
   ✓ an_older_version_comes_from_its_git_tag
@@ -138,6 +146,7 @@ PASSED:
   ✓ declared_list_parameters_refuse_other_kinds
   ✓ disagreeing_calls_are_a_loud_error_naming_both_kinds
   ✓ division_by_another_dimension_is_a_composite_unit
+  ✓ do_end_and_then_end_enclose_all_their_statements
   ✓ do_runs_a_block_literal
   ✓ do_runs_a_named_block
   ✓ do_runs_an_add_to_phrase
@@ -155,6 +164,7 @@ PASSED:
   ✓ entities_become_characters
   ✓ equality_glyphs_compare
   ✓ error_makes_an_error_value_of_a_text
+  ✓ every_for_header_bound_minus_one_asks
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
@@ -230,6 +240,7 @@ PASSED:
   ✓ join_and_concatenation_take_non_ascii_characters
   ✓ len_counts
   ✓ let_var_and_const_declare_inside_any_block
+  ✓ levenshtein_with_a_pushed_row
   ✓ list_annotations_on_parameters
   ✓ list_argument_for_an_int_parameter_is_a_type_error
   ✓ list_is_never_silently_reduced_to_its_last_element
@@ -261,6 +272,7 @@ PASSED:
   ✓ not_equal_is_the_negation
   ✓ objects_compare_by_their_entries
   ✓ one_character_texts_as_keys_and_arguments
+  ✓ one_end_for_both_then_and_do_is_ambiguous
   ✓ only_the_chosen_body_runs
   ✓ ordering_a_list_with_a_number_is_a_loud_error
   ✓ parameters_shadow_literal_variables
@@ -283,6 +295,7 @@ PASSED:
   ✓ push_takes_any_expression
   ✓ python_slices_of_a_list
   ✓ quantities_compare_in_the_finer_unit
+  ✓ questions_quote_prefix_operators_as_written
   ✓ range_calls_are_exclusive_ranges
   ✓ range_slices_of_a_list
   ✓ ranges_in_for_headers_stay_ranges
@@ -514,7 +527,9 @@ PASSED:
   ✓ test_eval3
   ✓ test_evaluated_text_prints_with_the_canonical_quote
   ✓ test_exact_decimal_arithmetic
+  ✓ test_exact_numbers_have_a_text_form
   ✓ test_exact_rationals_stay_exact
+  ✓ test_exact_variable_assigned_a_float_widens
   ✓ test_executable_tree_shaking
   ✓ test_expected_structure
   ✓ test_explicit_cast_truncates_a_float
@@ -531,7 +546,7 @@ PASSED:
   ✓ test_factorial_and_fib_stay_exact
   ✓ test_failed_fetch_is_an_error_value
   ✓ test_fast_floats_are_not_associative
-  ✓ test_fd_write
+  ✓ test_fd_write_raw
   ✓ test_fetch
   ✓ test_fetch_result_needs_a_check
   ✓ test_fetch_times_out_loudly
@@ -968,10 +983,13 @@ PASSED:
   ✓ test_print
   ✓ test_print_function
   ✓ test_print_returns_its_value_without_a_capability_error
+  ✓ test_print_runtime_values
   ✓ test_print_statement_in_a_function
   ✓ test_proof_model_matches_unbounded_int
   ✓ test_property_word_after_a_name_counts
+  ✓ test_property_word_after_a_name_counts_like_dot_property
   ✓ test_property_word_agrees_with_of_and_getter
+  ✓ test_property_word_agrees_with_size_of
   ✓ test_property_word_counts_text_characters
   ✓ test_pure_rejects_divergence
   ✓ test_quadratic
@@ -1327,4 +1345,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-68 ignored, 1322 passed, 0 failed, 1322 total tested
+68 ignored, 1340 passed, 0 failed, 1340 total tested
