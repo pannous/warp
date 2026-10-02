@@ -1264,7 +1264,8 @@ impl WaspParser {
 				let args_node = self.parse_bracketed('(');
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
-				if self.current_char() == '{' {
+				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
+				if self.current_char() == '{' && !self.equals_compares {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
 					let signature = Node::List(
