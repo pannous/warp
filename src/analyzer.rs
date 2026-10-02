@@ -2625,6 +2625,6 @@ fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 	}
 
 	for (name, sig) in signatures {
-		ctx.ffi_imports.insert(name, sig);
+		ctx.ffi_imports.insert(name.clone(), sig.clone());
 	}
 }

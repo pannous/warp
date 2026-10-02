@@ -294,9 +294,19 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
     signatures
 }
 
-/// Get FFI signatures by parsing header files for a library
-/// Falls back to hardcoded signatures if headers not found
-pub fn get_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
+/// Get FFI signatures by parsing header files for a library, once per process: every name the analyzer meets is looked up here
+pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, FfiSignature> {
+    static PARSED: std::sync::Mutex<Vec<(String, &'static HashMap<String, FfiSignature>)>> = std::sync::Mutex::new(Vec::new());
+    let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, signatures)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
+        return signatures;
+    }
+    let signatures: &'static HashMap<String, FfiSignature> = Box::leak(Box::new(parse_signatures_from_headers(library)));
+    parsed.push((library.to_string(), signatures));
+    signatures
+}
+
+fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);
 
@@ -346,9 +356,14 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// Get known FFI function signatures by parsing system header files
+/// Get known FFI function signatures by parsing system header files, once per process
 /// Uses unified Kind/Signature types from ffi_parser module
-pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
+pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
+    static PARSED: OnceLock<HashMap<String, FfiSignature>> = OnceLock::new();
+    PARSED.get_or_init(parse_ffi_signatures)
+}
+
+fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
     use crate::ffi_parser::get_all_signatures;
     use crate::function::kind_to_valtype;
 

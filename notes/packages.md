@@ -8,7 +8,20 @@
   reads its own files: uniscript.wasp has `read(module_directory + "/data/entities.idx")`. `read` itself is relative to
   the working directory at run time; a fetched package is below it, so the page preloads packages/uniscript/data/entities.idx.
 - Concurrency: a process-wide mutex; parallel processes clone into `.<name>.fetching.<pid>` and rename, the loser deletes its copy.
+- Pinned packages: `name: {repository: "git url", version: 1.2.3}` in packages.wasp is the git tag `v1.2.3` (or `1.2.3`),
+  cloned once per machine into `~/.cache/warp/packages/<name>@1.2.3` and linked as `packages/<name>`; versioned `use`
+  (`packages/<name>@<version>`) links the same cache. A tag never changes, so exports, worktrees and test runs never
+  fetch again; raising the pinned version is the update (the stale link is replaced on the next `use`).
+  uniscript is pinned: unpinned, every fresh export cloned the moving default branch (inline-tag warnings, eaten
+  whitespace) and 6-7 of warp's uniscript tests failed there.
+- uniscript ships its compiled entity data, `data/entities.idx`; warp only reads it and never compiles the
+  `data/entities/**/*.wasp` sources. What was slow was compiling `use uniscript` itself: ~8 s per program, almost all
+  of it re-parsing the C headers of m, c and SDL2 for every name the analyzer met (`ffi::get_signatures_from_headers`,
+  `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/test_uniscript.rs 335 s → 24 s.
+  A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
+  identical GC rec groups); not there yet.
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
+  An existing packages/<name> (directory or link outside the cache) always wins over the pin.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.wasp
   and data/uniscript/. warp's tests/test_uniscript.rs still tests it (through `use uniscript`).
 - Versions (src/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
@@ -19,4 +32,4 @@
   `1.2.3` and `v1.2.3` (two dots or more) lex as version literals (`v2`, `v1.2` stay names); `version 1.10` keeps 1.10. Versions compare part by part at
   compile time (`1.9 < version 1.10`, `1.2.0 == 1.2`), otherwise they are their text.
 - Command line: `warp use uniscript >= 1.0` is just the program, fetching like any other.
-- Open: registry as its own repository (later); an update command.
+- Open: registry as its own repository (later); `fetch_package_version` still lists the remote tags on every versioned `use`.
