@@ -5,6 +5,11 @@ Mantra:
 - If there is an ambiguity, ask the user.
 - If the preferred syntax is different, educate the user.
 
+Limit (user, 2026-10-02): implement what a newcomer expects only where it does not clash with a known footgun
+(wiki/Footguns.md). Where it clashes, the footgun decision wins and the compiler educates instead. The one exception is
+text + number concatenation. Examples: `a[-1]` stays an error with a hint to `#-1` (silent wrap), `[x]*n` is an Ask
+(Python repeats, NumPy multiplies; `n times [x]` repeats), mutating a main-level variable from a function needs `global`.
+
 "Educate" is a hint naming the preferred wasp form, never a refusal.
 
 "Ask" is a diagnostic category of its own and a new programming paradigm: by default the compiler really
