@@ -1302,7 +1302,7 @@ impl WaspParser {
 		self.skip_spaces();
 
 		// Step 1: Prefix (nud)
-		let mut lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
+		let lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
 			self.advance_by(chars);
 			self.skip_spaces();
 			let rhs = self.parse_prefix_operand(op);

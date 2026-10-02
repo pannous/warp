@@ -423,7 +423,7 @@ fn flatten_prefix_application(items: Vec<Node>, bracket: &Bracket, separator: &S
 fn replace_word(text: &str, word: &str, replacement: &str) -> String {
 	let mut result = String::new();
 	let mut current = String::new();
-	let mut flush = |current: &mut String, result: &mut String| {
+	let flush = |current: &mut String, result: &mut String| {
 		result.push_str(if current == word { replacement } else { current });
 		current.clear();
 	};
