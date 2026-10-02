@@ -1,0 +1,4 @@
+f(a, b) := a > 0 and b > 0
+ok = 0
+if f(1, 2) { ok = 1 }
+ok

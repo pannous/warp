@@ -1,0 +1,3 @@
+square(x) := x*x
+law square(x) >= 0
+square(3)

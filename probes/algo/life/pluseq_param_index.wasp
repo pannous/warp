@@ -1,0 +1,7 @@
+size = 2
+fun f(grid, r, c) {
+  count = 0
+  count += grid[r * size + c]
+  return count
+}
+f([0, 1, 1, 1], 0, 1)

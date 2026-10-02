@@ -1,0 +1,4 @@
+fun f(grid, i) {
+  return grid[i]
+}
+f([0, 1, 1, 1], 1)

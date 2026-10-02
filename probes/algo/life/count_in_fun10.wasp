@@ -1,0 +1,6 @@
+fun f(i) {
+  count = 0
+  count = count + i
+  return count
+}
+f(10)

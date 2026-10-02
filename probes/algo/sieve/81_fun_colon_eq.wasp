@@ -1,0 +1,3 @@
+fun g(items) := items[1]
+xs = [4,5,6]
+g(xs)

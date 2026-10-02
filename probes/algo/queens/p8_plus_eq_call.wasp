@@ -1,0 +1,5 @@
+fn one() { return 1 }
+count = 0
+count += one()
+count += one()
+count

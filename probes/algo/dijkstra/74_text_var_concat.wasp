@@ -1,0 +1,4 @@
+names = ["A", "B"]
+p = names[1]
+q = names[0] + p
+q

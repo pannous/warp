@@ -1,0 +1,1 @@
+fun g(n) { r=[]; i=0; while i < n { r.add(i); i += 1 }; return r }; count(g(3))

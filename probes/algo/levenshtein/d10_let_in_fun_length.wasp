@@ -1,0 +1,5 @@
+fun f(a) {
+    let m = a.length
+    return m
+}
+f("abc")

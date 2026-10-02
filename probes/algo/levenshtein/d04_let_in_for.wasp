@@ -1,0 +1,6 @@
+s = 0
+for i in 0..3 {
+    let c = i * 2
+    s += c
+}
+s

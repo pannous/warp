@@ -1,0 +1,1 @@
+ins(items) := { for i in 1..count(items) { items[i] = items[i] }; items }; ins([3,1,2]).join(",")

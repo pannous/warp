@@ -1,0 +1,2 @@
+names = ["A", "B"]
+names[0] + names[1]

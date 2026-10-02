@@ -1,0 +1,22 @@
+// Levenshtein edit distance via dynamic programming (two-row variant), 1-based `#` indexing
+def levenshtein(a, b) {
+    s = a
+    t = b
+    prev = []
+    for j in 0...(#t) { prev.push(j) }
+    for i in 1...(#s) {
+        curr = [i]
+        for j in 1...(#t) {
+            cost = s#i == t#j ? 0 : 1
+            deletion = prev#(j + 1) + 1
+            insertion = curr#j + 1
+            substitution = prev#j + cost
+            best = min(deletion, insertion, substitution)
+            curr.push(best)
+        }
+        prev = curr
+    }
+    prev#(#t + 1)
+}
+t = levenshtein("flaw", "lawn")
+t

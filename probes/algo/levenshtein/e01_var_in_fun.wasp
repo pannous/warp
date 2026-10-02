@@ -1,0 +1,5 @@
+fun f(n) {
+    var m = n + 1
+    return m
+}
+f(2)

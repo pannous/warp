@@ -1,0 +1,8 @@
+fun f(k) {
+  n = []
+  n.push(k)
+  n.push(k * 2)
+  return n
+}
+h = f(3)
+h[1]

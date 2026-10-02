@@ -1,0 +1,4 @@
+i = 0
+done = false
+while !done { i = i + 1; if i == 3 { done = true } }
+i

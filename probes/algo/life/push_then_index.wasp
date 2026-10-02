@@ -1,0 +1,6 @@
+fun f(g) {
+  n = []
+  n.push(1)
+  return g[1]
+}
+f([1, 2, 3])

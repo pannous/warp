@@ -1,0 +1,4 @@
+size = 3
+x = 0
+for r in 0 to size-1 { x += 1 }
+x

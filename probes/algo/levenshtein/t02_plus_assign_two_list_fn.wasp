@@ -1,0 +1,9 @@
+def g(n) {
+    p = []
+    for j in 1...(n) { p.push(j) }
+    p#(n)
+}
+t = 0
+t += g(3)
+t += g(2)
+t

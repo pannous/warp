@@ -1,0 +1,4 @@
+fun g(items) {
+  items[1]
+}
+g([4,5,6])

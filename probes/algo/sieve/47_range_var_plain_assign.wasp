@@ -1,0 +1,6 @@
+n = 5
+s = 0
+for k in 0..n {
+  s = s + k
+}
+s

@@ -1,0 +1,7 @@
+fn zeros(n) {
+    b = []
+    for i in 0..n { b.push(0) }
+    return b
+}
+z = zeros(3)
+z.length

@@ -1,0 +1,7 @@
+prev = [0, 1, 2]
+for i in 1..3 {
+    curr = [i, 7]
+    curr.push(4)
+    prev = curr
+}
+prev[1]
