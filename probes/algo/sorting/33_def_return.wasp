@@ -1,0 +1,1 @@
+def f(xs) { if count(xs) <= 1 { return xs }; return xs }; count(f([1,2]))

@@ -1,0 +1,1 @@
+fun f(xs) { if len(xs) <= 1 { return xs }; return f(xs[1:]) }; f([1,2,3])[0]
