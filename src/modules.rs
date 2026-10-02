@@ -23,6 +23,8 @@ const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
 const MODULE_DIRECTORY: &str = "module_directory";
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
+/// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
+const PACKAGE_CACHE: &str = ".cache/warp/packages";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
@@ -191,21 +193,42 @@ enum Import {
 	Include,
 }
 
-/// The git url of a package in the registry
-pub fn package_repository(name: &str) -> Option<String> {
-	statements(WaspParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| match entry.drop_meta() {
-		Node::Key(key, Op::Colon, url) => match (key.drop_meta(), url.drop_meta()) {
-			(Node::Symbol(key), Node::Text(url)) if key == name => Some(url.clone()),
-			_ => None,
-		},
-		_ => None,
+/// A package of the registry: `name: "git url"` follows the default branch,
+/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
+struct Registered {
+	url: String,
+	pinned: Option<Version>,
+}
+
+fn registered(name: &str) -> Option<Registered> {
+	statements(WaspParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
+		let Node::Key(key, _, value) = entry.drop_meta() else { return None };
+		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
+			return None;
+		}
+		match value.drop_meta() {
+			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
+			pinned => match pinned["repository"].drop_meta() {
+				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
+				_ => None,
+			},
+		}
 	})
 }
 
-/// The directory of a package, cloned from its registered repository unless it is already there
+/// The git url of a package in the registry
+pub fn package_repository(name: &str) -> Option<String> {
+	registered(name).map(|package| package.url)
+}
+
+/// The directory of a package, packages/<name>: the pinned version, or a clone of the default branch;
+/// whatever is there already stays, so a local checkout linked there stands in for the package
 pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
-	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
-	clone(name, &url, name, None)
+	let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+	match &package.pinned {
+		Some(version) => fetch_tagged(name, &package.url, version, name),
+		None => clone(name, &package.url, &Path::new(PACKAGES_DIRECTORY).join(name), None),
+	}
 }
 
 /// The directory of the version of a package a requirement picks among its git tags (`v1.2.3` or `1.2.3`):
@@ -213,11 +236,41 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
 	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
 	let tags = version_tags(&url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
-	let Some((tag, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
+	let Some((_, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
 		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
 	};
-	clone(name, &url, &format!("{name}@{version}"), Some(tag))
+	fetch_tagged(name, &url, version, &format!("{name}@{version}"))
+}
+
+/// packages/<link_name>, a link to the version's shallow clone in the machine's package cache: fetched once per machine,
+/// never again per checkout, export or test run. A link into the cache to another version (the pin moved) or to a
+/// removed clone is replaced.
+fn fetch_tagged(name: &str, url: &str, version: &Version, link_name: &str) -> Result<PathBuf, String> {
+	let cached = package_cache().join(format!("{name}@{version}"));
+	let link = Path::new(PACKAGES_DIRECTORY).join(link_name);
+	let stale = |target: PathBuf| target.starts_with(package_cache()) && (target != cached || !cached.exists());
+	if std::fs::read_link(&link).is_ok_and(stale) {
+		std::fs::remove_file(&link).map_err(|failure| format!("package {name}: stale link {}: {failure}", link.display()))?;
+	}
+	if link.exists() {
+		return Ok(link);
+	}
+	if !cached.exists() {
+		let tags = version_tags(url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+		let tag = tags.iter().find(|(_, tagged)| tagged == version).map(|(tag, _)| tag.as_str())
+			.ok_or(format!("package {name} has no tag of version {version} at {url}"))?;
+		clone(name, url, &cached, Some(tag))?;
+	}
+	std::fs::create_dir_all(PACKAGES_DIRECTORY).map_err(|failure| format!("package {name}: {failure}"))?;
+	match std::os::unix::fs::symlink(&cached, &link) {
+		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
+		_ => Ok(link),
+	}
+}
+
+fn package_cache() -> PathBuf {
+	PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(PACKAGE_CACHE)
 }
 
 /// The tags of a repository that name versions, with their versions
@@ -232,14 +285,16 @@ fn version_tags(url: &str) -> Result<Vec<(String, Version)>, String> {
 		.collect())
 }
 
-/// A shallow clone of a repository, of a tag or the default branch, into packages/<directory_name> unless it is there
-fn clone(name: &str, url: &str, directory_name: &str, tag: Option<&str>) -> Result<PathBuf, String> {
-	let directory = Path::new(PACKAGES_DIRECTORY).join(directory_name);
+/// A shallow clone of a repository, of a tag or the default branch, into directory unless it is there
+fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<PathBuf, String> {
 	let _fetching = FETCHING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	if directory.exists() {
-		return Ok(directory);
+		return Ok(directory.to_path_buf());
 	}
-	let staging = Path::new(PACKAGES_DIRECTORY).join(format!(".{directory_name}.fetching.{}", std::process::id()));
+	let parent = directory.parent().unwrap_or(Path::new("."));
+	std::fs::create_dir_all(parent).map_err(|failure| format!("package {name}: {failure}"))?;
+	let directory_name = directory.file_name().unwrap_or_default().to_string_lossy();
+	let staging = parent.join(format!(".{directory_name}.fetching.{}", std::process::id()));
 	let mut command = Command::new("git");
 	command.args(["clone", "--quiet", "--depth", "1"]);
 	if let Some(tag) = tag {
@@ -249,10 +304,10 @@ fn clone(name: &str, url: &str, directory_name: &str, tag: Option<&str>) -> Resu
 	if !clone.status.success() {
 		return Err(format!("package {name} not fetched from {url}: {}", String::from_utf8_lossy(&clone.stderr).trim()));
 	}
-	if std::fs::rename(&staging, &directory).is_err() && directory.exists() {
+	if std::fs::rename(&staging, directory).is_err() && directory.exists() {
 		std::fs::remove_dir_all(&staging).ok(); // another process fetched it first
 	}
-	Ok(directory)
+	Ok(directory.to_path_buf())
 }
 
 fn package_module(directory: &Path, name: &str) -> Option<PathBuf> {
