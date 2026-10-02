@@ -13,7 +13,8 @@ use std::collections::{HashMap, HashSet};
 /// Words that declare a name assignable once: `const x=5`, `final x=5`
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
-const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", "print", "println", "puts", "not"];
+const PRINT_CALL: &str = "print";
+const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
 
 fn is_constant_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
@@ -150,6 +151,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
+				}
+				if name == PRINT_CALL && items.len() == 2 {
+					return held_kind(&items[1], || infer_type(&items[1], scope)); // `print x` is worth x, `print "c"` a text
 				}
 			}
 			// Check for function calls: (funcname args...) where first item is a symbol
@@ -417,6 +421,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 						};
 						scope.define(name.clone(), type_node, kind);
 					}
+					Node::Symbol(name) => widen_to_float(scope, name, right),
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
 						if let Node::Symbol(name) = var_name.drop_meta() {
@@ -435,6 +440,9 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		}
 		// Compound assignments don't create new variables
 		Node::Key(left, op, right) if op.is_compound_assign() => {
+			if let Node::Symbol(name) = left.drop_meta() {
+				widen_to_float(scope, name, right);
+			}
 			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
 		}
 		Node::Key(left, Op::Do, right) => {
@@ -452,6 +460,17 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}
 		_ => 0,
+	}
+}
+
+/// An exact variable that is later assigned an f64 (`x=10; x=floor(2.5)` with libm's floor) holds an f64 throughout,
+/// as an expression mixing in an f64 is one; a declared type is kept (and checked elsewhere)
+fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
+	let float_value = infer_type(value, scope).is_float();
+	if let Some(local) = scope.locals.get_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
+		if float_value {
+			local.kind = Kind::Float;
+		}
 	}
 }
 
