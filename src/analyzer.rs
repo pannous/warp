@@ -54,6 +54,21 @@ pub fn is_unbracketed_block(items: &[Node], bracket: &Bracket, separator: &Separ
 	matches!(separator, Separator::Semicolon | Separator::Newline) && *bracket == Bracket::None && items.len() > 1
 }
 
+/// Items that run rather than compute a value, making their list a block: assignments, definitions, `i++`, imports.
+/// Control flow counts too, except inside `[…]`: there `if c then a else b` is just a computed element, as `p#2` is.
+pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
+	match item.drop_meta() {
+		Node::Key(_, Op::Assign | Op::Define | Op::Inc | Op::Dec, _) => true,
+		Node::Key(_, op, _) if op.is_compound_assign() => true,
+		Node::Key(_, Op::Then | Op::Else | Op::Do, _) => *bracket != Bracket::Square,
+		Node::Key(left, Op::Colon, _) => matches!(left.drop_meta(), Node::Symbol(s) if s == "global"),
+		Node::List(list_items, _, _) if list_items.len() >= 2 => {
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return"].contains(&s.as_str()))
+		}
+		_ => false,
+	}
+}
+
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
 fn is_statement_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline))
@@ -186,8 +201,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			if *bracket == Bracket::Round && items.len() == 1 {
 				return infer_type(&items[0], scope);
 			}
-			// Data list: all items are pure data → Kind::List
-			if !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node) {
+			// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
+			let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
+			if computed_elements || (!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)) {
 				return Kind::List;
 			}
 			// Statement sequence: return type of last item
@@ -291,8 +307,21 @@ fn global_declared_name(declaration: &Node) -> Option<String> {
 	}
 }
 
+/// The body of a function definition `f(x) = …`, `f(x) := …`, `def f(x) {…}`: its variables are the function's own
+fn function_definition_body(node: &Node) -> Option<&Node> {
+	let starts_with_symbol = |items: &[Node]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)));
+	match node.drop_meta() {
+		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => Some(body),
+		Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword)) => items.last(),
+		_ => None,
+	}
+}
+
 fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bool, in_structure: bool) -> u32 {
 	let node = node.drop_meta();
+	if function_definition_body(node).is_some() {
+		return 0;
+	}
 	match node {
 		// Global declarations: global:Key(name, =, value) - don't create local
 		// Tag structures: html:body - body is structure context (attributes, not variables)
@@ -526,6 +555,9 @@ fn check_type_errors(node: &Node, scope: &mut Scope) -> Option<Node> {
 
 fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structure: bool) -> Option<Node> {
 	let node = node.drop_meta();
+	if let Some(body) = function_definition_body(node) {
+		return check_type_errors_inner(body, &mut Scope::new(), false);
+	}
 	match node {
 		Node::Key(left, Op::Colon, right) => {
 			if let Node::Symbol(kw) = left.drop_meta() {
