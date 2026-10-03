@@ -869,17 +869,9 @@ impl Scope {
 	}
 
 	/// Define a function parameter
-	pub fn define_param(&mut self, name: String, type_node: Option<Box<Node>>) -> Local {
-		let position = self.locals.len() as u32;
-		let local = Local {
-			name: name.clone(),
-			type_node,
-			position,
-			is_param: true,
-			kind: Kind::Int,  // Default to Int for params
-			data_pointer: 0,
-			data_length: 0,
-		};
+	pub fn define_param(&mut self, name: String, kind: Kind) -> Local {
+		let mut local = self.define(name.clone(), None, kind);
+		local.is_param = true;
 		self.locals.insert(name, local.clone());
 		local
 	}

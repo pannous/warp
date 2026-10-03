@@ -429,7 +429,7 @@ impl WasmGcEmitter {
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.ctx.declared_globals.clone();
 		for param in user_fn.params.iter() {
-			self.scope.define(param.name.clone(), None, param_kind(param));
+			self.scope.define_param(param.name.clone(), param_kind(param));
 		}
 
 		// Collect any additional variables in the body, and the temp locals its loops need
