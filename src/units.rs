@@ -6,7 +6,8 @@
 
 use crate::extensions::numbers::Number;
 use crate::meta::Dada;
-use crate::node::{error, Bracket, Node};
+use crate::node::{error, Bracket, Node, Separator};
+use std::collections::HashMap;
 use crate::operators::Op;
 use std::fmt;
 
@@ -193,17 +194,34 @@ fn defines_unit_name(node: &Node) -> bool {
 	defines || children(node).into_iter().any(defines_unit_name)
 }
 
+/// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
+type Variables = HashMap<String, Value>;
+
 fn evaluate(node: &Node) -> Evaluated {
+	evaluate_in(node, &mut Variables::new())
+}
+
+fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 	match node.drop_meta() {
 		Node::Number(Number::Int(n)) => Ok(Value::Number(*n)),
-		Node::Symbol(name) => unit_named(name)
-			.map(|unit| Value::Quantity(Quantity { amount: 1, unit }))
-			.ok_or(Stop::Unsupported),
-		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate(right)?),
-		Node::Key(left, op, right) => arithmetic(evaluate(left)?, *op, evaluate(right)?),
+		Node::Symbol(name) => match variables.get(name) {
+			Some(value) => Ok(value.clone()),
+			None => unit_named(name).map(|unit| Value::Quantity(Quantity { amount: 1, unit })).ok_or(Stop::Unsupported),
+		},
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
+			let value = evaluate_in(value, variables)?;
+			variables.insert(name.clone(), value.clone());
+			Ok(value)
+		}
+		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
+		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
+			items.iter().try_fold(Value::Number(0), |_, item| evaluate_in(item, variables))
+		}
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
-			[single] => evaluate(single),
-			[count, unit] if is_unit_word(unit) => arithmetic(evaluate(count)?, Op::Mul, evaluate(unit)?),
+			[single] => evaluate_in(single, variables),
+			[count, unit] if is_unit_word(unit) => arithmetic(evaluate_in(count, variables)?, Op::Mul, evaluate_in(unit, variables)?),
 			_ => Err(Stop::Unsupported),
 		},
 		_ => Err(Stop::Unsupported),

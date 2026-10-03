@@ -64,4 +64,5 @@ The supervisor should remove the DONE elements after a while.
 - Arithmetic on two values of unknown kind (`m.age + m.scores#1` of a parsed JSON map holding floats) assumes Ints and traps "cast failure"; it needs run-time dispatch on the number kinds (Int, Float, exact). samples/json_parser.wasp converts with `as float`. (samples 2026-10-03)
 - `print xs` of a list variable is pinned as an error (tests/test_welcoming_print.rs, "no runtime text yet") although `str(xs)` and nested lists in a join now give "[1 2]"; decide whether print may use the same text. (samples 2026-10-03)
 - A one-character text assigned to a variable is a character (`input = "a"` then `byte_slice(input, …)` traps on a cast), while longer texts are texts. (samples 2026-10-03)
-- A quantity assigned to a variable is an error: `x=2 km; x` → "undefined variable: km" (also `x=2 h`), while `2 km` alone is a quantity. (night 2026-10-04)
+- DONE: A quantity assigned to a variable is an error: `x=2 km; x` → "undefined variable: km" (also `x=2 h`), while `2 km` alone is a quantity. (night 2026-10-04) (constant programs: the unit evaluator binds variables)
+- `2 h + 30 min` → "undefined variable: h" and `x=30 min; x` → 30: time units (time.rs durations) and units.rs quantities do not mix. (night 2026-10-04)
