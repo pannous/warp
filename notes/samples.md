@@ -27,7 +27,13 @@ return-kind inference, `and`/`or` decided at run time for calls and Nodes, `if` 
 run-time field reads of declared fields, `{x: x}` keys, call shapes, declared field kinds, float parameter widening,
 float-path conditionals/returns/zero-arg calls, globals and captures typed with function kinds.
 
-## Still failing (2026-10-03 evening)
-async, binary_tree, calculator, circle, comments, control_flow, data_structures, errors, functions, html, html_dsl,
-json_parser, mandelbrot, modules, natural, netbase, neural_net, particles, polymorphism (needs overloading, todo.md),
-sample, sin, sine, test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).
+Later batches: records (optional fields, field_with on instances, bare return, recursive list functions), nested block
+comments, C-style `real f(real x) {…}` definitions and `if (c) statement`.
+- Output filters: `grep -v '^      '` (to hide hint continuation lines) also hides indented program output.
+- `tau`/`τ`, `pi` are constants: a variable cannot be named so.
+- `real` is the exact real type; use `float` for IEEE arithmetic.
+
+## Still failing (2026-10-03 night)
+async, calculator, circle, control_flow, data_structures, errors, functions, html, html_dsl, json_parser, mandelbrot,
+modules, natural, netbase, neural_net, particles, polymorphism (needs parameter overloading, todo.md), sample,
+test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).
