@@ -1,0 +1,3 @@
+// `use package`: every file below the package folder (the one holding shapes_package.wasp)
+use package
+circle_area(2) + unit
