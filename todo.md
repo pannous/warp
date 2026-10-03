@@ -43,3 +43,8 @@
 - Workers' copies share one warp artifact in the shared target dir (cdylib writes an unhashed libwarp.rlib; the root package metadata ignores its path): a copy builds with `version = "0.1.1-<name>"` and `crate-type = ["rlib"]` in its uncommitted Cargo.toml. The warp binary itself (debug/warp) is still one file for all copies: copy it right after building. (impl-types 2026-10-03)
 - `await job` (D2 round 3) has nothing to await yet: no tasks/`go` exist in warp. wiki/async.md still documents `html=job!` as await, which D2 retired. (r3-sem 2026-10-03)
 - `x.double` with a user function `double:=it*2` is an error ("double needs 1 argument"), so `x.double!` cannot mutate either; `double(x)!` and `double x!` work. (r3-sem 2026-10-03)
+- `print "a"` followed by a line starting with `√` (`print "a"\n√9`) evaluates to ø, without print it is 3. (web-playground 2026-10-03)
+- `xs=[3 1 2]; print sort(xs)` → Error("not a joinable item"); `sort(xs)` alone is fine. (web-playground 2026-10-03)
+- The indexing hint for a map with a text key is wrong: `ages["alice"]` hints `ages#("alice"+1)`. (web-playground 2026-10-03)
+- In the browser samples/quicksort.wasp overflows V8's wasm stack inside the compiler ("Maximum call stack size exceeded"); natively it reaches its error at 41:7. A deep recursion in the analyzer/emitter. (web-playground 2026-10-03)
+- The browser playground has no packages (`use netbase` → module not found) and no native FFI (raylib, SDL, libc): libm only, via Math. (web-playground 2026-10-03)
