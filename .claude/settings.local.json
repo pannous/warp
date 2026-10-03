@@ -49,6 +49,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/test-gate.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "mcp__.*__.*",
         "hooks": [
           {

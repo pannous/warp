@@ -2,6 +2,8 @@
 # Simplified test runner - matches IDE configuration exactly
 # Creates clean test_results.txt with just pass/fail lists
 
+[ -z "$WARP_TEST_LOCKED" ] && exec "$(dirname "$0")/tests/queue.sh" "$0" "$@"
+
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 
