@@ -531,6 +531,13 @@ impl WasmGcEmitter {
 		self.runtime_function(TEXT_AS_INT, vec![node_ref], vec![ValType::I64], locals, |s, f| {
 			let (pointer, end, negative, digit, value) = (1, 2, 3, 4, 5);
 			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
+			// a one-character text is a character node: its digit, else invalid_number
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
+			s.emit_codepoint_of_node(f);
+			Self::emit_list(f, &[I::I64Const('0' as i64), I::I64Sub, I::LocalTee(value), I::I64Const(9), I::I64GtU]);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &[I::LocalGet(value), I::Return, I::End]);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");

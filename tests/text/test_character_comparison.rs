@@ -24,3 +24,9 @@ fn test_character_test_words() {
 	is!("c='_'; c.is_alphanumeric()", false);
 	is!("c='7'; c.is_alphanumeric()", true);
 }
+
+#[test] // the cast of a one-character text held in a variable reads its digit, like "12" (not its code point)
+fn test_one_character_text_as_int() {
+	is!("x=\"5\"; x as int", 5);
+	is!("x=\"a\"; try (x as int) + 1 else 0", 0);
+}
