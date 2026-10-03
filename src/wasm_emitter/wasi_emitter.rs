@@ -62,7 +62,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `print x` / `print(x)`: writes x and a newline to stdout, the value is the printed value. A literal is written as
-	/// compiled; any other number, text or character through its runtime text form (print_value). Lists, floats and
+	/// compiled; any other number, text or character through its runtime text form (print_value). Lists and
 	/// other values have no runtime text yet: an error value.
 	pub(super) fn emit_print(&mut self, func: &mut Function, value: &Node) {
 		let text = match value.drop_meta() {
@@ -70,7 +70,7 @@ impl WasmGcEmitter {
 			Node::Text(text) => text.clone(),
 			Node::Char(character) => character.to_string(),
 			_ => match self.get_type(value) {
-				Kind::Int | Kind::Text | Kind::Codepoint | Kind::Empty => {
+				Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint | Kind::Empty => {
 					self.emit_node_instructions(func, value);
 					self.emit_call(func, PRINT_VALUE);
 					return;

@@ -3152,6 +3152,25 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 	}
 }
 
+/// Calls of the host words (`sleep(ms)`, `random()` …) import them, unless the program defines a function of that name
+pub fn extract_host_words(ctx: &mut Context, node: &Node) {
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+				}
+			}
+			items.iter().for_each(|item| extract_host_words(ctx, item));
+		}
+		Node::Key(left, _, right) => {
+			extract_host_words(ctx, left);
+			extract_host_words(ctx, right);
+		}
+		_ => {}
+	}
+}
+
 /// The function names of `import sin from 'm'` and of the group `import (sin, floor, fabs) from 'm'`
 fn imported_names(names: &Node) -> Vec<String> {
 	match names.drop_meta() {

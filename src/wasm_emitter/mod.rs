@@ -8,6 +8,7 @@ mod equality;
 mod function_builder;
 mod config;
 mod ffi_emitter;
+mod float_text;
 mod import_manager;
 mod key_emitter;
 mod layout;
@@ -758,6 +759,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		crate::analyzer::extract_host_words(&mut self.ctx, node);
 		self.type_errors.extend(self.ctx.parameter_conflicts.drain(..));
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
@@ -2268,7 +2270,7 @@ impl WasmGcEmitter {
 	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
 		let kind = self.get_type(value);
 		let node = match kind {
-			Kind::Int | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
+			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			Kind::List => {
 				let text = |text: &str| Box::new(Node::Text(text.to_string()));
@@ -3750,13 +3752,9 @@ fn eval_program(node: Node) -> Node {
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
-	let result = if needs_ffi {
-		read_bytes_with_ffi(&bytes)
-	} else if needs_wasi {
-		read_bytes_with_wasi(&bytes)
-	} else if needs_host {
-		read_bytes_with_host(&bytes)
+	use crate::wasm_reader::{read_bytes_with_imports, Imports};
+	let result = if needs_ffi || needs_wasi || needs_host {
+		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
 	} else {
 		read_bytes(&bytes)
 	};

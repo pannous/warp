@@ -65,6 +65,7 @@ mod test_ffi_warning_once;
 mod test_ffi;
 mod test_fixed_width_ints;
 mod test_float_assignment;
+mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
 mod test_float_parameters;
@@ -88,6 +89,7 @@ mod test_glyph_aliases;
 mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
+mod test_host_words;
 mod test_if_call_condition;
 mod test_in_position;
 mod test_include;

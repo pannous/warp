@@ -93,6 +93,10 @@ impl WasmGcEmitter {
 						self.emit_user_function_call(func, fn_name, &[]);
 						return;
 					}
+					if self.ctx.ffi_imports.contains_key(fn_name) {
+						self.emit_ffi_call(func, fn_name, &[], None);
+						return;
+					}
 				}
 			}
 			self.emit_node_instructions(func, &items[0]);

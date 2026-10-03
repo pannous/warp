@@ -50,22 +50,8 @@ impl FfiSignature {
     }
 }
 
-/// FFI state for running modules with native function imports
-#[derive(Default)]
-pub struct FfiState {
-    // Memory pointer for string operations
-    pub memory_ptr: Option<*const u8>,
-    pub memory_len: usize,
-}
-
-impl FfiState {
-    pub fn new() -> Self {
-        FfiState {
-            memory_ptr: None,
-            memory_len: 0,
-        }
-    }
-}
+/// FFI functions run in the program's one state, with the host functions and WASI
+pub use crate::host::HostState as FfiState;
 
 // ============================================================================
 // C Header Parsing for Dynamic FFI Signature Discovery
@@ -506,6 +492,9 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
             results: vec![ValType::I32],
         },
     );
+    for (name, params, results) in crate::host::host_word_signatures() {
+        sigs.insert(name.to_string(), FfiSignature::new(name, crate::host::HOST_LIBRARY, params, results));
+    }
 
     sigs
 }
@@ -1186,7 +1175,7 @@ pub fn link_module_libraries(
     for import in module.imports() {
         let module_name = import.module();
         // Skip built-in libraries that are already linked
-        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1") {
+        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
             libs_to_link.insert(module_name.to_string());
         }
     }
