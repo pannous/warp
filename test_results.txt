@@ -145,7 +145,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
   ✓ ffi::test_ffi::test_ffi_strlen
-  ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
@@ -443,7 +442,6 @@ PASSED:
   ✓ lists::test_unpacking::star_rest_from_list
   ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
-  ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
   ✓ lists::test_unpacking::too_many_values_is_loud
   ✓ lists::test_unpacking::underscore_discards
@@ -970,6 +968,9 @@ PASSED:
   ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
   ✓ programs::test_calculator_fixes::test_run_time_math
   ✓ programs::test_calculator_fixes::test_text_comparisons
+  ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
+  ✓ programs::test_data_structure_fixes::test_list_comprehension
+  ✓ programs::test_data_structure_fixes::test_named_tuple_fields
   ✓ programs::test_json_parser_fixes::test_field_of_a_call_result
   ✓ programs::test_json_parser_fixes::test_mixed_returns_are_nodes
   ✓ programs::test_json_parser_fixes::test_text_of_a_run_time_value
@@ -981,6 +982,7 @@ PASSED:
   ✓ programs::test_samples::test_calculator
   ✓ programs::test_samples::test_collatz
   ✓ programs::test_samples::test_comments
+  ✓ programs::test_samples::test_data_structures
   ✓ programs::test_samples::test_factorial
   ✓ programs::test_samples::test_fibonacci
   ✓ programs::test_samples::test_fizzbuzz
@@ -1686,4 +1688,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1681 passed, 0 failed, 1681 total tested
+58 ignored, 1683 passed, 0 failed, 1683 total tested
