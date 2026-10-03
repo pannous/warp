@@ -157,6 +157,7 @@ mod test_statement_terminators;
 mod test_surface_syntax;
 mod test_statements_after_type;
 mod test_string;
+mod test_style_dont_care;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;

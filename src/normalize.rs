@@ -9,6 +9,7 @@
 //! ```ignore
 //! style.function_def = FunctionStyle::Def;
 //! ```
+//! Every axis also takes `Any`: all its forms are fine and never hinted (function definitions by default).
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -107,6 +108,8 @@ pub enum CastStyle {
     AsOperator,
     /// `int(x)` (constructor call)
     Constructor,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for function definitions
@@ -124,6 +127,8 @@ pub enum FunctionStyle {
     Function,
     /// `define f(x): x*2`
     Define,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// How the body of a function definition was written after its signature
@@ -146,6 +151,8 @@ pub enum VarStyle {
     Let,
     /// `var x = 5`
     Var,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for logical operators
@@ -155,6 +162,8 @@ pub enum LogicalStyle {
     Words,
     /// `&&`, `||`, `!`
     Symbols,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for string quotes
@@ -164,6 +173,8 @@ pub enum QuoteStyle {
     Single,
     /// `"hello"`
     Double,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for indexing
@@ -173,6 +184,8 @@ pub enum IndexStyle {
     Hash,
     /// `x[0]`
     Bracket,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for conditionals
@@ -182,6 +195,8 @@ pub enum ConditionalStyle {
     IfThenElse,
     /// `x ? y : z`
     Ternary,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for power operator
@@ -191,6 +206,8 @@ pub enum PowerStyle {
     Caret,
     /// `x**2`
     DoubleStar,
+    /// every form is fine: no hint
+    Any,
 }
 
 /// Preferred style for the type of a list of elements
@@ -204,7 +221,24 @@ pub enum ListTypeStyle {
     Of,
     /// `[int]`
     Bracket,
+    /// every form is fine: no hint
+    Any,
 }
+
+/// A style axis: one preferred form, or `Any` ("I don't care, both are fine": every form compiles, never a hint)
+pub trait Preferred: Copy + PartialEq {
+    const ANY: Self;
+
+    /// The preferred form to hint toward when `used` is written: none when it is the preferred one or the axis is `Any`
+    fn instead_of(self, used: Self) -> Option<Self> {
+        (self != Self::ANY && self != used).then_some(self)
+    }
+}
+
+macro_rules! preferred_axes {
+    ($($axis:ident),*) => { $(impl Preferred for $axis { const ANY: Self = $axis::Any; })* };
+}
+preferred_axes!(CastStyle, FunctionStyle, VarStyle, LogicalStyle, QuoteStyle, IndexStyle, ConditionalStyle, PowerStyle, ListTypeStyle);
 
 /// Global style configuration
 #[derive(Debug, Clone)]
@@ -226,7 +260,7 @@ impl Default for Style {
         Self {
             list_type: ListTypeStyle::Plural,
             cast: CastStyle::AsOperator,
-            function_def: FunctionStyle::ColonEquals,
+            function_def: FunctionStyle::Any, // user 2026-10-03: `f(x) := …`, `def f(x): …` … are all fine
             var_def: VarStyle::ColonEquals,
             logical: LogicalStyle::Words,
             quotes: QuoteStyle::Double,
@@ -340,7 +374,7 @@ pub mod hints {
 
     /// Returns whether a hint was emitted, so that the type word is not hinted a second time
     pub fn type_constructor(type_name: &str, value: &str) -> bool {
-        let is_non_canonical = style().cast == CastStyle::AsOperator;
+        let is_non_canonical = style().cast.instead_of(CastStyle::Constructor).is_some();
         if is_non_canonical {
             let original = format!("{}({})", type_name, value);
             let canonical = format!("{} as {}", value, canonical_type_word(type_name));
@@ -351,7 +385,7 @@ pub mod hints {
 
     /// 'as' operator when constructor style is preferred; returns whether a hint was emitted
     pub fn as_operator(value: &str, type_name: &str) -> bool {
-        let is_non_canonical = style().cast == CastStyle::Constructor;
+        let is_non_canonical = style().cast.instead_of(CastStyle::AsOperator).is_some();
         if is_non_canonical {
             let original = format!("{} as {}", value, type_name);
             let canonical = format!("{}({})", canonical_type_word(type_name), value);
@@ -370,15 +404,18 @@ pub mod hints {
 
     /// The quote character a string literal was written with
     pub fn quotes(used: char, content: &str) {
-        let (canonical_quote, reason) = match style().quotes {
-            QuoteStyle::Single => ('\'', "single quotes preferred for strings"),
-            QuoteStyle::Double => ('"', "double quotes preferred for strings"),
+        let used_style = match used {
+            '\'' => QuoteStyle::Single,
+            '"' => QuoteStyle::Double,
+            _ => return,
         };
-        if used == '\'' || used == '"' {
-            if used != canonical_quote {
-                hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
-            }
-        }
+        let reason = match style().quotes.instead_of(used_style) {
+            Some(QuoteStyle::Single) => "single quotes preferred for strings",
+            Some(QuoteStyle::Double) => "double quotes preferred for strings",
+            _ => return,
+        };
+        let canonical_quote = text_quote();
+        hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
     }
 
     /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
@@ -468,26 +505,25 @@ pub mod hints {
 
     /// Variable definition keywords
     pub fn var_keyword(used: &str, name: &str, value: &str) {
-        let preferred = style().var_def;
         let used_style = match used {
             "let" => VarStyle::Let,
             "var" => VarStyle::Var,
             ":=" => VarStyle::ColonEquals,
             _ => return,
         };
+        let Some(preferred) = style().var_def.instead_of(used_style) else { return };
         let spell = |var_style: VarStyle| match var_style {
             VarStyle::ColonEquals => format!("{name} := {value}"),
             VarStyle::Let => format!("let {name} = {value}"),
             VarStyle::Var => format!("var {name} = {value}"),
+            VarStyle::Any => format!("{name} = {value}"),
         };
         let reason = match preferred {
             VarStyle::ColonEquals => "use := for definition",
             VarStyle::Let => "use 'let' for definition",
             VarStyle::Var => "use 'var' for definition",
+            VarStyle::Any => return,
         };
-        if used_style == preferred {
-            return;
-        }
         match used_style {
             // shown until the user acknowledges it once (diagnostic::educate_once)
             VarStyle::Let => crate::diagnostic::educate_once(LET_TOPIC, &spell(used_style), &spell(preferred),
@@ -501,7 +537,7 @@ pub mod hints {
     fn list_type_spelling(list_style: ListTypeStyle, element_words: &[&str]) -> Option<String> {
         match (list_style, element_words) {
             (ListTypeStyle::Plural, [element]) => crate::analyzer::type_word_kind(element).map(|_| format!("{element}s")),
-            (ListTypeStyle::Plural, _) => None,
+            (ListTypeStyle::Plural | ListTypeStyle::Any, _) => None,
             (ListTypeStyle::Generic, words) => {
                 let (last, nested) = words.split_last()?;
                 let arguments = nested.iter().rev().fold(last.to_string(), |inner, word| format!("{word}<{inner}>"));
@@ -517,16 +553,14 @@ pub mod hints {
 
     /// A list type written in `used` style: `list<int>` and `list of int` when `ints` is preferred, `ints` when the words are
     pub fn list_type(used: ListTypeStyle, element_words: &[&str]) {
-        let preferred = style().list_type;
-        if used == preferred {
-            return;
-        }
+        let Some(preferred) = style().list_type.instead_of(used) else { return };
         if let (Some(original), Some(canonical)) = (list_type_spelling(used, element_words), list_type_spelling(preferred, element_words)) {
             let reason = match preferred {
                 ListTypeStyle::Plural => "a plural type word is a list of that type",
                 ListTypeStyle::Generic => "angle brackets apply the list type to its element type",
                 ListTypeStyle::Of => "'list of' reads as a phrase",
                 ListTypeStyle::Bracket => "square brackets around the element type read as a list",
+                ListTypeStyle::Any => return,
             };
             hint(&original, &canonical, reason);
         }
@@ -534,7 +568,6 @@ pub mod hints {
 
     /// Function definition keywords
     pub fn function_keyword(used: &str, name: &str, params: &str, written_body: BodyForm) {
-        let preferred = style().function_def;
         let used_style = match used {
             "def" => FunctionStyle::Def,
             "define" => FunctionStyle::Define,
@@ -544,6 +577,7 @@ pub mod hints {
             ":=" => FunctionStyle::ColonEquals,
             _ => return,
         };
+        let Some(preferred) = style().function_def.instead_of(used_style) else { return };
         let spell = |function_style: FunctionStyle, body: BodyForm| {
             let body_text = match body {
                 BodyForm::Colon => ": ...",
@@ -551,7 +585,7 @@ pub mod hints {
                 BodyForm::Block => " { ... }",
             };
             match function_style {
-                FunctionStyle::ColonEquals => format!("{name}({params}) := ..."),
+                FunctionStyle::ColonEquals | FunctionStyle::Any => format!("{name}({params}) := ..."),
                 FunctionStyle::Def => format!("def {name}({params}){body_text}"),
                 FunctionStyle::Define => format!("define {name}({params}){body_text}"),
                 FunctionStyle::Fn => format!("fn {name}({params}){body_text}"),
@@ -561,7 +595,7 @@ pub mod hints {
         };
         let conventional_body = |function_style: FunctionStyle| match function_style {
             FunctionStyle::Def | FunctionStyle::Define => BodyForm::Colon,
-            FunctionStyle::Fn | FunctionStyle::Fun | FunctionStyle::ColonEquals => BodyForm::Assign,
+            FunctionStyle::Fn | FunctionStyle::Fun | FunctionStyle::ColonEquals | FunctionStyle::Any => BodyForm::Assign,
             FunctionStyle::Function => BodyForm::Block,
         };
         let reason = match preferred {
@@ -571,10 +605,9 @@ pub mod hints {
             FunctionStyle::Fn => "'fn' keyword preferred",
             FunctionStyle::Fun => "'fun' keyword preferred",
             FunctionStyle::Function => "'function' keyword preferred",
+            FunctionStyle::Any => return,
         };
-        if used_style != preferred {
-            hint(&spell(used_style, written_body), &spell(preferred, conventional_body(preferred)), reason);
-        }
+        hint(&spell(used_style, written_body), &spell(preferred, conventional_body(preferred)), reason);
     }
 
     /// `idx` shifted by `offset` for the other index base: `s[0]` is `s#1`, brackets count from 0 and `#` from 1
@@ -637,7 +670,7 @@ const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 pub fn text_quote() -> char {
     match style().quotes {
         QuoteStyle::Single => '\'',
-        QuoteStyle::Double => '"',
+        QuoteStyle::Double | QuoteStyle::Any => '"',
     }
 }
 
