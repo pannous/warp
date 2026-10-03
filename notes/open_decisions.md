@@ -242,7 +242,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 
 ## Decided 2026-10-02
 - `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
-  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
+  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/control/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
 
 ## Original questions
 ## Blocking finished work

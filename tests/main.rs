@@ -5,6 +5,7 @@
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
+mod control;
 mod functions;
 mod lists;
 mod node;
@@ -24,20 +25,13 @@ mod test_algo_queens;
 mod test_algo_sieve;
 mod test_algo_sorting;
 mod test_all_samples;
-mod test_block_assigns_outer;
-mod test_blocks;
 mod test_colon_body_assignment;
 mod test_colon_body_extent;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compile_only;
-mod test_condition_block;
-mod test_control_words;
 mod test_data_scope;
-mod test_do_block;
 mod test_download;
 mod test_emitter;
-mod test_empty_block_binding;
-mod test_empty_block;
 mod test_eval_state;
 mod test_export_declaration;
 mod test_ffi_import_group;
@@ -45,7 +39,6 @@ mod test_ffi_warning_once;
 mod test_ffi;
 mod test_float_fields;
 mod test_folder_scope;
-mod test_for_loop;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_gc_name_registry;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -59,21 +52,15 @@ mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_host_words;
-mod test_if_call_condition;
-mod test_if_value_kind;
 mod test_include;
 mod test_it_shadow_warning;
-mod test_iteration_words;
 mod test_kitchensink;
 mod test_logical_calls;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_libm_linking;
 mod test_like;
-mod test_loop_forms;
-mod test_loops_in_functions;
 mod test_module_cache;
 mod test_name_subsection_order;
-mod test_not_condition_block;
 mod test_object_arguments;
 mod test_package_pin;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -87,17 +74,8 @@ mod test_samples;
 mod test_spaced_construction;
 mod test_style_dont_care;
 mod test_sweep_fixes;
-mod test_switch_match;
-mod test_switch_no_case_value;
-mod test_switch_value;
-mod test_times_count_once;
 mod test_todo;
-mod test_top_level_block;
-mod test_trap_messages;
-mod test_try_else;
 mod test_try_else_value;
-mod test_try_exits_and_naming;
-mod test_try_deep;
 mod test_typed_returns;
 mod test_tuples;
 mod test_undefined_variable;
@@ -128,8 +106,6 @@ mod test_welcoming_print;
 mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
 mod test_welcoming_sugar;
-mod test_while_paren_condition;
-mod test_while_value;
 mod test_wasm_names_order;
 mod test_wit_types;
 mod test_wit;
