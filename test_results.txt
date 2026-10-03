@@ -229,7 +229,6 @@ PASSED:
   ✓ test_angle::test_if_math
   ✓ test_angle::test_if_two
   ✓ test_angle::test_logic_precedence
-  ✓ test_angle::test_smart_types
   ✓ test_angle::test_switch
   ✓ test_angle::test_switch_evaluation
   ✓ test_angle::test_truthy_and
@@ -246,7 +245,6 @@ PASSED:
   ✓ test_array_types::test_declared_typed_arrays_keep_working
   ✓ test_array_types::test_plural_declarations_are_lists
   ✓ test_array_types::test_typed_array_as_a_value
-  ✓ test_asts::test_ast
   ✓ test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ test_attributes::attribute_names_may_be_kebab_case
   ✓ test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -690,6 +688,7 @@ PASSED:
   ✓ test_math::test_if_then_else
   ✓ test_math::test_logarithm_in_runtime
   ✓ test_math::test_modulo
+  ✓ test_math::test_modulo_with_variables
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
   ✓ test_math::test_runtime_equality_autocast
@@ -703,7 +702,6 @@ PASSED:
   ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
-  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
   ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
@@ -829,6 +827,13 @@ PASSED:
   ✓ test_number::test_number
   ✓ test_number::test_number_floats
   ✓ test_number::test_number_mix
+  ✓ test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
+  ✓ test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
+  ✓ test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
+  ✓ test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
+  ✓ test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
+  ✓ test_object_arguments::an_instance_of_another_class_is_a_type_error
+  ✓ test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ test_one_line_statements::separated_prints_still_run
   ✓ test_one_line_statements::two_prints_on_one_line_need_a_separator
   ✓ test_operator_declarations::test_built_in_operators_are_untouched
@@ -1275,6 +1280,7 @@ PASSED:
   ✓ test_uniscript::effect_words_stack_on_one_operand
   ✓ test_uniscript::entities_become_characters
   ✓ test_uniscript::full_blocks_keep_their_spaces
+  ✓ test_uniscript::greek_is_transliterated_phonetically
   ✓ test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
   ✓ test_uniscript::spelling_back_round_trips
   ✓ test_uniscript::the_header_declares_uniscript_and_its_version
@@ -1555,4 +1561,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1550 passed, 0 failed, 1550 total tested
+58 ignored, 1556 passed, 0 failed, 1556 total tested
