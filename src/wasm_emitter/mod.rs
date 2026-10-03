@@ -964,6 +964,7 @@ impl WasmGcEmitter {
 		self.emit_equality_ops();
 		// Emit helper functions
 		self.emit_getters();
+		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -2327,6 +2328,12 @@ impl WasmGcEmitter {
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
 						self.emit_truncating_cast(func);
+						self.emit_call(func, "new_int");
+					}
+					// Runtime: a text, or a value known only at run time (a list element), parses its digits
+					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+						self.emit_node_instructions(func, value);
+						self.emit_call(func, list_ops::TEXT_AS_INT);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible; a ratio is truncated
