@@ -104,8 +104,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Text // concatenation
 	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
 		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
-	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
-		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
 	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
@@ -213,6 +213,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					if name == crate::library_words::SLICE || name == "reverse" {
 						// a slice or reversal of a text is a text, of anything else a list
 						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+					}
+					if name == crate::library_words::FIELD_WITH {
+						// a copy of the object with one field set: a Node, whatever the object's kind is known as
+						return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
 					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 				}
@@ -2314,7 +2318,8 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
-				let kind = infer_type(&items[1], &scope);
+				// `return` alone returns ø: a Node, so the function's numbers are Nodes too
+				let kind = if matches!(items[1].drop_meta(), Node::Empty) { Kind::Empty } else { infer_type(&items[1], &scope) };
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
 					returned_nodes.push(kind);
 				}
@@ -2324,6 +2329,7 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	match returned_nodes.as_slice() {
 		_ if last_kind.is_ref() => last_kind,
 		[] => last_kind,
+		[Kind::Empty] => Kind::Empty,
 		[Kind::List] => Kind::List,
 		_ => Kind::Text,
 	}
@@ -2406,7 +2412,8 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
-				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
+				// `t.left = 3` lowers to `t = field_with(t, "left", 3)`: t is an object too
+				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
 				}
@@ -2500,40 +2507,43 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
 	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
 	for _ in 0..parameter_count {
-		if !widen_float_parameters(ctx, node, &globals) {
+		if !widen_parameters(ctx, node, &globals) {
 			break;
 		}
 		refine_return_kinds(ctx, &globals);
 	}
 }
 
-/// A parameter that some call passes a float takes floats: `mul(v, 1.0 / length(v))` with length returning a float.
-/// infer_parameters_from_calls knows only literal arguments; this pass runs once the return kinds are known.
-/// It only widens Int to Float. True when a parameter changed.
-fn widen_float_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
+/// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
+/// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
+/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters, and
+/// leaves a parameter alone when calls disagree. True when a parameter changed.
+fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
-	let mut floats: HashSet<(String, usize)> = HashSet::new();
+	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
 	let mut main = Scope::with_function_kinds(function_kinds.clone());
 	collect_variables(program, &mut main);
-	collect_float_arguments(program, &main, ctx, &mut floats);
+	collect_argument_kinds(program, &main, ctx, &mut passed);
 	for function in ctx.user_functions.values() {
 		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals);
-		collect_float_arguments(&function.body, &scope, ctx, &mut floats);
+		collect_argument_kinds(&function.body, &scope, ctx, &mut passed);
 	}
 	let mut changed = false;
-	for (name, index) in floats {
+	for ((name, index), kinds) in passed {
+		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
+		let [kind] = kinds.as_slice() else { continue };
 		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
 		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
-			param.used_as = Some(Kind::Float);
+			param.used_as = Some(*kind);
 			changed = true;
 		}
 	}
 	changed
 }
 
-/// The (function, parameter index) pairs that a call in `node` passes a float, not looking into nested definitions
-fn collect_float_arguments(node: &Node, scope: &Scope, ctx: &Context, floats: &mut HashSet<(String, usize)>) {
+/// The kinds each call in `node` passes each parameter of a user function, not looking into nested definitions
+fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mut HashMap<(String, usize), HashSet<Kind>>) {
 	if function_definition_body(node).is_some() {
 		return;
 	}
@@ -2542,19 +2552,17 @@ fn collect_float_arguments(node: &Node, scope: &Scope, ctx: &Context, floats: &m
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
 				if let Some(function) = ctx.user_functions.get(name) {
 					for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
-						if infer_type(argument, scope) == Kind::Float {
-							floats.insert((name.clone(), index));
-						}
+						passed.entry((name.clone(), index)).or_default().insert(infer_type(argument, scope));
 					}
 				}
 			}
-			items.iter().for_each(|item| collect_float_arguments(item, scope, ctx, floats));
+			items.iter().for_each(|item| collect_argument_kinds(item, scope, ctx, passed));
 		}
 		Node::Key(left, _, right) => {
-			collect_float_arguments(left, scope, ctx, floats);
-			collect_float_arguments(right, scope, ctx, floats);
+			collect_argument_kinds(left, scope, ctx, passed);
+			collect_argument_kinds(right, scope, ctx, passed);
 		}
-		Node::Meta { node, .. } => collect_float_arguments(node, scope, ctx, floats),
+		Node::Meta { node, .. } => collect_argument_kinds(node, scope, ctx, passed),
 		_ => {}
 	}
 }
@@ -2729,6 +2737,15 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
 					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
+				// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an
+				// error of the last value; assumed to return a Node of unknown kind, it settles
+				let kind = if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
+					let mut unknown_recursion = function_kinds.clone();
+					unknown_recursion.insert(function.name.clone(), Kind::Empty);
+					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals)
+				} else {
+					kind
+				};
 				(function.name.clone(), kind)
 			})
 			.collect();

@@ -41,12 +41,8 @@ pub fn lower(node: Node) -> Node {
 fn construct(node: Node, registry: &TypeRegistry) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = with_spaced_constructions(items, registry).into_iter().map(|item| construct(item, registry)).collect();
-			match items.as_slice() {
-				// `v = T {…}` leaves the construction alone in its list
-				[single] if bracket == Bracket::None && instance_parts(single).is_some() => single.clone(),
-				_ => instance(&items, &bracket, &separator, registry).unwrap_or(Node::List(items, bracket, separator)),
-			}
+			let items: Vec<Node> = items.into_iter().map(|item| construct(item, registry)).collect();
+			instance(&items, &bracket, &separator, registry).unwrap_or(Node::List(items, bracket, separator))
 		}
 		Node::Key(name, Op::None, fields) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 			let entries = entries(&construct(*fields, registry));
@@ -66,22 +62,6 @@ fn construct(node: Node, registry: &TypeRegistry) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, registry)), data },
 		other => other,
 	}
-}
-
-/// `T {x: 1}` with a space, T a declared type: the glued construction `T{x: 1}` (open decision 41)
-fn with_spaced_constructions(items: Vec<Node>, registry: &TypeRegistry) -> Vec<Node> {
-	let mut joined: Vec<Node> = Vec::with_capacity(items.len());
-	for item in items {
-		let is_fields = matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
-		let follows_type = matches!(joined.last().map(Node::drop_meta), Some(Node::Symbol(name)) if registry.get_by_name(name).is_some());
-		if is_fields && follows_type {
-			let name = joined.pop().expect("follows a type name");
-			joined.push(Node::Key(Box::new(name), Op::None, Box::new(item)));
-		} else {
-			joined.push(item);
-		}
-	}
-	joined
 }
 
 /// The instance a call of a declared type constructs; a wrong argument count is an error value at the call
@@ -126,12 +106,14 @@ fn entry_name(entry: &Node) -> Option<String> {
 	}
 }
 
-/// The given fields, then every left out field that has a default, with its default value
+/// The given fields, then every left out field that has a default, with its default value, and every left out optional one
 fn with_defaults(type_def: &TypeDef, registry: &TypeRegistry, mut entries: Vec<Node>) -> Vec<Node> {
 	let given: Vec<String> = entries.iter().filter_map(entry_name).collect();
 	for field in type_def.fields.iter().filter(|field| !given.contains(&field.name)) {
-		if let Some(default) = registry.default_of(type_def, field) {
-			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(default.clone())));
+		// a left out optional field `left?` is there, holding ø: reading it is no error, assigning it changes it
+		let value = registry.default_of(type_def, field).cloned().or_else(|| field.is_optional().then_some(Node::Empty));
+		if let Some(value) = value {
+			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value)));
 		}
 	}
 	entries

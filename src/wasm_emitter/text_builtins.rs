@@ -66,6 +66,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
 	}
+	if required.contains(crate::library_words::FIELD_WITH) {
+		required.insert(super::list_ops::STRUCT_BODY); // an instance keeps its type
+	}
 	if required.contains(super::list_ops::NODE_WITH_KEY) {
 		required.extend(["node_with_at", crate::library_words::FIELD_WITH]);
 	}
