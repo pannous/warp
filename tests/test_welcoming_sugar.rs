@@ -148,3 +148,20 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 	is!("#!/usr/bin/env warp\n3", 3);
 	is!("x=4\n#include lib\nx", 4); // a directive line stays a comment
 }
+
+#[test]
+fn a_spaced_double_slash_before_an_expression_asks_floor_or_comment() {
+	use warp::diagnostic::{with_asker, with_warning_mode, ScriptedAnswers, WarningMode};
+	// unanswered: an expression after `//` is taken as floor division, with a warning
+	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 2);
+	is!("low=3; high=8; (low + high) // 2", 5);
+	is!("n = 10; n //= 3; n", 3);
+	is!("x = 7 // done\nx", 7); // a lone word is taken as a comment
+	is!("x = 7 // a note here\nx", 7); // prose is a comment, not asked
+	is!("x = 7 // \"quoted\"\nx", 7);
+	fails_with("use strict\nx = 9 // 2\nx", "is `// 2` floor division or a comment?");
+	with_warning_mode(WarningMode::Error, || fails_with("x = 9 // 2", "(taking floor division)"));
+	let answer = |meaning: &str| ScriptedAnswers(vec![("floor-or-comment".to_string(), meaning.to_string())]);
+	with_asker(answer("a comment"), || is!("x = 9 // 2\nx", 9));
+	with_asker(answer("floor division"), || is!("x = 9 // 2\nx", 4));
+}

@@ -154,6 +154,28 @@ fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_'
 }
 
+/// The Ask topic of a spaced `a // b`: floor division or a comment
+const FLOOR_OR_COMMENT: &str = "floor-or-comment";
+
+/// The default reading of the text after a spaced `//`, when it could be a divisor: floor division for a number or an
+/// expression (`2`, `(a + b)`, `n + 1`), a comment for a lone word (`// done`); `None` when it can only be a comment:
+/// two words in a row (`note text`) or other characters (quotes, `:`, `!`)
+fn floor_or_comment_default(text: &str) -> Option<usize> {
+	let text = text.trim();
+	let expression_chars = text.chars().all(|c| is_identifier_char(c) || " \t+-*/%()[].,".contains(c));
+	let words: Vec<&str> = text.split_whitespace().collect();
+	let is_word = |token: &&str| token.chars().next().is_some_and(char::is_alphabetic);
+	let prose = words.windows(2).any(|pair| is_word(&pair[0]) && is_word(&pair[1]));
+	if text.is_empty() || !expression_chars || prose {
+		return None;
+	}
+	let lone_word = words.len() == 1 && is_word(&words[0]) && words[0].chars().all(is_identifier_char);
+	Some(if lone_word { COMMENT_READING } else { FLOOR_READING })
+}
+
+const FLOOR_READING: usize = 0;
+const COMMENT_READING: usize = 1;
+
 /// `a // b` (Python) as `(a - a % b) / b`: `%` is Euclidean, so this is floor(a/b) for a positive divisor
 fn floor_division(dividend: Node, divisor: Node) -> Node {
 	let remainder = Node::Key(Box::new(dividend.clone()), Op::Mod, Box::new(divisor.clone()));
@@ -241,6 +263,8 @@ pub struct WaspParser {
 	stops_at_end: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
+	/// Where a spaced `a // b` was read as a comment (asked once, see `spaced_floor_division`)
+	questioned_comment_at: Option<usize>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
@@ -338,6 +362,7 @@ impl WaspParser {
 			stops_at_else: false,
 			stops_at_end: false,
 			times_loops: 0,
+			questioned_comment_at: None,
 			after_function_keyword: false,
 			elvis_operands: 0,
 			functions: Default::default(),
@@ -545,6 +570,38 @@ impl WaspParser {
 		self.current_char() == '/' && self.peek_char(1) == '/' && self.pos > 0 && (is_identifier_char(previous) || matches!(previous, ')' | ']'))
 	}
 
+	/// `a // b` with spaces: Python floor division or a `//` comment? Only asked when `//` follows an operand on its line
+	/// and the rest of the line reads as an expression (`len(xs) // 2`, `(lo + hi) // 2`); prose (`x // note text`) or
+	/// anything else stays a comment. Unanswered it takes floor division, with a warning naming both forms.
+	fn spaced_floor_division(&mut self) -> Result<bool, Node> {
+		if self.questioned_comment_at == Some(self.pos) {
+			return Ok(false);
+		}
+		let Some((written, default)) = self.spaced_floor_candidate() else { return Ok(false) };
+		let readings = vec![reading("floor division", "a//b"), reading("a comment", "a  # note")];
+		let question = format!("is `{written}` floor division or a comment? (`a//b` divides, `# note` or `// note` on its own line comments)");
+		let question = Ask { default, ..Ask::new(FLOOR_OR_COMMENT, question, readings, Fallback::Warning) };
+		let chosen = ask(&question.written(&written).at(self.line_nr, self.column))?;
+		if chosen == COMMENT_READING {
+			self.questioned_comment_at = Some(self.pos);
+		}
+		Ok(chosen == FLOOR_READING)
+	}
+
+	/// A spaced `//` behind an operand on its line whose rest could be a divisor: the text written and the default reading
+	fn spaced_floor_candidate(&self) -> Option<(String, usize)> {
+		if self.current_char() != '/' || self.peek_char(1) != '/' || !matches!(self.prev_char(), ' ' | '\t') {
+			return None;
+		}
+		let operand_before = self.chars[..self.pos].iter().rev().find(|c| !matches!(c, ' ' | '\t'));
+		if !operand_before.is_some_and(|&c| is_identifier_char(c) || matches!(c, ')' | ']')) {
+			return None;
+		}
+		let rest: String = (2..).map(|offset| self.peek_char(offset)).take_while(|&c| !matches!(c, '\n' | '\r' | '\0' | ';')).collect();
+		let default = floor_or_comment_default(rest.trim_start_matches('='))?;
+		Some((format!("//{}", rest.trim_end()), default))
+	}
+
 	fn is_at_line_start(&self) -> bool {
 		// Check if we're at the very beginning or right after whitespace/newline
 		self.pos == 0 || self.prev_char().is_whitespace()
@@ -670,7 +727,8 @@ impl WaspParser {
 				continue;
 			}
 			// // line comment (but not :// URL scheme)
-			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
+			let questioned = self.spaced_floor_candidate().is_some() && self.questioned_comment_at != Some(self.pos);
+			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() && !questioned {
 				self.advance_by(2);
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() { comments.push(text); }
@@ -1558,7 +1616,18 @@ impl WaspParser {
 
 			// Step 3b: Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`
 			let word_division = self.matches_keyword("div");
-			if word_division || self.at_floor_division() {
+			let spaced_division = match self.spaced_floor_division() {
+				Ok(divides) => divides,
+				Err(unanswered) => {
+					while !matches!(self.current_char(), '\n' | '\0') {
+						self.advance(); // the questioned `// …` is consumed with its error
+					}
+					lhs = unanswered;
+					previous_comparand = None;
+					continue;
+				}
+			};
+			if word_division || spaced_division || self.at_floor_division() {
 				let compound = !word_division && self.peek_char(2) == '=';
 				let op = if compound { Op::Assign } else { Op::Div };
 				let (l_bp, r_bp) = op.binding_power();

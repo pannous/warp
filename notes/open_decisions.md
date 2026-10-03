@@ -29,6 +29,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   for a positive divisor, `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment.
   `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
   division is exact, with the hint `n//2`.
+- Spaced `a // b` (fix-floor-ask): `mid = len(items) // 2` was silently a comment (merge sort recursed forever). When
+  `//` follows an operand on its line and the rest of the statement (up to newline or `;`) could be a divisor, it is
+  the Ask `floor-or-comment` (readings: floor division `a//b`, a comment `# note`), fallback Warning. Default: floor
+  division for a number or expression (`// 2`, `// (a + b)`, `//= 3`), a comment for a lone word (`// done`).
+  Prose (two words in a row, `x // note text`) or other characters (quotes, `:`, `!`) stay plain comments, not asked.
+  Under `use strict` the warning is an error.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
