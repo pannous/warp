@@ -96,7 +96,7 @@ impl Lowering<'_> {
 }
 
 /// `(t1 = a; t2 = b; value)`, or just the value without bindings
-fn with_bindings(mut bindings: Vec<Node>, value: Node) -> Node {
+pub(crate) fn with_bindings(mut bindings: Vec<Node>, value: Node) -> Node {
 	if bindings.is_empty() {
 		return value;
 	}
@@ -124,7 +124,7 @@ fn fold_list_at_runtime(name: &str, list: &str, better: &Op) -> Node {
 }
 
 /// A value or arithmetic on values: cheap and side-effect free to repeat in the comparisons
-fn is_plain(node: &Node) -> bool {
+pub(crate) fn is_plain(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Symbol(_) | Node::True | Node::False | Node::Empty => true,
 		Node::Key(left, op, right) => {

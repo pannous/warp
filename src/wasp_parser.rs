@@ -34,6 +34,8 @@ const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
+const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
@@ -841,6 +843,9 @@ impl WaspParser {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
 		}
 
+		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
+			return Some((Op::Similar, word.len()));
+		}
 		// Keywords (4-char)
 		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
 		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
@@ -865,6 +870,7 @@ impl WaspParser {
 			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),
+			('~', '~') => return Some((Op::Similar, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
@@ -893,6 +899,7 @@ impl WaspParser {
 		// Keywords (2-char)
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
+		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
@@ -922,6 +929,7 @@ impl WaspParser {
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
+			'≈' | '⋍' | '~' => Some((Op::Similar, 1)),
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
 			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
@@ -2280,7 +2288,11 @@ impl WaspParser {
 		let (quote_line, quote_column) = self.get_position();
 		self.advance(); // skip opening quote
 
+		let interpolates = quote == '"' && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
 		let mut s = String::new();
+		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
+		let mut template = String::new();
+		let mut is_template = false;
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
@@ -2288,6 +2300,9 @@ impl WaspParser {
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
+				if is_template {
+					return crate::interpolation::template_text(&template);
+				}
 				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
 				if s.chars().count() > 1 {
 					set_hint_position(quote_line, quote_column);
@@ -2302,22 +2317,97 @@ impl WaspParser {
 				}
 				return Node::text(&s);
 			}
-			if ch == '\\' {
-				self.advance();
-				match self.current_char() {
-					'n' => s.push('\n'),
-					't' => s.push('\t'),
-					'r' => s.push('\r'),
-					c => s.push(c),
+			let hole = match ch {
+				'$' if interpolates => self.parse_dollar_hole(),
+				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
+				_ => Ok(None),
+			};
+			match hole {
+				Err(message) => return error(&message),
+				Ok(Some(expression)) => {
+					template.push_str(&format!("${{{expression}}}"));
+					is_template = true;
+					continue;
 				}
+				Ok(None) => {}
+			}
+			let literal = if ch == '\\' {
 				self.advance();
+				let escaped = self.current_char();
+				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
+				match escaped {
+					'n' => '\n',
+					't' => '\t',
+					'r' => '\r',
+					c => c,
+				}
 			} else {
-				s.push(ch);
-				self.advance();
+				ch
+			};
+			self.advance();
+			s.push(literal);
+			match literal {
+				'$' => template.push_str("$$"),
+				c => template.push(c),
 			}
 		}
 	}
 
+	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
+		let (line, column) = self.get_position();
+		let next = self.peek_char(1);
+		let expression = if next == '{' {
+			self.advance_by(2);
+			let expression = self.text_until_closing('{', '}')?;
+			set_hint_position(line, column);
+			norm::interpolation(&format!("${{{expression}}}"), &expression);
+			expression
+		} else if next.is_alphabetic() || next == '_' {
+			self.advance();
+			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+			self.advance_by(name.chars().count());
+			set_hint_position(line, column);
+			norm::interpolation(&format!("${name}"), &name);
+			name
+		} else {
+			return Ok(None);
+		};
+		Ok(Some(expression))
+	}
+
+	/// `\(expr)` inside interpolated text, the canonical hole: its expression
+	fn parse_swift_hole(&mut self) -> Result<String, String> {
+		self.advance_by(2);
+		self.text_until_closing('(', ')')
+	}
+
+	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket
+	fn text_until_closing(&mut self, open: char, close: char) -> Result<String, String> {
+		let start = self.pos;
+		let mut depth = 1;
+		let mut quote: Option<char> = None;
+		loop {
+			let ch = self.current_char();
+			match (ch, quote) {
+				('\0', _) => return Err(format!("unterminated interpolation hole: missing `{close}`")),
+				('\\', Some(_)) => self.advance(),
+				(c, Some(q)) if c == q => quote = None,
+				('"' | '\'', None) => quote = Some(ch),
+				(c, None) if c == open => depth += 1,
+				(c, None) if c == close => {
+					depth -= 1;
+					if depth == 0 {
+						let expression: String = self.chars[start..self.pos].iter().collect();
+						self.advance();
+						return if expression.trim().is_empty() { Err("empty interpolation hole".into()) } else { Ok(expression) };
+					}
+				}
+				_ => {}
+			}
+			self.advance();
+		}
+	}
 	fn parse_number(&mut self) -> Node {
 		let start = self.pos;
 		let number = self.parse_number_value();

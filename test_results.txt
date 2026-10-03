@@ -618,7 +618,6 @@ PASSED:
   ✓ test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ test_math::test_abs_alias
   ✓ test_math::test_absolute_value_arithmetic
-  ✓ test_math::test_arithmetic
   ✓ test_math::test_compound_assignment
   ✓ test_math::test_eval
   ✓ test_math::test_fraction_multiplication
@@ -649,6 +648,7 @@ PASSED:
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
   ✓ test_method_words::test_first_and_last
+  ✓ test_method_words::test_join
   ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do

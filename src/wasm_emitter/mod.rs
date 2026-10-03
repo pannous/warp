@@ -792,6 +792,11 @@ impl WasmGcEmitter {
 		found
 	}
 
+	/// A name that is no variable, global, function or `$n` parameter here
+	fn is_unbound(&self, name: &str) -> bool {
+		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
+	}
+
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		self.emit_type_error(func, format!("undefined variable: {name}"));
 	}
@@ -2213,7 +2218,12 @@ impl WasmGcEmitter {
 		let kind = self.get_type(value);
 		let node = match kind {
 			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
-			// a list variable stays a loud error: tests/test_cast_to_string.rs pins it until the decision on a runtime serializer
+			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
+			Kind::List => {
+				let text = |text: &str| Box::new(Node::Text(text.to_string()));
+				let items = Node::Key(Box::new(join_call(value.clone(), " ")), Op::Add, text("]"));
+				Node::Key(text("["), Op::Add, Box::new(items))
+			}
 			_ => {
 				self.emit_type_error(func, format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()));
 				return;
@@ -3577,7 +3587,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
-	let node = crate::injection::lower_templates(node)?;
+	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
 		return Err(node);
