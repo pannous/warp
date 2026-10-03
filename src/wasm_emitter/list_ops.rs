@@ -517,6 +517,8 @@ pub const RUNTIME_ERRORS: [&str; 19] = [
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
+/// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
+pub const TEXT_AS_FLOAT: &str = "text_as_float";
 /// The educate-once topic of `"ab"*2`, whose explicit form is `2 times "ab"`
 const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
@@ -564,6 +566,103 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[
 				I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalGet(value), I::LocalGet(negative), I::Select,
 			]);
+		});
+	}
+
+	pub(super) fn emit_text_as_float(&mut self) {
+		if !self.should_emit_function(TEXT_AS_FLOAT) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let float_box = self.type_manager.f64_box_type;
+		let mut locals = vec![ValType::I32; 4];
+		locals.push(ValType::F64);
+		locals.extend([ValType::I32; 4]);
+		self.runtime_function(TEXT_AS_FLOAT, vec![node_ref], vec![ValType::F64], locals, |s, f| {
+			let (pointer, end, negative, digit, value, scale_digits, digits, exponent, exponent_negative) = (1, 2, 3, 4, 5, 6, 7, 8, 9);
+			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
+			let byte = [I::LocalGet(pointer), I::I32Load8U(BYTE)];
+			let advance = [I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer)];
+			let kind = |f: &mut Function| {
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And]);
+			};
+			// a number node converts as it is
+			kind(f);
+			Self::emit_list(f, &[I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty)]);
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Return, I::End]);
+			kind(f);
+			Self::emit_list(f, &[I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
+			s.call(f, "get_int_value");
+			Self::emit_list(f, &[I::F64ConvertI64S, I::Return, I::End]);
+			s.emit_text_bounds(f, pointer, end);
+			// a sign
+			Self::emit_list(f, &at_end);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &byte);
+			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative), I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I::End]);
+			// digits, with a point among them: value collects them all, scale_digits counts those after the point
+			let digits_loop = |f: &mut Function, after_point: bool| {
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				Self::emit_list(f, &at_end);
+				f.instruction(&I::BrIf(1));
+				Self::emit_list(f, &byte);
+				Self::emit_list(f, &[I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU, I::BrIf(1)]);
+				Self::emit_list(f, &[I::LocalGet(value), I::F64Const(10.0.into()), I::F64Mul, I::LocalGet(digit), I::F64ConvertI32U, I::F64Add, I::LocalSet(value)]);
+				Self::emit_list(f, &[I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits)]);
+				if after_point {
+					Self::emit_list(f, &[I::LocalGet(scale_digits), I32Const(1), I::I32Add, I::LocalSet(scale_digits)]);
+				}
+				Self::emit_list(f, &advance);
+				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			};
+			digits_loop(f, false);
+			Self::emit_list(f, &at_end);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &byte);
+			Self::emit_list(f, &[I32Const('.' as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &advance);
+			digits_loop(f, true);
+			Self::emit_list(f, &[I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(digits), I::I32Eqz]);
+			s.emit_fail_if(f, "invalid_number");
+			// an exponent: e or E, a sign, digits
+			Self::emit_list(f, &at_end);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &byte);
+			Self::emit_list(f, &[I32Const(0x20), I::I32Or, I32Const('e' as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &advance);
+			Self::emit_list(f, &at_end);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &byte);
+			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(exponent_negative), I::LocalGet(exponent_negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I32Const(0), I::LocalSet(digits)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &at_end);
+			f.instruction(&I::BrIf(1));
+			Self::emit_list(f, &byte);
+			Self::emit_list(f, &[I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(exponent), I32Const(10), I::I32Mul, I::LocalGet(digit), I::I32Add, I::LocalSet(exponent), I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits)]);
+			Self::emit_list(f, &advance);
+			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(digits), I::I32Eqz]);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &[I::End, I::End]);
+			// nothing may follow
+			Self::emit_list(f, &at_end);
+			Self::emit_list(f, &[I::I32Eqz]);
+			s.emit_fail_if(f, "invalid_number");
+			// the power of ten: the written exponent less the digits after the point, applied by repeated * or / 10
+			Self::emit_list(f, &[I32Const(0), I::LocalGet(exponent), I::I32Sub, I::LocalGet(exponent), I::LocalGet(exponent_negative), I::Select]);
+			Self::emit_list(f, &[I::LocalGet(scale_digits), I::I32Sub, I::LocalSet(exponent)]);
+			for (more, step, towards_zero) in [(I::I32GtS, I::F64Mul, I::I32Sub), (I::I32LtS, I::F64Div, I::I32Add)] {
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(exponent), I32Const(0), more, I::I32Eqz, I::BrIf(1)]);
+				Self::emit_list(f, &[I::LocalGet(value), I::F64Const(10.0.into()), step, I::LocalSet(value)]);
+				Self::emit_list(f, &[I::LocalGet(exponent), I32Const(1), towards_zero, I::LocalSet(exponent), I::Br(0), I::End, I::End]);
+			}
+			Self::emit_list(f, &[I::F64Const(0.0.into()), I::LocalGet(value), I::F64Sub, I::LocalGet(value), I::LocalGet(negative), I::Select]);
 		});
 	}
 
