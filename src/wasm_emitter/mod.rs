@@ -88,7 +88,7 @@ use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
-use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, KIND_MASK, RawFieldValue, TypeDef, TypeRegistry};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
 #[cfg(feature = "native")]
@@ -103,6 +103,9 @@ use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
+
+/// Memory access for single bytes (strings, utf8), shared by the emitter modules
+pub(crate) const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArithmeticWrap {
@@ -986,7 +989,7 @@ impl WasmGcEmitter {
 		Self::emit_list(&mut func, &[
 			Instruction::LocalGet(0),
 			Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
-			Instruction::I64Const(0xFF), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
+			Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
 			Instruction::If(BlockType::Empty),
 		]);
 		self.emit_runtime_error(&mut func, "not_an_int");

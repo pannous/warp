@@ -12,7 +12,7 @@
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
-use super::WasmGcEmitter;
+use super::{WasmGcEmitter, BYTE};
 use num_bigint::BigInt;
 use num_traits::{One, Pow};
 use wasm_encoder::*;
@@ -26,7 +26,6 @@ const INT_TEXT: &str = "int_text";
 const DECIMAL_BASE: i64 = 10;
 /// A ratio whose denominator has no other prime factors is a terminating decimal
 const DECIMAL_PRIMES: [i64; 2] = [2, 5];
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 impl WasmGcEmitter {
 	/// Decimal literal as the exact value of its shortest round-trip digits: `0.1` → 1/10

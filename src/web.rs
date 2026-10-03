@@ -7,7 +7,7 @@ use crate::diagnostic::{self, Ask, Asker, Fallback};
 use crate::extensions::numbers::Number;
 use crate::meta::{Dada, DataType};
 use crate::node::{Bracket, Node, Separator};
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use num_bigint::{BigInt, Sign};
 use serde_json::{json, Value};
 use std::cell::RefCell;
@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 const KIND_BITS: u32 = 8;
-const KIND_MASK: i64 = 0xFF;
 /// The answer that acknowledges an `educate_once` note, stored under `ack:<topic>` like an answer
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
 
