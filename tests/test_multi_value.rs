@@ -77,3 +77,22 @@ fn test_optimized_multi_value_division() {
 	let optimized = WasmOptimizer::library(OptimizationMode::Speed).optimize(&module.bytes).unwrap();
 	assert_eq!(warp::wasm_reader::read_bytes(&optimized).unwrap(), int("60308641996265432088"));
 }
+
+#[test]
+fn test_int_divmod_returns_both_results() {
+	let module = compile(BIG_DIVISION).unwrap_or_else(|error| panic!("{error:?}"));
+	assert_eq!(result_count(&module.bytes, "int_divmod_slow"), Some(2));
+}
+
+#[test]
+fn test_big_exact_division_results_unchanged() {
+	is!("123456789012345678901234567890//-1000", int("-123456789012345678901234567"));
+	is!("-123456789012345678901234567890//-1000", int("123456789012345678901234568"));
+	is!("123456789012345678901234567890//98765432109876543210", 1249999988);
+	is!("-123456789012345678901234567890//98765432109876543210", -1249999989);
+	is!("864197523086419752308641975230 / 7", int("123456789012345678901234567890"));
+	is!("x = 123456789012345678901234567891 / 2; x * 2", int("123456789012345678901234567891"));
+	is!("(123456789012345678901234567891 / 2) * 4 / 2", int("123456789012345678901234567891"));
+	is!("98765432109876543210 / 0 > 10^40", true);
+	is!("x = 98765432109876543210 / 3; x * 3", int("98765432109876543210"));
+}
