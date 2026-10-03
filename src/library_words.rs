@@ -342,6 +342,15 @@ impl Lowering {
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
+			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
+			Node::List(items, bracket, separator) if keyword_definition_parameters(&items).is_some() => {
+				let parameters = keyword_definition_parameters(&items).expect("guarded");
+				let scope = self.parameters.borrow().len();
+				self.parameters.borrow_mut().extend(parameters);
+				let items = items.into_iter().map(|item| self.expand(item)).collect();
+				self.parameters.borrow_mut().truncate(scope);
+				Node::List(items, bracket, separator)
+			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				if let Some(walk) = self.for_over_map(&items) {
@@ -741,4 +750,31 @@ pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> N
 
 fn is_marker(node: &Node, marker: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if name == marker)
+}
+
+/// The untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them in a group
+fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
+	let (keyword, head) = match items {
+		[keyword, head, _body] => (keyword, head),
+		// `def ((f (m)) {…})`: the head and the body as one group
+		[keyword, definition] => match definition.drop_meta() {
+			Node::List(parts, Bracket::Round, _) if parts.len() == 2 => (keyword, &parts[0]),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
+	if !crate::operators::is_function_keyword(keyword) {
+		return None;
+	}
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let parameters = head_items.iter().skip(1).flat_map(|item| match item.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		other => vec![other.clone()],
+	});
+	Some(parameters.filter_map(|parameter| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, Op::Assign, _) => Some(name.name()),
+		_ => None,
+	}).collect())
 }
