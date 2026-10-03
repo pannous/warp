@@ -1,6 +1,6 @@
 // WASM multi-value: runtime helpers that produce two results return both on the stack (notes/multi_value.md)
 use warp::extensions::numbers::Number;
-use warp::wasm_emitter::{compile, eval};
+use warp::wasm_emitter::compile;
 use warp::{is, Node};
 use wasmparser::{CompositeInnerType, Name, NameSectionReader, Parser, Payload, TypeRef};
 
