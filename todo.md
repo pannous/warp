@@ -78,7 +78,7 @@ The supervisor should remove the DONE elements after a while.
 - `type(x)` inside a function body: "undefined variable: type" (works at main level). (samples 2026-10-03)
 - `h=(1,2); h.0` stays the data `(1 2).0`: tuple fields by number are not read (h#1 works). (samples 2026-10-03)
 - No `pop` word: `s.pop()` → "undefined function: pop". (samples 2026-10-03)
-- libm without `import … from 'm'` is silently wrong at run time: `x=random(); sin(x)` → ø, `def f(x:float):=sin(x); f(0.5)` → 0.5 (the argument). Only constant `sin(0.5)` works (answered at compile time). With the import both work. Should link libm implicitly or fail loudly. (samples-2 2026-10-03)
+- DONE libm without `import … from 'm'` is silently wrong at run time: `x=random(); sin(x)` → ø, `def f(x:float):=sin(x); f(0.5)` → 0.5 (the argument). Only constant `sin(0.5)` works (answered at compile time). With the import both work. Should link libm implicitly or fail loudly. (samples-2 2026-10-03)
 - Since samples-2, get_int_value reads a character as its code point, so `int('5')` is 53 (like `'5' as int`), no longer "not an int". Taking the digit instead is open (Interviewer). (samples-2 2026-10-03)
 - `round(x, 3)` (digits) stays the unevaluated data `(round x 3)`: no rounding to n digits, and no error. samples/neural_net.wasp uses `output.round(3)`. (samples-2 2026-10-03)
 - The CLI binary `shared-target/debug/warp` is not hashed per checkout: another worktree's build overwrites it between your build and your run (copy it right after building). (samples 2026-10-03)
