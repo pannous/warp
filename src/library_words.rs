@@ -30,7 +30,7 @@ const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 17] = [
+const SYNONYMS: [(&str, &[&str]); 20] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -48,6 +48,9 @@ const SYNONYMS: [(&str, &[&str]); 17] = [
 	(SLICE, &[]),
 	(COPY, &["clone"]),
 	("replace", &[]),
+	(IS_DIGIT, &["isdigit"]),
+	(IS_ALPHA, &["is_letter", "isalpha"]),
+	("is_alphanumeric", &["is_alnum", "isalnum"]),
 ];
 const SUM: &str = "sum";
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -68,14 +71,23 @@ const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
+/// Character tests (ASCII), `c.is_digit()`; a character compares by its code point. Templates are not lowered again,
+/// so is_alphanumeric spells out both tests instead of calling the words
+macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
+macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
 /// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 4] = [
+const EXPANDED_WORDS: [(&str, usize, &str); 7] = [
 	("first", 1, "word_tmp#1"),
 	("last", 1, "word_tmp#(count(word_tmp))"),
 	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
 	("replace", 3, "join(split(word_tmp, word_argument_2), word_argument_3)"),
+	(IS_DIGIT, 1, digit_test!()),
+	(IS_ALPHA, 1, letter_test!()),
+	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
+const IS_DIGIT: &str = "is_digit";
+const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 const TRY_TEMPORARY: &str = "try_tmp";
 const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";

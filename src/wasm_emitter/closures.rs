@@ -135,13 +135,18 @@ impl WasmGcEmitter {
 			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.f64_box_type)));
 			func.instruction(&I::StructGet { struct_type_index: self.type_manager.f64_box_type, field_index: 0 });
 		} else if kind == Kind::Codepoint {
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::I31));
-			func.instruction(&I::I31GetU);
-			func.instruction(&I::I64ExtendI32U);
+			self.emit_codepoint_of_node(func);
 		} else {
 			self.emit_call(func, "get_int_value");
 		}
+	}
+
+	/// Stack [Codepoint node] → [i64 code point]
+	pub(super) fn emit_codepoint_of_node(&self, func: &mut Function) {
+		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefCastNonNull(HeapType::I31));
+		func.instruction(&I::I31GetU);
+		func.instruction(&I::I64ExtendI32U);
 	}
 
 	/// Is `name` a helper `closure_call_n` whose body the emitter writes
