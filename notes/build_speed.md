@@ -20,11 +20,7 @@ the supervisor runs the one full suite before merging.
 3. Linker: mold is Linux-only; on macOS Apple's ld-prime (Xcode 15+) is already fast. `ld64.lld` is installed
    (~/.swiftly/bin) and can be tried with `-C link-arg=-fuse-ld=lld` in `[target.aarch64-apple-darwin] rustflags`;
    measure before adopting.
-4. Nightly frontend parallelism: `RUSTFLAGS="-Zthreads=8"` (parallel rustc front end) — helps the big warp crate.
-5. `cargo build --timings` once to see which crates dominate (likely wasmtime/cranelift, wasmer, wasmedge).
-6. Features: the three runtime backends (wasmtime, wasmer, wasmedge) are the heavy deps; builds and agents that only
+4. `cargo build --timings` once to see which crates dominate (likely wasmtime/cranelift, wasmer, wasmedge).
+5. Features: the three runtime backends (wasmtime, wasmer, wasmedge) are the heavy deps; builds and agents that only
    need wasmtime should not pass `--all-features`.
-7. Toolchain: nightly is 1.96 from 2026-03-19 — update (`rustup update nightly`), then run the full suite once.
-8. Cranelift codegen backend for dev (`-Zcodegen-backend=cranelift`): fast debug codegen, but test it against the
-   wasm runtime crates first (SIMD/intrinsics gaps); optional.
 Not useful here: splitting crates is a large refactor for unclear gain; debug-info tuning is already done.
