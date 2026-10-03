@@ -56,6 +56,7 @@ const ACKNOWLEDGED_PREFIX: &str = "ack:";
 thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
@@ -81,9 +82,15 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
 			warnings.iter().for_each(|warning| eprintln!("warning: {warning}"));
+			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
 			Ok(())
 		}
 	}
+}
+
+/// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
+pub fn take_warnings() -> Vec<Diagnostic> {
+	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
 }
 
 /// A warning the running program reports with `warning(message)`

@@ -17,6 +17,7 @@ mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
 mod node_emitter;
+mod reflection;
 mod string_table;
 mod type_manager;
 pub(crate) mod wasi_emitter;
@@ -51,6 +52,10 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 ];
 
 /// An index out of range in a program with an exclusive range is often an end the writer meant to include
+/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
+pub const TRAP_DETAIL: &str = "trap_detail";
+/// How a trapped run carries that value into its error: `trap detail: <value>`
+pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
 const INDEX_OUT_OF_RANGE: &str = "index out of range";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
 
@@ -75,12 +80,15 @@ use crate::context::{Context, UserFunctionDef};
 use crate::local::Local;
 use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, Signature};
+#[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
 use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
+#[cfg(feature = "native")]
 use crate::util::gc_engine;
+#[cfg(feature = "native")]
 use crate::wasm_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
@@ -928,6 +936,9 @@ impl WasmGcEmitter {
 		self.emit_equality_ops();
 		// Emit helper functions
 		self.emit_getters();
+		if self.config.emit_reflection {
+			self.emit_reflection();
+		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
@@ -1914,7 +1925,7 @@ impl WasmGcEmitter {
 		const TRAP_DETAIL_GLOBAL: &str = "trap·detail"; // not a wasp name, so no user global meets it
 		if !self.ctx.user_globals.contains_key(TRAP_DETAIL_GLOBAL) {
 			let index = self.declare_mutable_global(Kind::Empty);
-			self.exports.export(crate::wasm_reader::TRAP_DETAIL, ExportKind::Global, index);
+			self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
 			self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
 		}
 		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
@@ -3453,6 +3464,7 @@ impl WasmGcEmitter {
 	}
 }
 
+#[cfg(feature = "native")]
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	use wasmtime::{Linker, Module, Val};
@@ -3704,13 +3716,12 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 }
 
 fn eval_program(node: Node) -> Node {
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
-
 	let node = match lower_for_emission(node) {
 		Ok(node) => node,
 		Err(final_value) => return final_value,
 	};
 
+	#[cfg(feature = "native")]
 	if let Some(wasm_bytes) = raw_struct_module(&node) {
 		match run_raw_struct(&wasm_bytes) {
 			Ok(result) => return result,
@@ -3719,12 +3730,16 @@ fn eval_program(node: Node) -> Node {
 	}
 
 	// Fallback to standard Node encoding
-	let CompiledModule { bytes, needs_host, needs_wasi, needs_ffi } = match emit_module(&node) {
-		Ok(module) => module,
-		Err(type_error) => return type_error,
-	};
+	match emit_module(&node) {
+		Ok(module) => run_module(module),
+		Err(type_error) => type_error,
+	}
+}
 
-	// Use appropriate linker based on imports needed
+/// Run a compiled program with the linker its imports need
+#[cfg(feature = "native")]
+fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
+	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
 	let result = if needs_ffi {
 		read_bytes_with_ffi(&bytes)
 	} else if needs_wasi {
@@ -3737,6 +3752,12 @@ fn eval_program(node: Node) -> Node {
 	result.unwrap_or_else(failed_run)
 }
 
+/// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
+#[cfg(not(feature = "native"))]
+fn run_module(module: CompiledModule) -> Node {
+	crate::web::run_in_host(&module.bytes)
+}
+
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget
 pub fn out_of_fuel(steps: u64) -> Node {
 	crate::node::error(&format!(
@@ -3746,20 +3767,26 @@ pub fn out_of_fuel(steps: u64) -> Node {
 
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
+#[cfg(feature = "native")]
 fn failed_run(failure: anyhow::Error) -> Node {
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
 		Some(trap) => trap,
 	};
-	let trace = format!("{:?}", failure);
+	trap_error(&format!("{:?}", failure), trap.to_string())
+}
+
+/// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
+/// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
+pub fn trap_error(trace: &str, trap: String) -> Node {
 	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
 		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == crate::node::ATTRIBUTE_MARK).collect();
 		format!("no field {name}")
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		match trace.split_once(crate::wasm_reader::TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
+		match trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
 			Some(value) => format!("no case for {label} = {value}"),
 			None => format!("no case for {label}"),
 		}
@@ -3770,6 +3797,6 @@ fn failed_run(failure: anyhow::Error) -> Node {
 	});
 	let runtime_error = missing_field.or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
-	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
+	let message = runtime_error.or(exact_trap).unwrap_or(trap);
 	crate::node::error(&message)
 }

@@ -11,15 +11,19 @@ pub use extensions::strings::*;
 pub use extensions::utils::*;
 pub mod smarty;
 pub mod util; // reexported for tests
+#[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analyzer;
 pub mod compiler;
 pub mod node;
+#[cfg(feature = "native")]
 pub mod run;
 pub mod type_kinds;
+#[cfg(feature = "native")]
 pub mod gc_traits;
 pub mod context;
 pub mod wasm_emitter;
+#[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod wasm_optimizer;
 pub mod wasp_parser;
@@ -57,8 +61,10 @@ pub mod phrase_words;
 pub mod declarations;
 pub mod fixed_width;
 pub mod modules;
+#[cfg(feature = "native")]
 pub mod package_tools;
 pub mod versions;
+pub mod web;
 pub mod ambiguous_forms;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
@@ -80,15 +86,19 @@ pub use meta::{Dada, LineInfo, DataType};
 // WASM
 pub use wasm_emitter::{WasmGcEmitter};
 // Host functions
+#[cfg(feature = "native")]
 pub use host::{HostState, link_host_functions, create_host_linker};
 // Functions
 pub use function::{Function, FunctionRegistry, Signature, Arg, ABI, kind_to_valtype};
 // Local (unified struct for variables)
 pub use local::Local;
 // Legacy GcObject for backward compatibility (3-field Node layout)
+#[cfg(feature = "native")]
 pub use wasm_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
+#[cfg(feature = "native")]
 pub use gc_traits::{register_gc_types_from_wasm, FromVal, ToVal, FieldIndex, GcStructWrapper, GcReadable};
 // GcComparable trait for Node comparison with wasm_struct types
+#[cfg(feature = "native")]
 pub use node::GcComparable;

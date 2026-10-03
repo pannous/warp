@@ -125,6 +125,7 @@ impl fmt::Display for Dada {
 impl fmt::Debug for Dada {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		// Special handling for GcObject to show actual values
+		#[cfg(feature = "native")]
 		if self.type_name.contains("GcObject") {
 			if let Some(gc_obj) = self.downcast_ref::<crate::gc_traits::GcObject>() {
 				return write!(f, "{:?}", gc_obj);

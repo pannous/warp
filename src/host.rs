@@ -19,11 +19,14 @@ pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 use crate::extensions::utils::download_within;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
+#[cfg(feature = "native")]
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
+#[cfg(feature = "native")]
 use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};
 
+#[cfg(feature = "native")]
 /// Memory allocator state for host functions
 pub struct HostState {
 	/// Next free offset in linear memory for string allocation
@@ -32,12 +35,14 @@ pub struct HostState {
 	pending_result: Option<Node>,
 }
 
+#[cfg(feature = "native")]
 impl Default for HostState {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
+#[cfg(feature = "native")]
 impl HostState {
 	pub fn new() -> Self {
 		HostState {
@@ -55,6 +60,7 @@ impl HostState {
 	}
 }
 
+#[cfg(feature = "native")]
 /// Read a string from WASM linear memory
 pub fn read_string_from_memory(memory: &Memory, store: &impl wasmtime::AsContext, ptr: u32, len: u32) -> Result<String> {
 	let mut buf = vec![0u8; len as usize];
@@ -63,12 +69,14 @@ pub fn read_string_from_memory(memory: &Memory, store: &impl wasmtime::AsContext
 }
 
 /// Write a string to WASM linear memory using Caller, returns (ptr, len)
+#[cfg(feature = "native")]
 fn write_string_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, s: &str) -> Result<(u32, u32)> {
 	write_bytes_to_caller(memory, caller, s.as_bytes())
 }
 
 /// Copy bytes into the module's memory: from its text heap when it exports one (the same rule as its own
 /// emit_text_allocation: fresh pages past the current memory when the heap is unset or full), else from HostState
+#[cfg(feature = "native")]
 fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
 	let len = bytes.len() as u32;
 	let heap = match caller.get_export(TEXT_HEAP_EXPORT) {
@@ -100,6 +108,7 @@ fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, by
 	Ok((ptr, len))
 }
 
+#[cfg(feature = "native")]
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
 fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
@@ -123,6 +132,7 @@ fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len:
 	}
 }
 
+#[cfg(feature = "native")]
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	let engine = gc_engine();
@@ -154,6 +164,7 @@ pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
 	Ok(content)
 }
 
+#[cfg(feature = "native")]
 /// Fetch the URL in WASM memory and write the result back: (ptr, len) of the body, (ptr, -len) of the failure reason
 fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout: Duration) -> (i32, i32) {
 	let memory = match caller.get_export("memory") {
@@ -221,6 +232,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	}
 }
 
+#[cfg(feature = "native")]
 /// Link host functions into a wasmtime Linker
 pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> Result<()> {
 	// host.fetch(url_ptr: i32, url_len: i32) -> (result_ptr: i32, result_len: i32)
@@ -324,6 +336,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	Ok(())
 }
 
+#[cfg(feature = "native")]
 /// Create a linker with host functions pre-linked
 pub fn create_host_linker(engine: &Engine) -> Result<Linker<HostState>> {
 	let mut linker = Linker::new(engine);
@@ -331,7 +344,7 @@ pub fn create_host_linker(engine: &Engine) -> Result<Linker<HostState>> {
 	Ok(linker)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod tests {
 	use super::*;
 

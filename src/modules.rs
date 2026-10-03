@@ -415,6 +415,9 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 		clone(name, url, &cached, Some(tag))?;
 	}
 	std::fs::create_dir_all(packages).map_err(|failure| format!("package {name}: {failure}"))?;
+	#[cfg(not(unix))]
+	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
+	#[cfg(unix)]
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
 		_ => Ok(link),

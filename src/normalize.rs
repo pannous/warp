@@ -50,6 +50,7 @@ pub struct CapturedHint {
     pub canonical: String,
     /// `line:column`, empty when the emitting stage knows no position
     pub position: String,
+    pub reason: String,
 }
 
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
@@ -319,7 +320,7 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {
-            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone() });
+            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string() });
         }
     });
     if pos.is_empty() {

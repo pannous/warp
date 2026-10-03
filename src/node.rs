@@ -5,6 +5,7 @@ use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{CloneAny, Dada, DataType, LineInfo};
+#[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
 use regex::Regex;
 use serde::ser::SerializeStruct;
@@ -297,6 +298,7 @@ impl Node {
 	}
 
 	/// Convert compact 3-field WASM GC object to Node
+	#[cfg(feature = "native")]
 	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
 		// Read the kind field (i64), lower 8 bits are the tag
@@ -421,6 +423,7 @@ impl Node {
 	}
 
 	/// Read a list from compact GC representation
+	#[cfg(feature = "native")]
 	fn read_list_from_gc(obj: &GcObject, bracket: Bracket, _kind: i64) -> Node {
 		let mut items = Vec::new();
 
@@ -1859,6 +1862,7 @@ impl PartialEq<Node> for serde_json::Value {
 
 /// Trait for types that can be compared with Node::Data(GcObject)
 /// Used by wasm_struct! macro to enable `is!("code", struct_value)` comparisons
+#[cfg(feature = "native")]
 pub trait GcComparable {
 	/// Try to create Self from a GcObject
 	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self> where Self: Sized;
@@ -1866,6 +1870,7 @@ pub trait GcComparable {
 	fn gc_eq(&self, other: &Self) -> bool;
 }
 
+#[cfg(feature = "native")]
 impl Node {
 	/// Compare with a GcComparable type by extracting from Data variant
 	pub fn eq_gc<T: GcComparable + fmt::Debug>(&self, other: &T) -> bool {
@@ -1882,6 +1887,7 @@ impl Node {
 
 /// Blanket impl: Node can be compared with any GcComparable type
 /// This enables `assert_eq!(result, alice)` where alice is a wasm_struct! type
+#[cfg(feature = "native")]
 impl<T: GcComparable + fmt::Debug> PartialEq<T> for Node {
 	fn eq(&self, other: &T) -> bool {
 		self.eq_gc(other)

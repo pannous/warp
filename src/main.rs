@@ -50,6 +50,7 @@ pub mod fixed_width;
 pub mod modules;
 pub mod package_tools;
 pub mod versions;
+pub mod web;
 pub mod ambiguous_forms;
 use std::env;
 use std::fs;

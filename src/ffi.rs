@@ -10,9 +10,11 @@
 // 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
 use anyhow::Result;
+#[cfg(feature = "native")]
 use libloading::Library;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+#[cfg(feature = "native")]
 use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
 /// libm f64 functions linked by link_ffi_functions, with their arity.
@@ -534,6 +536,7 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 }
 
 /// Link FFI functions into a wasmtime linker
+#[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
     use wasmtime::ValType;
 
@@ -840,9 +843,11 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 // ============================================================================
 
 /// Global cache of loaded dynamic libraries
+#[cfg(feature = "native")]
 static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>>> = OnceLock::new();
 
 /// Get or load a dynamic library
+#[cfg(feature = "native")]
 fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
     let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     let mut guard = cache.lock().ok()?;
@@ -864,6 +869,7 @@ fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
 }
 
 /// Get possible paths for a library
+#[cfg(feature = "native")]
 fn get_library_paths(lib_name: &str) -> Vec<String> {
     let mut paths = Vec::new();
 
@@ -887,6 +893,7 @@ fn get_library_paths(lib_name: &str) -> Vec<String> {
 }
 
 /// Normalized parameter type for signature matching
+#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum ParamType {
     I32,
@@ -897,6 +904,7 @@ enum ParamType {
 }
 
 /// Normalized return type for signature matching
+#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum RetType {
     Void,
@@ -908,6 +916,7 @@ enum RetType {
 }
 
 /// Map C type string to normalized ParamType
+#[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -924,6 +933,7 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
 }
 
 /// Map C type string to normalized RetType
+#[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -941,6 +951,7 @@ fn c_type_to_ret_type(c_type: &str) -> RetType {
 }
 
 /// Map C type string to wasmtime ValType
+#[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -957,6 +968,7 @@ fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
 }
 
 /// Link all functions from a library discovered through header reflection
+#[cfg(feature = "native")]
 pub fn link_dynamic_library(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -992,6 +1004,7 @@ pub fn link_dynamic_library(
 }
 
 /// Link a single function from a parsed header signature
+#[cfg(feature = "native")]
 fn link_single_function(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -1038,6 +1051,7 @@ fn link_single_function(
 }
 
 /// Generate a signature key string for dispatch
+#[cfg(feature = "native")]
 fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
     let mut key = String::new();
     for p in params {
@@ -1062,6 +1076,7 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
 }
 
 /// Create FFI wrapper with typed function pointer call
+#[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
 fn create_ffi_wrapper(
     linker: &mut Linker<FfiState>,
@@ -1247,6 +1262,7 @@ fn create_ffi_wrapper(
 
 /// Link all dynamic libraries required by a WASM module's imports
 /// Scans the module for import statements and links matching libraries via reflection
+#[cfg(feature = "native")]
 pub fn link_module_libraries(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -1283,6 +1299,7 @@ pub fn link_module_libraries(
 }
 
 /// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
+#[cfg(feature = "native")]
 fn create_generic_ffi_wrapper(
     linker: &mut Linker<FfiState>,
     lib_name: &str,
@@ -1338,6 +1355,7 @@ fn create_generic_ffi_wrapper(
 }
 
 /// Get pointer into WASM linear memory
+#[cfg(feature = "native")]
 fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) -> *const u8 {
     if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
         unsafe { memory.data_ptr(&caller).add(offset) }
@@ -1348,6 +1366,7 @@ fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) ->
 
 /// Call native function with up to 8 arguments
 /// Uses platform calling convention (ARM64/x86_64)
+#[cfg(feature = "native")]
 #[inline(never)]
 unsafe fn call_native_function(func_ptr: usize, args: &[u64; 8], arg_count: usize) -> u64 {
     // Cast to function pointer type based on arg count
