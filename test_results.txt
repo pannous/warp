@@ -606,6 +606,7 @@ PASSED:
   ✓ test_key_lookup::test_missing_key_is_an_error
   ✓ test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ test_key_lookup::test_text_value_is_looked_up
+  ✓ test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
   ✓ test_kitchensink::test_kitchensink_all_node_types
   ✓ test_kitchensink::test_kitchensink_complex_tree
   ✓ test_kitchensink::test_kitchensink_wasmtime_execution
@@ -694,11 +695,11 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
+  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
-  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -951,6 +952,8 @@ PASSED:
   ✓ test_records_classes::an_optional_field_defaults_to_null
   ✓ test_records_classes::record_stays_usable_as_a_variable_name
   ✓ test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ test_runtime_text_as_int::a_text_variable_converts_to_int
+  ✓ test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ test_samples::test_ackermann
   ✓ test_samples::test_collatz
   ✓ test_samples::test_factorial
@@ -1525,4 +1528,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1520 passed, 0 failed, 1520 total tested
+58 ignored, 1523 passed, 0 failed, 1523 total tested
