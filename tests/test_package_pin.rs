@@ -64,6 +64,7 @@ fn a_changed_clone_stands_in_for_the_pin() {
 /// The analyzer asks for an FFI signature of every name it meets; the system headers are parsed once per process
 #[test]
 fn header_signatures_are_parsed_once() {
+	crate::requires!(crate::common::MACOS_C_HEADERS);
 	let first = warp::ffi::get_signatures_from_headers("m");
 	assert!(first.contains_key("sqrt"));
 	assert!(std::ptr::eq(first, warp::ffi::get_signatures_from_headers("m")));
