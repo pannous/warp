@@ -8,6 +8,9 @@ Workflow that worked:
   ~160 on 10 cores; ~/dev/bin/claude-remote.sh now refuses to spawn while load >= cores.
 - Dependent fixes: publish an integration branch and let the next fixers rebase onto it, merge in dependency order.
 
+- Everyone builds into the ONE shared target dir from ~/.cargo/config.toml (see notes/build_speed.md); per-agent
+  CARGO_TARGET_DIRs cost ~280 GB in this round.
+
 Pitfalls seen:
 - A worker's test passed only because the shared checkout held other agents' uncommitted edits (sorting sample);
   only a clean export proves anything.
