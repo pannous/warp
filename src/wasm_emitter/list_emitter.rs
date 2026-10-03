@@ -9,10 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 15] = [
+const BUILTIN_CALLS: [&str; 16] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM,
 ];
 
 const PRINT: &str = "print";
@@ -232,6 +232,9 @@ impl WasmGcEmitter {
 			return;
 		}
 
+		if let Some((list, sum_loop)) = super::list_dispatch::list_sum_call(items) {
+			return self.emit_list_sum(func, list, sum_loop, super::list_dispatch::Wanted::Node);
+		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::analyzer::ZERO_FILL_CALL {
 				self.emit_numeric_value(func, count);
@@ -511,11 +514,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `x = v`, `x += v` to a float variable: float arithmetic also in a loop body
 	fn is_float_assignment(&self, item: &Node) -> bool {
 		match item.drop_meta() {
-			Node::Key(left, Op::Define | Op::Assign, _) => {
-				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
-			}
+			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
 			_ => false,
 		}
 	}

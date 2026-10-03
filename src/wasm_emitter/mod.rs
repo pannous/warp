@@ -1442,6 +1442,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	fn is_float_variable(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+	}
+
 	fn emit_compound_assign(
 		&mut self,
 		func: &mut Function,
@@ -2569,6 +2573,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
 			return;
 		}
@@ -2930,6 +2937,9 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
@@ -2984,6 +2994,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// Arithmetic operators with float
+			// `s += x` on a float variable, also as a statement of a loop body
+			Node::Key(left, op, right) if op.is_compound_assign() && self.is_float_variable(left) => {
+				self.emit_compound_assign(func, left, op, right, true);
+			}
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
@@ -3033,6 +3047,7 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
 				self.emit_float_value(func, value);
 			}
+			Node::Key(list, Op::Hash, index) if self.is_typed_list(list) => self.emit_typed_element_float(func, list, index),
 			Node::Key(_, Op::As, _) => {
 				self.emit_numeric_value(func, node);
 				self.emit_int_to_f64(func, None);
@@ -3260,7 +3275,7 @@ impl WasmGcEmitter {
 
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
-			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList")];
+			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
 		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
 
@@ -3279,6 +3294,7 @@ impl WasmGcEmitter {
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
+			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
 		];
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
