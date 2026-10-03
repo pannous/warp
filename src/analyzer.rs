@@ -2239,8 +2239,9 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Kind {
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
@@ -2309,7 +2310,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
 }
 
@@ -2412,7 +2413,14 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
-	refine_return_kinds(ctx);
+	refine_return_kinds(ctx, &declared_globals(node));
+}
+
+/// The program's `global` declarations with their kinds
+fn declared_globals(program: &Node) -> HashMap<String, Local> {
+	let mut scope = Scope::new();
+	collect_variables(program, &mut scope);
+	scope.globals
 }
 
 /// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
@@ -2570,13 +2578,13 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
 /// until the kinds settle: a call of a float-returning function is itself Float
-fn refine_return_kinds(ctx: &mut Context) {
+fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
-					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds));
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
 				(function.name.clone(), kind)
 			})
 			.collect();
