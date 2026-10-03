@@ -464,9 +464,15 @@ PASSED:
   ✓ test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
+  ✓ test_float_fields::test_captured_variable_set_by_a_call
+  ✓ test_float_fields::test_declared_float_field_in_arithmetic
+  ✓ test_float_fields::test_float_conditionals
+  ✓ test_float_fields::test_global_from_a_call
+  ✓ test_float_fields::test_zero_argument_call_in_float_context
   ✓ test_float_parameters::test_float_local_inside_float_function
   ✓ test_float_parameters::test_float_parameter_keeps_all_digits
   ✓ test_float_parameters::test_float_parameter_keeps_fraction
+  ✓ test_float_parameters::test_parameter_passed_a_float_returning_call
   ✓ test_float_parameters::test_unknown_parameter_type_is_reported
   ✓ test_float_parameters::test_user_function_shadows_ffi_name
   ✓ test_float_promotion::test_float_comparison_does_not_truncate
@@ -678,6 +684,7 @@ PASSED:
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ test_list_plus_number::each_reading_has_its_explicit_form
+  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -704,6 +711,7 @@ PASSED:
   ✓ test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ test_math::test_abs_alias
   ✓ test_math::test_absolute_value_arithmetic
+  ✓ test_math::test_arithmetic
   ✓ test_math::test_compound_assignment
   ✓ test_math::test_eval
   ✓ test_math::test_fraction_multiplication
@@ -726,7 +734,6 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
-  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
@@ -746,19 +753,14 @@ PASSED:
   ✓ test_meta::test_meta_field
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
-  ✓ test_method_words::test_chars_of_text_literal_in_assignment
   ✓ test_method_words::test_first_and_last
-  ✓ test_method_words::test_join
-  ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
   ✓ test_method_words::test_replace
   ✓ test_method_words::test_reverse
   ✓ test_method_words::test_sort
-  ✓ test_method_words::test_split
   ✓ test_method_words::test_sum
   ✓ test_method_words::test_unknown_method_word_is_an_error
-  ✓ test_method_words::test_upper_and_lower
   ✓ test_method_words::test_user_function_as_method_word
   ✓ test_min_max_lists::test_a_single_number_is_still_refused
   ✓ test_min_max_lists::test_extremum_of_a_list_literal
@@ -1000,6 +1002,11 @@ PASSED:
   ✓ test_records_classes::an_enum_names_its_cases_by_index
   ✓ test_records_classes::an_optional_field_defaults_to_null
   ✓ test_records_classes::record_stays_usable_as_a_variable_name
+  ✓ test_records::test_optional_field_is_empty_and_settable
+  ✓ test_records::test_optional_field_marks
+  ✓ test_records::test_parameter_passed_a_text_by_recursion
+  ✓ test_records::test_recursive_list_function
+  ✓ test_records::test_returns
   ✓ test_return_type_dispatch::test_a_picked_overload_warns_nothing
   ✓ test_return_type_dispatch::test_a_single_definition_with_a_result_type
   ✓ test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
@@ -1011,6 +1018,7 @@ PASSED:
   ✓ test_runtime_text_as_int::a_text_variable_converts_to_int
   ✓ test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ test_samples::test_ackermann
+  ✓ test_samples::test_binary_tree
   ✓ test_samples::test_collatz
   ✓ test_samples::test_factorial
   ✓ test_samples::test_fibonacci
@@ -1022,6 +1030,7 @@ PASSED:
   ✓ test_samples::test_primes
   ✓ test_samples::test_quadratic
   ✓ test_samples::test_quicksort
+  ✓ test_samples::test_raytracer
   ✓ test_samples::test_snake
   ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
@@ -1044,6 +1053,9 @@ PASSED:
   ✓ test_size_count::test_size_of_text_is_character_count
   ✓ test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
+  ✓ test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
+  ✓ test_spaced_construction::test_spaced_construction_of_a_declared_type
   ✓ test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
@@ -1280,6 +1292,9 @@ PASSED:
   ✓ test_typed_lists::test_map_and_element_wise_over_int_arrays
   ✓ test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ test_typed_returns::test_block_bodies_and_returns_convert_too
+  ✓ test_typed_returns::test_return_type_after_the_parameters
+  ✓ test_typed_returns::test_type_before_the_name_converts_the_result
   ✓ test_types_scope::test_data_key_is_a_scope
   ✓ test_types_scope::test_kebab_key_that_is_also_subtraction_warns
   ✓ test_types_scope::test_plural_type_word_denotes_a_list
@@ -1310,6 +1325,7 @@ PASSED:
   ✓ test_unbounded_int::test_overflow_promotes_add_sub
   ✓ test_unbounded_int::test_overflow_promotes_mul
   ✓ test_unbounded_int::test_overflow_promotes_neg_abs
+  ✓ test_unbounded_int::test_overflow_promotes_pow
   ✓ test_unbounded_int::test_small_arithmetic_unchanged
   ✓ test_undefined_calls::test_declared_type_constructs
   ✓ test_undefined_calls::test_paren_data_stays_data
@@ -1363,7 +1379,6 @@ PASSED:
   ✓ test_versions::version_is_a_soft_keyword
   ✓ test_versions::version_literals_have_two_dots_or_more
   ✓ test_versions::versions_compare_part_by_part
-  ✓ test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
@@ -1612,4 +1627,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1608 passed, 0 failed, 1608 total tested
+58 ignored, 1622 passed, 0 failed, 1622 total tested
