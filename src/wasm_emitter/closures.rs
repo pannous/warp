@@ -19,6 +19,9 @@ use StorageType::Val;
 use ValType::Ref;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
+/// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
+pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
+pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
 const ENTRY_FIELD: u32 = 0;
 const CAPTURED_FIELD: u32 = 1;
 const NODE_DATA_FIELD: u32 = 1;
@@ -155,8 +158,16 @@ impl WasmGcEmitter {
 		let mut func = Function::new(vec![(1, Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) }))]);
 		func.instruction(&I::LocalGet(0));
 		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefTestNonNull(HeapType::Concrete(closure)));
+		self.emit_fail_unless(&mut func, NOT_A_FUNCTION);
+		func.instruction(&I::LocalGet(0));
+		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
 		func.instruction(&I::LocalTee(closure_local));
+		func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
+		func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
+		self.emit_fail_unless(&mut func, WRONG_ARGUMENT_COUNT);
+		func.instruction(&I::LocalGet(closure_local));
 		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
 		for argument in 1..=arity {
 			func.instruction(&I::LocalGet(argument as u32));
@@ -171,6 +182,14 @@ impl WasmGcEmitter {
 		self.code.function(&func);
 		let index = function.func_index.expect("registered in pass 1");
 		self.exports.export(name, ExportKind::Func, index);
+	}
+
+	/// The runtime error `error` unless the i32 on the stack is true
+	fn emit_fail_unless(&mut self, func: &mut Function, error: &'static str) {
+		func.instruction(&I::I32Eqz);
+		func.instruction(&I::If(BlockType::Empty));
+		self.emit_runtime_error(func, error);
+		func.instruction(&I::End);
 	}
 
 	/// `closure_new(target, captured…)`: the Node holding the $Closure of the target's entry and the captured values
