@@ -42,6 +42,7 @@ pub mod lambdas;
 pub mod library_words;
 pub mod type_tests;
 pub mod min_max;
+pub mod mutation;
 pub mod switch;
 pub mod phrase_words;
 pub mod declarations;
