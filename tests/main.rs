@@ -153,6 +153,7 @@ mod test_quote_output;
 mod test_rational_type;
 mod test_records_classes;
 mod test_rounding_in_functions;
+mod test_runtime_text_as_int;
 mod test_samples;
 mod test_semicolon_square;
 mod test_shift_operators;

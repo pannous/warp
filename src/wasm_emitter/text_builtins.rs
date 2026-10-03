@@ -73,6 +73,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
+	if required.contains(super::list_ops::TEXT_AS_INT) {
+		required.insert("get_int_value");
+	}
 	if required.contains("list_sort") {
 		required.insert(super::library_ops::NODE_ORDER);
 	}

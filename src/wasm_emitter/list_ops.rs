@@ -515,7 +515,49 @@ pub const RUNTIME_ERRORS: [&str; 19] = [
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT,
 ];
 
+/// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
+pub const TEXT_AS_INT: &str = "text_as_int";
+
 impl WasmGcEmitter {
+	/// `x as int` of a text held in a variable, like the literal `"12" as int`; no digits is the runtime error invalid_number
+	pub(super) fn emit_text_as_int(&mut self) {
+		if !self.should_emit_function(TEXT_AS_INT) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64];
+		self.runtime_function(TEXT_AS_INT, vec![node_ref], vec![ValType::I64], locals, |s, f| {
+			let (pointer, end, negative, digit, value) = (1, 2, 3, 4, 5);
+			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
+			s.call(f, "get_int_value");
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &at_end);
+			s.emit_fail_if(f, "invalid_number");
+			// a leading sign: negative = (c == '-'), pointer skips it
+			Self::emit_list(f, &[
+				I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative),
+				I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or,
+				I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer),
+			]);
+			Self::emit_list(f, &at_end);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &at_end);
+			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU]);
+			s.emit_fail_if(f, "invalid_number");
+			Self::emit_list(f, &[
+				I::LocalGet(value), I::I64Const(10), I::I64Mul, I::LocalGet(digit), I::I64ExtendI32U, I::I64Add, I::LocalSet(value),
+				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End,
+			]);
+			Self::emit_list(f, &[
+				I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalGet(value), I::LocalGet(negative), I::Select,
+			]);
+		});
+	}
+
 	/// zero_fill(count, zero): a square list of `count` times the node `zero`, ø when count is not positive
 	fn emit_zero_fill(&mut self) {
 		if !self.should_emit_function(crate::analyzer::ZERO_FILL_CALL) {
