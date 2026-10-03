@@ -288,6 +288,36 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 	}
 }
 
+/// `(col // 3) * 3`: a spaced `//` after code starts a comment, and when the rest of its line closes a bracket that is
+/// open before it, the writer meant floor division. The line, column and the hidden closing bracket.
+fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
+	for (line_index, line) in input.lines().enumerate() {
+		let chars: Vec<char> = line.chars().collect();
+		let (mut depth, mut quote): (i32, Option<char>) = (0, None);
+		for (column, &c) in chars.iter().enumerate() {
+			match (quote, c) {
+				(Some(open), _) if c == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(c),
+				(None, '(' | '[' | '{') => depth += 1,
+				(None, ')' | ']' | '}') => depth -= 1,
+				(None, '/') if chars.get(column + 1) == Some(&'/') => {
+					let spaced = column > 0 && chars[column - 1] == ' ' && chars.get(column + 2) == Some(&' ');
+					let rest = &chars[column + 2..];
+					let closes = rest.iter().map(|c| match c { ')' | ']' | '}' => 1, '(' | '[' | '{' => -1, _ => 0 }).sum::<i32>();
+					if spaced && depth > 0 && closes > 0 {
+						let closer = rest.iter().find(|c| matches!(c, ')' | ']' | '}')).copied().unwrap_or(')');
+						return Some((line_index + 1, column + 1, closer));
+					}
+					break;
+				}
+				_ => {}
+			}
+		}
+	}
+	None
+}
+
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
 pub fn parse_data(input: &str) -> Node {
 	WaspParser::parse_with_options(input, ParserOptions::data())
@@ -575,6 +605,9 @@ impl WaspParser {
 	}
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
+		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
+			return error(&format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b"));
+		}
 		let mut parser = WaspParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
 		if options == ParserOptions::default() {
