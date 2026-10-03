@@ -102,7 +102,22 @@ fn is_update(node: &Node) -> bool {
 /// Infer the Kind for an expression
 /// Returns Int, Float, Text, etc. based on the expression's result type
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
+/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
+/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
+pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
+	let runtime_kind = |kind: &Kind| matches!(kind, Kind::Data | Kind::Empty);
+	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || runtime_kind(kind);
+	if ![left, right].iter().any(runtime_kind) || ![left, right].iter().all(numeric) {
+		return None;
+	}
+	let index = [Op::Add, Op::Sub, Op::Mul, Op::Div].iter().position(|candidate| candidate == op)?;
+	Some(crate::wasm_emitter::list_ops::NODE_ARITHMETIC[index].0)
+}
+
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
+	if node_arithmetic(left, op, right).is_some() {
+		return Kind::Data; // Int or Float, decided at run time
+	}
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
 	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)

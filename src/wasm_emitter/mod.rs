@@ -16,7 +16,7 @@ mod list_emitter;
 mod list_dispatch;
 mod library_ops;
 mod text_unicode;
-mod list_ops;
+pub(crate) mod list_ops;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
@@ -1008,6 +1008,7 @@ impl WasmGcEmitter {
 		self.emit_getters();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_node_arithmetic(); // after text_as_float and get_int_value, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1339,6 +1340,12 @@ impl WasmGcEmitter {
 			return;
 		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
+			return;
+		}
+		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)) {
+			self.emit_node_instructions(func, left);
+			self.emit_node_instructions(func, right);
+			self.emit_call(func, function);
 			return;
 		}
 		let use_float = self.should_use_float(left, right, op);
