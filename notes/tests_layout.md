@@ -53,3 +53,4 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - parser/ (tests-tidy-parser): pure move
 - node/ (tests-tidy-node): pure move
 - numbers/ (tests-tidy-numbers): pure move
+- text/ (tests-tidy-text): pure move

@@ -36,7 +36,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   or a newline" (wasp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
   text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
-  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/text/test_text_repeat.rs).
   text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
   type error" from 2026-10-02.
 
@@ -66,7 +66,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
   `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
 - #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
-- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- #16 commented `"a".s() + 2` lines in tests/text/test_string.rs (P19): "Delete the lines" (approved test-file edit).
 - tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
   tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
   folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
@@ -108,7 +108,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
 - D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
-  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
@@ -152,7 +152,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - #26 library: "Extend all". Unicode upper/lower, sort any comparable values, reverse works on text.
 - #23: "Warn on `it` shadowing". A loop's `it` still shadows a function's `it`, with a warning.
   #31 (switch message shows value; `min`/`d` units): neither option chosen, stays open.
-- #35: "Lists join to "[1 2]"" (the tests/test_cast_to_string.rs assertion may be edited; a general runtime serializer
+- #35: "Lists join to "[1 2]"" (the tests/text/test_cast_to_string.rs assertion may be edited; a general runtime serializer
   later) and ""x" as float is loud" (error with a hint; only single-quote codepoints convert to numbers).
 - #34 deep traps under `try`: "Later". #37 first-class functions by specialisation: "Enough for now".
 - #14e: `download <url>` is an alias of `fetch`.
@@ -320,7 +320,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 34. DECIDED 2026-10-03 (now, round 3). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
-35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
+35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/text/test_cast_to_string.rs (added today by a worker) pins it;
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
 36. DECIDED 2026-10-03 (see 25). Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
