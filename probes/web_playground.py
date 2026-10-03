@@ -68,6 +68,11 @@ def main():
 	warp = build_cli()
 	server = serve()
 	browser("open", PAGE)
+	# runs asked for while the compiler still loads queue up (they once raced: "pending is undefined" in the run timer)
+	early = browser("eval", "Promise.all([playground.evaluate('1+1'), playground.evaluate('2+2')]).then(reports => reports.map(r => r.value).join(' '))")
+	ok = early == '"2 4"'
+	print(f"{'ok  ' if ok else 'FAIL'} runs asked for while the compiler loads: {early}")
+	if not ok: failures.append("early runs")
 	for _ in range(30):
 		if browser("get", "text", "#status") not in ("", "loading the compiler…"):
 			break
