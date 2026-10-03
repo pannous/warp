@@ -86,10 +86,13 @@ fn ask_json(ask: &Ask) -> Value {
 // The result of a run in the page, read back into a Node
 // ============================================================================
 
-/// What happened when the page ran a module: `{"result": tree}`, `{"trap": message, "trace": stack, "detail": tree?}`
+/// What happened when the page ran a module (`warnings`: the runtime warnings it reported): `{"result": tree}`, `{"trap": message, "trace": stack, "detail": tree?}`
 /// (a runtime error; the stack names the wasm functions, `detail` is the module's trap_detail global) or
 /// `{"failure": message}` (the module did not compile, link or instantiate)
 pub fn run_outcome(outcome: &Value) -> Node {
+	for warning in outcome.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+		diagnostic::report_runtime_warning(warning);
+	}
 	if let Some(tree) = outcome.get("result") {
 		return node_from_tree(tree);
 	}
@@ -98,10 +101,33 @@ pub fn run_outcome(outcome: &Value) -> Node {
 		if let Some(detail) = outcome.get("detail").filter(|detail| !detail.is_null()) {
 			trace.push_str(&format!("\n{}{}", crate::wasm_emitter::TRAP_DETAIL_PREFIX, node_from_tree(detail).serialize()));
 		}
-		return crate::wasm_emitter::trap_error(&trace, message.to_string());
+		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}
 	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
+}
+
+/// V8's trap messages and the words wasmtime uses for them, so a runtime error reads the same in the CLI and the page
+const TRAP_WORDS: [(&str, &str); 12] = [
+	("unreachable", "wasm `unreachable` instruction executed"),
+	("memory access out of bounds", "out of bounds memory access"),
+	("divide by zero", "integer divide by zero"),
+	("remainder by zero", "integer divide by zero"),
+	("divide result unrepresentable", "integer overflow"),
+	("float unrepresentable in integer range", "invalid conversion to integer"),
+	("null function or function signature mismatch", "indirect call type mismatch"),
+	("dereferencing a null pointer", "null reference"),
+	("illegal cast", "cast failure"),
+	("array element access out of bounds", "out of bounds array access"),
+	("table index is out of bounds", "undefined element: out of bounds table access"),
+	("Maximum call stack size exceeded", "call stack exhausted"),
+];
+const TRAP_PREFIX: &str = "wasm trap: ";
+
+/// The CLI's message for a trap the page reports in the browser engine's words
+fn engine_words(message: &str) -> String {
+	let words = TRAP_WORDS.iter().find(|(engine, _)| message == *engine).map_or(message, |(_, wasmtime)| wasmtime);
+	format!("{TRAP_PREFIX}{words}")
 }
 
 /// A node read by the page: `{kind, data, chain}`, where `kind` is the decimal i64 kind field, `data` the payload

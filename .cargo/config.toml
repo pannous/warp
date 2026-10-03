@@ -16,3 +16,10 @@ jobs = 8
 
 # Note: Use 'cargo test --no-fail-fast' to run all tests
 #test = ["test", "--no-fail-fast"] forbidden?
+# The test suite in headless Chrome (notes/web_playground.md): `cargo browser-test [filter]` builds tests/main.rs for
+# wasm32-wasip1 without the native feature and runs it through web/playground/tests.html
+[alias]
+browser-test = ["test", "--target", "wasm32-wasip1", "--no-default-features", "--test", "tests"]
+
+[target.wasm32-wasip1]
+runner = "web/playground/test_in_browser.py"

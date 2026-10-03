@@ -5,6 +5,7 @@
 mod common;
 mod node_values_test;
 mod probe_def_syntax;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod probe_footguns;
 mod probe_increment;
 mod probe_index_loop;
@@ -34,6 +35,7 @@ mod test_cast_to_string;
 mod test_colon_body_assignment;
 mod test_colon_body_extent;
 mod test_comments;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compile_only;
 mod test_condition_block;
 mod test_constructor_vs_data;
@@ -69,6 +71,7 @@ mod test_for_loop;
 mod test_function_keyword;
 mod test_function_values;
 mod test_functions;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_gc_struct;
 mod test_generic_types;
 mod test_global_constant_words;
@@ -76,6 +79,7 @@ mod test_global_declaration;
 mod test_global_modifiers;
 mod test_globals;
 mod test_glyph_aliases;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_if_call_condition;
 mod test_in_position;
@@ -122,6 +126,7 @@ mod test_operator_declarations;
 mod test_operators;
 mod test_optional_words;
 mod test_package_pin;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
 mod test_panic_sweep;
@@ -129,6 +134,7 @@ mod test_parameter_call_kinds;
 mod test_parameter_codepoint_calls;
 mod test_parser_sugar;
 mod test_parser;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_prefixed_declarations;
 mod test_property_access;
@@ -150,6 +156,7 @@ mod test_surface_syntax;
 mod test_statements_after_type;
 mod test_string;
 mod test_struct_field_of_constructor;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
 mod test_structural_equality;
 mod test_sum_of_decimals;
@@ -164,6 +171,7 @@ mod test_text_bytes;
 mod test_text_casts;
 mod test_text_concat;
 mod test_text_functions;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;
 mod test_text_runtime;
 mod test_text_variable_assignment;
@@ -188,22 +196,27 @@ mod test_types;
 mod test_unbounded_int;
 mod test_undefined_calls;
 mod test_undefined_variable;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_uniscript;
 mod test_units_arithmetic;
 mod test_units_compare;
 mod test_units_followup;
 mod test_use_modules;
 mod test_use_scopes;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_utils;
 mod test_versions;
 mod test_warning_mode;
 mod test_wasi;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_wasm_emitter;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_wasm_reader;
 mod test_wasm;
 mod test_wasp_format;
 mod test_wasp_position;
 mod test_wast;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_web;
 mod test_welcoming_ask;
 mod test_welcoming_break;
