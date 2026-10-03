@@ -219,6 +219,23 @@ fn test_type_confusion() {
 	                            // todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
 }
 
+
+
+#[test]
+#[ignore = "soon"]
+fn test_function_return_types() {
+	let _result = analyze(parse("def f(x):float := 42.0"));
+	let _result = analyze(parse("def f(x):int := 42"));
+	let _result = analyze(parse("def f(x):float:=42"));// auto-cast
+	is!("def f(x):float := 42.0;f(0)",42.0);
+	is!("def f(x):int := 42;f(0)",42);
+	is!("def f(x):float := 42;f(0)",42.0);
+	is!("def f(x) as float := 42.0;f(0)",42.0);
+	is!("def f(x) as int := 42;f(0)",42);
+	is!("def f(x) as float := 42;f(0)",42.0);// auto-cast
+	is!("def f(x) as string := 42;f(0)","42");// auto-cast
+}
+
 #[test]
 fn test_types_simple() {
 	// clearAnalyzerContext();
@@ -237,6 +254,8 @@ fn test_types_simple() {
 	// // eq!(result.name, "b");
 
 	let _result = analyze(parse("float a,string b"));
+
+
 	// let result0 = result[0];
 	// eq!(result0.kind(), AST::reference);
 	//	eq!(result0.kind(), AST::declaration);
@@ -293,7 +312,7 @@ fn test_types_simple2() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system and Signature implementation
+#[ignore = "soon"] // TODO: requires complete type system and Signature implementation
 fn test_typed_functions() {
 	// todo name 'id' clashes with 'id' in preRegisterFunctions();
 	clear_analyzer_context();
@@ -316,7 +335,7 @@ fn test_typed_functions() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_empty_typed_functions() {
 	// todo int a(){} should be compiler error
 	// todo do we really want / need int a(); #[test] fn a(){} ?
@@ -358,7 +377,7 @@ fn test_types() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism() {
 	// debug:
 	//	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
@@ -377,7 +396,7 @@ fn test_polymorphism() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism2() {
 	clear_analyzer_context();
 	let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");
@@ -392,7 +411,7 @@ fn test_polymorphism2() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism3() {
 	is!(
 		"fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
@@ -412,7 +431,7 @@ fn test_generics() {
 }
 
 #[test]
-#[ignore] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
 	is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
