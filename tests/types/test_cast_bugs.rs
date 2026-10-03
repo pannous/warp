@@ -14,8 +14,8 @@ fn loud_cast_error(code: &str) {
 fn a_cast_to_char_can_be_stored() {
 	assert_eq!(text_of("x=65 as char; x"), "'A'");
 	assert_eq!(text_of("65 as char"), "'A'");
-	is!("'A' as int", 65);
-	is!("x=65 as char; x as int", 65);
+	is!("ord('A')", 65);
+	is!("x=65 as char; ord(x)", 65);
 }
 
 #[test]

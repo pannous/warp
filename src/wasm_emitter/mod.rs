@@ -2434,12 +2434,8 @@ impl WasmGcEmitter {
 						self.emit_call(func, "new_int");
 					}
 					Node::Text(s) => self.emit_text_cast(func, s, target_type),
-					// Compile-time: char literal to int (parse digit)
-					Node::Char(c) => {
-						let n: i64 = c.to_string().parse().unwrap_or(*c as i64);
-						func.instruction(&Instruction::I64Const(n));
-						self.emit_call(func, "new_int");
-					}
+					// a character is a one-character text: its digit, else invalid_number; its code point is ord(c)
+					Node::Char(c) => self.emit_text_cast(func, &c.to_string(), target_type),
 					// Runtime: float expression to int
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
@@ -2447,7 +2443,7 @@ impl WasmGcEmitter {
 						self.emit_call(func, "new_int");
 					}
 					// Runtime: a text, or a value known only at run time (a list element), parses its digits
-					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+					_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 						self.emit_node_instructions(func, value);
 						self.emit_call(func, list_ops::TEXT_AS_INT);
 						self.emit_call(func, "new_int");

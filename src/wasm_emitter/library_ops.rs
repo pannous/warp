@@ -18,13 +18,14 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 16] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
 	(crate::library_words::COLLECTION_CONTAINS, crate::library_words::COLLECTION_CONTAINS),
 	(crate::library_words::COLLECTION_POSITION, crate::library_words::COLLECTION_POSITION),
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
+	(crate::library_words::ORD, CODEPOINT_OF),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
 	("reverse", "list_reverse"),
@@ -36,6 +37,8 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+/// codepoint_of(node) -> Int node: the code point of a character, the runtime error not_a_character for anything else
+pub const CODEPOINT_OF: &str = "codepoint_of";
 pub const NODE_ORDER: &str = "node_order";
 
 impl WasmGcEmitter {
@@ -53,6 +56,20 @@ impl WasmGcEmitter {
 		self.emit_list_join();
 		self.emit_print_value(); // after list_join, which gives the text
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
+		self.emit_codepoint_of();
+	}
+
+	fn emit_codepoint_of(&mut self) {
+		if !self.should_emit_function(CODEPOINT_OF) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(CODEPOINT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
+			s.emit_require_kind(f, 0, Kind::Codepoint, "not_a_character");
+			f.instruction(&I::LocalGet(0));
+			s.emit_codepoint_of_node(f);
+			s.call(f, "new_int");
+		});
 	}
 
 	/// Push the i64 of the Int node in local `node`
