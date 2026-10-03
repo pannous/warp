@@ -535,6 +535,7 @@ PASSED:
   ✓ test_functions::test_variable_reassignment
   ✓ test_functions::test_variables
   ✓ test_functions::test2def
+  ✓ test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
   ✓ test_gc_struct::test_class_instance_raw
   ✓ test_gc_struct::test_gc_object_index_access
   ✓ test_gc_struct::test_gc_struct_macro
@@ -563,6 +564,8 @@ PASSED:
   ✓ test_glyph_aliases::equality_glyphs_compare
   ✓ test_glyph_aliases::glyphs_inside_text_stay_text
   ✓ test_glyph_aliases::logic_glyphs_are_and_or
+  ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
+  ✓ test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ test_host::test_emit_host_imports
   ✓ test_host::test_emitter_with_host_imports_valid
   ✓ test_host::test_host_fetch_import
@@ -773,6 +776,8 @@ PASSED:
   ✓ test_mutating_bang::a_method_with_bang_assigns_back
   ✓ test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
   ✓ test_mutating_bang::without_bang_the_value_is_unchanged
+  ✓ test_name_subsection_order::name_subsections_ascend_in_compiled_programs
+  ✓ test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
   ✓ test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ test_negated_call::test_function_applied_to_a_negative_number
   ✓ test_negated_call::test_variable_minus_number_stays_subtraction
@@ -1047,6 +1052,9 @@ PASSED:
   ✓ test_structural_equality::struct_instances_compare_by_their_fields
   ✓ test_structural_equality::the_entry_order_of_an_object_does_not_matter
   ✓ test_structural_equality::variables_holding_structures_compare_by_value
+  ✓ test_style_dont_care::an_explicit_function_style_still_hints
+  ✓ test_style_dont_care::any_axis_can_stop_caring
+  ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
   ✓ test_suffix_words::a_function_name_with_ed_is_its_suffix_form
   ✓ test_suffix_words::an_ungrouped_mix_asks
   ✓ test_suffix_words::an_unknown_word_is_no_suffix_form
@@ -1317,6 +1325,7 @@ PASSED:
   ✓ test_wasm_emitter::test_node_kind_enum_abi
   ✓ test_wasm_emitter::test_wasm_roundtrip
   ✓ test_wasm_emitter::test_wasm_roundtrip_via_is
+  ✓ test_wasm_names_order::name_subsections_and_maps_are_in_order
   ✓ test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept
   ✓ test_wasm_reader::test_node_serialization_workflow_design
   ✓ test_wasm_reader::test_wasm_gc_node_reading_concept
@@ -1538,4 +1547,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-64 ignored, 1533 passed, 0 failed, 1533 total tested
+58 ignored, 1542 passed, 0 failed, 1542 total tested
