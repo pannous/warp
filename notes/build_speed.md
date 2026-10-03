@@ -43,3 +43,10 @@ copy: the uplifted `debug/libwarp.rlib` (nothing links it) and the binary `debug
 The shared target dir is `~/.cargo/shared-target.noindex` (renamed from shared-target): the `.noindex` suffix keeps
 Spotlight's mdworker processes out of ~90 GB of build output (16 of them were busy during a full-suite run).
 Worker copies under probes/ are deleted once their branch is merged; keep one work copy per worker, no extra exports.
+
+## Disk: the shared target dir grows per worktree (2026-10-03)
+Each worktree builds warp under its own version suffix, so every one leaves its own incremental cache (~250 MB, 310 of
+them) and test binaries (5936 files) in the shared target dir: it reached 183 GB and filled the disk. Dependencies are
+shared and small in comparison. `~/dev/bin/prune-cargo-target.sh` (cron, every 6 hours, log in
+~/.companion/logs/prune-cargo-target.log) deletes warp's incremental caches and test/lib binaries untouched for 12
+hours; dependencies stay. After the first cleanup: 80 GB.
