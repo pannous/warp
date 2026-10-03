@@ -40,6 +40,18 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
+  to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
+  python if it has all the fields but is a known different type then we should create an error and get the user about
+  a new keyword image like photo so the image will be treated like a photo and judged by users we should write that as
+  a very central philosophy which needs to be implemented". So: a value of truly unknown type passed to `p:photo` is
+  duck typed (judged by the fields it is used with); a value of a KNOWN different type (an `image` with all of photo's
+  fields) is an error that teaches `image like photo`, which declares image usable as a photo, judged by uses.
+  Keyword: "`image like photo`" (chosen over `as`/`is`). Written map `{width:7}` for `p:photo`: "Accept
+  structurally". `p.word` typo on an untyped parameter: "Field lookup, runtime error" ("no field word").
+- libm FFI (warp-12 experiment: headers serve all of libm on macOS incl. hypot; glibc's __MATHCALL macros defeat the
+  header parser on Linux): "Headers first, table fallback". Header-driven linking always; LIBM_UNARY/LIBM_BINARY link
+  only when the headers give nothing for "m". Patch: warp.worktrees.noindex/ffi-libm-experiment.patch.
 - tests/ folders (asked by warp-1a, branch tests-tidy, notes/tests_layout.md): "OK as listed" (17 topic folders,
   welcoming one folder). Duplicates: "Only probes condense". Probe lines condense into topic files; assertions in
   regular test files stay even when duplicated.
