@@ -29,3 +29,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   / mutate mark) even when an operand follows (wasp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
   tests/test_spaced_required_fields.rs.
 - `while i<n {i++}` already works on main (todo marked DONE).
+
+## 2026-10-03 fix-constant-text
+- `str(1+2)`, `"" + (1+2)`, `"a" + 2*3`: an Int constant expression converts by its value ("3", "a6"), not its source
+  (emit_cast "string": the source-text branch is for data and names only). Float/real constants still serialize (todo).
+  tests/test_constant_expression_text.rs.
