@@ -211,6 +211,7 @@ mod test_types_scope;
 mod test_types;
 mod test_unbounded_int;
 mod test_multi_value;
+mod test_tuple_returns;
 mod test_undefined_calls;
 mod test_undefined_variable;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
