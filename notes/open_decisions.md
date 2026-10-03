@@ -19,6 +19,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P25 `int('5')` for a character: the code point 53 (like `'5' as int`), the digit value 5 (like Python's int("5")),
   or an error naming `as int` / digit()? Options: Digit value 5 / Code point 53 / Error with hints.
   Assumed: code point 53 (since 913c5b1e, before: error "not an int"). Asked by warp-d2, branch samples-2; todo.md.
+- P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
+  and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
+  libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
