@@ -46,6 +46,7 @@ mod test_data_scope;
 mod test_data;
 mod test_decimal_list_elements;
 mod test_declared_float_exact_reals;
+mod test_declared_text_one_character;
 mod test_do_block;
 mod test_dollar_names;
 mod test_download;

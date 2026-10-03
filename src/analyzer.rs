@@ -1753,7 +1753,8 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 	let expected = builtin_type_kind(type_name)?;
 	let actual = literal_kind(value)?;
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
-	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal {
+	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
+	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text {
 		return None;
 	}
 	let value_text = value.serialize();
@@ -1762,7 +1763,7 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 }
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
-/// the widening of an Int literal assigned to a float becomes an explicit Float literal
+/// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
 	lower_declarations_among(node, &variables)
@@ -1847,6 +1848,7 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
 						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float(number.clone().into()))),
+						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
 						_ => value,
 					};
 					Node::Key(Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())), op, value)

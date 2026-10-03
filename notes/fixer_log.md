@@ -25,3 +25,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-03 fix-text-as-int
 - `x="12"; x as int` / `int(x)` / `xs#1 as int` parse the text at run time (list_ops.rs `text_as_int`: optional sign,
   decimal digits; else runtime error "invalid number"); was "not an int". tests/test_runtime_text_as_int.rs.
+
+## 2026-10-03 fix-declared-text
+- `string x = "a"`, `x:string = "a"`, `text x = "a"` and a later `x = "c"`: a one-character text (parsed as a codepoint)
+  assigned to a declared text is that text (analyzer.rs assignment_mismatch + lower_declarations_among).
+  tests/test_declared_text_one_character.rs.
