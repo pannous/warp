@@ -479,6 +479,8 @@ PASSED:
   ✓ test_float_text::test_float_joins_texts
   ✓ test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
   ✓ test_float_to_int_range::test_rounding_functions_give_exact_ints
+  ✓ test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
+  ✓ test_float_zero_and_compound::test_float_zero_fill_holds_floats
   ✓ test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ test_folder_scope::inline_code_has_no_folder_scope
   ✓ test_folder_scope::sibling_definitions_are_visible_without_use
@@ -718,7 +720,6 @@ PASSED:
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
   ✓ test_math::test_runtime_equality_autocast
-  ✓ test_math::test_simple_variables
   ✓ test_math::test_sin
   ✓ test_math::test_sinus_wasp_import
   ✓ test_math::test_sqrt_alias
@@ -726,6 +727,7 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
+  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
@@ -1268,6 +1270,8 @@ PASSED:
   ✓ test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ test_typed_arrays::test_typed_array_of_other_types
   ✓ test_typed_lists::test_appended_int_list_is_an_array
+  ✓ test_typed_lists::test_float_array_elements_are_numbers
+  ✓ test_typed_lists::test_float_list_is_a_float_array
   ✓ test_typed_lists::test_int_array_assignment_keeps_value_semantics
   ✓ test_typed_lists::test_int_array_errors_like_cons_list
   ✓ test_typed_lists::test_int_array_index_count_sum_for
@@ -1611,4 +1615,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1606 passed, 0 failed, 1606 total tested
+58 ignored, 1610 passed, 0 failed, 1610 total tested
