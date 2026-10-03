@@ -111,6 +111,7 @@ use log::{trace, warn};
 use std::collections::HashMap;
 use std::thread::scope;
 use wasm_encoder::*;
+#[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
@@ -3190,6 +3191,12 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 
+	#[cfg(not(feature = "validate"))]
+	fn try_validate_wasm(_bytes: &[u8]) -> Result<(), String> {
+		Ok(()) // the engine that runs the module validates it (the browser build, web/playground)
+	}
+
+	#[cfg(feature = "validate")]
 	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);

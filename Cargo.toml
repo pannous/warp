@@ -24,8 +24,11 @@ required-features = ["native"]
 
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
-default = ["native"]
+default = ["native", "validate"]
 native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:ureq", "dep:rustyline", "dep:libloading"]
+# validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
+# of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
+validate = []
 #test = [] superfluous, just use cargo test => #[cfg(test)]
 optimizer = [] # Enable optimizing wasm via ...
 ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
@@ -106,6 +109,16 @@ inherits = "dev"       # Use dev profile for tests
 #[profile.fast]
 #inherits = "dev"
 #debug = false          # No debug symbols → /opt/cargo/fast/
+
+# web/playground's warp.debug.wasm: optimized enough to run, with DWARF and the name section kept for the browser's
+# debugger and readable stack traces (build.sh)
+[profile.web-debug]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 16
+debug = "line-tables-only" # full DWARF is 53 MB; lines and function names are what the debugger and traces need
+strip = false
 
 [profile.release]
 incremental = false    # Release doesn't need incremental
