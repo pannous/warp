@@ -1007,6 +1007,7 @@ impl WasmGcEmitter {
 		// Emit helper functions
 		self.emit_getters();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
+		self.emit_text_as_float();
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -2413,6 +2414,12 @@ impl WasmGcEmitter {
 						func.instruction(&Instruction::F64Const((*n as f64).into()));
 						self.emit_call(func, "new_float");
 					}
+					// Runtime: a text, or a value known only at run time, parses its digits
+					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+						self.emit_node_instructions(func, value);
+						self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+						self.emit_call(func, "new_float");
+					}
 					// Runtime: emit as float
 					_ => {
 						self.emit_float_value(func, value);
@@ -3057,6 +3064,10 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::F64Abs);
 			}
 			// `v as float` is v's f64; any other cast's exact value converted
+			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && matches!(self.get_type(value), Kind::Text | Kind::Empty) && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+			}
 			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
 				self.emit_float_value(func, value);
 			}

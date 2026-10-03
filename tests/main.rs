@@ -66,6 +66,8 @@ mod test_samples;
 mod test_spaced_construction;
 mod test_style_dont_care;
 mod test_sweep_fixes;
+mod test_text_as_float;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_todo;
 mod test_try_else_value;
 mod test_typed_returns;
