@@ -1,7 +1,7 @@
 # Sample sweep (samples/, started 2026-10-03)
 
 Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/x.wasp", …)` line in tests/test_samples.rs.
+`is!("samples/x.wasp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
 - Build, then copy the binary at once: `cargo build --offline --bin warp && cp ~/.cargo/shared-target.noindex/debug/warp probes/samples/warp`.
