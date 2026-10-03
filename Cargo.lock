@@ -1628,7 +1628,6 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
- "syn 3.0.6",
  "unicode-normalization",
  "ureq",
  "wasm-encoder 0.259.0",

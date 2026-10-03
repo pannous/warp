@@ -8,7 +8,6 @@ pub use extensions::lists::*;
 pub use extensions::numbers::*;
 pub use extensions::strings::*;
 pub use extensions::utils::*;
-pub mod smarty;
 pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
