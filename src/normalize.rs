@@ -418,11 +418,6 @@ pub mod hints {
         hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
     }
 
-    /// A dollar hole `${expr}` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
-    pub fn interpolation(written: &str, expression: &str) {
-        hint(written, &format!("\\({expression})"), "canonical interpolation hole");
-    }
-
     /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
     pub fn interpolation(written: &str, expression: &str) {
         hint(written, &format!("\\({expression})"), "canonical interpolation hole");
