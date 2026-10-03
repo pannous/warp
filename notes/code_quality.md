@@ -338,7 +338,7 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   folder scope), `tests/welcoming/` (15 `test_welcoming_*`), `tests/algo/` (6 `test_algo_*`), `tests/runtime/` (wasm,
   wasi, host, ffi, gc_struct, reader). A pure `git mv` + `mod` lines, no test body changes.
 - Not tests in tests/: `probe_*.rs` ×7 (probe_footguns.rs 1 088 lines runs in the suite), `tests/probes/*.rs` (dead),
-  `tests/notes/` (session notes → notes/OLD), `tests/test_utils.rs` (dead cache, 11 warnings), `tests/test_todo.rs` /
+  `tests/notes/` (session notes → notes/OLD), `tests/test_utils.rs` (dead cache, 11 warnings), `tests/sweeps/test_todo.rs` /
   `test_node_todo.rs` (todo lists as tests).
 - Oversized: test_wasm.rs 1 781 (a port of the C++ test_wasm.cpp, 35 feature `cfg` branches, 65 assertion lines
   repeated inside the file), probe_footguns.rs 1 088, test_ffi.rs 621, test_types.rs 602, test_xml.rs 537.

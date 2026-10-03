@@ -60,3 +60,4 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - ffi/ (tests-tidy-ffi): pure move
 - wasm/ (tests-tidy-wasm): pure move
 - programs/ (tests-tidy-programs): pure move
+- sweeps/ (tests-tidy-sweeps): pure move
