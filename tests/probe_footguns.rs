@@ -252,7 +252,7 @@ fn test_compound_index_assignment() {
 #[test]
 fn test_text_plus_number_is_a_type_error() {
 	is!("\"5\"+3", "53"); // JS: "53", C: '5'+3 = 56; user decision 2026-10-02: a number joins a text in its text form
-	fails_with("\"5\"*3", "type error"); // JS: 15
+	is!("\"5\"*3", "555"); // JS: 15; user decision 2026-10-03: Python repeat
 	is!("3 + \"4\"", "34");
 	is!("\"ab\"+3", "ab3");
 	is!("int(\"5\") + 3", 8);

@@ -35,9 +35,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
   or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
-  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
-  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
-  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
+  type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
 - Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
