@@ -910,6 +910,8 @@ PASSED:
   ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ test_print_arguments::print_joins_its_arguments_with_a_space
+  ✓ test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ test_print_arguments::print_of_a_braceless_call_prints_its_result
   ✓ test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
   ✓ test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
@@ -1523,4 +1525,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1518 passed, 0 failed, 1518 total tested
+58 ignored, 1520 passed, 0 failed, 1520 total tested
