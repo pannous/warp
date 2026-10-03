@@ -178,3 +178,5 @@ mod test_optimizer_exceptions;
 mod test_optimizer_extended_const;
 mod test_read_bytes_plain_result;
 mod test_float_zero_and_compound;
+mod test_user_method_form;
+mod test_type_word_user_function;

@@ -6,7 +6,7 @@ use warp::wasp_parser::parse;
 use warp::{is, Node};
 
 const SQUARE: &str = "square(x) := x*x\nlaw square(-x) == square(x)";
-const WRONG_DOUBLE: &str = "double(x) := x+x\nlaw double(x) == x";
+const WRONG_DOUBLE: &str = "twice(x) := x+x\nlaw twice(x) == x";
 
 #[test]
 fn test_law_stated() {
@@ -24,7 +24,7 @@ fn test_law_does_not_change_program_result() {
 
 #[test]
 fn test_law_asserted_at_call_sites() {
-	let result = eval(&format!("{WRONG_DOUBLE}\ndouble(3)"));
+	let result = eval(&format!("{WRONG_DOUBLE}\ntwice(3)"));
 	assert!(matches!(result, Node::Error(_)), "expected law violation, got {result:?}");
 	assert!(result.serialize().contains("x=3"), "{}", result.serialize());
 }
