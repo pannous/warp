@@ -339,10 +339,7 @@ pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	val_to_node(&results[0], &mut store, &instance)
 }
 
-/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
-pub const TRAP_DETAIL: &str = "trap_detail";
-/// How a trapped run carries that value into its error: `trap detail: <value>`
-pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {

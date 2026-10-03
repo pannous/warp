@@ -67,6 +67,9 @@ fn unsupported(node: &Node) -> String {
 }
 
 fn now() -> Time {
+	#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+	return Time::Instant(crate::web::now_nanos());
+	#[allow(unreachable_code)]
 	let since_epoch = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.map(|elapsed| elapsed.as_nanos() as i128)

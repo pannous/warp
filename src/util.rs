@@ -1,5 +1,6 @@
 use serde_json::json;
 use std::cell::Cell;
+#[cfg(feature = "native")]
 use wasmtime::{Config, Engine, Store};
 
 /// Fuel for one run: wasmtime burns about one unit per executed WASM instruction, so this is roughly
@@ -35,6 +36,7 @@ pub fn with_fuel<R>(steps: u64, body: impl FnOnce() -> R) -> R {
 
 /// Engine settings every wasp run shares: GC, typed function references, and canonical NaNs so float
 /// results are bit-identical on every CPU and engine (a NaN produced by arithmetic is always 0x7ff8000000000000).
+#[cfg(feature = "native")]
 pub fn deterministic_config() -> Config {
 	let mut config = Config::new();
 	config.wasm_gc(true);
@@ -44,12 +46,14 @@ pub fn deterministic_config() -> Config {
 }
 
 /// A store for a `gc_engine` with the current fuel budget
+#[cfg(feature = "native")]
 pub fn fueled_store<T>(engine: &Engine, data: T) -> Store<T> {
 	let mut store = Store::new(engine, data);
 	store.set_fuel(fuel_budget()).expect("gc_engine consumes fuel");
 	store
 }
 
+#[cfg(feature = "native")]
 pub fn fetch(p0: &str) -> String {
 	ureq::get(p0)
 		.call()
@@ -61,6 +65,7 @@ pub fn fetch(p0: &str) -> String {
 
 /// Create a WASM engine with GC, function references, canonical NaNs and fuel metering.
 /// This is the standard configuration for all wasp WASM operations; create its stores with `fueled_store`.
+#[cfg(feature = "native")]
 pub fn gc_engine() -> Engine {
 	let mut config = deterministic_config();
 	config.consume_fuel(true);
