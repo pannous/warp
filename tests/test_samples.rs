@@ -139,3 +139,9 @@ fn test_binary_tree() { is!("samples/binary_tree.wasp", 409); }
 
 #[test] // nested block comments, doc comments, factorial(5)
 fn test_comments() { is!("samples/comments.wasp", 120); }
+
+#[test] // fdlibm's sine kernel: sin(1) to six digits
+fn test_sin() { is!("samples/sin.wasp", 841471); }
+
+#[test] // the Taylor kernel at π/2
+fn test_sine() { assert!(warp::wasm_emitter::eval("samples/sine.wasp").serialize().starts_with("1.0000000")); }

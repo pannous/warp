@@ -1,6 +1,6 @@
 #!/usr/bin/env wasp
-real sin(real x){
-  	if(x<0) return -sin(-x)
+float sine(float x){
+  	if(x<0) return -sine(-x)
     # magical taylor constants
     S1 = -1/6.
     S2 =  1/120.
@@ -15,7 +15,7 @@ real sin(real x){
     r = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
     return x + z*x*(S1 + z*r)
 }
-sin(π/2)
+sine(π/2)
 
 # double cos(double x){
 #	return sin(x+PI/2);// todo: eval PI/2 in compiler!
