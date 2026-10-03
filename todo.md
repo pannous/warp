@@ -29,7 +29,7 @@
 - `x=[1 2]; (sort x)#1` is the symbol `sort`: a spaced round group `(sort x)` stays data, so the braceless call inside parentheses does not run; `(x.sort)#1` works. (impl-text 2026-10-03)
 - `[2.5 -1.0 0.5]` is the two-item list `[1.5 0.5]`: the glued sign subtracts (D13 Ask, impl-ask). (impl-text 2026-10-03)
 - An int list `as string` joins at runtime to "[1 2]"; a list of texts joins unquoted ("[a b]", its literal prints `["a" "b"]`) and a nested list is "not a joinable item": the general runtime serializer is still open (#35). (impl-text 2026-10-03)
-- test_normalization's styled-hint tests flake under parallel runs: `set_style` is process-global while their mutex is file-private (seen: test_variable_definition_let_style with no hint). (impl-text 2026-10-03)
+- DONE: test_normalization's styled-hint tests flake under parallel runs: `set_style` is process-global while their mutex is file-private (seen: test_variable_definition_let_style with no hint). (impl-text 2026-10-03)
 - tests/common/mod.rs `serve` duplicates probe_footguns.rs `serve` (the local HTTP stub); probe_footguns could use the common one. (impl-text 2026-10-03)
 - The shared target's `libwarp.rlib` has no hash (crate-type cdylib + rlib): every checkout copy links the same file; copies need `crate-type = ["rlib"]` plus a unique version locally. (impl-text 2026-10-03)
 - `x != int` is `undefined variable: int`: #30 made `x == int` false with the hint `x is int`, but `!=` with a type word has no reading yet (`not x is int`?). (impl-sem 2026-10-03)

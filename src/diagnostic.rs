@@ -283,15 +283,28 @@ pub fn with_asker<R>(asker: impl Asker + 'static, body: impl FnOnce() -> R) -> R
 
 /// Remember answers across runs in `path` (one `topic = explicit form` per line), loading the ones already there
 pub fn use_answers_file(path: impl Into<std::path::PathBuf>) {
-	let path = path.into();
-	let saved = std::fs::read_to_string(&path).unwrap_or_default();
+	ANSWERS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
+	load_saved_answers();
+}
+
+/// The answers remembered in the answers file, none without one
+fn load_saved_answers() {
+	let saved = ANSWERS_FILE.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok())).unwrap_or_default();
 	ANSWERS.with(|answers| {
 		let mut answers = answers.borrow_mut();
+		answers.clear();
 		for (topic, form) in saved.lines().filter_map(|line| line.split_once(" = ")) {
 			answers.insert(topic.trim().to_string(), form.trim().to_string());
 		}
 	});
-	ANSWERS_FILE.with(|file| *file.borrow_mut() = Some(path));
+}
+
+/// A new program (eval, compile) starts with no assumptions, no notes shown and only the answers saved in the answers
+/// file: what one program was asked, assumed or shown never reaches the next one on the same thread
+pub fn begin_program() {
+	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().clear());
+	NOTES_SHOWN.with(|notes| notes.borrow_mut().clear());
+	load_saved_answers();
 }
 
 fn remember(topic: &str, explicit_form: &str) {
