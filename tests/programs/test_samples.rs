@@ -151,3 +151,6 @@ fn test_calculator() { is!("samples/calculator.wasp", 39); }
 
 #[test] // age 30 + first score 95
 fn test_json_parser() { is!("samples/json_parser.wasp", 125.0); }
+
+#[test] // the iteration counts of a 40x30 grid
+fn test_mandelbrot() { is!("samples/mandelbrot.wasp", 17748); }
