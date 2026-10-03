@@ -1,5 +1,3 @@
-#![allow(mixed_script_confusables)]
-
 use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::type_kinds::NodeKind;
@@ -356,7 +354,7 @@ fn test_math_operators() {
 	is!("i=-9;-i", 9);
 	#[cfg(feature = "WASM")]
 	{
-		is!("√ π ²", 3.141592653589793); // fu ;);
+		is!("√ π ²", std::f64::consts::PI); // fu ;);
 	}
 	#[cfg(not(feature = "WASM"))]
 	{

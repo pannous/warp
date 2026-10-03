@@ -1623,7 +1623,6 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
- "once_cell",
  "paste",
  "rustyline",
  "serde",
