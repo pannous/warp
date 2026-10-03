@@ -139,7 +139,7 @@ function compilerImports() {
 		warp_host: {
 			run: (pointer, length) => {
 				const bytes = new Uint8Array(compiler.memory.buffer, pointer, length).slice();
-				post({ type: "module", size: length });
+				post({ type: "module", bytes });
 				pendingOutcome = utf8.encode(JSON.stringify(runProgram(bytes)));
 				return pendingOutcome.length;
 			},
