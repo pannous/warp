@@ -23,3 +23,5 @@
 - `x = reduce xs (a b)->a+b` is "functions are not first-class values yet" / "cannot extract a numeric value": the lambda after a prefix word does not stay inside the assigned value; `reduce xs (a b)->a+b` alone works. (impl-surface 2026-10-03)
 - `double := it*2; double 4` gives 4: `double` is a type word, so the definition is shadowed silently instead of a loud clash. (impl-surface 2026-10-03)
 - `l=π; d=abs(l-3.14); d <= 1e-9*abs(l)` is "l is a float where an exact Int is expected"; inline (`abs(l-3.14) <= 1e-9*abs(l)`) works. (impl-surface 2026-10-03)
+- `double:=it*2; double 4` gives 4 and `4 doubled` stays data: `double` is a type word (f64), so a function named double is never called. (impl-ask 2026-10-03)
+- D13 asks only after a number literal (`1 -1`); `x -1`, `f(x) -1` keep subtracting (tests/test_negated_call.rs). Whether variables should ask too is open (warp-43, 2026-10-03). (impl-ask)
