@@ -658,14 +658,6 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalGet(current));
 		func.instruction(&Instruction::RefIsNull);
 		self.emit_fail_if(func, "index_out_of_range");
-		// a meta entry `@name:value` has no position: step over it
-		self.emit_field(func, current, 1);
-		self.call(func, super::equality::IS_META_ENTRY);
-		func.instruction(&Instruction::If(BlockType::Empty));
-		self.emit_field(func, current, 2);
-		func.instruction(&Instruction::LocalSet(current));
-		func.instruction(&Instruction::Br(1));
-		func.instruction(&Instruction::End);
 		Self::emit_index_compare(func, Instruction::I64LeS);
 		func.instruction(&Instruction::BrIf(1));
 		self.emit_field(func, current, 2);
@@ -675,6 +667,10 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Br(0));
 		func.instruction(&Instruction::End);
 		func.instruction(&Instruction::End);
+		// meta entries `@name:value` sit behind every field (meta_entries.rs, field_with): arriving at one is past the end
+		self.emit_field(func, current, 1);
+		self.call(func, super::equality::IS_META_ENTRY);
+		self.emit_fail_if(func, "index_out_of_range");
 	}
 
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
