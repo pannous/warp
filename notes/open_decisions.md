@@ -6,10 +6,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 
 ## Pending questions (ordered by impact; recommended option first)
 Batches paused until 2026-10-03 17:30 local (5-hour limit at 93%, BOSS-cheeky-shannon).
-- P21 `try X else e => Y`: is the caught `e` its message text ("index out of range") or an Error value?
-  Options: Message text / Error value (returning it re-raises; `e.message` for the text).
-  Assumed: message text, so returning it is a normal value. Asked by warp-bc (cloud-eval), branch
-  claude/try-exits-and-naming. (Not asked: a named else skips the fast `xs#i` / `a/b` checks, same results, slower.)
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -46,6 +42,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
+  otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
+  the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
 - Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
   to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
   python if it has all the fields but is a known different type then we should create an error and get the user about
