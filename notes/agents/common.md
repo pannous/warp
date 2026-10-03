@@ -23,5 +23,5 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
   worktree after the merge, report one line to the Supervisor.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go into todo.md on your branch.
-- Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub shows the `master` branch, so wiki edits go to master
-  (`git push origin HEAD:master`); `main` there is only a mirror kept for old habits.
+- Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
+  edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.
