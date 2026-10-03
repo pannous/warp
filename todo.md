@@ -4,7 +4,7 @@ The supervisor should remove the DONE elements after a while.
 
 - `global g = read("f")` → "undefined variable: read"; `global g = "abc"` used in a function → "cannot extract a numeric value"; `const` works.
 - A variable first assigned a one-character literal (`s="x"`) is a codepoint variable; `s = s + "ab"` is then a type error.
-- tests/test_wasm.rs `test_string_concat_wasm` passes now but is still `#[ignore]`.
+- tests/wasm/test_wasm.rs `test_string_concat_wasm` passes now but is still `#[ignore]`.
 - `use x from 1.10` / `use x >= 1.10` read 1.10 as the float 1.1 (only `version 1.10` and literals with two dots keep their text): write `from 1.10.0` or `from version 1.10`.
 
 - DONE: tests/functions/test_method_words.rs test_library_words_refuse_what_they_cannot_do expects upper("é") to fail with "non ascii text", but the merged text-runtime branch (src/wasm_emitter/text_unicode.rs) now maps Latin/Greek/Cyrillic case, so upper("é") = "É". Decide: drop that expectation or keep the ASCII-only refusal. (2026-10-01 branch consolidation)
