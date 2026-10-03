@@ -45,6 +45,7 @@ pub mod declarations;
 pub mod modules;
 pub mod package_tools;
 pub mod versions;
+pub mod ambiguous_forms;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};

@@ -2290,6 +2290,14 @@ pub fn lower_negated_calls(node: Node) -> Node {
 	negate_calls(node, &ctx.user_functions, &bound)
 }
 
+/// The functions a word can apply: the program's functions that take arguments and the built-in real functions
+pub fn applicable_function_names(node: &Node) -> HashSet<String> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, node);
+	let user_functions = ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name);
+	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
+}
+
 fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
