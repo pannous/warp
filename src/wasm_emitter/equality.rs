@@ -6,7 +6,7 @@
 
 use super::WasmGcEmitter;
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{any_heap_type, Kind};
 use wasm_encoder::*;
@@ -25,6 +25,8 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Empty | Node::Text(_) | Node::List(_, Bracket::Square, _) => true,
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structured_value(&items[0]),
+			// a call whose result is a text or a list: `lower(a) == lower(b)`
+			Node::List(_, Bracket::Round, Separator::None) => matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List),
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint
 			Node::Key(indexed, Op::Hash, _) => !matches!(indexed.drop_meta(), Node::Empty),
 			Node::Symbol(name) => {
