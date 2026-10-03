@@ -138,12 +138,14 @@ fn arity(word: &str) -> usize {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = bind_read_data_objects(node);
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned_objects = HashMap::new();
 	collect_assigned_objects(&node, &mut assigned_objects);
+
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
@@ -206,8 +208,15 @@ fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 }
 
 /// A field lookup by a name, as `field_lookup` builds it: its value is an object whenever the field holds one
+/// A field read by name (`p.x`, `p["x"]`), an element of one (`company.employees#2`), or either in parentheses: the
+/// value may be an object
 fn is_field_lookup(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Hash, index) if crate::wasp_parser::subscript_key(index).and_then(field_name).is_some())
+	match node.drop_meta() {
+		Node::Key(_, Op::Hash, index) if crate::wasp_parser::subscript_key(index).and_then(field_name).is_some() => true,
+		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
+		_ => false,
+	}
 }
 
 /// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
@@ -215,6 +224,8 @@ pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let single;
 	let items: &[Node] = match node.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
+		// a named tuple `(x: 10, y: 20)`: its entries are fields too
+		Node::List(items, Bracket::Round, _) if items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => items,
 		Node::Key(_, Op::Colon, _) => {
 			single = [node.clone()];
 			&single
@@ -260,6 +271,29 @@ fn collect_assigned_objects(node: &Node, objects: &mut HashMap<String, Option<No
 		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_objects(item, objects)),
 		_ => {}
 	}
+}
+
+/// `person: {name: "Alice"}` among the statements of a program that reads `person` later binds it like
+/// `person = {…}`: `person.name` is then a field of a variable (a data key nothing reads stays data)
+fn bind_read_data_objects(program: Node) -> Node {
+	let Node::List(items, bracket @ (Bracket::None | Bracket::Curly), separator) = program else { return program };
+	let mut read = HashSet::new();
+	for item in &items {
+		item.visit(&mut |part| {
+			if let Node::Key(receiver, Op::Dot | Op::Hash, _) = part {
+				if let Node::Symbol(name) = receiver.drop_meta() {
+					read.insert(name.clone());
+				}
+			}
+		});
+	}
+	let items = items.into_iter().map(|item| match item.drop_meta() {
+		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(symbol) if read.contains(symbol)) && object_entries(value).is_some() => {
+			Node::Key(name.clone(), Op::Assign, value.clone())
+		}
+		_ => item,
+	}).collect();
+	Node::List(items, bracket, separator)
 }
 
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {

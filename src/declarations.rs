@@ -83,4 +83,3 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 		_ => None,
 	}
 }
-

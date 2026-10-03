@@ -3788,7 +3788,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(crate::library_words::lower_function_methods(crate::declarations::lower_c_functions(node))))))))));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(crate::library_words::lower_function_methods(crate::comprehensions::lower(crate::declarations::lower_c_functions(node)))))))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}

@@ -55,6 +55,7 @@ pub mod min_max;
 pub mod mutation;
 pub mod switch;
 pub mod phrase_words;
+pub mod comprehensions;
 pub mod declarations;
 pub mod fixed_width;
 pub mod modules;
