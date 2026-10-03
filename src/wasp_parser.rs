@@ -2037,6 +2037,16 @@ impl WaspParser {
 			return self.parse_optional_else(if_then, ElseParseMode::Atom);
 		}
 
+		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
+		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
+		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
+			let outer = std::mem::replace(&mut self.stops_at_else, true);
+			let then_expr = self.parse_expr(0);
+			self.stops_at_else = outer;
+			let if_then = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))), Op::Then, Box::new(then_expr));
+			return self.parse_optional_else(if_then, ElseParseMode::Expr);
+		}
+
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
 	}
 

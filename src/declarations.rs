@@ -1,4 +1,5 @@
 //! `enum color {red green blue}` declares the object `color={red:0 green:1 blue:2}`: a case is its index, `color.green` is 1.
+//! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -10,7 +11,7 @@ pub fn lower(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(lower).collect();
-			enum_object(&items).unwrap_or(Node::List(items, bracket, separator))
+			enum_object(&items).or_else(|| c_function(&items)).unwrap_or(Node::List(items, bracket, separator))
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
@@ -34,4 +35,42 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 		.collect();
 	let object = Node::List(entries, Bracket::Curly, Separator::Space);
 	Some(Node::Key(Box::new(name.clone()), Op::Assign, Box::new(object)))
+}
+
+
+/// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
+/// block); the result kind is inferred as for any definition
+fn c_function(items: &[Node]) -> Option<Node> {
+	let [result_type, definition] = items else { return None };
+	let Node::Symbol(result_type) = result_type.drop_meta() else { return None };
+	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
+		return None;
+	}
+	let Node::List(parts, Bracket::Round, _) = definition.drop_meta() else { return None };
+	let [head, body] = parts.as_slice() else { return None };
+	let Node::List(_, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let (name, arguments) = head_items.split_first()?;
+	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
+		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		_ => vec![argument.clone()],
+	});
+	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
+	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Colon);
+	Some(Node::Key(Box::new(head), Op::Define, Box::new(body.clone())))
+}
+
+/// `real x` is `x:real`; a bare name stays untyped
+fn c_parameter(parameter: &Node) -> Option<Node> {
+	match parameter.drop_meta() {
+		Node::Symbol(_) => Some(parameter.clone()),
+		Node::List(words, _, Separator::Space) => match words.as_slice() {
+			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
+				Some(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(kind.clone())))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
 }

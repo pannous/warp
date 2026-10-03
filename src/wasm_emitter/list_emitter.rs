@@ -515,9 +515,18 @@ impl WasmGcEmitter {
 	}
 
 	/// `x = v`, `x += v` to a float variable: float arithmetic also in a loop body
+	/// `x = …` of a float variable, or an `if` whose branches are such assignments (`if (x > t) x = x - t`)
 	fn is_float_assignment(&self, item: &Node) -> bool {
+		let branch_assigns_float = |branch: &Node| match branch.drop_meta() {
+			Node::List(items, Bracket::Curly, _) if items.len() == 1 => self.is_float_assignment(&items[0]),
+			other => self.is_float_assignment(other),
+		};
 		match item.drop_meta() {
 			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
+			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
+			Node::Key(if_then, Op::Else, otherwise) => {
+				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) && branch_assigns_float(otherwise)
+			}
 			_ => false,
 		}
 	}

@@ -34,6 +34,7 @@ mod test_block_function;
 mod test_blocks;
 mod test_cast_bugs;
 mod test_cast_to_string;
+mod test_c_style;
 mod test_closures;
 mod test_colon_body_assignment;
 mod test_colon_body_extent;
