@@ -3688,7 +3688,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let node = crate::closures::lower(node);
 	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
-	let node = crate::traits::lower_conformances(crate::type_constructor::lower(node));
+	let node = crate::traits::lower_conformances(crate::overloads::lower(crate::type_constructor::lower(node)));
 	let node = crate::min_max::lower(node);
 	let node = crate::declarations::lower(node);
 	let node = crate::switch::lower(node);
