@@ -768,15 +768,24 @@ impl WaspParser {
 		self.current_char() == '/' && matches!(self.peek_char(1), '*' | '#')
 	}
 
-	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening
+	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening; comments nest:
+	/// `/* outer /* inner */ still outer */`
 	fn consume_block_comment(&mut self) -> String {
-		let closing_mark = if self.peek_char(1) == '#' { '#' } else { '*' };
+		let mark = if self.peek_char(1) == '#' { '#' } else { '*' };
 		self.advance_by(2);
 		let mut block = String::new();
+		let mut depth = 1;
 		while self.current_char() != '\0' {
-			if self.current_char() == closing_mark && self.peek_char(1) == '/' {
+			let pair = (self.current_char(), self.peek_char(1));
+			if pair == (mark, '/') || pair == ('/', mark) {
+				depth += if pair.0 == '/' { 1 } else { -1 };
+				if depth == 0 {
+					self.advance_by(2);
+					break;
+				}
+				block.extend([pair.0, pair.1]);
 				self.advance_by(2);
-				break;
+				continue;
 			}
 			block.push(self.current_char());
 			self.advance();
