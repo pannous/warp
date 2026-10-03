@@ -191,6 +191,7 @@ mod test_units_arithmetic;
 mod test_units_compare;
 mod test_units_followup;
 mod test_use_modules;
+mod test_use_scopes;
 mod test_utils;
 mod test_versions;
 mod test_warning_mode;

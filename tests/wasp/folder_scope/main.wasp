@@ -1,2 +1,3 @@
-// D15 folder scope: area and twice come from the sibling files without `use`
+// `use folder`: area and twice come from the sibling files
+use folder
 area(3) + twice(1)
