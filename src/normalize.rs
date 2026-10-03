@@ -333,10 +333,8 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
 
     let key = format!("{}|{}", original, canonical);
 
-    if mode == HintMode::Once {
-        if !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
-            return;
-        }
+    if mode == HintMode::Once && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
+        return;
     }
 
     let pos = position_string();

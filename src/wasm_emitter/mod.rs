@@ -755,7 +755,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
-		self.type_errors.extend(self.ctx.parameter_conflicts.drain(..));
+		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
 		analyze_required_functions(&mut self.ctx, node);
@@ -2908,7 +2908,7 @@ impl WasmGcEmitter {
 			Node::Number(num) => {
 				match num {
 					Number::Int(_) | Number::BigInt(_) => {
-						let value: f64 = num.clone().into();
+						let value: f64 = (*num).into();
 						func.instruction(&Instruction::F64Const(Ieee64::new(value.to_bits())));
 					}
 					Number::Float(f) => {

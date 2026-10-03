@@ -41,6 +41,7 @@ fn typed(name: &str, type_name: &str) -> Node {
 ///   `a number` → `number:number`, `a photo` → `photo` (`photo:photo` once `class photo` is declared); `to add a b: a+b` keeps `a`
 /// - a known type before a name types it: `int i` → `i:int`; a lone known type names itself, or is `it` when the body uses `it`
 /// - several nouns after an article are one multi-word name, typed by its head noun and named by it: `a phone number` → `number:number`
+///
 /// Err when two parameters end up with one name (`a first name`, `a last name`).
 pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) -> bool) -> Result<Vec<Node>, String> {
 	let is_name = |word: &str| !PREPOSITIONS.contains(&word) && !is_known_type(word);

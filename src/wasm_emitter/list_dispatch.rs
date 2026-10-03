@@ -7,6 +7,7 @@
 //!   `(array (mut i64))` with spare capacity, see `find_typed_lists`: O(1) index and count, amortised O(1) append
 //!   (`out.add(x)`, which `map` lowers to), no box per element. Wherever the program needs it as a value (a result, an
 //!   argument, a print) it becomes the same Node list the literal would have built (`int_list_as_node`).
+//!
 //! A host-native or GPU backend behind a host import, taking over above a minimum length at run time, would be a
 //! third variant here; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
 //!

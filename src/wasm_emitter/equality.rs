@@ -53,10 +53,7 @@ impl WasmGcEmitter {
 
 	/// An object literal `{a:1 b:2}`, or an instance `point:{x:1 y:2}`: compared by its entries, never read as a number
 	fn is_object_literal(node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _) => true,
-			_ => false,
-		}
+		matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _))
 	}
 
 	/// A value that is tested or compared as a Node: a structured value, an object, or either of them in parentheses
