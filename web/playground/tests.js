@@ -15,6 +15,7 @@ const workerCount = Number(parameters.get("workers") ?? DEFAULT_WORKERS);
 
 const $ = id => document.getElementById(id);
 const results = [];
+const running = new Set(); // names of the tests on the workers now: a stuck page names them
 
 function listTests() {
 	return new Promise((resolve, reject) => {
@@ -31,7 +32,8 @@ const failedResults = () => results.filter(result => !result.passed && !result.s
 const skippedResults = () => results.filter(result => result.skipped);
 
 function showProgress(total) {
-	$("progress").textContent = `${results.length}/${total} run: ${passedResults().length} passed, ${failedResults().length} failed`;
+	const now = running.size ? ` · running ${[...running].join(", ")}` : "";
+	$("progress").textContent = `${results.length}/${total} run: ${passedResults().length} passed, ${failedResults().length} failed${now}`;
 }
 
 function showFailure(result) {
@@ -49,6 +51,7 @@ function runner(queue, total) {
 		let worker, current, timer;
 		const record = result => {
 			clearTimeout(timer);
+			running.delete(result.name);
 			results.push(result);
 			if (!result.passed && !result.skipped) showFailure(result);
 			showProgress(total);
@@ -70,6 +73,7 @@ function runner(queue, total) {
 				start();
 				record({ name: current.name, passed: false, timedOut: true, output: `stopped after ${TEST_TIMEOUT_MS / 1000} s` });
 			}, TEST_TIMEOUT_MS);
+			running.add(current.name);
 			worker.postMessage({ type: "run", name: current.name, ignored: current.ignored });
 		};
 		start();
