@@ -45,3 +45,9 @@ fn read_loads_a_file_as_bytes() {
 	is!("use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_at(index, 4)", 5);
 	is!("read(\"no/such/file\")", warp::error("read no/such/file failed: No such file or directory (os error 2)"));
 }
+
+#[test]
+fn bytes_of_a_one_character_text_in_a_variable() {
+	is!("input = \"a\"; byte_slice(input, 0, 1)", "a");
+	is!("input = \"a\"; byte_at(input, 0)", 97);
+}

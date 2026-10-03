@@ -79,6 +79,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::TEXT_AS_INT) || required.contains(super::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");
 	}
+	if required.contains(super::list_ops::TEXT_AS_INT) && required.contains(super::INT_RUNTIME) {
+		required.extend(["exact_mul", "exact_add", "exact_sub"]);
+	}
 	if required.contains("list_sort") {
 		required.insert(super::library_ops::NODE_ORDER);
 	}
@@ -92,7 +95,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -146,7 +149,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 			}
 			(BYTE_SLICE, [text, start, end]) => {
-				self.emit_node_instructions(func, text);
+				self.emit_text_argument(func, text);
 				self.emit_numeric_value(func, start);
 				self.emit_numeric_value(func, end);
 				self.emit_call(func, BYTE_SLICE);
@@ -155,11 +158,19 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A text argument as a Text node: a one-character text held in a variable is a character (`input = "a"`)
+	fn emit_text_argument(&mut self, func: &mut Function, text: &Node) {
+		self.emit_node_instructions(func, text);
+		if !matches!(text.drop_meta(), Node::Text(_)) {
+			self.emit_call(func, TEXT_OF);
+		}
+	}
+
 	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
 	pub(super) fn emit_integer_text_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
 		match (name, arguments) {
 			(BYTE_AT, [text, offset]) => {
-				self.emit_node_instructions(func, text);
+				self.emit_text_argument(func, text);
 				self.emit_numeric_value(func, offset);
 				self.emit_call(func, BYTE_AT);
 			}

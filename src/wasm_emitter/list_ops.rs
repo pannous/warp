@@ -566,13 +566,19 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU]);
 			s.emit_fail_if(f, "invalid_number");
+			// value = value*10 + digit, unbounded with the big-int runtime ("99999999999999999999" as int)
+			let unbounded = s.int_runtime();
+			Self::emit_list(f, &[I::LocalGet(value), I::I64Const(10)]);
+			if unbounded { s.call(f, "exact_mul") } else { f.instruction(&I::I64Mul); }
+			Self::emit_list(f, &[I::LocalGet(digit), I::I64ExtendI32U]);
+			if unbounded { s.call(f, "exact_add") } else { f.instruction(&I::I64Add); }
 			Self::emit_list(f, &[
-				I::LocalGet(value), I::I64Const(10), I::I64Mul, I::LocalGet(digit), I::I64ExtendI32U, I::I64Add, I::LocalSet(value),
+				I::LocalSet(value),
 				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End,
 			]);
-			Self::emit_list(f, &[
-				I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalGet(value), I::LocalGet(negative), I::Select,
-			]);
+			Self::emit_list(f, &[I::I64Const(0), I::LocalGet(value)]);
+			if unbounded { s.call(f, "exact_sub") } else { f.instruction(&I::I64Sub); }
+			Self::emit_list(f, &[I::LocalGet(value), I::LocalGet(negative), I::Select]);
 		});
 	}
 

@@ -16,3 +16,9 @@ fn a_text_without_a_number_is_a_runtime_error() {
 	is!("x=\"\"; x as int", error("invalid number"));
 	is!("x=\"1x\"; x as int", error("invalid number"));
 }
+
+#[test]
+fn a_text_beyond_i64_parses_unbounded() {
+	is!("x=\"99999999999999999999\"; x as int", warp::Node::Number(warp::Number::from_bigint("99999999999999999999".parse().unwrap())));
+	is!("x=\"-99999999999999999999\"; x as int + 1 < 0", 1);
+}
