@@ -13,17 +13,17 @@ Nothing was changed in the main checkout; the current heuristic from de18c3bb is
 
 | Location | Input | Expected now | Value under the rule |
 |---|---|---|---|
-| tests/test_lists.rs:194 (`test_root_lists`) | `{1;2;3}` | list `[1,2,3]` | 3 |
-| tests/test_lists.rs:205 (`test_root_list_strings`) | `a;b;c` at top level | strings `a b c` | `c` |
-| tests/test_lists.rs:213 (`test_root_list_strings`) | `{a;b;c}` | strings `a b c` | `c` |
-| tests/test_lists.rs:189 (commented out) | `1;2;3` expecting `ints(1,2,3,0)` | list | 3; stays commented |
+| tests/lists/test_lists.rs:194 (`test_root_lists`) | `{1;2;3}` | list `[1,2,3]` | 3 |
+| tests/lists/test_lists.rs:205 (`test_root_list_strings`) | `a;b;c` at top level | strings `a b c` | `c` |
+| tests/lists/test_lists.rs:213 (`test_root_list_strings`) | `{a;b;c}` | strings `a b c` | `c` |
+| tests/lists/test_lists.rs:189 (commented out) | `1;2;3` expecting `ints(1,2,3,0)` | list | 3; stays commented |
 
 Both tests stop at their first failing assert, so the three lines above were identified by reading; only the first is
 seen failing per test.
 
 ## Checked and not conflicting
 
-- `(1;2;3)`, `(a;b;c)` (tests/test_lists.rs:188, 204), `[1;2;3]`, `[a;b;c]` (:195, :211): stay lists.
+- `(1;2;3)`, `(a;b;c)` (tests/lists/test_lists.rs:188, 204), `[1;2;3]`, `[a;b;c]` (:195, :211): stay lists.
 - `(1, 2; 3, 4)[1][0]` and `[1,0]` (tests/test_blocks.rs:86, :91): stay a matrix. These fail if `(…)` is treated as a block.
 - tests/test_wasm.rs:1347 `'hello';(1 2 3 4);10` → 10: already passes, agrees.
 - tests/test_semicolon_square.rs: pins `[1;2;3]` and `[1\n2\n3]` equal to `[1 2 3]`; passes before and after.

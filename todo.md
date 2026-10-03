@@ -13,7 +13,7 @@
 - DONE: A runtime ratio has no text form: `y=2.5; y as string`, `str(y)` and now `"x" + y` give "-9223372036854775807" (list_join only knows texts, ints, characters). (fix-sugar 2026-10-02)
 - DONE: `x=10; x = floor(x/2)` → WASM validation failure "expected i64, found f64": analyzer::infer_type takes floor's kind from the libm FFI signature (Float) while the builtin floor emits an Int. (fix-sugar 2026-10-02)
 - `count of []` parses as `count (of[])` (a subscript of `of`); `count ()` returns the symbol `count`. (fix-sugar 2026-10-02)
-- `xs.insert 4 at 0`, `insert 4 at start of xs`, `x is 100 times [0]` (tests/test_lists.rs ignored tests) are not parsed yet. (fix-sugar 2026-10-02)
+- `xs.insert 4 at 0`, `insert 4 at start of xs`, `x is 100 times [0]` (tests/lists/test_lists.rs ignored tests) are not parsed yet. (fix-sugar 2026-10-02)
 - DONE: `import floor from "m"; x=10.0; x=floor(2.5)` fails WASM validation (expected i64, found f64): reassigning a float variable from an imported libm call. The builtin (non-imported) floor/ceil/round reassignments work since fix-globals. (2026-10-02)
 - DONE: `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)
 - `print` of a list, a float or a map has no runtime text yet ("print of a List has no runtime text yet"), like `xs as string`; a runtime serializer is undecided (tests/test_cast_to_string.rs). (fix-print 2026-10-02)

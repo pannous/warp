@@ -204,7 +204,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
-  (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
+  (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
   `##` (doc comment) and the directives in wasp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
@@ -302,7 +302,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
-    that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
+    that assertion line? The fix (a small arm in check_null_use) is ready; tests/lists/test_empty_list_count.rs waits #[ignore]d.
 29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
