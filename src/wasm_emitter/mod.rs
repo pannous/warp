@@ -48,6 +48,8 @@ const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up"
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
+/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
+const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
@@ -445,6 +447,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 		let mut func = Function::new(locals);
 
 		// Captured variables read their definition-time globals
@@ -1171,6 +1174,7 @@ impl WasmGcEmitter {
 		}
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 
 		let mut func = Function::new(locals);
 		self.emit_witness_installation(&mut func);
@@ -1509,32 +1513,45 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return left; else return right
-			self.emit_float_value(func, left);
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-			func.instruction(&Instruction::F64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-			self.emit_float_value(func, left); // return left (0.0)
-			func.instruction(&Instruction::Else);
-			self.emit_float_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_float");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_float_value(func, left);
-		func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-		func.instruction(&Instruction::F64Ne);
+		// and: a falsy left is the value, else right; or: a truthy left is the value, else right. Left is evaluated once.
+		self.emit_held_left_is_falsy(func, left, true);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-		self.emit_float_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::And, right, true);
 		func.instruction(&Instruction::Else);
-		self.emit_float_value(func, right); // return right
+		self.emit_logical_branch(func, op == &Op::Or, right, true);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_float");
 		true
+	}
+
+	/// Push i32 1 when `left` is falsy (0 or 0.0), keeping its value in a scratch local (a float as its bits)
+	fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
+		let held = self.scratch(LOGICAL_SCRATCH);
+		if is_float {
+			self.emit_float_value(func, left);
+			Self::emit_list(func, &[Instruction::I64ReinterpretF64, Instruction::LocalTee(held), Instruction::F64ReinterpretI64]);
+			Self::emit_list(func, &[Instruction::F64Const(Ieee64::new(0.0f64.to_bits())), Instruction::F64Eq]);
+		} else {
+			self.emit_numeric_value(func, left);
+			Self::emit_list(func, &[Instruction::LocalTee(held), Instruction::I64Eqz]);
+		}
+	}
+
+	/// The held left value, raw
+	fn emit_held_left(&self, func: &mut Function, is_float: bool) {
+		func.instruction(&Instruction::LocalGet(self.scratch(LOGICAL_SCRATCH)));
+		if is_float {
+			func.instruction(&Instruction::F64ReinterpretI64);
+		}
+	}
+
+	/// One branch of a numeric and/or: the held left value or right, raw
+	fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
+		match (is_left, is_float) {
+			(true, _) => self.emit_held_left(func, is_float),
+			(false, true) => self.emit_float_value(func, right),
+			(false, false) => self.emit_numeric_value(func, right),
+		}
 	}
 
 	fn emit_int_truthy_logical(
@@ -1548,27 +1565,11 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return 0; else return right
-			self.emit_numeric_value(func, left);
-			func.instruction(&Instruction::I64Eqz);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
-			func.instruction(&Instruction::Else);
-			self.emit_numeric_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_int");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_numeric_value(func, left);
-		func.instruction(&Instruction::I64Eqz);
+		self.emit_held_left_is_falsy(func, left, false);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-		self.emit_numeric_value(func, right); // return right (left was falsy)
+		self.emit_logical_branch(func, op == &Op::And, right, false);
 		func.instruction(&Instruction::Else);
-		self.emit_numeric_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::Or, right, false);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_int");
 		true
@@ -1706,65 +1707,56 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(self.type_manager.node_type),
 		};
 
-		// For numeric left operand, extract its value for truthiness check
-		let left_is_numeric = self.is_numeric(left);
+		// A call of number kind is tested at run time like a numeric variable, and evaluated once
+		let is_call = matches!(left.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		let left_is_numeric = self.is_numeric(left) || (is_call && matches!(self.get_type(left), Kind::Int | Kind::Float));
 
 		if left_is_numeric {
-			// Emit left as numeric and check truthiness
-			if self.get_type(left).is_float() {
-				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-				if *op == Op::And {
-					// and: if left == 0, return left (falsy); else return right
-					func.instruction(&Instruction::F64Eq);
-				} else {
-					// or: if left != 0, return left (truthy); else return right
-					func.instruction(&Instruction::F64Ne);
-				}
-			} else {
-				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Eqz);
-				if *op == Op::And {
-					// and: if left == 0 (eqz is true), return left
-					// eqz returns 1 if zero, 0 if non-zero
-				} else {
-					// or: if left != 0 (eqz is false), return left
-					func.instruction(&Instruction::I32Eqz); // flip the condition
-				}
+			let is_float = self.get_type(left).is_float();
+			self.emit_held_left_is_falsy(func, left, is_float);
+			if *op == Op::Or {
+				func.instruction(&Instruction::I32Eqz); // or: a truthy left is the value
 			}
-
-			// If condition is true, return left; else return right
 			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
-			self.emit_node_instructions(func, left);
+			self.emit_held_left(func, is_float);
+			self.emit_call(func, if is_float { "new_float" } else { "new_int" });
 			func.instruction(&Instruction::Else);
 			self.emit_node_instructions(func, right);
 			func.instruction(&Instruction::End);
-		} else {
-			// Left is non-numeric - check if it's falsy at compile time
-			let left_is_falsy = left.is_falsy();
-
+		} else if Self::is_run_time_value(left) {
+			// a variable, call or element holding a Node: its truthiness is known at run time only
+			let held = self.node_scratch();
+			self.emit_node_instructions(func, left);
+			func.instruction(&Instruction::LocalTee(held));
+			self.emit_call(func, IS_TRUTHY);
 			if *op == Op::And {
-				if left_is_falsy {
-					// and with falsy left: return left
-					self.emit_node_instructions(func, left);
-				} else {
-					// and with truthy left: return right
-					self.emit_node_instructions(func, right);
-				}
-			} else {
-				// Op::Or
-				if left_is_falsy {
-					// or with falsy left: return right
-					self.emit_node_instructions(func, right);
-				} else {
-					// or with truthy left: return left
-					self.emit_node_instructions(func, left);
-				}
+				func.instruction(&Instruction::I32Eqz); // and: a falsy left is the value
 			}
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			Self::emit_list(func, &[Instruction::LocalGet(held), Instruction::RefAsNonNull, Instruction::Else]);
+			self.emit_node_instructions(func, right);
+			func.instruction(&Instruction::End);
+		} else {
+			// a literal left is falsy or not at compile time: `[] or 3`, `"a" and 4`
+			let left_is_value = left.is_falsy() == (*op == Op::And);
+			self.emit_node_instructions(func, if left_is_value { left } else { right });
 		}
 	}
 
+	/// A name, call, element or field: its value exists only at run time
+	fn is_run_time_value(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(_) => true,
+			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+			Node::Key(_, Op::Hash | Op::Dot, _) => true,
+			_ => false,
+		}
+	}
 
+	/// The one nullable Node local of every function, after its int scratch locals
+	fn node_scratch(&self) -> u32 {
+		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+	}
 
 	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
@@ -2095,7 +2087,7 @@ impl WasmGcEmitter {
 			return;
 		};
 
-		// A branch yielding a text, list or error (`if x {x} else {"offline"}`): both branches are Node values
+		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
 			Node::List(items, Bracket::Curly, _) if items.len() == 1 => items[0].clone(),
 			other => other.clone(),
@@ -2103,7 +2095,8 @@ impl WasmGcEmitter {
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
 		let is_node_valued = |emitter: &Self, value: &Node| {
-			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || crate::analyzer::branch_kind(value, &emitter.scope).is_ref())
+			let kind = crate::analyzer::branch_kind(value, &emitter.scope);
+			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
 			self.emit_condition(func, condition, Self::emit_block_value);

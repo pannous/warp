@@ -348,9 +348,11 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// Either branch a reference type (Text, Symbol, List…): the value is a Node, else a number
+/// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
-	if then_kind.is_ref() || else_kind.is_ref() {
+	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
+		Kind::Codepoint
+	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
 		Kind::Float
@@ -3001,7 +3003,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
-			if matches!(op, Op::If | Op::While | Op::Question | Op::Not) {
+			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
