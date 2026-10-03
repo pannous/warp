@@ -2359,12 +2359,44 @@ impl WasmGcEmitter {
 				let items = Node::Key(Box::new(join_call(value.clone(), " ")), Op::Add, text("]"));
 				Node::Key(text("["), Op::Add, Box::new(items))
 			}
+			// a value known only at run time (an element, a parsed value): a list is "[1 2]" as above, anything else joins
+			Kind::Empty => {
+				self.emit_dynamic_text(func, value);
+				return;
+			}
 			_ => {
 				self.emit_type_error(func, format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()));
 				return;
 			}
 		};
 		self.emit_node_instructions(func, &node);
+	}
+
+	/// The text of a Node of unknown kind: "[" + join(xs, " ") + "]" for a list, else join([x], "")
+	fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		let node_ref = Ref(self.node_ref(false));
+		let text = |emitter: &mut Self, func: &mut Function, text: &str| {
+			let (pointer, length) = emitter.allocate_string(text);
+			Self::emit_list(func, &[Instruction::I32Const(pointer as i32), Instruction::I32Const(length as i32)]);
+			emitter.emit_call(func, "new_text");
+		};
+		self.emit_node_instructions(func, value);
+		Self::emit_list(func, &[Instruction::LocalTee(held), Instruction::RefAsNonNull, Instruction::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::List as i64), Instruction::I64Eq]);
+		func.instruction(&Instruction::If(BlockType::Result(node_ref)));
+		text(self, func, "[");
+		func.instruction(&Instruction::LocalGet(held));
+		text(self, func, " ");
+		self.emit_call(func, "list_join");
+		self.emit_call(func, text_builtins::TEXT_CONCAT);
+		text(self, func, "]");
+		self.emit_call(func, text_builtins::TEXT_CONCAT);
+		func.instruction(&Instruction::Else);
+		Self::emit_list(func, &[Instruction::I64Const(crate::type_kinds::SQUARE_LIST_KIND), Instruction::LocalGet(held), Instruction::RefNull(HeapType::Concrete(node_type)), Instruction::StructNew(node_type)]);
+		text(self, func, "");
+		self.emit_call(func, "list_join");
+		func.instruction(&Instruction::End);
 	}
 
 	/// Emit type cast: value as type

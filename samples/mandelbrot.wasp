@@ -1,9 +1,10 @@
 // Mandelbrot set visualization
 // Classic fractal computation
 
+// decimal literals are exact in wasp: the iteration runs in floats, or its fractions would grow without end
 def mandelbrot(cx, cy, max_iter) {
-    x = 0.0
-    y = 0.0
+    x = 0.0 as float
+    y = 0.0 as float
     iter = 0
     while x*x + y*y <= 4 and iter < max_iter {
         xtemp = x*x - y*y + cx
@@ -23,7 +24,7 @@ def render(width, height, max_iter) {
         for col in 0..width {
             cx = (col - width/2) * 4.0 / width
             iter = mandelbrot(cx, cy, max_iter)
-            idx = iter * chars.length / max_iter
+            idx = iter * (chars.length - 1)//max_iter  // floor division: / is exact
             line = line + chars[idx]
         }
         print line
@@ -32,20 +33,11 @@ def render(width, height, max_iter) {
 
 render(80, 40, 100)
 
-// Color version for graphics output
-def color_mandelbrot(cx, cy, max_iter) {
-    iter = mandelbrot(cx, cy, max_iter)
-    if iter == max_iter { return black }
-    hue = iter * 360 / max_iter
-    return hsv(hue, 1.0, 1.0)
-}
-
-// Canvas rendering
-canvas(800, 600)
-for y in 0..600 {
-    cy = (y - 300) * 3.0 / 600
-    for x in 0..800 {
-        cx = (x - 500) * 3.0 / 800
-        pixel(x, y, color_mandelbrot(cx, cy, 256))
+// The color version drew to a canvas (canvas, pixel, hsv), which wasp has no words for yet; its iteration counts:
+total = 0
+for y in 0..30 {
+    for x in 0..40 {
+        total = total + mandelbrot((x - 25) * 3.0 / 40, (y - 15) * 3.0 / 30, 64)
     }
 }
+total
