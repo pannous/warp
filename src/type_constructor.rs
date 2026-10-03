@@ -41,8 +41,12 @@ pub fn lower(node: Node) -> Node {
 fn construct(node: Node, registry: &TypeRegistry) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| construct(item, registry)).collect();
-			instance(&items, &bracket, &separator, registry).unwrap_or(Node::List(items, bracket, separator))
+			let items: Vec<Node> = with_spaced_constructions(items, registry).into_iter().map(|item| construct(item, registry)).collect();
+			match items.as_slice() {
+				// `v = T {…}` leaves the construction alone in its list
+				[single] if bracket == Bracket::None && instance_parts(single).is_some() => single.clone(),
+				_ => instance(&items, &bracket, &separator, registry).unwrap_or(Node::List(items, bracket, separator)),
+			}
 		}
 		Node::Key(name, Op::None, fields) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 			let entries = entries(&construct(*fields, registry));
@@ -62,6 +66,22 @@ fn construct(node: Node, registry: &TypeRegistry) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, registry)), data },
 		other => other,
 	}
+}
+
+/// `T {x: 1}` with a space, T a declared type: the glued construction `T{x: 1}` (open decision 41)
+fn with_spaced_constructions(items: Vec<Node>, registry: &TypeRegistry) -> Vec<Node> {
+	let mut joined: Vec<Node> = Vec::with_capacity(items.len());
+	for item in items {
+		let is_fields = matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
+		let follows_type = matches!(joined.last().map(Node::drop_meta), Some(Node::Symbol(name)) if registry.get_by_name(name).is_some());
+		if is_fields && follows_type {
+			let name = joined.pop().expect("follows a type name");
+			joined.push(Node::Key(Box::new(name), Op::None, Box::new(item)));
+		} else {
+			joined.push(item);
+		}
+	}
+	joined
 }
 
 /// The instance a call of a declared type constructs; a wrong argument count is an error value at the call

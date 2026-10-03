@@ -484,6 +484,11 @@ impl InstanceTypes {
 		}
 	}
 
+	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds
+	pub fn is_declared_field(&self, name: &str) -> bool {
+		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+	}
+
 	/// The shape of an expression, when it is known to hold instances of one declared type
 	pub fn shape(&self, node: &Node) -> Option<Shape> {
 		if let Some((name, _)) = instance_parts(node) {
