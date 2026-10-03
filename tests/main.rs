@@ -79,6 +79,7 @@ mod test_global_declaration;
 mod test_global_modifiers;
 mod test_globals;
 mod test_glyph_aliases;
+mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_if_call_condition;

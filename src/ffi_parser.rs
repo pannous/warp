@@ -6,61 +6,39 @@ use std::path::Path;
 use crate::type_kinds::Kind;
 use crate::function::{Signature, Arg};
 
-/// Common include directories to search for headers
+/// Include directories searched for headers, in order (a C compiler's order: the first holding a header wins)
 const INCLUDE_DIRS: &[&str] = &[
     "/opt/homebrew/include",
     "/usr/local/include",
     "/usr/include",
     "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include",
 ];
+/// `:`-separated include directories replacing INCLUDE_DIRS (web/playground's test runner serves exactly one)
+const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
+const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
 
-/// Find header files for a library by searching common locations
-pub fn find_library_headers(library: &str) -> Vec<String> {
-    match library {
-        "m" | "math" | "libm" => find_existing_headers(&["math.h"]),
-        "c" | "libc" => find_existing_headers(&["string.h", "stdlib.h", "stdio.h"]),
-        "SDL2" | "sdl2" | "sdl" => {
-            let mut paths = Vec::new();
-            for dir in INCLUDE_DIRS {
-                for header in ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"] {
-                    let path = format!("{}/SDL2/{}", dir, header);
-                    if Path::new(&path).exists() {
-                        paths.push(path);
-                    }
-                }
-            }
-            paths
-        }
-        _ => {
-            // Generic: search for {library}.h
-            let header_name = format!("{}.h", library);
-            let mut paths = Vec::new();
-            for dir in INCLUDE_DIRS {
-                let path = format!("{}/{}", dir, header_name);
-                if Path::new(&path).exists() {
-                    paths.push(path);
-                }
-                let subdir_path = format!("{}/{}/{}", dir, library, header_name);
-                if Path::new(&subdir_path).exists() {
-                    paths.push(subdir_path);
-                }
-            }
-            paths
-        }
+fn include_dirs() -> Vec<String> {
+    match std::env::var(INCLUDE_VARIABLE) {
+        Ok(list) => list.split(':').filter(|dir| !dir.is_empty()).map(str::to_string).collect(),
+        Err(_) => INCLUDE_DIRS.iter().map(|dir| dir.to_string()).collect(),
     }
 }
 
-fn find_existing_headers(headers: &[&str]) -> Vec<String> {
-    let mut paths = Vec::new();
-    for dir in INCLUDE_DIRS {
-        for header in headers {
-            let path = format!("{}/{}", dir, header);
-            if Path::new(&path).exists() {
-                paths.push(path);
-            }
-        }
-    }
-    paths
+/// The path of `header` (`math.h`, `SDL2/SDL_render.h`) in the first of `dirs` that holds it
+pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> {
+    dirs.iter().map(|dir| format!("{}/{}", dir.as_ref(), header)).find(|path| Path::new(path).exists())
+}
+
+/// The headers that declare a library's functions, each found once in the include directories
+pub fn find_library_headers(library: &str) -> Vec<String> {
+    let headers: Vec<String> = match library {
+        "m" | "math" | "libm" => vec!["math.h".into()],
+        "c" | "libc" => vec!["string.h".into(), "stdlib.h".into(), "stdio.h".into()],
+        "SDL2" | "sdl2" | "sdl" => SDL_HEADERS.iter().map(|header| format!("SDL2/{header}")).collect(),
+        _ => vec![format!("{library}.h"), format!("{library}/{library}.h")],
+    };
+    let dirs = include_dirs();
+    headers.iter().filter_map(|header| find_header_in(header, &dirs)).collect()
 }
 
 /// FFI function info - combines Signature with library metadata

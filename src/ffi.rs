@@ -106,6 +106,8 @@ pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
     }
 }
 
+const SDL_PREFIX: &str = "SDL_";
+
 /// C keywords that start a statement: a line holding one declares no function
 const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
 
@@ -519,7 +521,7 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     }
 
     // Try well-known libraries via header discovery
-    for lib in ["m", "c", "SDL2"] {
+    for &lib in implicit_header_libraries(name) {
         let header_sigs = get_signatures_from_headers(lib);
         if let Some(sig) = header_sigs.get(name).cloned() {
             return Some(sig);
@@ -527,6 +529,12 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     }
 
     None
+}
+
+/// The libraries whose headers an undeclared call `name(…)` is looked up in: libm and libc, SDL2 only for SDL_ names,
+/// so a program that never names SDL never reads its headers
+pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
+    if name.starts_with(SDL_PREFIX) { &["m", "c", "SDL2"] } else { &["m", "c"] }
 }
 
 /// Get FFI signature from a specific library's headers
