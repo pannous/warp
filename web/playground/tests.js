@@ -4,6 +4,7 @@
 
 const TEST_TIMEOUT_MS = 120000;
 const DEFAULT_WORKERS = 2;
+const RESULTS_URL = "/__results__";
 
 const parameters = new URLSearchParams(location.search);
 const wasmUrl = parameters.get("wasm") ?? "tests.wasm";
@@ -97,6 +98,15 @@ async function main() {
 		seconds: (performance.now() - started) / 1000,
 	};
 	$("progress").textContent += `, ${ignored} ignored, ${window.testSummary.seconds.toFixed(1)} s`;
+	report(window.testSummary);
+}
+
+// the browser's name for the results file test_in_browser.py keeps (a plain static server just refuses the POST)
+const browserName = () => /Firefox\//.test(navigator.userAgent) ? "firefox" : /Edg\//.test(navigator.userAgent) ? "edge"
+	: /Chrome\//.test(navigator.userAgent) ? "chrome" : /Safari\//.test(navigator.userAgent) ? "safari" : "other";
+
+function report(summary) {
+	fetch(RESULTS_URL, { method: "POST", body: JSON.stringify({ ...summary, browser: browserName(), userAgent: navigator.userAgent }) }).catch(() => {});
 }
 
 main().catch(failure => {

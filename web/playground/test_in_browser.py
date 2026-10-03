@@ -4,8 +4,8 @@
 `test_in_browser.py <tests.wasm> [libtest arguments]`: this serves the repository root and the binary, opens
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
-Besides the repository it serves /__system__/<absolute path> for C headers (*.h under an include directory), which the
-FFI header parser reads, as natively."""
+Besides the repository it serves /__include__/<header>: the C header of that name from the first include directory of
+src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
 
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "8733"))
@@ -13,11 +13,24 @@ WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
 SESSION = "warp-browser-tests"
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
-SYSTEM_PREFIX = "/__system__/"
-SYSTEM_FILES = re.compile(r"^/.*/include/.*\.h$")  # C headers only: the page must not read anything else of the machine
+INCLUDE_PREFIX = "/__include__/"
+HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
+RESULTS_PATH = "/__results__"
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
+
+
+def include_dirs():
+	"""the compiler's own list, so both look in the same places"""
+	source = open(os.path.join(REPOSITORY, "src", "ffi_parser.rs"), encoding="utf-8").read()
+	return re.findall(r'"([^"]+)"', re.search(r"const INCLUDE_DIRS[^=]*=\s*&\[(.*?)\];", source, re.S).group(1))
+
+
+def find_header(name):
+	if not HEADER_NAME.match(name):
+		return None
+	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
 
 
 def serve(binary):
@@ -26,10 +39,20 @@ def serve(binary):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)
 			if path == BINARY_PATH and binary:
 				return binary
-			if path.startswith(SYSTEM_PREFIX):
-				system = os.path.normpath("/" + path[len(SYSTEM_PREFIX):])
-				return system if SYSTEM_FILES.match(system) else "/nonexistent"
+			if path.startswith(INCLUDE_PREFIX):
+				return find_header(path[len(INCLUDE_PREFIX):]) or "/nonexistent"
 			return super().translate_path(path)
+
+		def do_POST(self):
+			"""tests.html posts its summary here: scratch/browser_tests_<browser>.json, e.g. from a Firefox tab"""
+			if self.path != RESULTS_PATH:
+				return self.send_error(404)
+			summary = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+			os.makedirs(os.path.join(REPOSITORY, "scratch"), exist_ok=True)
+			with open(os.path.join(REPOSITORY, "scratch", f"browser_tests_{summary.get('browser', 'unknown')}.json"), "w") as file:
+				json.dump(summary, file, indent=1)
+			self.send_response(204)
+			self.end_headers()
 
 		def log_message(self, *_):
 			pass
