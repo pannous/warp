@@ -65,6 +65,7 @@ pub mod versions;
 pub mod web;
 pub mod ambiguous_forms;
 pub mod traits;
+pub mod overloads;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp

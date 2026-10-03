@@ -422,6 +422,8 @@ pub enum Shape {
 /// like library_words' object variables); parameters `p:person` are instances
 pub struct InstanceTypes {
 	variables: HashMap<String, Option<Shape>>,
+	/// The shapes user functions return, from their bodies: `make(t) := pdf(t)` returns a pdf
+	results: HashMap<String, Option<Shape>>,
 	registry: TypeRegistry,
 }
 
@@ -432,14 +434,14 @@ impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
 		let mut registry = TypeRegistry::new();
 		collect_all_types(&mut registry, node);
-		let mut types = InstanceTypes { variables: HashMap::new(), registry };
+		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry };
 		if types.registry.types().is_empty() {
 			return types;
 		}
 		for _ in 0..INFERENCE_ROUNDS {
-			let mut variables = HashMap::new();
-			types.collect(node, &mut variables);
-			types.variables = variables;
+			let (mut variables, mut results) = (HashMap::new(), HashMap::new());
+			types.collect(node, &mut variables, &mut results);
+			(types.variables, types.results) = (variables, results);
 		}
 		types
 	}
@@ -457,17 +459,24 @@ impl InstanceTypes {
 		variables.insert(name.to_string(), agreed);
 	}
 
-	fn collect(&self, node: &Node, variables: &mut HashMap<String, Option<Shape>>) {
+	fn collect(&self, node: &Node, variables: &mut HashMap<String, Option<Shape>>, results: &mut HashMap<String, Option<Shape>>) {
 		match node.drop_meta() {
 			Node::Key(target, Op::Assign | Op::Define, value) => {
-				if let Node::Symbol(name) = target.drop_meta() {
-					Self::bind(variables, name, self.shape(value), crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)));
+				let is_plain = crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_));
+				match (target.drop_meta(), definition_head(target)) {
+					(Node::Symbol(name), _) => Self::bind(variables, name, self.shape(value), is_plain),
+					// `d:docx = …` of a declared type
+					(Node::Key(name, Op::Colon, type_node), _) if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() => {
+						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
+					}
+					(_, Some(head)) => Self::bind(results, &head[0].name(), self.shape(value), is_plain),
+					_ => {}
 				}
-				self.collect(value, variables);
+				self.collect(value, variables, results);
 			}
 			Node::Key(left, _, right) => {
-				self.collect(left, variables);
-				self.collect(right, variables);
+				self.collect(left, variables, results);
+				self.collect(right, variables, results);
 			}
 			Node::List(items, _, _) => {
 				// `for x in xs`: x is an item of xs
@@ -478,7 +487,7 @@ impl InstanceTypes {
 						}
 					}
 				}
-				items.iter().for_each(|item| self.collect(item, variables))
+				items.iter().for_each(|item| self.collect(item, variables, results))
 			}
 			_ => {}
 		}
@@ -518,6 +527,8 @@ impl InstanceTypes {
 			Node::List(items, _, _) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
+				// `make(t)`: what the user function returns
+				[function, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.results.contains_key(name)) => self.results[&function.name()].clone(),
 				// `(x)`, and `(t = a; value)` as min_max binds its operands
 				[.., last] => self.shape(last),
 				[] => None,
