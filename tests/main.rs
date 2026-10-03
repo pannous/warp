@@ -74,6 +74,8 @@ mod test_function_keyword;
 mod test_function_values;
 mod test_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_gc_name_registry;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_gc_struct;
 mod test_generic_types;
 mod test_global_constant_words;

@@ -1147,9 +1147,10 @@ pub mod wasm_name_resolver {
 	#[derive(Clone)]
 	struct StructTypeKey(StructType);
 
+	/// The cache holds types of every engine (each run has its own), and StructType::eq panics across engines
 	impl PartialEq for StructTypeKey {
 		fn eq(&self, other: &Self) -> bool {
-			StructType::eq(&self.0, &other.0)
+			Engine::same(self.0.engine(), other.0.engine()) && StructType::eq(&self.0, &other.0)
 		}
 	}
 
