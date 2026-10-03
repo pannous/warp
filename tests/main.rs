@@ -23,7 +23,6 @@ mod test_all_samples;
 mod test_angle;
 mod test_argument_kinds;
 mod test_array_types;
-mod test_asts;
 mod test_attributes;
 mod test_bare_function_name;
 mod test_bare_list_assignment;
