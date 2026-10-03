@@ -127,3 +127,6 @@ fn test_snake() { is!("samples/snake.wasp", 40); }
 
 #[test] // both quicksorts agree
 fn test_quicksort() { is!("samples/quicksort.wasp", true); }
+
+#[test] // the glider moved by (2, 2) in 8 generations
+fn test_game_of_life() { is!("samples/game_of_life.wasp", 2726); }
