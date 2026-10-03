@@ -118,3 +118,6 @@ fn test_parse_all_samples() {
 		println!("\nNote: Some files may use experimental syntax or be intentionally malformed");
 	}
 }
+
+#[test] // first row of the solution: 5 3 4
+fn test_sudoku() { is!("samples/sudoku.wasp", 534); }
