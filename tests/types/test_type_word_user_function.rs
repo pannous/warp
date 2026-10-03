@@ -38,3 +38,9 @@ fn a_clash_is_an_error_not_a_warning() {
 	clash("double := it*2; double 4");
 	assert!(take_warnings().is_empty());
 }
+
+#[test]
+fn the_number_dot_form_calls_a_user_function() {
+	is!("square(x):=x*x; 4.square", 16);
+	is!("square(x):=x*x; 4.square()", 16);
+}

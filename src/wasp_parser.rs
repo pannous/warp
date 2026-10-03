@@ -2892,8 +2892,9 @@ impl WaspParser {
 
 		self.push_digits(&mut num_str);
 		let mut is_float = false;
-		// Only consume . as decimal if NOT followed by another . (range operator)
-		if self.current_char() == '.' && self.peek_char(1) != '.' {
+		// Only consume . as decimal if NOT followed by another . (range operator) or a word (`4.square` calls square)
+		let after_point = self.peek_char(1);
+		if self.current_char() == '.' && after_point != '.' && !(after_point.is_alphabetic() || after_point == '_') {
 			is_float = true;
 			num_str.push('.');
 			self.advance();

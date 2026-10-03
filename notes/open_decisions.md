@@ -16,6 +16,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P24 should the suffix form `4 doubled` and the number-dot form `4.square` call user functions?
   Options: Yes, both (a letter after `4.` is never a decimal) / Suffix form only / Neither. Assumed: unsupported
   (todo.md). Asked by warp-bc. Note: the suffix form is wiki syntax (D9 `1+2 squared`).
+  Night 2026-10-04: the number-dot form `4.square` calls square now (a letter after `4.` is never a decimal).
 - P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
   and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
   libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
