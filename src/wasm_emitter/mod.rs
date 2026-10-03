@@ -411,6 +411,8 @@ impl WasmGcEmitter {
 
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
+		let typed_lists = self.find_typed_lists(&user_fn.body);
+		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -457,6 +459,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
 		self.restore_loop_labels(saved_loop_labels);
+		self.typed_lists = saved_typed_lists;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();

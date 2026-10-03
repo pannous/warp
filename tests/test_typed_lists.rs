@@ -135,3 +135,11 @@ fn test_map_and_element_wise_over_int_arrays() {
 	assert_eq!(printed("xs=[1,2,3]; map xs {it*10}"), "[10 20 30]");
 	is!("xs=[1,2,3]; each xs {it*10}", 30);
 }
+
+#[test]
+fn test_int_arrays_inside_functions() {
+	assert!(typed_array_operations("def squares(n){out=[]; for i in 1..n {out.add(i*i)}; out}; squares(4)") > 0);
+	assert_eq!(printed("def squares(n){out=[]; for i in 1..n {out.add(i*i)}; out}; squares(4)"), "[1 4 9]");
+	is!("def total(){xs=int[5]; for i in 1..5 {xs[i]=i}; sum xs}; total()", 10);
+	is!("def second(){xs=[5,6,7]; xs#2}; second()", 6);
+}
