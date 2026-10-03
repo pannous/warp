@@ -5,19 +5,7 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P14 code quality 3: regroup tests/ into topic subdirectories (pure moves) and move `probe_*.rs` out of the suite?
-  Options: Move probes out only / Regroup and move probes / Leave as is. Assumed: as is.
-- P15 code quality 8: replace CLAUDE.md with a symlink to AGENTS.md (AGENTS.md already rewritten from §1)?
-  Options: Symlink to AGENTS.md / Keep both files. Assumed: both kept, CLAUDE.md untouched.
-- P16 code quality 9: root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links,
-  `build_debug.sh`, `add_ignore_to_failing_tests.sh`, `nextest.sh`). Options: Move to notes/OLD / Delete / Keep.
-  Assumed: kept.
-- P17 D10 return-type polymorphism (`render "hello" as pdf`, `docx example = render "x"`), parked 2026-10-03.
-  Options: Keep parked / `as` stays a cast only / Return-type dispatch, Ask when ambiguous. Assumed: `as` is a cast.
-- P18 #10 Polish notation for .wat/.wast (`(module a b)` → node `module` with children, test_wast), parked.
-  Options: Keep parked / ParserOptions mode. Assumed: test_wast stays ignored.
-- P19 #16 commented `"a".s() + 2` lines in test_string.rs, parked ("don't care").
-  Options: Leave them / Delete the commented lines. Assumed: left.
+(none pending; parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03)
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -52,6 +40,20 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Wiki remote `main` (asked by warp-d0, notes/wiki_branch.md): "Delete remote main". GitHub wikis serve only master;
+  master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
+  `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
+- #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
+- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
+  tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
+  folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
+  topic folders.
+- CLAUDE.md (P15, code quality 8): "Symlink to AGENTS.md".
+- Root clutter (P16, code quality 9): "Move to notes/OLD" (the dangling `wasp`/`warp` links are deleted).
+- D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
+  `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
+  Asks-become-warnings rule).
 - smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
 - Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
 - GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
