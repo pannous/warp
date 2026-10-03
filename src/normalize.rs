@@ -777,7 +777,8 @@ fn signature_of(definition: &Node) -> Option<(String, String, BodyForm)> {
 /// Emit the hints for every non-canonical form in the parsed program that the parser cannot see while reading characters
 pub fn check_style(program: &Node) {
     walk(program, &mut |node, positioned| match node {
-        Node::List(items, _, _) => check_items(items, positioned),
+        // `[int, 3]` and `[double, f]` are items, never the call int(3)
+        Node::List(items, bracket, separator) if *bracket != Bracket::Square && *separator != crate::node::Separator::Colon => check_items(items, positioned),
         Node::Key(_, Op::Colon, right) => {
             if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
                 if let [element] = items.as_slice() {

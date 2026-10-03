@@ -20,3 +20,4 @@ mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
 mod test_welcoming_sugar;
 mod test_c_style;
+mod test_item_list_cast_hint;
