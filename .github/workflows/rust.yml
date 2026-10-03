@@ -90,11 +90,11 @@ jobs:
     - id: tests
       run: cargo test --verbose --no-fail-fast
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
-    # Clippy is denied in src/ (library and binary); tests/ is not clippy-linted here (style lints left there)
+    # Clippy is denied everywhere: src/, the binary and tests/
     - id: clippy
       run: |
-        cargo clippy --lib --bins -- -D warnings
-        cargo clippy --lib --bins --all-features -- -D warnings
+        cargo clippy --all-targets -- -D warnings
+        cargo clippy --all-targets --all-features -- -D warnings
         cargo clippy --lib --no-default-features -- -D warnings
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - name: Agent result
