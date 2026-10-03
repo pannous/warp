@@ -73,7 +73,7 @@ User decisions from that round:
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
-  …) never warn. tests/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
+  …) never warn. tests/welcoming/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
 - A wrong guess fails far away, so `eval` names it: a runtime error lists the defaults the warnings took
   (`assumed at 23:13, 24:15: …; fix: ..<`, diagnostic::take_assumptions), and an index out of range in a program with an
   exclusive range adds "hint: `..` excludes the end; `...` or `to` include it". The kotlin-range warning fires for every

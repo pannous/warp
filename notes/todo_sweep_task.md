@@ -16,7 +16,7 @@ Left: #10 polish notation (no opinion), #13 web host (later), remaining ignored 
 | id | task | status |
 |---|---|---|
 | A1 | tests/numbers/test_law.rs:52 `:=` functions compile `x:float` params as Int, `half(1.0) == 0` | done 768e8a87 (bundled into C2's commit by mistake)
-| A2 | tests/probe_footguns.rs:129 `(x*x) as i64` panics inside a function body | done a0b29543 (ignore was stale, already fixed earlier) |
+| A2 | tests/welcoming/test_footguns.rs:129 `(x*x) as i64` panics inside a function body | done a0b29543 (ignore was stale, already fixed earlier) |
 | A4 | footguns: `1/4+1/4` → 0 (sum typed Int) — verify first | done e5934b38 (already fixed; fixed float locals in function bodies instead) |
 | B4 | footguns: `f := it*10; 1 + f 3` → 31; `x=[1 2 3]; x[3]` returns program text — verify first | done 872063f4 0b795bf9 (stale, already fixed; duplicate tests sent back) |
 
@@ -43,7 +43,7 @@ Left: #10 polish notation (no opinion), #13 web host (later), remaining ignored 
 | A8 | test_math.rs superscript powers 3⁴, vulgar fractions ⅓9 | done d184af4f |
 | C6 | test_meta.rs 5 ignored failing tests (Meta API) | test_parent_context done ba38aea1; @ attributes 74383853 553b398c, IndexMut 1e82fd43; tag form c1b29ed6, meta serialization 5202803b — all 5 done (696/1 expected/114), IndexMut meta, meta serialization → warp-library |
 | B8 | test_lists.rs 6 ignored failing array tests | parked: tests contradict recorded decisions (size in bytes, checked index assignment); typed-array declaration + while value need user |
-| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); while(cond) body abaf6712 (test_wasm_while2 un-ignored); part 2 restored after wipe, patch probes/b9_part2.patch, waits for user OK to replace should_panic test probe_footguns.rs:56 |
+| B9 | `while cond: body;rest` colon body swallows `;`; compiler panic (unwrap undefined variable) → error value | part 1 done 1ca29159 (while-colon → Do); while(cond) body abaf6712 (test_wasm_while2 un-ignored); part 2 restored after wipe, patch probes/b9_part2.patch, waits for user OK to replace should_panic test test_footguns.rs:56 |
 | B10 | `i--` lexes as a kebab-case symbol (test_wasm_while2) | done 2bc61ab1 |
 | B11 | `for i in 1..3: i` unimplemented (returns unevaluated) | done 99d752df (for → while lowering, src/for_loop.rs) |
 | A9 | `3²+1`, `x²+1` → 'cannot extract a numeric value' (postfix Square/Cube in arithmetic) | done 1a815cfc |

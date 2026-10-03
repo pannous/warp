@@ -37,7 +37,7 @@ all the time.
 - `ffi/`: test_ffi test_ffi_import_group test_ffi_warning_once test_host test_wasi test_download test_host_words test_libm_linking
 - `wasm/`: test_wasm test_wasm_emitter test_emitter test_wasm_reader test_wast test_gc_name_registry test_gc_struct test_name_subsection_order test_wasm_names_order wasm_optimizer_test test_optimizer_exceptions test_optimizer_extended_const test_read_bytes_plain_result test_compile_only test_wit test_wit_types
 - `web/`: test_web test_web_playground test_uniscript
-- `welcoming/` (one folder, user OK 2026-10-03): test_welcoming_ask test_welcoming_break test_welcoming_count_argument test_welcoming_elements test_welcoming_empty_push test_welcoming_globals test_welcoming_indent test_welcoming_listexpr test_welcoming_listparams test_welcoming_maps test_welcoming_parse test_welcoming_print test_welcoming_rangeblock test_welcoming_slices test_welcoming_sugar test_got_it_warnings test_warning_mode test_style_dont_care test_it_shadow_warning (+ probe_footguns condensed)
+- `welcoming/` (one folder, user OK 2026-10-03): test_footguns test_welcoming_ask test_welcoming_break test_welcoming_count_argument test_welcoming_elements test_welcoming_empty_push test_welcoming_globals test_welcoming_indent test_welcoming_listexpr test_welcoming_listparams test_welcoming_maps test_welcoming_parse test_welcoming_print test_welcoming_rangeblock test_welcoming_slices test_welcoming_sugar test_got_it_warnings test_warning_mode test_style_dont_care test_it_shadow_warning (+ probe_footguns condensed)
 - `programs/`: test_algo_dijkstra test_algo_levenshtein test_algo_life test_algo_queens test_algo_sieve test_algo_sorting test_all_samples test_samples test_kitchensink
 - `sweeps/`: test_todo test_panic_sweep test_sweep_fixes (regression sweeps; test_todo's passing cases move to their topic file)
 
@@ -61,3 +61,4 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - wasm/ (tests-tidy-wasm): pure move
 - programs/ (tests-tidy-programs): pure move
 - sweeps/ (tests-tidy-sweeps): pure move
+- welcoming/ (tests-tidy-welcoming): probe_footguns condensed into test_footguns.rs (the Solved catalog of notes/footguns.md)

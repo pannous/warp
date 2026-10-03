@@ -49,7 +49,7 @@ Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decis
 
 - test_operators.rs::test_add_pure_vec_data
 
-## (b) needs a user decision: empty list / ø counting properties (probe_footguns.rs:634 pins `x=ø; x.size` as an error): 1
+## (b) needs a user decision: empty list / ø counting properties (test_footguns.rs:634 pins `x=ø; x.size` as an error): 1
 
 - test_empty_list_count.rs::the_counting_properties_of_an_empty_list_need_no_null_check
 
