@@ -11,12 +11,15 @@ grouped into folders".
 - File names keep their `test_` stem, so filters like `tests/queue.sh -- test_lists::` keep working (cargo filters
   are substrings). Full test names gain the folder: `lists::test_lists::test_index`.
 - No `probe_*.rs` in tests/: a probe's cases that matter become tests in the topic file, the rest is dropped.
-- An `is!/eq!/assert_eq!` line that appears twice is kept once, in the most specific file. The test count drops only
-  where a whole test was a duplicate; every removed or merged test is named in its commit message.
+- Only probes condense (user 2026-10-03, via the Interviewer: "Only probes condense"): a probe line already asserted
+  by a test is dropped, the rest moves into the topic file. Assertions in regular test files stay where they are, even
+  when duplicated. The test count drops only by probe tests that were duplicates; each one is named in its commit.
 - `#[cfg(feature = "native")]` stays on the `mod` line of a native-only file (now in the folder's mod.rs).
 - Data files stay where they are: tests/fixtures/, tests/wasp/ (paths in the tests are relative to the crate root).
 
 ## Folders
+User 2026-10-03: "OK as listed".
+
 Moved one folder per branch (`tests-tidy-<folder>`), small and quick to merge, because other workers add test files
 all the time.
 
@@ -34,7 +37,7 @@ all the time.
 - `ffi/`: test_ffi test_ffi_import_group test_ffi_warning_once test_host test_wasi test_download
 - `wasm/`: test_wasm test_wasm_emitter test_emitter test_wasm_reader test_wast test_gc_name_registry test_gc_struct test_name_subsection_order test_wasm_names_order wasm_optimizer_test test_optimizer_exceptions test_optimizer_extended_const test_read_bytes_plain_result test_compile_only test_wit test_wit_types test_utils
 - `web/`: test_web test_web_playground test_uniscript
-- `welcoming/`: test_welcoming_ask test_welcoming_break test_welcoming_count_argument test_welcoming_elements test_welcoming_empty_push test_welcoming_globals test_welcoming_indent test_welcoming_listexpr test_welcoming_listparams test_welcoming_maps test_welcoming_parse test_welcoming_print test_welcoming_rangeblock test_welcoming_slices test_welcoming_sugar test_got_it_warnings test_warning_mode test_style_dont_care test_it_shadow_warning (+ probe_footguns condensed)
+- `welcoming/` (one folder, user OK 2026-10-03): test_welcoming_ask test_welcoming_break test_welcoming_count_argument test_welcoming_elements test_welcoming_empty_push test_welcoming_globals test_welcoming_indent test_welcoming_listexpr test_welcoming_listparams test_welcoming_maps test_welcoming_parse test_welcoming_print test_welcoming_rangeblock test_welcoming_slices test_welcoming_sugar test_got_it_warnings test_warning_mode test_style_dont_care test_it_shadow_warning (+ probe_footguns condensed)
 - `programs/`: test_algo_dijkstra test_algo_levenshtein test_algo_life test_algo_queens test_algo_sieve test_algo_sorting test_all_samples test_samples test_kitchensink
 - `sweeps/`: test_todo test_panic_sweep test_sweep_fixes (regression sweeps; test_todo's passing cases move to their topic file)
 
