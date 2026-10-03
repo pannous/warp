@@ -67,6 +67,7 @@ pub mod package_tools;
 pub mod versions;
 pub mod web;
 pub mod ambiguous_forms;
+pub mod traits;
 // ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================

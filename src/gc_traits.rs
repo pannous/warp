@@ -1029,23 +1029,29 @@ pub mod wasm_name_resolver {
 	static REGISTRY: Lazy<Mutex<FieldNameRegistry>> =
         Lazy::new(|| Mutex::new(FieldNameRegistry::default()));
 
+    /// The registry only caches parsed name sections, so a panic elsewhere while it was locked (a should_panic test,
+    /// say) leaves it usable; that panic already reported itself, and poisoning would fail every later lookup
+    fn registry() -> std::sync::MutexGuard<'static, FieldNameRegistry> {
+        REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     pub fn register_module(bytes: &[u8]) -> Result<u64> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.register_module(bytes)
     }
 
     pub fn lookup_field_index(struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.lookup(struct_type, field_name, module)
     }
 
     pub fn field_names(struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.field_names(struct_type, module)
     }
 
     pub fn type_name(struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.type_name(struct_type, module)
     }
 

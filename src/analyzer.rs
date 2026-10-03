@@ -207,8 +207,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(name) = items[0].drop_meta() {
-					if name == crate::library_words::SLICE {
-						// a slice of a text is a text, of anything else a list
+					if name == crate::library_words::SLICE || name == "reverse" {
+						// a slice or reversal of a text is a text, of anything else a list
 						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
 					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
@@ -329,9 +329,10 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
 		REAL_WORD => Some(Kind::Float),
-		word => match type_word_kind(word)? {
-			Kind::Codepoint => Some(Kind::Text),
-			kind => Some(kind),
+		word => match type_word_kind(word) {
+			Some(Kind::Codepoint) => Some(Kind::Text),
+			Some(kind) => Some(kind),
+			None => Some(Kind::Empty), // instances, keys, symbols: held as Nodes
 		},
 	}
 }
@@ -1127,6 +1128,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
 			}
 		}
+		// `sort(xs)`, `reverse(xs)`: the same elements
+		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
+			list_type_name(&items[1], scope)
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -1167,6 +1172,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// The type name of a map literal, `map of <value type>` when its values share one
 const MAP_TYPE: &str = "map";
+/// Library words whose list result has the elements of their list argument
+const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
@@ -2261,6 +2268,9 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
 /// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
+	if crate::type_constructor::instance_parts_marked(type_node) {
+		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
+	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
