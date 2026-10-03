@@ -5,6 +5,7 @@
 mod common;
 mod node_values_test;
 mod probe_def_syntax;
+mod probe_destructuring;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod probe_footguns;
 mod probe_increment;
