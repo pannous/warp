@@ -24,6 +24,14 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
   `xs + [4]` concatenates.
 - D12 `a=1 2 3` / `a=1,2,3`: user "idk", stays parked.
+- D1 interpolation: "Both". Double-quoted text accepts Swift `"\(expr)"` and `"${expr}"` (also `$x`); the normalizer
+  picks one canonical form. Single quotes stay literal. Open detail: `$` holes in sql/sh templates must keep working.
+- D6 pipe: "The pipe operator is just an operator that behaves differently with different types unified". So `|` is one
+  operator dispatched on its operand types: truth values → logical or, a value and a function → pipe (`2|square|root`).
+- D14 `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
+  warning". `3 in [1 2 3]` gives the position (truthy when found), with a warning. Caveat for implementation: a 0-based
+  position makes the first element falsy, so the position must be 1-based (or found-at-0 still truthy).
+- #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
 - Text + number concatenates, the number in its text form (`"F:" + 13` → `"F:13"`, `"5"+3` → `"53"`, JS/Kotlin), with a
@@ -145,7 +153,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 29. The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
-30. `is` and `==` are the same operator, so a type word on the right of `==` is now also a type test (`3 == int` → 1).
+30. DECIDED 2026-10-03 (see the top: only `is` tests types). `is` and `==` are the same operator, so a type word on the right of `==` is now also a type test (`3 == int` → 1).
     `3 is rational` → 1 (int is a special case of rational). Keep both?
 31. `switch n {…}` without a match reports `no case for n` (the subject as written, not its runtime value 4).
     Units: no `min`/`d` (clash with the function `min`), `s`/`h` are now unit words. OK?
