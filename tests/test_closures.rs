@@ -46,8 +46,8 @@ fn test_map_and_reduce_with_a_closure_variable() {
 
 #[test]
 fn test_function_chosen_at_run_time() {
-	is!("double(x):=x*2; square(x):=x*x; pick(c) := if c then double else square; f = pick(1); f(5)", 10);
-	is!("double(x):=x*2; square(x):=x*x; pick(c) := if c then double else square; f = pick(0); f(5)", 25);
+	is!("twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(1); f(5)", 10);
+	is!("twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(0); f(5)", 25);
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn test_float_closure() {
 
 #[test]
 fn test_compose_returns_a_closure() {
-	is!("double(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(double, inc); h(3)", 8);
+	is!("twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); h(3)", 8);
 	is!("compose(f, g) := (x => f(g(x))); k=10; h = compose(y=>y+k, y=>y*2); h(3)", 16);
 }
 
@@ -79,7 +79,7 @@ fn test_curried_closures() {
 
 #[test]
 fn test_a_closure_prints_as_its_function() {
-	assert_eq!(printed("double(x):=x*2; pick(c) := if c then double else double; pick(1)"), "double");
+	assert_eq!(printed("twice(x):=x*2; pick(c) := if c then twice else twice; pick(1)"), "twice");
 }
 
 #[test]

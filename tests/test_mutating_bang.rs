@@ -16,8 +16,8 @@ fn a_function_with_bang_on_its_argument_assigns_back() {
 	is!("x=\"ab\"; upper x!; x", "AB");
 	is!("xs=[1 2 3]; reverse xs!; xs#1", 3);
 	is!("x=\"ab\"; upper(x)!; x", "AB");
-	is!("double:=it*2; x=3; double x!; x", 6);
-	is!("double:=it*2; x=3; double(x)!; x", 6);
+	is!("twice:=it*2; x=3; twice x!; x", 6);
+	is!("twice:=it*2; x=3; twice(x)!; x", 6);
 }
 
 #[test]
