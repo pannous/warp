@@ -88,7 +88,7 @@ fn a_number_joins_a_text_in_its_text_form() {
 	is!("13 + \"F\"", "13F");
 	is!("i=3; \"row \" + i + \":\"", "row 3:");
 	is!("s=\"n=\"; s += 4; s", "n=4");
-	fails_with("\"5\"*3", "type error");
+	is!("\"5\"*3", "555"); // user decision 2026-10-03: Python repeat
 }
 
 #[test]

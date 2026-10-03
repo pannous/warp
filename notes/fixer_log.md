@@ -20,7 +20,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-03 fix-small
 - analyzer's copy of `collect_assigned_names` removed (identical to library_words').
 - `ages["alice"]` no longer hints `ages#("alice"+1)`: a quoted key counts no position (normalize.rs index_operator).
-  tests/test_key_subscript_hint.rs.
+  tests/lists/test_key_subscript_hint.rs.
 
 ## 2026-10-03 fix-text-as-int
 - `x="12"; x as int` / `int(x)` / `xs#1 as int` parse the text at run time (list_ops.rs `text_as_int`: optional sign,
@@ -34,7 +34,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-03 fix-spaced-required
 - `class person{name! email?}`: a `!` glued to its name and followed by a space is the suffix (required field / evaluate
   / mutate mark) even when an operand follows (wasp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
-  tests/test_spaced_required_fields.rs.
+  tests/parser/test_spaced_required_fields.rs.
 - `while i<n {i++}` already works on main (todo marked DONE).
 
 ## 2026-10-03 fix-constant-text
@@ -49,5 +49,11 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-03 fix-one-line-statements
 - `print a    print b` (a print word or print(…) call after the first print of a space list) is the error "two statements
-  on one line? separate them with `;` or a newline" (user decision). tests/test_one_line_statements.rs.
+  on one line? separate them with `;` or a newline" (user decision). tests/parser/test_one_line_statements.rs.
 - notes/open_decisions.md records this and the text * number decision (repeat + got-it warning, an assumption).
+
+## 2026-10-03 fix-text-repeat
+- text * int repeats (`"ab"*2` → "abab", `"5"*3` → "555"), educate_once "got it" warning naming `n times text`, and
+  `int("5")*3` for a digit text (user decision "Python repeat"). `n times "ab"` / `n times g` repeat (parser marker
+  `times·text`, a non-text is an error naming `n times [x]`). text * float/text stay type errors.
+  tests/test_text_repeat.rs; approved edits of test_print_type_error, probe_footguns, test_welcoming_sugar in their own commit.

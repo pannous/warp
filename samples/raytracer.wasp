@@ -1,7 +1,7 @@
 // Simple ray tracer
 // Renders spheres with lighting
 
-type Vec3: { x: float, y: float, z: float }
+type Vec3 { x: float, y: float, z: float }
 
 def vec(x, y, z) := Vec3 { x: x, y: y, z: z }
 def add(a, b) := vec(a.x + b.x, a.y + b.y, a.z + b.z)
@@ -11,8 +11,8 @@ def dot(a, b) := a.x * b.x + a.y * b.y + a.z * b.z
 def length(v) := sqrt(dot(v, v))
 def normalize(v) := mul(v, 1.0 / length(v))
 
-type Sphere: { center: Vec3, radius: float, color: Vec3 }
-type Ray: { origin: Vec3, direction: Vec3 }
+type Sphere { center: Vec3, radius: float, color: Vec3 }
+type Ray { origin: Vec3, direction: Vec3 }
 
 def intersect(ray, sphere) {
     oc = sub(ray.origin, sphere.center)
@@ -25,16 +25,16 @@ def intersect(ray, sphere) {
 }
 
 // Scene setup
-spheres = [
+global spheres = [
     Sphere { center: vec(0, 0, 5), radius: 1.0, color: vec(1, 0, 0) }
     Sphere { center: vec(2, 0, 6), radius: 1.0, color: vec(0, 1, 0) }
     Sphere { center: vec(-2, 0, 6), radius: 1.0, color: vec(0, 0, 1) }
     Sphere { center: vec(0, -101, 5), radius: 100, color: vec(0.5, 0.5, 0.5) }
 ]
-light = normalize(vec(1, 1, -1))
+global light = normalize(vec(1, 1, -1))
 
 def trace(ray) {
-    closest = 1e10
+    closest = 1e10 as float // 1e10 alone is an exact number, which cannot later hold a float
     hit_sphere = None
     for sphere in spheres {
         t = intersect(ray, sphere)
@@ -54,6 +54,7 @@ def trace(ray) {
 // Render
 width = 80
 height = 40
+shades = 0 // the sum of all shade levels: a checksum of the picture
 for y in 0..height {
     line = ""
     for x in 0..width {
@@ -63,7 +64,10 @@ for y in 0..height {
         color = trace(ray)
         brightness = (color.x + color.y + color.z) / 3
         chars = " .:-=+*#%@"
-        line = line + chars[int(brightness * 9)]
+        shade = int(brightness * 9)
+        shades = shades + shade
+        line = line + chars[shade]
     }
     print line
 }
+shades

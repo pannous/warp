@@ -311,6 +311,7 @@ fn test_sqrt_alias() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
 fn test_abs_alias() {
 	is!("abs -3", 3);
 	is!("abs 3", 3);

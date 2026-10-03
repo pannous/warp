@@ -1,61 +1,72 @@
 // Conway's Game of Life
-// Cellular automaton simulation
+// Cellular automaton simulation on a torus (the edges wrap)
+// the grid is a flat list of cells, row by row; lists are values, so the grid is global for the functions to change it
 
-width = 40
-height = 20
-grid = Array2D(width, height, false)
+width = 20
+height = 10
+generations = 8
+global grid = []
+for i in 0 to width * height - 1 { grid.push(false) }
+
+def cell(x, y) { return grid#(y * width + x + 1) }
 
 // Initialize with glider
 def spawn_glider(x, y) {
-    grid[x+1, y] = true
-    grid[x+2, y+1] = true
-    grid[x, y+2] = true
-    grid[x+1, y+2] = true
-    grid[x+2, y+2] = true
+    for (dx, dy) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+        grid#((y + dy) * width + x + dx + 1) = true
+    }
 }
 
 spawn_glider(2, 2)
 
 def count_neighbors(x, y) {
-    count = 0
-    for dy in -1..2 {
-        for dx in -1..2 {
-            if dx == 0 and dy == 0 { continue }
-            nx = (x + dx + width) % width
-            ny = (y + dy + height) % height
-            if grid[nx, ny] { count = count + 1 }
+    neighbors = 0
+    for dy in -1 to 1 {
+        for dx in -1 to 1 {
+            if dx != 0 or dy != 0 {
+                nx = (x + dx + width) % width
+                ny = (y + dy + height) % height
+                if cell(nx, ny) { neighbors = neighbors + 1 }
+            }
         }
     }
-    return count
+    return neighbors
 }
 
 def step() {
-    next = Array2D(width, height, false)
+    next = []
     for y in 0..height {
         for x in 0..width {
             n = count_neighbors(x, y)
-            alive = grid[x, y]
             // Rules: B3/S23
-            next[x, y] = n == 3 or (alive and n == 2)
+            next.push(n == 3 or (cell(x, y) and n == 2))
         }
     }
     grid = next
 }
 
 def render() {
-    clear()
     for y in 0..height {
         line = ""
         for x in 0..width {
-            line = line + (grid[x, y] ? "█" : " ")
+            line = line + (if cell(x, y) then "█" else " ")
         }
         print line
     }
 }
 
-// Main loop
-loop {
-    render()
+// Main loop: a few generations instead of forever
+for generation in 1 to generations {
     step()
-    sleep(100)
+    sleep(10)
 }
+render()
+
+// the glider moved two cells right and down: sum of y*100+x over live cells
+checksum = 0
+for y in 0..height {
+    for x in 0..width {
+        if cell(x, y) { checksum = checksum + y * 100 + x }
+    }
+}
+checksum

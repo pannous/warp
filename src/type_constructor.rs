@@ -99,19 +99,21 @@ fn entries(fields: &Node) -> Vec<Node> {
 	}
 }
 
-fn entry_name(entry: &Node) -> Option<String> {
+pub(crate) fn entry_name(entry: &Node) -> Option<String> {
 	match entry.drop_meta() {
 		Node::Key(field, Op::Colon | Op::Assign, _) => Some(field.name()),
 		_ => None,
 	}
 }
 
-/// The given fields, then every left out field that has a default, with its default value
+/// The given fields, then every left out field that has a default, with its default value, and every left out optional one
 fn with_defaults(type_def: &TypeDef, registry: &TypeRegistry, mut entries: Vec<Node>) -> Vec<Node> {
 	let given: Vec<String> = entries.iter().filter_map(entry_name).collect();
 	for field in type_def.fields.iter().filter(|field| !given.contains(&field.name)) {
-		if let Some(default) = registry.default_of(type_def, field) {
-			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(default.clone())));
+		// a left out optional field `left?` is there, holding ø: reading it is no error, assigning it changes it
+		let value = registry.default_of(type_def, field).cloned().or_else(|| field.is_optional().then_some(Node::Empty));
+		if let Some(value) = value {
+			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value)));
 		}
 	}
 	entries

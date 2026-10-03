@@ -5,7 +5,7 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending; parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03)
+(none pending) Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -33,13 +33,32 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 
 ## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
 - `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
-  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+  or a newline" (wasp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
-  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
-  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
-  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
+  type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Text quotes in printed output (asked by warp-6c; user WIP commit ec968e18 expected single quotes in
+  tests/test_method_words.rs): "Keep double quotes". The printer keeps `"HELLO"`; the WIP test edits are reverted to
+  double quotes (user decision) and the 5 ignored tests un-ignored.
+- `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
+  otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
+  the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
+- Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
+  to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
+  python if it has all the fields but is a known different type then we should create an error and get the user about
+  a new keyword image like photo so the image will be treated like a photo and judged by users we should write that as
+  a very central philosophy which needs to be implemented". So: a value of truly unknown type passed to `p:photo` is
+  duck typed (judged by the fields it is used with); a value of a KNOWN different type (an `image` with all of photo's
+  fields) is an error that teaches `image like photo`, which declares image usable as a photo, judged by uses.
+  Keyword: "`image like photo`" (chosen over `as`/`is`). Written map `{width:7}` for `p:photo`: "Accept
+  structurally". `p.word` typo on an untyped parameter: "Field lookup, runtime error" ("no field word").
+- libm FFI (warp-12 experiment: headers serve all of libm on macOS incl. hypot; glibc's __MATHCALL macros defeat the
+  header parser on Linux): "Headers first, table fallback". Header-driven linking always; LIBM_UNARY/LIBM_BINARY link
+  only when the headers give nothing for "m". Patch: warp.worktrees.noindex/ffi-libm-experiment.patch.
 - tests/ folders (asked by warp-1a, branch tests-tidy, notes/tests_layout.md): "OK as listed" (17 topic folders,
   welcoming one folder). Duplicates: "Only probes condense". Probe lines condense into topic files; assertions in
   regular test files stay even when duplicated.
@@ -75,7 +94,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
   `--offline` builds from the registry cache.
 - Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
-  tests/test_web.rs go, keeping the branch that runs today (approved test edit).
+  tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
   don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
@@ -188,7 +207,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
-  (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
+  (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
   `##` (doc comment) and the directives in wasp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
@@ -286,7 +305,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
-    that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
+    that assertion line? The fix (a small arm in check_null_use) is ready; tests/lists/test_empty_list_count.rs waits #[ignore]d.
 29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
@@ -315,5 +334,10 @@ D16 overflow contradict Decided rules). Found while implementing:
     `1<2==2` chains (`1<2 and 2==2` → true). Should `==`/`!=` stop chaining with `<`/`>`?
 40. (impl-ask, 2026-10-03; assumption taken, not blocking) D13 `1 -1` asks only when the left operand is a number
     literal (`1 -1`, `1 +1`, `[1 -1]`); `x -1`, `abs -3`, `return -1` keep subtracting/negating, so
-    tests/test_negated_call.rs:10 `is!("x=5;x -1", 4)` stays. Should `x -1` ask too (that test line would change)?
+    tests/operators/test_negated_call.rs:10 `is!("x=5;x -1", 4)` stays. Should `x -1` ask too (that test line would change)?
     Also assumed: D9's suffix-precedence Ask falls back to Error.
+41. (samples, 2026-10-03; assumption taken, not blocking) Spaced construction: `V { x: 1, y: 2 }` with a space now
+    constructs a declared type `V` exactly like the glued `V{x: 1 y: 2}` (D4); a word that names no declared type
+    before a block stays data (`Person { name: "Alice" }`). Also: `v.x` reads the field at run time when `x` is a field
+    of any declared type, even if v's type is unknown at compile time (a missing field fails "no field x").
+    OK, or should the spaced form stay data?

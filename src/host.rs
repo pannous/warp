@@ -10,8 +10,45 @@ use std::time::Duration;
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 const PAGE_BITS: u32 = 16;
 
-/// Other spellings of the host words (user decision #14e: `download <url>` is `fetch <url>`)
-const HOST_ALIASES: [(&str, &str); 1] = [("download", "fetch")];
+/// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
+/// `download <url>` is `fetch <url>`; `random(n)` is `random_below(n)`)
+const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetch"), ("random", Some(1), RANDOM_BELOW)];
+
+/// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs):
+/// `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
+/// since the Unix epoch. A program that defines a word of the same name keeps its own.
+pub const HOST_LIBRARY: &str = "host";
+const SLEEP: &str = "sleep";
+const RANDOM: &str = "random";
+const RANDOM_BELOW: &str = "random_below";
+const CLOCK: &str = "clock";
+pub const HOST_WORDS: [&str; 4] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK];
+
+/// name, parameters, results of the host words
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 4] {
+	use wasm_encoder::ValType::{F64, I64};
+	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64])]
+}
+
+/// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets
+#[cfg(feature = "native")]
+fn next_random() -> u64 {
+	use std::sync::atomic::{AtomicU64, Ordering};
+	static STATE: AtomicU64 = AtomicU64::new(0);
+	let mut x = STATE.load(Ordering::Relaxed);
+	if x == 0 {
+		x = (milliseconds_since_epoch() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+	}
+	x ^= x >> 12;
+	x ^= x << 25;
+	x ^= x >> 27;
+	STATE.store(x, Ordering::Relaxed);
+	x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+}
+
+fn milliseconds_since_epoch() -> i64 {
+	std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
+}
 
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -27,12 +64,13 @@ use log::trace;
 use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};
 
 #[cfg(feature = "native")]
-/// Memory allocator state for host functions
+/// The state of a running program, one for all its imports: host functions, WASI and FFI share one linker, so a program
+/// can print and fetch, or print and call C
 pub struct HostState {
 	/// Next free offset in linear memory for string allocation
 	next_alloc: u32,
-	/// Pending result node from `run` call (stored until it can be returned)
-	pending_result: Option<Node>,
+	/// WASI preview 1 (fd_write …), writing to the process's stdout and stderr
+	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
 }
 
 #[cfg(feature = "native")]
@@ -47,7 +85,7 @@ impl HostState {
 	pub fn new() -> Self {
 		HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
-			pending_result: None,
+			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
 		}
 	}
 
@@ -263,6 +301,12 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		},
 	)?;
 
+	linker.func_wrap(HOST_LIBRARY, SLEEP, |milliseconds: i64| std::thread::sleep(Duration::from_millis(milliseconds.max(0) as u64)))?;
+	// the top 53 bits make a uniform f64 in [0, 1)
+	linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
+	linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
+	linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
+
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
 	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
 		if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
@@ -299,12 +343,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 
 			// Execute the WASM and get result directly
 			match run_wasm_simple(&wasm_bytes) {
-				Ok(result) => {
-					caller.data_mut().pending_result = Some(Node::Number(
-						crate::extensions::numbers::Number::Int(result),
-					));
-					result
-				}
+				Ok(result) => result,
 				Err(e) => {
 					trace!("host.run: execution failed: {}", e);
 					-1
@@ -363,19 +402,20 @@ pub fn lower_aliases(node: Node) -> Node {
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
 	defined.extend(context.user_functions.into_keys());
-	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
+	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
 	if aliases.is_empty() {
 		return node;
 	}
 	renamed_heads(node, &aliases)
 }
 
-fn renamed_heads(node: Node, aliases: &[(&str, &str)]) -> Node {
+fn renamed_heads(node: Node, aliases: &[(&str, Option<usize>, &str)]) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| renamed_heads(item, aliases)).collect();
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if let Some((_, word)) = aliases.iter().find(|(alias, _)| alias == name) {
+				let arguments = items.len() - 1;
+				if let Some((_, _, word)) = aliases.iter().find(|(alias, arity, _)| alias == name && arity.is_none_or(|arity| arity == arguments)) {
 					items[0] = Node::Symbol(word.to_string());
 				}
 			}

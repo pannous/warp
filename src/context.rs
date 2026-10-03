@@ -32,6 +32,9 @@ pub struct UserFunctionDef {
     pub func_index: Option<u32>,
 }
 
+/// A variable captured by a closure: the global holding its value at definition time, and its kind
+pub type Capture = (String, (u32, Kind));
+
 /// Compilation context for WASM GC emission
 /// Contains state that tracks functions, types, variables, and strings during compilation
 /// GLOBAL module scope containing several function scopes.
@@ -47,9 +50,11 @@ pub struct Context {
     pub user_globals: HashMap<String, (u32, Kind)>,
     /// The program's `global` declarations with kind and type, which every function body sees
     pub declared_globals: HashMap<String, crate::local::Local>,
+    /// Declared kinds of the fields of the program's types, keyed by analyzer::field_kind_key (`.x` → Float)
+    pub field_kinds: HashMap<String, Kind>,
     pub user_functions: HashMap<String, UserFunctionDef>,
     /// Per function: captured outer variable → (global holding its value at definition time, kind)
-    pub captures: HashMap<String, Vec<(String, (u32, Kind))>>,
+    pub captures: HashMap<String, Vec<Capture>>,
     /// Calls that disagree on the kind of an undeclared parameter, reported as type errors
     pub parameter_conflicts: Vec<String>,
     /// Functions made into closures (closures.rs): (function, number of captured values leading its parameters)
@@ -88,6 +93,7 @@ impl Context {
             type_registry: TypeRegistry::new(),
             user_globals: HashMap::new(),
             declared_globals: HashMap::new(),
+            field_kinds: HashMap::new(),
             captures: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),

@@ -335,6 +335,8 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
+		self.emit_float_text(); // after int_to_decimal, which it calls
+		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -352,6 +354,12 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				is_kind(f, Kind::Float);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_field(f, element, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
+				s.call(f, super::float_text::FLOAT_TEXT);
+				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
 					f.instruction(&I::If(BlockType::Empty));
@@ -526,8 +534,19 @@ impl WasmGcEmitter {
 		});
 		assert_eq!(self.func_index("map_replace_entry"), replace_entry, "recursive call index");
 
-		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64], |s, f| {
-			let (entry, kind) = (3, 4);
+		let field_with = next_index(self);
+		let has_instances = !self.ctx.type_registry.types().is_empty();
+		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64, nullable], |s, f| {
+			let (entry, kind, body) = (3, 4, 5);
+			// an instance `T:{fields}` keeps its type: the field is set in its field list
+			if has_instances {
+				f.instruction(&I::LocalGet(0));
+				s.call(f, super::list_ops::STRUCT_BODY);
+				Self::emit_list(f, &[I::LocalTee(body), I::LocalGet(0), I::RefEq, I::I32Eqz, I::If(BlockType::Empty)]);
+				s.emit_field(f, 0, 0);
+				s.emit_field(f, 0, 1);
+				Self::emit_list(f, &[I::LocalGet(body), I::RefAsNonNull, I::LocalGet(1), I::LocalGet(2), I::Call(field_with), I::StructNew(node_type), I::Return, I::End]);
+			}
 			// the entry `name:value`, with the name as a symbol like the names of an object literal
 			f.instruction(&I::LocalGet(1));
 			s.call(f, super::list_ops::MAP_KEY_NAME);
@@ -564,5 +583,6 @@ impl WasmGcEmitter {
 			s.call(f, "not_an_object");
 			Self::emit_list(f, &[I::End, I::LocalGet(0), I::LocalGet(1), I::LocalGet(entry), I::RefAsNonNull, I::Call(replace_entry)]);
 		});
+		assert_eq!(self.func_index("field_with"), field_with, "recursive call index");
 	}
 }

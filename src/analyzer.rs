@@ -14,6 +14,8 @@ use std::collections::{HashMap, HashSet};
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
+/// The error for a user function named like a type word; `{name}` is the word
+const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
 const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
 const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
 
@@ -100,12 +102,14 @@ fn is_update(node: &Node) -> bool {
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
-	} else if *op == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left, right) {
-		Kind::Text // concatenation
-	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
-		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
-	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
-		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
+	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)
+		|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+		|| repeats_text(left, op, right)
+	{
+		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+		Kind::Text
+	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
+		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
 	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
 	} else {
@@ -113,9 +117,15 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	}
 }
 
+/// text * int or int * text: the text repeated (Python), user decision 2026-10-03
+pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
+	let is_text = |kind: Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
+}
+
 /// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
 pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
-	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(number.clone()).fract() != 0.0);
+	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
 	match arithmetic_kind(left, op, right) {
 		Kind::Int if fractional_exponent => Kind::Float,
 		kind => kind,
@@ -160,6 +170,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
+				if name == crate::library_words::LIST_SUM && items.len() == 3 {
+					return infer_type(&items[2], scope); // the loop it dispatches around
+				}
 				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 					return infer_type(&items[1], scope); // `return x` is worth x
 				}
@@ -171,6 +184,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
+				}
+				if name == crate::wasp_parser::TEXT_TIMES {
+					return Kind::Text;
 				}
 				if name == PRINT_CALL && items.len() >= 2 {
 					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
@@ -213,6 +229,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 					if name == crate::library_words::SLICE || name == "reverse" {
 						// a slice or reversal of a text is a text, of anything else a list
 						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+					}
+					if name == crate::library_words::FIELD_WITH {
+						// a copy of the object with one field set: a Node, whatever the object's kind is known as
+						return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
 					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
 				}
@@ -308,6 +328,13 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// An element: `xs#i`, `xs[i]`, `text#i`
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
+		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
+		Node::Key(indexed, Op::Hash, index) if crate::wasp_parser::subscript_key(index)
+			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
+			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
+			let Some(Node::Text(name)) = crate::wasp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
+			scope.function_kind(&field_kind_key(name)).expect("guarded")
+		}
 		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
 			let by_name = crate::wasp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
@@ -348,9 +375,11 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// Either branch a reference type (Text, Symbol, List…): the value is a Node, else a number
+/// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
-	if then_kind.is_ref() || else_kind.is_ref() {
+	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
+		Kind::Codepoint
+	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
 		Kind::Float
@@ -1264,13 +1293,36 @@ fn common_type_word(words: &[String]) -> Option<String> {
 
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
-	check_parameter_annotations(program)
+	check_type_word_functions(program)
+		.or_else(|| check_parameter_annotations(program))
 		.or_else(|| check_declared_types(program, &mut HashMap::new()))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.map(Diagnostic::into_error)
+}
+
+/// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
+fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, program);
+	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(|name| type_word_kind(name).is_some()).collect();
+	clashes.sort();
+	let name = clashes.first()?;
+	let mut definition = None;
+	program.visit(&mut |node| {
+		if let (None, Node::Key(left, Op::Define | Op::Assign, _)) = (definition, node) {
+			let head = match left.drop_meta() {
+				Node::List(items, _, _) => items.first().map(Node::drop_meta),
+				other => Some(other),
+			};
+			if matches!(head, Some(Node::Symbol(word)) if word == *name) {
+				definition = Some(node);
+			}
+		}
+	});
+	Some(Diagnostic::at(definition.unwrap_or(program), TYPE_WORD_FUNCTION_CLASH.replace("{name}", name)))
 }
 
 /// Warnings that do not stop compilation: well-defined code that likely does not mean what it says
@@ -1867,7 +1919,7 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 			match target.drop_meta() {
 				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
-						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float(number.clone().into()))),
+						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float((*number).into()))),
 						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
 						_ => value,
 					};
@@ -1925,7 +1977,7 @@ fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator)
 			Node::Key(word, op, value) => {
 				let Node::Symbol(word) = word.drop_meta() else { return None };
 				type_name = format!("{type_name} of {word}");
-				assignment = Some((op.clone(), value.clone()));
+				assignment = Some((*op, value.clone()));
 				break;
 			}
 			_ => return None,
@@ -2039,7 +2091,8 @@ fn zero_element(type_word: &str) -> Option<Node> {
 	let element = plural_element_type(type_word).unwrap_or(type_word);
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
-		Kind::Float => Node::float(0.0),
+		// `0.0f`: a bare 0.0 is an exact decimal, so an Int
+		Kind::Float => Node::Key(Box::new(Node::float(0.0)), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string()))),
 		Kind::Text => Node::Text(String::new()),
 		Kind::Codepoint => Node::Char('\0'),
 		_ => return None,
@@ -2260,8 +2313,9 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
-fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Scope {
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
@@ -2271,9 +2325,9 @@ fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<S
 
 /// The kinds of the values `return a, b` gives back, position by position over every such return:
 /// one kind when all agree, Float for Int mixed with Float, else a Node
-fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Vec<Kind> {
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
 	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
-	let scope = function_body_scope(params, body, function_kinds);
+	let scope = function_body_scope(params, body, function_kinds, globals);
 	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
 	body.visit(&mut |node| {
 		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
@@ -2289,11 +2343,11 @@ fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<Str
 	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
 }
 
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Kind {
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
 	if crate::tuples::tuple_arity(body).is_some() {
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
-	let scope = function_body_scope(params, body, function_kinds);
+	let scope = function_body_scope(params, body, function_kinds, globals);
 	let last_kind = match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),
@@ -2304,7 +2358,8 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
-				let kind = infer_type(&items[1], &scope);
+				// `return` alone returns ø: a Node, so the function's numbers are Nodes too
+				let kind = if matches!(items[1].drop_meta(), Node::Empty) { Kind::Empty } else { infer_type(&items[1], &scope) };
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
 					returned_nodes.push(kind);
 				}
@@ -2314,6 +2369,7 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 	match returned_nodes.as_slice() {
 		_ if last_kind.is_ref() => last_kind,
 		[] => last_kind,
+		[Kind::Empty] => Kind::Empty,
 		[Kind::List] => Kind::List,
 		_ => Kind::Text,
 	}
@@ -2337,6 +2393,29 @@ fn names_list_type(type_name: &str) -> bool {
 }
 
 /// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
+/// The key under which Scope::function_kinds holds the declared kind of a field (as tuples::element_key holds a
+/// tuple element's): `v.x` reads a float when every declared type with a field x declares it `float`
+pub fn field_kind_key(field: &str) -> String {
+	format!(".{field}")
+}
+
+/// The fields of the declared types whose declarations all agree on one builtin kind, keyed by field_kind_key
+pub fn declared_field_kinds(registry: &crate::type_kinds::TypeRegistry) -> HashMap<String, Kind> {
+	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
+	for field in registry.types().iter().flat_map(|type_def| &type_def.fields) {
+		let kind = type_word_kind(&field.type_name.to_lowercase());
+		kinds.entry(field_kind_key(&field.name)).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
+	}
+	kinds.into_iter().filter_map(|(key, kind)| Some((key, kind?))).collect()
+}
+
+/// The declared field kinds of a program
+fn program_field_kinds(program: &Node) -> HashMap<String, Kind> {
+	let mut registry = crate::type_kinds::TypeRegistry::new();
+	collect_all_types(&mut registry, program);
+	declared_field_kinds(&registry)
+}
+
 pub fn type_word_kind(type_name: &str) -> Option<Kind> {
 	match type_name {
 		"number" => Some(Kind::Int),
@@ -2358,7 +2437,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
 	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
@@ -2373,7 +2452,8 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
-				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
+				// `t.left = 3` lowers to `t = field_with(t, "left", 3)`: t is an object too
+				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
 				}
@@ -2461,7 +2541,77 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
-	refine_return_kinds(ctx);
+	let globals = declared_globals(node);
+	ctx.field_kinds = program_field_kinds(node);
+	refine_return_kinds(ctx, &globals);
+	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
+	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
+	for _ in 0..parameter_count {
+		if !widen_parameters(ctx, node, &globals) {
+			break;
+		}
+		refine_return_kinds(ctx, &globals);
+	}
+}
+
+/// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length
+/// returning a float, `print_tree(tree.left, prefix + "│ ")` passing a text. infer_parameters_from_calls knows only
+/// literal arguments; this pass runs once the return kinds are known. It only changes undeclared Int parameters, and
+/// leaves a parameter alone when calls disagree. True when a parameter changed.
+fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
+	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	function_kinds.extend(ctx.field_kinds.clone());
+	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
+	let mut main = Scope::with_function_kinds(function_kinds.clone());
+	collect_variables(program, &mut main);
+	collect_argument_kinds(program, &main, ctx, &mut passed);
+	for function in ctx.user_functions.values() {
+		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals);
+		collect_argument_kinds(&function.body, &scope, ctx, &mut passed);
+	}
+	let mut changed = false;
+	for ((name, index), kinds) in passed {
+		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
+		let [kind] = kinds.as_slice() else { continue };
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
+		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
+			param.used_as = Some(*kind);
+			changed = true;
+		}
+	}
+	changed
+}
+
+/// The kinds each call in `node` passes each parameter of a user function, not looking into nested definitions
+fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mut HashMap<(String, usize), HashSet<Kind>>) {
+	if function_definition_body(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if let Some(function) = ctx.user_functions.get(name) {
+					for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
+						passed.entry((name.clone(), index)).or_default().insert(infer_type(argument, scope));
+					}
+				}
+			}
+			items.iter().for_each(|item| collect_argument_kinds(item, scope, ctx, passed));
+		}
+		Node::Key(left, _, right) => {
+			collect_argument_kinds(left, scope, ctx, passed);
+			collect_argument_kinds(right, scope, ctx, passed);
+		}
+		Node::Meta { node, .. } => collect_argument_kinds(node, scope, ctx, passed),
+		_ => {}
+	}
+}
+
+/// The program's `global` declarations with their kinds
+fn declared_globals(program: &Node) -> HashMap<String, Local> {
+	let mut scope = Scope::new();
+	collect_variables(program, &mut scope);
+	scope.globals
 }
 
 /// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
@@ -2623,19 +2773,29 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
 /// until the kinds settle: a call of a float-returning function is itself Float
-fn refine_return_kinds(ctx: &mut Context) {
+fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
+	function_kinds.extend(ctx.field_kinds.clone());
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
-					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds));
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
+				// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an
+				// error of the last value; assumed to return a Node of unknown kind, it settles
+				let kind = if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
+					let mut unknown_recursion = function_kinds.clone();
+					unknown_recursion.insert(function.name.clone(), Kind::Empty);
+					infer_function_return_kind(&function.params, &function.body, &unknown_recursion, globals)
+				} else {
+					kind
+				};
 				(function.name.clone(), kind)
 			})
 			.collect();
 		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
 			.flat_map(|function| {
-				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds);
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
 				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
 			})
 			.collect();
@@ -2997,7 +3157,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
-			if matches!(op, Op::If | Op::While | Op::Question | Op::Not) {
+			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
@@ -3210,6 +3370,25 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 		}
 		Node::Meta { ref node, .. } => {
 			extract_ffi_imports(ctx, node);
+		}
+		_ => {}
+	}
+}
+
+/// Calls of the host words (`sleep(ms)`, `random()` …) import them, unless the program defines a function of that name
+pub fn extract_host_words(ctx: &mut Context, node: &Node) {
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+				}
+			}
+			items.iter().for_each(|item| extract_host_words(ctx, item));
+		}
+		Node::Key(left, _, right) => {
+			extract_host_words(ctx, left);
+			extract_host_words(ctx, right);
 		}
 		_ => {}
 	}

@@ -4,7 +4,7 @@ User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun
 (wiki/matching.md, wiki/type.md, wiki/signature.md). This note sets the rule for the open details: unknown words
 (`photo`) and multi-word names. Status: approved by warp-43 (2026-10-03) as an assumption for the user to review;
 implemented in src/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in wasp_parser.rs and by the spaced
-`f T x = …` form), tests/test_type_name_matching.rs.
+`f T x = …` form), tests/types/test_type_name_matching.rs.
 
 ## Forms covered
 

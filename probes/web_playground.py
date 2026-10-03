@@ -68,6 +68,11 @@ def main():
 	warp = build_cli()
 	server = serve()
 	browser("open", PAGE)
+	# runs asked for while the compiler still loads queue up (they once raced: "pending is undefined" in the run timer)
+	early = browser("eval", "Promise.all([playground.evaluate('1+1'), playground.evaluate('2+2')]).then(reports => reports.map(r => r.value).join(' '))")
+	ok = early == '"2 4"'
+	print(f"{'ok  ' if ok else 'FAIL'} runs asked for while the compiler loads: {early}")
+	if not ok: failures.append("early runs")
 	for _ in range(30):
 		if browser("get", "text", "#status") not in ("", "loading the compiler…"):
 			break
@@ -92,6 +97,18 @@ def main():
 	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
 	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
+
+	# the debug build (?debug, warp.debug.wasm) compiles the same programs
+	browser("open", PAGE + "?debug")
+	for _ in range(60):
+		if browser("get", "text", "#status") not in ("", "loading the compiler…"):
+			break
+		time.sleep(1)
+	debug = evaluate_in_page(["3+3"])[0]["value"]
+	ok = debug == "6" and "debug build" in browser("get", "text", "#build")
+	print(f"{'ok  ' if ok else 'FAIL'} the debug build evaluates 3+3 → {debug}")
+	if not ok: failures.append("debug build")
+	browser("open", PAGE)
 
 	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".wasp"))
 	sources = [open(os.path.join(REPOSITORY, "samples", name + ".wasp"), encoding="utf-8").read() for name in names]

@@ -252,7 +252,7 @@ fn test_compound_index_assignment() {
 #[test]
 fn test_text_plus_number_is_a_type_error() {
 	is!("\"5\"+3", "53"); // JS: "53", C: '5'+3 = 56; user decision 2026-10-02: a number joins a text in its text form
-	fails_with("\"5\"*3", "type error"); // JS: 15
+	is!("\"5\"*3", "555"); // JS: 15; user decision 2026-10-03: Python repeat
 	is!("3 + \"4\"", "34");
 	is!("\"ab\"+3", "ab3");
 	is!("int(\"5\") + 3", 8);
@@ -906,7 +906,7 @@ fn test_approximation_is_marked() {
 #[test]
 fn test_as_float_converts_exact_values() {
 	let pi = eval("π as float");
-	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.141592653589793), "{pi:?}");
+	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == std::f64::consts::PI), "{pi:?}");
 }
 
 #[test]
@@ -956,7 +956,7 @@ fn test_fuel_budget_can_be_raised() {
 		other => panic!("expected out of fuel, got {other:?}"),
 	}
 	assert_eq!(eval(counting), 1000);
-	assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous");
+	const { assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous") };
 }
 
 fn effects(code: &str, function: &str) -> warp::effects::EffectSet {

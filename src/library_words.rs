@@ -50,6 +50,9 @@ const SYNONYMS: [(&str, &[&str]); 17] = [
 	("replace", &[]),
 ];
 const SUM: &str = "sum";
+/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
+/// a typed list sums its array, any other list runs the loop `sum` always lowered to
+pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 15] = [
@@ -290,7 +293,7 @@ impl Lowering {
 		let mut bindings = vec![];
 		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
 		let (l, r) = (SIMILAR_LEFT_PLACEHOLDER, SIMILAR_RIGHT_PLACEHOLDER);
-		let comparison = self.from_template(
+		let comparison = self.instantiate_template(
 			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
 			&[(l, &left), (r, &right)],
 		);
@@ -424,8 +427,13 @@ impl Lowering {
 		if let Some(word) = self.library_word(name).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
+		// `x.square` and `x.add(y)` call the user function with the receiver as first argument
+		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
+			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
+			return Some(Node::List(call, Bracket::Round, Separator::None));
+		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
-		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver);
+		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || self.instances.is_declared_field(name);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
@@ -516,6 +524,7 @@ impl Lowering {
 			return Diagnostic::at(head, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
+			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
@@ -525,7 +534,7 @@ impl Lowering {
 	}
 
 	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
-	fn from_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
+	fn instantiate_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
 		let number = self.temporaries.get();
 		self.temporaries.set(number + 1);
 		let mut program = parse(&template.replace(TRY_TEMPORARY, &format!("{TRY_TEMPORARY}_{number}")));
@@ -544,15 +553,15 @@ impl Lowering {
 			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
 			}
-			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.from_template(
+			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.instantiate_template(
 				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),
-			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.from_template(
+			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.instantiate_template(
 				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{{DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}})"),
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
-			_ => self.from_template(
+			_ => self.instantiate_template(
 				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
 				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
 				&[(value, &guarded), (fallback_placeholder, &fallback)],
@@ -567,7 +576,7 @@ impl Lowering {
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
-		self.from_template(
+		self.instantiate_template(
 			&format!("(if {condition_placeholder} {{1}} else {{error({TRY_FALLBACK_PLACEHOLDER})}})"),
 			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
 		)
@@ -585,6 +594,16 @@ impl Lowering {
 			substitute(program, &placeholder, argument)
 		})
 	}
+}
+
+/// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
+fn dispatched_sum(expanded: Node) -> Node {
+	let Node::List(mut items, bracket, separator) = expanded else { return expanded };
+	let [assignment, sum_loop] = items.as_mut_slice() else { return Node::List(items, bracket, separator) };
+	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else { return Node::List(items, bracket, separator) };
+	let list = temporary.as_ref().clone();
+	*sum_loop = Node::List(vec![Node::Symbol(LIST_SUM.to_string()), list, sum_loop.clone()], Bracket::Round, Separator::None);
+	Node::List(items, bracket, separator)
 }
 
 /// `first [1 2 3]` has one argument, `join [1 2] ","` two: a prefix call with more items than the word takes keeps the rest together

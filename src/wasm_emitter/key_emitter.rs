@@ -305,7 +305,11 @@ impl WasmGcEmitter {
 
 	/// Emit default Key node (preserve structure for roundtrip)
 	pub(super) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
-		self.emit_node_instructions(func, left);
+		match left.drop_meta() {
+			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so
+			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),
+			_ => self.emit_node_instructions(func, left),
+		}
 		// For struct instances like Person{...}, emit block as list
 		let right_node = right.drop_meta();
 		if let Node::List(items, Bracket::Curly, sep) = right_node {

@@ -147,14 +147,6 @@ macro_rules! put {
     }};
 }
 
-// PUB : PUBLIC FUNCTIONS
-// you need to explicitly mark each function with the pub keyword in the module definition.
-// Rust does NOT provide a way to globally set visibility for all items within a module;
-#[allow(dead_code)]
-pub fn public_function() {
-	put!("public function");
-}
-
 // https://doc.rust-lang.org/std/primitive.char.html
 // rust playground:
 // https://play.rust-lang.org/?version=stable&mode=debug

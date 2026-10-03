@@ -41,6 +41,7 @@ fn typed(name: &str, type_name: &str) -> Node {
 ///   `a number` → `number:number`, `a photo` → `photo` (`photo:photo` once `class photo` is declared); `to add a b: a+b` keeps `a`
 /// - a known type before a name types it: `int i` → `i:int`; a lone known type names itself, or is `it` when the body uses `it`
 /// - several nouns after an article are one multi-word name, typed by its head noun and named by it: `a phone number` → `number:number`
+///
 /// Err when two parameters end up with one name (`a first name`, `a last name`).
 pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) -> bool) -> Result<Vec<Node>, String> {
 	let is_name = |word: &str| !PREPOSITIONS.contains(&word) && !is_known_type(word);
@@ -106,8 +107,99 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 
-pub fn lower(node: Node) -> Node {
+/// A function head `name(params)`, as a call
+fn is_call_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+}
+
+/// A definition with a declared return type, as the definition whose body converts its result to that type:
+/// `int square(x) = x*x` (items `int`, `square(x) = …`), `square(x) as int := …` and `square(x) : int = …` (also after
+/// `def`) → `square(x) := (x*x) as int`
+fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
+	// `function square(n){…}` names no return type: a definition keyword is no type word here
+	word(type_name).filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	let type_name = type_name.drop_meta();
+	match definition.drop_meta() {
+		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
+			Some(Node::Key(head.clone(), *op, Box::new(converted(body, type_name))))
+		}
+		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
+		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body)) => {
+			Some(Node::Key(Box::new(flat_head(&items[0])), Op::Define, Box::new(converted(&items[1], type_name))))
+		}
+		_ => None,
+	}
+}
+
+/// The glued signature keeps its parameters as one group, `(half (x))`: `(half x)` like the head of `half(x) := …`
+fn flat_head(head: &Node) -> Node {
+	match head.drop_meta() {
+		Node::List(items, bracket, separator) if items.len() == 2 => match items[1].drop_meta() {
+			Node::List(parameters, _, _) => Node::List([vec![items[0].clone()], parameters.clone()].concat(), bracket.clone(), separator.clone()),
+			_ => head.clone(),
+		},
+		_ => head.clone(),
+	}
+}
+
+fn is_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+fn as_type(value: Node, type_name: &Node) -> Node {
+	Node::Key(Box::new(value), Op::As, Box::new(type_name.clone()))
+}
+
+const RETURN: &str = "return";
+
+fn is_return(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && word(&items[0]) == Some(RETURN))
+}
+
+/// The body with every value it gives back converted: each `return e` and the last statement of a block
+fn converted(body: &Node, type_name: &Node) -> Node {
+	let body = converted_returns(body.drop_meta().clone(), type_name);
+	match body {
+		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {
+			let last = items.pop().expect("not empty");
+			items.push(if is_return(&last) { last } else { as_type(last, type_name) });
+			Node::List(items, Bracket::Curly, separator)
+		}
+		body if is_return(&body) => body,
+		body => as_type(body, type_name),
+	}
+}
+
+fn converted_returns(node: Node, type_name: &Node) -> Node {
 	match node {
+		Node::List(mut items, bracket, separator) if items.len() == 2 && word(&items[0]) == Some(RETURN) => {
+			let value = items.pop().expect("two items");
+			items.push(as_type(value, type_name));
+			Node::List(items, bracket, separator)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| converted_returns(item, type_name)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(converted_returns(*left, type_name)), op, Box::new(converted_returns(*right, type_name))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(converted_returns(*node, type_name)), data },
+		other => other,
+	}
+}
+
+/// `square(x) as int := …` / `square(x) : int = …`: the head with its return type, as `typed_return`
+fn return_typed_definition(node: &Node) -> Option<Node> {
+	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else { return None };
+	let Node::Key(head, Op::As | Op::Colon, type_name) = target.drop_meta() else { return None };
+	typed_return(type_name, &Node::Key(head.clone(), *op, body.clone()))
+}
+
+pub fn lower(node: Node) -> Node {
+	if let Some(definition) = return_typed_definition(&node) {
+		return definition;
+	}
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [type_name, definition] if typed_return(type_name, definition).is_some()) => {
+			typed_return(&items[0], &items[1]).expect("guarded")
+		}
 		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
 			spaced_definition(&items).expect("guarded")
 		}

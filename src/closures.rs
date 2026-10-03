@@ -216,7 +216,7 @@ struct Lifting {
 
 impl Lifting {
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
-		(bound.contains(name) || self.variables.contains(name)) && !(self.functions.contains(name) && !bound.contains(name))
+		bound.contains(name) || (self.variables.contains(name) && !self.functions.contains(name))
 	}
 
 	/// A parameter, or a variable assigned a function value
@@ -346,7 +346,7 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 }
 
 /// The closures a call of `arity` values may call
-pub fn targets_of_arity<'a>(context: &'a Context, arity: usize) -> impl Iterator<Item = &'a UserFunctionDef> {
+pub fn targets_of_arity(context: &Context, arity: usize) -> impl Iterator<Item = &UserFunctionDef> {
 	context.closure_targets.iter().filter_map(move |(target, captured)| context.user_functions.get(target).filter(|function| function.params.len() == captured + arity))
 }
 

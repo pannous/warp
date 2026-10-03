@@ -142,6 +142,8 @@ const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
+/// The call `n times text` is parsed to: the text repeated n times
+pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
@@ -253,7 +255,7 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
 		}
 		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => split_trailing_block(right, empty_is_block)
-			.map(|(operand, block)| (Node::Key(left.clone(), op.clone(), Box::new(operand)), block)),
+			.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block)),
 		_ => None,
 	}
 }
@@ -358,7 +360,7 @@ const USER_INFIX_BP: (u8, u8) = (140, 141);
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit
 fn is_operator_glyph(glyph: &str) -> bool {
-	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && glyph.chars().any(|c| !c.is_ascii())
+	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && !glyph.is_ascii()
 }
 
 fn is_plain_name(word: &str) -> bool {
@@ -1519,8 +1521,8 @@ impl WaspParser {
 			};
 		}
 
-		// Optional type: `x:int?=ø`, `f(x:int?)` (wiki/null.md); a ternary `?` is followed by its branch instead
-		if self.current_char() == '?' && self.ends_optional_type(self.peek_char(1), self.peek_char(2)) {
+		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
+		if self.current_char() == '?' && (self.ends_optional_type(self.peek_char(1), self.peek_char(2)) || self.closes_after_blanks(1)) {
 			self.advance();
 			return Symbol(format!("{symbol}?"));
 		}
@@ -1576,6 +1578,15 @@ impl WaspParser {
 				name: Box::new(Symbol(type_name)),
 				body: Box::new(body),
 			};
+		}
+
+		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
+		if self.declared_types.contains(&symbol) && self.block_after_blanks() {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			let block = self.parse_bracketed('{');
+			return Node::Key(Box::new(Symbol(symbol)), Op::None, Box::new(block));
 		}
 
 		// Check for IMMEDIATE suffix blocks (no space allowed)
@@ -1706,11 +1717,15 @@ impl WaspParser {
 		self.advance_by(RETURN_KEYWORD.len());
 		self.skip_spaces();
 		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		if !self.at_body_start() || names_a_variable {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // bare `return`, or `return := …` as a name
+		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
+		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
+			Node::Empty
+		} else if !self.at_body_start() || names_a_variable {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
 			return None;
-		}
-		let value = self.parse_expr(0);
+		} else {
+			self.parse_expr(0)
+		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
@@ -2367,6 +2382,8 @@ impl WaspParser {
 				let list = self.parse_atom();
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
+			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
@@ -2894,7 +2911,26 @@ impl WaspParser {
 
 	/// `?` directly after a type name, then `=` (not `==`) or a closing bracket or separator
 	fn ends_optional_type(&self, next: char, after: char) -> bool {
-		matches!(next, ')' | ']' | '}' | ',' | ';') || (next == '=' && after != '=')
+		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
+	}
+
+	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
+	fn block_after_blanks(&self) -> bool {
+		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = blanks_from(0);
+		if blanks == 0 || self.peek_char(blanks) != '{' {
+			return false;
+		}
+		let first = blanks + 1 + blanks_from(blanks + 1);
+		let name = (first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
+		let after_name = first + name + blanks_from(first + name);
+		self.peek_char(first) == '}' || (name > 0 && self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=')
+	}
+
+	/// Do blanks and then a closing bracket, `,`, `;` or the line end follow `offset`: nothing a ternary could be followed by
+	fn closes_after_blanks(&self, offset: usize) -> bool {
+		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		blanks > 0 && matches!(self.peek_char(offset + blanks), ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0')
 	}
 
 	fn parse_symbol(&mut self) -> Result<String, String> {
@@ -3399,7 +3435,7 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		_ => None,
 	}
 }
-// Tests moved to tests/test_parser.rs
+// Tests moved to tests/parser/test_parser.rs
 
 /// `f := …`, `f x := …`, `f(x) := …` define f
 fn defined_function_name(target: &Node) -> Option<String> {

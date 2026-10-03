@@ -41,6 +41,10 @@ pub struct TypeManager {
 	/// $IntList = (struct (field $length (mut i32)) (field $items (mut (ref $IntArray)))): a growable list of ints
 	pub int_list_type: u32,
 
+	/// $FloatArray = (array (mut f64)), the items of a $FloatList, the growable list of floats
+	pub float_array_type: u32,
+	pub float_list_type: u32,
+
 	/// Next available type index
 	next_type_idx: u32,
 
@@ -72,6 +76,8 @@ impl TypeManager {
 			ratio_type: 0,
 			int_array_type: 0,
 			int_list_type: 0,
+			float_array_type: 0,
+			float_list_type: 0,
 			next_type_idx: 0,
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
@@ -140,16 +146,21 @@ impl TypeManager {
 		self.next_type_idx += 1;
 
 		self.emit_big_int_types();
-		self.types.ty().array(&Val(ValType::I64), true);
-		self.int_array_type = self.next_type_idx;
-		self.next_type_idx += 1;
-		let items = RefType { nullable: false, heap_type: HeapType::Concrete(self.int_array_type) };
+		(self.int_array_type, self.int_list_type) = self.emit_typed_list_types(ValType::I64);
+		(self.float_array_type, self.float_list_type) = self.emit_typed_list_types(ValType::F64);
+	}
+
+	/// The array of `element`s and the growable list holding it: (struct (field $length (mut i32)) (field $items (mut (ref $array))))
+	fn emit_typed_list_types(&mut self, element: ValType) -> (u32, u32) {
+		self.types.ty().array(&Val(element), true);
+		let array = self.next_type_idx;
+		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
 		self.types.ty().struct_(vec![
 			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
 			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
 		]);
-		self.int_list_type = self.next_type_idx;
-		self.next_type_idx += 1;
+		self.next_type_idx += 2;
+		(array, array + 1)
 	}
 
 	/// Types behind unbounded Int, see wasm_emitter/big_int.rs

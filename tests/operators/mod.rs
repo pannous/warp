@@ -1,0 +1,12 @@
+mod test_add_to;
+mod test_equality_never_chains;
+mod test_in_position;
+mod test_less_than_compare;
+mod test_logic_grouped_operands;
+mod test_mutating_bang;
+mod test_negated_call;
+mod test_operator_declarations;
+mod test_operator_parsing;
+mod test_operators;
+mod test_structural_equality;
+mod test_truthiness_of_objects;
