@@ -80,7 +80,8 @@ macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
 macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
 /// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 7] = [
+const EXPANDED_WORDS: [(&str, usize, &str); 8] = [
+	(ROUND_TO, 2, "round(word_tmp * 10^word_argument_2) / 10^word_argument_2"),
 	("first", 1, "word_tmp#1"),
 	("last", 1, "word_tmp#(count(word_tmp))"),
 	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
@@ -90,6 +91,9 @@ const EXPANDED_WORDS: [(&str, usize, &str); 7] = [
 	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
 const IS_DIGIT: &str = "is_digit";
+/// `round(x, 3)`, `x.round(3)`: x rounded to 3 digits after the point; `round(x)` stays the builtin
+const ROUND_TO: &str = "round_to";
+const ROUND: &str = "round";
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 const TRY_TEMPORARY: &str = "try_tmp";
@@ -426,6 +430,12 @@ impl Lowering {
 		canonical_word(name).filter(|word| !self.shadowed.contains(name) && !self.shadowed.contains(*word))
 	}
 
+	/// The library word a call of `name` with that many arguments (receiver included) means
+	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		let rounds_to_digits = name == ROUND && argument_count == 2 && !self.shadowed.contains(name);
+		if rounds_to_digits { Some(ROUND_TO) } else { self.library_word(name) }
+	}
+
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		if let Some(lookup) = self.of_lookup(items) {
@@ -438,7 +448,7 @@ impl Lowering {
 			Node::Symbol(name) => name,
 			_ => return None,
 		};
-		let word = self.library_word(head)?;
+		let word = self.library_word_for(head, items.len() - 1)?;
 		if let [_, of, rest @ ..] = items {
 			if matches!(of.drop_meta(), Node::Symbol(word) if word == "of") && !rest.is_empty() {
 				// `first of xs` is `first(xs)`
@@ -526,7 +536,7 @@ impl Lowering {
 		}
 		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
 		let is_called = matches!(method.drop_meta(), Node::List(..));
-		if let Some(word) = self.library_word(name).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
+		if let Some(word) = self.library_word_for(name, arguments.len() + 1).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		// `x.square` and `x.add(y)` call the user function with the receiver as first argument

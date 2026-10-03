@@ -24,3 +24,4 @@ mod test_zero_fill;
 mod test_float_zero_and_compound;
 mod test_implicit_libm;
 mod test_unit_word_keys;
+mod test_round_to_digits;
