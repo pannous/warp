@@ -315,6 +315,7 @@ PASSED:
   ✓ test_compile_only::compile_command_writes_wasm_without_running
   ✓ test_condition_block::a_condition_still_ends_before_its_block
   ✓ test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ test_constructor_vs_data::test_construction_checks_field_types
   ✓ test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -696,11 +697,11 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
-  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -985,6 +986,7 @@ PASSED:
   ✓ test_size_count::test_size_of_text_is_character_count
   ✓ test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ test_statement_terminators::semicolon_inside_a_line_still_groups
@@ -1299,7 +1301,6 @@ PASSED:
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
-  ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ test_wasm_emitter::test_emit_gc_types
   ✓ test_wasm_emitter::test_function_usage_tracking
@@ -1529,4 +1530,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1524 passed, 0 failed, 1524 total tested
+58 ignored, 1525 passed, 0 failed, 1525 total tested
