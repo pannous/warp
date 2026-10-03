@@ -697,6 +697,7 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
+  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
@@ -705,7 +706,6 @@ PASSED:
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
-  ✓ test_meta_attributes::test_meta_entries_survive_eval
   ✓ test_meta_attributes::test_meta_key_in_parsed_data
   ✓ test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
   ✓ test_meta_attributes::test_meta_stays_reachable
@@ -716,11 +716,13 @@ PASSED:
   ✓ test_meta::test_meta_field
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
+  ✓ test_method_words::test_chars_of_text_literal_in_assignment
   ✓ test_method_words::test_first_and_last
   ✓ test_method_words::test_join
   ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
+  ✓ test_method_words::test_replace
   ✓ test_method_words::test_reverse
   ✓ test_method_words::test_sort
   ✓ test_method_words::test_split
@@ -966,6 +968,7 @@ PASSED:
   ✓ test_samples::test_power
   ✓ test_samples::test_primes
   ✓ test_samples::test_quadratic
+  ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
   ✓ test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ test_semicolon_square::test_square_brackets_keep_all_semicolon_items
@@ -1040,6 +1043,7 @@ PASSED:
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
   ✓ test_suffix_words::a_function_name_with_ed_is_its_suffix_form
+  ✓ test_suffix_words::a_variable_is_no_suffix_form
   ✓ test_suffix_words::an_ungrouped_mix_asks
   ✓ test_suffix_words::an_unknown_word_is_no_suffix_form
   ✓ test_suffix_words::the_answer_compiles_the_chosen_reading
@@ -1301,6 +1305,7 @@ PASSED:
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
+  ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ test_wasm_emitter::test_emit_gc_types
   ✓ test_wasm_emitter::test_function_usage_tracking
@@ -1530,4 +1535,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1525 passed, 0 failed, 1525 total tested
+58 ignored, 1530 passed, 0 failed, 1530 total tested
