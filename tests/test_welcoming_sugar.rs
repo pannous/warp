@@ -1,8 +1,7 @@
 //! Newcomer syntax from Python/JS is eaten: it compiles to its intent, and a hint names the wasp form
 //! (probes/sugar/cases.txt; decisions in notes/open_decisions.md)
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::*;
 use warp::node::strings;
 

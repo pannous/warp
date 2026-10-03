@@ -1,5 +1,4 @@
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::*;
 
 #[test]

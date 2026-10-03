@@ -1,7 +1,6 @@
 //! `record`, `struct` and `class` declare the same kind of type: constructor call, field access, optional fields
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::{eq, is, Node};
 use warp::wasm_emitter::eval;
 

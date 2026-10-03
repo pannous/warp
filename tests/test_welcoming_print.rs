@@ -2,7 +2,7 @@
 // (ratios, big integers) have a text form like the host's; an exact variable assigned an f64 becomes a float. probes/print/
 use warp::*;
 
-mod common;
+use crate::common;
 
 #[test]
 fn test_print_runtime_values() {

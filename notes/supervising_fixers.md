@@ -3,7 +3,7 @@
 Workflow that worked:
 - Field-test workers write samples in their natural style, report failures as minimal snippets; fixer sessions get one
   topic each (template probes/algo/fixer_prompt.md); every branch is built on origin/main in a scratch export.
-- Workers run targeted tests only (`CARGO_BUILD_JOBS=2 … --test <file> -- --test-threads=2`); the supervisor merges a
+- Workers run targeted tests only (`CARGO_BUILD_JOBS=2 … --test tests <file_stem>:: -- --test-threads=2`); the supervisor merges a
   batch in scratch/integrate and runs the ONE full suite before pushing to main. Parallel full suites pushed the load to
   ~160 on 10 cores; ~/dev/bin/claude-remote.sh now refuses to spawn while load >= cores.
 - Dependent fixes: publish an integration branch and let the next fixers rebase onto it, merge in dependency order.

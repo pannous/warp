@@ -2,7 +2,7 @@
 use warp::wasm_emitter::eval;
 use warp::*;
 
-mod common;
+use crate::common;
 
 fn assert_error(code: &str) {
 	match eval(code) {

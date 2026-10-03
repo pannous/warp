@@ -1,7 +1,6 @@
 //! `switch subject {key: body …}` is map indexing that executes: the chosen body runs, `default:` catches the rest
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

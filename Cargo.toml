@@ -7,6 +7,12 @@
 name = "warp"
 version = "0.1.1"
 edition = "2021"  # Cargo edition! NOT package edition!
+# One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

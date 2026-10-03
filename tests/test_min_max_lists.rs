@@ -1,7 +1,6 @@
 //! `max` and `min` of one list: `max([1 5 2])`, `max(xs)`; several arguments are a list as well
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

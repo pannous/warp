@@ -1,6 +1,6 @@
 use warp::*;
 
-mod common;
+use crate::common;
 
 #[test]
 fn test_float_read_in_exact_context_is_refused_loudly() {

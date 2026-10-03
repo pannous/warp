@@ -1,7 +1,6 @@
 //! `prefix|suffix|infix operator ⊕ := body` declares an operator (wiki operator.md); the parser learns it from a pre-scan
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 #[test]
 fn test_suffix_operator() {

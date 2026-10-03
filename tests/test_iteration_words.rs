@@ -1,8 +1,7 @@
 //! `filter`, `reduce`, `fold` and `each` over a literal block, lambda or defined function: a loop, lowered at compile time
 use warp::wasm_emitter::eval;
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()

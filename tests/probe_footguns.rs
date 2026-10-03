@@ -1,8 +1,7 @@
 //! Footguns of other languages, checked against Warp (see footguns.md).
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::wasm_emitter::{eval, eval_untrusted};
 use warp::{is, parse_data, Node};
 

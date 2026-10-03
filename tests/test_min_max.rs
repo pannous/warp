@@ -1,7 +1,6 @@
 //! Builtins `min` and `max`.
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

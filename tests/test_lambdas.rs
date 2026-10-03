@@ -2,8 +2,7 @@
 //! at once, `map` over a literal block or lambda is a loop. Functions are not first-class values yet.
 use warp::wasm_emitter::eval;
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()

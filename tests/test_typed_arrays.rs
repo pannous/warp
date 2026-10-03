@@ -1,6 +1,5 @@
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 #[test]
 fn test_typed_array_declaration_with_count_first() {

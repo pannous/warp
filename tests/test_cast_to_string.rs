@@ -1,7 +1,6 @@
 //! `value as string` is the serialized text of a literal; a value only known at runtime is a loud error, never a panic
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

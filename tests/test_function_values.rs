@@ -2,8 +2,7 @@
 //! nothing can be passed where a function is expected; the function it is passed to is specialised for it
 use warp::wasm_emitter::eval;
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()

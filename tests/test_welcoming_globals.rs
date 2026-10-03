@@ -3,7 +3,7 @@
 use warp::*;
 use warp::diagnostic::{with_asker, with_warning_mode, ScriptedAnswers, WarningMode};
 
-mod common;
+use crate::common;
 
 #[test]
 fn test_function_changes_a_declared_global() {

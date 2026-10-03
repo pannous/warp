@@ -1,5 +1,4 @@
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 #[test]
 fn test_undefined_variable_use_is_an_error_value() {

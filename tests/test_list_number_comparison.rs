@@ -1,7 +1,6 @@
 //! Ordering a list against a number is an error value (equality stays false)
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

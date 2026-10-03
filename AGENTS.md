@@ -93,7 +93,7 @@ compilation delays.
 ```bash
 cargo test                     # Run all tests
 cargo test <test_name>         # Run specific test by name
-cargo test --test <test_file>  # Run specific test file (without _test.rs suffix)
+cargo test --test tests <file_stem>::  # Run one test file: all tests/*.rs are modules of ONE test crate (tests/main.rs); add new files there as `mod x;`
 ```
 
 #### Important Test Files

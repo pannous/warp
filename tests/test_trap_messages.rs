@@ -1,7 +1,6 @@
 //! A trap with no friendlier wording names its cause, not a wasm backtrace
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 #[test]
 fn integer_modulo_by_zero_names_the_division() {

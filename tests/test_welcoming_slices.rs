@@ -1,8 +1,7 @@
 //! Slices `a[start:end]`, `a[start..end]`, `a[start...last]`, `s.slice(start)` of lists and texts, and `a.copy()`
 //! (Sorting field test, probes/slices/). A negative index never wraps around (Footguns.md): it is an error naming last(x).
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::is;
 
 #[test]

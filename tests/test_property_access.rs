@@ -1,7 +1,6 @@
 //! Property access on objects: `o.a`, `a of o`, `o's a` and `o["a"]` are one lookup; a missing key is a loud error value
 use warp::*;
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 
 #[test]
 fn test_dot_on_an_object_literal() {
