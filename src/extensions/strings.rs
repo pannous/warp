@@ -2,14 +2,12 @@ use std::fmt::Debug; // for println!("{:?}", item)
 use std::fmt::Display; // for println!("{}", item)
 					   // use crate::put;
 
-#[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn String(s: &str) -> String {
 	// ⚠️ pseudo constructor no conflict with std::string::String ??
 	s.to_string()
 }
 
-#[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn S(s: &str) -> String {
 	// String.from(s)
