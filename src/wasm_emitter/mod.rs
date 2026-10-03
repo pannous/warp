@@ -1029,15 +1029,21 @@ impl WasmGcEmitter {
 		});
 
 		// get_int_value(node: ref $Node) -> i64
-		// Extract integer from Node's data field (i64box); a node that is no Int is the runtime error not_an_int,
-		// which a `try` catches, never a raw cast trap
+		// Extract integer from Node's data field (i64box); a character is its code point ('5' as int is 53), so a
+		// character variable compares with c >= '0'. Any other node is the runtime error not_an_int, which a `try`
+		// catches, never a raw cast trap
 		self.exported_function("get_int_value", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
-			Self::emit_list(func, &[
+			let node_kind_is = |kind: Kind| [
 				Instruction::LocalGet(0),
 				Instruction::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
-				Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
-				Instruction::If(BlockType::Empty),
-			]);
+				Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(kind as i64), Instruction::I64Eq,
+			];
+			Self::emit_list(func, &node_kind_is(Kind::Codepoint));
+			Self::emit_list(func, &[Instruction::If(BlockType::Empty), Instruction::LocalGet(0)]);
+			s.emit_codepoint_of_node(func);
+			Self::emit_list(func, &[Instruction::Return, Instruction::End]);
+			Self::emit_list(func, &node_kind_is(Kind::Int));
+			Self::emit_list(func, &[Instruction::I32Eqz, Instruction::If(BlockType::Empty)]);
 			s.emit_runtime_error(func, "not_an_int");
 			func.instruction(&Instruction::End);
 			func.instruction(&Instruction::LocalGet(0)); // Node
@@ -2821,9 +2827,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, "get_int_value");
 				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if local.kind == Kind::Codepoint {
-						self.emit_codepoint_of_node(func);
-					} else if local.kind.is_ref() {
+					if local.kind.is_ref() {
 						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
 						self.emit_call(func, "get_int_value");
 					} else if local.kind.is_float() {
