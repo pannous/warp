@@ -87,6 +87,7 @@ mod test_less_than_compare;
 mod test_list_arithmetic;
 mod test_list_number_comparison;
 mod test_list_parameters;
+mod test_list_truthiness;
 mod test_lists;
 mod test_logic_grouped_operands;
 mod test_loop_forms;
