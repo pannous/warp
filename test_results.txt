@@ -476,6 +476,10 @@ PASSED:
   ✓ test_float_promotion::test_undefined_float_power_is_refused_loudly
   ✓ test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
   ✓ test_float_to_int_range::test_rounding_functions_give_exact_ints
+  ✓ test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
+  ✓ test_folder_scope::inline_code_has_no_folder_scope
+  ✓ test_folder_scope::sibling_definitions_are_visible_without_use
+  ✓ test_folder_scope::the_file_itself_wins_over_its_siblings
   ✓ test_for_loop::test_for_classic_three_part_header
   ✓ test_for_loop::test_for_over_exclusive_range
   ✓ test_for_loop::test_for_over_inclusive_range
@@ -546,7 +550,7 @@ PASSED:
   ✓ test_in_position::a_found_first_element_is_truthy
   ✓ test_in_position::in_gives_the_one_based_position
   ✓ test_in_position::maps_and_has_keep_their_truth_value
-  ✓ test_in_position::the_position_as_a_value_warns
+  ✓ test_in_position::the_position_never_warns
   ✓ test_include::a_missing_include_lists_the_searched_paths
   ✓ test_include::a_nested_include_is_found_next_to_the_including_file
   ✓ test_include::include_splices_the_whole_file_and_runs_it
@@ -680,10 +684,10 @@ PASSED:
   ✓ test_math::test_if_block_syntax
   ✓ test_math::test_if_then_else
   ✓ test_math::test_logarithm_in_runtime
-  ✓ test_math::test_modulo
   ✓ test_math::test_modulo_with_variables
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
+  ✓ test_math::test_runtime_equality_autocast
   ✓ test_math::test_simple_variables
   ✓ test_math::test_sin
   ✓ test_math::test_sinus_wasp_import
@@ -693,6 +697,19 @@ PASSED:
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
+  ✓ test_meta_attributes::test_at_in_data_stays_text
+  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
+  ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
+  ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
+  ✓ test_meta_attributes::test_iteration_skips_meta_entries
+  ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
+  ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
+  ✓ test_meta_attributes::test_meta_entries_survive_eval
+  ✓ test_meta_attributes::test_meta_key_in_parsed_data
+  ✓ test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
+  ✓ test_meta_attributes::test_meta_stays_reachable
+  ✓ test_meta_attributes::test_prefix_attribute_survives_emission
   ✓ test_meta::test_meta
   ✓ test_meta::test_meta_at
   ✓ test_meta::test_meta_at2
@@ -725,6 +742,15 @@ PASSED:
   ✓ test_min_max::test_user_definition_wins_over_the_builtin
   ✓ test_module_cache::test_different_modules_not_cached
   ✓ test_module_cache::test_module_cache_reuse
+  ✓ test_multi_value::test_big_division_results_unchanged
+  ✓ test_multi_value::test_big_exact_division_results_unchanged
+  ✓ test_multi_value::test_divmod_returns_quotient_and_remainder
+  ✓ test_multi_value::test_int_divmod_returns_both_results
+  ✓ test_multi_value::test_optimized_multi_value_division
+  ✓ test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
+  ✓ test_mutating_bang::a_method_with_bang_assigns_back
+  ✓ test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
+  ✓ test_mutating_bang::without_bang_the_value_is_unchanged
   ✓ test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ test_negated_call::test_function_applied_to_a_negative_number
   ✓ test_negated_call::test_variable_minus_number_stays_subtraction
@@ -812,6 +838,8 @@ PASSED:
   ✓ test_operators::test_for_each
   ✓ test_operators::test_key
   ✓ test_operators::test_while_true_forever
+  ✓ test_optimizer_exceptions::optimized_try_still_catches
+  ✓ test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions
   ✓ test_optional_words::is_with_a_test_word
   ✓ test_optional_words::test_words_read_as_not
   ✓ test_optional_words::test_words_work_in_other_conditions
@@ -1079,9 +1107,35 @@ PASSED:
   ✓ test_top_level_block::test_function_body_block_yields_its_last_item
   ✓ test_top_level_block::test_top_level_newlines_yield_the_last_item
   ✓ test_top_level_block::test_top_level_semicolons_yield_the_last_item
+  ✓ test_traits::test_a_builtin_trait_cannot_be_redeclared
+  ✓ test_traits::test_a_claim_of_a_declared_trait_is_checked
+  ✓ test_traits::test_a_compare_with_mismatched_types_is_no_conformance
+  ✓ test_traits::test_a_declared_trait_dispatches_by_type
+  ✓ test_traits::test_a_type_without_the_operation_of_a_declared_trait
+  ✓ test_traits::test_a_user_type_orders_with_less_than
+  ✓ test_traits::test_a_user_type_overrides_equality_with_equals
+  ✓ test_traits::test_a_user_type_sorts_through_its_compare
+  ✓ test_traits::test_an_explicit_conformance_claim_needs_the_operation
+  ✓ test_traits::test_builtin_kinds_stay_comparable
+  ✓ test_traits::test_conformance_is_a_type_test
+  ✓ test_traits::test_conformance_to_a_declared_trait_is_a_type_test
+  ✓ test_traits::test_instances_are_equatable_by_their_fields
+  ✓ test_traits::test_min_and_max_of_a_user_type
+  ✓ test_traits::test_mixed_kinds_stay_not_comparable
+  ✓ test_traits::test_ordering_a_type_without_compare_is_a_compile_error
+  ✓ test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix
+  ✓ test_traits::test_trait_synonyms_declare_a_trait
+  ✓ test_traits::test_two_user_types_each_have_their_own_compare
   ✓ test_trap_messages::integer_modulo_by_zero_names_the_division
   ✓ test_truthiness_of_objects::an_object_is_truthy
   ✓ test_truthiness_of_objects::empty_values_are_falsy
+  ✓ test_try_deep::caught_errors_leave_later_errors_loud
+  ✓ test_try_deep::nested_try_restores_the_depth_on_both_paths
+  ✓ test_try_deep::try_catches_a_failed_cast
+  ✓ test_try_deep::try_catches_an_error_inside_a_called_function
+  ✓ test_try_deep::try_catches_an_error_inside_an_expression
+  ✓ test_try_deep::try_in_a_loop_catches_each_time
+  ✓ test_try_deep::try_inside_a_called_function_restores_the_depth
   ✓ test_try_else::assert_gives_the_condition_or_an_error
   ✓ test_try_else::try_falls_back_on_an_error_value
   ✓ test_try_else::try_falls_back_on_division_and_modulo_by_zero
@@ -1208,6 +1262,10 @@ PASSED:
   ✓ test_use_modules::test_use_missing_module_is_an_error_value
   ✓ test_use_modules::test_use_twice_is_a_no_op
   ✓ test_use_modules::test_warp_extension_is_found
+  ✓ test_use_scopes::siblings_are_invisible_without_a_scope
+  ✓ test_use_scopes::use_folder_in_inline_code_is_the_working_directory
+  ✓ test_use_scopes::use_package_sees_every_file_below_the_package_folder
+  ✓ test_use_scopes::use_project_sees_every_file_below_the_project_root
   ✓ test_versions::an_older_version_comes_from_its_git_tag
   ✓ test_versions::tagged_version_literals
   ✓ test_versions::use_requires_a_version_of_a_package
@@ -1291,6 +1349,12 @@ PASSED:
   ✓ test_wasp_position::test_position_in_json_output
   ✓ test_wasp_position::test_position_tracking
   ✓ test_wasp_position::test_position_with_comments
+  ✓ test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
+  ✓ test_web_playground::a_trap_in_the_page_names_the_runtime_error
+  ✓ test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
+  ✓ test_web_playground::an_unanswered_ask_is_reported_with_its_readings_and_falls_back
+  ✓ test_web_playground::evaluate_reports_the_value_the_cli_prints
+  ✓ test_web_playground::the_pages_answer_is_taken_and_hinted
   ✓ test_web::test_fetch
   ✓ test_web::test_html_wasp
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
@@ -1441,4 +1505,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-64 ignored, 1436 passed, 0 failed, 1436 total tested
+64 ignored, 1500 passed, 0 failed, 1500 total tested
