@@ -306,8 +306,36 @@ fn run_main<S: 'static>(
 /// Load WASM bytes with host function support and return Node
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
+	read_bytes_with_imports(bytes, Imports { host: true, ..Imports::default() })
+}
+
+/// The import families a module needs linked
+#[derive(Clone, Copy, Default)]
+pub struct Imports {
+	pub host: bool,
+	pub wasi: bool,
+	pub ffi: bool,
+}
+
+/// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once
+pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	use crate::host::{HostState, link_host_functions};
-	let (result, mut store, instance) = run_main(bytes, HostState::new(), |linker, engine, _| link_host_functions(linker, engine))?;
+	use crate::ffi::{link_ffi_functions, link_module_libraries};
+	let (result, mut store, instance) = run_main(bytes, HostState::new(), |linker, engine, module| {
+		// the host words (sleep, random, clock) are imported like C functions from the host module
+		if imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY) {
+			link_host_functions(linker, engine)?;
+		}
+		if imports.wasi {
+			p1::add_to_linker_sync(linker, |state: &mut HostState| &mut state.wasi)?;
+		}
+		if imports.ffi {
+			// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
+			link_ffi_functions(linker, engine)?;
+			link_module_libraries(linker, engine, module)?;
+		}
+		Ok(())
+	})?;
 	val_to_node(&result, &mut store, &instance)
 }
 
@@ -426,42 +454,12 @@ pub fn call_constructor(
 	Ok(GcObject::new(results[0], store, *instance))
 }
 
-/// WASI state for running modules with WASI imports (preview 1)
-pub struct WasiState {
-	ctx: p1::WasiP1Ctx,
-}
-
-impl Default for WasiState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WasiState {
-	pub fn new() -> Self {
-		let ctx = WasiCtxBuilder::new()
-			.inherit_stdout()
-			.inherit_stderr()
-			.build_p1();
-		WasiState { ctx }
-	}
-}
-
 /// Load WASM bytes with WASI support (for fd_write, puts, etc.)
 pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
-	let (result, mut store, instance) = run_main(bytes, WasiState::new(), |linker, _, _| {
-		Ok(p1::add_to_linker_sync(linker, |state: &mut WasiState| &mut state.ctx)?)
-	})?;
-	val_to_node(&result, &mut store, &instance)
+	read_bytes_with_imports(bytes, Imports { wasi: true, ..Imports::default() })
 }
 
 /// Load WASM bytes with FFI support (for native function imports)
 pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
-	use crate::ffi::{link_ffi_functions, link_module_libraries, FfiState};
-	// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
-	let (result, mut store, instance) = run_main(bytes, FfiState::new(), |linker, engine, module| {
-		link_ffi_functions(linker, engine)?;
-		link_module_libraries(linker, engine, module)
-	})?;
-	val_to_node(&result, &mut store, &instance)
+	read_bytes_with_imports(bytes, Imports { ffi: true, ..Imports::default() })
 }

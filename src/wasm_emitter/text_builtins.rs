@@ -82,6 +82,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::wasi_emitter::PRINT_VALUE) {
 		required.insert("list_join");
 	}
+	if required.contains("list_join") {
+		required.insert(super::float_text::FLOAT_TEXT);
+	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);

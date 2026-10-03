@@ -80,6 +80,14 @@ function programImports(holder, hooks) {
 			},
 			warn: (pointer, length) => holder.warnings.push(text(pointer, length)),
 			run: () => -1n,
+			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
+			sleep: milliseconds => {
+				const until = Date.now() + Number(milliseconds);
+				while (Date.now() < until);
+			},
+			random: () => Math.random(),
+			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
+			clock: () => BigInt(Date.now()),
 		},
 		wasi_snapshot_preview1: {
 			fd_write: (fd, vectors, count, written) => {

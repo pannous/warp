@@ -218,6 +218,7 @@ impl EffectReport {
 		let mut context = Context::new();
 		extract_user_functions(&mut context, program);
 		extract_ffi_imports(&mut context, program);
+		crate::analyzer::extract_host_words(&mut context, program);
 		let resolver = Resolver { context: &context };
 
 		let mut report = EffectReport::default();
