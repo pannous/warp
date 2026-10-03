@@ -64,6 +64,7 @@ mod test_float_exact_context;
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
+mod test_folder_scope;
 mod test_for_loop;
 mod test_function_keyword;
 mod test_function_values;

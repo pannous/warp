@@ -179,8 +179,10 @@ fn main() {
             }
         }
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
-        let warp_code = load_file(&arg_string);
-        let result = eval(&warp_code);
+        if !file_exists(&arg_string) {
+            eprintln!("Error: Could not read file '{}'", arg_string);
+        }
+        let result = eval(&arg_string); // a file: its folder is in scope (D15)
         println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {

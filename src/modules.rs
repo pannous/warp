@@ -43,8 +43,79 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: None };
-	loader.resolve(with_module_directory(program, Path::new("."))).unwrap_or_else(|failure| failure)
+	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let folder = file.as_deref().map(folder_of);
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone() };
+	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
+	let resolved = loader.resolve(program).and_then(|program| match &file {
+		Some(file) => loader.with_folder_scope(program, file),
+		None => Ok(program),
+	});
+	resolved.unwrap_or_else(|failure| failure)
+}
+
+thread_local! {
+	/// The file being compiled; its folder is in scope (D15). None for inline code
+	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Compile `body` as the program of `file`: every definition in the .wasp files of its folder is visible without `use`
+pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
+	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
+	let result = body();
+	PROGRAM_FILE.with(|current| *current.borrow_mut() = previous);
+	result
+}
+
+fn folder_of(file: &Path) -> PathBuf {
+	match file.parent() {
+		Some(folder) if !folder.as_os_str().is_empty() => folder.to_path_buf(),
+		_ => PathBuf::from("."),
+	}
+}
+
+/// Another module file of the program's folder, parsed only when its text mentions a name the program needs
+struct Sibling {
+	path: PathBuf,
+	source: String,
+	statements: Option<Vec<Node>>,
+}
+
+fn siblings_of(file: &Path) -> Vec<Sibling> {
+	let itself = file.canonicalize().ok();
+	let Ok(entries) = std::fs::read_dir(folder_of(file)) else { return vec![] };
+	let mut paths: Vec<PathBuf> = entries.filter_map(|entry| entry.ok().map(|entry| entry.path()))
+		.filter(|path| path.is_file() && path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known)))
+		.filter(|path| path.canonicalize().ok() != itself)
+		.collect();
+	paths.sort();
+	paths.into_iter().filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None })).collect()
+}
+
+impl Sibling {
+	/// The statements of the file; a file that does not parse is reported and contributes nothing
+	fn statements(&mut self) -> Result<&[Node], Node> {
+		if self.statements.is_none() {
+			let module = WaspParser::parse(&self.source);
+			let parsed = match module.first_error() {
+				Some(failure) => {
+					let warning = crate::diagnostic::Diagnostic::at(&module, format!("folder scope skips {}: {}", self.path.display(), failure.serialize()));
+					crate::diagnostic::report(&[warning])?;
+					vec![]
+				}
+				None => statements(with_module_directory(module, &folder_of(&self.path))),
+			};
+			self.statements = Some(parsed);
+		}
+		Ok(self.statements.as_deref().unwrap_or_default())
+	}
+
+	fn declarations_of(&mut self, name: &str) -> Result<Vec<Node>, Node> {
+		if !self.source.contains(name) {
+			return Ok(vec![]);
+		}
+		Ok(self.statements()?.iter().filter(|statement| is_declaration(statement) && declared_name(statement).as_deref() == Some(name)).cloned().collect())
+	}
 }
 
 fn with_module_directory(module: Node, directory: &Path) -> Node {
@@ -170,6 +241,61 @@ impl Loader<'_> {
 			}
 		}
 		candidates
+	}
+
+	/// D15 folder scope: a name the program uses but does not define comes from the one sibling file defining it,
+	/// together with what that definition uses in turn and the sibling's own `use`s; two siblings defining it is an error
+	fn with_folder_scope(&mut self, program: Node, file: &Path) -> Result<Node, Node> {
+		let mut siblings = siblings_of(file);
+		let mut own = statements(program.clone());
+		let mut known = HashSet::new();
+		bound_names(&program, &mut known);
+		let mut needed: Vec<String> = mentioned_names(&own).into_iter().filter(|name| !known.contains(name)).collect();
+		let mut imports = Vec::new();
+		let mut using_siblings = HashSet::new();
+		while let Some(name) = needed.pop() {
+			if !known.insert(name.clone()) {
+				continue;
+			}
+			let mut providers: Vec<(usize, Vec<Node>)> = Vec::new();
+			for (index, sibling) in siblings.iter_mut().enumerate() {
+				let declarations = sibling.declarations_of(&name)?;
+				let same_as_before = providers.iter().any(|(_, earlier)| same_definitions(earlier, &declarations));
+				if !declarations.is_empty() && !same_as_before {
+					providers.push((index, declarations)); // the same definition in two files is no conflict
+				}
+			}
+			let (index, declarations) = match providers.len() {
+				0 => continue,
+				1 => providers.remove(0),
+				_ => {
+					let files: Vec<String> = providers.iter().map(|(index, _)| siblings[*index].path.display().to_string()).collect();
+					return Err(error(&format!("{name} is defined in more than one file of the folder: {}; rename one, or `use` the one you mean", files.join(" and "))));
+				}
+			};
+			if using_siblings.insert(index) {
+				imports.extend(self.uses_of(&mut siblings[index])?);
+			}
+			let mut parameters = HashSet::new();
+			declarations.iter().for_each(|declaration| bound_names(declaration, &mut parameters));
+			parameters.remove(&name);
+			needed.extend(mentioned_names(&declarations).into_iter().filter(|used| !parameters.contains(used)));
+			imports.extend(declarations);
+		}
+		if imports.is_empty() {
+			return Ok(program);
+		}
+		imports.append(&mut own);
+		Ok(Node::List(imports, Bracket::None, Separator::Newline))
+	}
+
+	/// The modules a sibling file uses, resolved from its folder
+	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let outer_directory = std::mem::replace(&mut self.including_directory, Some(folder_of(&sibling.path)));
+		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
+		self.including_directory = outer_directory;
+		Ok(resolved?.into_iter().flat_map(statements).collect())
 	}
 
 	/// A file that cannot be found: an error listing where it was looked for
@@ -466,6 +592,101 @@ fn is_declaration(statement: &Node) -> bool {
 		}
 		_ => false,
 	}
+}
+
+/// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
+fn declared_name(statement: &Node) -> Option<String> {
+	match statement.drop_meta() {
+		Node::Type { name, .. } => leftmost_symbol(name),
+		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
+		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
+		_ => None,
+	}
+}
+
+fn leftmost_symbol(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, _, _) => leftmost_symbol(items.first()?),
+		Node::Key(left, Op::Colon | Op::Assign | Op::Define, _) => leftmost_symbol(left),
+		_ => None,
+	}
+}
+
+/// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
+fn binds_names(keyword: &str) -> bool {
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || matches!(keyword, "for" | "require" | "include")
+}
+
+/// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`
+fn header(definition: &Node) -> &Node {
+	match definition.drop_meta() {
+		Node::Key(header, Op::Colon | Op::Assign | Op::Define, _) => header,
+		Node::List(items, _, _) if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) => &items[0],
+		_ => definition,
+	}
+}
+
+/// Every name the program binds anywhere: variables, functions, parameters, loop variables, imports.
+/// Generous on purpose: a bound name never comes from a sibling
+fn bound_names(node: &Node, names: &mut HashSet<String>) {
+	match node.drop_meta() {
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() => {
+			names.extend(mentioned_names(std::slice::from_ref(target.as_ref())));
+			bound_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			bound_names(left, names);
+			bound_names(right, names);
+		}
+		Node::List(items, _, _) => {
+			if let [keyword, bound, ..] = items.as_slice() {
+				if matches!(keyword.drop_meta(), Node::Symbol(word) if binds_names(word)) {
+					names.extend(mentioned_names(std::slice::from_ref(header(bound))));
+				}
+			}
+			items.iter().for_each(|item| bound_names(item, names));
+		}
+		Node::Type { name, body } => {
+			bound_names(name, names);
+			names.extend(leftmost_symbol(name));
+			bound_names(body, names);
+		}
+		_ => {}
+	}
+}
+
+fn same_definitions(first: &[Node], second: &[Node]) -> bool {
+	first.len() == second.len() && first.iter().zip(second).all(|(a, b)| a.serialize() == b.serialize())
+}
+
+/// Every word the statements mention
+fn mentioned_names(statements: &[Node]) -> Vec<String> {
+	fn collect(node: &Node, names: &mut Vec<String>) {
+		match node {
+			Node::Symbol(name) => names.push(name.clone()),
+			Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
+				collect(receiver, names); // `xs.add(x)` names a method of xs, no definition of the folder
+				if let Node::List(call, _, _) = member.drop_meta() {
+					call.iter().skip(1).for_each(|argument| collect(argument, names));
+				}
+			}
+			Node::Key(left, _, right) => {
+				collect(left, names);
+				collect(right, names);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
+			Node::Meta { node, .. } => collect(node, names),
+			Node::Type { name, body } => {
+				collect(name, names);
+				collect(body, names);
+			}
+			_ => {}
+		}
+	}
+	let mut names = Vec::new();
+	statements.iter().for_each(|statement| collect(statement, &mut names));
+	names
 }
 
 /// `require x` and `import x` of a native library stay in the program as `use x`

@@ -1,0 +1,3 @@
+// the file's own definition wins over the sibling's
+area(r) := r
+area(3)
