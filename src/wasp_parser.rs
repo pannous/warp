@@ -2166,6 +2166,12 @@ impl WaspParser {
 	/// `else body`, and `else if` / `elif` / `elsif` / `elseif` chaining a whole new `if … {…} else …`
 	fn parse_optional_else(&mut self, if_then: Node, mode: ElseParseMode) -> Node {
 		self.skip_spaces();
+		// `}` then `else …` on the next line belongs to this if
+		if self.else_on_a_later_line() {
+			while matches!(self.current_char(), ' ' | '\t' | '\n' | '\r') {
+				self.advance();
+			}
+		}
 		let else_expr = if let Some(word) = self.at_else_if_word() {
 			self.advance_by(word.len());
 			self.parse_else_if()
@@ -2188,6 +2194,14 @@ impl WaspParser {
 			return if_then;
 		};
 		Node::Key(Box::new(if_then), Op::Else, Box::new(else_expr))
+	}
+
+	/// Do line breaks and blanks, then the word `else`, follow the cursor
+	fn else_on_a_later_line(&self) -> bool {
+		let gap = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r')).count();
+		let crosses_line = (0..gap).any(|at| self.peek_char(at) == '\n');
+		let word = ELSE_KEYWORD.chars().enumerate().all(|(i, c)| self.peek_char(gap + i) == c) && !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
+		crosses_line && word
 	}
 
 	fn at_else_if_word(&self) -> Option<&'static str> {

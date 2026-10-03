@@ -86,6 +86,13 @@ impl WasmGcEmitter {
 			return;
 		}
 
+		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		if let Some(key) = self.runtime_math_key(&call) {
+			self.emit_runtime_math(func, key, &call);
+			self.emit_call(func, "new_float");
+			return;
+		}
+
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// Check for zero-argument function call: (funcname)
 			if *bracket == Bracket::Round {
@@ -116,8 +123,7 @@ impl WasmGcEmitter {
 		if items.len() == 2 {
 			if let Node::Symbol(s) = items[0].drop_meta() {
 				if s == "return" {
-					// Emit the return value and return instruction
-					self.emit_node_instructions(func, &items[1]);
+					self.emit_returned_value(func, &items[1]);
 					self.emit_leave_tries(func, 0);
 					func.instruction(&Instruction::Return);
 					// Unreachable after return, push dummy value
@@ -514,17 +520,18 @@ impl WasmGcEmitter {
 	}
 
 	/// `x = v`, `x += v` to a float variable: float arithmetic also in a loop body
-	/// `x = …` of a float variable, or an `if` whose branches are such assignments (`if (x > t) x = x - t`)
-	fn is_float_assignment(&self, item: &Node) -> bool {
+	/// `x = …` of a float variable, or an `if` with a branch ending in one (`if (x > t) x = x - t`,
+	/// `if op == "+" { advance(); left = left + term() } else { return left }`)
+	pub(super) fn is_float_assignment(&self, item: &Node) -> bool {
 		let branch_assigns_float = |branch: &Node| match branch.drop_meta() {
-			Node::List(items, Bracket::Curly, _) if items.len() == 1 => self.is_float_assignment(&items[0]),
+			Node::List(items, Bracket::Curly, _) => items.last().is_some_and(|last| self.is_float_assignment(last)),
 			other => self.is_float_assignment(other),
 		};
 		match item.drop_meta() {
 			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
 			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
 			Node::Key(if_then, Op::Else, otherwise) => {
-				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) && branch_assigns_float(otherwise)
+				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) || branch_assigns_float(otherwise)
 			}
 			_ => false,
 		}

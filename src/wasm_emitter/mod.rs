@@ -53,6 +53,9 @@ const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
+/// Math words of a float computed at run time, and the libm function behind each (imported like m.pow);
+/// with a constant argument real.rs computes them exactly instead
+pub const RUNTIME_MATH: [(&str, &str); 7] = [("sin", "m.sin"), ("cos", "m.cos"), ("tan", "m.tan"), ("exp", "m.exp"), ("log", "m.log"), ("ln", "m.log"), ("log10", "m.log10")];
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
 const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
@@ -1682,6 +1685,20 @@ impl WasmGcEmitter {
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
 	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them)
+		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text) {
+			self.emit_node_instructions(func, left);
+			self.emit_node_instructions(func, right);
+			self.emit_call(func, library_ops::NODE_ORDER);
+			let sign_test = match op {
+				Op::Lt => Instruction::I32LtS,
+				Op::Gt => Instruction::I32GtS,
+				Op::Le => Instruction::I32LeS,
+				_ => Instruction::I32GeS,
+			};
+			Self::emit_list(func, &[Instruction::I32Const(0), sign_test, Instruction::I64ExtendI32U]);
+			return;
+		}
 		if op.is_comparison() && self.should_use_float(left, right, op) {
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, right);
@@ -1782,6 +1799,47 @@ impl WasmGcEmitter {
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
 		func.instruction(&Instruction::End);
+	}
+
+	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error("…")` from a
+	/// function of numbers fails the run with the message, it cannot give back an Error value
+	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
+		if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
+			self.emit_trap_detail(func, message);
+			self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+		} else if self.returns_node {
+			self.emit_node_instructions(func, value);
+		} else if self.returns_float {
+			self.emit_float_value(func, value);
+		} else {
+			self.emit_numeric_value(func, value);
+		}
+	}
+
+	/// `sin(x)`: the libm key of a math word called with one argument, unless the program defines or imports the word
+	fn runtime_math_key(&self, node: &Node) -> Option<&'static str> {
+		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+		let [head, _] = items.as_slice() else { return None };
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		if self.ctx.user_functions.contains_key(name) || self.ctx.ffi_imports.contains_key(name) {
+			return None;
+		}
+		RUNTIME_MATH.iter().find(|(word, _)| word == name).map(|(_, key)| *key)
+	}
+
+	/// The f64 of a math word through libm
+	fn emit_runtime_math(&mut self, func: &mut Function, key: &'static str, node: &Node) {
+		let Node::List(items, _, _) = node.drop_meta() else { return };
+		self.emit_float_value(func, &items[1]);
+		match self.ffi_func_index(key) {
+			Some(index) => {
+				func.instruction(&Instruction::Call(index));
+			}
+			None => {
+				self.discovered_needs.insert(Need::MathImport(key));
+				func.instruction(&Instruction::Unreachable);
+			}
+		}
 	}
 
 	/// The one nullable Node local of every function, after its int scratch locals
@@ -2213,6 +2271,18 @@ impl WasmGcEmitter {
 
 	/// One pass of a loop body; a numeric value becomes the loop's value
 	fn emit_loop_body(&mut self, func: &mut Function, body: &Node, result_local: u32) {
+		let statements = match body.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.clone(),
+			other => vec![other.clone()],
+		};
+		if statements.last().is_some_and(|last| self.is_float_assignment(last)) {
+			// `while … { …; x = x * 0.5 }` of a float x: run the statements, the loop's value stays 0
+			for statement in &statements {
+				self.emit_discarded_statement(func, statement, Self::emit_numeric_value);
+				func.instruction(&Instruction::Drop);
+			}
+			return;
+		}
 		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
 		} else if self.get_type(body).is_ref() { // `while c { s += "a" }`: a text or list update, its value is not a number
 			self.emit_node_instructions(func, body);
@@ -2870,14 +2940,7 @@ impl WasmGcEmitter {
 					if let Node::Symbol(keyword) = items[0].drop_meta() {
 						if keyword == "return" {
 							// Emit the return value, as the Node a Node-returning function gives back
-							if self.returns_node {
-								self.emit_node_instructions(func, &items[1]);
-							} else if self.returns_float {
-								self.emit_float_value(func, &items[1]);
-							} else {
-								self.emit_numeric_value(func, &items[1]);
-							}
-							self.emit_leave_tries(func, 0);
+							self.emit_returned_value(func, &items[1]);
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
@@ -2961,6 +3024,15 @@ impl WasmGcEmitter {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
 		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
+			return;
+		}
+		if let Some(key) = self.runtime_math_key(node) {
+			return self.emit_runtime_math(func, key, node);
+		}
+		// `return x` in a branch: the numeric path returns it (as the function's kind); the value after is never reached
+		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return")) {
+			self.emit_numeric_value(func, node);
+			func.instruction(&Instruction::F64ConvertI64S);
 			return;
 		}
 		let located = node;
@@ -3145,6 +3217,11 @@ impl WasmGcEmitter {
 						self.emit_float_value(func, item);
 					}
 				}
+			}
+			// a loop: run it, its count as the value (a float function leaves it by `return`)
+			Node::Key(_, Op::Do, _) => {
+				self.emit_numeric_value(func, node);
+				func.instruction(&Instruction::F64ConvertI64S);
 			}
 			Node::Key(condition, Op::Question, then_else) => self.emit_ternary_raw(func, condition, then_else, ValType::F64, Self::emit_float_value),
 			Node::Key(if_then, Op::Else, else_expr) => self.emit_if_then_else_raw(func, if_then, Some(else_expr), ValType::F64, Self::emit_float_value),
@@ -3831,6 +3908,14 @@ fn eval_program(node: Node) -> Node {
 	}
 }
 
+/// The message of `error("…")`
+fn returned_error_message(value: &Node) -> Option<&Node> {
+	match value.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error") => Some(&items[1]),
+		_ => None,
+	}
+}
+
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
@@ -3886,7 +3971,10 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
 		crate::fixed_width::overflow_message(&type_name)
 	});
-	let runtime_error = missing_field.or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
+	// `return error("…")` from a number function: the message is the trap detail
+	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()))
+		.flatten().map(|detail| detail.trim_matches('"').to_string());
+	let runtime_error = returned_error.or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	let message = runtime_error.or(exact_trap).unwrap_or(trap);
 	crate::node::error(&message)

@@ -179,6 +179,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
 				}
+				if items.len() == 2 && crate::wasm_emitter::RUNTIME_MATH.iter().any(|(word, _)| word == name) {
+					return Kind::Float; // sin(x): a float (exact for a constant x, computed by real.rs)
+				}
 				if name == crate::closures::CLOSURE_NEW {
 					return Kind::Function;
 				}
@@ -2348,24 +2351,43 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
 	let scope = function_body_scope(params, body, function_kinds, globals);
-	let last_kind = match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
-		_ => infer_type(body, &scope),
+	// `return error("…")` is the failure path: it does not decide what the function returns
+	let is_error = |value: &Node| {
+		let value = match value.drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") => &items[1],
+			other => other,
+		};
+		matches!(value.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "error"))
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
 	// (`return [dist, prev]`: a List when every returned Node is one)
 	let mut returned_nodes: Vec<Kind> = vec![];
+	let mut returned: Vec<Kind> = vec![];
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
-			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
+			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") && !is_error(&items[1]) {
 				// `return` alone returns ø: a Node, so the function's numbers are Nodes too
 				let kind = if matches!(items[1].drop_meta(), Node::Empty) { Kind::Empty } else { infer_type(&items[1], &scope) };
+				returned.push(kind);
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
 					returned_nodes.push(kind);
 				}
 			}
 		}
 	});
+	let last = match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => &statements[statements.len() - 1],
+		other => other,
+	};
+	let last_kind = match (is_error(last), returned.first()) {
+		(true, Some(_)) if returned.contains(&Kind::Float) => Kind::Float,
+		(true, Some(first)) => *first,
+		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
+		_ => match infer_type(last, &scope) {
+			Kind::Int if returned.contains(&Kind::Float) => Kind::Float,
+			kind => kind,
+		},
+	};
 	match returned_nodes.as_slice() {
 		_ if last_kind.is_ref() => last_kind,
 		[] => last_kind,
