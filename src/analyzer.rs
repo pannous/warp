@@ -2419,7 +2419,7 @@ pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
 	let mut bound: HashSet<String> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
-	collect_assigned_names(&node, &mut bound);
+	crate::library_words::collect_assigned_names(&node, &mut bound);
 	negate_calls(node, &ctx.user_functions, &bound)
 }
 
@@ -2429,23 +2429,6 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	extract_user_functions_inner(&mut ctx, node);
 	let user_functions = ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name);
 	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
-}
-
-fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.clone());
-			}
-			collect_assigned_names(value, names);
-		}
-		Node::Key(left, _, right) => {
-			collect_assigned_names(left, names);
-			collect_assigned_names(right, names);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
-		_ => {}
-	}
 }
 
 fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
