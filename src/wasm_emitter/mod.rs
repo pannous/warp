@@ -105,7 +105,6 @@ use ValType::Ref;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArithmeticWrap {
-	None,
 	Int,
 	Float,
 }
@@ -272,14 +271,6 @@ impl WasmGcEmitter {
 	fn ffi_func_index(&self, name: &str) -> Option<u32> {
 		let ffi_name = format!("ffi_{}", name);
 		self.ctx.func_registry.get(&ffi_name).map(|f| f.call_index as u32)
-	}
-
-	/// Register an import function
-	fn register_import(&mut self, name: &'static str) -> u32 {
-		let func = FuncDef::host(name);
-		let idx = self.ctx.func_registry.register(func);
-		self.next_func_idx = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
-		idx
 	}
 
 	/// Register a code function
@@ -1012,7 +1003,7 @@ impl WasmGcEmitter {
 		// i64_pow(base: i64, exp: i64) -> i64
 		// Computes base^exp using a loop
 		if self.should_emit_function("i64_pow") {
-			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |s, func| {
+			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |_, func| {
 				// Locals: 0=base, 1=exp, 2=result
 				// result = 1
 				func.instruction(&Instruction::I64Const(1));
@@ -1637,7 +1628,6 @@ impl WasmGcEmitter {
 
 	fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
 		match wrap {
-			ArithmeticWrap::None => {}
 			ArithmeticWrap::Int => self.emit_call(func, "new_int"),
 			ArithmeticWrap::Float => self.emit_call(func, "new_float"),
 		}
@@ -3781,7 +3771,7 @@ pub fn out_of_fuel(steps: u64) -> Node {
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
 #[cfg(feature = "native")]
-fn failed_run(failure: anyhow::Error) -> Node {
+pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
