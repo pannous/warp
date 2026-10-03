@@ -10,15 +10,14 @@ page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
-target_dir="$(cargo metadata --offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
-RUSTFLAGS="-C link-arg=-zstack-size=$STACK_BYTES" cargo rustc --offline --lib --crate-type cdylib --release \
+offline=$([ "${CARGO_NET_OFFLINE:-true}" = false ] || echo --offline) # CI (.github/workflows/pages.yml) fetches crates
+target_dir="$(cargo metadata $offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+RUSTFLAGS="-C link-arg=-zstack-size=$STACK_BYTES" cargo rustc $offline --lib --crate-type cdylib --release \
 	--target wasm32-unknown-unknown --no-default-features
 compiled="$target_dir/wasm32-unknown-unknown/release/warp.wasm"
-if command -v wasm-opt > /dev/null; then
-	wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals "$compiled" -o "$page/warp.wasm"
-else
-	cp "$compiled" "$page/warp.wasm"
-fi
+# wasm-opt shrinks it by a tenth; without it (or an older one refusing a feature) the unoptimized module serves too
+wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals "$compiled" -o "$page/warp.wasm" \
+	|| cp "$compiled" "$page/warp.wasm"
 
 python3 - "$page/samples.js" samples/*.wasp <<'PYTHON'
 import json, os, sys
