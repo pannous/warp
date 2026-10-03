@@ -26,6 +26,10 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
+const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
+/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
+const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
@@ -239,6 +243,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
+	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -338,6 +344,7 @@ impl WaspParser {
 			equals_compares: false,
 			in_for_header: false,
 			stops_at_else: false,
+			signed_list_element: None,
 			stops_at_end: false,
 			times_loops: 0,
 			after_function_keyword: false,
@@ -545,6 +552,39 @@ impl WaspParser {
 	fn at_floor_division(&self) -> bool {
 		let previous = self.prev_char();
 		self.current_char() == '/' && self.peek_char(1) == '/' && self.pos > 0 && (is_identifier_char(previous) || matches!(previous, ')' | ']'))
+	}
+
+	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator
+	fn element_wise_operator(&self) -> Option<Op> {
+		if self.current_char() != '.' {
+			return None;
+		}
+		ELEMENT_WISE_OPERATORS.iter().find(|(glyph, _)| *glyph == self.peek_char(1)).map(|(_, op)| *op)
+	}
+
+	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
+	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`
+	fn signed_number_starts_a_list(&mut self, lhs: &Node) -> Result<bool, Node> {
+		if self.signed_list_element == Some(self.pos) {
+			return Ok(true); // answered for the operand inside
+		}
+		if !matches!(lhs.drop_meta(), Node::Number(_)) || !self.prev_char().is_whitespace() || !self.number_starts_at(1) {
+			return Ok(false);
+		}
+		let signed: String = self.chars[self.pos..].iter().take_while(|ch| !ch.is_whitespace() && !matches!(ch, ']' | ')' | '}' | ',' | ';')).collect();
+		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
+		let written = format!("{first} {signed}");
+		let readings = vec![
+			crate::diagnostic::reading("the list", &format!("[{written}]")),
+			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
+		];
+		let question = crate::diagnostic::Ask::new(SIGNED_OPERAND_TOPIC, format!("is `{written}` a list or arithmetic?"), readings, crate::diagnostic::Fallback::Warning)
+			.written(&written).at(self.line_nr, self.column);
+		let is_list = crate::diagnostic::ask(&question)? == 0;
+		if is_list {
+			self.signed_list_element = Some(self.pos);
+		}
+		Ok(is_list)
 	}
 
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
@@ -1585,6 +1625,20 @@ impl WaspParser {
 				continue;
 			}
 
+			// Step 3d: element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+			if let Some(op) = self.element_wise_operator() {
+				let (l_bp, r_bp) = op.binding_power();
+				if l_bp < min_bp {
+					break;
+				}
+				self.advance_by(2);
+				self.skip_whitespace();
+				let operand = self.parse_expr(r_bp);
+				lhs = crate::analyzer::element_wise(lhs, op, operand);
+				previous_comparand = None;
+				continue;
+			}
+
 			// Step 3c: membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`
 			// a unit word stays in the flat counting phrase: `number of chars in t`
 			let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
@@ -1636,6 +1690,21 @@ impl WaspParser {
 			// Stop if operator binds less tightly than our minimum
 			if l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
+			}
+			if matches!(op, Op::Add | Op::Sub) {
+				match self.signed_number_starts_a_list(&lhs) {
+					Ok(false) => {}
+					Ok(true) => {
+						if op == Op::Add {
+							self.advance_by(1); // `+1` is the element 1
+						}
+						break; // `1 -1`: the signed number is the next element
+					}
+					Err(strict) => {
+						lhs = strict;
+						break;
+					}
+				}
 			}
 
 			// Consume the operator

@@ -1923,16 +1923,18 @@ fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 }
 
 /// `[x]*n` and `n*[x]` with a list literal: Python repeats the list, NumPy multiplies each element (wiki/Footguns.md
-/// "Lists and arithmetic"), so the user is asked; unanswered it is an error naming both explicit forms
+/// "Lists and arithmetic"), so the user is asked; unanswered it is an error naming both explicit forms.
+/// Likewise `[1 2 3]+4`: append or add to each element?
 pub fn lower_list_times(node: Node) -> Node {
+	let list_arithmetic = |key: &Node, positioned: &Node| list_times(key, positioned).or_else(|| list_plus(key, positioned));
 	match node {
 		Node::Meta { node: inner, data } => {
 			let positioned = Node::Meta { node: inner.clone(), data: data.clone() };
-			list_times(&inner, &positioned).unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
+			list_arithmetic(&inner, &positioned).unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
 		}
 		Node::Key(left, op, right) => {
 			let key = Node::Key(Box::new(lower_list_times(*left)), op, Box::new(lower_list_times(*right)));
-			list_times(&key, &key).unwrap_or(key)
+			list_arithmetic(&key, &key).unwrap_or(key)
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_list_times).collect(), bracket, separator),
 		other => other,
@@ -1943,8 +1945,7 @@ const LIST_TIMES_TOPIC: &str = "list-times";
 
 fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
-	let is_list = |side: &Node| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _));
-	let (list, count) = match (is_list(left), is_list(right)) {
+	let (list, count) = match (is_list_literal(left), is_list_literal(right)) {
 		(true, false) => (left.as_ref(), right.as_ref()),
 		(false, true) => (right.as_ref(), left.as_ref()),
 		_ => return None,
@@ -1965,6 +1966,54 @@ fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 		}
 		Err(error) => error,
 	})
+}
+
+const LIST_PLUS_TOPIC: &str = "list-plus";
+
+fn is_list_literal(side: &Node) -> bool {
+	matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))
+}
+
+/// `[1 2 3]+4` and `4+[1 2 3]` with a list literal and a number: append (prepend) or add to each element?
+/// Unanswered it is an error naming `[1 2 3] + [4]` and `[1 2 3] .+ 4`
+fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Add, right) = key.drop_meta() else { return None };
+	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
+	let (list, number, list_first) = match (is_list_literal(left), is_list_literal(right)) {
+		(true, false) if is_number(right) => (left.as_ref(), right.as_ref(), true),
+		(false, true) if is_number(left) => (right.as_ref(), left.as_ref(), false),
+		_ => return None,
+	};
+	let written = key.drop_meta().serialize();
+	let (list_text, number_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(number));
+	let (joining, joined) = match list_first {
+		true => ("append", format!("{list_text} + [{number_text}]")),
+		false => ("prepend", format!("[{number_text}] + {list_text}")),
+	};
+	let readings = vec![
+		crate::diagnostic::reading(joining, &joined),
+		crate::diagnostic::reading("add to each element", &format!("{list_text} .+ {number_text}")),
+	];
+	let question = crate::diagnostic::Ask::new(LIST_PLUS_TOPIC, format!("type error: list + number: does `{written}` {joining} {number_text} or add it to each element?"),
+		readings, crate::diagnostic::Fallback::Error).written(&written).at_node(positioned);
+	let singleton = Node::List(vec![number.clone()], Bracket::Square, Separator::Space);
+	Some(match crate::diagnostic::ask(&question) {
+		Ok(0) if list_first => Node::Key(Box::new(list.clone()), Op::Add, Box::new(singleton)),
+		Ok(0) => Node::Key(Box::new(singleton), Op::Add, Box::new(list.clone())),
+		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
+		Err(error) => error,
+	})
+}
+
+/// The element name of the lambda an element-wise operator maps with: no wasp program writes it
+const EACH_ELEMENT: &str = "each_element";
+
+/// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
+pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
+	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
+	let lambda = Node::Key(element(), Op::FatArrow, Box::new(Node::Key(element(), op, Box::new(operand))));
+	let call = Node::List(vec![Node::Symbol("map".to_string()), lambda], Bracket::Round, Separator::None);
+	Node::Key(Box::new(list), Op::Dot, Box::new(call))
 }
 
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
