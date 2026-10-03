@@ -1,9 +1,7 @@
-// D14 (user 2026-10-03): `x in list` gives the 1-based position of x (truthy when found), 0 when absent, with a warning
-// that the value is a position. As a condition only its truth counts, so no warning there.
+// D14 (user 2026-10-03): `x in list` gives the 1-based position of x (truthy when found), 0 when absent;
+// round 3: "Never warn".
 use warp::*;
 use warp::diagnostic::{with_warning_mode, WarningMode};
-
-use crate::common::fails_with;
 
 #[test]
 fn in_gives_the_one_based_position() {
@@ -21,8 +19,8 @@ fn a_found_first_element_is_truthy() {
 }
 
 #[test]
-fn the_position_as_a_value_warns() {
-	with_warning_mode(WarningMode::Error, || fails_with("3 in [1 2 3]", "position"));
+fn the_position_never_warns() {
+	with_warning_mode(WarningMode::Error, || is!("3 in [1 2 3]", 3));
 	with_warning_mode(WarningMode::Error, || is!("if 3 in [1 2 3] {7} else {8}", 7));
 }
 

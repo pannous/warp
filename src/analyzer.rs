@@ -1238,7 +1238,6 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
 	warnings.extend(kebab_ambiguities(program));
-	positions_used_as_values(program, false, &mut warnings);
 	program.visit(&mut |node| {
 		if let Node::Key(_, Op::Define, body) = node {
 			if uses_it_outside_loops(body) {
@@ -1276,32 +1275,6 @@ fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 			}
 		}
 	});
-}
-
-/// `x in xs` is the 1-based position of x (user decision D14): a condition only asks whether it is there, any other use
-/// gets the number, which may surprise a reader expecting true/false
-fn positions_used_as_values(node: &Node, in_condition: bool, warnings: &mut Vec<Diagnostic>) {
-	match node.drop_meta() {
-		Node::Key(left, op, right) => {
-			let (left_is_condition, right_is_condition) = match op {
-				Op::If | Op::While | Op::Not => (false, true),
-				Op::And | Op::Or => (in_condition, in_condition),
-				Op::Question => (true, false),
-				_ => (false, false),
-			};
-			positions_used_as_values(left, left_is_condition, warnings);
-			positions_used_as_values(right, right_is_condition, warnings);
-		}
-		Node::List(items, _, _) => {
-			let is_position = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == crate::library_words::COLLECTION_POSITION);
-			if is_position && !in_condition {
-				warnings.push(Diagnostic::at(node, "`x in xs` is the position of x in xs (1-based, 0 when absent), not true/false")
-					.fix("if x in xs {…} tests it; xs.has(x) is 1 or 0"));
-			}
-			items.iter().for_each(|item| positions_used_as_values(item, false, warnings));
-		}
-		_ => {}
-	}
 }
 
 fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
