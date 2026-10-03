@@ -12,3 +12,10 @@ fn test_type_symbol() {
 fn test_type_typed_variable() {
 	is!("x:int=42;type(x)", Node::Symbol("int".to_string()));
 }
+
+#[test]
+fn test_type_inside_a_function_body() {
+	is!("def f(x){ type(x) }; f(3)", Node::Symbol("int".to_string()));
+	is!("def f(x){ type(x) }; f(\"ab\")", Node::Symbol("text".to_string()));
+	is!("def f(x){ y=type(x); y }; f(3)", Node::Symbol("int".to_string()));
+}

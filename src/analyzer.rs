@@ -188,6 +188,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if name == crate::wasp_parser::TEXT_TIMES {
 					return Kind::Text;
 				}
+				if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
+					return Kind::Symbol; // the type's name
+				}
 				if name == PRINT_CALL && items.len() >= 2 {
 					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
 						[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text

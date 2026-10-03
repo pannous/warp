@@ -14,7 +14,7 @@ pub const IS_TYPE: &str = "is_type";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 const OF_WORD: &str = "of";
-const TYPE_WORD: &str = "type";
+pub const TYPE_WORD: &str = "type";
 
 /// Words that name the same type
 fn canonical_spec_word(word: &str) -> &str {

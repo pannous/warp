@@ -8,3 +8,8 @@ fn several_typed_parameters() {
 	is!("fun addi(float x, float y){x+y}; addi(2.2,2.2)", 4.4);
 	is!("fun addier(float a, float b){b+a}; addier(42,1)+1", 44.0);
 }
+
+#[test]
+fn spaced_typed_signature() {
+	is!("f int x := x+1; f(2)", 3);
+}
