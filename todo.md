@@ -58,3 +58,5 @@
 - Traits: default methods in a trait (`trait shape{area; describe(s) := …}`) are a loud error for now; Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open. (impl-traits 2026-10-03)
 - Static instance types (traits::InstanceTypes) are flow-insensitive per variable name: a variable assigned an instance and later something whose shape is unknown keeps the instance shape. (impl-traits 2026-10-03)
 - Later, when machine load is low (user 2026-10-03): an agent fixes the red tests on main of pannous/russh (Rust, Semver, CodeQL on schedule: code scanning likely not enabled) and pannous/warpgate (Test); they mail nightly until then (notes/ci_policy.md).
+- typed-lists: bare `int[0]` (no assignment) is 'i' and `#(int[n])` is 1: only `x = int[N]` with a literal N is a zero fill, `int[n]` with a variable indexes the word "int"
+- typed-lists: `int_array_filled` wraps a count above 2^31 to i32 (zero_fill would loop that long); a typed list read before its first assignment traps on a null array instead of the Node path's behaviour

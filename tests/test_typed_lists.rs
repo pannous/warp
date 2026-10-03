@@ -57,6 +57,8 @@ fn test_int_list_literal_is_an_array() {
 fn test_mixed_list_stays_cons_cells() {
 	assert_eq!(typed_array_operations("xs=[3,\"a\",4]; xs#2"), 0);
 	assert_eq!(typed_array_operations("xs=[3,1.5f,4]; xs#2"), 0);
+	assert_eq!(typed_array_operations("xs=[ø]; if xs {1} else {2}"), 0);
+	assert_eq!(typed_array_operations("xs=[1, ø]; #xs"), 0);
 }
 
 #[test]
@@ -95,4 +97,20 @@ fn test_int_array_errors_like_cons_list() {
 	fails_with("xs=[3,1,4]; xs#4", "index");
 	fails_with("xs=[3,1,4]; xs#0", "index");
 	fails_with("xs=[3,1,4]; xs#4=1", "index");
+}
+
+#[test]
+fn test_zero_filled_int_list_is_an_array() {
+	assert!(typed_array_operations("xs = int[5]; xs[2] = 7; xs[2]") > 0);
+	is!("xs = int[5]; xs[2] = 7; sum xs", 7);
+	is!("xs = int[5]; #xs", 5);
+	assert_eq!(printed("xs = int[3]; xs[1] = 4; xs"), "[0 4 0]");
+}
+
+#[test]
+fn test_int_expression_items_are_an_array() {
+	assert!(typed_array_operations("a=2; xs=[a, a+1, a*3]; xs#3") > 0);
+	is!("a=2; xs=[a, a+1, a*3]; xs#3", 6);
+	assert_eq!(printed("a=2; xs=[a, a+1, 7/7]; xs"), "[2 3 1]");
+	fails_with("xs=[3,1,4]; xs#-1", "index out of range");
 }

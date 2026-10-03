@@ -12,7 +12,6 @@
 //! A typed list keeps value semantics: `ys = xs` copies the array when either variable is assigned by index.
 
 use super::WasmGcEmitter;
-use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -28,6 +27,7 @@ pub const INT_ARRAY_AT: &str = "int_array_at";
 pub const INT_ARRAY_SET: &str = "int_array_set";
 pub const INT_ARRAY_COPY: &str = "int_array_copy";
 pub const INT_ARRAY_AS_LIST: &str = "int_array_as_list";
+pub const INT_ARRAY_FILLED: &str = "int_array_filled";
 const NODE_COUNT: &str = "node_count";
 const SQUARE_BRACKET_INFO: i64 = 1;
 
@@ -75,12 +75,14 @@ enum Source {
 	Other,
 }
 
-fn source_of(value: &Node) -> Source {
-	let is_int = |item: &Node| matches!(item.drop_meta(), Node::Number(Number::Int(_)));
+/// The count and zero of `zero_fill(count, zero)`, what `x : 100 int` and `int[100]` lower to
+fn zero_fill_parts(value: &Node) -> Option<(&Node, &Node)> {
 	match value.drop_meta() {
-		Node::Symbol(name) => Source::Variable(name.clone()),
-		Node::List(items, Bracket::Square, _) if !items.is_empty() && items.iter().all(is_int) => Source::Literal(ElementType::Int),
-		_ => Source::Other,
+		Node::List(items, _, _) => match items.as_slice() {
+			[call, count, zero] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::analyzer::ZERO_FILL_CALL) => Some((count, zero)),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 
@@ -108,6 +110,30 @@ fn agreed_element(sources: &[Source], typed: &HashMap<String, Option<ElementType
 }
 
 impl WasmGcEmitter {
+	/// An element provably an exact Int: a number literal, an Int variable, a call of a function returning one, or
+	/// arithmetic of those. Not by the type alone: it defaults to Int for anything unknown (ø, a key)
+	fn is_int_item(&self, item: &Node) -> bool {
+		let is_int_kind = self.get_type(item) == Kind::Int;
+		is_int_kind && match item.drop_meta() {
+			Node::Number(_) | Node::Symbol(_) => true,
+			Node::Key(left, op, right) if op.is_arithmetic() => {
+				(matches!(left.drop_meta(), Node::Empty) || self.is_int_item(left)) && self.is_int_item(right)
+			}
+			Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name)),
+			_ => false,
+		}
+	}
+
+	fn source_of(&self, value: &Node) -> Source {
+		let is_int = |item: &Node| self.is_int_item(item);
+		match value.drop_meta() {
+			Node::Symbol(name) => Source::Variable(name.clone()),
+			_ if zero_fill_parts(value).is_some_and(|(_, zero)| is_int(zero)) => Source::Literal(ElementType::Int),
+			Node::List(items, Bracket::Square, _) if !items.is_empty() && items.iter().all(is_int) => Source::Literal(ElementType::Int),
+			_ => Source::Other,
+		}
+	}
+
 	/// The list variables of the current body that can be typed arrays: locals of kind List that are only ever assigned
 	/// int literal lists or other such variables, never updated as a whole (`xs += …`), not captured by a function, no
 	/// global, not assigned inside a `try`. Any other use reads them as Nodes, so it stays correct.
@@ -118,7 +144,7 @@ impl WasmGcEmitter {
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => sources.entry(name.clone()).or_default().push(source_of(value)),
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => sources.entry(name.clone()).or_default().push(self.source_of(value)),
 				Node::Symbol(name) if is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(list, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					if let Node::Symbol(name) = list.drop_meta() {
@@ -260,6 +286,12 @@ impl WasmGcEmitter {
 					self.emit_call(func, INT_ARRAY_COPY);
 				}
 			}
+			_ if zero_fill_parts(value).is_some() => {
+				let (count, zero) = zero_fill_parts(value).expect("guarded");
+				self.emit_numeric_value(func, count);
+				self.emit_numeric_value(func, zero);
+				self.emit_call(func, INT_ARRAY_FILLED);
+			}
 			Node::List(items, _, _) => {
 				for item in items {
 					self.emit_numeric_value(func, item);
@@ -314,6 +346,16 @@ impl WasmGcEmitter {
 					I::LocalGet(1), I::I32Const(0), I::LocalGet(0), I::I32Const(0), I::LocalGet(0), I::ArrayLen,
 					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 					I::LocalGet(1),
+				]);
+			});
+		}
+		// int_array_filled(count, zero) -> array: count times zero, empty when count is not positive
+		if self.should_emit_function(INT_ARRAY_FILLED) {
+			self.runtime_function(INT_ARRAY_FILLED, vec![ValType::I64, ValType::I64], vec![array_ref], vec![], |_, f| {
+				Self::emit_list(f, &[
+					I::LocalGet(1),
+					I::LocalGet(0), I::I64Const(0), I::LocalGet(0), I::I64Const(0), I::I64GtS, I::Select, I::I32WrapI64,
+					I::ArrayNew(array),
 				]);
 			});
 		}
