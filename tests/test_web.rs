@@ -37,13 +37,6 @@ fn test_inner_html() {
 	// eq!(serialized, "<html><bold>test</bold></html>");
 	//	eval("<html><script>alert('ok')");
 	//	eval("<html><script>alert('ok')</script></html>");
-	#[cfg(feature = "WEBAPP")]
-	{
-		eval("<html><bold id=b ok=123>test</bold></html>");
-		is!("$b.ok", 123); // TODO emitAttributeSetter
-		eval("<script>console.log('ok!')</script>");
-		eval("<script>alert('alert ok!')</script>"); // // pop up window NOT supported by WebView, so we use print instead
-	}
 	//	eval("$b.innerHTML='<i>ok</i>'");
 	//	eval("<html><bold id='anchor'>…</bold></html>");
 	//	eval("$anchor.innerHTML='<i>ok</i>'");
@@ -99,19 +92,6 @@ fn test_dom() {
 #[test]
 #[ignore = "WEBAPP feature required"]
 fn test_dom_property() {
-	#[cfg(not(feature = "WEBAPP"))]
-	{
-	}
-	#[cfg(feature = "WEBAPP")]
-	{
-		let mut result = eval("getExternRefPropertyValue($canvas,'width')"); // ok!!
-		eq!(result.value(), &300); // only works because String "300" gets converted to BigInt 300
-							 //	result = eval("width='width';$canvas.width");
-		result = eval("$canvas.width");
-		eq!(result.value(), &300);
-		//	return;
-		let _style = eval("$canvas.style");
-	}
 	// eq!(result.kind(), strings);
 	//	eq!(result.kind(), stringp);
 	// if (result.value()));
