@@ -363,9 +363,8 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   slower crates); `wat` → dev-dependency. Cargo.lock has 245 packages.
 - No `vendor/` exists although Cargo.toml and AGENTS.md describe vendored offline builds; `--offline` works from the
   registry cache. Fix the docs, or vendor for real (decision).
-- `crate-type = ["cdylib", "rlib"]`: the cdylib (for wasm-pack) makes every checkout share one unhashed `libwarp.rlib`
-  (notes/build_speed.md pitfall). Proposal: a separate tiny `web/` crate (or `[lib]` only in a wasm-pack profile) owns the
-  cdylib, so the main crate is plain `rlib` and copies stop clobbering each other.
+- DONE 2026-10-04: `crate-type = ["cdylib", "rlib"]` is now `["rlib"]`; the playground build asks for the cdylib itself
+  (`cargo rustc --crate-type cdylib`, web/playground/build.sh), so copies no longer share one unhashed `libwarp.rlib`.
 - `[package.metadata.clippy] warn = false` does nothing (not a clippy key); remove.
 - `#![allow(dead_code, unused_imports)]` crate-wide (lib.rs, main.rs, node.rs) + `#![allow(unused)]` (smarty.rs) hide 88
   lib warnings; remove after §4.
@@ -398,4 +397,4 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 8. CLAUDE.md: replace with a symlink to AGENTS.md, and may AGENTS.md's architecture section be rewritten from §1?
 9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links, `build_debug.sh`,
    `add_ignore_to_failing_tests.sh`, `nextest.sh`): delete or move to notes/OLD?
-10. Split the `cdylib` into its own small crate for the web playground?
+10. DONE (user: "can we gate it"): no split needed, the cdylib is gated to web/playground/build.sh.

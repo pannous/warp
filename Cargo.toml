@@ -138,6 +138,6 @@ panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
 
 [lib]
-# to compile to wasm using `wasm-pack build` :
-crate-type = ["cdylib", "rlib"]
-#https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
+# Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).
+# A cdylib here made cargo name the rlib without a hash, so every checkout copy linked the same libwarp.rlib.
+crate-type = ["rlib"]
