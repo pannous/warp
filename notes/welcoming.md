@@ -20,6 +20,27 @@ the same way: nothing asks which reading was meant and no answer is remembered. 
 a warning (take the default reading, shown until the user says "got it") or an error naming the explicit forms (too
 dangerous to guess; user, same day: "Stay loud errors").
 
+## Duck typing and `like` (central philosophy, user decision 2026-10-03)
+
+User, verbatim: "if it's truly unknown then this is a duck typing like a python; if it has all the fields but is a known
+different type then we should create an error and tell the user about a new keyword image like photo, so the image will
+be treated like a photo and judged by uses. We should write that as a very central philosophy."
+
+What a typed parameter `p:photo` accepts:
+
+| argument | result |
+|---|---|
+| a photo | accepted |
+| a value of unknown type (an untyped parameter passed on, a written map `{width:3}`) | duck typed: accepted, judged by the fields its uses read; a missing field fails loudly ("no field height") |
+| a value of a known other type (`image{…}`) | compile error that teaches the keyword: "image is not a photo; fix: declare `image like photo` to use it as one" |
+| a known non-object (`3`, `"x"`) | compile error: "keep needs a photo for parameter p, got 3 (an Int)" |
+
+`image like photo` declares that an image may stand wherever a photo is expected. It is a promise, not a conversion:
+the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
+of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
+fields are a decision the writer states once, in one line). Implemented in src/traits.rs (`Likeness`,
+`Dispatch::refused_argument`), tests/test_like.rs, wiki page wiki_pages/like.md.
+
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
 Python/JS style: samples/<name>.wasp next to samples/<name>_idiomatic.wasp, tests in tests/test_algo_<name>.rs.

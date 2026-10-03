@@ -113,6 +113,7 @@ mod test_less_than_compare;
 mod test_library_unicode;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_libm_linking;
+mod test_like;
 mod test_list_arithmetic;
 mod test_list_number_comparison;
 mod test_list_plus_number;
