@@ -658,6 +658,14 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalGet(current));
 		func.instruction(&Instruction::RefIsNull);
 		self.emit_fail_if(func, "index_out_of_range");
+		// a meta entry `@name:value` has no position: step over it
+		self.emit_field(func, current, 1);
+		self.call(func, super::equality::IS_META_ENTRY);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		self.emit_field(func, current, 2);
+		func.instruction(&Instruction::LocalSet(current));
+		func.instruction(&Instruction::Br(1));
+		func.instruction(&Instruction::End);
 		Self::emit_index_compare(func, Instruction::I64LeS);
 		func.instruction(&Instruction::BrIf(1));
 		self.emit_field(func, current, 2);
@@ -1308,6 +1316,12 @@ impl WasmGcEmitter {
 		let column_cells = next_index(self);
 		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+			// a meta entry `@name:value` is no key, value or entry of the map
+			s.emit_field(f, 0, 1);
+			s.call(f, super::equality::IS_META_ENTRY);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::Return, I::End]);
 			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);

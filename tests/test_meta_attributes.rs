@@ -65,3 +65,41 @@ fn test_field_first_then_meta_fallback() {
 	is!("p = {source:\"field\" @source:\"gps\"}; p.source", "field");
 	fails_with(&with_point("p = point{x:1 y:2}; p.source"), "no field source");
 }
+
+// Round 3 (user decision "Skip @ keys"): iteration, keys, values, entries and every count ignore meta entries
+
+const WITH_META: &str = "p = {x:1 y:2 @s:30}; ";
+
+fn with_meta(code: &str) -> String {
+	format!("{WITH_META}{code}")
+}
+
+#[test]
+fn test_iteration_skips_meta_entries() {
+	is!(&with_meta("n=0; for k in p {n+=1}; n"), 2);
+	is!(&with_meta("t=0; for k,v in p {t+=v}; t"), 3);
+	is!("p = {x:1}; p.@s = 30; t=0; for k,v in p {t+=v}; t", 1);
+}
+
+#[test]
+fn test_keys_values_entries_skip_meta_entries() {
+	is!(&with_meta("#p.keys"), 2);
+	is!(&with_meta("sum(p.values)"), 3);
+	is!(&with_meta("#map_entries(p)"), 2);
+}
+
+#[test]
+fn test_counts_and_positions_skip_meta_entries() {
+	is!(&with_meta("p.count"), 2);
+	is!(&with_meta("p.length"), 2);
+	is!(&with_meta("count(p)"), 2);
+	is!(&with_meta("#p"), 2);
+	fails_with(&with_meta("p#3"), "index out of range");
+}
+
+#[test]
+fn test_meta_stays_reachable() {
+	is!(&with_meta("p.@s"), 30);
+	is!(&with_meta("p@s"), 30);
+	is!(&with_meta("p[\"@s\"]"), 30);
+}
