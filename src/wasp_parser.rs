@@ -76,6 +76,8 @@ const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
 const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
+/// `x is int` tests the type; `x == int` stays equality (user decision #30)
+const IS_WORD: &str = "is";
 const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
@@ -1701,6 +1703,7 @@ impl WaspParser {
 				continue;
 			}
 
+			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define

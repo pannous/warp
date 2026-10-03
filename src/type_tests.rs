@@ -1,6 +1,7 @@
 //! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints` lower to `is_type(x, "spec")`, which the
 //! emitter answers from the static type name of `x` (the same as `type(x)`). `type of x` is `type(x)`.
-//! A type word on the right of `is`/`==` switches from equality to a type test; `x is y` with a variable stays equality.
+//! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
+//! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
 use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
 use crate::context::Context;
@@ -79,6 +80,34 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 	}).collect()
 }
 
+/// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
+const EQUALITY_OPERAND: &str = "equality operand";
+
+/// The right side of `x == word` as the parser marks it when the word names a type
+pub fn equality_operand(word: Node) -> Node {
+	match word.drop_meta() {
+		Node::Symbol(name) if type_spec(&[name.as_str()], &HashSet::new()).is_some() => {
+			Node::Meta { node: Box::new(word), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
+		}
+		_ => word,
+	}
+}
+
+fn is_equality_operand(node: &Node) -> bool {
+	matches!(node, Node::Meta { data, .. } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name() == EQUALITY_OPERAND))
+}
+
+/// `type(x) == int` compares two types; `x == int` compares a value with a type, never equal: educate toward `x is int`
+fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &HashSet<String>) -> Node {
+	let compares_types = matches!(subject.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == TYPE_WORD));
+	if compares_types {
+		return is_type_call(expand(subject, shadowed), spec);
+	}
+	let (written, preferred) = (crate::normalize::operand_text(&subject), word.drop_meta().name());
+	crate::normalize::hint(&format!("{written} == {preferred}"), &format!("{written} is {preferred}"), "only `is` tests a type; a value never equals a type");
+	Node::False
+}
+
 fn is_type_call(subject: Node, spec: String) -> Node {
 	Node::List(vec![Node::Symbol(IS_TYPE.to_string()), subject, Node::Text(spec)], Bracket::Round, Separator::None)
 }
@@ -92,6 +121,7 @@ fn expand(node: Node, shadowed: &HashSet<String>) -> Node {
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
+			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
 			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
 			None => Node::Key(Box::new(expand(*subject, shadowed)), Op::Eq, Box::new(expand(*right, shadowed))),
 		},
