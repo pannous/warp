@@ -118,6 +118,7 @@ mod test_min_max_lists;
 mod test_min_max;
 mod test_module_cache;
 mod test_mutating_bang;
+mod test_name_subsection_order;
 mod test_negated_call;
 mod test_newline_precedence;
 mod test_node_operators;

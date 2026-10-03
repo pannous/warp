@@ -3449,7 +3449,7 @@ impl WasmGcEmitter {
 			module.section(&data);
 		}
 
-		// Name section for field name resolution
+		// Name section for field name resolution, subsections in ascending id order (function 1, type 4, field 10)
 		let mut names = NameSection::new();
 
 		// Function names (subsection 1 comes before types and fields)
