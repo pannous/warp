@@ -24,7 +24,9 @@ let worker;
 let workerReady;
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
-let queued; // code waiting for the running evaluation to finish
+let runs = Promise.resolve(); // the evaluations, one after another
+let showing = false; // the page is evaluating its editor's code
+let queued; // the editor's code to show once the current run is shown
 let typingTimer;
 const debugBuild = new URLSearchParams(location.search).has(DEBUG_PARAMETER);
 let lastModule; // the bytes of the last module the compiler emitted, for the download button
@@ -71,37 +73,38 @@ function startWorker() {
 			if (!pending) return;
 			if (data.type === "print") pending.printed.push(data);
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish({ ...data.report, printed: pending.printed, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, milliseconds: data.milliseconds });
 		};
 	});
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 }
 
-function finish(report) {
-	clearTimeout(pending.timer);
-	const { resolve } = pending;
-	pending = undefined;
-	resolve(report);
-	if (queued !== undefined) {
-		const code = queued;
-		queued = undefined;
-		show(code);
-	}
+function finish(run, report) {
+	clearTimeout(run.timer);
+	if (pending === run) pending = undefined;
+	run.resolve(report);
 }
 
-// evaluate code in the worker: the report of src/web.rs evaluate plus `printed` [{text, stream}]
-async function evaluate(code) {
+// evaluate code in the worker: the report of src/web.rs evaluate plus `printed` [{text, stream}]. The worker runs one
+// program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several)
+function evaluate(code) {
+	const run = runs.then(() => runInWorker(code));
+	runs = run.catch(() => {});
+	return run;
+}
+
+async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
-		const id = ++nextRunId;
-		const timer = setTimeout(() => {
+		const run = { id: ++nextRunId, resolve, printed: [] };
+		run.timer = setTimeout(() => {
 			worker.terminate(); // a program that does not stop blocks the worker: replace it
-			const printed = pending.printed;
 			startWorker();
-			finish({ value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+			finish(run, { value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed: run.printed,
+				warnings: [], runtime_warnings: [], hints: [], notes: [] });
 		}, RUN_TIMEOUT_MS);
-		pending = { id, resolve, printed: [], timer };
-		worker.postMessage({ id, code, acknowledged: acknowledgements() });
+		pending = run;
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
 }
 
@@ -147,12 +150,23 @@ function showReport(report) {
 }
 
 async function show(code) {
-	if (pending) {
-		queued = code;
+	if (showing) {
+		queued = code; // only the newest code is worth running next
 		return;
 	}
+	showing = true;
 	setStatus("running…");
-	showReport(await evaluate(code));
+	try {
+		showReport(await evaluate(code));
+	} catch (failure) {
+		setStatus(failure.message, true);
+	}
+	showing = false;
+	if (queued !== undefined) {
+		const next = queued;
+		queued = undefined;
+		show(next);
+	}
 }
 
 // a link to the same page with the other compiler build

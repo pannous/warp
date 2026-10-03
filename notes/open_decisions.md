@@ -41,6 +41,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Text quotes in printed output (asked by warp-6c; user WIP commit ec968e18 expected single quotes in
+  tests/test_method_words.rs): "Keep double quotes". The printer keeps `"HELLO"`; the WIP test edits are reverted to
+  double quotes (user decision) and the 5 ignored tests un-ignored.
 - `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
   otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
   the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
@@ -331,7 +334,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     `1<2==2` chains (`1<2 and 2==2` → true). Should `==`/`!=` stop chaining with `<`/`>`?
 40. (impl-ask, 2026-10-03; assumption taken, not blocking) D13 `1 -1` asks only when the left operand is a number
     literal (`1 -1`, `1 +1`, `[1 -1]`); `x -1`, `abs -3`, `return -1` keep subtracting/negating, so
-    tests/test_negated_call.rs:10 `is!("x=5;x -1", 4)` stays. Should `x -1` ask too (that test line would change)?
+    tests/operators/test_negated_call.rs:10 `is!("x=5;x -1", 4)` stays. Should `x -1` ask too (that test line would change)?
     Also assumed: D9's suffix-precedence Ask falls back to Error.
 41. (samples, 2026-10-03; assumption taken, not blocking) Spaced construction: `V { x: 1, y: 2 }` with a space now
     constructs a declared type `V` exactly like the glued `V{x: 1 y: 2}` (D4); a word that names no declared type
