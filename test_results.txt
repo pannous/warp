@@ -694,11 +694,11 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
-  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -909,6 +909,8 @@ PASSED:
   ✓ test_person_struct::test_person_struct_roundtrip
   ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
+  ✓ test_print_arguments::print_joins_its_arguments_with_a_space
+  ✓ test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
   ✓ test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
   ✓ test_property_access::test_bracket_lookup_by_text_never_traps
@@ -1291,6 +1293,7 @@ PASSED:
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
+  ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ test_wasm_emitter::test_emit_gc_types
   ✓ test_wasm_emitter::test_function_usage_tracking
@@ -1520,4 +1523,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1515 passed, 0 failed, 1515 total tested
+58 ignored, 1518 passed, 0 failed, 1518 total tested
