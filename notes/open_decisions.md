@@ -31,6 +31,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - D14 `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
   warning". `3 in [1 2 3]` gives the position (truthy when found), with a warning. Caveat for implementation: a 0-based
   position makes the first element falsy, so the position must be 1-based (or found-at-0 still truthy).
+- #38 `[ø]`: "Truthy". A non-empty list is truthy; the test_wasm_logic_on_objects expectation may be edited.
+- D16 numbers: "Unbounded + FFI types". Int stays unbounded (BigInt promotion); `byte`, `int8..int64` exist as declared
+  types for FFI that trap on overflow. No `overflow` value.
+- D2 `!` (evaluate / mutate / await): "let's think about this later", parked.
+- D13 `1 -1`: "ask and assume list". An Ask (signed operand glued after a space) whose default reading is the list
+  `[1 -1]` (fallback Warning, taking the list); the arithmetic reading is written `1 - 1`.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -171,5 +177,5 @@ D16 overflow contradict Decided rules). Found while implementing:
 37. First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
     not a funcref table: functions chosen at run time and capturing lambdas remain loud errors. A table needs one
     uniform (boxed) signature. Enough for now?
-38. Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
+38. DECIDED 2026-10-03 (see the top: truthy). Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
     when it has a first element.
