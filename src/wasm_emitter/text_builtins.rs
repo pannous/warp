@@ -81,7 +81,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort"];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
