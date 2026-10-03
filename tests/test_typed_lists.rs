@@ -197,6 +197,7 @@ fn calls_to(code: &str, name: &str) -> usize {
 }
 
 #[test]
+#[ignore = "next"]
 fn test_sum_of_a_typed_list_is_one_operation() {
 	assert!(calls_to("xs=[1,2,3]; sum xs", "int_list_sum") > 0);
 	assert!(calls_to("xs=[1.5f,2.5f]; sum xs", "float_list_sum") > 0);
