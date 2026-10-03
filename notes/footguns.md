@@ -174,7 +174,7 @@
   in list_emitter, half up = floor(x) + (frac ≥ ½) via a scratch local holding the f64 bits); Booleans are integers
   (analyzer `check_boolean_arithmetic` in `diagnose`: arithmetic on true/false, comparisons or prefix `not` is an error with
   an `int(…)` fix-it). Validated on CI (branch claude/footguns-numbers2; no local build, crates.io blocked).
-- Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/test_node_operators.rs);
+- Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/node/test_node_operators.rs);
   the boolean check does not follow variables; `false == 0` still true; `mod` evaluates its divisor three times;
   rounding is via f64, no half-away-from-zero; no `mod=`.
 

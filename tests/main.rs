@@ -4,13 +4,13 @@
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
+mod node;
 mod parser;
 mod functions;
 mod lists;
 mod types;
 mod operators;
 mod web;
-mod node_values_test;
 mod probe_destructuring;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod probe_footguns;
@@ -87,10 +87,6 @@ mod test_loops_in_functions;
 mod test_math;
 mod test_module_cache;
 mod test_name_subsection_order;
-mod test_node_operators;
-mod test_node_todo;
-mod test_node;
-mod test_normalization;
 mod test_not_condition_block;
 mod test_number;
 mod test_object_arguments;

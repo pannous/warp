@@ -96,7 +96,7 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 
 #### Important Test Files
 
-- `tests/test_node.rs` - Tests Node AST operations
+- `tests/node/test_node.rs` - Tests Node AST operations
 - `tests/parser/test_parser.rs` - Tests parser functionality
 - `tests/test_wasm_emitter.rs` - Tests WASM GC code generation
 - `tests/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)

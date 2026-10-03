@@ -36,7 +36,7 @@ Left: #10 polish notation (no opinion), #13 web host (later), remaining ignored 
 ## Low
 | id | task | status |
 |---|---|---|
-| C3 | tests/test_node.rs:7 Node `remove`; tests/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: done e88399a6 (verified by warp-numeric) |
+| C3 | tests/node/test_node.rs:7 Node `remove`; tests/node/test_node_operators.rs `Meta` not exported | Meta: not applicable (old API gone, comment kept); remove: done e88399a6 (verified by warp-numeric) |
 | B5 | semicolon: block literals ({},(),[]) are values keeping all items; running a block (root, function body, if/while) yields its last item (wiki/list.md); replaces de18c3bb heuristic. Step 1: survey conflicting tests | user decided: block literals are values, running a block yields last item; test_lists.rs:205 may change → done ff9b2d62 b2f931d1 |
 | B6 | bare name of a function with parameters (`sq:=it*2;sq`) → silent 0, should be loud | done 7e2e746c 417f3fed |
 | B7 | test_angle.rs test_switch / test_switch_evaluation: object key lookup {a:1 b:2}[a] | done 82bd757f 72c51ed5 |
