@@ -18,6 +18,9 @@ changed this as of June 2026. `main` cannot become the served branch, so it cann
   - Both `main` and `master` point at ddbb3fd (merged today), so nothing is lost by dropping either one.
 - Pushing only `main` does not show up on the web wiki (that is how the drift that needed ddbb3fd happened).
 
+## Decision (user, 2026-10-03): delete remote `main`
+The user runs `git push origin --delete main` in the wiki checkout (the git-destructive hook blocks agents).
+
 ## Recommendation (cleanest setup)
 1. Keep `master` as the only remote branch: delete remote `main` (`git push origin --delete main` in the wiki
    checkout). Risk: none for content (identical tip); a session that still pushes `main` would recreate it,
