@@ -133,3 +133,6 @@ fn test_game_of_life() { is!("samples/game_of_life.wasp", 2726); }
 
 #[test] // three spheres on a floor, as shades of " .:-=+*#%@"
 fn test_raytracer() { is!("samples/raytracer.wasp", 8230); }
+
+#[test] // height 4, nine values
+fn test_binary_tree() { is!("samples/binary_tree.wasp", 409); }
