@@ -29,11 +29,13 @@ const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
 const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
+/// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
+pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 6] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 7] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text),
+	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -123,6 +125,11 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
+			// a hole names a variable: a word that names nothing is loud, never its own spelling
+			(TEXT_FORM, [value]) => match value.drop_meta() {
+				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
+				_ => self.emit_runtime_text_cast(func, value),
+			},
 			(BYTE_AT | IS_ERROR, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
