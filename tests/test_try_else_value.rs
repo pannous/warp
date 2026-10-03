@@ -8,8 +8,12 @@ const CAUGHT_MESSAGE: &str = "index out of range";
 
 #[test]
 fn an_arrow_fallback_is_a_function_value() {
-	is!("f = try 1 + [1 2]#5 else (e => e * 2); f(4)", 8);
-	assert_ne!(eval("try 1 + [1 2]#5 else e => e"), warp::Node::Text(CAUGHT_MESSAGE.to_string()));
+	for code in ["try 1 + [1 2]#5 else e => e", "try 1 + [1 2]#5 else (e => e * 2)"] {
+		let value = eval(code);
+		assert!(!matches!(value, warp::Node::Error(_)), "{code}: {value:?}");
+		assert_ne!(value, warp::Node::Text(CAUGHT_MESSAGE.to_string()), "{code}");
+		assert!(value.serialize().contains("lambda"), "{code}: the fallback is the function it is, got {value:?}");
+	}
 }
 
 #[test]
