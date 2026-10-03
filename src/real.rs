@@ -71,6 +71,49 @@ fn function_name(node: &Node) -> Option<&'static str> {
 
 /// Programs that were not evaluated exactly see exact reals as their f64 value (as before)
 pub fn lower(node: Node) -> Node {
+	let real_variables = real_variables(&node);
+	lower_reals(with_real_type_arguments(node, &real_variables))
+}
+
+/// Variables assigned once, to a value that mentions an exact real (`x=π`): their type is the type of that value
+fn real_variables(program: &Node) -> HashMap<String, Node> {
+	let mut assignments: HashMap<String, Vec<Node>> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				assignments.entry(name.clone()).or_default().push(value.as_ref().clone());
+			}
+		}
+	});
+	assignments.into_iter()
+		.filter_map(|(name, mut values)| (values.len() == 1 && mentions_real(&values[0])).then(|| (name, values.remove(0))))
+		.collect()
+}
+
+/// `type(x)` and `is_type(x, spec)` of such a variable ask about its value, before lowering makes it a float
+fn with_real_type_arguments(node: Node, real_variables: &HashMap<String, Node>) -> Node {
+	if real_variables.is_empty() {
+		return node;
+	}
+	match node {
+		Node::List(mut items, bracket, separator) => {
+			let asks_type = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == "type" || head == crate::type_tests::IS_TYPE);
+			let variable_value = match items.get(1).map(Node::drop_meta) {
+				Some(Node::Symbol(name)) if asks_type => real_variables.get(name),
+				_ => None,
+			};
+			if let Some(value) = variable_value {
+				items[1] = value.clone();
+			}
+			Node::List(items.into_iter().map(|item| with_real_type_arguments(item, real_variables)).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(with_real_type_arguments(*left, real_variables)), op, Box::new(with_real_type_arguments(*right, real_variables))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_real_type_arguments(*node, real_variables)), data },
+		other => other,
+	}
+}
+
+fn lower_reals(node: Node) -> Node {
 	match node {
 		Node::Number(Number::Real(real)) => match real {
 			Real::Exact(exact) if exact.has_imaginary() => error(&format!("{exact} is complex: ⅈ is only supported in constant expressions")),
@@ -79,15 +122,15 @@ pub fn lower(node: Node) -> Node {
 		Node::Key(left, Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => {
 			error("∛ of a runtime value is not supported yet, only of constants")
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_reals(*left)), op, Box::new(lower_reals(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
 		// `π is real`: answered before π becomes a float
 		Node::List(items, _, _) if is_type_test_of_real(&items) => {
 			let Node::Text(spec) = items[2].drop_meta() else { unreachable!("guarded") };
 			if crate::type_tests::type_matches(&type_name_before_lowering(&items[1]), spec) { Node::True } else { Node::False }
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_reals).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_reals(*node)), data },
 		other => other,
 	}
 }

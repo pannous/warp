@@ -153,6 +153,7 @@ mod test_top_level_block;
 mod test_trap_messages;
 mod test_truthiness_of_objects;
 mod test_try_else;
+mod test_type_of_real_variable;
 mod test_type_tests;
 mod test_type_upgrading;
 mod test_type_words;
