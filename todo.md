@@ -47,3 +47,4 @@
 - A `return`, `break` or `continue` that leaves a `try X else Y` from inside X skips the depth decrement: an error after it throws instead of trapping and ends as an uncaught wasm exception rather than its message. (r3-try 2026-10-03)
 - The caught error id is kept in the global `caught_error` but nothing reads it yet: `try X else e => …` / naming the caught error is open. (r3-try 2026-10-03)
 - `x="a"; x as int` and `x="12"; x as int` are the runtime error "not an int" (was a raw cast trap); the literal `"a" as int` explains decision #35 at compile time, the variable form deserves the same message. (r3-try 2026-10-03)
+- wasm-opt warns "out-of-order name subsection": emit_names writes the type/field name subsections before the function names; binaryen expects ascending subsection ids (module 0, function 1, local 2, …, global 7, field 10, tag 11). (optimizer 2026-10-03)
