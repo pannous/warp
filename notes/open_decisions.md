@@ -5,17 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P1 text * number: should `"ab"*2` repeat the text as in Python ("abab"), the way text + number was relaxed?
-  Options: Keep the type error with the repeat hint / Repeat with a hint / Ask (fallback Error).
-  Assumed: type error naming `(2 times [greeting]).join("")`. Asked by warp-35 (web-playground);
-  touches src/wasm_emitter/list_ops.rs emit_arithmetic_type_error, tests/test_print_type_error.rs.
-- P4 typed lists next step: Float arrays and whole-op Sum/Map ListOps (the GPU seam)?
-  Options: Yes, continue / Not now. Assumed: nothing built yet. Asked by warp-5e (typed-lists, merged).
-  User answered "?" in warp-5e's session (2026-10-03): unclear, ask again with one line of context.
-- P5 D9 fallback: when nobody can answer the `1+2 squared` Ask (tests, CI), error or take `1+(2 squared)`?
-  Options: Error / Warning taking `1+(2 squared)`. Assumed: Error. Asked by the D13/D9 implementer (#40).
-- P6 D1 detail: inside `sql`/`sh` templates, does `$x` stay a hole (bound parameter) rather than text interpolation?
-  Options: Templates keep `$` holes / Interpolate everywhere. Assumed: holes. From the D1 decision (open detail).
 - P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
   Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
 - P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
@@ -77,6 +66,21 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
+  warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
+  don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
+  extra feature for later as an intelligent intent to change the code." Assigned to warp-b8 (ask-to-warning).
+- Error-fallback Asks (`[x]*n`, `insert(0, 4)` order, `[1 2 3]+4`, bare `a=1 2 3`, `1+2 squared`): "Stay loud errors".
+  They name the explicit forms, no default reading is taken. Asked by warp-b8; its assumption stands.
+- Text * number (P1, asked by warp-35): first "actually, why not use the python app approach? Is it really a foot gun",
+  then "Python repeat". `"ab"*2` → "abab"; digit text `"5"*3` → "555" with a got-it warning that it is text, not 15.
+  Replaces the type error with the repeat hint (also the earlier "text * number: Always ask").
+- Typed lists follow-up (P4, asked by warp-5e): "Yes, continue". Float typed arrays, then whole-op Sum/Map ListOps.
+- D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
+- D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
+  the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
+  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  `"\(expr)"` was not asked about and stays.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
