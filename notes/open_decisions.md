@@ -69,6 +69,15 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   compound-assignment autostash and the README/Footguns autostash were already on main; pre-history-rewrite held only
   .DS_Store and test_results.txt. All 4 dropped. The one unmerged line, the user's 2026-09-27 note on chained
   comparison "BUT NOT WITH == etc !!", became #39 below.
+- D4 fields (asked again 2026-10-03, wiki/constructor.md says optional + extendible): "Strict". A missing field is an
+  error unless `?` or defaulted (`!` = explicit required); an undeclared field is an error with the hint `T:{…}`.
+- Meta information on objects (user idea 2026-10-03: "Think of a special syntax to extend known objects with meta
+  information"): existing `@name(value) X` prefix and `X["@name"]` stay; chosen additions: `@key` inside a literal
+  (`point{x:1 y:2 @source:"gps"}`, never a field, not counted, ignored by == and by strict validation), `x.@key`
+  read/write, glued postfix `x@key`, and attributes survive wasm emission/eval. User: "Can we also access them
+  normally as a fallback? point.source first, check if it's a real attribute, then check if it's a meta. Or is that
+  too complicated and overkill?" Answer (warp-43): not overkill, one fallback in the field lookup: field first, then
+  meta; when both exist the field wins and a hint names `.@source`; neither → the strict "has no field" error.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
