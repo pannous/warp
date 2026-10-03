@@ -30,6 +30,8 @@ pub const FIELD_KIND: usize = 0;
 pub const FIELD_DATA: usize = 1;
 pub const FIELD_VALUE: usize = 2;
 /// Exported functions a module may start with, in the order they are looked for
+/// How many result values of `main` are read: a Node, or a plain number
+const MAX_MAIN_RESULTS: usize = 1;
 const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
 
 /// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
@@ -254,8 +256,18 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 
 /// Load WASM bytes and return Node (calls from_gc_object)
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
-	let obj = read_bytes_gc(bytes)?;
-	Ok(Node::from_gc_object(&obj))
+	let (result, mut store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
+	match result {
+		Val::AnyRef(Some(reference)) => {
+			if !reference.is_struct(&store)? {
+				return Err(anyhow!("main returned a reference that is no Node struct"));
+			}
+			Ok(Node::from_gc_object(&GcObject::new(result, Rc::new(RefCell::new(store)), instance)))
+		}
+		// a plain number or the null reference: no Node struct to read
+		Val::I32(_) | Val::I64(_) | Val::F64(_) | Val::AnyRef(None) => val_to_node(&result, &mut store, &instance),
+		other => Err(anyhow!("main returns {:?}, which is no Node and no number", other.ty(&store)?)),
+	}
 }
 
 /// Load WASM bytes and return GcObject
@@ -280,10 +292,15 @@ fn run_main<S: 'static>(
 		.iter()
 		.find_map(|name| instance.get_func(&mut store, name))
 		.ok_or_else(|| anyhow!("No entry point: {:?}", ENTRY_POINTS))?;
-	let mut results = vec![Val::I32(0)];
+	let result_types: Vec<_> = main.ty(&store).results().collect();
+	if result_types.len() > MAX_MAIN_RESULTS {
+		return Err(anyhow!("main returns {} values, at most {} can be read", result_types.len(), MAX_MAIN_RESULTS));
+	}
+	// a main without a result leaves nothing to read: the null reference reads as Empty
+	let mut results = vec![Val::AnyRef(None); result_types.len()];
 	let outcome = main.call(&mut store, &[], &mut results);
 	with_trap_detail(outcome, &mut store, &instance)?;
-	Ok((results[0], store, instance))
+	Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance))
 }
 
 /// Load WASM bytes with host function support and return Node
