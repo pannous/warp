@@ -1,6 +1,6 @@
 # Effects guide
 
-Code: `src/effects.rs` · Tests: `tests/test_effects.rs` · Design: DESIGN.md "Effects", "Effects as enforced capabilities"
+Code: `src/effects.rs` · Tests: `tests/functions/test_effects.rs` · Design: DESIGN.md "Effects", "Effects as enforced capabilities"
 
 ## Model
 - Closed set `Effect { State, Allocation, IO, FFI, Async, Unsafe }`, `EffectSet` is a u8 bitset, `Pure` = empty set.

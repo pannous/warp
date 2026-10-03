@@ -1,7 +1,7 @@
 # Normalization audit
 
 Each row was checked with `normalize::capture_hints` (the built parser) against the default `Style`; the test column names the test in
-`tests/test_normalization.rs` that asserts exactly one hint with the canonical text and position for the non-canonical form and
+`tests/node/test_normalization.rs` that asserts exactly one hint with the canonical text and position for the non-canonical form and
 none for the canonical one. Every `Style` field also has a test with the style swapped (the form that is canonical by default is then hinted).
 Positions are `line:column` of the first character of the form (the operator for infix operators, the opening quote for strings).
 

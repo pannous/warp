@@ -18,7 +18,7 @@ data: property access is row 7 of wiki_features.md.
 
 - `sum` of a list of decimals or floats: the `for` loop over such a list traps (`for i in [1.5 2] {i}` → cast failure). Fix the loop, not `sum`.
 - A space before `[` never indexes (decided 2026-10-03): `first [10, 5]` and `reduce [7] (a b)->a+b` pass the list
-  (tests/test_surface_syntax.rs). Still open: `x = reduce xs (a b)->a+b` and `print first [10, 5]` (see TODO.md).
+  (tests/parser/test_surface_syntax.rs). Still open: `x = reduce xs (a b)->a+b` and `print first [10, 5]` (see TODO.md).
 - `upper`/`lower` beyond ASCII need Unicode case tables. `reverse` and `first`/`last` of a text: `first`/`last` work (graphemes), `reverse` of a text is an error.
 - `sort` compares ints only (no floats, texts, mixed): the comparison of two Nodes is not a runtime function yet.
 - `x.upper!` (in-place, inventions.md) is not implemented: `x.upper` returns a new text, value semantics.

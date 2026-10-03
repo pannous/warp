@@ -1,6 +1,6 @@
 # Typed lists and the list dispatch seam
 
-Code: `src/wasm_emitter/list_dispatch.rs`. Tests: `tests/test_typed_lists.rs`.
+Code: `src/wasm_emitter/list_dispatch.rs`. Tests: `tests/lists/test_typed_lists.rs`.
 
 ## What is typed
 
