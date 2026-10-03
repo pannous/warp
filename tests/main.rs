@@ -52,6 +52,7 @@ mod test_export_declaration;
 mod test_ffi_import_group;
 mod test_ffi_warning_once;
 mod test_ffi;
+mod test_fixed_width_ints;
 mod test_float_assignment;
 mod test_float_bit_operations;
 mod test_float_exact_context;

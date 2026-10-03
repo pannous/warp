@@ -18,6 +18,7 @@
 
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
+use crate::fixed_width::FixedWidth;
 use crate::node::Node;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
@@ -395,6 +396,46 @@ impl WasmGcEmitter {
 		func.instruction(&I::I32Const(0));
 		func.instruction(&Self::i32_compare(op));
 		func.instruction(&I::End);
+	}
+
+	/// The fixed width (`byte`, `int8` …) the variable `node` was declared with
+	pub(super) fn declared_fixed_width(&self, node: &Node) -> Option<&'static FixedWidth> {
+		let Node::Symbol(name) = node.drop_meta() else { return None };
+		let type_node = self.scope.lookup(name)?.type_node.as_ref()?;
+		crate::fixed_width::fixed_width(&type_node.name())
+	}
+
+	/// Stack [Int] → [Int] before storing to `target`: traps when the Int does not fit its declared fixed width
+	pub(super) fn emit_fits_declared(&mut self, func: &mut Function, target: &Node) {
+		let width = self.declared_fixed_width(target);
+		self.emit_fixed_width_check(func, width);
+	}
+
+	/// Stack [Int] → [Int], trapping in `overflow_of_<type>` when the Int leaves the range of `width`
+	pub(super) fn emit_fixed_width_check(&mut self, func: &mut Function, width: Option<&'static FixedWidth>) {
+		let Some(width) = width else { return };
+		let value = self.scratch(2);
+		func.instruction(&I::LocalSet(value));
+		let below = self.emit_bound_violation(func, value, Op::Lt, width.low);
+		let above = self.emit_bound_violation(func, value, Op::Gt, width.high);
+		if below && above {
+			func.instruction(&I::I32Or);
+		}
+		if below || above {
+			self.emit_fail_if(func, width.trap);
+		}
+		func.instruction(&I::LocalGet(value));
+	}
+
+	/// Push i32 `value op bound`; without the Int runtime every Int is a machine i64, so a bound beyond i64 holds trivially
+	fn emit_bound_violation(&mut self, func: &mut Function, value: u32, op: Op, bound: i128) -> bool {
+		if !self.int_runtime() && i64::try_from(bound).is_err() {
+			return false;
+		}
+		func.instruction(&I::LocalGet(value));
+		self.emit_int_literal(func, &BigInt::from(bound));
+		self.emit_int_compare(func, &op, None, Some((bound, bound)));
+		true
 	}
 
 	fn machine_compare(op: &Op) -> Instruction<'static> {

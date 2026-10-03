@@ -1327,6 +1327,7 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, right);
 		} else {
 			self.emit_numeric_value(func, right);
+			self.emit_fits_declared(func, left);
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
 			if let Some(local) = self.scope.lookup(name) {
@@ -1350,6 +1351,7 @@ impl WasmGcEmitter {
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			self.emit_int_step(func, local_pos, op);
+			self.emit_fits_declared(func, left);
 			// Store and return new value
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
@@ -1391,6 +1393,7 @@ impl WasmGcEmitter {
 				self.emit_float_arithmetic(func, &base_op);
 			} else {
 				self.emit_int_compound_op(func, &base_op, right);
+				self.emit_fits_declared(func, left);
 			}
 			// Store result and leave on stack
 			func.instruction(&Instruction::LocalTee(local_pos));
@@ -1599,6 +1602,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::I64ExtendI32U);
 		} else {
 			self.emit_int_op(func, op, left_range, right_range);
+			let width = crate::fixed_width::wider(self.declared_fixed_width(left), self.declared_fixed_width(right));
+			self.emit_fixed_width_check(func, width);
 		}
 	}
 
@@ -2546,6 +2551,7 @@ impl WasmGcEmitter {
 							return;
 						}
 						self.emit_value_of_kind(func, right, kind);
+						self.emit_fits_declared(func, left);
 						func.instruction(&Instruction::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
 						if kind.is_float() {
@@ -2567,6 +2573,7 @@ impl WasmGcEmitter {
 				if let Node::Symbol(name) = left.drop_meta() {
 					let Some(local_pos) = self.defined_local_position(func, name) else { return };
 					self.emit_int_step(func, local_pos, op);
+					self.emit_fits_declared(func, left);
 					// Store and return new value
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -2591,6 +2598,7 @@ impl WasmGcEmitter {
 					// Emit y
 					self.emit_numeric_value(func, right);
 					self.emit_int_compound_op(func, &base_op, right);
+					self.emit_fits_declared(func, left);
 					// Store result and leave on stack
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -3727,7 +3735,11 @@ fn failed_run(failure: anyhow::Error) -> Node {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("no case for {label}")
 	});
-	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
+	let overflow = trace.split_once(crate::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
+		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+		crate::fixed_width::overflow_message(&type_name)
+	});
+	let runtime_error = missing_field.or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
 	crate::node::error(&message)

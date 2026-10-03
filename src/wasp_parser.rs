@@ -302,6 +302,18 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	found
 }
 
+/// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
+/// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
+fn typed_parameter(arguments: Node) -> Node {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if matches!(items.as_slice(), [type_word, name]
+			if matches!(type_word.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) && matches!(name.drop_meta(), Symbol(_))) => {
+			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
+		}
+		_ => arguments,
+	}
+}
+
 fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
 	Node::List([vec![Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
@@ -1442,7 +1454,7 @@ impl WaspParser {
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
-					match args_node {
+					match typed_parameter(args_node) {
 						Node::List(args, _, _) => items.extend(args),
 						Node::Empty => {}
 						other => items.push(other),

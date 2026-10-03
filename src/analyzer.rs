@@ -1020,6 +1020,7 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
+		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
 		_ => return None,
 	})
 }
@@ -2374,10 +2375,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	match node {
 		// Pattern: name(param1, param2, ...) = body
 		Node::Key(left, Op::Assign, body) => {
-			if let Node::List(items, _, _) = left.drop_meta() {
+			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items), body));
+						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items, bracket), body));
 						return;
 					}
 				}
@@ -2390,7 +2391,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params = extract_params(items);
+						let params = extract_params(items, bracket);
 						let implicit_param = uses_dollar_param(body) || uses_it(body);
 						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
 						if !params.is_empty() || implicit_param || written_call {
@@ -2436,13 +2437,14 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	}
 }
 
-/// The parameters after the function name in a signature list
-fn extract_params(signature: &[Node]) -> Vec<Param> {
+/// The parameters after the function name in a signature list. Only a spaced signature `f int x` pairs a type word with
+/// the next name; in the call form `f(T, y)` every item is a parameter (the parser made `f(int x)` the item `x:int`)
+fn extract_params(signature: &[Node], bracket: &Bracket) -> Vec<Param> {
 	let mut items = signature.iter().skip(1).peekable();
 	let mut params = vec![];
 	while let Some(item) = items.next() {
 		let type_first_name = match (item.drop_meta(), items.peek().map(|next| next.drop_meta())) {
-			(Node::Symbol(type_name), Some(Node::Symbol(name))) if type_word_kind(type_name).is_some() => Some(name),
+			(Node::Symbol(type_name), Some(Node::Symbol(name))) if *bracket != Bracket::Round && type_word_kind(type_name).is_some() => Some(name),
 			_ => None,
 		};
 		match type_first_name {
@@ -2509,10 +2511,10 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 
 	// Pattern 1: def (name params...): body
 	if let Node::Key(sig, Op::Colon, body) = first {
-		if let Node::List(sig_items, _, _) = sig.drop_meta() {
+		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					return Some(user_function(name, extract_params(sig_items), body));
+					return Some(user_function(name, extract_params(sig_items, bracket), body));
 				}
 			}
 		}
