@@ -131,6 +131,7 @@ mod test_normalization;
 mod test_not_condition_block;
 mod test_number_glyphs;
 mod test_number;
+mod test_object_arguments;
 mod test_one_line_statements;
 mod test_operator_declarations;
 mod test_operators;
