@@ -1106,6 +1106,7 @@ impl WaspParser {
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
 	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	/// `try X else e => Y` names the caught error: `marker(X, Y, e)`, never a lambda.
 	fn parse_guard(&mut self, marker: &'static str) -> Node {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
@@ -1123,7 +1124,11 @@ impl WaspParser {
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		let parts = match fallback.drop_meta() {
+			Key(name, Op::FatArrow, body) if marker == TRY_MARKER && matches!(name.drop_meta(), Symbol(_)) => vec![guarded, body.as_ref().clone(), name.as_ref().clone()],
+			_ => vec![guarded, fallback],
+		};
+		Node::List([vec![Symbol(marker.to_string())], parts].concat(), Bracket::Round, Separator::None)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)

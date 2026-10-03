@@ -25,7 +25,7 @@ mod string_table;
 mod type_manager;
 mod try_guard;
 mod tuple_emitter;
-pub use try_guard::RAN_WITHOUT_ERROR;
+pub use try_guard::{CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
@@ -2850,6 +2850,7 @@ impl WasmGcEmitter {
 							} else {
 								self.emit_numeric_value(func, &items[1]);
 							}
+							self.emit_leave_tries(func, 0);
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
