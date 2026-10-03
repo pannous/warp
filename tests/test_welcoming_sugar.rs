@@ -165,3 +165,12 @@ fn a_spaced_double_slash_before_an_expression_asks_floor_or_comment() {
 	with_asker(answer("a comment"), || is!("x = 9 // 2\nx", 9));
 	with_asker(answer("floor division"), || is!("x = 9 // 2\nx", 4));
 }
+
+#[test]
+fn an_aligned_double_slash_is_a_comment() {
+	// two or more spaces before `//` align an expected-value comment: never asked, never divides
+	is!("x = 7    // 2\nx", 7);
+	is!("total = 0\ntotal = total + 5        // 2\ntotal", 5);
+	is!("t = 6 // 2π\nt", 6); // non-ASCII after `//` is a note
+	is!("x = 7 //  2\nx", 7); // two spaces after `//` too
+}

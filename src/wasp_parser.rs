@@ -159,10 +159,11 @@ const FLOOR_OR_COMMENT: &str = "floor-or-comment";
 
 /// The default reading of the text after a spaced `//`, when it could be a divisor: floor division for a number or an
 /// expression (`2`, `(a + b)`, `n + 1`), a comment for a lone word (`// done`); `None` when it can only be a comment:
-/// two words in a row (`note text`) or other characters (quotes, `:`, `!`)
+/// two words in a row (`note text`) or other characters (quotes, `:`, `!`, non-ASCII like `2π`)
 fn floor_or_comment_default(text: &str) -> Option<usize> {
 	let text = text.trim();
-	let expression_chars = text.chars().all(|c| is_identifier_char(c) || " \t+-*/%()[].,".contains(c));
+	// ASCII only: `tau = 6.28 // 2π` is a note, not a division
+	let expression_chars = text.chars().all(|c| c.is_ascii_alphanumeric() || " \t_+-*/%()[].,".contains(c));
 	let words: Vec<&str> = text.split_whitespace().collect();
 	let is_word = |token: &&str| token.chars().next().is_some_and(char::is_alphabetic);
 	let prose = words.windows(2).any(|pair| is_word(&pair[0]) && is_word(&pair[1]));
@@ -588,9 +589,13 @@ impl WaspParser {
 		Ok(chosen == FLOOR_READING)
 	}
 
-	/// A spaced `//` behind an operand on its line whose rest could be a divisor: the text written and the default reading
+	/// A `//` with exactly one space on each side (`a // 2`, `n //= 3`) behind an operand on its line whose rest could be a
+	/// divisor: the text written and the default reading. Two or more spaces before it align a comment
+	/// (`total = f(x)        // 2` states the expected value) and are never asked.
 	fn spaced_floor_candidate(&self) -> Option<(String, usize)> {
-		if self.current_char() != '/' || self.peek_char(1) != '/' || !matches!(self.prev_char(), ' ' | '\t') {
+		let one_space_before = self.prev_char() == ' ' && self.pos >= 2 && !self.chars[self.pos - 2].is_whitespace();
+		let one_space_after = (self.peek_char(2) == ' ' && !self.peek_char(3).is_whitespace()) || self.peek_char(2) == '=';
+		if self.current_char() != '/' || self.peek_char(1) != '/' || !one_space_before || !one_space_after {
 			return None;
 		}
 		let operand_before = self.chars[..self.pos].iter().rev().find(|c| !matches!(c, ' ' | '\t'));

@@ -35,6 +35,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   division for a number or expression (`// 2`, `// (a + b)`, `//= 3`), a comment for a lone word (`// done`).
   Prose (two words in a row, `x // note text`) or other characters (quotes, `:`, `!`) stay plain comments, not asked.
   Under `use strict` the warning is an error.
+  fix-floor-ask-2: only exactly one space on each side (`a // 2`, `(lo + hi) // 2`, `n //= 3`) is a candidate; two or
+  more spaces before `//` align a comment (`total = f(x)        // 2`, samples/levenshtein*.wasp) and are never asked,
+  nor is non-ASCII text after it (`tau = 6.28 // 2π`, samples/sin.wasp).
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
