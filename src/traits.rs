@@ -549,6 +549,11 @@ impl InstanceTypes {
 		}
 	}
 
+	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds
+	pub fn is_declared_field(&self, name: &str) -> bool {
+		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+	}
+
 	/// The shape of an expression, when it is known to hold instances of one declared type
 	pub fn shape(&self, node: &Node) -> Option<Shape> {
 		if let Some((name, _)) = instance_parts(node) {
@@ -580,14 +585,15 @@ impl InstanceTypes {
 				Node::Key(_, Op::Then, then) => self.branches_shape(then, otherwise),
 				_ => None,
 			},
-			Node::List(items, _, _) => match items.as_slice() {
+			Node::List(items, _, separator) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
 				// `make(t)`: what the user function returns
 				[function, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.results.contains_key(name)) => self.results[&function.name()].clone(),
-				// `(x)`, and `(t = a; value)` as min_max binds its operands
-				[.., last] => self.shape(last),
-				[] => None,
+				// `(x)`, and `(t = a; value)` as min_max binds its operands; another call `f(s)` is not its argument
+				[single] => self.shape(single),
+				[.., last] if matches!(separator, Separator::Semicolon | Separator::Newline) => self.shape(last),
+				_ => None,
 			},
 			_ => None,
 		}

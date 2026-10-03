@@ -333,3 +333,8 @@ D16 overflow contradict Decided rules). Found while implementing:
     literal (`1 -1`, `1 +1`, `[1 -1]`); `x -1`, `abs -3`, `return -1` keep subtracting/negating, so
     tests/test_negated_call.rs:10 `is!("x=5;x -1", 4)` stays. Should `x -1` ask too (that test line would change)?
     Also assumed: D9's suffix-precedence Ask falls back to Error.
+41. (samples, 2026-10-03; assumption taken, not blocking) Spaced construction: `V { x: 1, y: 2 }` with a space now
+    constructs a declared type `V` exactly like the glued `V{x: 1 y: 2}` (D4); a word that names no declared type
+    before a block stays data (`Person { name: "Alice" }`). Also: `v.x` reads the field at run time when `x` is a field
+    of any declared type, even if v's type is unknown at compile time (a missing field fails "no field x").
+    OK, or should the spaced form stay data?

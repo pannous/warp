@@ -428,7 +428,7 @@ impl Lowering {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
-		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver);
+		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || self.instances.is_declared_field(name);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}

@@ -174,6 +174,7 @@ pub struct WasmGcEmitter {
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
+	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
@@ -220,6 +221,7 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			returns_node: true,
+			returns_float: false,
 			returned_tuple: vec![],
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
@@ -336,7 +338,7 @@ impl WasmGcEmitter {
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	fn allocate_closure_captures(&mut self, program: &Node) {
-		let mut outer = Scope::new();
+		let mut outer = Scope::with_function_kinds(self.user_function_kinds()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
@@ -442,6 +444,7 @@ impl WasmGcEmitter {
 		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals + temp_locals);
 		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
 		let saved_returns_node = std::mem::replace(&mut self.returns_node, returns_node);
+		let saved_returns_float = std::mem::replace(&mut self.returns_float, user_fn.return_kind.is_float());
 		let saved_loop_labels = self.take_loop_labels();
 		let mut locals = self.local_declarations(num_params as usize);
 		if temp_locals > 0 {
@@ -490,6 +493,7 @@ impl WasmGcEmitter {
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
+		self.returns_float = saved_returns_float;
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 
@@ -523,7 +527,8 @@ impl WasmGcEmitter {
 		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
 			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
 		});
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).collect()
+		let fields = crate::analyzer::declared_field_kinds(&self.ctx.type_registry);
+		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -1758,6 +1763,20 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// The f64 of a number Node computed at run time: a Float's value, an Int converted
+	fn emit_node_as_f64(&mut self, func: &mut Function, node: &Node) {
+		let (held, node_type, float_box) = (self.node_scratch(), self.type_manager.node_type, self.type_manager.f64_box_type);
+		self.emit_node_instructions(func, node);
+		Self::emit_list(func, &[Instruction::LocalTee(held), Instruction::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::Float as i64), Instruction::I64Eq]);
+		Self::emit_list(func, &[Instruction::If(BlockType::Result(ValType::F64)), Instruction::LocalGet(held), Instruction::RefAsNonNull]);
+		Self::emit_list(func, &[Instruction::StructGet { struct_type_index: node_type, field_index: 1 }, Instruction::RefCastNonNull(HeapType::Concrete(float_box))]);
+		Self::emit_list(func, &[Instruction::StructGet { struct_type_index: float_box, field_index: 0 }, Instruction::Else, Instruction::LocalGet(held), Instruction::RefAsNonNull]);
+		self.emit_call(func, "get_int_value");
+		self.emit_int_to_f64(func, None);
+		func.instruction(&Instruction::End);
+	}
+
 	/// The one nullable Node local of every function, after its int scratch locals
 	fn node_scratch(&self) -> u32 {
 		self.int_scratch + big_int::INT_SCRATCH_LOCALS
@@ -1912,7 +1931,7 @@ impl WasmGcEmitter {
 
 	/// Every `global` of the program exists before any function is compiled, so function bodies can change it
 	fn allocate_declared_globals(&mut self, program: &Node) {
-		let mut main = Scope::new();
+		let mut main = Scope::with_function_kinds(self.user_function_kinds()); // `global g = vec(1, 2)` holds what vec returns
 		collect_variables(program, &mut main);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
@@ -2027,57 +2046,43 @@ impl WasmGcEmitter {
 
 	/// Emit ternary expression returning i64: condition ? then_expr : else_expr
 	fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+		self.emit_ternary_raw(func, condition, then_else, ValType::I64, Self::emit_numeric_value);
+	}
+
+	/// `c ? a : b` as a raw number, each branch by `emit` (emit_numeric_value i64, emit_float_value f64)
+	fn emit_ternary_raw(&mut self, func: &mut Function, condition: &Node, then_else: &Node, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
 		// Structure: condition ? Key(then, Colon, else)
 		let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() else {
 			self.emit_malformed(func, then_else, TERNARY_BRANCHES);
 			return;
 		};
-
-		// Evaluate condition and convert to i32 for if instruction
-		self.emit_condition(func, condition, Self::emit_numeric_value);
-
-		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-
-		// Then branch
-		self.emit_numeric_value(func, then_expr);
-
-		func.instruction(&Instruction::Else);
-
-		// Else branch
-		self.emit_numeric_value(func, else_expr);
-
-		func.instruction(&Instruction::End);
+		self.emit_raw_branches(func, condition, then_expr, Some(else_expr), value_type, emit);
 	}
 
 	/// Emit if-then-else returning i64: if condition then then_expr else else_expr
 	fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
-		// Extract condition and then_expr from structure
+		self.emit_if_then_else_raw(func, left, else_expr, ValType::I64, Self::emit_numeric_value);
+	}
+
+	/// `if c then a else b` as a raw number, each branch by `emit`; without else the value is 0
+	fn emit_if_then_else_raw(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let Some((condition, then_expr)) = if_then_parts(left) else {
 			self.emit_malformed(func, left, IF_THEN);
 			return;
 		};
+		self.emit_raw_branches(func, condition, then_expr, else_expr, value_type, emit);
+	}
 
-		// Evaluate condition
+	fn emit_raw_branches(&mut self, func: &mut Function, condition: &Node, then_expr: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
 		self.emit_condition(func, condition, Self::emit_numeric_value);
-
-		// if (condition) { then_expr } else { else_expr }
-		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-
-		// Then branch
-		self.emit_numeric_value(func, then_expr);
-
+		func.instruction(&Instruction::If(BlockType::Result(value_type)));
+		emit(self, func, then_expr);
 		func.instruction(&Instruction::Else);
-
-		// Else branch
-		if let Some(else_node) = else_expr {
-			self.emit_numeric_value(func, else_node);
-		} else {
-			// No else branch - return 0
-			func.instruction(&Instruction::I64Const(0));
+		match else_expr {
+			Some(else_node) => emit(self, func, else_node),
+			None => emit(self, func, &Node::int(0)),
 		}
-
 		func.instruction(&Instruction::End);
 	}
 
@@ -2854,6 +2859,8 @@ impl WasmGcEmitter {
 							// Emit the return value, as the Node a Node-returning function gives back
 							if self.returns_node {
 								self.emit_node_instructions(func, &items[1]);
+							} else if self.returns_float {
+								self.emit_float_value(func, &items[1]);
 							} else {
 								self.emit_numeric_value(func, &items[1]);
 							}
@@ -3098,6 +3105,10 @@ impl WasmGcEmitter {
 							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Float));
 							return;
 						}
+						if self.ctx.user_functions.contains_key(fn_name) {
+							self.emit_user_function_call_float(func, fn_name, &[]);
+							return;
+						}
 					}
 				}
 				if self.emit_integer_builtin(func, items) {
@@ -3118,6 +3129,11 @@ impl WasmGcEmitter {
 					}
 				}
 			}
+			Node::Key(condition, Op::Question, then_else) => self.emit_ternary_raw(func, condition, then_else, ValType::F64, Self::emit_float_value),
+			Node::Key(if_then, Op::Else, else_expr) => self.emit_if_then_else_raw(func, if_then, Some(else_expr), ValType::F64, Self::emit_float_value),
+			Node::Key(_, Op::Then, _) => self.emit_if_then_else_raw(func, node, None, ValType::F64, Self::emit_float_value),
+			// an element or field read by name (`v.x` of an instance): a Node, an Int or a Float at run time
+			Node::Key(_, Op::Hash, _) => self.emit_node_as_f64(func, node),
 			other => self.emit_not_a_number(func, located, other),
 		}
 	}

@@ -1,16 +1,17 @@
 // Binary Search Tree
 // Classic data structure with insert, search, traverse
 
-type Node: {
+// trees are values: insert returns the tree with the value added; an empty tree is ø
+type Tree {
     value: int
-    left: Node?
-    right: Node?
+    left?
+    right?
 }
 
-def node(value) := Node { value: value, left: None, right: None }
+def node(value) := Tree { value: value }
 
 def insert(tree, value) {
-    if tree == None { return node(value) }
+    if tree == ø { return node(value) }
     if value < tree.value {
         tree.left = insert(tree.left, value)
     } else if value > tree.value {
@@ -20,29 +21,29 @@ def insert(tree, value) {
 }
 
 def search(tree, value) {
-    if tree == None { return false }
+    if tree == ø { return false }
     if value == tree.value { return true }
     if value < tree.value { return search(tree.left, value) }
     return search(tree.right, value)
 }
 
 def inorder(tree) {
-    if tree == None { return [] }
+    if tree == ø { return [] }
     return inorder(tree.left) + [tree.value] + inorder(tree.right)
 }
 
 def preorder(tree) {
-    if tree == None { return [] }
+    if tree == ø { return [] }
     return [tree.value] + preorder(tree.left) + preorder(tree.right)
 }
 
 def height(tree) {
-    if tree == None { return 0 }
+    if tree == ø { return 0 }
     return 1 + max(height(tree.left), height(tree.right))
 }
 
 def print_tree(tree, prefix, is_left) {
-    if tree == None { return }
+    if tree == ø { return }
     print prefix + (is_left ? "├── " : "└── ") + tree.value
     new_prefix = prefix + (is_left ? "│   " : "    ")
     print_tree(tree.left, new_prefix, true)
@@ -51,15 +52,16 @@ def print_tree(tree, prefix, is_left) {
 
 // Build tree
 values = [50, 30, 70, 20, 40, 60, 80, 15, 25]
-tree = None
+tree = ø
 for v in values {
     tree = insert(tree, v)
 }
 
 print "Tree structure:"
 print_tree(tree, "", false)
-print "Inorder:  " + inorder(tree)
-print "Preorder: " + preorder(tree)
-print "Height:   " + height(tree)
-print "Contains 40? " + search(tree, 40)
-print "Contains 42? " + search(tree, 42)
+print "Inorder:  " + str(inorder(tree))
+print "Preorder: " + str(preorder(tree))
+print "Height:   " + str(height(tree))
+print "Contains 40? " + str(search(tree, 40))
+print "Contains 42? " + str(search(tree, 42))
+height(tree) * 100 + count(inorder(tree))

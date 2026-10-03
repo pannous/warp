@@ -1057,7 +1057,7 @@ impl WasmGcEmitter {
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
-const STRUCT_BODY: &str = "struct_body";
+pub(super) const STRUCT_BODY: &str = "struct_body";
 const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime

@@ -1521,8 +1521,8 @@ impl WaspParser {
 			};
 		}
 
-		// Optional type: `x:int?=ø`, `f(x:int?)` (wiki/null.md); a ternary `?` is followed by its branch instead
-		if self.current_char() == '?' && self.ends_optional_type(self.peek_char(1), self.peek_char(2)) {
+		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
+		if self.current_char() == '?' && (self.ends_optional_type(self.peek_char(1), self.peek_char(2)) || self.closes_after_blanks(1)) {
 			self.advance();
 			return Symbol(format!("{symbol}?"));
 		}
@@ -1578,6 +1578,15 @@ impl WaspParser {
 				name: Box::new(Symbol(type_name)),
 				body: Box::new(body),
 			};
+		}
+
+		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
+		if self.declared_types.contains(&symbol) && self.block_after_blanks() {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			let block = self.parse_bracketed('{');
+			return Node::Key(Box::new(Symbol(symbol)), Op::None, Box::new(block));
 		}
 
 		// Check for IMMEDIATE suffix blocks (no space allowed)
@@ -1708,11 +1717,15 @@ impl WaspParser {
 		self.advance_by(RETURN_KEYWORD.len());
 		self.skip_spaces();
 		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		if !self.at_body_start() || names_a_variable {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // bare `return`, or `return := …` as a name
+		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
+		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
+			Node::Empty
+		} else if !self.at_body_start() || names_a_variable {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
 			return None;
-		}
-		let value = self.parse_expr(0);
+		} else {
+			self.parse_expr(0)
+		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
@@ -2898,7 +2911,26 @@ impl WaspParser {
 
 	/// `?` directly after a type name, then `=` (not `==`) or a closing bracket or separator
 	fn ends_optional_type(&self, next: char, after: char) -> bool {
-		matches!(next, ')' | ']' | '}' | ',' | ';') || (next == '=' && after != '=')
+		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
+	}
+
+	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
+	fn block_after_blanks(&self) -> bool {
+		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = blanks_from(0);
+		if blanks == 0 || self.peek_char(blanks) != '{' {
+			return false;
+		}
+		let first = blanks + 1 + blanks_from(blanks + 1);
+		let name = (first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
+		let after_name = first + name + blanks_from(first + name);
+		self.peek_char(first) == '}' || (name > 0 && self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=')
+	}
+
+	/// Do blanks and then a closing bracket, `,`, `;` or the line end follow `offset`: nothing a ternary could be followed by
+	fn closes_after_blanks(&self, offset: usize) -> bool {
+		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		blanks > 0 && matches!(self.peek_char(offset + blanks), ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0')
 	}
 
 	fn parse_symbol(&mut self) -> Result<String, String> {
