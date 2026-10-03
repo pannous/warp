@@ -8,6 +8,32 @@ function-length and nesting scan, a `crate::` dependency graph, 6-line clone win
 src: 88 files, 41 101 lines, 2 274 functions (82 over 50 lines, 35 over 100). tests: 225 files, 17 814 lines,
 1 500 `#[test]`, 91 ignored.
 
+## Status (2026-10-03, branch `code-quality`)
+
+Done, behaviour-preserving (full suite, default features, green through the function builder; the rest checked by
+`cargo check --all-targets --all-features`, the CLI and targeted runs of test_ffi, test_float_promotion, test_wasi,
+test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the final check):
+- #1 main.rs uses the library (`use warp::…`), no second compile of every module.
+- #3 deleted `compiler/`, `run/wasmer_runner.rs`, `run/wasmedge_runner.rs`, `ast.rs`, `wasm_emitter/node_emitter.rs`,
+  `extensions/_mod.rs`, `bin/test_op.rs`, the dead `run_wasm`, `test_func`, `register_import`, `ArithmeticWrap::None`;
+  crates `parity-wasm`, `wasm-ast`, `regex` removed; `wat`, `once_cell` are dev-dependencies (std `LazyLock` in src).
+- #6 `wasm_emitter/function_builder.rs` (`runtime_function`, `exported_function`, `emit_list`); list_ops, getters,
+  `i64_pow` use it; the 8-arm `emit_constructor!` macro is one `emit_node_constructor` function.
+- #7 `KIND_BITS`, `KIND_MASK`, `CURLY/SQUARE_BRACKET_INFO`, `CURLY/SQUARE_LIST_KIND` in type_kinds.rs; `BYTE`, `WORD`
+  in `wasm_emitter/layout.rs`; WASI stdout writes share `emit_stdout_write`.
+- #8 (part) `wasm_reader::run_main` serves plain, host, WASI and FFI runs; FFI and `.wat` results go through the
+  generic `val_to_node`, which learned Float (FFI returned Empty for texts and lists before); CLI `run`/`run_wat` failures are error
+  nodes; `util::fetch` delegates to `download` instead of a second panicking ureq call.
+- #9 (part) the 15 libm bindings are a table (`LIBM_UNARY`, `LIBM_BINARY`); the two header parsers remain.
+- #14 AGENTS.md architecture/build/test sections match the tree (CLAUDE.md untouched, see question 8).
+
+Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
+#2 feature flags (test edits), #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
+wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is
+linked from ~/dev/script/rust), the crate-wide `#![allow(dead_code, unused_imports)]`.
+Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_mismatch` (should_panic) with
+`assertion failed: a.comes_from_same_engine(b.engine())` while panicking; it passes alone (see TODO).
+
 ## Summary, ranked by value/effort
 
 | # | Finding | Files | Sev | Effort | Proposal | Kind |

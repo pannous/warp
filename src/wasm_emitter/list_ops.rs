@@ -1,11 +1,12 @@
 //! List and string operation functions for WASM
 
-use crate::wasm_emitter::{WasmGcEmitter, BYTE, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::{Kind, KIND_MASK};
+use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
+use crate::wasm_emitter::layout::BYTE;
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
@@ -30,153 +31,125 @@ impl WasmGcEmitter {
 		// Get the numeric value of the element at index (1-based)
 		// Traverses linked list: for index N, follow value pointer N-1 times, return data
 		if self.should_emit_function("list_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
+			self.exported_function("list_at", vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![Ref(node_ref_nullable)], |s, func| {
+				// Locals: 0=list, 1=index, 2=current (loop variable)
+				s.emit_require_integral(func, 1);
 
-			// Locals: 0=list, 1=index, 2=current (loop variable)
-			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
-			self.emit_require_integral(&mut func, 1);
+				s.emit_list_walk(func, 2);
 
-			self.emit_list_walk(&mut func, 2);
-
-			// Get current.data (which is a ref to the element Node, cast from anyref)
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field (anyref holding ref $Node)
+				// Get current.data (which is a ref to the element Node, cast from anyref)
+				func.instruction(&Instruction::LocalGet(2));
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 1, // data field (anyref holding ref $Node)
+				});
+				// Cast anyref to ref $Node
+				func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
+				// Get the inner node's data field (which holds the i64_box)
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 1, // data field of the element node
+				});
+				s.emit_int_from_payload(func);
 			});
-			// Cast anyref to ref $Node
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
-			// Get the inner node's data field (which holds the i64_box)
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field of the element node
-			});
-			self.emit_int_from_payload(&mut func);
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("list_at");
-			self.exports.export("list_at", ExportKind::Func, idx);
 		}
 
 		// list_node_at(list: ref $Node, index: i64) -> ref $Node
 		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
 		if self.should_emit_function("list_node_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
-			self.functions.function(func_type);
+			self.exported_function("list_node_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![Ref(node_ref_nullable)], |s, func| {
+				// Locals: 0=list, 1=index, 2=current (loop variable)
+				s.emit_require_integral(func, 1);
 
-			// Locals: 0=list, 1=index, 2=current (loop variable)
-			let mut func = Function::new(vec![(1, Ref(node_ref_nullable))]);
-			self.emit_require_integral(&mut func, 1);
+				s.emit_list_walk(func, 2);
 
-			self.emit_list_walk(&mut func, 2);
-
-			// Get current.data (which is a ref to the element Node, cast from anyref)
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 1, // data field (anyref holding ref $Node)
+				// Get current.data (which is a ref to the element Node, cast from anyref)
+				func.instruction(&Instruction::LocalGet(2));
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 1, // data field (anyref holding ref $Node)
+				});
+				// Cast anyref to ref $Node and return it directly
+				func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
 			});
-			// Cast anyref to ref $Node and return it directly
-			func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("list_node_at");
-			self.exports.export("list_node_at", ExportKind::Func, idx);
 		}
 
 		// node_count(node: ref $Node) -> i64
 		// Count the number of elements in a list/block by traversing the value chain
 		if self.should_emit_function("node_count") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
-			self.functions.function(func_type);
+			self.exported_function("node_count", vec![Ref(node_ref)], vec![ValType::I64], vec![ValType::I64, Ref(node_ref_nullable)], |s, func| {
+				// Locals: 0=node, 1=count, 2=current
 
-			// Locals: 0=node, 1=count, 2=current
-			let mut func = Function::new(vec![(1, ValType::I64), (1, Ref(node_ref_nullable))]);
+				// a text counts its user-perceived characters (grapheme clusters)
+				s.emit_is_text(func);
+				func.instruction(&Instruction::If(BlockType::Empty));
+				func.instruction(&Instruction::LocalGet(0));
+				s.call(func, "text_grapheme_count");
+				func.instruction(&Instruction::Return);
+				func.instruction(&Instruction::End);
 
-			// a text counts its user-perceived characters (grapheme clusters)
-			self.emit_is_text(&mut func);
-			func.instruction(&Instruction::If(BlockType::Empty));
-			func.instruction(&Instruction::LocalGet(0));
-			self.call(&mut func, "text_grapheme_count");
-			func.instruction(&Instruction::Return);
-			func.instruction(&Instruction::End);
+				// ø is the empty list
+				s.emit_field(func, 0, 0);
+				func.instruction(&Instruction::I64Const(Kind::Empty as i64));
+				func.instruction(&Instruction::I64Eq);
+				func.instruction(&Instruction::If(BlockType::Empty));
+				func.instruction(&Instruction::I64Const(0));
+				func.instruction(&Instruction::Return);
+				func.instruction(&Instruction::End);
 
-			// ø is the empty list
-			self.emit_field(&mut func, 0, 0);
-			func.instruction(&Instruction::I64Const(Kind::Empty as i64));
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Empty));
-			func.instruction(&Instruction::I64Const(0));
-			func.instruction(&Instruction::Return);
-			func.instruction(&Instruction::End);
+				// a key:value pair is one item, the one-entry object `{a:1}`
+				s.emit_field(func, 0, 0);
+				func.instruction(&Instruction::I64Const(KIND_MASK));
+				func.instruction(&Instruction::I64And);
+				func.instruction(&Instruction::I64Const(KEY_KIND));
+				func.instruction(&Instruction::I64Eq);
+				func.instruction(&Instruction::If(BlockType::Empty));
+				func.instruction(&Instruction::I64Const(1));
+				func.instruction(&Instruction::Return);
+				func.instruction(&Instruction::End);
 
-			// a key:value pair is one item, the one-entry object `{a:1}`
-			self.emit_field(&mut func, 0, 0);
-			func.instruction(&Instruction::I64Const(KIND_MASK));
-			func.instruction(&Instruction::I64And);
-			func.instruction(&Instruction::I64Const(KEY_KIND));
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Empty));
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::Return);
-			func.instruction(&Instruction::End);
+				// count = 0
+				func.instruction(&Instruction::I64Const(0));
+				func.instruction(&Instruction::LocalSet(1));
 
-			// count = 0
-			func.instruction(&Instruction::I64Const(0));
-			func.instruction(&Instruction::LocalSet(1));
+				// current = node
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::LocalSet(2));
 
-			// current = node
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalSet(2));
+				// Loop: while current is not null, count++ and current = current.value
+				func.instruction(&Instruction::Block(BlockType::Empty));
+				func.instruction(&Instruction::Loop(BlockType::Empty));
 
-			// Loop: while current is not null, count++ and current = current.value
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			func.instruction(&Instruction::Loop(BlockType::Empty));
+				// if current is null, break
+				func.instruction(&Instruction::LocalGet(2));
+				func.instruction(&Instruction::RefIsNull);
+				func.instruction(&Instruction::BrIf(1)); // break to outer block
 
-			// if current is null, break
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::RefIsNull);
-			func.instruction(&Instruction::BrIf(1)); // break to outer block
+				// count = count + 1, unless the entry is a meta entry `@name:value`
+				func.instruction(&Instruction::LocalGet(1));
+				s.emit_field(func, 2, 1);
+				s.call(func, super::equality::IS_META_ENTRY);
+				func.instruction(&Instruction::I32Eqz);
+				func.instruction(&Instruction::I64ExtendI32U);
+				func.instruction(&Instruction::I64Add);
+				func.instruction(&Instruction::LocalSet(1));
 
-			// count = count + 1, unless the entry is a meta entry `@name:value`
-			func.instruction(&Instruction::LocalGet(1));
-			self.emit_field(&mut func, 2, 1);
-			self.call(&mut func, super::equality::IS_META_ENTRY);
-			func.instruction(&Instruction::I32Eqz);
-			func.instruction(&Instruction::I64ExtendI32U);
-			func.instruction(&Instruction::I64Add);
-			func.instruction(&Instruction::LocalSet(1));
+				// current = current.value (field 2)
+				func.instruction(&Instruction::LocalGet(2));
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 2,
+				});
+				func.instruction(&Instruction::LocalSet(2));
 
-			// current = current.value (field 2)
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 2,
+				// continue loop
+				func.instruction(&Instruction::Br(0));
+				func.instruction(&Instruction::End); // end loop
+				func.instruction(&Instruction::End); // end block
+
+				// return count
+				func.instruction(&Instruction::LocalGet(1));
 			});
-			func.instruction(&Instruction::LocalSet(2));
-
-			// continue loop
-			func.instruction(&Instruction::Br(0));
-			func.instruction(&Instruction::End); // end loop
-			func.instruction(&Instruction::End); // end block
-
-			// return count
-			func.instruction(&Instruction::LocalGet(1));
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("node_count");
-			self.exports.export("node_count", ExportKind::Func, idx);
 		}
 
 		// node_bytes(node) -> i64: the bytes of a text, 8 bytes per element otherwise
@@ -202,70 +175,60 @@ impl WasmGcEmitter {
 		// node_index_at(node: ref $Node, index: i64) -> ref $Node
 		// Runtime dispatch: for Text/Symbol call string_char_at, for List/Block call list_node_at
 		if self.should_emit_function("node_index_at") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)]);
-			self.functions.function(func_type);
+			self.exported_function("node_index_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![], |s, func| {
+				s.emit_require_integral(func, 1);
 
-			let mut func = Function::new(vec![]);
-			self.emit_require_integral(&mut func, 1);
+				// a one-character text is held as a Codepoint: its only element is itself
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 });
+				func.instruction(&Instruction::I64Const(Kind::Codepoint as i64));
+				func.instruction(&Instruction::I64Eq);
+				func.instruction(&Instruction::If(BlockType::Empty));
+				Self::emit_index_compare(func, Instruction::I64Ne);
+				s.emit_fail_if(func, "index_out_of_range");
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::Return);
+				func.instruction(&Instruction::End);
+				s.emit_pair_part(func);
 
-			// a one-character text is held as a Codepoint: its only element is itself
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
-			func.instruction(&Instruction::I64Const(Kind::Codepoint as i64));
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Empty));
-			Self::emit_index_compare(&mut func, Instruction::I64Ne);
-			self.emit_fail_if(&mut func, "index_out_of_range");
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::Return);
-			func.instruction(&Instruction::End);
-			self.emit_pair_part(&mut func);
+				// Get node.kind
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 0, // kind field
+				});
 
-			// Get node.kind
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 0, // kind field
+				// Check if kind is Text (3) or Symbol (5)
+				// kind == 3 || kind == 5 means it's a string
+				func.instruction(&Instruction::I64Const(3)); // Kind::Text
+				func.instruction(&Instruction::I64Eq);
+				func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+				// It's a Text - call string_char_at
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::LocalGet(1));
+				s.emit_call(func, "string_char_at");
+				func.instruction(&Instruction::Else);
+				// Check for Symbol
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::StructGet {
+					struct_type_index: s.type_manager.node_type,
+					field_index: 0,
+				});
+				func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
+				func.instruction(&Instruction::I64Eq);
+				func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+				// It's a Symbol - call string_char_at
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::LocalGet(1));
+				s.emit_call(func, "string_char_at");
+				func.instruction(&Instruction::Else);
+				// Otherwise it's a list - call list_node_at
+				func.instruction(&Instruction::LocalGet(0));
+				func.instruction(&Instruction::LocalGet(1));
+				s.emit_call(func, "list_node_at");
+				func.instruction(&Instruction::End); // end inner if
+				func.instruction(&Instruction::End); // end outer if
 			});
-
-			// Check if kind is Text (3) or Symbol (5)
-			// kind == 3 || kind == 5 means it's a string
-			func.instruction(&Instruction::I64Const(3)); // Kind::Text
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
-			// It's a Text - call string_char_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			self.emit_call(&mut func, "string_char_at");
-			func.instruction(&Instruction::Else);
-			// Check for Symbol
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::StructGet {
-				struct_type_index: self.type_manager.node_type,
-				field_index: 0,
-			});
-			func.instruction(&Instruction::I64Const(5)); // Kind::Symbol
-			func.instruction(&Instruction::I64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
-			// It's a Symbol - call string_char_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			self.emit_call(&mut func, "string_char_at");
-			func.instruction(&Instruction::Else);
-			// Otherwise it's a list - call list_node_at
-			func.instruction(&Instruction::LocalGet(0));
-			func.instruction(&Instruction::LocalGet(1));
-			self.emit_call(&mut func, "list_node_at");
-			func.instruction(&Instruction::End); // end inner if
-			func.instruction(&Instruction::End); // end outer if
-
-			func.instruction(&Instruction::End);
-			self.code.function(&func);
-			let idx = self.register_func("node_index_at");
-			self.exports.export("node_index_at", ExportKind::Func, idx);
 		}
 
 		self.emit_with_at_functions();
@@ -283,7 +246,6 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
 		let list_insert_at = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![], |s, f| {
@@ -291,7 +253,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[
 				I::LocalGet(0), I::RefIsNull, I::LocalGet(1), I::I64Eqz, I::I32Or,
 				I::If(BlockType::Result(node_ref)),
-				I::I64Const(square_list_kind), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
+				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
 				I::Else,
 			]);
 			s.emit_field(f, 0, 0);
@@ -562,14 +524,13 @@ impl WasmGcEmitter {
 		let node = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node_ref = Ref(self.node_ref(true));
-		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
 		self.runtime_function(crate::analyzer::ZERO_FILL_CALL, vec![ValType::I64, node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
 			let rest = 2;
 			Self::emit_list(f, &[
 				I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(0), I::I64Const(0), I::I64LeS, I::BrIf(1),
-				I::I64Const(square_list_kind), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
+				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
 				I::LocalGet(0), I::I64Const(1), I::I64Sub, I::LocalSet(0),
 				I::Br(0), I::End, I::End,
 				I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
@@ -1008,12 +969,7 @@ impl WasmGcEmitter {
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
 const STRUCT_BODY: &str = "struct_body";
-/// A list node's kind is `Kind::List | bracket_info << KIND_BITS`, bracket_info 1 for `[…]` (see the serialization notes in CLAUDE.md)
-const KIND_BITS: i64 = 8;
-const SQUARE_BRACKET_INFO: i64 = 1;
-const KEY_KIND: i64 = 6;
-const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
-const CURLY_LIST_KIND: i64 = Kind::List as i64; // bracket_info Curly=0
+const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
 pub const NODE_AT_KEY: &str = "node_at_key";

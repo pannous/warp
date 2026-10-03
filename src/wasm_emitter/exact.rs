@@ -12,11 +12,12 @@
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
-use super::{WasmGcEmitter, BYTE};
+use super::WasmGcEmitter;
 use num_bigint::BigInt;
 use num_traits::{One, Pow};
 use wasm_encoder::*;
 use Instruction as I;
+use crate::wasm_emitter::layout::BYTE;
 
 /// Largest shift count: `1 << n` allocates n bits, a bigger count is a runtime error instead of an out-of-memory
 pub const MAX_SHIFT_COUNT: i64 = 1 << 16;

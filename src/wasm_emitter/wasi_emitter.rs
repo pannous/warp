@@ -5,16 +5,36 @@ use crate::type_kinds::Kind;
 use wasm_encoder::*;
 
 use super::WasmGcEmitter;
+use crate::type_kinds::SQUARE_LIST_KIND;
+use crate::wasm_emitter::layout::WORD;
 
 const PRINT_TERMINATOR: &str = "\n";
 /// print_value(x): writes the text form of x (as `x as string` has it) and a newline, yields x
 pub const PRINT_VALUE: &str = "print_value";
 const STDOUT: i32 = 1;
-const IOVEC: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
-/// Bracket info of a square list, in the bits above the kind (see type_kinds)
-const SQUARE_LIST_KIND: i64 = (1 << 8) | Kind::List as i64;
+/// Scratch memory of the stdout writes: the iovec {buf_ptr, buf_len} at 0, fd_write's byte count at 8
+const IOVEC_ADDRESS: i32 = 0;
+const NWRITTEN_ADDRESS: i32 = 8;
 
 impl WasmGcEmitter {
+	/// Writes the text at (ptr, len) to stdout: the iovec {ptr, len} at address IOVEC_ADDRESS, then
+	/// `fd_write(STDOUT, iovs, 1, nwritten)`. Leaves fd_write's error code on the stack; false when fd_write is not imported.
+	fn emit_stdout_write(&self, func: &mut Function, str_ptr: u32, str_len: u32) -> bool {
+		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS));
+		func.instruction(&Instruction::I32Const(str_ptr as i32));
+		func.instruction(&Instruction::I32Store(WORD));
+		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS + 4));
+		func.instruction(&Instruction::I32Const(str_len as i32));
+		func.instruction(&Instruction::I32Store(WORD));
+		func.instruction(&Instruction::I32Const(STDOUT));
+		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS));
+		func.instruction(&Instruction::I32Const(1));
+		func.instruction(&Instruction::I32Const(NWRITTEN_ADDRESS));
+		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write") else { return false };
+		func.instruction(&Instruction::Call(fd_write.call_index as u32));
+		true
+	}
+
 	/// Emit WASI puts: write string to stdout
 	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
 	pub(super) fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
@@ -37,34 +57,7 @@ impl WasmGcEmitter {
 			_ => self.allocate_string(""),
 		};
 
-		// Set up iovec at address 0: {buf_ptr: i32, buf_len: i32}
-		// i32.store at address 0 = str_ptr
-		func.instruction(&Instruction::I32Const(0)); // address
-		func.instruction(&Instruction::I32Const(str_ptr as i32)); // value
-		func.instruction(&Instruction::I32Store(MemArg {
-			offset: 0,
-			align: 2,
-			memory_index: 0,
-		}));
-
-		// i32.store at address 4 = str_len
-		func.instruction(&Instruction::I32Const(4)); // address
-		func.instruction(&Instruction::I32Const(str_len as i32)); // value
-		func.instruction(&Instruction::I32Store(MemArg {
-			offset: 0,
-			align: 2,
-			memory_index: 0,
-		}));
-
-		// Call fd_write(fd=1, iovs=0, iovs_len=1, nwritten=8)
-		func.instruction(&Instruction::I32Const(1)); // fd = stdout
-		func.instruction(&Instruction::I32Const(0)); // iovs ptr
-		func.instruction(&Instruction::I32Const(1)); // iovs len
-		func.instruction(&Instruction::I32Const(8)); // nwritten ptr
-
-		if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
-			func.instruction(&Instruction::Call(f.call_index as u32));
-		}
+		self.emit_stdout_write(func, str_ptr, str_len);
 		// Stack now has i32 (error code), leave it for conversion to Node
 	}
 
@@ -112,10 +105,10 @@ impl WasmGcEmitter {
 			let write = |f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
 				f.instruction(&Instruction::I32Const(0));
 				push_address(f);
-				f.instruction(&Instruction::I32Store(IOVEC));
+				f.instruction(&Instruction::I32Store(WORD));
 				f.instruction(&Instruction::I32Const(4));
 				push_length(f);
-				f.instruction(&Instruction::I32Store(IOVEC));
+				f.instruction(&Instruction::I32Store(WORD));
 				for argument in [STDOUT, 0, 1, 8] {
 					f.instruction(&Instruction::I32Const(argument));
 				}
@@ -145,31 +138,8 @@ impl WasmGcEmitter {
 			let s = format!("{}", n); // Number implements Display
 			let (str_ptr, str_len) = self.allocate_string(&s);
 
-			// Set up iovec
-			func.instruction(&Instruction::I32Const(0));
-			func.instruction(&Instruction::I32Const(str_ptr as i32));
-			func.instruction(&Instruction::I32Store(MemArg {
-				offset: 0,
-				align: 2,
-				memory_index: 0,
-			}));
-			func.instruction(&Instruction::I32Const(4));
-			func.instruction(&Instruction::I32Const(str_len as i32));
-			func.instruction(&Instruction::I32Store(MemArg {
-				offset: 0,
-				align: 2,
-				memory_index: 0,
-			}));
-
-			// Call fd_write
-			func.instruction(&Instruction::I32Const(1));
-			func.instruction(&Instruction::I32Const(0));
-			func.instruction(&Instruction::I32Const(1));
-			func.instruction(&Instruction::I32Const(8));
-
-			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
-				func.instruction(&Instruction::Call(f.call_index as u32));
-				func.instruction(&Instruction::Drop); // Drop return value
+			if self.emit_stdout_write(func, str_ptr, str_len) {
+				func.instruction(&Instruction::Drop);
 			}
 		}
 		// For runtime values, we'd need itoa - just drop for now
@@ -182,29 +152,7 @@ impl WasmGcEmitter {
 			let s = format!("{}", n); // Number implements Display
 			let (str_ptr, str_len) = self.allocate_string(&s);
 
-			func.instruction(&Instruction::I32Const(0));
-			func.instruction(&Instruction::I32Const(str_ptr as i32));
-			func.instruction(&Instruction::I32Store(MemArg {
-				offset: 0,
-				align: 2,
-				memory_index: 0,
-			}));
-			func.instruction(&Instruction::I32Const(4));
-			func.instruction(&Instruction::I32Const(str_len as i32));
-			func.instruction(&Instruction::I32Store(MemArg {
-				offset: 0,
-				align: 2,
-				memory_index: 0,
-			}));
-
-			func.instruction(&Instruction::I32Const(1));
-			func.instruction(&Instruction::I32Const(0));
-			func.instruction(&Instruction::I32Const(1));
-			func.instruction(&Instruction::I32Const(8));
-
-			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
-				func.instruction(&Instruction::Call(f.call_index as u32));
-			}
+			self.emit_stdout_write(func, str_ptr, str_len);
 		} else {
 			// Return 0 for non-constant
 			func.instruction(&Instruction::I32Const(0));

@@ -5,16 +5,15 @@
 //! binary searched: the code point, then up to three mapped code points (`ß` is `SS`), zeros for unused slots.
 
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, BYTE};
+use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
+use crate::type_kinds::SQUARE_LIST_KIND;
+use crate::wasm_emitter::layout::{BYTE, WORD};
 
-const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-const SQUARE_BRACKET_INFO: i64 = 1;
-const KIND_SHIFT: i64 = 8;
 
 /// The longest mapping of one code point (`ΐ` upper is three)
 const MAPPED_SLOTS: u32 = 3;
@@ -187,7 +186,6 @@ impl WasmGcEmitter {
 		}
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let square_list = (SQUARE_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 6]);
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
@@ -201,7 +199,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
 			s.emit_decode_at(f, index, first_byte, code_point, step);
 			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(step), I::I32Add, I::LocalSet(index)]);
-			Self::emit_list(f, &[I::I64Const(square_list), I::LocalGet(code_point)]);
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(code_point)]);
 			s.call(f, "new_codepoint");
 			Self::emit_list(f, &[I::LocalGet(characters), I::StructNew(node_type), I::LocalSet(characters), I::Br(0), I::End, I::End]);
 			Self::emit_list(f, &[I::LocalGet(characters)]);

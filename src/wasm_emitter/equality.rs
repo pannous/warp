@@ -12,11 +12,11 @@ use crate::type_kinds::{any_heap_type, Kind, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
+use crate::wasm_emitter::layout::BYTE;
 
 pub const VALUES_EQUAL: &str = "values_equal";
 pub const IS_META_ENTRY: &str = "is_meta_entry";
 pub const IS_TRUTHY: &str = "is_truthy";
-const MEMORY: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 impl WasmGcEmitter {
 	/// Values that only compare or test structurally: they have no numeric reading
@@ -138,7 +138,7 @@ impl WasmGcEmitter {
 			Self::return_if(f, 0);
 			f.instruction(&I::LocalGet(name));
 			f.instruction(&I::StructGet { struct_type_index: string, field_index: 0 });
-			f.instruction(&I::I32Load8U(MEMORY));
+			f.instruction(&I::I32Load8U(BYTE));
 			f.instruction(&I::I32Const(crate::node::ATTRIBUTE_MARK as i32));
 			f.instruction(&I::I32Eq);
 		});
@@ -416,7 +416,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::BrIf(1));
 			for pointer in [4, 5] {
 				f.instruction(&I::LocalGet(pointer));
-				f.instruction(&I::I32Load8U(MEMORY));
+				f.instruction(&I::I32Load8U(BYTE));
 			}
 			f.instruction(&I::I32Ne);
 			Self::return_if(f, 0);

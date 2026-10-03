@@ -359,7 +359,6 @@ extern "C" {
 
 	// libc functions
 	fn abs(x: i32) -> i32;
-	fn strlen(s: *const i8) -> usize;
 	fn atoi(s: *const i8) -> i32;
 	fn atol(s: *const i8) -> i64;
 	fn atof(s: *const i8) -> f64;
@@ -367,6 +366,10 @@ extern "C" {
 	fn strncmp(s1: *const i8, s2: *const i8, n: usize) -> i32;
 	fn rand() -> i32;
 }
+
+/// libm functions linked under the import module "m"
+const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 
 /// Get known FFI function signatures by parsing system header files, once per process
 /// Uses unified Kind/Signature types from ffi_parser module
@@ -556,129 +559,20 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
     use wasmtime::ValType;
 
-    // libm: fmin(f64, f64) -> f64
-    let fmin_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmin", fmin_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmin(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fmax(f64, f64) -> f64
-    let fmax_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmax", fmax_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmax(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fabs(f64) -> f64
-    let fabs_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fabs", fabs_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { fabs(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: floor(f64) -> f64
-    let floor_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "floor", floor_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { floor(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: ceil(f64) -> f64
-    let ceil_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "ceil", ceil_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { ceil(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: round(f64) -> f64
-    let round_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "round", round_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { round(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: sqrt(f64) -> f64
-    let sqrt_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "sqrt", sqrt_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { sqrt(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: sin(f64) -> f64
-    let sin_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "sin", sin_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { sin(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: cos(f64) -> f64
-    let cos_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "cos", cos_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { cos(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: tan(f64) -> f64
-    let tan_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "tan", tan_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { tan(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fmod(f64, f64) -> f64
-    let fmod_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmod", fmod_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmod(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: pow(f64, f64) -> f64
-    let pow_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "pow", pow_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { pow(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: exp(f64) -> f64
-    let exp_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "exp", exp_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { exp(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: log(f64) -> f64
-    let log_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "log", log_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { log(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: log10(f64) -> f64
-    let log10_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "log10", log10_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { log10(x) }.to_bits());
-        Ok(())
-    })?;
+    for (name, function) in LIBM_UNARY {
+        let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
+        linker.func_new("m", name, unary, move |_caller, params, results| {
+            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64()) }.to_bits());
+            Ok(())
+        })?;
+    }
+    for (name, function) in LIBM_BINARY {
+        let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
+        linker.func_new("m", name, binary, move |_caller, params, results| {
+            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64(), params[1].unwrap_f64()) }.to_bits());
+            Ok(())
+        })?;
+    }
 
     // libc: abs(i32) -> i32
     let abs_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);

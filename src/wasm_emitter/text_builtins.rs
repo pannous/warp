@@ -5,11 +5,12 @@
 
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, BYTE, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
+use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";

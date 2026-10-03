@@ -53,14 +53,10 @@ pub fn fueled_store<T>(engine: &Engine, data: T) -> Store<T> {
 	store
 }
 
+/// The body at `url`, empty (and reported on stderr) when the download fails
 #[cfg(feature = "native")]
-pub fn fetch(p0: &str) -> String {
-	ureq::get(p0)
-		.call()
-		.unwrap()
-		.body_mut()
-		.read_to_string()
-		.unwrap()
+pub fn fetch(url: &str) -> String {
+	crate::extensions::utils::download(url)
 }
 
 /// Create a WASM engine with GC, function references, canonical NaNs and fuel metering.

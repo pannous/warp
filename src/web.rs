@@ -13,8 +13,8 @@ use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use crate::type_kinds::KIND_BITS;
 
-const KIND_BITS: u32 = 8;
 /// The answer that acknowledges an `educate_once` note, stored under `ack:<topic>` like an answer
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
 

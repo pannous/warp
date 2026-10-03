@@ -576,24 +576,6 @@ impl WasmGcEmitter {
 	// Runtime functions (emitted once, only when the program needs them)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	pub(super) fn runtime_function(
-		&mut self,
-		name: &'static str,
-		params: Vec<ValType>,
-		results: Vec<ValType>,
-		locals: Vec<ValType>,
-		body: impl FnOnce(&Self, &mut Function),
-	) {
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params, results);
-		self.functions.function(func_type);
-		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
-		body(self, &mut func);
-		func.instruction(&I::End);
-		self.code.function(&func);
-		self.register_func(name);
-	}
-
 	pub(super) fn call(&self, func: &mut Function, name: &str) {
 		func.instruction(&I::Call(self.func_index(name)));
 	}
@@ -670,12 +652,6 @@ impl WasmGcEmitter {
 		func.instruction(&I::Br(0));
 		func.instruction(&I::End);
 		func.instruction(&I::End);
-	}
-
-	pub(super) fn emit_list(func: &mut Function, instructions: &[Instruction]) {
-		for instruction in instructions {
-			func.instruction(instruction);
-		}
 	}
 
 	pub(crate) fn emit_int_runtime(&mut self) {

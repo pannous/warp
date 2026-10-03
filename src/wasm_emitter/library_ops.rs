@@ -1,17 +1,14 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, BYTE};
+use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
+use crate::type_kinds::{CURLY_LIST_KIND, SQUARE_LIST_KIND};
+use crate::wasm_emitter::layout::BYTE;
 
-/// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
-/// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
-const SQUARE_BRACKET_INFO: i64 = 1;
-const KIND_SHIFT: i64 = 8;
-const CURLY_BRACKET_INFO: i64 = 0;
 const KEY_KIND: i64 = Kind::Key as i64;
 /// An i64 has at most 19 digits, plus the sign
 const MAX_INT_BYTES: i32 = 20;
@@ -265,7 +262,6 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let square_list = (SQUARE_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 8]);
 		self.runtime_function("text_split", vec![node_ref, node_ref], vec![node_ref], locals, |s, f| {
@@ -284,7 +280,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalTee(start), I::LocalSet(index)]);
 			// the bytes from `start` up to the local `stop` as a text at the front of `pieces`
 			let push_piece = |f: &mut Function, stop: u32| {
-				Self::emit_list(f, &[I::I64Const(square_list), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+				Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalGet(pieces), I::StructNew(node_type), I::LocalSet(pieces)]);
 			};
@@ -496,7 +492,6 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
-		let curly_list = (CURLY_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let colon = crate::operators::op_to_code(&crate::operators::Op::Colon);
 
 		// replace_entry(cells, name, entry): the cells with the entry of that name replaced, or `entry` added at the end of
@@ -505,7 +500,7 @@ impl WasmGcEmitter {
 		let replace_entry = next_index(self);
 		self.runtime_function("map_replace_entry", vec![nullable, node_ref, node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (cells, name, entry, head) = (0, 1, 2, 3);
-			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::I64Const(curly_list), I::LocalGet(entry)]);
+			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::I64Const(CURLY_LIST_KIND), I::LocalGet(entry)]);
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
 			// a new field goes in front of the first meta entry
 			s.emit_field(f, cells, 1);
