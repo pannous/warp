@@ -28,7 +28,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
 - `/` is exact division (rationals): use `>> 1` for halving indices.
 - `global g = read(…)` fails ("undefined variable: read"); `const g = read(…)` works and is imported by `use`.
 - Unannotated parameters are Int: annotate text parameters `f(t:text)`.
-- The ignored test `test_string_concat_wasm` (tests/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
+- The ignored test `test_string_concat_wasm` (tests/wasm/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
 
 ## Design decisions
 - Controls follow their character (uniscript repository, fonts/README.md): `<:red A>` → A U+E0072. A block's own entry wins over the suffix,

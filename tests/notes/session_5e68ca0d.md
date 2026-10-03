@@ -2,7 +2,7 @@
 
 ## 👤 Human
 
-in test_ffi.rs/Users/me/dev/angles/warp/tests/test_ffi.rs  Replace the wrongly converted C++ multi line strings to r#"
+in test_ffi.rs/Users/me/dev/angles/warp/tests/ffi/test_ffi.rs  Replace the wrongly converted C++ multi line strings to r#"
 
 ---
 
@@ -14,7 +14,7 @@ I'll read the file first to see the wrongly converted C++ multi-line strings.
 
 ## 🤖 Assistant
 
-→ `Read`: `/Users/me/dev/angles/warp/tests/test_ffi.rs`
+→ `Read`: `/Users/me/dev/angles/warp/tests/ffi/test_ffi.rs`
 
 ---
 
@@ -26,13 +26,13 @@ I can see several multi-line strings that were incorrectly converted from C++ to
 
 ## 🤖 Assistant
 
-→ `Edit`: `/Users/me/dev/angles/warp/tests/test_ffi.rs`
+→ `Edit`: `/Users/me/dev/angles/warp/tests/ffi/test_ffi.rs`
 
 ---
 
 ## 🤖 Assistant
 
-→ `Edit`: `/Users/me/dev/angles/warp/tests/test_ffi.rs`
+→ `Edit`: `/Users/me/dev/angles/warp/tests/ffi/test_ffi.rs`
 
 ---
 

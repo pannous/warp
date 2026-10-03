@@ -98,13 +98,13 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 
 - `tests/node/test_node.rs` - Tests Node AST operations
 - `tests/parser/test_parser.rs` - Tests parser functionality
-- `tests/test_wasm_emitter.rs` - Tests WASM GC code generation
-- `tests/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
+- `tests/wasm/test_wasm_emitter.rs` - Tests WASM GC code generation
+- `tests/wasm/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
 
 ## WASM GC Reading Patterns
 
 The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits.rs`, examples in `tests/test_wasm_reader.rs` and `tests/test_gc_struct.rs`):
+(`src/gc_traits.rs`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -197,8 +197,8 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
 
 4. Verification pointers:
 
-   - `tests/test_wasm_emitter.rs` covers `test_wasm_roundtrip` and `test_wasm_roundtrip_via_is`
-   - `tests/test_wasm_reader.rs` documents the GC reading pattern
+   - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip` and `test_wasm_roundtrip_via_is`
+   - `tests/wasm/test_wasm_reader.rs` documents the GC reading pattern
 
 5. Round-trip remains:
 

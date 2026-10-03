@@ -77,7 +77,7 @@ cargo test --test test_samples
 
 When adding a new sample:
 1. Add it to `samples/` directory with `.wasp` extension
-2. If it should work, add a test in `tests/test_samples.rs`
+2. If it should work, add a test in `tests/programs/test_samples.rs`
 3. Use `#[ignore]` attribute with explanation if feature not yet implemented
 4. Update this README
 

@@ -35,7 +35,7 @@ all the time.
 - `scope/`: test_globals test_global_constant_words test_global_declaration test_global_modifiers test_data_scope test_use_scopes test_undefined_variable test_prefixed_declarations test_export_declaration test_colon_body_assignment test_colon_body_extent test_eval_state
 - `modules/`: test_include test_use_modules test_module_cache test_packages test_package_pin test_package_tools test_versions test_header_search test_folder_scope
 - `ffi/`: test_ffi test_ffi_import_group test_ffi_warning_once test_host test_wasi test_download test_host_words test_libm_linking
-- `wasm/`: test_wasm test_wasm_emitter test_emitter test_wasm_reader test_wast test_gc_name_registry test_gc_struct test_name_subsection_order test_wasm_names_order wasm_optimizer_test test_optimizer_exceptions test_optimizer_extended_const test_read_bytes_plain_result test_compile_only test_wit test_wit_types test_utils
+- `wasm/`: test_wasm test_wasm_emitter test_emitter test_wasm_reader test_wast test_gc_name_registry test_gc_struct test_name_subsection_order test_wasm_names_order wasm_optimizer_test test_optimizer_exceptions test_optimizer_extended_const test_read_bytes_plain_result test_compile_only test_wit test_wit_types
 - `web/`: test_web test_web_playground test_uniscript
 - `welcoming/` (one folder, user OK 2026-10-03): test_welcoming_ask test_welcoming_break test_welcoming_count_argument test_welcoming_elements test_welcoming_empty_push test_welcoming_globals test_welcoming_indent test_welcoming_listexpr test_welcoming_listparams test_welcoming_maps test_welcoming_parse test_welcoming_print test_welcoming_rangeblock test_welcoming_slices test_welcoming_sugar test_got_it_warnings test_warning_mode test_style_dont_care test_it_shadow_warning (+ probe_footguns condensed)
 - `programs/`: test_algo_dijkstra test_algo_levenshtein test_algo_life test_algo_queens test_algo_sieve test_algo_sorting test_all_samples test_samples test_kitchensink
@@ -56,3 +56,8 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - text/ (tests-tidy-text): pure move
 - control/ (tests-tidy-control): pure move
 - scope/ (tests-tidy-scope): pure move
+- modules/ (tests-tidy-modules): pure move
+- ffi/ (tests-tidy-ffi): pure move
+- wasm/ (tests-tidy-wasm): pure move
+- programs/ (tests-tidy-programs): pure move
+- sweeps/ (tests-tidy-sweeps): pure move
