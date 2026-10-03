@@ -65,7 +65,6 @@ fn main() {
 
     if args.len() == 1 {
         // No args, just program name
-        #[cfg(not(feature = "wasm"))]
         if !io::stdin().is_terminal() {
             // Read from stdin pipe
             let mut input = String::new();
@@ -83,14 +82,6 @@ fn main() {
     }
 
     if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
-        #[cfg(feature = "WEBAPP")]
-        {
-            // start_server in thread, open webview
-            let arg = format!("http://localhost:{}/{}", 9999, arg_string);
-            println!("Serving {}", arg);
-            // open_webview(arg);
-        }
-        #[cfg(not(feature = "WEBAPP"))]
         println!("warp compiled without webview");
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
         let code = if file_exists(target) { load_file(target) } else { target.to_string() };
@@ -143,12 +134,6 @@ fn main() {
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wasm") {
         if args.len() >= 3 {
-            #[cfg(any(feature = "WABT_MERGE", feature = "INCLUDE_MERGER"))]
-            {
-                // merge_files
-                todo!("linking files needs compilation with WABT_MERGE");
-            }
-            #[cfg(not(any(feature = "WABT_MERGE", feature = "INCLUDE_MERGER")))]
             {
                 todo!("linking files needs compilation with WABT_MERGE");
             }
@@ -158,15 +143,11 @@ fn main() {
             std::process::exit(node_to_i32(&result));
         }
     } else if arg_string == "test" || arg_string == "tests" {
-        #[cfg(not(feature = "release"))]
         {
             println!("Run tests with: cargo test");
         }
-        #[cfg(feature = "release")]
-        println!("warp release compiled without tests");
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Wasp documentation can be found at https://github.com/pannous/warp/wiki");
-        #[cfg(not(feature = "wasm"))]
         {
             let _ = std::process::Command::new("open")
                 .arg("https://github.com/pannous/warp/")
@@ -181,23 +162,8 @@ fn main() {
     } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
         console();
     } else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
-        #[cfg(feature = "GRAFIX")]
-        {
-            // init_graphics();
-        }
-        #[cfg(not(feature = "GRAFIX"))]
         println!("warp compiled without sdl/webview");
     } else if matches!(arg_string.as_str(), "app" | "webview" | "browser") {
-        #[cfg(feature = "WEBAPP")]
-        {
-            #[cfg(feature = "GRAFIX")]
-            {
-                // init_graphics();
-            }
-            #[cfg(not(feature = "GRAFIX"))]
-            println!("warp compiled without sdl/webview");
-        }
-        #[cfg(not(feature = "WEBAPP"))]
         {
             println!("must compile with WEBAPP support");
             std::process::exit(-1);
@@ -214,7 +180,6 @@ fn main() {
             println!("Wasp compiled without server OR no program given!");
         }
     } else if arg_string == "lsp" {
-        #[cfg(not(feature = "wasm"))]
         {
             // lsp_main();
             println!("LSP not yet implemented");
