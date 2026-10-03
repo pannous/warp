@@ -329,6 +329,15 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
 						}
+						t if t == Kind::Float as u8 => {
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							let float_box = data_val.unwrap_anyref().and_then(|data| data.unwrap_struct(&store).ok());
+							let value = match float_box {
+								Some(float_box) => float_box.field(&mut store, 0)?.unwrap_f64(),
+								None => 0.0,
+							};
+							Ok(Node::Number(crate::extensions::numbers::Number::Float(value)))
+						}
 						t if t == Kind::Codepoint as u8 => {
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							let code = data_val.unwrap_anyref().and_then(|data| data.as_i31(&store).ok().flatten()).map(|code| code.get_u32());
