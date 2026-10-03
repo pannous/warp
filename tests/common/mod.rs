@@ -16,10 +16,16 @@ pub const MACOS_C_HEADERS: Resource = Resource { name: "the macOS C headers (lib
 macro_rules! requires {
 	($resource:expr) => {
 		if !($resource.available)() {
-			eprintln!("skipped: needs {} ({})", $resource.name, module_path!());
+			$crate::common::announce_skip($resource.name, module_path!());
 			return;
 		}
 	};
+}
+
+/// Written to the stderr handle itself: libtest captures `eprintln!` of passing tests, which would hide the skip
+pub fn announce_skip(resource: &str, test_module: &str) {
+	use std::io::Write;
+	let _ = writeln!(std::io::stderr(), "skipped: needs {resource} ({test_module})");
 }
 
 pub fn fails_with(code: &str, needle: &str) {
