@@ -423,6 +423,11 @@ pub mod hints {
         hint(written, &format!("\\({expression})"), "canonical interpolation hole");
     }
 
+    /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
+    pub fn interpolation(written: &str, expression: &str) {
+        hint(written, &format!("\\({expression})"), "canonical interpolation hole");
+    }
+
     /// The operator as written in the source; `is_prefix` tells `!x` from an infix use
     pub fn operator(written: &str, is_prefix: bool) {
         let mut characters = written.chars();
