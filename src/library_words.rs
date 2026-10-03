@@ -11,7 +11,7 @@ use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
-use crate::wasm_emitter::RAN_WITHOUT_ERROR;
+use crate::wasm_emitter::{CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
@@ -77,6 +77,7 @@ const EXPANDED_WORDS: [(&str, usize, &str); 4] = [
 const TRY_TEMPORARY: &str = "try_tmp";
 const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
 const TRY_FALLBACK_PLACEHOLDER: &str = "try_placeholder_fallback";
+const CAUGHT_NAME_PLACEHOLDER: &str = "try_placeholder_caught";
 const LIST_PLACEHOLDER: &str = "try_placeholder_list";
 const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
@@ -229,8 +230,8 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], TRY_MARKER) => {
-				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
+			Node::List(items, Bracket::Round, _) if matches!(items.len(), 3 | 4) && is_marker(&items[0], TRY_MARKER) => {
+				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()), items.get(3).cloned())
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
@@ -516,25 +517,34 @@ impl Lowering {
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
 	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
 	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
-	fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
+	/// `try X else Y`; `try X else e => Y` (`caught` is e) names the caught error in Y: its message text (CAUGHT_ERROR_TEXT)
+	fn lower_try(&self, guarded: Node, fallback: Node, caught: Option<Node>) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
 		match guarded.drop_meta() {
 			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
-				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
+				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback, caught)))
 			}
-			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.from_template(
+			// the checked shortcuts know no error to name
+			Node::Key(list, Op::Hash, index) if caught.is_none() && !matches!(list.drop_meta(), Node::Empty) => self.from_template(
 				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),
-			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.from_template(
+			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) if caught.is_none() => self.from_template(
 				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{{DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}})"),
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
-			_ => self.from_template(
-				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
-				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
-				&[(value, &guarded), (fallback_placeholder, &fallback)],
-			),
+			_ => {
+				let name = caught.unwrap_or(Node::Empty);
+				let caught = match name {
+					Node::Empty => String::new(),
+					_ => format!("{CAUGHT_NAME_PLACEHOLDER} = {CAUGHT_ERROR_TEXT}(try_tmp_finished, try_tmp_value); "),
+				};
+				self.from_template(
+					// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
+					&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{caught}{fallback_placeholder}}})"),
+					&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_NAME_PLACEHOLDER, &name)],
+				)
+			}
 		}
 	}
 

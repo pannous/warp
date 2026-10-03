@@ -2,7 +2,8 @@
 //! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `wasp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
 //! `ran_without_error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
-//! an error was thrown. The id of the caught error stays in the global `caught_error` for a later `try … else e => …`.
+//! an error was thrown. The id of the caught error stays in the global `caught_error`, which `try … else e => …` reads
+//! (`caught_error_text`). A jump out of a `try` (return, break, continue) lowers the depth first (`emit_leave_tries`).
 
 use super::WasmGcEmitter;
 use crate::node::Node;
@@ -11,6 +12,11 @@ use Instruction as I;
 
 /// The marker call `try X else Y` lowers to (library_words::lower_try): `ran_without_error{try_tmp = X}`
 pub const RAN_WITHOUT_ERROR: &str = "ran_without_error";
+/// `caught_error_text(finished, value)` in the else branch of `try X else e => …`: the message of the error that ended X,
+/// the Error value X gave (finished) or the runtime error thrown in it (not finished, its id in `caught_error`)
+pub const CAUGHT_ERROR_TEXT: &str = "caught_error_text";
+/// The message of an error id no runtime error function has: never expected, but never silent either
+const UNKNOWN_ERROR_MESSAGE: &str = "unknown runtime error";
 const ERROR_TAG_NAME: &str = "wasp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
 const CAUGHT_ERROR_GLOBAL: &str = "caught_error";
@@ -108,6 +114,28 @@ impl WasmGcEmitter {
 		func.instruction(&I::GlobalSet(catching.caught_global));
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(0), I::End]);
+	}
+
+	/// `caught_error_text(finished, value)` as a Text node
+	pub(super) fn emit_caught_error_text(&mut self, func: &mut Function, finished: &Node, value: &Node) {
+		let catching = self.declare_error_catching();
+		let node = self.type_manager.node_type;
+		let text = BlockType::Result(ValType::Ref(self.node_ref(false)));
+		self.emit_numeric_value(func, finished);
+		Self::emit_list(func, &[I::I64Eqz, I::If(text), I::Block(text)]);
+		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
+			Self::emit_list(func, &[I::GlobalGet(catching.caught_global), I::I32Const(error_id as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			self.emit_string_call(func, &super::list_ops::caught_error_message(name), "new_text");
+			Self::emit_list(func, &[I::Br(1), I::End]);
+		}
+		self.emit_string_call(func, UNKNOWN_ERROR_MESSAGE, "new_text");
+		Self::emit_list(func, &[I::End, I::Else, I::I64Const(crate::type_kinds::Kind::Text as i64)]);
+		// an Error value carries its message's string as its data: the same data as a Text
+		self.emit_node_instructions(func, value);
+		Self::emit_list(func, &[
+			I::StructGet { struct_type_index: node, field_index: 1 },
+			I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::End,
+		]);
 	}
 
 	/// A Node variable is a non-nullable local that wasm counts as set only after the block setting it: assigned inside
