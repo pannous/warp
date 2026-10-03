@@ -10,7 +10,7 @@
 //! style.function_def = FunctionStyle::Def;
 //! ```
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -241,7 +241,7 @@ impl Default for Style {
 }
 
 /// Global style setting
-static STYLE: Lazy<Mutex<Style>> = Lazy::new(|| Mutex::new(Style::default()));
+static STYLE: LazyLock<Mutex<Style>> = LazyLock::new(|| Mutex::new(Style::default()));
 
 /// Set the global style
 pub fn set_style(style: Style) {
@@ -260,7 +260,7 @@ pub fn style() -> Style {
 // ============================================================================
 
 /// Global set of hints already shown (for "once" mode)
-static SHOWN_HINTS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+static SHOWN_HINTS: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Hint display mode
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -274,7 +274,7 @@ pub enum HintMode {
 }
 
 /// Global hint mode setting
-static HINT_MODE: Lazy<Mutex<HintMode>> = Lazy::new(|| Mutex::new(HintMode::Always));
+static HINT_MODE: LazyLock<Mutex<HintMode>> = LazyLock::new(|| Mutex::new(HintMode::Always));
 
 /// Set the global hint mode
 pub fn set_hint_mode(mode: HintMode) {

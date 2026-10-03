@@ -1022,12 +1022,12 @@ pub fn register_gc_types_from_wasm(bytes: &[u8]) -> Result<u64> {
 /// WASM name resolver module for looking up field names from WASM metadata
 pub mod wasm_name_resolver {
     use super::*;
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
 	use wasmparser as wp;
 	use crate::gc_traits::wasm_name_resolver::ParsedAbstractHeapType::{Any, Array, Extern, Func, NoExtern, NoFunc, Struct};
 
-	static REGISTRY: Lazy<Mutex<FieldNameRegistry>> =
-        Lazy::new(|| Mutex::new(FieldNameRegistry::default()));
+	static REGISTRY: LazyLock<Mutex<FieldNameRegistry>> =
+        LazyLock::new(|| Mutex::new(FieldNameRegistry::default()));
 
     /// The registry only caches parsed name sections, so a panic elsewhere while it was locked (a should_panic test,
     /// say) leaves it usable; that panic already reported itself, and poisoning would fail every later lookup
