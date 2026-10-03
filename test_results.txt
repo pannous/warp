@@ -257,7 +257,7 @@ PASSED:
   ✓ test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
-  ✓ test_bare_list_assignment::the_answer_compiles_the_chosen_reading
+  ✓ test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ test_block_assigns_outer::the_declared_and_returned_forms_change_it
@@ -392,7 +392,7 @@ PASSED:
   ✓ test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ test_equality_never_chains::orderings_still_chain
-  ✓ test_eval_state::an_answer_given_in_one_eval_is_not_remembered_by_the_next
+  ✓ test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ test_eval_state::every_eval_shows_its_educate_once_note
   ✓ test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
@@ -538,6 +538,11 @@ PASSED:
   ✓ test_glyph_aliases::equality_glyphs_compare
   ✓ test_glyph_aliases::glyphs_inside_text_stay_text
   ✓ test_glyph_aliases::logic_glyphs_are_and_or
+  ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
+  ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
+  ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
+  ✓ test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
+  ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ test_host::test_emit_host_imports
@@ -563,9 +568,9 @@ PASSED:
   ✓ test_inline_comments::test_hash_without_space_is_still_the_index_operator
   ✓ test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
   ✓ test_interpolation::an_unknown_name_in_a_hole_is_loud
+  ✓ test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
   ✓ test_interpolation::data_keeps_dollars_as_text
   ✓ test_interpolation::dollar_arguments_and_templates_keep_working
-  ✓ test_interpolation::dollar_holes_interpolate_too
   ✓ test_interpolation::holes_take_parameters_lists_and_exact_numbers
   ✓ test_interpolation::holes_take_text_results_of_library_words
   ✓ test_interpolation::single_quotes_stay_literal
@@ -649,7 +654,8 @@ PASSED:
   ✓ test_list_parameters::named_parameter_indexed_as_list
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
-  ✓ test_list_plus_number::the_answer_compiles_the_chosen_reading
+  ✓ test_list_plus_number::each_reading_has_its_explicit_form
+  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -705,7 +711,6 @@ PASSED:
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
-  ✓ test_meta_attributes::test_meta_entries_survive_eval
   ✓ test_meta_attributes::test_meta_key_in_parsed_data
   ✓ test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
   ✓ test_meta_attributes::test_meta_stays_reachable
@@ -918,6 +923,7 @@ PASSED:
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ test_print_arguments::print_of_a_braceless_call_prints_its_result
   ✓ test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
   ✓ test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
@@ -950,6 +956,12 @@ PASSED:
   ✓ test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ test_rational_type::test_rational_and_rationals_are_type_words
   ✓ test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ test_read_bytes_plain_result::a_main_without_a_result_is_empty
+  ✓ test_read_bytes_plain_result::a_null_result_is_empty
+  ✓ test_read_bytes_plain_result::a_plain_f64_result_is_a_float
+  ✓ test_read_bytes_plain_result::a_plain_i32_result_is_an_int
+  ✓ test_read_bytes_plain_result::a_plain_i64_result_is_an_int
+  ✓ test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
   ✓ test_records_classes::a_class_has_untyped_fields
   ✓ test_records_classes::a_missing_required_field_is_an_error
   ✓ test_records_classes::a_record_is_a_struct
@@ -982,8 +994,8 @@ PASSED:
   ✓ test_shift_operators::test_shifts_of_big_exact_ints
   ✓ test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
+  ✓ test_signed_operand_list::each_reading_has_its_explicit_form
   ✓ test_signed_operand_list::spaced_or_glued_operators_stay_arithmetic
-  ✓ test_signed_operand_list::the_answer_compiles_the_chosen_reading
   ✓ test_signed_operand_list::under_strict_the_default_is_an_error
   ✓ test_size_count::test_bytes_need_explicit_unit
   ✓ test_size_count::test_size_is_element_count
@@ -1047,7 +1059,7 @@ PASSED:
   ✓ test_suffix_words::a_variable_is_no_suffix_form
   ✓ test_suffix_words::an_ungrouped_mix_asks
   ✓ test_suffix_words::an_unknown_word_is_no_suffix_form
-  ✓ test_suffix_words::the_answer_compiles_the_chosen_reading
+  ✓ test_suffix_words::each_reading_has_its_explicit_form
   ✓ test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ test_superscript_signs::a_negative_superscript_is_a_reciprocal_power
   ✓ test_superscript_signs::a_negative_superscript_on_a_variable
@@ -1383,18 +1395,18 @@ PASSED:
   ✓ test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
-  ✓ test_web_playground::an_unanswered_ask_is_reported_with_its_readings_and_falls_back
+  ✓ test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
+  ✓ test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ test_web_playground::evaluate_reports_the_value_the_cli_prints
-  ✓ test_web_playground::the_pages_answer_is_taken_and_hinted
   ✓ test_web::test_fetch
   ✓ test_web::test_html_wasp
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
-  ✓ test_welcoming_ask::an_answer_is_remembered_so_the_user_is_not_asked_twice
+  ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
   ✓ test_welcoming_ask::an_educating_note_shows_until_acknowledged
+  ✓ test_welcoming_ask::an_old_answers_line_never_picks_a_reading
   ✓ test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error
   ✓ test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form
-  ✓ test_welcoming_ask::answers_persist_in_the_project_answers_file
   ✓ test_welcoming_ask::every_for_header_bound_minus_one_asks
   ✓ test_welcoming_ask::questions_quote_prefix_operators_as_written
   ✓ test_welcoming_ask::upto_asks_and_defaults_to_exclusive
@@ -1536,4 +1548,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1531 passed, 0 failed, 1531 total tested
+58 ignored, 1543 passed, 0 failed, 1543 total tested
