@@ -484,6 +484,8 @@ impl WasmGcEmitter {
 
 /// Runtime errors trap inside a function of that name; eval reports the name as an error value
 const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
+/// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
+const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
 
 /// The division in an index `n/2`, also behind the 0-based shift of `xs[n/2]` (`xs#(n/2 + 1)`)
 fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
@@ -497,7 +499,8 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 }
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
-const RUNTIME_ERROR_FIXES: [(&str, &str); 1] = [(INDEX_NOT_INTEGRAL, "fix: compute it with // (floor division) or `… as int`")];
+const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
+const RUNTIME_ERROR_FIXES: [(&str, &str); 2] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX)];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
 pub fn runtime_error_message(name: &str) -> String {
@@ -511,12 +514,12 @@ pub fn runtime_error_message(name: &str) -> String {
 /// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
 
-pub const RUNTIME_ERRORS: [&str; 22] = [
+pub const RUNTIME_ERRORS: [&str; 23] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character",
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -680,6 +683,7 @@ impl WasmGcEmitter {
 		let nullable_node_ref = Ref(self.node_ref(true));
 		self.runtime_function(crate::analyzer::ZERO_FILL_CALL, vec![ValType::I64, node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
 			let rest = 2;
+			s.emit_require_whole(f, 0, COUNT_NOT_INTEGRAL);
 			Self::emit_list(f, &[
 				I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
@@ -722,14 +726,19 @@ impl WasmGcEmitter {
 	/// An index held in a variable (`m = n/2; xs[m]`, `xs[0:m]`) traps at run time when the Int in i64 local `index` is a
 	/// ratio, as `xs[n/2]` does: a value outside the fixnum range is a handle into the number heap (big_int.rs)
 	pub(super) fn emit_require_integral(&self, func: &mut Function, index: u32) {
+		self.emit_require_whole(func, index, INDEX_NOT_INTEGRAL);
+	}
+
+	/// Trap with `error` when the Int in i64 local `local` is a ratio
+	fn emit_require_whole(&self, func: &mut Function, local: u32, error: &'static str) {
 		if !self.int_runtime() {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
 		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
-		Self::emit_list(func, &[Instruction::LocalGet(index), Instruction::I64Const(fixnum_offset), Instruction::I64Add, Instruction::I64Const(0), Instruction::I64LtS, Instruction::If(BlockType::Empty)]);
-		self.emit_heap_get(func, index);
+		Self::emit_list(func, &[Instruction::LocalGet(local), Instruction::I64Const(fixnum_offset), Instruction::I64Add, Instruction::I64Const(0), Instruction::I64LtS, Instruction::If(BlockType::Empty)]);
+		self.emit_heap_get(func, local);
 		func.instruction(&Instruction::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
-		self.emit_fail_if(func, INDEX_NOT_INTEGRAL);
+		self.emit_fail_if(func, error);
 		func.instruction(&Instruction::End);
 	}
 
