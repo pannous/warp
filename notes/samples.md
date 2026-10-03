@@ -33,7 +33,16 @@ comments, C-style `real f(real x) {…}` definitions and `if (c) statement`.
 - `tau`/`τ`, `pi` are constants: a variable cannot be named so.
 - `real` is the exact real type; use `float` for IEEE arithmetic.
 
+Branch samples-2 / implicit-libm (warp-d2): a character variable compares by code point (`c >= '0'`), words
+`is_digit` `is_alpha` `is_alphanumeric`, method syntax for builtins (`x.round()`, `x.floor()`, `x.sin()`; user
+functions since 3da746b), `x="5"; x as int` is 5, and libm called without import links libm (exp/sin/… compiled to
+their argument at run time before).
+
 ## Still failing (2026-10-03 night)
+Split 2026-10-03: sample fixer (branch samples) takes async … mandelbrot; warp-d2 takes modules … webgpu.
+neural_net next blockers: `Matrix(r, c, fn)`, `Array(n, fn)`, `m[i, j]`, `round(x, 3)` (todo.md), plus `global` for
+the weights (sample side). calculator / json_parser now pass the character tests and stop at nested functions sharing
+`pos` and dynamic objects.
 async, calculator, circle, control_flow, data_structures, errors, functions, html, html_dsl, json_parser, mandelbrot,
 modules, natural, netbase, neural_net, particles, polymorphism (needs parameter overloading, todo.md), sample,
 test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).

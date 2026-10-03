@@ -22,3 +22,4 @@ mod test_units_compare;
 mod test_units_followup;
 mod test_zero_fill;
 mod test_float_zero_and_compound;
+mod test_implicit_libm;

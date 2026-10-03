@@ -3311,8 +3311,37 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 	}
 }
 
-/// Extract FFI imports from "import X from Y" and "use Y" statements
+/// Extract FFI imports from "import X from Y" and "use Y" statements, and the libm functions called without one
 pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
+	extract_declared_ffi_imports(ctx, node);
+	add_implicit_libm_imports(ctx, node);
+}
+
+/// libm functions the emitter does not implement itself (rounding and √ are builtins): a call of one the program neither
+/// imports nor defines links it from libm, as `import f from 'm'` would; without that it compiled to its argument
+fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
+	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
+	let implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
+	let mut called = HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::List(items, bracket, separator) = part {
+			if let Some(name) = call_name(items, bracket, separator).filter(|name| implicit.contains(name)) {
+				called.insert(name.to_string());
+			}
+		}
+	});
+	called.retain(|name| !ctx.ffi_imports.contains_key(name));
+	if called.is_empty() {
+		return;
+	}
+	let mut defined = Context::new();
+	extract_user_functions(&mut defined, node);
+	for name in called.iter().filter(|name| !defined.user_functions.contains_key(*name)) {
+		add_ffi_import(ctx, name, "m");
+	}
+}
+
+fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
 		Node::List(items, _, _) => {
@@ -3358,7 +3387,7 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 				}
 			}
 			for item in items {
-				extract_ffi_imports(ctx, item);
+				extract_declared_ffi_imports(ctx, item);
 			}
 		}
 		Node::Key(ref key, _, ref value) => {
@@ -3372,11 +3401,11 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 					}
 				}
 			}
-			extract_ffi_imports(ctx, key);
-			extract_ffi_imports(ctx, value);
+			extract_declared_ffi_imports(ctx, key);
+			extract_declared_ffi_imports(ctx, value);
 		}
 		Node::Meta { ref node, .. } => {
-			extract_ffi_imports(ctx, node);
+			extract_declared_ffi_imports(ctx, node);
 		}
 		_ => {}
 	}
