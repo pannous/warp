@@ -21,3 +21,4 @@
 - `string x = "a"; x` fails: "type mismatch: x is declared string, cannot assign codepoint 'a'" (a one-character double-quoted text parses as a codepoint). (impl-types 2026-10-03)
 - `f int x := x+1; f(2)` (spaced typed signature) → undefined variable: f, and `f(int x, float y) := x+y; f(2, 0.5)` → undefined variable: x; both before D5 work. (impl-types 2026-10-03)
 - Workers' copies share one warp artifact in the shared target dir (cdylib writes an unhashed libwarp.rlib; the root package metadata ignores its path): a copy builds with `version = "0.1.1-<name>"` and `crate-type = ["rlib"]` in its uncommitted Cargo.toml. The warp binary itself (debug/warp) is still one file for all copies: copy it right after building. (impl-types 2026-10-03)
+- `class person{name! email?}` (space-separated, `!` field) parses as the one field `name: email?`; with `;` it works. (impl-types 2026-10-03)
