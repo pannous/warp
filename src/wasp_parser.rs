@@ -2165,7 +2165,9 @@ impl WaspParser {
 	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
-		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !(is_evaluable || mutated.is_some()) {
+		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
+		let glued_suffix = !self.prev_char().is_whitespace() && matches!(self.peek_char(1), ' ' | '\t');
+		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();

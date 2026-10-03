@@ -23,3 +23,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `string x = "a"`, `x:string = "a"`, `text x = "a"` and a later `x = "c"`: a one-character text (parsed as a codepoint)
   assigned to a declared text is that text (analyzer.rs assignment_mismatch + lower_declarations_among).
   tests/test_declared_text_one_character.rs.
+
+## 2026-10-03 fix-spaced-required
+- `class person{name! email?}`: a `!` glued to its name and followed by a space is the suffix (required field / evaluate
+  / mutate mark) even when an operand follows (wasp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
+  tests/test_spaced_required_fields.rs.
+- `while i<n {i++}` already works on main (todo marked DONE).

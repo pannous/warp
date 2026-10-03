@@ -161,6 +161,7 @@ mod test_shift_operators;
 mod test_signed_operand_list;
 mod test_size_count;
 mod test_size_property_word;
+mod test_spaced_required_fields;
 mod test_statement_sequence;
 mod test_statement_terminators;
 mod test_surface_syntax;
