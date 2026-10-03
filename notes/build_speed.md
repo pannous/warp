@@ -24,3 +24,9 @@ the supervisor runs the one full suite before merging.
 5. Features: the three runtime backends (wasmtime, wasmer, wasmedge) are the heavy deps; builds and agents that only
    need wasmtime should not pass `--all-features`.
 Not useful here: splitting crates is a large refactor for unclear gain; debug-info tuning is already done.
+
+## Pitfall: copies share one warp artifact (2026-10-03)
+Every copy of warp that builds into the shared target dir (worktrees, `git archive` exports, probes/*_export) maps to the
+same warp lib artifact: cargo's metadata hash ignores the path of a root package and the fingerprint compares mtimes of
+relative paths. A copy can report "Fresh warp" and run another checkout's code, both ways. Fix: give each copy a unique
+pre-release version in its Cargo.toml (`0.1.1-<topic>`, never committed); dependencies stay shared.
