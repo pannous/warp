@@ -57,7 +57,8 @@ fn test_closures_returning_text() {
 
 #[test]
 fn test_not_a_function_stays_loud() {
-	fails_with("map [1 2 3] 5", "functions are not first-class values yet");
+	fails_with("map [1 2 3] 5", "map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)");
+	fails_with("apply(f, x):=f(x); apply(5, 2)", "apply needs a function for parameter f, got 5 (an Int)");
 }
 
 #[test]

@@ -49,7 +49,7 @@ fn test_each_runs_the_body_per_item_and_is_the_last_value() {
 #[test]
 fn test_a_wrong_function_is_an_error() {
 	fails_with("reduce [1 2 3] {it+1}", "reduce takes a function of two arguments");
-	fails_with("filter [1 2 3] 5", "functions are not first-class values yet");
+	fails_with("filter [1 2 3] 5", "filter needs a function, got 5");
 	fails_with("fold [1 2 3] 0 (a)->a", "fold takes a function of two arguments");
 }
 
