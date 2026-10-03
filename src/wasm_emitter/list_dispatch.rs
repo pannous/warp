@@ -570,7 +570,10 @@ impl WasmGcEmitter {
 		}
 		// filled(count, zero) -> list: count times zero, empty when count is not positive
 		if self.should_emit_function(runtime.filled) {
-			self.runtime_function(runtime.filled, vec![ValType::I64, value], vec![list_ref], vec![ValType::I32], |_, f| {
+			self.runtime_function(runtime.filled, vec![ValType::I64, value], vec![list_ref], vec![ValType::I32], |s, f| {
+				// more elements than an array index holds: out of memory, never a count wrapped to i32
+				Self::emit_list(f, &[I::LocalGet(0), I::I64Const(i32::MAX as i64), I::I64GtS]);
+				s.emit_fail_if(f, "out_of_memory");
 				Self::emit_list(f, &[
 					I::LocalGet(0), I::I64Const(0), I::LocalGet(0), I::I64Const(0), I::I64GtS, I::Select, I::I32WrapI64, I::LocalTee(2),
 					I::LocalGet(1), I::LocalGet(2), I::ArrayNew(array), I::StructNew(list),
@@ -627,6 +630,10 @@ impl WasmGcEmitter {
 			let nullable_node = Ref(self.node_ref(true));
 			self.runtime_function(runtime.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
 				let (position, rest) = (1, 2);
+				// a typed list variable read before its first assignment is ø, as any unassigned list variable
+				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
+				s.call(f, "new_empty");
+				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &[
 					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
 					I::LocalGet(0), length.clone(), I::LocalSet(position),
