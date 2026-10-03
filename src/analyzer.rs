@@ -2839,6 +2839,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
 				}
+				if fn_name == crate::wasm_emitter::text_builtins::TEXT_FORM {
+					ctx.required_functions.insert("list_join");
+				}
 				if fn_name == crate::library_words::FIELD_WITH {
 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
 				}

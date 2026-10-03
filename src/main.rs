@@ -29,6 +29,7 @@ pub mod function_equality;
 pub mod effects;
 pub mod diagnostic;
 pub mod injection;
+pub mod interpolation;
 pub mod time;
 pub mod real;
 pub mod units;

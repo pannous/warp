@@ -2357,7 +2357,11 @@ impl WaspParser {
 		let (quote_line, quote_column) = self.get_position();
 		self.advance(); // skip opening quote
 
+		let interpolates = quote == '"' && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
 		let mut s = String::new();
+		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
+		let mut template = String::new();
+		let mut is_template = false;
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
@@ -2365,6 +2369,9 @@ impl WaspParser {
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
+				if is_template {
+					return crate::interpolation::template_text(&template);
+				}
 				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
 				if s.chars().count() > 1 {
 					set_hint_position(quote_line, quote_column);
@@ -2374,27 +2381,116 @@ impl WaspParser {
 				let mut chars = s.chars();
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
+						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
+							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); only a single-quoted character converts to its code point");
+							return Diagnostic { message, line: quote_line, column: quote_column, fix: Some(format!("'{c}' as {number_type}")) }.into_error();
+						}
 						return Node::codepoint(c);
 					}
 				}
 				return Node::text(&s);
 			}
-			if ch == '\\' {
-				self.advance();
-				match self.current_char() {
-					'n' => s.push('\n'),
-					't' => s.push('\t'),
-					'r' => s.push('\r'),
-					c => s.push(c),
+			let hole = match ch {
+				'$' if interpolates => self.parse_dollar_hole(),
+				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
+				_ => Ok(None),
+			};
+			match hole {
+				Err(message) => return error(&message),
+				Ok(Some(expression)) => {
+					template.push_str(&format!("${{{expression}}}"));
+					is_template = true;
+					continue;
 				}
+				Ok(None) => {}
+			}
+			let literal = if ch == '\\' {
 				self.advance();
+				let escaped = self.current_char();
+				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
+				match escaped {
+					'n' => '\n',
+					't' => '\t',
+					'r' => '\r',
+					c => c,
+				}
 			} else {
-				s.push(ch);
-				self.advance();
+				ch
+			};
+			self.advance();
+			s.push(literal);
+			match literal {
+				'$' => template.push_str("$$"),
+				c => template.push(c),
 			}
 		}
 	}
 
+	/// The number type of a following `as int` / `as float` …
+	fn number_cast_follows(&self) -> Option<String> {
+		let rest: String = self.chars[self.pos..].iter().take(32).collect();
+		let words: Vec<&str> = rest.split_whitespace().take(2).collect();
+		let number_type = words.get(1)?.trim_end_matches(|c: char| !is_identifier_char(c));
+		use crate::type_kinds::Kind::{Float, Int};
+		let is_number = matches!(crate::analyzer::builtin_type_kind(number_type), Some(Int | Float)) && !number_type.starts_with("bool");
+		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
+	}
+
+	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
+		let (line, column) = self.get_position();
+		let next = self.peek_char(1);
+		let expression = if next == '{' {
+			self.advance_by(2);
+			let expression = self.text_until_closing('{', '}')?;
+			set_hint_position(line, column);
+			norm::interpolation(&format!("${{{expression}}}"), &expression);
+			expression
+		} else if next.is_alphabetic() || next == '_' {
+			self.advance();
+			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+			self.advance_by(name.chars().count());
+			set_hint_position(line, column);
+			norm::interpolation(&format!("${name}"), &name);
+			name
+		} else {
+			return Ok(None);
+		};
+		Ok(Some(expression))
+	}
+
+	/// `\(expr)` inside interpolated text, the canonical hole: its expression
+	fn parse_swift_hole(&mut self) -> Result<String, String> {
+		self.advance_by(2);
+		self.text_until_closing('(', ')')
+	}
+
+	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket
+	fn text_until_closing(&mut self, open: char, close: char) -> Result<String, String> {
+		let start = self.pos;
+		let mut depth = 1;
+		let mut quote: Option<char> = None;
+		loop {
+			let ch = self.current_char();
+			match (ch, quote) {
+				('\0', _) => return Err(format!("unterminated interpolation hole: missing `{close}`")),
+				('\\', Some(_)) => self.advance(),
+				(c, Some(q)) if c == q => quote = None,
+				('"' | '\'', None) => quote = Some(ch),
+				(c, None) if c == open => depth += 1,
+				(c, None) if c == close => {
+					depth -= 1;
+					if depth == 0 {
+						let expression: String = self.chars[start..self.pos].iter().collect();
+						self.advance();
+						return if expression.trim().is_empty() { Err("empty interpolation hole".into()) } else { Ok(expression) };
+					}
+				}
+				_ => {}
+			}
+			self.advance();
+		}
+	}
 	fn parse_number(&mut self) -> Node {
 		let start = self.pos;
 		let number = self.parse_number_value();
