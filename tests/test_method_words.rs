@@ -5,13 +5,13 @@ use crate::common::fails_with;
 
 /// The printed result with double quotes, whichever quote the printer uses
 fn printed(code: &str) -> String {
-	eval(code).serialize().replace('\'', "'")
+	eval(code).serialize().replace('\'', "\"")
 }
 
 #[test]
 fn test_unknown_method_word_is_an_error() {
-	fails_with("x='hello'; x.shout", "undefined function: shout");
-	fails_with("x='hello'; x.shout()", "undefined function: shout");
+	fails_with("x=\"hello\"; x.shout", "undefined function: shout");
+	fails_with("x=\"hello\"; x.shout()", "undefined function: shout");
 	fails_with("x=[1 2 3]; x.frobnicate", "undefined function: frobnicate");
 }
 
@@ -37,8 +37,8 @@ fn test_first_and_last() {
 	is!("x=[1 2 3]; x.last", 3);
 	is!("x=[4 5 6]; first(x)", 4);
 	is!("x=[4 5 6]; last(x)", 6);
-	is!("x='hello'; x.first", "h");
-	is!("x='hello'; x.last", "o");
+	is!("x=\"hello\"; x.first", "h");
+	is!("x=\"hello\"; x.last", "o");
 }
 
 #[test]
@@ -65,46 +65,42 @@ fn test_sort() {
 }
 
 #[test]
-#[ignore = "next"] // single-quoted output expected (the user's WIP); the printer writes double quotes
 fn test_upper_and_lower() {
 	for word in ["upper", "uppercase"] {
-		assert_eq!(printed(&format!("x='hello'; x.{word}")), "'HELLO'");
-		assert_eq!(printed(&format!("x='hello'; x.{word}()")), "'HELLO'");
-		assert_eq!(printed(&format!("x='hello'; {word} x")), "'HELLO'");
-		assert_eq!(printed(&format!("{word}('hello')")), "'HELLO'");
+		assert_eq!(printed(&format!("x=\"hello\"; x.{word}")), "\"HELLO\"");
+		assert_eq!(printed(&format!("x=\"hello\"; x.{word}()")), "\"HELLO\"");
+		assert_eq!(printed(&format!("x=\"hello\"; {word} x")), "\"HELLO\"");
+		assert_eq!(printed(&format!("{word}(\"hello\")")), "\"HELLO\"");
 	}
 	for word in ["lower", "lowercase"] {
-		assert_eq!(printed(&format!("x='HeLLo'; x.{word}")), "'hello'");
-		assert_eq!(printed(&format!("{word} 'HeLLo'")), "'hello'");
+		assert_eq!(printed(&format!("x=\"HeLLo\"; x.{word}")), "\"hello\"");
+		assert_eq!(printed(&format!("{word} \"HeLLo\"")), "\"hello\"");
 	}
-	assert_eq!(printed("'hello'.upper"), "'HELLO'");
+	assert_eq!(printed("\"hello\".upper"), "\"HELLO\"");
 }
 
 #[test]
-#[ignore = "next"] // single-quoted output expected (the user's WIP); the printer writes double quotes
 fn test_split() {
-	assert_eq!(printed("'a,b'.split(',')"), "['a' 'b']");
-	assert_eq!(printed("x='a,b,c'; x.split(',')"), "['a' 'b' 'c']");
-	assert_eq!(printed("split('a b', ' ')"), "['a' 'b']");
+	assert_eq!(printed("\"a,b\".split(\",\")"), "[\"a\" \"b\"]");
+	assert_eq!(printed("x=\"a,b,c\"; x.split(\",\")"), "[\"a\" \"b\" \"c\"]");
+	assert_eq!(printed("split(\"a b\", \" \")"), "[\"a\" \"b\"]");
 }
 
 #[test]
-#[ignore = "next"] // single-quoted output expected (the user's WIP); the printer writes double quotes
 fn test_join() {
-	assert_eq!(printed("join [1 2] ','"), "'1,2'");
-	assert_eq!(printed("x=['a' 'b']; x.join('-')"), "'a-b'");
-	assert_eq!(printed("join([1 2 3], '')"), "'123'");
+	assert_eq!(printed("join [1 2] \",\""), "\"1,2\"");
+	assert_eq!(printed("x=[\"a\" \"b\"]; x.join(\"-\")"), "\"a-b\"");
+	assert_eq!(printed("join([1 2 3], \"\")"), "\"123\"");
 }
 
 #[test]
-#[ignore = "next"] // single-quoted output expected (the user's WIP); the printer writes double quotes
 fn test_join_and_split_edge_cases() {
-	assert_eq!(printed("join([10, -5, 300], ' ')"), "'10 -5 300'");
-	assert_eq!(printed("join(['x', 7, 'yz'], '')"), "'x7yz'");
-	assert_eq!(printed("join ['ab' 'cd'] ', '"), "'ab, cd'");
-	assert_eq!(printed("'a--b--c'.split('--')"), "['a' 'b' 'c']");
-	assert_eq!(printed("'a,,b'.split(',')"), "['a' '' 'b']");
-	assert_eq!(printed("'abc'.split(',')"), "['abc']");
+	assert_eq!(printed("join([10, -5, 300], \" \")"), "\"10 -5 300\"");
+	assert_eq!(printed("join([\"x\", 7, \"yz\"], \"\")"), "\"x7yz\"");
+	assert_eq!(printed("join [\"ab\" \"cd\"] \", \""), "\"ab, cd\"");
+	assert_eq!(printed("\"a--b--c\".split(\"--\")"), "[\"a\" \"b\" \"c\"]");
+	assert_eq!(printed("\"a,,b\".split(\",\")"), "[\"a\" \"\" \"b\"]");
+	assert_eq!(printed("\"abc\".split(\",\")"), "[\"abc\"]");
 }
 
 #[test]
@@ -113,7 +109,7 @@ fn test_library_words_refuse_what_they_cannot_do() {
 	assert_eq!(printed("upper(\"é\")"), "\"É\"");
 	fails_with("sort [1 \"a\"]", "not comparable"); // #26: texts sort, mixed kinds don't
 	fails_with("reverse 5", "not a list");
-	fails_with("join([[1], [2]], ',')", "not a joinable item");
+	fails_with("join([[1], [2]], \",\")", "not a joinable item");
 	fails_with("first(1, 2)", "first takes 1 argument, got 2");
 	fails_with("x=[1 2]; x.first(3)", "first takes 1 argument, got 2");
 	fails_with("join([1 2])", "join takes 2 arguments, got 1");
@@ -128,7 +124,6 @@ fn test_replace() {
 }
 
 #[test]
-#[ignore = "next"] // single-quoted output expected (the user's WIP); the printer writes double quotes
 fn test_chars_of_text_literal_in_assignment() {
 	assert_eq!(printed("cs=\"abc\".chars(); cs#2"), "\"b\"");
 }
