@@ -136,3 +136,6 @@ fn test_raytracer() { is!("samples/raytracer.wasp", 8230); }
 
 #[test] // height 4, nine values
 fn test_binary_tree() { is!("samples/binary_tree.wasp", 409); }
+
+#[test] // nested block comments, doc comments, factorial(5)
+fn test_comments() { is!("samples/comments.wasp", 120); }
