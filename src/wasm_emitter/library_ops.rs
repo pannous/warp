@@ -1,15 +1,13 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::type_kinds::Kind;
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::type_kinds::{Kind, KIND_MASK};
+use crate::wasm_emitter::{WasmGcEmitter, BYTE};
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
-const KIND_MASK: i64 = 0xFF;
 /// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;
@@ -41,13 +39,16 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
-const NODE_ORDER: &str = "node_order";
+pub const NODE_ORDER: &str = "node_order";
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
 		self.emit_text_reverse(); // list_reverse hands a text to it
 		self.emit_list_reverse();
 		self.emit_text_chars(); // and it ends with list_reverse
+		if self.should_emit_function(NODE_ORDER) {
+			self.emit_node_order();
+		}
 		self.emit_list_sort();
 		self.emit_text_case("text_upper", true);
 		self.emit_text_case("text_lower", false);
@@ -131,8 +132,10 @@ impl WasmGcEmitter {
 	}
 
 	/// node_order(a, b): negative, 0 or positive as a is before, with or after b. Numbers by value (as f64 when either is a
-	/// float), texts and characters by code points (the order of their UTF-8 bytes); anything else is not comparable.
+	/// float), texts and characters by code points (the order of their UTF-8 bytes), instances by the Comparable witness of
+	/// their type (witness.rs); anything else is not comparable.
 	fn emit_node_order(&mut self) {
+		let witness = self.compare_witness_table();
 		let node_ref = Ref(self.node_ref(false));
 		let float_box = self.type_manager.f64_box_type;
 		let exact = self.int_runtime();
@@ -170,6 +173,9 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(difference), I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
 			Self::emit_list(f, &[I::LocalGet(first_length), I::LocalGet(second_length), I::I32Sub, I::Return, I::End]);
+			if let Some(table) = witness {
+				s.emit_instance_order(f, table, kinds, first, second);
+			}
 			// numbers only from here
 			for kind in kinds {
 				is_kind(f, kind, Kind::Int);
@@ -212,7 +218,6 @@ impl WasmGcEmitter {
 		if !self.should_emit_function("list_sort") {
 			return;
 		}
-		self.emit_node_order();
 		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();

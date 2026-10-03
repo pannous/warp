@@ -3,6 +3,9 @@ use wasm_encoder::ValType::Ref;
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
 
+/// Mask selecting the Kind tag from a node's `kind` field (lower 8 bits; the rest is op/bracket info)
+pub const KIND_MASK: i64 = 0xFF;
+
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]
@@ -25,6 +28,7 @@ pub enum Kind {
 	Pointer = 13,  // FFI pointer (i64 handle)
 	Int32 = 14,    // explicit i32 (for FFI)
 	Float32 = 15,  // explicit f32 (for FFI)
+	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 }
 
 impl Kind {
@@ -96,6 +100,7 @@ impl std::fmt::Display for Kind {
 			Kind::Error => write!(f, "error"),
 			Kind::TypeDef => write!(f, "typedef"),
 			Kind::Pointer => write!(f, "pointer"),
+			Kind::Function => write!(f, "function"),
 		}
 	}
 }

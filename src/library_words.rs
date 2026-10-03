@@ -91,7 +91,7 @@ const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
-const LIST_RESULT_WORDS: [&str; 4] = ["chars", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
+const LIST_RESULT_WORDS: [&str; 6] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
@@ -126,7 +126,8 @@ pub fn lower(node: Node) -> Node {
 	let mut assigned_objects = HashMap::new();
 	collect_assigned_objects(&node, &mut assigned_objects);
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
-	Lowering { context, shadowed, objects, temporaries: Cell::new(0) }.expand(node)
+	let instances = crate::traits::InstanceTypes::of(&node);
+	Lowering { context, shadowed, objects, instances, temporaries: Cell::new(0) }.expand(node)
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
@@ -216,6 +217,8 @@ struct Lowering {
 	context: Context,
 	shadowed: HashSet<String>,
 	objects: HashMap<String, Node>,
+	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
+	instances: crate::traits::InstanceTypes,
 	temporaries: Cell<usize>,
 }
 
@@ -320,7 +323,8 @@ impl Lowering {
 			}
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
-		let is_prefix = *bracket == Bracket::None && *separator == Separator::Space && items.len() > 1;
+		// `(sort xs)` is `sort xs` in parentheses
+		let is_prefix = matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
 		if !is_call && !is_prefix {
 			return None;
 		}
@@ -434,6 +438,10 @@ impl Lowering {
 
 	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
 	fn object_literal(&self, node: &Node) -> Option<Node> {
+		self.written_object(node).or_else(|| self.instances.fields_template(node))
+	}
+
+	fn written_object(&self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {

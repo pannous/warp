@@ -166,6 +166,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
 				}
+				if name == crate::closures::CLOSURE_NEW {
+					return Kind::Function;
+				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
 				}
@@ -204,8 +207,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(name) = items[0].drop_meta() {
-					if name == crate::library_words::SLICE {
-						// a slice of a text is a text, of anything else a list
+					if name == crate::library_words::SLICE || name == "reverse" {
+						// a slice or reversal of a text is a text, of anything else a list
 						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
 					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
@@ -326,9 +329,10 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
 		REAL_WORD => Some(Kind::Float),
-		word => match type_word_kind(word)? {
-			Kind::Codepoint => Some(Kind::Text),
-			kind => Some(kind),
+		word => match type_word_kind(word) {
+			Some(Kind::Codepoint) => Some(Kind::Text),
+			Some(kind) => Some(kind),
+			None => Some(Kind::Empty), // instances, keys, symbols: held as Nodes
 		},
 	}
 }
@@ -1081,6 +1085,7 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
+		"function" | "closure" => Kind::Function,
 		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
 		_ => return None,
 	})
@@ -1123,6 +1128,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
 			}
 		}
+		// `sort(xs)`, `reverse(xs)`: the same elements
+		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
+			list_type_name(&items[1], scope)
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -1163,6 +1172,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// The type name of a map literal, `map of <value type>` when its values share one
 const MAP_TYPE: &str = "map";
+/// Library words whose list result has the elements of their list argument
+const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
@@ -2257,6 +2268,9 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
 /// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
+	if crate::type_constructor::instance_parts_marked(type_node) {
+		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
+	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
@@ -2297,8 +2311,12 @@ fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
+	let mut called: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
+		if let Some(name) = crate::closures::called_closure(node) {
+			called.insert(name.to_string());
+		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
 				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
@@ -2321,7 +2339,13 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		indexed.insert(source.clone());
 	}
 	params.into_iter().map(|param| {
-		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
+		let used_as = if called.contains(&param.name) {
+			Some(Kind::Function)
+		} else if indexed.contains(&param.name) {
+			Some(Kind::List)
+		} else {
+			None
+		};
 		Param { used_as, ..param }
 	}).collect()
 }
@@ -2347,6 +2371,11 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 		for function in ctx.user_functions.values() {
 			function.body.visit(&mut |node| {
 				let Node::List(items, _, _) = node else { return };
+				// `closure_new(target, captured…)` passes the captured values to the target's first parameters
+				let items = match crate::closures::as_closure_new(node) {
+					Some(_) => &items[1..],
+					None => &items[..],
+				};
 				let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) else { return };
 				let Some(called) = ctx.user_functions.get(callee) else { return };
 				for (argument, called_param) in items[1..].iter().zip(&called.params) {
@@ -2373,8 +2402,11 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
+	crate::closures::register_closure_calls(ctx, node);
 	infer_parameters_from_calls(ctx, node);
 	infer_forwarded_parameters(ctx);
+	infer_closure_parameters(ctx, node);
+	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
 	refine_return_kinds(ctx);
 }
 
@@ -2431,6 +2463,48 @@ fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound:
 	}
 }
 
+/// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
+/// parameter of the enclosing function, a literal variable), its parameters the kinds of the literal arguments of the closure
+/// calls of its arity
+fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
+	let variable_kinds = literal_variable_kinds(program, ctx);
+	loop {
+		let mut inferred: Vec<(String, usize, Kind)> = vec![];
+		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
+			let params: HashMap<String, Kind> = function.params.iter().map(|param| (param.name.clone(), param_kind(param))).collect();
+			(function.body.as_ref(), params)
+		}));
+		for (body, params) in scopes {
+			body.visit(&mut |node| {
+				let value_kind = |value: &Node| match value.drop_meta() {
+					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					_ => argument_literal_kind(value),
+				};
+				if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+					inferred.extend(captured.iter().enumerate().filter_map(|(index, value)| Some((target.to_string(), index, value_kind(value)?))));
+				}
+				let Node::List(items, _, _) = node else { return };
+				let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+				let Some(arity) = crate::closures::closure_call_arity(name) else { return };
+				for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)) {
+					inferred.extend(items[2..].iter().enumerate().filter_map(|(index, argument)| Some((target.clone(), captured + index, argument_literal_kind(argument)?))));
+				}
+			});
+		}
+		let mut changed = false;
+		for (target, index, kind) in inferred {
+			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
+			if kind != Kind::Int && param.annotation.is_none() && param.default.is_none() && param.used_as.is_none() {
+				param.used_as = Some(kind);
+				changed = true;
+			}
+		}
+		if !changed {
+			return;
+		}
+	}
+}
+
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
 	let name = format!("{kind:?}");
@@ -2443,6 +2517,7 @@ fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
 		Node::List(entries, Bracket::Curly, _) if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => Some(Kind::List), // a map
 		_ => None,
 	}
@@ -2511,7 +2586,11 @@ fn refine_return_kinds(ctx: &mut Context) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
-			.map(|function| (function.name.clone(), infer_function_return_kind(&function.params, &function.body, &function_kinds)))
+			.map(|function| {
+				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds));
+				(function.name.clone(), kind)
+			})
 			.collect();
 		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
 		function_kinds.extend(inferred);

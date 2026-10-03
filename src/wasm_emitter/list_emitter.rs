@@ -288,8 +288,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
 			// count, length, size: elements, or graphemes of a text
-			self.emit_node_instructions(func, arg);
-			self.emit_call(func, counter);
+			self.emit_list_count(func, arg, counter);
 			self.emit_call(func, "new_int");
 			return true;
 		}
@@ -449,7 +448,9 @@ impl WasmGcEmitter {
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
 	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
-		if self.is_float_assignment(item) {
+		if let Some((name, value)) = self.typed_list_store(item) {
+			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
+		} else if self.is_float_assignment(item) {
 			self.emit_float_value(func, item);
 		} else if self.is_ref_update(item) || self.is_output_call(item) {
 			self.emit_node_instructions(func, item);

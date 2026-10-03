@@ -45,9 +45,9 @@ const ITERATIONS: [Iteration; 5] = [
 	},
 ];
 
-struct Lambda {
-	params: Vec<String>,
-	body: Node,
+pub(crate) struct Lambda {
+	pub(crate) params: Vec<String>,
+	pub(crate) body: Node,
 }
 
 /// Lower the lambdas and iteration words whose function is known; an iteration word over a parameter is left for the
@@ -129,6 +129,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	match left.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
+		Node::Empty => Some(vec![]), // `() => body`
 		Node::List(items, _, _) => items
 			.iter()
 			.map(|item| match item.drop_meta() {
@@ -141,7 +142,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 }
 
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)`
-fn arrow_lambda(node: &Node) -> Option<Lambda> {
+pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
 		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
 			let params = parameter_names(left)?;
@@ -366,6 +367,8 @@ impl Lowering {
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => Ok(call(name, arguments.to_vec())),
 				Node::Symbol(_) if !self.strict => Err(None),
+				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one
+				_ if crate::closures::may_be_function_value(function) => Ok(crate::closures::closure_call(function.clone(), arguments.to_vec())),
 				_ => Err(Some(Diagnostic::at(function, NOT_FIRST_CLASS).into_error())),
 			},
 		}

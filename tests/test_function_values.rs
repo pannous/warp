@@ -2,7 +2,6 @@
 //! nothing can be passed where a function is expected; the function it is passed to is specialised for it
 use warp::wasm_emitter::eval;
 use warp::*;
-use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()
@@ -55,8 +54,8 @@ fn test_a_lambda_that_captures_nothing_is_a_value() {
 }
 
 #[test]
-fn test_a_lambda_that_captures_stays_an_error() {
-	fails_with("k=3; apply(f, x):=f(x); apply(y=>y+k, 2)", "functions are not first-class values yet");
+fn test_a_lambda_that_captures_is_passed_as_a_closure() {
+	is!("k=3; apply(f, x):=f(x); apply(y=>y+k, 2)", 5);
 }
 
 #[test]
