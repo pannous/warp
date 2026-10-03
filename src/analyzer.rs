@@ -71,6 +71,9 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::Key(left, Op::Colon, _) => matches!(left.drop_meta(), Node::Symbol(s) if s == "global"),
 		// a lowered `for` loop: `i=a; while …`
 		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => true,
+		// a group that runs statements, `(y=1; y)`, or prints: in a block it runs, it is not an item
+		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
+		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return"].contains(&s.as_str()))
 		}
@@ -1944,6 +1947,7 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 			let appended = Node::Key(list.clone(), Op::Add, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)));
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
+		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if op.suffix_exponent().is_some() => {
 			let exponent = op.suffix_exponent().expect("guarded");
@@ -2021,6 +2025,8 @@ fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
+const POP_METHOD: &str = "pop";
+const POP_TEMPORARY: &str = "pop_tmp";
 const INSERT_METHOD: &str = "insert";
 
 /// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
@@ -2041,8 +2047,9 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')).then_some(name)
 }
 
-pub fn is_append_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name)
+/// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
+pub fn is_list_mutating_method(name: &str) -> bool {
+	APPEND_METHODS.contains(&name) || name == POP_METHOD
 }
 
 /// The element of `x.add(v)` when x is a variable
@@ -2050,6 +2057,16 @@ fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 	let Node::Symbol(_) = list.drop_meta() else { return None };
 	match call.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) => Some(&items[1]),
+		_ => None,
+	}
+}
+
+/// `xs.pop()` when xs is a variable: the last item, removed from xs (Python's list.pop())
+fn popped_list(list: &Node, call: &Node) -> Option<Node> {
+	let Node::Symbol(name) = list.drop_meta() else { return None };
+	match call.drop_meta() {
+		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => Some(crate::wasp_parser::parse(&format!(
+			"({POP_TEMPORARY} = {name}#count({name}); {name} = slice({name}, 0, count({name})-1); {POP_TEMPORARY})"))),
 		_ => None,
 	}
 }

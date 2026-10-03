@@ -45,7 +45,7 @@ The supervisor should remove the DONE elements after a while.
 - `int('5')` → "not an int" ('5' as int is 53 by design; int() of a character should say so or take the digit). An element of `s.chars()` has no compile-time kind, so `c as text` fails "no runtime text yet" (decision #35); `for c in s` works. (samples 2026-10-03)
 - DONE: `type(x)` inside a function body: "undefined variable: type" (works at main level). (samples 2026-10-03) (night 2026-10-04)
 - `h=(1,2); h.0` stays the data `(1 2).0`: tuple fields by number are not read (h#1 works). (samples 2026-10-03)
-- No `pop` word: `s.pop()` → "undefined function: pop". (samples 2026-10-03)
+- DONE: No `pop` word: `s.pop()` → "undefined function: pop". (samples 2026-10-03) (xs.pop() on a list variable: last item, removed; night 2026-10-04)
 - DONE libm without `import … from 'm'` is silently wrong at run time: `x=random(); sin(x)` → ø, `def f(x:float):=sin(x); f(0.5)` → 0.5 (the argument). Only constant `sin(0.5)` works (answered at compile time). With the import both work. Should link libm implicitly or fail loudly. (samples-2 2026-10-03)
 - DONE Since samples-2, get_int_value reads a character as its code point, so `int('5')` is 53 (like `'5' as int`), no longer "not an int". Taking the digit instead is open (Interviewer). (samples-2 2026-10-03)
 - DONE int of a character is its digit (user 2026-10-03: "obviously one of five is five"; tests/text/test_character_comparison.rs). A non-digit still disagrees: `'a' as int` / `int('a')` is 97 (pinned by test_text_casts and test_cast_bugs) while `c='a'; c as int` is "invalid number". (int-of-char 2026-10-03)
