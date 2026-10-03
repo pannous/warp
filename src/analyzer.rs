@@ -308,6 +308,13 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// An element: `xs#i`, `xs[i]`, `text#i`
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
+		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
+		Node::Key(indexed, Op::Hash, index) if crate::wasp_parser::subscript_key(index)
+			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
+			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
+			let Some(Node::Text(name)) = crate::wasp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
+			scope.function_kind(&field_kind_key(name)).expect("guarded")
+		}
 		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
 			let by_name = crate::wasp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
@@ -2340,6 +2347,29 @@ fn names_list_type(type_name: &str) -> bool {
 }
 
 /// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
+/// The key under which Scope::function_kinds holds the declared kind of a field (as tuples::element_key holds a
+/// tuple element's): `v.x` reads a float when every declared type with a field x declares it `float`
+pub fn field_kind_key(field: &str) -> String {
+	format!(".{field}")
+}
+
+/// The fields of the declared types whose declarations all agree on one builtin kind, keyed by field_kind_key
+pub fn declared_field_kinds(registry: &crate::type_kinds::TypeRegistry) -> HashMap<String, Kind> {
+	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
+	for field in registry.types().iter().flat_map(|type_def| &type_def.fields) {
+		let kind = type_word_kind(&field.type_name.to_lowercase());
+		kinds.entry(field_kind_key(&field.name)).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
+	}
+	kinds.into_iter().filter_map(|(key, kind)| Some((key, kind?))).collect()
+}
+
+/// The declared field kinds of a program
+fn program_field_kinds(program: &Node) -> HashMap<String, Kind> {
+	let mut registry = crate::type_kinds::TypeRegistry::new();
+	collect_all_types(&mut registry, program);
+	declared_field_kinds(&registry)
+}
+
 pub fn type_word_kind(type_name: &str) -> Option<Kind> {
 	match type_name {
 		"number" => Some(Kind::Int),
@@ -2464,7 +2494,69 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
-	refine_return_kinds(ctx, &declared_globals(node));
+	let globals = declared_globals(node);
+	ctx.field_kinds = program_field_kinds(node);
+	refine_return_kinds(ctx, &globals);
+	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
+	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
+	for _ in 0..parameter_count {
+		if !widen_float_parameters(ctx, node, &globals) {
+			break;
+		}
+		refine_return_kinds(ctx, &globals);
+	}
+}
+
+/// A parameter that some call passes a float takes floats: `mul(v, 1.0 / length(v))` with length returning a float.
+/// infer_parameters_from_calls knows only literal arguments; this pass runs once the return kinds are known.
+/// It only widens Int to Float. True when a parameter changed.
+fn widen_float_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
+	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	function_kinds.extend(ctx.field_kinds.clone());
+	let mut floats: HashSet<(String, usize)> = HashSet::new();
+	let mut main = Scope::with_function_kinds(function_kinds.clone());
+	collect_variables(program, &mut main);
+	collect_float_arguments(program, &main, ctx, &mut floats);
+	for function in ctx.user_functions.values() {
+		let scope = function_body_scope(&function.params, &function.body, &function_kinds, globals);
+		collect_float_arguments(&function.body, &scope, ctx, &mut floats);
+	}
+	let mut changed = false;
+	for (name, index) in floats {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
+		if param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::Int)) {
+			param.used_as = Some(Kind::Float);
+			changed = true;
+		}
+	}
+	changed
+}
+
+/// The (function, parameter index) pairs that a call in `node` passes a float, not looking into nested definitions
+fn collect_float_arguments(node: &Node, scope: &Scope, ctx: &Context, floats: &mut HashSet<(String, usize)>) {
+	if function_definition_body(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if let Some(function) = ctx.user_functions.get(name) {
+					for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
+						if infer_type(argument, scope) == Kind::Float {
+							floats.insert((name.clone(), index));
+						}
+					}
+				}
+			}
+			items.iter().for_each(|item| collect_float_arguments(item, scope, ctx, floats));
+		}
+		Node::Key(left, _, right) => {
+			collect_float_arguments(left, scope, ctx, floats);
+			collect_float_arguments(right, scope, ctx, floats);
+		}
+		Node::Meta { node, .. } => collect_float_arguments(node, scope, ctx, floats),
+		_ => {}
+	}
 }
 
 /// The program's `global` declarations with their kinds
@@ -2631,6 +2723,7 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 /// until the kinds settle: a call of a float-returning function is itself Float
 fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
+	function_kinds.extend(ctx.field_kinds.clone());
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {

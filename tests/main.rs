@@ -65,6 +65,7 @@ mod test_ffi_warning_once;
 mod test_ffi;
 mod test_fixed_width_ints;
 mod test_float_assignment;
+mod test_float_fields;
 mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
