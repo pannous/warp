@@ -18,3 +18,6 @@
 - DONE: `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)
 - `print` of a list, a float or a map has no runtime text yet ("print of a List has no runtime text yet"), like `xs as string`; a runtime serializer is undecided (tests/test_cast_to_string.rs). (fix-print 2026-10-02)
 - `x=1; x+=sqrt(2)` gives the f64 2.414… while `x=1; x=sqrt(2)` keeps the exact real √2: compound assignment skips the exact-real lowering. (fix-print 2026-10-02)
+- `x != int` is `undefined variable: int`: #30 made `x == int` false with the hint `x is int`, but `!=` with a type word has no reading yet (`not x is int`?). (impl-sem 2026-10-03)
+- `x == a number` (a spaced type phrase after `==`) still type-tests through type_tests::spaced_type_test; only a single type word after `==` is marked as equality. (impl-sem 2026-10-03)
+- The shared cargo target dir also shares the unhashed `debug/warp` binary between checkouts/exports: `cargo build --bin warp` in one copy is overwritten by the next, so CLI probes may run another copy's code. (impl-sem 2026-10-03)
