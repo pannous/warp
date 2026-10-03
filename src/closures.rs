@@ -216,7 +216,7 @@ struct Lifting {
 
 impl Lifting {
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
-		(bound.contains(name) || self.variables.contains(name)) && !(self.functions.contains(name) && !bound.contains(name))
+		bound.contains(name) || (self.variables.contains(name) && !self.functions.contains(name))
 	}
 
 	/// A parameter, or a variable assigned a function value
