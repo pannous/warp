@@ -33,4 +33,5 @@ fn test_run_time_math() {
 	is!("x = random()*0 + 1.0; round(sin(x) * 1000)", 841);
 	is!("def f(x) := cos(x); round(f(0.0))", 1);
 	is!("sin(π/2)", 1);
+	is!("x = random()*0 + 2.0; round(ln(x) * 1000)", 693); // ln is libm's log
 }

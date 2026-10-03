@@ -86,13 +86,6 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		if let Some(key) = self.runtime_math_key(&call) {
-			self.emit_runtime_math(func, key, &call);
-			self.emit_call(func, "new_float");
-			return;
-		}
-
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// Check for zero-argument function call: (funcname)
 			if *bracket == Bracket::Round {

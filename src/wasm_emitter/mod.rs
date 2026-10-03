@@ -53,9 +53,6 @@ const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
-/// Math words of a float computed at run time, and the libm function behind each (imported like m.pow);
-/// with a constant argument real.rs computes them exactly instead
-pub const RUNTIME_MATH: [(&str, &str); 7] = [("sin", "m.sin"), ("cos", "m.cos"), ("tan", "m.tan"), ("exp", "m.exp"), ("log", "m.log"), ("ln", "m.log"), ("log10", "m.log10")];
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
 const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
@@ -1816,32 +1813,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `sin(x)`: the libm key of a math word called with one argument, unless the program defines or imports the word
-	fn runtime_math_key(&self, node: &Node) -> Option<&'static str> {
-		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
-		let [head, _] = items.as_slice() else { return None };
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		if self.ctx.user_functions.contains_key(name) || self.ctx.ffi_imports.contains_key(name) {
-			return None;
-		}
-		RUNTIME_MATH.iter().find(|(word, _)| word == name).map(|(_, key)| *key)
-	}
-
-	/// The f64 of a math word through libm
-	fn emit_runtime_math(&mut self, func: &mut Function, key: &'static str, node: &Node) {
-		let Node::List(items, _, _) = node.drop_meta() else { return };
-		self.emit_float_value(func, &items[1]);
-		match self.ffi_func_index(key) {
-			Some(index) => {
-				func.instruction(&Instruction::Call(index));
-			}
-			None => {
-				self.discovered_needs.insert(Need::MathImport(key));
-				func.instruction(&Instruction::Unreachable);
-			}
-		}
-	}
-
 	/// The one nullable Node local of every function, after its int scratch locals
 	fn node_scratch(&self) -> u32 {
 		self.int_scratch + big_int::INT_SCRATCH_LOCALS
@@ -3025,9 +2996,6 @@ impl WasmGcEmitter {
 		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
-		}
-		if let Some(key) = self.runtime_math_key(node) {
-			return self.emit_runtime_math(func, key, node);
 		}
 		// `return x` in a branch: the numeric path returns it (as the function's kind); the value after is never reached
 		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return")) {
