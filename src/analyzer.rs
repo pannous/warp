@@ -3341,7 +3341,7 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
 	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
-	implicit.extend(LIBM_ALIASES.iter().map(|(alias, _)| *alias));
+	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
 	let mut called = HashSet::new();
 	node.visit(&mut |part| {
 		if let Node::List(items, bracket, separator) = part {
@@ -3357,18 +3357,12 @@ fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let mut defined = Context::new();
 	extract_user_functions(&mut defined, node);
 	for name in called.iter().filter(|name| !defined.user_functions.contains_key(*name)) {
-		match LIBM_ALIASES.iter().find(|(alias, _)| alias == name) {
-			// `ln(x)` calls libm's log: the import is log, the program calls it ln
-			Some((alias, function)) => {
-				ctx.ffi_imports.extend(crate::ffi::get_ffi_signature_from_lib(function, "m").map(|signature| (alias.to_string(), signature)));
-			}
-			None => add_ffi_import(ctx, name, "m"),
-		}
+		add_ffi_import(ctx, name, "m");
 	}
 }
 
-/// Other names of libm functions: `ln` is the natural logarithm, libm's log
-const LIBM_ALIASES: [(&str, &str); 1] = [("ln", "log")];
+/// The natural logarithm under its usual name, libm's log
+const LIBM_LN: &str = "ln";
 
 fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
