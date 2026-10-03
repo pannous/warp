@@ -2147,14 +2147,21 @@ impl WaspParser {
 		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(Empty)))
 	}
 
-	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway
+	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.
+	/// After a function or method the `!` mutates in place (user decision D2, by position): `x.upper!` and `upper(x)!`
+	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
 	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
+		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
-		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !is_evaluable {
+		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();
-		Some(lhs.clone())
+		Some(match (mutated, lhs.drop_meta()) {
+			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
+			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
+			(None, _) => lhs.clone(),
+		})
 	}
 
 	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md).
