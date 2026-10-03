@@ -465,6 +465,9 @@ PASSED:
   ✓ numbers::test_float_to_int_range::test_rounding_functions_give_exact_ints
   ✓ numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
   ✓ numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats
+  ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
+  ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
+  ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
   ✓ numbers::test_law::test_law_asserted_at_call_sites
   ✓ numbers::test_law::test_law_does_not_change_program_result
   ✓ numbers::test_law::test_law_float_parameter_kinds
@@ -1668,4 +1671,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1663 passed, 0 failed, 1663 total tested
+58 ignored, 1666 passed, 0 failed, 1666 total tested
