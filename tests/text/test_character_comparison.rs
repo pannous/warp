@@ -30,3 +30,11 @@ fn test_one_character_text_as_int() {
 	is!("x=\"5\"; x as int", 5);
 	is!("x=\"a\"; try (x as int) + 1 else 0", 0);
 }
+
+#[test] // user 2026-10-03: "obviously one of five is five": int of a digit character is its digit
+fn test_int_of_character_is_its_digit() {
+	is!("int('5')", 5);
+	is!("c='5'; int(c)", 5);
+	is!("s=\"a5\"; int(s#2)", 5);
+	is!("int('5')+1", 6);
+}
