@@ -128,6 +128,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_fabs_from_m
   ✓ ffi::test_ffi::test_ffi_floor
   ✓ ffi::test_ffi::test_ffi_fmax
+  ✓ ffi::test_ffi::test_ffi_fmin
   ✓ ffi::test_ffi::test_ffi_fmin_wasp_file
   ✓ ffi::test_ffi::test_ffi_fmod
   ✓ ffi::test_ffi::test_ffi_generic_discovery
@@ -179,7 +180,6 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
-  ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
@@ -189,6 +189,9 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
+  ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
+  ✓ functions::test_closures::an_item_of_a_function_list_called_directly
   ✓ functions::test_closures::test_a_closure_prints_as_its_function
   ✓ functions::test_closures::test_a_lambda_without_parameters
   ✓ functions::test_closures::test_a_list_of_closures
@@ -287,6 +290,9 @@ PASSED:
   ✓ functions::test_parameter_call_kinds::untyped_parameter_with_int_calls_or_none_stays_int
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_a_text_argument
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_disagrees_with_an_int_argument
+  ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
+  ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
   ✓ functions::test_property_access::test_dot_on_an_object_literal
@@ -436,7 +442,6 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
-  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -448,6 +453,7 @@ PASSED:
   ✓ lists::test_unpacking::parenthesized_target
   ✓ lists::test_unpacking::star_init
   ✓ lists::test_unpacking::star_middle
+  ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
   ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
@@ -1301,6 +1307,7 @@ PASSED:
   ✓ types::test_type_word_user_function::a_clash_is_an_error_not_a_warning
   ✓ types::test_type_word_user_function::a_function_with_another_name_is_no_clash
   ✓ types::test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error
+  ✓ types::test_type_word_user_function::the_number_dot_form_calls_a_user_function
   ✓ types::test_type_word_user_function::the_type_word_still_casts_without_a_definition
   ✓ types::test_type_words::test_type_constructor_words
   ✓ types::test_type_words::test_type_first_parameter
@@ -1585,6 +1592,8 @@ PASSED:
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
   ✓ welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
+  ✓ welcoming::test_item_list_cast_hint::a_type_word_item_in_a_comma_list_is_no_cast
+  ✓ welcoming::test_item_list_cast_hint::a_written_constructor_call_is_still_hinted
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -1707,4 +1716,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1702 passed, 0 failed, 1702 total tested
+58 ignored, 1711 passed, 0 failed, 1711 total tested
