@@ -14,7 +14,7 @@ The specification is not fully implemented yet
 - The project parses a custom syntax, builds a Node-based AST, and emits WebAssembly modules using:
 - WIT (WebAssembly Interface Types) definitions
 - WASM GC (Garbage Collection) bytecode
-- Multiple WASM runtime backends (wasmtime, wasmer, wasmedge)
+- wasmtime to run them (feature `native`; the browser build in web/playground runs them in JavaScript)
 
 ## Core Architecture
 
@@ -50,30 +50,24 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
+### Pipeline (`src/wasm_emitter/mod.rs`: `compile`, `eval`)
+
+parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
+`library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
+
 ### Emitters
 
-Two distinct code generation backends:
+0. **Text**: `Node::serialize` (`src/node.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+1. **WASM GC Emitter** (`src/wasm_emitter/`)
+    - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
+      functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
+    - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
+    - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
 
-0. **Generic Emitter** (`src/emitter.rs`)
-    - Textual emitter similar to json5
+### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi.rs`)
 
-1. **WASM GC Emitter** (`src/wasm_gc_emitter.rs`)
-    - Generates WASM GC bytecode using `wasm-encoder` crate
-    - Creates GC struct types for each Node variant with proper tagging
-    - Uses `NodeKind` enum for runtime type discrimination
-
-### WASM Runtime Support (`src/run/`)
-
-Multiple runtime backends for executing generated WASM:
-
-- `wasmtime_runner.rs` - Primary runtime
-- `wasmedge_runner.rs` - Alternative
-- `wasmer_runner.rs` - Alternative
-
-### Compiler Utilities (`src/compiler/`)
-
-- `wasm_reader.rs` - Reads WASM modules using wasmparser
-- `parity_wasm_reader.rs` - Alternative reader using parity-wasm
+- `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
+- `wasm_reader` and `gc_traits.rs` read the resulting GC objects back into Nodes
 
 ## Build and Test Commands
 
@@ -82,11 +76,8 @@ Multiple runtime backends for executing generated WASM:
 ```bash
 cargo build                    # Debug build
 cargo build --release          # Release build
-cargo build --offline          # Offline mode (uses vendored dependencies)
+cargo build --offline          # Offline mode (uses the local registry cache)
 ```
-
-The project uses vendored dependencies (see `vendor/`) to support offline builds. The `Cargo.toml` warns against online
-compilation delays.
 
 ### Testing
 
@@ -98,23 +89,15 @@ cargo test --test tests <file_stem>::  # Run one test file: all tests/*.rs are m
 
 #### Important Test Files
 
-- `tests/node_test.rs` - Tests Node AST operations
-- `tests/wasp_parser_test.rs` - Tests parser functionality
-- `tests/wasm_gc_emitter_test.rs` - Tests WASM GC code generation
-- `tests/wasm_reader_test.rs` - Tests reading WASM GC objects (see guide below)
-
-### Running Examples
-
-```bash
-cargo run --example wasm_gc_generation
-cargo run --example wit_generation
-cargo run --example wasp_comments_demo
-```
+- `tests/test_node.rs` - Tests Node AST operations
+- `tests/test_parser.rs` - Tests parser functionality
+- `tests/test_wasm_emitter.rs` - Tests WASM GC code generation
+- `tests/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
 
 ## WASM GC Reading Patterns
 
-The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection. See
-`docs/wasm-gc-reading-guide.md` for:
+The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
+(`src/gc_traits.rs`, examples in `tests/test_wasm_reader.rs` and `tests/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -128,13 +111,13 @@ Use WASM names excessively! Wasm provides custom sections for names, use ALL of 
 
 ### Offline Development
 
-The project is configured for **offline-first** development to avoid compilation delays. Dependencies are vendored and
-Cargo.toml has offline mode notes. Use `--offline` flag when building.
+The project is configured for **offline-first** development to avoid compilation delays: dependencies come from the
+local registry cache. Use `--offline` flag when building.
 
 ### Test File Locations
 
-Tests are in `tests/` directory (not `src/`). Each test file is named `*_test.rs` and tests a specific module or
-feature.
+Tests are in `tests/` directory (not `src/`). Each test file is named `test_*.rs`, tests a specific module or feature,
+and is a module of the one test crate `tests/main.rs`.
 
 ### Extension Utilities
 
@@ -154,8 +137,7 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 1. **Modify parser or emitter** - Edit files in `src/`
 2. **Add tests** - Create or update tests in `tests/`
 3. **Run tests** - `cargo test` to verify
-4. **Check examples** - Run examples to see output
-5. **Build offline** - Use `--offline` for reproducible builds
+4. **Build offline** - Use `--offline` for reproducible builds
 
 ## Serialization
 
@@ -216,7 +198,7 @@ is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run
 
 the is! macro triggers the following roundtrip: 
 is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
-via warp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
+via warp::wasm_emitter::eval and emit_node_main and Node::from_gc_object
 
 ### soon
 

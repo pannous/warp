@@ -20,9 +20,10 @@ the supervisor runs the one full suite before merging.
 3. Linker: mold is Linux-only; on macOS Apple's ld-prime (Xcode 15+) is already fast. `ld64.lld` is installed
    (~/.swiftly/bin) and can be tried with `-C link-arg=-fuse-ld=lld` in `[target.aarch64-apple-darwin] rustflags`;
    measure before adopting.
-4. `cargo build --timings` once to see which crates dominate (likely wasmtime/cranelift, wasmer, wasmedge).
-5. Features: the three runtime backends (wasmtime, wasmer, wasmedge) are the heavy deps; builds and agents that only
-   need wasmtime should not pass `--all-features`.
+4. `cargo build --timings` once to see which crates dominate (likely wasmtime/cranelift).
+5. Features: wasmtime is the only runtime (wasmer and wasmedge are gone); `--all-features` additionally turns on ~20
+   empty C++ feature flags that switch test branches (notes/code_quality.md #2).
+6. DONE 2026-10-03: the warp binary no longer re-declares every module (`mod x;` in main.rs compiled the crate twice).
 Not useful here: splitting crates is a large refactor for unclear gain; debug-info tuning is already done.
 
 ## Pitfall: copies share one warp artifact (2026-10-03)

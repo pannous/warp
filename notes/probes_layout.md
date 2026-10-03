@@ -1,7 +1,8 @@
 # probes / scratch / data layout (2026-10-02)
 
 Rule (AGENTS.md "Folders"): `probes/` tracked, hand-written sources only; `scratch/` disposable copies, worktrees,
-cargo homes, private index files; `data/` logs, results, patches, dumps; build output in `/opt/cargo/warp-<topic>`.
+cargo homes, private index files; `data/` logs, results, patches, dumps; build output in the one shared target dir from
+`~/.cargo/config.toml` (notes/build_speed.md).
 
 - Allowlist lives in `.gitignore` (`!probes/**/*.<ext>`); `probes/check_layout.sh [tree-ish]` reads the same list and
   fails on tracked probes under src/ tests/ target/ vendor/ .git, blobs over 100 KB, or other extensions.
