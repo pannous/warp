@@ -72,12 +72,9 @@
 - DONE: Several statements on one line separated only by spaces (`print a    print b`, playground example) parse as ONE flat space list [print a print b] and run silently to ø without printing anything; needs a rule (split before a statement keyword? an Ask? an error naming `;`). (fixer 2026-10-03) (now a loud error, user decision)
 - `"ab"*2` / `greeting*2`: text * int is a type error (hint `(2 times ["ab"]).join("")` since print-type-error); `n times "ab"` fails with "`times` needs a body" while `3 times [1]` repeats. Rule proposed to the supervisor (repeat a non-numeric text with a hint, `"5"*3` stays an error). (fixer 2026-10-03)
 - A one-character text in a variable (`x="5"; x as int`) is a codepoint, so it converts as a character, not through text_as_int; and text_as_int wraps silently above i64 (no big-int parse yet). (fixer 2026-10-03)
-<<<<<<< HEAD
 - `x, y = xs` with a list value is an error (only a tuple function call or as many values as names destructure); a run-time list destructuring would need the list length check. Tuple functions passed as function values (closures.rs adapters) are untested. (tuple-returns 2026-10-03)
 - The wiki repo has diverged branches: origin/master (GitHub's displayed default, string.md D1 commit) and origin/main (where most agents push, the trait/use/D15 commits). Pick one and merge the other. (tuple-returns 2026-10-03)
 ||||||| 46360987
-=======
 - `"f" + sqrt(2)` gives "fø√(2)" and `sqrt(2) as string` serializes its source: an exact real (or a Float constant expression) still takes the source-text branch of emit_cast "string"; its value text (√2 or 1.414…) is undecided. (fixer 2026-10-03)
 - Later (user 2026-10-03, "an intelligent intent to change the code"): a "change code" action that rewrites an ambiguity's `written` text to the explicit form the user picks: playground button, IDE quick fix, maybe `warp fix`. The data is in every `diagnostic::Ask` (written, line/column, readings[].explicit_form). Design note in notes/welcoming.md "Later: change the code". (ask-to-warning)
 - The `.wasp-answers` file of earlier runs is no longer read; its `ack:` lines live on only if moved to `.wasp-acknowledged`. (ask-to-warning)
->>>>>>> origin/main
