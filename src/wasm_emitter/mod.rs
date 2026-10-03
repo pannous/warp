@@ -3005,6 +3005,7 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
 				self.emit_float_value(func, value);
 			}
+			Node::Key(list, Op::Hash, index) if self.is_typed_list(list) => self.emit_typed_element_float(func, list, index),
 			Node::Key(_, Op::As, _) => {
 				self.emit_numeric_value(func, node);
 				self.emit_int_to_f64(func, None);
@@ -3225,7 +3226,7 @@ impl WasmGcEmitter {
 
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
-			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList")];
+			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
 		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
 
@@ -3244,6 +3245,7 @@ impl WasmGcEmitter {
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
+			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
 		];
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {

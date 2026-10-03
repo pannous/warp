@@ -143,3 +143,25 @@ fn test_int_arrays_inside_functions() {
 	is!("def total(){xs=int[5]; for i in 1..5 {xs[i]=i}; sum xs}; total()", 10);
 	is!("def second(){xs=[5,6,7]; xs#2}; second()", 6);
 }
+
+#[test]
+fn test_float_list_is_a_float_array() {
+	assert!(typed_array_operations("xs=[1.5f, 2.5f]; xs#2") > 0);
+	assert!(typed_array_operations("x=2.0f; xs=[√2, x*3]; #xs") > 0);
+	assert_eq!(typed_array_operations("xs=[1, 2.5f]; xs#2"), 0); // an Int item stays an Int node
+	assert_eq!(eval("xs=[1.5f, 2.5f]; xs"), eval("[1.5f, 2.5f]"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; xs#2"), eval("2.5f"));
+	is!("xs=[1.5f, 2.5f]; #xs", 2);
+	fails_with("xs=[1.5f, 2.5f]; xs#3", "index out of range");
+}
+
+#[test]
+fn test_float_array_elements_are_numbers() {
+	assert_eq!(eval("xs=[1.5f, 2.5f]; xs#1*2"), eval("3.0f"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; y=xs#2; y"), eval("2.5f"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; sum xs"), eval("4.0f"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; s=0; for x in xs {s = s + x}; s"), eval("4.0f"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; xs#1=0.25f; xs"), eval("[0.25f, 2.5f]"));
+	assert_eq!(eval("xs=[]; xs.add(1.5f); xs.add(2.5f); xs"), eval("[1.5f, 2.5f]"));
+	assert_eq!(eval("xs=[1.5f, 2.5f]; xs.map(x=>x*2)"), eval("[3.0f, 5.0f]"));
+}

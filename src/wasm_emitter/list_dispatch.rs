@@ -3,10 +3,10 @@
 //!
 //! Backends are interchangeable, the result is the same Node either way:
 //! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links
-//! - `TypedArray`: a list variable proven to hold only ints is an `$IntList`, a length and a wasm GC
-//!   `(array (mut i64))` with spare capacity, see `find_typed_lists`: O(1) index and count, amortised O(1) append
-//!   (`out.add(x)`, which `map` lowers to), no box per element. Wherever the program needs it as a value (a result, an
-//!   argument, a print) it becomes the same Node list the literal would have built (`int_list_as_node`).
+//! - `TypedArray`: a list variable proven to hold only ints (floats) is an `$IntList` (`$FloatList`), a length and a
+//!   wasm GC `(array (mut i64))` (`f64`) with spare capacity, see `find_typed_lists`: O(1) index and count, amortised
+//!   O(1) append (`out.add(x)`, which `map` lowers to), no box per element. Wherever the program needs it as a value (a
+//!   result, an argument, a print) it becomes the same Node list the literal would have built (`int_list_as_node`).
 //! - `Host`: reserved for a host-native or GPU implementation behind a host import, taking over above
 //!   `HOST_BACKEND_MIN_LENGTH` at run time; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
 //!
@@ -24,12 +24,6 @@ use ValType::Ref;
 /// Element count from which a host/GPU backend would take over a list operation at run time; `None`: no such backend
 pub const HOST_BACKEND_MIN_LENGTH: Option<u32> = None;
 
-pub const INT_LIST_AT: &str = "int_list_at";
-pub const INT_LIST_SET: &str = "int_list_set";
-pub const INT_LIST_COPY: &str = "int_list_copy";
-pub const INT_LIST_AS_NODE: &str = "int_list_as_node";
-pub const INT_LIST_FILLED: &str = "int_list_filled";
-pub const INT_LIST_PUSH: &str = "int_list_push";
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full
 const FIRST_CAPACITY: i32 = 4;
 const NODE_COUNT: &str = "node_count";
@@ -44,7 +38,7 @@ pub enum ListOp {
 	Element,
 	/// `xs#i = v`, `xs#i += v`
 	SetElement,
-	/// `xs = [1 2 3]`, `ys = xs`
+	/// `xs = [1 2 3]`, `ys = xs`, `xs.add(4)`
 	Store,
 	/// `xs` where a Node is needed
 	AsNode,
@@ -53,6 +47,53 @@ pub enum ListOp {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ElementType {
 	Int,
+	Float,
+}
+
+/// The runtime functions of one element type
+struct ElementRuntime {
+	at: &'static str,
+	set: &'static str,
+	copy: &'static str,
+	as_node: &'static str,
+	filled: &'static str,
+	push: &'static str,
+	/// the constructor of one element's Node
+	new_node: &'static str,
+}
+
+const INT_RUNTIME: ElementRuntime = ElementRuntime {
+	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", as_node: "int_list_as_node", filled: "int_list_filled",
+	push: "int_list_push", new_node: "new_int",
+};
+const FLOAT_RUNTIME: ElementRuntime = ElementRuntime {
+	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", as_node: "float_list_as_node",
+	filled: "float_list_filled", push: "float_list_push", new_node: "new_float",
+};
+
+impl ElementType {
+	const ALL: [ElementType; 2] = [ElementType::Int, ElementType::Float];
+
+	fn runtime(self) -> &'static ElementRuntime {
+		match self {
+			ElementType::Int => &INT_RUNTIME,
+			ElementType::Float => &FLOAT_RUNTIME,
+		}
+	}
+
+	fn kind(self) -> Kind {
+		match self {
+			ElementType::Int => Kind::Int,
+			ElementType::Float => Kind::Float,
+		}
+	}
+
+	fn val_type(self) -> ValType {
+		match self {
+			ElementType::Int => ValType::I64,
+			ElementType::Float => ValType::F64,
+		}
+	}
 }
 
 /// An implementation of the list operations
@@ -120,55 +161,72 @@ fn agreed_element(sources: &[Source], typed: &HashMap<String, Option<ElementType
 }
 
 impl WasmGcEmitter {
-	/// An element provably an exact Int: a number literal, an Int variable, a call of a function returning one, or
-	/// arithmetic of those. Not by the type alone: it defaults to Int for anything unknown (ø, a key)
-	fn is_int_item(&self, item: &Node) -> bool {
-		let is_int_kind = self.get_type(item) == Kind::Int;
-		is_int_kind && match item.drop_meta() {
+	/// An element provably of the element type: a number literal, a variable, a call of a function returning one, or
+	/// arithmetic of numbers. Not by the type alone: it defaults to Int for anything unknown (ø, a key)
+	fn is_element(&self, item: &Node, element: ElementType) -> bool {
+		self.get_type(item) == element.kind() && self.is_number_expression(item)
+	}
+
+	fn is_number_expression(&self, item: &Node) -> bool {
+		let is_number = |operand: &Node| matches!(self.get_type(operand), Kind::Int | Kind::Float) && self.is_number_expression(operand);
+		match item.drop_meta() {
 			Node::Number(_) | Node::Symbol(_) => true,
-			Node::Key(left, op, right) if op.is_arithmetic() => {
-				(matches!(left.drop_meta(), Node::Empty) || self.is_int_item(left)) && self.is_int_item(right)
+			// `1.5f` is `1.5 as float`
+			Node::Key(value, Op::As, _) => is_number(value),
+			Node::Key(left, op, right) if op.is_arithmetic() || op.is_prefix() => {
+				(matches!(left.drop_meta(), Node::Empty) || is_number(left)) && is_number(right)
 			}
 			Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name)),
 			_ => false,
 		}
 	}
 
+	/// The element type all `items` share
+	fn items_element(&self, items: &[Node]) -> Option<ElementType> {
+		let first = items.first()?;
+		ElementType::ALL.into_iter().find(|element| self.is_element(first, *element) && items.iter().all(|item| self.is_element(item, *element)))
+	}
+
 	/// The source of `target = value`
 	fn source_of(&self, target: &str, value: &Node) -> Source {
-		let is_int = |item: &Node| self.is_int_item(item);
+		let literal = |items: &[Node]| self.items_element(items).map_or(Source::Other, Source::Literal);
 		match value.drop_meta() {
 			Node::Empty => Source::Empty,
 			Node::List(items, Bracket::Square, _) if items.is_empty() => Source::Empty,
 			Node::Key(list, Op::Add, appended) if matches!(list.drop_meta(), Node::Symbol(name) if name == target) => match appended.drop_meta() {
-				Node::List(items, Bracket::Square, _) if !items.is_empty() && items.iter().all(is_int) => Source::Append(ElementType::Int),
+				Node::List(items, Bracket::Square, _) => self.items_element(items).map_or(Source::Other, Source::Append),
 				_ => Source::Other,
 			},
 			Node::Symbol(name) => Source::Variable(name.clone()),
-			_ if zero_fill_parts(value).is_some_and(|(_, zero)| is_int(zero)) => Source::Literal(ElementType::Int),
-			Node::List(items, Bracket::Square, _) if !items.is_empty() && items.iter().all(is_int) => Source::Literal(ElementType::Int),
+			_ if zero_fill_parts(value).is_some() => literal(std::slice::from_ref(zero_fill_parts(value).expect("guarded").1)),
+			Node::List(items, Bracket::Square, _) => literal(items),
 			_ => Source::Other,
 		}
 	}
 
 	/// The list variables of the current body that can be typed arrays: locals of kind List that are only ever assigned
-	/// int literal lists, the empty list, ints appended to themselves or other such variables, never updated by an
-	/// operator (`xs += …`), not captured by a function, no global, not assigned inside a `try`. Any other use reads them
-	/// as Nodes, so it stays correct.
+	/// int (float) literal lists, the empty list, numbers appended to themselves or other such variables, never updated
+	/// by an operator (`xs += …`), not captured by a function, no global, not assigned inside a `try`; a float list only
+	/// ever gets floats by index. Any other use reads them as Nodes, so it stays correct.
 	pub(super) fn find_typed_lists(&self, program: &Node) -> HashMap<String, TypedList> {
 		let mut sources: HashMap<String, Vec<Source>> = HashMap::new();
 		let mut excluded: HashSet<String> = HashSet::new();
 		let mut updated: HashSet<String> = HashSet::new();
+		let mut assigned_kinds: HashMap<String, Vec<Kind>> = HashMap::new();
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => sources.entry(name.clone()).or_default().push(self.source_of(name, value)),
 				Node::Symbol(name) if is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(list, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
-					if let Node::Symbol(name) = list.drop_meta() {
-						let by_key = self.map_key(index).is_some() || self.dynamic_key(index).is_some();
-						if by_key { excluded.insert(name.clone()) } else { updated.insert(name.clone()) };
+					let Node::Symbol(name) = list.drop_meta() else { return };
+					if self.map_key(index).is_some() || self.dynamic_key(index).is_some() {
+						excluded.insert(name.clone());
+						return;
 					}
+					updated.insert(name.clone());
+					let assigned = if is_update(op) { Node::Key(target.clone(), op.base_op(), value.clone()) } else { value.as_ref().clone() };
+					assigned_kinds.entry(name.clone()).or_default().push(self.get_type(&assigned));
 				}
 				_ => {}
 			}
@@ -189,6 +247,10 @@ impl WasmGcEmitter {
 		}
 		let is_list_local = |name: &String| self.scope.lookup(name).is_some_and(|local| !local.is_param && local.kind == Kind::List);
 		let has_start = |name: &String| sources[name].iter().any(|source| !matches!(source, Source::Append(_)));
+		// an index assignment stores what node_with_at would: any number into an int list, only floats into a float list
+		let takes_assignments = |name: &String, element: ElementType| {
+			element == ElementType::Int || assigned_kinds.get(name).is_none_or(|kinds| kinds.iter().all(|kind| *kind == Kind::Float))
+		};
 		let mut typed: HashMap<String, Option<ElementType>> = sources.keys()
 			.filter(|name| is_list_local(name) && has_start(name) && !excluded.contains(*name))
 			.map(|name| (name.clone(), None))
@@ -198,6 +260,7 @@ impl WasmGcEmitter {
 			let mut changed = false;
 			for name in typed.keys().cloned().collect::<Vec<_>>() {
 				match agreed_element(&sources[&name], &typed) {
+					Ok(Some(element)) if !takes_assignments(&name, element) => { typed.remove(&name); changed = true; }
 					Err(()) => { typed.remove(&name); changed = true; }
 					Ok(Some(element)) if typed[&name].is_none() => { typed.insert(name, Some(element)); changed = true; }
 					Ok(_) => {}
@@ -228,10 +291,23 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// How the local of a variable is stored: a typed list as its array, anything else by its kind
+	/// The (array, list) type indices of an element type
+	fn typed_list_types(&self, element: ElementType) -> (u32, u32) {
+		let types = &self.type_manager;
+		match element {
+			ElementType::Int => (types.int_array_type, types.int_list_type),
+			ElementType::Float => (types.float_array_type, types.float_list_type),
+		}
+	}
+
+	fn typed_list_ref(&self, element: ElementType) -> RefType {
+		RefType { nullable: true, heap_type: HeapType::Concrete(self.typed_list_types(element).1) }
+	}
+
+	/// How the local of a variable is stored: a typed list as its list struct, anything else by its kind
 	pub(super) fn local_storage_type(&self, name: &str, kind: Kind) -> ValType {
-		match self.typed_lists.get(name).map(|list| list.element) {
-			Some(ElementType::Int) => Ref(self.int_list_ref()),
+		match self.typed_lists.get(name) {
+			Some(list) => Ref(self.typed_list_ref(list.element)),
 			None => self.storage_type(kind),
 		}
 	}
@@ -239,9 +315,9 @@ impl WasmGcEmitter {
 	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
 	pub(super) fn emit_list_count(&mut self, func: &mut Function, target: &Node, counter: &'static str) {
 		match (self.typed_list(target), counter) {
-			(Some((slot, _)), NODE_COUNT) => {
-				let int_list = self.type_manager.int_list_type;
-				Self::emit_list(func, &[I::LocalGet(slot), I::StructGet { struct_type_index: int_list, field_index: 0 }, I::I64ExtendI32U]);
+			(Some((slot, list)), NODE_COUNT) => {
+				let (_, list_type) = self.typed_list_types(list.element);
+				Self::emit_list(func, &[I::LocalGet(slot), I::StructGet { struct_type_index: list_type, field_index: 0 }, I::I64ExtendI32U]);
 			}
 			_ => {
 				self.emit_node_instructions(func, target);
@@ -250,7 +326,8 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Push the number (i64) at the 1-based `index` of `target`
+	/// Push the number (i64) at the 1-based `index` of `target`; a float element takes the generic way, which fails as
+	/// it always did
 	pub(super) fn emit_list_element_number(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		self.emit_integral_index_check(func, index);
 		match self.list_backend(ListOp::Element, target) {
@@ -263,13 +340,27 @@ impl WasmGcEmitter {
 		}
 	}
 
+	pub(super) fn is_typed_list(&self, target: &Node) -> bool {
+		self.typed_list(target).is_some()
+	}
+
+	/// Push the f64 at the 1-based `index` of a typed list `target`
+	pub(super) fn emit_typed_element_float(&mut self, func: &mut Function, target: &Node, index: &Node) {
+		let (_, list) = self.typed_list(target).expect("typed backend");
+		self.emit_integral_index_check(func, index);
+		self.emit_typed_element(func, target, index);
+		if list.element == ElementType::Int {
+			self.emit_int_to_f64(func, None);
+		}
+	}
+
 	/// Push the Node at the 1-based `index` of `target` (a list element, or a character of a text)
 	pub(super) fn emit_list_element_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		self.emit_integral_index_check(func, index);
 		match self.list_backend(ListOp::Element, target) {
-			Backend::TypedArray(ElementType::Int) => {
+			Backend::TypedArray(element) => {
 				self.emit_typed_element(func, target, index);
-				self.emit_call(func, "new_int");
+				self.emit_call(func, element.runtime().new_node);
 			}
 			_ => {
 				self.emit_node_instructions(func, target);
@@ -280,73 +371,83 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_typed_element(&mut self, func: &mut Function, target: &Node, index: &Node) {
-		let (slot, _) = self.typed_list(target).expect("typed backend");
+		let (slot, list) = self.typed_list(target).expect("typed backend");
 		func.instruction(&I::LocalGet(slot));
 		self.emit_numeric_value(func, index);
-		self.emit_call(func, INT_LIST_AT);
+		self.emit_call(func, list.element.runtime().at);
 	}
 
-	/// `target#index = value` on a typed list, in place: leaves the assigned value (i64). False for any other list.
-	pub(super) fn emit_typed_element_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
-		if self.list_backend(ListOp::SetElement, target) != Backend::TypedArray(ElementType::Int) {
-			return false;
+	/// Emit `value` as an element of a typed list
+	fn emit_element_value(&mut self, func: &mut Function, value: &Node, element: ElementType) {
+		match element {
+			ElementType::Int => self.emit_numeric_value(func, value),
+			ElementType::Float => self.emit_float_value(func, value),
 		}
+	}
+
+	/// `target#index = value` on a typed list, in place: leaves the assigned value (i64; 0 for a float, which is no exact
+	/// Int, as an entry assignment of a non-number leaves). False for any other list.
+	pub(super) fn emit_typed_element_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
+		let Backend::TypedArray(element) = self.list_backend(ListOp::SetElement, target) else { return false };
 		let (slot, _) = self.typed_list(target).expect("typed backend");
-		let assigned = self.scratch(2);
 		func.instruction(&I::LocalGet(slot));
 		self.emit_numeric_value(func, index);
-		self.emit_numeric_value(func, value);
+		self.emit_element_value(func, value, element);
+		if element == ElementType::Float {
+			self.emit_call(func, element.runtime().set);
+			func.instruction(&I::I64Const(0));
+			return true;
+		}
+		let assigned = self.scratch(2);
 		func.instruction(&I::LocalTee(assigned));
-		self.emit_call(func, INT_LIST_SET);
+		self.emit_call(func, element.runtime().set);
 		func.instruction(&I::LocalGet(assigned));
 		true
 	}
 
-	/// `name = value` for a typed list variable: stores the array and leaves it on the stack. False for any other variable.
+	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
 	pub(super) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
+		let runtime = list.element.runtime();
 		match value.drop_meta() {
 			Node::Symbol(source) => {
 				let (source_slot, source_list) = self.typed_list(value).unwrap_or_else(|| panic!("{source} is a typed list"));
 				func.instruction(&I::LocalGet(source_slot));
 				if list.updated || source_list.updated {
-					self.emit_call(func, INT_LIST_COPY);
+					self.emit_call(func, runtime.copy);
 				}
 			}
 			_ if zero_fill_parts(value).is_some() => {
 				let (count, zero) = zero_fill_parts(value).expect("guarded");
 				self.emit_numeric_value(func, count);
-				self.emit_numeric_value(func, zero);
-				self.emit_call(func, INT_LIST_FILLED);
+				self.emit_element_value(func, zero, list.element);
+				self.emit_call(func, runtime.filled);
 			}
 			Node::Key(_, Op::Add, appended) => {
 				let Node::List(items, _, _) = appended.drop_meta() else { unreachable!("find_typed_lists admits only appended lists") };
 				func.instruction(&I::LocalGet(slot));
 				for item in items {
-					self.emit_numeric_value(func, item);
-					self.emit_call(func, INT_LIST_PUSH);
+					self.emit_element_value(func, item, list.element);
+					self.emit_call(func, runtime.push);
 				}
 			}
-			Node::Empty => self.emit_int_list_of(func, &[]),
-			Node::List(items, _, _) => self.emit_int_list_of(func, items),
+			Node::Empty => self.emit_typed_list_of(func, &[], list.element),
+			Node::List(items, _, _) => self.emit_typed_list_of(func, items, list.element),
 			other => unreachable!("find_typed_lists admits no {other:?}"),
 		}
 		func.instruction(&I::LocalTee(slot));
 		true
 	}
 
-	/// A new $IntList of the numbers of `items`
-	fn emit_int_list_of(&mut self, func: &mut Function, items: &[Node]) {
+	/// A new typed list of `items`
+	fn emit_typed_list_of(&mut self, func: &mut Function, items: &[Node], element: ElementType) {
+		let (array, list) = self.typed_list_types(element);
 		func.instruction(&I::I32Const(items.len() as i32));
 		for item in items {
-			self.emit_numeric_value(func, item);
+			self.emit_element_value(func, item, element);
 		}
-		func.instruction(&I::ArrayNewFixed { array_type_index: self.type_manager.int_array_type, array_size: items.len() as u32 });
-		func.instruction(&I::StructNew(self.type_manager.int_list_type));
-	}
-
-	fn int_list_ref(&self) -> RefType {
-		RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.int_list_type) }
+		func.instruction(&I::ArrayNewFixed { array_type_index: array, array_size: items.len() as u32 });
+		func.instruction(&I::StructNew(list));
 	}
 
 	/// The variable and value of an assignment to a typed list variable
@@ -358,37 +459,45 @@ impl WasmGcEmitter {
 
 	/// Push a typed list variable as the Node list it stands for; false for any other variable
 	pub(super) fn emit_typed_list_as_node(&mut self, func: &mut Function, name: &str) -> bool {
-		let Some((slot, _)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
+		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
 		func.instruction(&I::LocalGet(slot));
-		self.emit_call(func, INT_LIST_AS_NODE);
+		self.emit_call(func, list.element.runtime().as_node);
 		true
 	}
 
 	/// The runtime functions of the typed-array backend, each only when the program calls it
 	pub(super) fn emit_typed_list_runtime(&mut self) {
-		let (list, array) = (self.type_manager.int_list_type, self.type_manager.int_array_type);
-		let list_ref = Ref(self.int_list_ref());
+		for element in ElementType::ALL {
+			self.emit_element_runtime(element);
+		}
+	}
+
+	fn emit_element_runtime(&mut self, element: ElementType) {
+		let runtime = element.runtime();
+		let value = element.val_type();
+		let (array, list) = self.typed_list_types(element);
+		let list_ref = Ref(self.typed_list_ref(element));
 		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
 		let node_ref = Ref(self.node_ref(false));
 		let length = I::StructGet { struct_type_index: list, field_index: 0 };
 		let items = I::StructGet { struct_type_index: list, field_index: 1 };
-		// int_list_at(list, index) -> i64: the element at the 1-based index
-		if self.should_emit_function(INT_LIST_AT) {
-			self.runtime_function(INT_LIST_AT, vec![list_ref, ValType::I64], vec![ValType::I64], vec![], |s, f| {
-				s.emit_list_position(f);
+		// at(list, index) -> element: the element at the 1-based index
+		if self.should_emit_function(runtime.at) {
+			self.runtime_function(runtime.at, vec![list_ref, ValType::I64], vec![value], vec![], |s, f| {
+				s.emit_list_position(f, list);
 				f.instruction(&I::ArrayGet(array));
 			});
 		}
-		// int_list_set(list, index, value): the element at the 1-based index becomes value
-		if self.should_emit_function(INT_LIST_SET) {
-			self.runtime_function(INT_LIST_SET, vec![list_ref, ValType::I64, ValType::I64], vec![], vec![], |s, f| {
-				s.emit_list_position(f);
+		// set(list, index, value): the element at the 1-based index becomes value
+		if self.should_emit_function(runtime.set) {
+			self.runtime_function(runtime.set, vec![list_ref, ValType::I64, value], vec![], vec![], |s, f| {
+				s.emit_list_position(f, list);
 				Self::emit_list(f, &[I::LocalGet(2), I::ArraySet(array)]);
 			});
 		}
-		// int_list_copy(list) -> list: its own items, no spare capacity
-		if self.should_emit_function(INT_LIST_COPY) {
-			self.runtime_function(INT_LIST_COPY, vec![list_ref], vec![list_ref], vec![array_ref], |_, f| {
+		// copy(list) -> list: its own items, no spare capacity
+		if self.should_emit_function(runtime.copy) {
+			self.runtime_function(runtime.copy, vec![list_ref], vec![list_ref], vec![array_ref], |_, f| {
 				Self::emit_list(f, &[
 					I::LocalGet(0), length.clone(), I::ArrayNewDefault(array), I::LocalSet(1),
 					I::LocalGet(1), I::I32Const(0), I::LocalGet(0), items.clone(), I::I32Const(0), I::LocalGet(0), length.clone(),
@@ -397,18 +506,18 @@ impl WasmGcEmitter {
 				]);
 			});
 		}
-		// int_list_filled(count, zero) -> list: count times zero, empty when count is not positive
-		if self.should_emit_function(INT_LIST_FILLED) {
-			self.runtime_function(INT_LIST_FILLED, vec![ValType::I64, ValType::I64], vec![list_ref], vec![ValType::I32], |_, f| {
+		// filled(count, zero) -> list: count times zero, empty when count is not positive
+		if self.should_emit_function(runtime.filled) {
+			self.runtime_function(runtime.filled, vec![ValType::I64, value], vec![list_ref], vec![ValType::I32], |_, f| {
 				Self::emit_list(f, &[
 					I::LocalGet(0), I::I64Const(0), I::LocalGet(0), I::I64Const(0), I::I64GtS, I::Select, I::I32WrapI64, I::LocalTee(2),
 					I::LocalGet(1), I::LocalGet(2), I::ArrayNew(array), I::StructNew(list),
 				]);
 			});
 		}
-		// int_list_push(list, value) -> list: value appended in place, the items doubled when full; a new list for ø
-		if self.should_emit_function(INT_LIST_PUSH) {
-			self.runtime_function(INT_LIST_PUSH, vec![list_ref, ValType::I64], vec![list_ref], vec![array_ref], |_, f| {
+		// push(list, value) -> list: value appended in place, the items doubled when full; a new list for ø
+		if self.should_emit_function(runtime.push) {
+			self.runtime_function(runtime.push, vec![list_ref, value], vec![list_ref], vec![array_ref], |_, f| {
 				let grown = 2;
 				Self::emit_list(f, &[
 					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
@@ -426,11 +535,11 @@ impl WasmGcEmitter {
 				]);
 			});
 		}
-		// int_list_as_node(list) -> ref $Node: the square list of Int nodes, built from the last element; ø when empty
-		if self.should_emit_function(INT_LIST_AS_NODE) {
+		// as_node(list) -> ref $Node: the square list of element nodes, built from the last element; ø when empty
+		if self.should_emit_function(runtime.as_node) {
 			let node = self.type_manager.node_type;
 			let nullable_node = Ref(self.node_ref(true));
-			self.runtime_function(INT_LIST_AS_NODE, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
+			self.runtime_function(runtime.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
 				let (position, rest) = (1, 2);
 				Self::emit_list(f, &[
 					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
@@ -440,7 +549,7 @@ impl WasmGcEmitter {
 					I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
 					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
 				]);
-				s.call(f, "new_int");
+				s.call(f, runtime.new_node);
 				Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(SQUARE_BRACKET_INFO)]);
 				s.call(f, "new_list");
 				Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref))]);
@@ -452,8 +561,7 @@ impl WasmGcEmitter {
 
 	/// In a runtime function (list, index, …): fail unless the 1-based index (local 1) is an integer within the list,
 	/// then push its items and the 0-based i32 position
-	fn emit_list_position(&self, func: &mut Function) {
-		let list = self.type_manager.int_list_type;
+	fn emit_list_position(&self, func: &mut Function, list: u32) {
 		self.emit_require_integral(func, 1);
 		Self::emit_list(func, &[
 			I::LocalGet(1), I::I64Const(1), I::I64LtS,
