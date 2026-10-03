@@ -305,6 +305,24 @@ PASSED:
   ✓ test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ test_closures::test_a_closure_prints_as_its_function
+  ✓ test_closures::test_a_lambda_without_parameters
+  ✓ test_closures::test_a_list_of_closures
+  ✓ test_closures::test_a_parameter_declared_a_function
+  ✓ test_closures::test_calling_a_non_function_or_the_wrong_arity_is_loud
+  ✓ test_closures::test_capturing_lambda_passed_to_a_function
+  ✓ test_closures::test_chained_calls_of_returned_closures
+  ✓ test_closures::test_closure_captures_by_value
+  ✓ test_closures::test_closure_held_in_a_variable_passed_on
+  ✓ test_closures::test_closures_returning_text
+  ✓ test_closures::test_compose_returns_a_closure
+  ✓ test_closures::test_curried_closures
+  ✓ test_closures::test_float_closure
+  ✓ test_closures::test_function_chosen_at_run_time
+  ✓ test_closures::test_lambda_in_a_variable
+  ✓ test_closures::test_map_and_reduce_with_a_closure_variable
+  ✓ test_closures::test_not_a_function_stays_loud
+  ✓ test_closures::test_returned_closure
   ✓ test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -400,6 +418,10 @@ PASSED:
   ✓ test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ test_equality_never_chains::orderings_still_chain
+  ✓ test_eval_state::an_answer_given_in_one_eval_is_not_remembered_by_the_next
+  ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
+  ✓ test_eval_state::every_eval_shows_its_educate_once_note
+  ✓ test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
   ✓ test_export_declaration::test_export_of_a_function_stays_a_function
   ✓ test_export_declaration::test_export_with_type_word_keeps_the_value
   ✓ test_export_declaration::test_export_without_initializer_is_zero
@@ -489,8 +511,8 @@ PASSED:
   ✓ test_for_loop::test_nested_for
   ✓ test_function_keyword::function_defines_like_def
   ✓ test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
+  ✓ test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
   ✓ test_function_values::test_a_lambda_that_captures_nothing_is_a_value
-  ✓ test_function_values::test_a_lambda_that_captures_stays_an_error
   ✓ test_function_values::test_a_parameter_called_as_a_function
   ✓ test_function_values::test_an_alias_of_a_function
   ✓ test_function_values::test_an_explicit_reference
@@ -612,7 +634,7 @@ PASSED:
   ✓ test_kitchensink::test_kitchensink_all_node_types
   ✓ test_kitchensink::test_kitchensink_complex_tree
   ✓ test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_loud_error
+  ✓ test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ test_lambdas::test_assigned_lambda_is_a_function
   ✓ test_lambdas::test_block_called_with_bindings
   ✓ test_lambdas::test_lambda_captures_by_value
@@ -684,6 +706,7 @@ PASSED:
   ✓ test_math::test_if_block_syntax
   ✓ test_math::test_if_then_else
   ✓ test_math::test_logarithm_in_runtime
+  ✓ test_math::test_modulo
   ✓ test_math::test_modulo_with_variables
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
@@ -701,7 +724,6 @@ PASSED:
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
-  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -1173,6 +1195,17 @@ PASSED:
   ✓ test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ test_typed_arrays::test_typed_array_of_other_types
+  ✓ test_typed_lists::test_appended_int_list_is_an_array
+  ✓ test_typed_lists::test_int_array_assignment_keeps_value_semantics
+  ✓ test_typed_lists::test_int_array_errors_like_cons_list
+  ✓ test_typed_lists::test_int_array_index_count_sum_for
+  ✓ test_typed_lists::test_int_array_reads_back_as_the_same_node
+  ✓ test_typed_lists::test_int_arrays_inside_functions
+  ✓ test_typed_lists::test_int_expression_items_are_an_array
+  ✓ test_typed_lists::test_int_list_literal_is_an_array
+  ✓ test_typed_lists::test_map_and_element_wise_over_int_arrays
+  ✓ test_typed_lists::test_mixed_list_stays_cons_cells
+  ✓ test_typed_lists::test_zero_filled_int_list_is_an_array
   ✓ test_types_scope::test_data_key_is_a_scope
   ✓ test_types_scope::test_kebab_key_that_is_also_subtraction_warns
   ✓ test_types_scope::test_plural_type_word_denotes_a_list
@@ -1505,4 +1538,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-64 ignored, 1500 passed, 0 failed, 1500 total tested
+64 ignored, 1533 passed, 0 failed, 1533 total tested
