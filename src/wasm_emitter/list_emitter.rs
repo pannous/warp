@@ -514,11 +514,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `x = v`, `x += v` to a float variable: float arithmetic also in a loop body
 	fn is_float_assignment(&self, item: &Node) -> bool {
 		match item.drop_meta() {
-			Node::Key(left, Op::Define | Op::Assign, _) => {
-				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
-			}
+			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
 			_ => false,
 		}
 	}

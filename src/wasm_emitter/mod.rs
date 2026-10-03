@@ -1442,6 +1442,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	fn is_float_variable(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+	}
+
 	fn emit_compound_assign(
 		&mut self,
 		func: &mut Function,
@@ -2990,6 +2994,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// Arithmetic operators with float
+			// `s += x` on a float variable, also as a statement of a loop body
+			Node::Key(left, op, right) if op.is_compound_assign() && self.is_float_variable(left) => {
+				self.emit_compound_assign(func, left, op, right, true);
+			}
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
