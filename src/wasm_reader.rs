@@ -305,7 +305,8 @@ pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
 	let mut results = vec![Val::I32(0)];
 	{
 		let mut s = store_rc.borrow_mut();
-		main.call(&mut *s, &[], &mut results)?;
+		let outcome = main.call(&mut *s, &[], &mut results);
+		with_trap_detail(outcome, &mut s, &instance)?;
 	}
 
 	Ok(GcObject::new(results[0], store_rc, instance))
@@ -332,9 +333,27 @@ pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 		.ok_or_else(|| anyhow!("No main function"))?;
 
 	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
+	let outcome = main.call(&mut store, &[], &mut results);
+	with_trap_detail(outcome, &mut store, &instance)?;
 
 	val_to_node(&results[0], &mut store, &instance)
+}
+
+/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
+pub const TRAP_DETAIL: &str = "trap_detail";
+/// How a trapped run carries that value into its error: `trap detail: <value>`
+pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+
+/// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
+fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
+	outcome.map_err(|failure| {
+		let failure = anyhow::Error::from(failure);
+		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
+		match detail.filter(|value| !matches!(value, Val::AnyRef(None))).and_then(|value| val_to_node(&value, store, instance).ok()) {
+			Some(value) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", value.serialize())),
+			None => failure,
+		}
+	})
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
@@ -357,6 +376,11 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 						t if t == Kind::Int as u8 => {
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
+						}
+						t if t == Kind::Codepoint as u8 => {
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							let code = data_val.unwrap_anyref().and_then(|data| data.as_i31(&store).ok().flatten()).map(|code| code.get_u32());
+							Ok(code.and_then(char::from_u32).map_or(Node::Empty, Node::Char))
 						}
 						// an Error from a host call (fetch) carries its reason as text
 						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 || t == Kind::Error as u8 => {
@@ -463,7 +487,8 @@ pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
 		.ok_or_else(|| anyhow!("No main or _start function"))?;
 
 	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
+	let outcome = main.call(&mut store, &[], &mut results);
+	with_trap_detail(outcome, &mut store, &instance)?;
 	val_to_node(&results[0], &mut store, &instance)
 }
 
@@ -493,7 +518,8 @@ pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
 		.ok_or_else(|| anyhow!("No main function"))?;
 
 	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
+	let outcome = main.call(&mut store, &[], &mut results);
+	with_trap_detail(outcome, &mut store, &instance)?;
 
 	// Read the GC struct fields directly
 	let result_val = results[0];

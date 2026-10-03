@@ -139,6 +139,7 @@ mod test_sum_of_decimals;
 mod test_superscript_signs;
 mod test_sweep_fixes;
 mod test_switch_match;
+mod test_switch_no_case_value;
 mod test_switch_value;
 mod test_symbol_hyphen;
 mod test_text_bytes;
