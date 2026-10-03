@@ -678,7 +678,6 @@ PASSED:
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ test_list_plus_number::each_reading_has_its_explicit_form
-  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -720,6 +719,7 @@ PASSED:
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
   ✓ test_math::test_runtime_equality_autocast
+  ✓ test_math::test_simple_variables
   ✓ test_math::test_sin
   ✓ test_math::test_sinus_wasp_import
   ✓ test_math::test_sqrt_alias
@@ -1214,6 +1214,8 @@ PASSED:
   ✓ test_try_deep::try_catches_an_error_inside_an_expression
   ✓ test_try_deep::try_in_a_loop_catches_each_time
   ✓ test_try_deep::try_inside_a_called_function_restores_the_depth
+  ✓ test_try_else_value::an_arrow_fallback_is_a_function_value
+  ✓ test_try_else_value::try_else_takes_a_value_or_an_action
   ✓ test_try_else::assert_gives_the_condition_or_an_error
   ✓ test_try_else::try_falls_back_on_an_error_value
   ✓ test_try_else::try_falls_back_on_division_and_modulo_by_zero
@@ -1221,13 +1223,10 @@ PASSED:
   ✓ test_try_else::try_keeps_a_value
   ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
   ✓ test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
-  ✓ test_try_exits_and_naming::a_named_else_is_skipped_without_an_error
   ✓ test_try_exits_and_naming::bare_try_else_still_works
   ✓ test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
   ✓ test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
   ✓ test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
-  ✓ test_try_exits_and_naming::the_else_branch_names_a_caught_runtime_error
-  ✓ test_try_exits_and_naming::the_else_branch_names_an_error_value
   ✓ test_tuple_returns::test_bare_list_assignment_still_asks
   ✓ test_tuple_returns::test_destructuring_arity_mismatch_is_loud
   ✓ test_tuple_returns::test_parallel_assignment_and_swap
@@ -1312,7 +1311,6 @@ PASSED:
   ✓ test_unbounded_int::test_overflow_promotes_add_sub
   ✓ test_unbounded_int::test_overflow_promotes_mul
   ✓ test_unbounded_int::test_overflow_promotes_neg_abs
-  ✓ test_unbounded_int::test_overflow_promotes_pow
   ✓ test_unbounded_int::test_small_arithmetic_unchanged
   ✓ test_undefined_calls::test_declared_type_constructs
   ✓ test_undefined_calls::test_paren_data_stays_data
@@ -1615,4 +1613,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1610 passed, 0 failed, 1610 total tested
+58 ignored, 1608 passed, 0 failed, 1608 total tested
