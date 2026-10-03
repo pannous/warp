@@ -172,6 +172,7 @@ mod test_to_definition;
 mod test_todo;
 mod test_top_level_block;
 mod test_trap_messages;
+mod test_traits;
 mod test_truthiness_of_objects;
 mod test_try_else;
 mod test_try_deep;
