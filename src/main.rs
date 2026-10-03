@@ -157,6 +157,11 @@ fn main() {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         let result = eval(code);
         println!("» {}", result.serialize());
+    } else if let Some(code) = arg_string.strip_prefix("lower ") {
+        match wasm_emitter::lower(code) {
+            Ok(lowered) => println!("{}", lowered.serialize()),
+            Err(final_value) => println!("no module needed: {}", final_value.serialize()),
+        }
     } else if let Some(code) = arg_string.strip_prefix("parse ") {
         println!("{}", structure(&wasp_parser::parse(code)));
     } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
@@ -226,6 +231,7 @@ fn usage() {
     println!("  warp <file.warp>     Execute a warp file");
     println!("  warp <file.wasm>     Run a wasm file");
     println!("  warp eval <code>     Evaluate code");
+    println!("  warp lower <code>    Show the program after the lowering passes");
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");

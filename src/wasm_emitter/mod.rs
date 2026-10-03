@@ -3856,6 +3856,13 @@ fn write_debug_module(bytes: &[u8]) {
 	}
 }
 
+/// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
+/// when it needs no module.
+pub fn lower(code: &str) -> Result<Node, Node> {
+	crate::diagnostic::begin_program();
+	crate::diagnostic::in_program_mode(lawful_program(code)?, lower_for_emission)
+}
+
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
