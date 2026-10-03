@@ -562,6 +562,7 @@ PASSED:
   ✓ test_host::test_host_run_import
   ✓ test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
+  ✓ test_if_value_kind::test_if_of_characters_joins_a_text
   ✓ test_in_position::a_found_first_element_is_truthy
   ✓ test_in_position::in_gives_the_one_based_position
   ✓ test_in_position::maps_and_has_keep_their_truth_value
@@ -683,6 +684,9 @@ PASSED:
   ✓ test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
   ✓ test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
   ✓ test_logic_grouped_operands::the_logic_table_of_negations
+  ✓ test_logical_calls::test_call_operand_is_evaluated_once
+  ✓ test_logical_calls::test_call_operand_of_and_or
+  ✓ test_logical_calls::test_node_operand_of_and_or
   ✓ test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ test_loop_forms::for_without_variable_binds_it
   ✓ test_loop_forms::ranges_in_for_headers_stay_ranges
@@ -714,9 +718,9 @@ PASSED:
   ✓ test_math::test_superscript_powers
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
-  ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
+  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
   ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
@@ -996,6 +1000,7 @@ PASSED:
   ✓ test_samples::test_factorial
   ✓ test_samples::test_fibonacci
   ✓ test_samples::test_fizzbuzz
+  ✓ test_samples::test_game_of_life
   ✓ test_samples::test_gcd
   ✓ test_samples::test_parse_all_samples
   ✓ test_samples::test_power
@@ -1128,6 +1133,10 @@ PASSED:
   ✓ test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ test_text_getters::text_getters_read_texts_and_errors
+  ✓ test_text_repeat::n_times_text_is_the_explicit_repeat
+  ✓ test_text_repeat::text_repeat_names_the_explicit_form
+  ✓ test_text_repeat::text_times_float_or_text_stays_a_type_error
+  ✓ test_text_repeat::text_times_int_repeats
   ✓ test_text_runtime::join_and_concatenation_take_non_ascii_characters
   ✓ test_text_runtime::reverse_of_a_text_is_by_characters
   ✓ test_text_runtime::the_characters_of_a_runtime_text
@@ -1580,4 +1589,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1575 passed, 0 failed, 1575 total tested
+58 ignored, 1584 passed, 0 failed, 1584 total tested
