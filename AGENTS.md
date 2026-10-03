@@ -248,8 +248,9 @@ One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/wa
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
 
-Before and after each task run git status and your targeted tests (tests/queue.sh -- <filter>); the full ./test.sh is
-run by the Integrator on the merged tree (notes/roles.md).
+Workers: before and after each task, run `git status` and the tests that cover your change:
+`tests/queue.sh -- <filter>`. Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
+your branch (notes/roles.md).
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back
 
