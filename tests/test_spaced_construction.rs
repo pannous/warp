@@ -17,3 +17,11 @@ fn test_field_of_a_declared_type_reads_at_run_time() {
 	fails_with("class V { x: float, y: float }; x=[1]; x.y", "no field y");
 	fails_with("x=\"hello\"; x.shout", "undefined function: shout");
 }
+
+#[test] // samples/raytracer.wasp: `def vec(x, y, z) := Vec3 { x: x, y: y, z: z }` built `Vec3[1:1 2:2 3:3]`
+fn test_entry_named_like_a_variable_keeps_its_name() {
+	is!("x = 3; m = {x: x}; m.x", 3);
+	is!("def f(x) { k = {x: x}; return k.x }; f(3)", 3);
+	is!("class V { x: float, y: float }; def vec(x, y) := V(x, y); vec(3, 4).y", 4);
+	is!("class V { x: float, y: float }; def vec(x, y) := V { x: x, y: y }; vec(3, 4).x", 3);
+}

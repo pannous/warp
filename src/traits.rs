@@ -520,12 +520,13 @@ impl InstanceTypes {
 				Node::Key(_, Op::Then, then) => self.branches_shape(then, otherwise),
 				_ => None,
 			},
-			Node::List(items, _, _) => match items.as_slice() {
+			Node::List(items, _, separator) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
-				// `(x)`, and `(t = a; value)` as min_max binds its operands
-				[.., last] => self.shape(last),
-				[] => None,
+				// `(x)`, and `(t = a; value)` as min_max binds its operands; a call `f(s)` is not its argument
+				[single] => self.shape(single),
+				[.., last] if matches!(separator, Separator::Semicolon | Separator::Newline) => self.shape(last),
+				_ => None,
 			},
 			_ => None,
 		}
