@@ -49,6 +49,26 @@ crates.io. Its known gap, `miniz_oxide` for the package sub-builds, stays unfixe
 Lean is disabled in the cloud (user decision 2026-10-03): `requires!(LEAN)` skips the Lean-proving tests when
 `CLAUDE_CODE_REMOTE=true`. The test gate hook and tests/queue.sh lock are Mac-local; cloud sessions are exempt (notes/roles.md).
 
+**Session and environment ids** (from the cloud's own `mcp__claude-code-remote__list_sessions`):
+
+| Session | Session id | Environment | Model | crates.io | pannous.com |
+|---|---|---|---|---|---|
+| Cloud-Microsoft | session_01EkeRuTptsZvLBGsKoRGxip | env_011CUKrgcRXmXGnc5XA1kuYK ("Microsoft", Custom) | Opus 5.5 | 200 | 200 |
+| Cloud-Default | session_01TonobYUriX5FEEciaKZ46j | env_011CUKq4dJkNg2L8R6uJFKZb (Default, Trusted) | Sonnet 5.5 | 200 | 403 |
+
+The old routines ran in a third environment, env_011CUKr7fLEneY74cFok55eT, with no crates.io. Both open environments build
+from crates.io now. "Microsoft works much better" is most likely the **model**: Cloud-Microsoft runs Opus, while Cloud-Default
+runs Sonnet. Network access only differs for pannous.com.
+
+**Remaining cloud-only test failures**: 3 package/uniscript tests need the `wasm32-wasip1` Rust target. Fix it in each
+environment's **setup script**: `rustup target add wasm32-wasip1` (static.rust-lang.org is reachable). Cloud-Microsoft,
+2026-10-03: the suite was 1464 passed, 3 failed; after the rustup line those 3 tests pass (targeted run, 4/4 ok).
+
+**Cloud sessions can talk out**: they have the `claude-code-remote` MCP (`list_sessions`, `send_message`, behind a permission
+prompt). Cloud-Microsoft used it to find and brief the "fixer" session. When the USER tells a cloud session to merge
+into main, it does so itself (5747140, claude/no-lean-in-cloud). Our rule stays: cloud work goes to the Integrator.
+After an approved `send_message`, the stop hook complains about an uncommitted `.claude/settings.local.json`. Don't commit it.
+
 ## 2. Billing: what draws from where
 
 Measured with `~/dev/bin/claude-usage.sh`. It reads the OAuth usage endpoint with the keychain token and never prints it.
