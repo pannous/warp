@@ -78,6 +78,17 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   normally as a fallback? point.source first, check if it's a real attribute, then check if it's a meta. Or is that
   too complicated and overkill?" Answer (warp-43): not overkill, one fallback in the field lookup: field first, then
   meta; when both exist the field wins and a hint names `.@source`; neither → the strict "has no field" error.
+- Round 3 (2026-10-03, multiple choice):
+  - #40 `x -1`: "Keep subtracting". Only a number literal on the left asks (`1 -1`); variables, calls, words subtract.
+  - D2 `!`: "By position". `fn!` after a function/method mutates in place (`x.upper!`), `{…}!` evaluates a block,
+    await gets its own word `await job` (no `job!`).
+  - D14 `in` warning: "Never warn". `3 in [1 2 3]` gives the position silently (the impl-sem warning goes).
+  - D5 type-name matching rule (notes/matching.md): "Accept".
+  - D15 auto-imports: "Yes, folder scope". All .wasp files in the same folder are visible without `use`.
+  - Meta keys in iteration: "Skip @ keys". Iteration, keys, values and count ignore `@` entries.
+  - #34 deep traps under `try`: "Do it now".
+  - 14d test_comments2: user "what? 0.length() ???"; explained: the test parses two lines, `y=0` is one Key whose
+    length is 0 (C++ counted the 3-item list `[y = 0]`). Correct for the current model, closed.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -167,7 +178,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
-14d. `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
+14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
 15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
@@ -208,7 +219,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     (83a40987, content is merged) plus the older autostash entries. Drop them?
 33. DECIDED 2026-10-03 (see the top: by value + educate). A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
     closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
-34. DECIDED 2026-10-03 (later). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
+34. DECIDED 2026-10-03 (now, round 3). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
 35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
