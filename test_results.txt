@@ -4,6 +4,9 @@ PASSED:
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
+  ✓ control::test_block_statements::a_list_result_after_a_print_is_read
+  ✓ control::test_block_statements::a_print_in_a_block_runs_before_its_list_value
+  ✓ control::test_block_statements::a_statement_group_in_a_function_body_runs
   ✓ control::test_blocks::test_group_cascade
   ✓ control::test_blocks::test_group_cascade1
   ✓ control::test_blocks::test_group_cascade2
@@ -125,7 +128,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_fabs_from_m
   ✓ ffi::test_ffi::test_ffi_floor
   ✓ ffi::test_ffi::test_ffi_fmax
-  ✓ ffi::test_ffi::test_ffi_fmin
   ✓ ffi::test_ffi::test_ffi_fmin_wasp_file
   ✓ ffi::test_ffi::test_ffi_fmod
   ✓ ffi::test_ffi::test_ffi_generic_discovery
@@ -145,6 +147,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
   ✓ ffi::test_ffi::test_ffi_strlen
+  ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
@@ -331,6 +334,7 @@ PASSED:
   ✓ functions::test_typed_returns::test_return_type_after_the_parameters
   ✓ functions::test_typed_returns::test_type_before_the_name_converts_the_result
   ✓ functions::test_typed_signatures::several_typed_parameters
+  ✓ functions::test_typed_signatures::spaced_typed_signature
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
   ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
@@ -361,6 +365,8 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
+  ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_index_assignment::test_index_assign_25_elements
   ✓ lists::test_index_assignment::test_index_assign_in_while_loop
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
@@ -377,6 +383,7 @@ PASSED:
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
   ✓ lists::test_list_number_comparison::ordering_a_list_with_a_number_is_a_loud_error
+  ✓ lists::test_list_parameters::a_list_literal_assigned_to_a_parameter
   ✓ lists::test_list_parameters::implicit_it_indexed_as_list
   ✓ lists::test_list_parameters::indexed_parameter_can_be_called_repeatedly_and_combined
   ✓ lists::test_list_parameters::named_parameter_indexed_as_list
@@ -407,6 +414,9 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
+  ✓ lists::test_pop::pop_gives_the_last_item
+  ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ lists::test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
   ✓ lists::test_signed_operand_list::each_reading_has_its_explicit_form
@@ -438,10 +448,10 @@ PASSED:
   ✓ lists::test_unpacking::parenthesized_target
   ✓ lists::test_unpacking::star_init
   ✓ lists::test_unpacking::star_middle
-  ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
   ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
+  ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
   ✓ lists::test_unpacking::too_many_values_is_loud
   ✓ lists::test_unpacking::underscore_discards
@@ -654,6 +664,8 @@ PASSED:
   ✓ numbers::test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ numbers::test_rational_type::test_rational_and_rationals_are_type_words
   ✓ numbers::test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ numbers::test_round_to_digits::round_to_digits
+  ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
   ✓ numbers::test_shift_operators::test_angle_brackets_still_delimit_generics
   ✓ numbers::test_shift_operators::test_shift_left_multiplies_by_a_power_of_two
@@ -674,6 +686,8 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
   ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
+  ✓ numbers::test_unit_word_keys::a_quantity_held_in_a_variable
+  ✓ numbers::test_unit_word_keys::a_unit_word_key_after_a_number
   ✓ numbers::test_units_arithmetic::test_incompatible_units_are_an_error
   ✓ numbers::test_units_arithmetic::test_scaling_a_quantity
   ✓ numbers::test_units_arithmetic::test_spaced_known_unit_multiplies
@@ -788,6 +802,8 @@ PASSED:
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ parser::test_attributes::attribute_names_may_be_kebab_case
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
+  ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
+  ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
   ✓ parser::test_comments::test_comment_metadata
   ✓ parser::test_comments::test_comment_with_metadata_accessor
@@ -1191,6 +1207,8 @@ PASSED:
   ✓ types::test_data::test_node_data_metadata
   ✓ types::test_data::test_node_data_type_mismatch
   ✓ types::test_data::test_node_data_various_types
+  ✓ types::test_declaration_without_value::a_declaration_assigned_before_reading_works
+  ✓ types::test_declaration_without_value::reading_a_declaration_without_value_is_an_error
   ✓ types::test_float_fields::test_captured_variable_set_by_a_call
   ✓ types::test_float_fields::test_declared_float_field_in_arithmetic
   ✓ types::test_float_fields::test_float_conditionals
@@ -1262,6 +1280,7 @@ PASSED:
   ✓ types::test_type_name_matching::test_type_then_name_parameter
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
+  ✓ types::test_type_of::test_type_inside_a_function_body
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
@@ -1688,4 +1707,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1683 passed, 0 failed, 1683 total tested
+58 ignored, 1702 passed, 0 failed, 1702 total tested
