@@ -647,6 +647,7 @@ PASSED:
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ test_list_plus_number::the_answer_compiles_the_chosen_reading
+  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -698,7 +699,6 @@ PASSED:
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
-  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -909,6 +909,8 @@ PASSED:
   ✓ test_person_struct::test_person_struct_roundtrip
   ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
+  ✓ test_print_type_error::print_of_a_type_error_reports_that_error
+  ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
   ✓ test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ test_property_access::test_dot_on_a_variable_and_nested
   ✓ test_property_access::test_dot_on_an_object_literal
@@ -1289,7 +1291,6 @@ PASSED:
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
-  ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ test_wasm_emitter::test_emit_gc_types
   ✓ test_wasm_emitter::test_function_usage_tracking
@@ -1519,4 +1520,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1514 passed, 0 failed, 1514 total tested
+58 ignored, 1515 passed, 0 failed, 1515 total tested
