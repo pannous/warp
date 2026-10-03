@@ -149,16 +149,16 @@ pub fn lower(node: Node) -> Node {
 	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), temporaries: Cell::new(0) }.expand(node)
 }
 
-/// Method syntax for functions: the called method `x.f(args)` is `f(x, args)` when f is a user, rounding or libm function.
-/// Runs first, so the passes that know these calls see them in their plain form
+/// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding or libm
+/// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
+/// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
-	let mut assigned = HashSet::new();
-	collect_assigned_names(&node, &mut assigned);
+	let mut defined: HashSet<String> = context.user_functions.into_keys().collect();
+	collect_assigned_names(&node, &mut defined);
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some();
-	let is_function = |name: &str| context.user_functions.contains_key(name) || (is_builtin(name) && !assigned.contains(name));
-	function_methods_as_calls(node, &is_function)
+	function_methods_as_calls(node, &|name| is_builtin(name) && !defined.contains(name))
 }
 
 fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str) -> bool) -> Node {
