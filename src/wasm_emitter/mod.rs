@@ -3198,99 +3198,46 @@ impl WasmGcEmitter {
 		Ok(bytes)
 	}
 
+	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
 	fn emit_names(&mut self) {
-		// Module name
 		self.names.module("wasp_compact");
 
-		// Type names
-		let mut type_names = NameMap::new();
-		type_names.append(self.type_manager.string_type, "String");
-		type_names.append(self.type_manager.i64_box_type, "i64box");
-		type_names.append(self.type_manager.f64_box_type, "f64box");
-		type_names.append(self.type_manager.node_type, "Node");
-		// User-defined type names
-		for (name, idx) in &self.ctx.user_type_indices {
-			type_names.append(*idx, name);
+		let mut functions: Vec<(u32, &str)> = self.ctx.func_registry.all().iter().map(|f| (f.call_index as u32, f.name.as_str())).collect();
+		self.names.functions(&name_map(&mut functions));
+
+		let tm = &self.type_manager;
+		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node")];
+		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
+		self.names.types(&name_map(&mut types));
+
+		if self.next_global_idx > 0 {
+			const KIND_GLOBALS: [&str; 12] = ["kind_empty", "kind_int", "kind_float", "kind_text", "kind_codepoint", "kind_symbol",
+				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
+			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
+				.filter(|(idx, _)| (*idx as u32) < self.next_global_idx).map(|(idx, name)| (idx as u32, *name)).collect();
+			globals.extend(self.extra_global_names.iter().copied());
+			self.names.globals(&name_map(&mut globals));
 		}
-		self.names.types(&type_names);
 
-		// Field names for struct types
-		let mut type_field_names = IndirectNameMap::new();
-
-		// $Node fields
-		let mut node_fields = NameMap::new();
-		node_fields.append(0, "kind");
-		node_fields.append(1, "data");
-		node_fields.append(2, "value");
-		type_field_names.append(self.type_manager.node_type, &node_fields);
-
-		// $String fields
-		Self::append_string_field_names(&mut type_field_names, self.type_manager.string_type);
-
-		// $i64box field
-		let mut i64box_fields = NameMap::new();
-		i64box_fields.append(0, "value");
-		type_field_names.append(self.type_manager.i64_box_type, &i64box_fields);
-
-		// $f64box field
-		let mut f64box_fields = NameMap::new();
-		f64box_fields.append(0, "value");
-		type_field_names.append(self.type_manager.f64_box_type, &f64box_fields);
-
-		// User-defined type fields
+		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
+			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
+			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
+			(tm.i64_box_type, vec![(0, "value")]),
+			(tm.f64_box_type, vec![(0, "value")]),
+		];
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
-				let mut field_names = NameMap::new();
-				for (i, field) in type_def.fields.iter().enumerate() {
-					field_names.append(i as u32, &field.name);
-				}
-				type_field_names.append(type_idx, &field_names);
+				fields.push((type_idx, type_def.fields.iter().enumerate().map(|(i, field)| (i as u32, field.name.as_str())).collect()));
 			}
 		}
-
+		fields.sort_by_key(|(type_idx, _)| *type_idx);
+		fields.dedup_by_key(|(type_idx, _)| *type_idx);
+		let mut type_field_names = IndirectNameMap::new();
+		for (type_idx, mut names) in fields {
+			type_field_names.append(type_idx, &name_map(&mut names));
+		}
 		self.names.fields(&type_field_names);
 
-		// Function names - sort by index for deterministic output
-		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self.ctx
-			.func_registry
-			.all()
-			.iter()
-			.map(|f| (f.name.as_str(), f.call_index as u32))
-			.collect();
-		sorted.sort_by_key(|(_, idx)| *idx);
-		for (name, idx) in sorted {
-			func_names.append(idx, name);
-		}
-		self.names.functions(&func_names);
-
-		// Global names for Kind constants
-		if self.next_global_idx > 0 {
-			let global_names_list = [
-				"kind_empty",
-				"kind_int",
-				"kind_float",
-				"kind_text",
-				"kind_codepoint",
-				"kind_symbol",
-				"kind_key",
-				"kind_block",
-				"kind_list",
-				"kind_data",
-				"kind_meta",
-				"kind_error",
-			];
-			let mut global_names = NameMap::new();
-			for (idx, name) in global_names_list.iter().enumerate() {
-				if (idx as u32) < self.next_global_idx {
-					global_names.append(idx as u32, name);
-				}
-			}
-			for (idx, name) in &self.extra_global_names {
-				global_names.append(*idx, name);
-			}
-			self.names.globals(&global_names);
-		}
 		if let Some(tag_names) = self.error_tag_names() {
 			self.names.tags(&tag_names);
 		}
@@ -3461,6 +3408,11 @@ impl WasmGcEmitter {
 		// Name section for field name resolution
 		let mut names = NameSection::new();
 
+		// Function names (subsection 1 comes before types and fields)
+		let mut func_names = NameMap::new();
+		func_names.append(0, "main");
+		names.functions(&func_names);
+
 		// Type names
 		let mut type_names = NameMap::new();
 		type_names.append(string_type_idx, "String");
@@ -3481,17 +3433,23 @@ impl WasmGcEmitter {
 		type_field_names.append(struct_type_idx, &struct_fields_names);
 		names.fields(&type_field_names);
 
-		// Function names
-		let mut func_names = NameMap::new();
-		func_names.append(0, "main");
-		names.functions(&func_names);
-
 		module.section(&names);
 
 		let bytes = module.finish();
 		write_debug_module(&bytes);
 		bytes
 	}
+}
+
+/// A name map in index order (the name section requires it), one name per index
+fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
+	names.sort_by_key(|(idx, _)| *idx);
+	names.dedup_by_key(|(idx, _)| *idx);
+	let mut map = NameMap::new();
+	for (idx, name) in names.iter() {
+		map.append(*idx, name);
+	}
+	map
 }
 
 #[cfg(feature = "native")]

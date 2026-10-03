@@ -234,6 +234,7 @@ mod test_welcoming_slices;
 mod test_welcoming_sugar;
 mod test_while_paren_condition;
 mod test_while_value;
+mod test_wasm_names_order;
 mod test_web_playground;
 mod test_wit_types;
 mod test_wit;
