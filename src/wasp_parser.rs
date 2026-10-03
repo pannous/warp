@@ -2515,6 +2515,12 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
+		// `int[n]`: n zeros of the type, whatever n is and wherever it stands
+		if let (Node::Symbol(type_word), [count], false) = (lhs.drop_meta(), indices.as_slice(), self.options.data_mode) {
+			if let Some(zeros) = crate::analyzer::zero_list(count.clone(), type_word).filter(|_| slice_bounds(count).is_none()) {
+				return Some(zeros);
+			}
+		}
 		if slice_bounds(&indices[0]).is_none() {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);

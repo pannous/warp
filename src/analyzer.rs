@@ -2188,7 +2188,7 @@ fn zero_element(type_word: &str) -> Option<Node> {
 pub const ZERO_FILL_CALL: &str = "zero_fill";
 
 /// The zero-filled list of `count` (any number expression) elements of the type word
-fn zero_list(count: Node, type_word: &str) -> Option<Node> {
+pub fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 	let zero = zero_element(type_word)?;
 	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, zero], Bracket::Round, Separator::None))
 }
@@ -2305,9 +2305,10 @@ fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 	}
 }
 
-/// `int[100]` or `100 * int`: the zero-filled list of that many elements
+/// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
 fn typed_array_value(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => Some(value.clone()),
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {
 			Node::Symbol(word) => zero_list(count.as_ref().clone(), word),
 			_ => None,

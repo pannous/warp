@@ -26,3 +26,10 @@ fn test_typed_array_of_other_types() {
 fn test_typed_array_assignment_past_the_end_is_an_error() {
 	fails_with("x : 3 int; x#5=7", "index out of range");
 }
+
+#[test]
+fn a_type_word_subscript_is_a_zero_filled_list_anywhere() {
+	is!("#(int[3])", 3);
+	is!("n=3; #(int[n])", 3);
+	is!("n=2; x = int[n]; x#2", 0);
+}
