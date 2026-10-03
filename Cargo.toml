@@ -1,6 +1,7 @@
 # cargo install --path . --locked --offline
 # GO OFFLINE against fucking 10 sec compilation every time!
-# --offline mode
+# --offline mode: dependencies come from the local registry cache. Vendoring is deactivated for now (no vendor/ on main;
+# the `vendor` branch and its refresh workflow are kept for offline cloud agents: notes/cloud_offline_build.md)
 
 
 [package]
@@ -115,6 +116,6 @@ panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
 
 [lib]
-# to compile to wasm using `wasm-pack build` :
-crate-type = ["cdylib", "rlib"]
-#https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
+# Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).
+# A cdylib here made cargo name the rlib without a hash, so every checkout copy linked the same libwarp.rlib.
+crate-type = ["rlib"]

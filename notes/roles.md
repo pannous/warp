@@ -56,7 +56,7 @@ The only session that runs the full suite and the only one that pushes code to m
 ## Workers
 - One task, one branch, one worktree: `git worktree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
-  Uncommitted build tweak in it: `version = "0.1.1-<name>"` + `crate-type = ["rlib"]` (notes/build_speed.md).
+  Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
 - Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
