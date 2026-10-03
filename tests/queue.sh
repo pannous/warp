@@ -14,6 +14,17 @@ POLL_SECONDS=2
 if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
 
+# lockf is the Mac's (BSD) lock tool, Linux (cloud VMs) has flock; with neither there is no lock to take
+if command -v lockf >/dev/null; then
+	lock_is_free=(lockf -s -t 0 "$LOCK" true); hold_lock=(lockf -k "$LOCK")
+elif command -v flock >/dev/null; then
+	lock_is_free=(flock -n "$LOCK" true); hold_lock=(flock "$LOCK")
+else
+	echo "test queue: neither lockf nor flock found, running WITHOUT the warp test lock" >&2
+	WARP_TEST_LOCKED=1 exec "${run[@]}"
+fi
+mkdir -p "$(dirname "$LOCK")"
+
 case "${run[0]}" in *test.sh) priority=0 ;; *) priority=1 ;; esac
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
@@ -27,7 +38,7 @@ drop_stale_tickets() {
 first_ticket() { ls "$QUEUE" | sort | head -1; }
 
 drop_stale_tickets
-if [ "$(first_ticket)" != "${ticket##*/}" ] || ! lockf -s -t 0 "$LOCK" true; then
+if [ "$(first_ticket)" != "${ticket##*/}" ] || ! "${lock_is_free[@]}"; then
 	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder)," \
 		"$(($(ls "$QUEUE" | sort | grep -n "^${ticket##*/}$" | cut -d: -f1) - 1)) ahead of us)" >&2
 fi
@@ -35,5 +46,5 @@ while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $PO
 
 # exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1
-exec lockf -k "$LOCK" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
+exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
 	"$LOCK" "$ticket" "${run[@]}"

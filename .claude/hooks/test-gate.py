@@ -3,8 +3,10 @@
 
 Blocks a Bash command with a segment that starts a test run directly: `cargo … test`, `cargo browser-test`, or a
 compiled test binary (`…/deps/tests-<hash>`). `./test.sh` and `tests/queue.sh …` pass (both take the lock), and so
-does `cargo test --no-run` (a build, no test runs). Exit 2 = block, the message goes back to the agent."""
+does `cargo test --no-run` (a build, no test runs). Exit 2 = block, the message goes back to the agent.
+Cloud sessions (CLAUDE_CODE_REMOTE=true) are exempt: their VM is not shared, so there is no machine to protect."""
 import json
+import os
 import re
 import sys
 
@@ -25,6 +27,8 @@ def direct_test_run(command: str) -> str | None:
 
 
 def main() -> int:
+    if os.environ.get("CLAUDE_CODE_REMOTE") == "true":
+        return 0
     try:
         command = json.loads(sys.stdin.read()).get("tool_input", {}).get("command", "")
     except (ValueError, AttributeError):

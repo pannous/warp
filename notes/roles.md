@@ -53,5 +53,7 @@ So branches are official, and every branch lives in a worktree under warp.worktr
 - `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
   binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
   directory is this checkout, which includes all spawned workers.
+- Both are Mac-local: cloud sessions (`CLAUDE_CODE_REMOTE=true`, a VM of their own) are exempt from the gate, and
+  queue.sh falls back to flock on Linux, or runs unlocked with a loud note when neither lockf nor flock exists.
 - Not covered: a script a worker writes itself that calls cargo test, and sessions in other checkouts; the role rule
   covers those.
