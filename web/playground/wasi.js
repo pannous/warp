@@ -1,14 +1,19 @@
 // A small WASI preview1 for the test binary in the browser (test-worker.js): arguments, clocks, randomness, stdout and
-// stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (host.js getSync,
-// FILE_ROOT; directories through the static server's listing page). Writes land in an in-memory overlay that lives as
+// stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (FILE_ROOT;
+// directories through the static server's listing page, cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE). Writes land in an in-memory overlay that lives as
 // long as the instance (one test), so a test can write a scratch file and read it back. Unknown calls: ENOSYS.
 
 const ERRNO = { SUCCESS: 0, BADF: 8, INVAL: 28, NOENT: 44, NOSYS: 52, NOTDIR: 54 };
 const FILETYPE = { CHARACTER_DEVICE: 2, DIRECTORY: 3, REGULAR_FILE: 4 };
 const OPEN = { CREATE: 1, DIRECTORY: 2, EXCLUSIVE: 4, TRUNCATE: 8 };
 const FD_FLAG_APPEND = 1;
-const ROOT_FD = 3; // the one preopened directory
-const ROOT_NAME = ".";
+const ROOT_FD = 3; // ".", the served repository; wasi-libc also resolves relative paths ("/" + path) here
+const INCLUDE_FD = 4; // "/include": the C headers warp reads for FFI signatures, each served by its name (test_in_browser.py)
+const INCLUDE_DIRECTORY = "/include";
+const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY]]);
+const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
+// WARP_INCLUDE replaces the compiler's include directories (src/ffi_parser.rs), so it looks in exactly one place
+const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`];
 const ALL_RIGHTS = 0xffffffffffffffffn;
 const RANDOM_CHUNK = 65536; // crypto.getRandomValues limit per call
 const DIRENT_HEADER = 24;
@@ -32,22 +37,61 @@ function normalPath(path) {
 	return parts.join("/");
 }
 
-// what the server has at a path: {bytes} for a file, {entries} for a directory, null for nothing
-function served(path) {
+const listings = new Map(); // directory → Map(name → is a directory) on the server, null: none; for every test of this worker
+
+function requestSync(method, url) {
 	try {
 		const request = new XMLHttpRequest();
-		request.open("GET", FILE_ROOT + path, false);
+		request.open(method, url, false);
 		request.overrideMimeType("text/plain; charset=x-user-defined");
 		request.send();
-		if (request.status !== 200) return null;
-		if (path === "" || request.responseURL.endsWith("/")) {
-			const names = [...request.responseText.matchAll(LISTING_LINK)].map(match => decodeURIComponent(match[1]).replace(/\/$/, ""));
-			return { entries: new Set(names) };
-		}
-		return { bytes: Uint8Array.from(request.responseText, character => character.charCodeAt(0) & 0xff) };
+		return request.status === 200 ? request : null;
 	} catch {
 		return null;
 	}
+}
+
+const bytesOf = request => Uint8Array.from(request.responseText, character => character.charCodeAt(0) & 0xff);
+
+// the entries of a served directory, from the listing page (a name ending in "/" is a directory); a missing parent is
+// known without asking the server
+function listing(directory) {
+	if (listings.has(directory)) return listings.get(directory);
+	const parent = directory.includes("/") ? directory.slice(0, directory.lastIndexOf("/")) : "";
+	const exists = directory === "" || listing(parent)?.get(directory.slice(directory.lastIndexOf("/") + 1));
+	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}`) : null;
+	const entries = request && new Map([...request.responseText.matchAll(LISTING_LINK)].map(match => {
+		const name = decodeURIComponent(match[1]);
+		return [name.replace(/\/$/, ""), name.endsWith("/")];
+	}));
+	listings.set(directory, entries);
+	return entries;
+}
+
+const headers = new Map(); // header URL → its lazy file or null, for every test of this worker
+
+// a served file, read only when its bytes are wanted: a directory walk stats every file of the repository
+function lazyFile(url) {
+	let bytes;
+	return {
+		get bytes() { return bytes ??= bytesOf(requestSync("GET", url) ?? { responseText: "" }); },
+		get size() { return bytes?.length ?? Number(requestSync("HEAD", url)?.getResponseHeader("Content-Length") ?? 0); },
+	};
+}
+
+// what the server has at a path: {bytes, size} for a file, {entries} for a directory, null for nothing.
+// "/include/…" are C headers (INCLUDE_URL), the other paths the repository's, asked only when their directory lists them
+function served(path) {
+	if (path.startsWith(`${INCLUDE_DIRECTORY}/`)) {
+		const url = INCLUDE_URL + path.slice(INCLUDE_DIRECTORY.length + 1);
+		if (!headers.has(url)) headers.set(url, requestSync("HEAD", url) ? lazyFile(url) : null);
+		return headers.get(url);
+	}
+	if (path === "") return { entries: new Set(listing("").keys()) };
+	const directory = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+	const isDirectory = listing(directory)?.get(path.slice(path.lastIndexOf("/") + 1));
+	if (isDirectory === undefined) return null;
+	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
 }
 
 // args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2)
@@ -56,7 +100,7 @@ function wasiImports(memory, args, output) {
 	const made = new Set(); // directories made in this instance
 	const removed = new Set(); // paths deleted in this instance
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
-	let nextFd = ROOT_FD + 1;
+	let nextFd = ROOT_FD + PREOPENS.size;
 	const view = () => new DataView(memory().buffer);
 	const bytesAt = (pointer, length) => new Uint8Array(memory().buffer, pointer, length);
 	const textAt = (pointer, length) => utf8Decoder.decode(bytesAt(pointer, length).slice());
@@ -73,9 +117,12 @@ function wasiImports(memory, args, output) {
 		if (found?.entries) children(path).forEach(name => found.entries.add(name));
 		return found;
 	}
+	// a path as the overlay and served() key it: relative for the repository, "/…" for the machine
 	const resolve = (dirFd, pointer, length) => {
-		const base = dirFd === ROOT_FD ? "" : descriptors.get(dirFd)?.path;
-		return base === undefined ? undefined : normalPath(`${base}/${textAt(pointer, length)}`);
+		const base = dirFd === ROOT_FD ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
+		if (base === undefined) return undefined;
+		const path = normalPath(`${base}/${textAt(pointer, length)}`);
+		return base.startsWith("/") ? `/${path}` : path;
 	};
 	const open = entry => {
 		descriptors.set(nextFd, entry);
@@ -102,18 +149,17 @@ function wasiImports(memory, args, output) {
 		bytesAt(pointer, 64).fill(0);
 		view().setUint8(pointer + 16, entry.entries ? FILETYPE.DIRECTORY : FILETYPE.REGULAR_FILE);
 		view().setBigUint64(pointer + 24, 1n, true);
-		view().setBigUint64(pointer + 32, BigInt(entry.bytes?.length ?? 0), true);
+		view().setBigUint64(pointer + 32, BigInt(entry.size ?? entry.bytes?.length ?? 0), true);
 		return ERRNO.SUCCESS;
 	};
 	const vectors = (pointer, count) => Array.from({ length: count }, (_, index) =>
 		[view().getUint32(pointer + 8 * index, true), view().getUint32(pointer + 8 * index + 4, true)]);
-	const environment = [];
 
 	const known = {
 		args_get: (pointers, buffer) => writeStrings(args, pointers, buffer),
 		args_sizes_get: (count, size) => writeSizes(args, count, size),
-		environ_get: (pointers, buffer) => writeStrings(environment, pointers, buffer),
-		environ_sizes_get: (count, size) => writeSizes(environment, count, size),
+		environ_get: (pointers, buffer) => writeStrings(ENVIRONMENT, pointers, buffer),
+		environ_sizes_get: (count, size) => writeSizes(ENVIRONMENT, count, size),
 		clock_time_get: (_id, _precision, time) => {
 			view().setBigUint64(time, BigInt(Math.round((performance.timeOrigin + performance.now()) * 1e6)), true);
 			return ERRNO.SUCCESS;
@@ -169,19 +215,19 @@ function wasiImports(memory, args, output) {
 		fd_sync: () => ERRNO.SUCCESS,
 		fd_datasync: () => ERRNO.SUCCESS,
 		fd_prestat_get: (fd, prestat) => {
-			if (fd !== ROOT_FD) return ERRNO.BADF;
+			if (!PREOPENS.has(fd)) return ERRNO.BADF;
 			view().setUint8(prestat, 0);
-			view().setUint32(prestat + 4, ROOT_NAME.length, true);
+			view().setUint32(prestat + 4, PREOPENS.get(fd).length, true);
 			return ERRNO.SUCCESS;
 		},
 		fd_prestat_dir_name: (fd, pointer, length) => {
-			if (fd !== ROOT_FD) return ERRNO.BADF;
-			bytesAt(pointer, length).set(utf8.encode(ROOT_NAME).subarray(0, length));
+			if (!PREOPENS.has(fd)) return ERRNO.BADF;
+			bytesAt(pointer, length).set(utf8.encode(PREOPENS.get(fd)).subarray(0, length));
 			return ERRNO.SUCCESS;
 		},
 		fd_fdstat_get: (fd, stat) => {
 			const entry = descriptors.get(fd);
-			const filetype = fd <= 2 ? FILETYPE.CHARACTER_DEVICE : fd === ROOT_FD || entry?.entries ? FILETYPE.DIRECTORY : entry ? FILETYPE.REGULAR_FILE : 0;
+			const filetype = fd <= 2 ? FILETYPE.CHARACTER_DEVICE : PREOPENS.has(fd) || entry?.entries ? FILETYPE.DIRECTORY : entry ? FILETYPE.REGULAR_FILE : 0;
 			if (!filetype) return ERRNO.BADF;
 			bytesAt(stat, 24).fill(0);
 			view().setUint8(stat, filetype);
@@ -191,7 +237,7 @@ function wasiImports(memory, args, output) {
 		},
 		fd_fdstat_set_flags: () => ERRNO.SUCCESS,
 		fd_filestat_get: (fd, stat) => {
-			const entry = fd === ROOT_FD ? { entries: new Set() } : descriptors.get(fd);
+			const entry = PREOPENS.has(fd) ? { entries: new Set() } : descriptors.get(fd);
 			return entry ? writeFilestat(stat, entry) : ERRNO.BADF;
 		},
 		fd_filestat_set_size: (fd, size) => {

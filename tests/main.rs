@@ -81,6 +81,7 @@ mod test_global_declaration;
 mod test_global_modifiers;
 mod test_globals;
 mod test_glyph_aliases;
+mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_if_call_condition;
@@ -238,6 +239,7 @@ mod test_welcoming_slices;
 mod test_welcoming_sugar;
 mod test_while_paren_condition;
 mod test_while_value;
+mod test_wasm_names_order;
 mod test_web_playground;
 mod test_wit_types;
 mod test_wit;
