@@ -57,3 +57,18 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   `int("5")*3` for a digit text (user decision "Python repeat"). `n times "ab"` / `n times g` repeat (parser marker
   `times·text`, a non-text is an error naming `n times [x]`). text * float/text stay type errors.
   tests/text/test_text_repeat.rs; approved edits of test_print_type_error, probe_footguns, test_welcoming_sugar in their own commit.
+  tests/test_text_repeat.rs; approved edits of test_print_type_error, probe_footguns, test_welcoming_sugar in their own commit.
+
+## 2026-10-04 fix-ignored (the #[ignore = "next"/"soon"] sweep)
+- Python unpacking (tests/probe_destructuring.rs, all 15 "next" probes now pass): `a, b = xs` of a list, text or
+  `(1, 2)` unpacks by position (tuple_emitter.rs emit_unpacking; another count is the runtime error "wrong number of
+  values"); `a, *rest = …` / `*init, last` / `a, *mid, z` (parser: `*name` → the starred symbol, tuples.rs STARRED;
+  node_slice for the rest); `[a, b] = v`, `(a, b) = 1, 2`, nested `(a, b), c = …` (hidden `unpacked·i` names).
+- `f(int x, float y)` / `fun f(int a, int b){…}`: every comma argument may be a typed parameter (typed_parameters).
+- Exact reals join texts symbolically in constant programs (real.rs Value::Text): `"f" + sqrt(2)` → "f√2", `π/2 as
+  string` → "π/2" (user: "√2 if we preserve that information symbolically").
+- test_types "soon" tests un-ignored where they pass (their assertions are comments): test_typed_functions,
+  test_empty_typed_functions, test_polymorphism, test_polymorphism2. Still ignored, need real features: return-type
+  annotations `def f(x):float := …` (undefined function f), overloading by parameter type (test_polymorphism3), and
+  test_function_argument_cast (C-style `float addi(int x,int y){…}` return-typed definitions, int parameters
+  truncating float arguments).

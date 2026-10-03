@@ -312,7 +312,6 @@ fn test_types_simple2() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system and Signature implementation
 fn test_typed_functions() {
 	// todo name 'id' clashes with 'id' in preRegisterFunctions();
 	clear_analyzer_context();
@@ -335,7 +334,6 @@ fn test_typed_functions() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system
 fn test_empty_typed_functions() {
 	// todo int a(){} should be compiler error
 	// todo do we really want / need int a(); #[test] fn a(){} ?
@@ -377,7 +375,6 @@ fn test_types() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism() {
 	// debug:
 	//	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
@@ -396,7 +393,6 @@ fn test_polymorphism() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism2() {
 	clear_analyzer_context();
 	let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");

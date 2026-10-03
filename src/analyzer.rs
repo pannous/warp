@@ -431,10 +431,17 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 	}
 	if let Some((names, values)) = crate::tuples::destructuring(node) {
 		let temporaries = values.iter().map(|value| collect_variables_inner(value, scope, false, in_structure)).sum();
+		// with a starred name the values are unpacked from one list: each name holds a Node, the star a list
+		let starred = names.iter().any(|name| crate::tuples::unstarred(name) != name);
 		for (index, name) in names.iter().enumerate() {
-			if scope.lookup(name).is_none() && !scope.is_global(name) {
-				let kind = destructured_kind(values, index, scope);
-				scope.define(name.clone(), None, kind);
+			let rest = crate::tuples::unstarred(name);
+			if scope.lookup(rest).is_none() && !scope.is_global(rest) {
+				let kind = match (starred, rest != name) {
+					(_, true) => Kind::List,
+					(true, false) => Kind::Data,
+					(false, false) => destructured_kind(values, index, scope),
+				};
+				scope.define(rest.to_string(), None, kind);
 			}
 		}
 		return temporaries;
