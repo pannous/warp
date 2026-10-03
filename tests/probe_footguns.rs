@@ -906,7 +906,7 @@ fn test_approximation_is_marked() {
 #[test]
 fn test_as_float_converts_exact_values() {
 	let pi = eval("π as float");
-	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.141592653589793), "{pi:?}");
+	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == std::f64::consts::PI), "{pi:?}");
 }
 
 #[test]

@@ -184,6 +184,7 @@ fn test_function_definitions() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
 fn test_variables() {
 	// Basic integers
 	is!("x=42; x", 42);
