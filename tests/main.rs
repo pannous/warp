@@ -5,6 +5,7 @@
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
+mod modules;
 mod control;
 mod functions;
 mod lists;
@@ -35,30 +36,22 @@ mod test_ffi_import_group;
 mod test_ffi_warning_once;
 mod test_ffi;
 mod test_float_fields;
-mod test_folder_scope;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_gc_name_registry;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_gc_struct;
 mod test_got_it_warnings;
-mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_host_words;
-mod test_include;
 mod test_it_shadow_warning;
 mod test_kitchensink;
 mod test_logical_calls;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_libm_linking;
 mod test_like;
-mod test_module_cache;
 mod test_name_subsection_order;
 mod test_object_arguments;
-mod test_package_pin;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_package_tools;
-mod test_packages;
 mod test_panic_sweep;
 mod test_records;
 mod test_return_type_dispatch;
@@ -72,9 +65,6 @@ mod test_todo;
 mod test_try_else_value;
 mod test_typed_returns;
 mod test_tuples;
-mod test_use_modules;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_versions;
 mod test_warning_mode;
 mod test_wasi;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
