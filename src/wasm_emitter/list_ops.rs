@@ -1014,7 +1014,7 @@ const MAP_COLUMN_CELLS: &str = "map_column_cells";
 const ENTRY_PART: i32 = 0;
 const KEY_PART: i32 = 1;
 const VALUE_PART: i32 = 2;
-use crate::library_words::{COLLECTION_CONTAINS, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WORD_FUNCTIONS};
+use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WORD_FUNCTIONS};
 
 impl WasmGcEmitter {
 	/// The key of `target[key]`: an index that is a symbol or a text (not a number) selects the entry of that name
@@ -1324,40 +1324,44 @@ impl WasmGcEmitter {
 				s.call(f, MAP_COLUMN);
 			});
 		}
-		// collection_contains(xs, x): 1 when a map has the key x or a list the element x, else 0
-		self.runtime_function(COLLECTION_CONTAINS, vec![node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64], |s, f| {
-			let (wanted, cell, kind) = (1, 2, 3);
-			let answer = |f: &mut Function, s: &Self, value: i64| {
-				f.instruction(&I::I64Const(value));
+		// collection_contains(xs, x): 1 when a map has the key x or a list the element x, else 0;
+		// collection_position(xs, x) (`x in xs`): the 1-based position of x in a list instead of the 1 (user decision D14)
+		for (name, positional) in [(COLLECTION_CONTAINS, false), (COLLECTION_POSITION, true)] {
+			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64, ValType::I64], |s, f| {
+				let (wanted, cell, kind, position) = (1, 2, 3, 4);
+				let answer = |f: &mut Function, s: &Self, value: i64| {
+					f.instruction(&if positional && value == 1 { I::LocalGet(position) } else { I::I64Const(value) });
+					s.call(f, "new_int");
+					f.instruction(&I::Return);
+				};
+				f.instruction(&I::LocalGet(0));
+				s.call(f, IS_MAP);
+				f.instruction(&I::If(BlockType::Empty));
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+				s.call(f, "map_find");
+				Self::emit_list(f, &[I::RefIsNull, I::I64ExtendI32U, I::I64Const(1), I::I64Xor]);
 				s.call(f, "new_int");
-				f.instruction(&I::Return);
-			};
-			f.instruction(&I::LocalGet(0));
-			s.call(f, IS_MAP);
-			f.instruction(&I::If(BlockType::Empty));
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, "map_find");
-			Self::emit_list(f, &[I::RefIsNull, I::I64ExtendI32U, I::I64Const(1), I::I64Xor]);
-			s.call(f, "new_int");
-			Self::emit_list(f, &[I::Return, I::End]);
-			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
-			answer(f, s, 0);
-			f.instruction(&I::End);
-			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
-			s.emit_fail_if(f, "not_a_list");
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, cell, 1);
-			f.instruction(&I::LocalGet(wanted));
-			s.call(f, VALUES_EQUAL);
-			f.instruction(&I::If(BlockType::Empty));
-			answer(f, s, 1);
-			f.instruction(&I::End);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
-			answer(f, s, 0);
-		});
+				Self::emit_list(f, &[I::Return, I::End]);
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				answer(f, s, 0);
+				f.instruction(&I::End);
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
+				s.emit_fail_if(f, "not_a_list");
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+				Self::emit_list(f, &[I::LocalGet(position), I::I64Const(1), I::I64Add, I::LocalSet(position)]);
+				s.emit_field(f, cell, 1);
+				f.instruction(&I::LocalGet(wanted));
+				s.call(f, VALUES_EQUAL);
+				f.instruction(&I::If(BlockType::Empty));
+				answer(f, s, 1);
+				f.instruction(&I::End);
+				s.emit_field(f, cell, 2);
+				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+				answer(f, s, 0);
+			});
+		}
 		// map_get_or(map, key, fallback): the value of the key, else the fallback (ø by default: `m.get(k)`)
 		self.runtime_function(MAP_GET_OR, vec![node_ref, node_ref, node_ref], vec![node_ref], vec![], |s, f| {
 			Self::emit_list(f, &[I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);

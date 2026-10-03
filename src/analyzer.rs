@@ -77,7 +77,20 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
 fn is_statement_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline))
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline) => true,
+		Node::List(items, Bracket::Curly, _) => matches!(items.as_slice(), [single] if is_update(single.drop_meta())), // `{x=x+1}`, `{n++}`
+		_ => false,
+	}
+}
+
+/// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
+fn is_update(node: &Node) -> bool {
+	match node {
+		Node::Key(target, Op::Assign, value) => matches!(target.drop_meta(), Node::Symbol(name) if crate::wasp_parser::mentions(value, name)),
+		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => matches!(target.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
 }
 
 /// Infer the Kind for an expression
@@ -551,12 +564,21 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
 	let mut meant_global: Vec<String> = vec![];
+	let blocks = block_function_names(&program);
+	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
+	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
 	for function in functions {
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
 		let mut decided: HashSet<&String> = HashSet::new();
 		for (node, name) in find_assignments(&function.body, &is_main_variable) {
 			if !decided.insert(name) {
+				continue;
+			}
+			if blocks.contains(&function.name) {
+				if outside_blocks.lookup(name).is_some() {
+					educate_block_assignment(node, name, &function.name);
+				}
 				continue;
 			}
 			if !starts_with_fresh_binding(&function.body, name) {
@@ -570,6 +592,39 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 		}
 	}
 	Ok(declare_global(program, &meant_global))
+}
+
+/// The functions defined as a block of statements, `inc := {x = x+1}`
+fn block_function_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Define, body) = node {
+			if let (Node::Symbol(name), true) = (name.drop_meta(), is_statement_block(body)) {
+				names.insert(name.clone());
+			}
+		}
+	});
+	names
+}
+
+fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
+	match node {
+		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => Node::Empty,
+		Node::Key(left, op, right) => Node::Key(Box::new(without_block_bodies(*left, blocks)), op, Box::new(without_block_bodies(*right, blocks))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_block_bodies(item, blocks)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_block_bodies(*node, blocks)), data },
+		other => other,
+	}
+}
+
+/// A block captures the outer variables by value (user decision D7): its assignment changes the block's own copy,
+/// so `x=1; inc:={x=x+1}; do inc; x` stays 1. Educate toward the forms that change x: `global x`, or returning the value.
+fn educate_block_assignment(assignment: &Node, name: &str, block: &str) {
+	crate::normalize::set_position_of(assignment);
+	let written = crate::normalize::operand_text(assignment);
+	let reason = format!("the block {block} captures {name} by value: its change stays inside the block");
+	crate::normalize::hint(&written, &format!("global {name}"), &reason);
+	crate::normalize::hint(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it");
 }
 
 const LOCAL_OR_GLOBAL: &str = "local-or-global";
@@ -1182,7 +1237,70 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
 	warnings.extend(kebab_ambiguities(program));
+	positions_used_as_values(program, false, &mut warnings);
+	program.visit(&mut |node| {
+		if let Node::Key(_, Op::Define, body) = node {
+			if uses_it_outside_loops(body) {
+				hidden_function_it(body, &mut warnings);
+			}
+		}
+	});
 	warnings
+}
+
+/// `for 1..4 {…}`: a loop that binds the implicit `it`
+fn is_it_loop(items: &[Node]) -> bool {
+	matches!(items, [keyword, _, body] if matches!(keyword.drop_meta(), Node::Symbol(word) if word == "for")
+		&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
+}
+
+/// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
+fn uses_it_outside_loops(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => word == "it",
+		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
+		Node::List(items, _, _) if is_it_loop(items) => uses_it_outside_loops(&items[1]),
+		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
+		_ => false,
+	}
+}
+
+/// The loops in a function with an implicit `it` whose own `it` hides the function's (user decision #23: kept, warned)
+fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			if is_it_loop(items) && uses_it(&items[2]) {
+				warnings.push(Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")
+					.fix(format!("for i in {} {{…}}", crate::normalize::operand_text(&items[1]))));
+			}
+		}
+	});
+}
+
+/// `x in xs` is the 1-based position of x (user decision D14): a condition only asks whether it is there, any other use
+/// gets the number, which may surprise a reader expecting true/false
+fn positions_used_as_values(node: &Node, in_condition: bool, warnings: &mut Vec<Diagnostic>) {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => {
+			let (left_is_condition, right_is_condition) = match op {
+				Op::If | Op::While | Op::Not => (false, true),
+				Op::And | Op::Or => (in_condition, in_condition),
+				Op::Question => (true, false),
+				_ => (false, false),
+			};
+			positions_used_as_values(left, left_is_condition, warnings);
+			positions_used_as_values(right, right_is_condition, warnings);
+		}
+		Node::List(items, _, _) => {
+			let is_position = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == crate::library_words::COLLECTION_POSITION);
+			if is_position && !in_condition {
+				warnings.push(Diagnostic::at(node, "`x in xs` is the position of x in xs (1-based, 0 when absent), not true/false")
+					.fix("if x in xs {…} tests it; xs.has(x) is 1 or 0"));
+			}
+			items.iter().for_each(|item| positions_used_as_values(item, false, warnings));
+		}
+		_ => {}
+	}
 }
 
 fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
@@ -2461,7 +2579,9 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
+					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
+					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
+					let params = if takes_it { vec![Param::untyped("it")] } else { vec![] };
 					ctx.user_functions.insert(name.clone(), user_function(name, params, body));
 					return;
 				}

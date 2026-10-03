@@ -295,7 +295,9 @@ impl WasmGcEmitter {
 		}
 		match fn_name {
 			crate::switch::NO_CASE_CALL => {
-				let Node::Text(label) = arg.drop_meta() else { return false };
+				let Node::Key(label, Op::Colon, value) = arg.drop_meta() else { return false };
+				let Node::Text(label) = label.drop_meta() else { return false };
+				self.emit_trap_detail(func, value);
 				let error: &'static str = Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str());
 				self.emit_runtime_error(func, error);
 				true

@@ -1899,6 +1899,19 @@ impl WasmGcEmitter {
 		self.next_global_idx - 1
 	}
 
+	/// Leave `value` in the exported global `trap_detail` (declared on first use), for the runtime error that follows
+	/// to name it: the runner reads it after the trap (wasm_reader::with_trap_detail)
+	pub(super) fn emit_trap_detail(&mut self, func: &mut Function, value: &Node) {
+		const TRAP_DETAIL_GLOBAL: &str = "trap·detail"; // not a wasp name, so no user global meets it
+		if !self.ctx.user_globals.contains_key(TRAP_DETAIL_GLOBAL) {
+			let index = self.declare_mutable_global(Kind::Empty);
+			self.exports.export(crate::wasm_reader::TRAP_DETAIL, ExportKind::Global, index);
+			self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		}
+		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
+		func.instruction(&Instruction::Drop);
+	}
+
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
 	fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
 		let Some((name, value)) = Self::global_declaration_parts(decl) else {
@@ -3736,7 +3749,10 @@ fn failed_run(failure: anyhow::Error) -> Node {
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		format!("no case for {label}")
+		match trace.split_once(crate::wasm_reader::TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
+			Some(value) => format!("no case for {label} = {value}"),
+			None => format!("no case for {label}"),
+		}
 	});
 	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());

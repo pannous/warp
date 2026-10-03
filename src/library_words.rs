@@ -21,8 +21,10 @@ pub const MAP_VALUES: &str = "map_values";
 /// map_entries(xs): the `key:value` entries of a map as a list (a one-entry map `{a:1}` is the entry itself), else xs
 pub const MAP_ENTRIES: &str = "map_entries";
 pub const COLLECTION_CONTAINS: &str = "collection_contains";
+/// collection_position(xs, x): `x in xs`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
+pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
-pub const MAP_WORD_FUNCTIONS: [&str; 5] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, MAP_GET_OR];
+pub const MAP_WORD_FUNCTIONS: [&str; 6] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR];
 const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 
@@ -48,9 +50,9 @@ const SYNONYMS: [(&str, &[&str]); 16] = [
 const SUM: &str = "sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 14] = [
+pub const RUNTIME_WORDS: [(&str, usize); 15] = [
 	("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
-	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (MAP_GET_OR, 3), (SLICE, 3),
+	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
 ];
 /// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
 pub const SLICE: &str = "slice";
@@ -369,7 +371,7 @@ impl Lowering {
 		if !is_marker(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
 			return None;
 		}
-		Some(self.call(COLLECTION_CONTAINS, in_word, vec![collection.clone(), element.clone()], false))
+		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error

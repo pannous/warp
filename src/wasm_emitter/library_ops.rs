@@ -23,11 +23,12 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 14] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
 	(crate::library_words::COLLECTION_CONTAINS, crate::library_words::COLLECTION_CONTAINS),
+	(crate::library_words::COLLECTION_POSITION, crate::library_words::COLLECTION_POSITION),
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
 	("chars", "text_chars"),
 	("field_with", "field_with"),

@@ -82,6 +82,8 @@ const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
 const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
+/// `x is int` tests the type; `x == int` stays equality (user decision #30)
+const IS_WORD: &str = "is";
 const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
@@ -1778,6 +1780,7 @@ impl WaspParser {
 				continue;
 			}
 
+			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
@@ -2120,6 +2123,12 @@ impl WaspParser {
 		self.advance_by(word.len());
 		self.skip_spaces();
 		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(Op::If.binding_power().1));
+		if guard == Op::While {
+			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+			let (statement, test) = (crate::normalize::operand_text(lhs), crate::normalize::operand_text(&condition));
+			crate::normalize::hint(&format!("{statement} {word} {test}"), &format!("{word} {test} {{ {statement} }}"),
+				"a trailing loop word tests before the first round, the statement may never run");
+		}
 		let condition = if negated { Node::Key(Box::new(Empty), Op::Not, Box::new(condition)) } else { condition };
 		Some(match guard {
 			Op::While => while_do(condition, lhs.clone()),
@@ -2206,8 +2215,20 @@ impl WaspParser {
 		};
 		self.times_loops += 1;
 		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
+		// the count is evaluated once, before the first round (user decision #22): the body may change what it reads
+		let (count_binding, count) = match count.drop_meta() {
+			Node::Number(_) => (None, count),
+			_ => {
+				let held = Symbol(format!("{TIMES_WORD}·count·{}", self.times_loops));
+				(Some(Node::Key(Box::new(held.clone()), Op::Assign, Box::new(count))), held)
+			}
+		};
 		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space)
+		let rounds = Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space);
+		match count_binding {
+			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
+			None => rounds,
+		}
 	}
 
 	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
@@ -3249,7 +3270,7 @@ fn is_minus_one(end: &Node) -> bool {
 	}
 }
 
-fn mentions(node: &Node, name: &str) -> bool {
+pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol == name,
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),

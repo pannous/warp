@@ -1,5 +1,5 @@
 //! `switch subject {key: body …}` (also `match`): map indexing that executes. Lowered to an if/else chain over the
-//! subject, so only the chosen body runs; the `default` key catches the rest, without it a miss is the error `no case for <subject>`.
+//! subject, so only the chosen body runs; the `default` key catches the rest, without it a miss is the error `no case for <subject> = <value>`.
 
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
@@ -10,8 +10,8 @@ use std::cell::Cell;
 const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEY: &str = "default";
 const SUBJECT_PREFIX: &str = "switch_subject_";
-/// Pseudo-call `switch_no_case(label)` the emitter turns into the runtime error function `no_case_<label>`,
-/// which eval reports as `no case for <label>`
+/// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
+/// which eval reports as `no case for <label> = <value>`
 pub const NO_CASE_CALL: &str = "switch_no_case";
 pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
@@ -64,7 +64,7 @@ impl Lowering<'_> {
 		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
-			None => no_case(subject),
+			None => no_case(subject, &subject_value),
 		};
 		let chain = cases.into_iter().rev().fold(miss, |otherwise, case| {
 			let matches = key(subject_value.clone(), Op::Eq, case.key);
@@ -113,8 +113,10 @@ fn subject_label(subject: &Node) -> String {
 	if is_name { written } else { UNNAMED_SUBJECT.to_string() }
 }
 
-fn no_case(subject: &Node) -> Node {
-	Node::List(vec![Node::Symbol(NO_CASE_CALL.to_string()), Node::Text(subject_label(subject))], Bracket::Round, Separator::None)
+/// `switch_no_case("label": value)`: the error names the subject as written and its runtime value
+fn no_case(subject: &Node, value: &Node) -> Node {
+	let label_and_value = key(Node::Text(subject_label(subject)), Op::Colon, value.clone());
+	Node::List(vec![Node::Symbol(NO_CASE_CALL.to_string()), label_and_value], Bracket::Round, Separator::None)
 }
 
 /// The `key: body` entries of a block
