@@ -31,5 +31,6 @@ n`,
 x`,
 	"runtime error": `xs = [1 2 3]
 xs[3]`,
-	fetch: `fetch https://raw.githubusercontent.com/pannous/warp/main/README.md`,
+	fetch: `// the browser fetches only from servers that allow it (CORS)
+fetch https://pannous.com/files/test`,
 };
