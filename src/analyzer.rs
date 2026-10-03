@@ -2055,7 +2055,8 @@ fn zero_element(type_word: &str) -> Option<Node> {
 	let element = plural_element_type(type_word).unwrap_or(type_word);
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
-		Kind::Float => Node::float(0.0),
+		// `0.0f`: a bare 0.0 is an exact decimal, so an Int
+		Kind::Float => Node::Key(Box::new(Node::float(0.0)), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string()))),
 		Kind::Text => Node::Text(String::new()),
 		Kind::Codepoint => Node::Char('\0'),
 		_ => return None,
