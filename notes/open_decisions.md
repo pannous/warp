@@ -40,6 +40,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- tests/ folders (asked by warp-1a, branch tests-tidy, notes/tests_layout.md): "OK as listed" (17 topic folders,
+  welcoming one folder). Duplicates: "Only probes condense". Probe lines condense into topic files; assertions in
+  regular test files stay even when duplicated.
 - Wiki remote `main` (asked by warp-d0, notes/wiki_branch.md): "Delete remote main". GitHub wikis serve only master;
   master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
   `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
