@@ -1,6 +1,99 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
+  ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
+  ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
+  ✓ control::test_blocks::test_group_cascade
+  ✓ control::test_blocks::test_group_cascade1
+  ✓ control::test_blocks::test_group_cascade2
+  ✓ control::test_blocks::test_indent_as_block
+  ✓ control::test_blocks::test_matrix_comma_index
+  ✓ control::test_blocks::test_matrix_order
+  ✓ control::test_condition_block::a_condition_still_ends_before_its_block
+  ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ control::test_control_words::bang_evaluates_a_block
+  ✓ control::test_control_words::n_times_repeats_its_block
+  ✓ control::test_control_words::trailing_if_guards_the_statement
+  ✓ control::test_control_words::trailing_while_and_until_repeat_the_statement
+  ✓ control::test_control_words::unless_runs_its_block_when_the_condition_is_false
+  ✓ control::test_control_words::until_loops_while_the_condition_is_false
+  ✓ control::test_do_block::a_user_function_named_do_wins
+  ✓ control::test_do_block::do_runs_a_block_literal
+  ✓ control::test_do_block::do_runs_a_named_block
+  ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
+  ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
+  ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
+  ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
+  ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
+  ✓ control::test_for_loop::test_for_classic_three_part_header
+  ✓ control::test_for_loop::test_for_over_exclusive_range
+  ✓ control::test_for_loop::test_for_over_inclusive_range
+  ✓ control::test_for_loop::test_for_over_list_literal
+  ✓ control::test_for_loop::test_for_over_list_variable
+  ✓ control::test_for_loop::test_for_with_colon_body
+  ✓ control::test_for_loop::test_loop_body_with_a_list_statement
+  ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
+  ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
+  ✓ control::test_if_value_kind::test_if_of_characters_joins_a_text
+  ✓ control::test_iteration_words::test_a_wrong_function_is_an_error
+  ✓ control::test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value
+  ✓ control::test_iteration_words::test_filter
+  ✓ control::test_iteration_words::test_fold
+  ✓ control::test_iteration_words::test_reduce
+  ✓ control::test_iteration_words::test_reduce_of_an_empty_list_is_an_error
+  ✓ control::test_iteration_words::test_words_a_program_defines_win
+  ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
+  ✓ control::test_loop_forms::for_without_variable_binds_it
+  ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
+  ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
+  ✓ control::test_loops_in_functions::a_multi_line_function_with_a_loop
+  ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
+  ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
+  ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
+  ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
+  ✓ control::test_switch_match::a_switch_is_a_value
+  ✓ control::test_switch_match::a_switch_picks_the_case_of_its_subject
+  ✓ control::test_switch_match::a_user_function_named_switch_wins
+  ✓ control::test_switch_match::match_is_another_word_for_switch
+  ✓ control::test_switch_match::no_case_and_no_default_is_a_loud_error
+  ✓ control::test_switch_match::only_the_chosen_body_runs
+  ✓ control::test_switch_match::the_default_case_catches_what_nothing_else_matches
+  ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
+  ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
+  ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_times_count_once::a_trailing_if_guards_the_whole_assignment
+  ✓ control::test_times_count_once::times_evaluates_its_count_once
+  ✓ control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
+  ✓ control::test_top_level_block::test_branch_block_yields_its_last_item
+  ✓ control::test_top_level_block::test_data_object_block_keeps_all_keys
+  ✓ control::test_top_level_block::test_function_body_block_yields_its_last_item
+  ✓ control::test_top_level_block::test_top_level_newlines_yield_the_last_item
+  ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
+  ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
+  ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
+  ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
+  ✓ control::test_try_deep::try_catches_a_failed_cast
+  ✓ control::test_try_deep::try_catches_an_error_inside_a_called_function
+  ✓ control::test_try_deep::try_catches_an_error_inside_an_expression
+  ✓ control::test_try_deep::try_in_a_loop_catches_each_time
+  ✓ control::test_try_deep::try_inside_a_called_function_restores_the_depth
+  ✓ control::test_try_else::assert_gives_the_condition_or_an_error
+  ✓ control::test_try_else::try_falls_back_on_an_error_value
+  ✓ control::test_try_else::try_falls_back_on_division_and_modulo_by_zero
+  ✓ control::test_try_else::try_falls_back_when_the_index_is_out_of_range
+  ✓ control::test_try_else::try_keeps_a_value
+  ✓ control::test_try_else::try_of_an_assignment_assigns_the_fallback
+  ✓ control::test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
+  ✓ control::test_try_exits_and_naming::bare_try_else_still_works
+  ✓ control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
+  ✓ control::test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
+  ✓ control::test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
+  ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
+  ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
+  ✓ control::test_while_value::test_while_value_is_last_body_value
+  ✓ control::test_while_value::test_while_value_of_untouched_loop_is_empty
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
   ✓ ffi_parser::tests::test_parse_int32_return
@@ -98,6 +191,8 @@ PASSED:
   ✓ functions::test_lambdas::test_map_as_a_method
   ✓ functions::test_lambdas::test_map_over_a_block_or_lambda
   ✓ functions::test_lambdas::test_named_functions_and_data_are_untouched
+  ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
+  ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_rounding_function
   ✓ functions::test_method_words::test_chars_of_text_literal_in_assignment
   ✓ functions::test_method_words::test_first_and_last
   ✓ functions::test_method_words::test_join
@@ -162,6 +257,7 @@ PASSED:
   ✓ functions::test_tuple_returns::test_tuple_function_returns_wasm_multi_value
   ✓ functions::test_tuple_returns::test_tuple_returns_inside_functions
   ✓ functions::test_tuple_returns::test_two_returned_values_destructure
+  ✓ functions::test_typed_signatures::several_typed_parameters
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
   ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
@@ -292,7 +388,6 @@ PASSED:
   ✓ node::test_normalization::test_cast_style_constructor
   ✓ node::test_normalization::test_conditional
   ✓ node::test_normalization::test_define_keyword
-  ✓ node::test_normalization::test_each_form_is_hinted_once_when_evaluated
   ✓ node::test_normalization::test_function_definition
   ✓ node::test_normalization::test_function_definition_def_style
   ✓ node::test_normalization::test_function_hint_quotes_the_body_form_actually_written
@@ -301,6 +396,7 @@ PASSED:
   ✓ node::test_normalization::test_indexing
   ✓ node::test_normalization::test_length_prefix_under_bracket_style
   ✓ node::test_normalization::test_list_of_lists_has_no_plural_spelling
+  ✓ node::test_normalization::test_list_type_hint_is_emitted_once_when_evaluated
   ✓ node::test_normalization::test_list_type_hint_with_values_and_position
   ✓ node::test_normalization::test_list_type_style_generic
   ✓ node::test_normalization::test_list_type_style_of
@@ -319,6 +415,150 @@ PASSED:
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
+  ✓ numbers::test_angle::test_call
+  ✓ numbers::test_angle::test_if
+  ✓ numbers::test_angle::test_if_call_zero
+  ✓ numbers::test_angle::test_if_gt
+  ✓ numbers::test_angle::test_if_math
+  ✓ numbers::test_angle::test_if_two
+  ✓ numbers::test_angle::test_logic_precedence
+  ✓ numbers::test_angle::test_switch
+  ✓ numbers::test_angle::test_switch_evaluation
+  ✓ numbers::test_angle::test_truthy_and
+  ✓ numbers::test_counting_units::count_unit_of_text
+  ✓ numbers::test_counting_units::size_of_text_in_unit
+  ✓ numbers::test_declared_float_exact_reals::test_declared_float_accepts_exact_reals
+  ✓ numbers::test_declared_float_exact_reals::test_declared_float_global_accepts_exact_reals
+  ✓ numbers::test_declared_float_exact_reals::test_declared_float_parameter_accepts_exact_reals
+  ✓ numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
+  ✓ numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
+  ✓ numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
+  ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
+  ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
+  ✓ numbers::test_fixed_width_ints::test_fixed_width_declaration_traps_on_overflow
+  ✓ numbers::test_fixed_width_ints::test_fixed_width_values_in_range
+  ✓ numbers::test_fixed_width_ints::test_plain_int_stays_unbounded
+  ✓ numbers::test_float_assignment::test_as_float_promotes_and_never_truncates
+  ✓ numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly
+  ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
+  ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
+  ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
+  ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
+  ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
+  ✓ numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
+  ✓ numbers::test_float_parameters::test_float_local_inside_float_function
+  ✓ numbers::test_float_parameters::test_float_parameter_keeps_all_digits
+  ✓ numbers::test_float_parameters::test_float_parameter_keeps_fraction
+  ✓ numbers::test_float_parameters::test_parameter_passed_a_float_returning_call
+  ✓ numbers::test_float_parameters::test_unknown_parameter_type_is_reported
+  ✓ numbers::test_float_parameters::test_user_function_shadows_ffi_name
+  ✓ numbers::test_float_promotion::test_float_comparison_does_not_truncate
+  ✓ numbers::test_float_promotion::test_float_modulo_keeps_fraction
+  ✓ numbers::test_float_promotion::test_float_power_keeps_fraction
+  ✓ numbers::test_float_promotion::test_fractional_exponent_uses_libm_pow
+  ✓ numbers::test_float_promotion::test_literal_float_operations_do_not_truncate
+  ✓ numbers::test_float_promotion::test_undefined_float_power_is_refused_loudly
+  ✓ numbers::test_float_text::test_float_as_text
+  ✓ numbers::test_float_text::test_float_joins_texts
+  ✓ numbers::test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
+  ✓ numbers::test_float_to_int_range::test_rounding_functions_give_exact_ints
+  ✓ numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
+  ✓ numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats
+  ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
+  ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
+  ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
+  ✓ numbers::test_law::test_law_asserted_at_call_sites
+  ✓ numbers::test_law::test_law_does_not_change_program_result
+  ✓ numbers::test_law::test_law_float_parameter_kinds
+  ✓ numbers::test_law::test_law_float_parameters_are_tested
+  ✓ numbers::test_law::test_law_lean_export
+  ✓ numbers::test_law::test_law_lean_export_modulo_is_euclidean
+  ✓ numbers::test_law::test_law_overflow_promotion_holds_in_property_tests
+  ✓ numbers::test_law::test_law_overflow_promotion_proved_by_lean
+  ✓ numbers::test_law::test_law_proved_by_lean
+  ✓ numbers::test_law::test_law_stated
+  ✓ numbers::test_law::test_law_tested_with_generated_inputs
+  ✓ numbers::test_law::test_law_violation_reported_by_verify
+  ✓ numbers::test_math::test_abs_alias
+  ✓ numbers::test_math::test_absolute_value_arithmetic
+  ✓ numbers::test_math::test_arithmetic
+  ✓ numbers::test_math::test_compound_assignment
+  ✓ numbers::test_math::test_eval
+  ✓ numbers::test_math::test_fraction_multiplication
+  ✓ numbers::test_math::test_global_with_pi
+  ✓ numbers::test_math::test_harder_arithmetic
+  ✓ numbers::test_math::test_hypen_versus_minus
+  ✓ numbers::test_math::test_if_block_syntax
+  ✓ numbers::test_math::test_if_then_else
+  ✓ numbers::test_math::test_logarithm_in_runtime
+  ✓ numbers::test_math::test_modulo
+  ✓ numbers::test_math::test_modulo_with_variables
+  ✓ numbers::test_math::test_power
+  ✓ numbers::test_math::test_runtime_equality
+  ✓ numbers::test_math::test_runtime_equality_autocast
+  ✓ numbers::test_math::test_simple_variables
+  ✓ numbers::test_math::test_sin
+  ✓ numbers::test_math::test_sinus_wasp_import
+  ✓ numbers::test_math::test_sqrt_alias
+  ✓ numbers::test_math::test_superscript_powers
+  ✓ numbers::test_math::test_ternary_with_comparison
+  ✓ numbers::test_math::test_units
+  ✓ numbers::test_math::test_variable_minus
+  ✓ numbers::test_math::test_while_loop
+  ✓ numbers::test_number::test_hex
+  ✓ numbers::test_number::test_number
+  ✓ numbers::test_number::test_number_floats
+  ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_rational_type::test_floats_are_not_rational
+  ✓ numbers::test_rational_type::test_int_is_a_special_case_of_rational
+  ✓ numbers::test_rational_type::test_other_mixes_stay_plain_lists
+  ✓ numbers::test_rational_type::test_pi_is_real_whatever_its_representation
+  ✓ numbers::test_rational_type::test_rational_and_rationals_are_type_words
+  ✓ numbers::test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ numbers::test_shift_operators::test_angle_brackets_still_delimit_generics
+  ✓ numbers::test_shift_operators::test_shift_left_multiplies_by_a_power_of_two
+  ✓ numbers::test_shift_operators::test_shift_of_a_float_is_refused
+  ✓ numbers::test_shift_operators::test_shift_of_a_non_integer_or_by_a_bad_count_is_an_error
+  ✓ numbers::test_shift_operators::test_shift_precedence_and_variables
+  ✓ numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two
+  ✓ numbers::test_shift_operators::test_shifts_of_big_exact_ints
+  ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
+  ✓ numbers::test_unbounded_int::test_big_division_and_remainder
+  ✓ numbers::test_unbounded_int::test_big_int_to_float
+  ✓ numbers::test_unbounded_int::test_big_literal_round_trip
+  ✓ numbers::test_unbounded_int::test_comparisons_across_small_and_big
+  ✓ numbers::test_unbounded_int::test_factorial_and_fib_stay_exact
+  ✓ numbers::test_unbounded_int::test_i64_opt_out_wraps
+  ✓ numbers::test_unbounded_int::test_overflow_promotes_add_sub
+  ✓ numbers::test_unbounded_int::test_overflow_promotes_mul
+  ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
+  ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
+  ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
+  ✓ numbers::test_units_arithmetic::test_incompatible_units_are_an_error
+  ✓ numbers::test_units_arithmetic::test_scaling_a_quantity
+  ✓ numbers::test_units_arithmetic::test_spaced_known_unit_multiplies
+  ✓ numbers::test_units_arithmetic::test_spaced_unknown_unit_stays_a_list
+  ✓ numbers::test_units_arithmetic::test_unit_sum_uses_the_finer_unit
+  ✓ numbers::test_units_arithmetic::test_variable_shadows_the_unit
+  ✓ numbers::test_units_compare::a_variable_may_change_from_nothing_to_a_number_in_a_loop
+  ✓ numbers::test_units_compare::division_by_another_dimension_is_a_composite_unit
+  ✓ numbers::test_units_compare::mixed_dimensions_are_a_loud_dimension_error
+  ✓ numbers::test_units_compare::quantities_compare_in_the_finer_unit
+  ✓ numbers::test_units_compare::scalar_division_keeps_the_unit_and_same_dimension_division_is_a_number
+  ✓ numbers::test_units_followup::test_descending_range_is_an_error
+  ✓ numbers::test_units_followup::test_negative_tolerance_is_an_error
+  ✓ numbers::test_units_followup::test_plus_minus_ascii_spelling
+  ✓ numbers::test_units_followup::test_range_with_a_unit
+  ✓ numbers::test_units_followup::test_single_quantity_keeps_its_unit
+  ✓ numbers::test_units_followup::test_tolerance_in_a_unit
+  ✓ numbers::test_units_followup::test_unit_sum_serializes_in_the_smallest_unit
+  ✓ numbers::test_units_followup::test_value_with_tolerance_prints_back
+  ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
+  ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
+  ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
+  ✓ numbers::test_zero_fill::a_zero_list_of_nothing_is_empty
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
@@ -403,6 +643,7 @@ PASSED:
   ✓ parser::test_comments::test_comments2
   ✓ parser::test_comments::test_inline_comments
   ✓ parser::test_comments::test_line_comments
+  ✓ parser::test_comments::test_nested_block_comments
   ✓ parser::test_dollar_names::dollar_digit_stays_a_parameter_reference
   ✓ parser::test_dollar_names::dollar_names_keep_their_sigil
   ✓ parser::test_dollar_names::dollar_names_survive_eval
@@ -557,10 +798,24 @@ PASSED:
   ✓ parser::test_xml::test_xml_to_json
   ✓ parser::test_xml::test_xml_with_attributes
   ✓ probe_destructuring::probe_for_loop_unpacking
+  ✓ probe_destructuring::probe_list_target
+  ✓ probe_destructuring::probe_nested_unpacking
+  ✓ probe_destructuring::probe_parenthesized_target
+  ✓ probe_destructuring::probe_star_init
+  ✓ probe_destructuring::probe_star_middle
+  ✓ probe_destructuring::probe_star_rest_empty
+  ✓ probe_destructuring::probe_star_rest_from_list
+  ✓ probe_destructuring::probe_star_rest_from_tuple_function
+  ✓ probe_destructuring::probe_star_rest_from_values
   ✓ probe_destructuring::probe_swap
   ✓ probe_destructuring::probe_too_few_values_is_loud
   ✓ probe_destructuring::probe_too_many_values_is_loud
   ✓ probe_destructuring::probe_underscore_discards
+  ✓ probe_destructuring::probe_unpack_list_function
+  ✓ probe_destructuring::probe_unpack_list_literal
+  ✓ probe_destructuring::probe_unpack_list_variable
+  ✓ probe_destructuring::probe_unpack_parenthesized_tuple
+  ✓ probe_destructuring::probe_unpack_text
   ✓ probe_destructuring::probe_unpack_tuple_function
   ✓ probe_destructuring::probe_unpack_tuple_values
   ✓ probe_footguns::test_addition_is_associative_by_default
@@ -691,6 +946,53 @@ PASSED:
   ✓ probe_footguns::test_while_loop_may_diverge
   ✓ probe_footguns::test_zero_string_is_truthy
   ✓ probe_footguns::test_zoned_time_records_its_rules_version
+  ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
+  ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
+  ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
+  ✓ scope::test_colon_body_assignment::test_if_colon_body_with_compound_assignment
+  ✓ scope::test_colon_body_assignment::test_while_colon_body_with_assignment
+  ✓ scope::test_colon_body_assignment::test_while_colon_body_with_compound_assignment
+  ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_newline
+  ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon
+  ✓ scope::test_data_scope::test_a_key_can_refer_to_an_earlier_key
+  ✓ scope::test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts
+  ✓ scope::test_data_scope::test_kebab_keys_are_read_back
+  ✓ scope::test_data_scope::test_other_hyphenated_names_stay_symbols
+  ✓ scope::test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts
+  ✓ scope::test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
+  ✓ scope::test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
+  ✓ scope::test_eval_state::every_eval_shows_its_educate_once_note
+  ✓ scope::test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
+  ✓ scope::test_export_declaration::test_export_of_a_function_stays_a_function
+  ✓ scope::test_export_declaration::test_export_with_type_word_keeps_the_value
+  ✓ scope::test_export_declaration::test_export_without_initializer_is_zero
+  ✓ scope::test_export_declaration::test_exported_variable_can_be_assigned
+  ✓ scope::test_export_declaration::test_type_words_come_from_the_analyzer
+  ✓ scope::test_global_constant_words::global_with_every_constant_word
+  ✓ scope::test_global_declaration::test_compound_assignment_on_a_global
+  ✓ scope::test_global_declaration::test_global_without_initializer
+  ✓ scope::test_global_modifiers::test_global_with_export
+  ✓ scope::test_global_modifiers::test_global_with_modifier_words
+  ✓ scope::test_global_modifiers::test_global_with_type_word
+  ✓ scope::test_global_modifiers::test_global_with_typed_define
+  ✓ scope::test_global_modifiers::test_global_without_initializer_keeps_the_type_word_out_of_the_name
+  ✓ scope::test_global_modifiers::test_type_word_alone_is_still_a_name
+  ✓ scope::test_global_modifiers::test_typed_global_without_initializer_is_zero
+  ✓ scope::test_globals::test_global_float_with_pi
+  ✓ scope::test_globals::test_global_int_multiple
+  ✓ scope::test_globals::test_global_int_simple
+  ✓ scope::test_globals::test_global_reassignment
+  ✓ scope::test_globals::test_global_with_expression
+  ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
+  ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
+  ✓ scope::test_undefined_variable::test_undefined_variable_compound_assignment_is_an_error_value
+  ✓ scope::test_undefined_variable::test_undefined_variable_increment_is_an_error_value
+  ✓ scope::test_undefined_variable::test_undefined_variable_use_is_an_error_value
+  ✓ scope::test_undefined_variable::test_unsupported_array_phrase_names_the_undefined_variable
+  ✓ scope::test_use_scopes::siblings_are_invisible_without_a_scope
+  ✓ scope::test_use_scopes::use_folder_in_inline_code_is_the_working_directory
+  ✓ scope::test_use_scopes::use_package_sees_every_file_below_the_package_folder
+  ✓ scope::test_use_scopes::use_project_sees_every_file_below_the_project_root
   ✓ test_algo_dijkstra::test_dijkstra
   ✓ test_algo_dijkstra::test_dijkstra_idiomatic
   ✓ test_algo_levenshtein::test_levenshtein
@@ -704,65 +1006,11 @@ PASSED:
   ✓ test_algo_sorting::test_sorting
   ✓ test_algo_sorting::test_sorting_idiomatic
   ✓ test_all_samples::test_parse_all_samples
-  ✓ test_angle::test_call
-  ✓ test_angle::test_if
-  ✓ test_angle::test_if_call_zero
-  ✓ test_angle::test_if_gt
-  ✓ test_angle::test_if_math
-  ✓ test_angle::test_if_two
-  ✓ test_angle::test_logic_precedence
-  ✓ test_angle::test_switch
-  ✓ test_angle::test_switch_evaluation
-  ✓ test_angle::test_truthy_and
-  ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
-  ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
-  ✓ test_block_assigns_outer::the_declared_and_returned_forms_change_it
-  ✓ test_blocks::test_group_cascade
-  ✓ test_blocks::test_group_cascade1
-  ✓ test_blocks::test_group_cascade2
-  ✓ test_blocks::test_indent_as_block
-  ✓ test_blocks::test_matrix_comma_index
-  ✓ test_blocks::test_matrix_order
-  ✓ test_cast_to_string::a_list_literal_as_string_is_its_text
-  ✓ test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
-  ✓ test_cast_to_string::an_object_literal_as_string_is_its_text
-  ✓ test_colon_body_assignment::test_for_colon_body_with_assignments
-  ✓ test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
-  ✓ test_colon_body_assignment::test_if_colon_body_with_assignment
-  ✓ test_colon_body_assignment::test_if_colon_body_with_compound_assignment
-  ✓ test_colon_body_assignment::test_while_colon_body_with_assignment
-  ✓ test_colon_body_assignment::test_while_colon_body_with_compound_assignment
-  ✓ test_colon_body_extent::test_colon_body_of_while_stops_at_newline
-  ✓ test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon
+  ✓ test_c_style::test_c_style_definition
+  ✓ test_c_style::test_if_assigning_a_float
+  ✓ test_c_style::test_if_parenthesized_condition_then_statement
   ✓ test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ test_compile_only::compile_command_writes_wasm_without_running
-  ✓ test_condition_block::a_condition_still_ends_before_its_block
-  ✓ test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
-  ✓ test_constant_expression_text::a_constant_expression_converts_by_its_value
-  ✓ test_control_words::bang_evaluates_a_block
-  ✓ test_control_words::n_times_repeats_its_block
-  ✓ test_control_words::trailing_if_guards_the_statement
-  ✓ test_control_words::trailing_while_and_until_repeat_the_statement
-  ✓ test_control_words::unless_runs_its_block_when_the_condition_is_false
-  ✓ test_control_words::until_loops_while_the_condition_is_false
-  ✓ test_counting_units::count_unit_of_text
-  ✓ test_counting_units::size_of_text_in_unit
-  ✓ test_data_scope::test_a_key_can_refer_to_an_earlier_key
-  ✓ test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts
-  ✓ test_data_scope::test_kebab_keys_are_read_back
-  ✓ test_data_scope::test_other_hyphenated_names_stay_symbols
-  ✓ test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts
-  ✓ test_declared_float_exact_reals::test_declared_float_accepts_exact_reals
-  ✓ test_declared_float_exact_reals::test_declared_float_global_accepts_exact_reals
-  ✓ test_declared_float_exact_reals::test_declared_float_parameter_accepts_exact_reals
-  ✓ test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
-  ✓ test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
-  ✓ test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
-  ✓ test_declared_text_one_character::a_declared_text_takes_a_one_character_text
-  ✓ test_do_block::a_user_function_named_do_wins
-  ✓ test_do_block::do_runs_a_block_literal
-  ✓ test_do_block::do_runs_a_named_block
-  ✓ test_do_block::do_still_joins_a_while_condition_with_its_body
   ✓ test_download::a_failed_download_is_an_error_value
   ✓ test_download::download_fetches_like_fetch
   ✓ test_emitter::test_compact_empty
@@ -770,19 +1018,6 @@ PASSED:
   ✓ test_emitter::test_compact_int
   ✓ test_emitter::test_optimizer_graph_generation
   ✓ test_emitter::test_tools_available
-  ✓ test_empty_block_binding::a_bound_empty_block_counts_zero
-  ✓ test_empty_block_binding::an_empty_block_can_be_bound
-  ✓ test_empty_block::a_program_that_is_only_an_empty_block_is_empty
-  ✓ test_empty_block::an_empty_block_inside_a_statement_is_a_value
-  ✓ test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
-  ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
-  ✓ test_eval_state::every_eval_shows_its_educate_once_note
-  ✓ test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
-  ✓ test_export_declaration::test_export_of_a_function_stays_a_function
-  ✓ test_export_declaration::test_export_with_type_word_keeps_the_value
-  ✓ test_export_declaration::test_export_without_initializer_is_zero
-  ✓ test_export_declaration::test_exported_variable_can_be_assigned
-  ✓ test_export_declaration::test_type_words_come_from_the_analyzer
   ✓ test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ test_ffi_warning_once::the_ffi_warning_is_printed_once
@@ -827,75 +1062,20 @@ PASSED:
   ✓ test_ffi::test_ffi_zlib_discovery
   ✓ test_ffi::test_import_from_pattern_emit
   ✓ test_ffi::test_import_from_pattern_parse
-  ✓ test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
-  ✓ test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
-  ✓ test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
-  ✓ test_fixed_width_ints::test_fixed_width_declaration_traps_on_overflow
-  ✓ test_fixed_width_ints::test_fixed_width_values_in_range
-  ✓ test_fixed_width_ints::test_plain_int_stays_unbounded
-  ✓ test_float_assignment::test_as_float_promotes_and_never_truncates
-  ✓ test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly
-  ✓ test_float_assignment::test_float_local_assignment_keeps_its_float_value
-  ✓ test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
-  ✓ test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
-  ✓ test_float_exact_context::test_explicit_cast_truncates_a_float
-  ✓ test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
-  ✓ test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
   ✓ test_float_fields::test_captured_variable_set_by_a_call
   ✓ test_float_fields::test_declared_float_field_in_arithmetic
   ✓ test_float_fields::test_float_conditionals
   ✓ test_float_fields::test_global_from_a_call
   ✓ test_float_fields::test_zero_argument_call_in_float_context
-  ✓ test_float_parameters::test_float_local_inside_float_function
-  ✓ test_float_parameters::test_float_parameter_keeps_all_digits
-  ✓ test_float_parameters::test_float_parameter_keeps_fraction
-  ✓ test_float_parameters::test_parameter_passed_a_float_returning_call
-  ✓ test_float_parameters::test_unknown_parameter_type_is_reported
-  ✓ test_float_parameters::test_user_function_shadows_ffi_name
-  ✓ test_float_promotion::test_float_comparison_does_not_truncate
-  ✓ test_float_promotion::test_float_modulo_keeps_fraction
-  ✓ test_float_promotion::test_float_power_keeps_fraction
-  ✓ test_float_promotion::test_fractional_exponent_uses_libm_pow
-  ✓ test_float_promotion::test_literal_float_operations_do_not_truncate
-  ✓ test_float_promotion::test_undefined_float_power_is_refused_loudly
-  ✓ test_float_text::test_float_as_text
-  ✓ test_float_text::test_float_joins_texts
-  ✓ test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
-  ✓ test_float_to_int_range::test_rounding_functions_give_exact_ints
-  ✓ test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
-  ✓ test_float_zero_and_compound::test_float_zero_fill_holds_floats
   ✓ test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ test_folder_scope::inline_code_has_no_folder_scope
   ✓ test_folder_scope::sibling_definitions_are_visible_without_use
   ✓ test_folder_scope::the_file_itself_wins_over_its_siblings
-  ✓ test_for_loop::test_for_classic_three_part_header
-  ✓ test_for_loop::test_for_over_exclusive_range
-  ✓ test_for_loop::test_for_over_inclusive_range
-  ✓ test_for_loop::test_for_over_list_literal
-  ✓ test_for_loop::test_for_over_list_variable
-  ✓ test_for_loop::test_for_with_colon_body
-  ✓ test_for_loop::test_loop_body_with_a_list_statement
-  ✓ test_for_loop::test_nested_for
   ✓ test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
   ✓ test_gc_struct::test_class_instance_raw
   ✓ test_gc_struct::test_gc_object_index_access
   ✓ test_gc_struct::test_gc_struct_macro
   ✓ test_gc_struct::test_raw_person_struct
-  ✓ test_global_constant_words::global_with_every_constant_word
-  ✓ test_global_declaration::test_compound_assignment_on_a_global
-  ✓ test_global_declaration::test_global_without_initializer
-  ✓ test_global_modifiers::test_global_with_export
-  ✓ test_global_modifiers::test_global_with_modifier_words
-  ✓ test_global_modifiers::test_global_with_type_word
-  ✓ test_global_modifiers::test_global_with_typed_define
-  ✓ test_global_modifiers::test_global_without_initializer_keeps_the_type_word_out_of_the_name
-  ✓ test_global_modifiers::test_type_word_alone_is_still_a_name
-  ✓ test_global_modifiers::test_typed_global_without_initializer_is_zero
-  ✓ test_globals::test_global_float_with_pi
-  ✓ test_globals::test_global_int_multiple
-  ✓ test_globals::test_global_int_simple
-  ✓ test_globals::test_global_reassignment
-  ✓ test_globals::test_global_with_expression
   ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
   ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
   ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
@@ -910,58 +1090,20 @@ PASSED:
   ✓ test_host::test_emitter_with_host_imports_valid
   ✓ test_host::test_host_fetch_import
   ✓ test_host::test_host_run_import
-  ✓ test_if_call_condition::a_call_condition_parses_like_the_assigned_call
-  ✓ test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
-  ✓ test_if_value_kind::test_if_of_characters_joins_a_text
   ✓ test_include::a_missing_include_lists_the_searched_paths
   ✓ test_include::a_nested_include_is_found_next_to_the_including_file
   ✓ test_include::include_splices_the_whole_file_and_runs_it
   ✓ test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ test_include::require_and_import_are_use
   ✓ test_include::use_imports_only_the_declarations
-  ✓ test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
-  ✓ test_interpolation::an_unknown_name_in_a_hole_is_loud
-  ✓ test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
-  ✓ test_interpolation::data_keeps_dollars_as_text
-  ✓ test_interpolation::dollar_arguments_and_templates_keep_working
-  ✓ test_interpolation::holes_take_parameters_lists_and_exact_numbers
-  ✓ test_interpolation::holes_take_text_results_of_library_words
-  ✓ test_interpolation::single_quotes_stay_literal
-  ✓ test_interpolation::swift_holes_interpolate_any_expression
-  ✓ test_interpolation::the_normalizer_hints_the_swift_form
   ✓ test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
   ✓ test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
-  ✓ test_iteration_words::test_a_wrong_function_is_an_error
-  ✓ test_iteration_words::test_each_runs_the_body_per_item_and_is_the_last_value
-  ✓ test_iteration_words::test_filter
-  ✓ test_iteration_words::test_fold
-  ✓ test_iteration_words::test_reduce
-  ✓ test_iteration_words::test_reduce_of_an_empty_list_is_an_error
-  ✓ test_iteration_words::test_words_a_program_defines_win
   ✓ test_kitchensink::test_kitchensink_all_node_types
   ✓ test_kitchensink::test_kitchensink_complex_tree
   ✓ test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ test_law::test_law_asserted_at_call_sites
-  ✓ test_law::test_law_does_not_change_program_result
-  ✓ test_law::test_law_float_parameter_kinds
-  ✓ test_law::test_law_float_parameters_are_tested
-  ✓ test_law::test_law_lean_export
-  ✓ test_law::test_law_lean_export_modulo_is_euclidean
-  ✓ test_law::test_law_overflow_promotion_holds_in_property_tests
-  ✓ test_law::test_law_overflow_promotion_proved_by_lean
-  ✓ test_law::test_law_proved_by_lean
-  ✓ test_law::test_law_stated
-  ✓ test_law::test_law_tested_with_generated_inputs
-  ✓ test_law::test_law_violation_reported_by_verify
   ✓ test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
   ✓ test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
-  ✓ test_library_unicode::reverse_works_on_text_by_code_points
-  ✓ test_library_unicode::sort_orders_floats
-  ✓ test_library_unicode::sort_orders_mixed_numbers
-  ✓ test_library_unicode::sort_orders_texts
-  ✓ test_library_unicode::sort_still_orders_ints
-  ✓ test_library_unicode::upper_and_lower_cover_unicode_scripts
   ✓ test_like::a_known_other_type_teaches_like
   ✓ test_like::a_like_type_is_judged_by_its_uses
   ✓ test_like::a_missing_field_is_a_warning
@@ -977,49 +1119,10 @@ PASSED:
   ✓ test_logical_calls::test_call_operand_is_evaluated_once
   ✓ test_logical_calls::test_call_operand_of_and_or
   ✓ test_logical_calls::test_node_operand_of_and_or
-  ✓ test_loop_forms::a_range_is_a_list_in_a_variable
-  ✓ test_loop_forms::for_without_variable_binds_it
-  ✓ test_loop_forms::ranges_in_for_headers_stay_ranges
-  ✓ test_loop_forms::upto_excludes_the_end_unlike_to
-  ✓ test_loops_in_functions::a_multi_line_function_with_a_loop
-  ✓ test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
-  ✓ test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
-  ✓ test_math::test_abs_alias
-  ✓ test_math::test_absolute_value_arithmetic
-  ✓ test_math::test_arithmetic
-  ✓ test_math::test_compound_assignment
-  ✓ test_math::test_eval
-  ✓ test_math::test_fraction_multiplication
-  ✓ test_math::test_global_with_pi
-  ✓ test_math::test_harder_arithmetic
-  ✓ test_math::test_hypen_versus_minus
-  ✓ test_math::test_if_block_syntax
-  ✓ test_math::test_if_then_else
-  ✓ test_math::test_logarithm_in_runtime
-  ✓ test_math::test_modulo
-  ✓ test_math::test_modulo_with_variables
-  ✓ test_math::test_power
-  ✓ test_math::test_runtime_equality
-  ✓ test_math::test_runtime_equality_autocast
-  ✓ test_math::test_simple_variables
-  ✓ test_math::test_sin
-  ✓ test_math::test_sinus_wasp_import
-  ✓ test_math::test_sqrt_alias
-  ✓ test_math::test_superscript_powers
-  ✓ test_math::test_ternary_with_comparison
-  ✓ test_math::test_units
-  ✓ test_math::test_variable_minus
-  ✓ test_math::test_while_loop
   ✓ test_module_cache::test_different_modules_not_cached
   ✓ test_module_cache::test_module_cache_reuse
   ✓ test_name_subsection_order::name_subsections_ascend_in_compiled_programs
   ✓ test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
-  ✓ test_not_condition_block::a_negated_condition_in_a_loop
-  ✓ test_not_condition_block::a_negated_condition_takes_its_block
-  ✓ test_number::test_hex
-  ✓ test_number::test_number
-  ✓ test_number::test_number_floats
-  ✓ test_number::test_number_mix
   ✓ test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
   ✓ test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
   ✓ test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
@@ -1049,25 +1152,6 @@ PASSED:
   ✓ test_panic_sweep::test_non_constant_range_bound_is_an_error
   ✓ test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error
   ✓ test_panic_sweep::test_update_of_a_non_variable_is_an_error
-  ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
-  ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
-  ✓ test_print_arguments::print_joins_its_arguments_with_a_space
-  ✓ test_print_arguments::print_of_a_braceless_call_is_worth_its_result
-  ✓ test_print_arguments::print_of_a_braceless_call_prints_its_result
-  ✓ test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
-  ✓ test_print_type_error::print_of_a_type_error_reports_that_error
-  ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
-  ✓ test_quote_output::test_codepoints_keep_single_quotes
-  ✓ test_quote_output::test_evaluated_text_prints_with_the_canonical_quote
-  ✓ test_quote_output::test_is_macro_round_trips_text
-  ✓ test_quote_output::test_serialized_text_parses_back
-  ✓ test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
-  ✓ test_rational_type::test_floats_are_not_rational
-  ✓ test_rational_type::test_int_is_a_special_case_of_rational
-  ✓ test_rational_type::test_other_mixes_stay_plain_lists
-  ✓ test_rational_type::test_pi_is_real_whatever_its_representation
-  ✓ test_rational_type::test_rational_and_rationals_are_type_words
-  ✓ test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
   ✓ test_read_bytes_plain_result::a_main_without_a_result_is_empty
   ✓ test_read_bytes_plain_result::a_null_result_is_empty
   ✓ test_read_bytes_plain_result::a_plain_f64_result_is_a_float
@@ -1086,12 +1170,10 @@ PASSED:
   ✓ test_return_type_dispatch::test_as_picks_the_overload
   ✓ test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
-  ✓ test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
-  ✓ test_runtime_text_as_int::a_text_variable_converts_to_int
-  ✓ test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ test_samples::test_ackermann
   ✓ test_samples::test_binary_tree
   ✓ test_samples::test_collatz
+  ✓ test_samples::test_comments
   ✓ test_samples::test_factorial
   ✓ test_samples::test_fibonacci
   ✓ test_samples::test_fizzbuzz
@@ -1103,88 +1185,21 @@ PASSED:
   ✓ test_samples::test_quadratic
   ✓ test_samples::test_quicksort
   ✓ test_samples::test_raytracer
+  ✓ test_samples::test_sin
+  ✓ test_samples::test_sine
   ✓ test_samples::test_snake
   ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
-  ✓ test_shift_operators::test_angle_brackets_still_delimit_generics
-  ✓ test_shift_operators::test_shift_left_multiplies_by_a_power_of_two
-  ✓ test_shift_operators::test_shift_of_a_float_is_refused
-  ✓ test_shift_operators::test_shift_of_a_non_integer_or_by_a_bad_count_is_an_error
-  ✓ test_shift_operators::test_shift_precedence_and_variables
-  ✓ test_shift_operators::test_shift_right_floors_by_a_power_of_two
-  ✓ test_shift_operators::test_shifts_of_big_exact_ints
   ✓ test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
   ✓ test_spaced_construction::test_spaced_construction_of_a_declared_type
-  ✓ test_string::test_first_char
-  ✓ test_string::test_interpolation
-  ✓ test_string::test_map
-  ✓ test_string::test_primitive_char
-  ✓ test_string::test_primitive_float
-  ✓ test_string::test_primitive_hello
-  ✓ test_string::test_primitive_int
-  ✓ test_string::test_primitive_string
-  ✓ test_string::test_reverse
-  ✓ test_string::test_str_string
-  ✓ test_string::test_string_at
-  ✓ test_string::test_string_basics
-  ✓ test_string::test_string_concatenation
-  ✓ test_string::test_string_from
-  ✓ test_string::test_string_index
-  ✓ test_string::test_string_index_by_variable
-  ✓ test_string::test_string_indices
-  ✓ test_string::test_string_set_at
-  ✓ test_string::test_string_substring
-  ✓ test_string::test_string_substring_from
   ✓ test_style_dont_care::an_explicit_function_style_still_hints
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
-  ✓ test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body
   ✓ test_sweep_fixes::a_lone_false_is_zero
   ✓ test_sweep_fixes::do_runs_an_add_to_phrase
-  ✓ test_switch_match::a_switch_is_a_value
-  ✓ test_switch_match::a_switch_picks_the_case_of_its_subject
-  ✓ test_switch_match::a_user_function_named_switch_wins
-  ✓ test_switch_match::match_is_another_word_for_switch
-  ✓ test_switch_match::no_case_and_no_default_is_a_loud_error
-  ✓ test_switch_match::only_the_chosen_body_runs
-  ✓ test_switch_match::the_default_case_catches_what_nothing_else_matches
-  ✓ test_switch_no_case_value::no_case_shows_the_runtime_value
-  ✓ test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
-  ✓ test_switch_value::a_switch_can_be_bound
-  ✓ test_text_bytes::byte_at_reads_one_byte
-  ✓ test_text_bytes::byte_slice_cuts_by_byte_offsets
-  ✓ test_text_bytes::plus_concatenates_texts_and_characters
-  ✓ test_text_bytes::plus_equals_appends_to_a_text
-  ✓ test_text_bytes::read_loads_a_file_as_bytes
-  ✓ test_text_bytes::text_plus_number_stays_a_type_error
-  ✓ test_text_casts::a_double_quoted_text_as_float_is_loud
-  ✓ test_text_casts::a_single_quoted_codepoint_still_converts
-  ✓ test_text_casts::an_int_list_variable_as_string_is_its_text
-  ✓ test_text_concat::concatenation_takes_results_of_functions_and_library_words
-  ✓ test_text_concat::text_plus_number_stays_an_error
-  ✓ test_text_concat::text_variables_and_compound_assignment
-  ✓ test_text_concat::texts_concatenate_with_plus
-  ✓ test_text_functions::a_block_with_an_if_statement_is_code_not_data
-  ✓ test_text_functions::an_if_with_text_branches_makes_a_text_function
-  ✓ test_text_functions::error_makes_an_error_value_of_a_text
-  ✓ test_text_functions::return_from_a_statement_gives_back_the_node
-  ✓ test_text_getters::compiled_uniscript_converts_like_the_browser_page
-  ✓ test_text_getters::text_getters_read_texts_and_errors
-  ✓ test_text_repeat::n_times_text_is_the_explicit_repeat
-  ✓ test_text_repeat::text_repeat_names_the_explicit_form
-  ✓ test_text_repeat::text_times_float_or_text_stays_a_type_error
-  ✓ test_text_repeat::text_times_int_repeats
-  ✓ test_text_runtime::join_and_concatenation_take_non_ascii_characters
-  ✓ test_text_runtime::reverse_of_a_text_is_by_characters
-  ✓ test_text_runtime::the_characters_of_a_runtime_text
-  ✓ test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
-  ✓ test_text_variable_assignment::a_one_letter_text_can_be_reassigned
-  ✓ test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
-  ✓ test_times_count_once::a_trailing_if_guards_the_whole_assignment
-  ✓ test_times_count_once::times_evaluates_its_count_once
-  ✓ test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
+  ✓ test_text_as_float::test_text_as_float
   ✓ test_todo::test_array_length
   ✓ test_todo::test_if_then_else
   ✓ test_todo::test_index_assign_in_loop
@@ -1198,32 +1213,8 @@ PASSED:
   ✓ test_todo::test_type_annotated
   ✓ test_todo::test_type_equivalence
   ✓ test_todo::test_utf8_char_indexing
-  ✓ test_top_level_block::test_branch_block_yields_its_last_item
-  ✓ test_top_level_block::test_data_object_block_keeps_all_keys
-  ✓ test_top_level_block::test_function_body_block_yields_its_last_item
-  ✓ test_top_level_block::test_top_level_newlines_yield_the_last_item
-  ✓ test_top_level_block::test_top_level_semicolons_yield_the_last_item
-  ✓ test_trap_messages::integer_modulo_by_zero_names_the_division
-  ✓ test_try_deep::caught_errors_leave_later_errors_loud
-  ✓ test_try_deep::nested_try_restores_the_depth_on_both_paths
-  ✓ test_try_deep::try_catches_a_failed_cast
-  ✓ test_try_deep::try_catches_an_error_inside_a_called_function
-  ✓ test_try_deep::try_catches_an_error_inside_an_expression
-  ✓ test_try_deep::try_in_a_loop_catches_each_time
-  ✓ test_try_deep::try_inside_a_called_function_restores_the_depth
   ✓ test_try_else_value::an_arrow_fallback_is_a_function_value
   ✓ test_try_else_value::try_else_takes_a_value_or_an_action
-  ✓ test_try_else::assert_gives_the_condition_or_an_error
-  ✓ test_try_else::try_falls_back_on_an_error_value
-  ✓ test_try_else::try_falls_back_on_division_and_modulo_by_zero
-  ✓ test_try_else::try_falls_back_when_the_index_is_out_of_range
-  ✓ test_try_else::try_keeps_a_value
-  ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
-  ✓ test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
-  ✓ test_try_exits_and_naming::bare_try_else_still_works
-  ✓ test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
-  ✓ test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
-  ✓ test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
   ✓ test_tuples::test_loop_over_list_with_global_tuple
   ✓ test_tuples::test_tuple_of_computed_items
   ✓ test_type_word_user_function::a_clash_is_an_error_not_a_warning
@@ -1233,40 +1224,6 @@ PASSED:
   ✓ test_typed_returns::test_block_bodies_and_returns_convert_too
   ✓ test_typed_returns::test_return_type_after_the_parameters
   ✓ test_typed_returns::test_type_before_the_name_converts_the_result
-  ✓ test_unbounded_int::test_big_division_and_remainder
-  ✓ test_unbounded_int::test_big_int_to_float
-  ✓ test_unbounded_int::test_big_literal_round_trip
-  ✓ test_unbounded_int::test_comparisons_across_small_and_big
-  ✓ test_unbounded_int::test_factorial_and_fib_stay_exact
-  ✓ test_unbounded_int::test_i64_opt_out_wraps
-  ✓ test_unbounded_int::test_overflow_promotes_add_sub
-  ✓ test_unbounded_int::test_overflow_promotes_mul
-  ✓ test_unbounded_int::test_overflow_promotes_neg_abs
-  ✓ test_unbounded_int::test_overflow_promotes_pow
-  ✓ test_unbounded_int::test_small_arithmetic_unchanged
-  ✓ test_undefined_variable::test_undefined_variable_compound_assignment_is_an_error_value
-  ✓ test_undefined_variable::test_undefined_variable_increment_is_an_error_value
-  ✓ test_undefined_variable::test_undefined_variable_use_is_an_error_value
-  ✓ test_undefined_variable::test_unsupported_array_phrase_names_the_undefined_variable
-  ✓ test_units_arithmetic::test_incompatible_units_are_an_error
-  ✓ test_units_arithmetic::test_scaling_a_quantity
-  ✓ test_units_arithmetic::test_spaced_known_unit_multiplies
-  ✓ test_units_arithmetic::test_spaced_unknown_unit_stays_a_list
-  ✓ test_units_arithmetic::test_unit_sum_uses_the_finer_unit
-  ✓ test_units_arithmetic::test_variable_shadows_the_unit
-  ✓ test_units_compare::a_variable_may_change_from_nothing_to_a_number_in_a_loop
-  ✓ test_units_compare::division_by_another_dimension_is_a_composite_unit
-  ✓ test_units_compare::mixed_dimensions_are_a_loud_dimension_error
-  ✓ test_units_compare::quantities_compare_in_the_finer_unit
-  ✓ test_units_compare::scalar_division_keeps_the_unit_and_same_dimension_division_is_a_number
-  ✓ test_units_followup::test_descending_range_is_an_error
-  ✓ test_units_followup::test_negative_tolerance_is_an_error
-  ✓ test_units_followup::test_plus_minus_ascii_spelling
-  ✓ test_units_followup::test_range_with_a_unit
-  ✓ test_units_followup::test_single_quantity_keeps_its_unit
-  ✓ test_units_followup::test_tolerance_in_a_unit
-  ✓ test_units_followup::test_unit_sum_serializes_in_the_smallest_unit
-  ✓ test_units_followup::test_value_with_tolerance_prints_back
   ✓ test_use_modules::test_module_statements_are_not_imported
   ✓ test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
   ✓ test_use_modules::test_search_order_prefers_earlier_directory
@@ -1276,10 +1233,6 @@ PASSED:
   ✓ test_use_modules::test_use_missing_module_is_an_error_value
   ✓ test_use_modules::test_use_twice_is_a_no_op
   ✓ test_use_modules::test_warp_extension_is_found
-  ✓ test_use_scopes::siblings_are_invisible_without_a_scope
-  ✓ test_use_scopes::use_folder_in_inline_code_is_the_working_directory
-  ✓ test_use_scopes::use_package_sees_every_file_below_the_package_folder
-  ✓ test_use_scopes::use_project_sees_every_file_below_the_project_root
   ✓ test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ test_user_method_form::a_user_function_is_called_in_method_form
   ✓ test_versions::an_older_version_comes_from_its_git_tag
@@ -1446,18 +1399,97 @@ PASSED:
   ✓ test_welcoming_sugar::n_times_a_one_element_list_repeats_it
   ✓ test_welcoming_sugar::the_empty_list_counts_zero_and_grows
   ✓ test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
-  ✓ test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
-  ✓ test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
-  ✓ test_while_value::test_while_value_is_last_body_value
-  ✓ test_while_value::test_while_value_of_untouched_loop_is_empty
   ✓ test_wit_types::wit_struct_is_a_plain_word
   ✓ test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket
   ✓ test_wit::test_timeout_protection
   ✓ test_wit::test_wit_parse
-  ✓ test_zero_fill::a_computed_size_is_a_runtime_count
-  ✓ test_zero_fill::a_large_zero_list_has_its_size
-  ✓ test_zero_fill::a_zero_list_is_still_a_list_of_zeros
-  ✓ test_zero_fill::a_zero_list_of_nothing_is_empty
+  ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
+  ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
+  ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_character_comparison::test_character_element_of_text_compares
+  ✓ text::test_character_comparison::test_character_test_words
+  ✓ text::test_character_comparison::test_character_variable_compares_with_character_literal
+  ✓ text::test_character_comparison::test_one_character_text_as_int
+  ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
+  ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
+  ✓ text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
+  ✓ text::test_interpolation::an_unknown_name_in_a_hole_is_loud
+  ✓ text::test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
+  ✓ text::test_interpolation::data_keeps_dollars_as_text
+  ✓ text::test_interpolation::dollar_arguments_and_templates_keep_working
+  ✓ text::test_interpolation::holes_take_parameters_lists_and_exact_numbers
+  ✓ text::test_interpolation::holes_take_text_results_of_library_words
+  ✓ text::test_interpolation::single_quotes_stay_literal
+  ✓ text::test_interpolation::swift_holes_interpolate_any_expression
+  ✓ text::test_interpolation::the_normalizer_hints_the_swift_form
+  ✓ text::test_library_unicode::reverse_works_on_text_by_code_points
+  ✓ text::test_library_unicode::sort_orders_floats
+  ✓ text::test_library_unicode::sort_orders_mixed_numbers
+  ✓ text::test_library_unicode::sort_orders_texts
+  ✓ text::test_library_unicode::sort_still_orders_ints
+  ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
+  ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
+  ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
+  ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
+  ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
+  ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
+  ✓ text::test_quote_output::test_codepoints_keep_single_quotes
+  ✓ text::test_quote_output::test_evaluated_text_prints_with_the_canonical_quote
+  ✓ text::test_quote_output::test_is_macro_round_trips_text
+  ✓ text::test_quote_output::test_serialized_text_parses_back
+  ✓ text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
+  ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
+  ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
+  ✓ text::test_string::test_first_char
+  ✓ text::test_string::test_interpolation
+  ✓ text::test_string::test_map
+  ✓ text::test_string::test_primitive_char
+  ✓ text::test_string::test_primitive_float
+  ✓ text::test_string::test_primitive_hello
+  ✓ text::test_string::test_primitive_int
+  ✓ text::test_string::test_primitive_string
+  ✓ text::test_string::test_reverse
+  ✓ text::test_string::test_str_string
+  ✓ text::test_string::test_string_at
+  ✓ text::test_string::test_string_basics
+  ✓ text::test_string::test_string_concatenation
+  ✓ text::test_string::test_string_from
+  ✓ text::test_string::test_string_index
+  ✓ text::test_string::test_string_index_by_variable
+  ✓ text::test_string::test_string_indices
+  ✓ text::test_string::test_string_set_at
+  ✓ text::test_string::test_string_substring
+  ✓ text::test_string::test_string_substring_from
+  ✓ text::test_text_bytes::byte_at_reads_one_byte
+  ✓ text::test_text_bytes::byte_slice_cuts_by_byte_offsets
+  ✓ text::test_text_bytes::plus_concatenates_texts_and_characters
+  ✓ text::test_text_bytes::plus_equals_appends_to_a_text
+  ✓ text::test_text_bytes::read_loads_a_file_as_bytes
+  ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
+  ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
+  ✓ text::test_text_casts::a_single_quoted_codepoint_still_converts
+  ✓ text::test_text_casts::an_int_list_variable_as_string_is_its_text
+  ✓ text::test_text_concat::concatenation_takes_results_of_functions_and_library_words
+  ✓ text::test_text_concat::text_plus_number_stays_an_error
+  ✓ text::test_text_concat::text_variables_and_compound_assignment
+  ✓ text::test_text_concat::texts_concatenate_with_plus
+  ✓ text::test_text_functions::a_block_with_an_if_statement_is_code_not_data
+  ✓ text::test_text_functions::an_if_with_text_branches_makes_a_text_function
+  ✓ text::test_text_functions::error_makes_an_error_value_of_a_text
+  ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
+  ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
+  ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
+  ✓ text::test_text_repeat::text_repeat_names_the_explicit_form
+  ✓ text::test_text_repeat::text_times_float_or_text_stays_a_type_error
+  ✓ text::test_text_repeat::text_times_int_repeats
+  ✓ text::test_text_runtime::join_and_concatenation_take_non_ascii_characters
+  ✓ text::test_text_runtime::reverse_of_a_text_is_by_characters
+  ✓ text::test_text_runtime::the_characters_of_a_runtime_text
+  ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
+  ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
+  ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -1491,6 +1523,8 @@ PASSED:
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_person_struct::test_person_struct_roundtrip
+  ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
+  ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records_classes::a_class_has_untyped_fields
   ✓ types::test_records_classes::a_missing_required_field_is_an_error
   ✓ types::test_records_classes::a_record_is_a_struct
@@ -1576,11 +1610,15 @@ PASSED:
   ✓ types::test_types::test_constructor_cast
   ✓ types::test_types::test_deep_type
   ✓ types::test_types::test_emit_cast
+  ✓ types::test_types::test_empty_typed_functions
+  ✓ types::test_types::test_polymorphism
+  ✓ types::test_types::test_polymorphism2
   ✓ types::test_types::test_type_confusion
   ✓ types::test_types::test_type_node
   ✓ types::test_types::test_type_registry
   ✓ types::test_types::test_type_registry_from_node
   ✓ types::test_types::test_type_synonyms
+  ✓ types::test_types::test_typed_functions
   ✓ types::test_types::test_types
   ✓ types::test_types::test_types_simple
   ✓ types::test_types::test_types_simple2
@@ -1633,4 +1671,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1628 passed, 0 failed, 1628 total tested
+58 ignored, 1666 passed, 0 failed, 1666 total tested

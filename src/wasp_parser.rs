@@ -408,6 +408,16 @@ fn typed_parameter(arguments: Node) -> Node {
 	}
 }
 
+/// Every argument of `f(int x, float y)` as its typed parameter
+fn typed_parameters(arguments: Node) -> Node {
+	match arguments.drop_meta() {
+		Node::List(items, bracket, Separator::Colon) => {
+			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
+		}
+		_ => typed_parameter(arguments),
+	}
+}
+
 fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
 	Node::List([vec![Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
@@ -1227,6 +1237,14 @@ impl WaspParser {
 				}
 			}
 			'"' | '\'' | '«' => self.parse_string(),
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/tuples.rs)
+			'*' if self.is_identifier_start(1) => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
+					Err(message) => error(&message),
+				}
+			}
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
@@ -1649,7 +1667,7 @@ impl WaspParser {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
 					let signature = Node::List(
-						vec![Symbol(symbol), args_node],
+						vec![Symbol(symbol), typed_parameters(args_node)],
 						Bracket::Round,
 						Separator::None,
 					);
@@ -1659,7 +1677,7 @@ impl WaspParser {
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
-					match typed_parameter(args_node) {
+					match typed_parameters(args_node) {
 						Node::List(args, _, _) => items.extend(args),
 						Node::Empty => {}
 						other => items.push(other),

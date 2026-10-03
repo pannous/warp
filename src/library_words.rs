@@ -149,6 +149,37 @@ pub fn lower(node: Node) -> Node {
 	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), temporaries: Cell::new(0) }.expand(node)
 }
 
+/// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding or libm
+/// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
+/// functions are called so later, in `method_call`
+pub fn lower_function_methods(node: Node) -> Node {
+	let mut context = Context::new();
+	extract_user_functions(&mut context, &node);
+	let mut defined: HashSet<String> = context.user_functions.into_keys().collect();
+	collect_assigned_names(&node, &mut defined);
+	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some();
+	function_methods_as_calls(node, &|name| is_builtin(name) && !defined.contains(name))
+}
+
+fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str) -> bool) -> Node {
+	let lowered = |node: Node| function_methods_as_calls(node, is_function);
+	match node {
+		Node::Key(receiver, Op::Dot, method) => {
+			let (receiver, method) = (lowered(*receiver), lowered(*method));
+			match method.drop_meta() {
+				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name)) => {
+					Node::List([vec![items[0].clone(), receiver], items[1..].to_vec()].concat(), Bracket::Round, Separator::None)
+				}
+				_ => Node::Key(Box::new(receiver), Op::Dot, Box::new(method)),
+			}
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(lowered(*left)), op, Box::new(lowered(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lowered).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
+		other => other,
+	}
+}
+
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {

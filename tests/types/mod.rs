@@ -20,3 +20,4 @@ mod test_type_words;
 mod test_typed_arrays;
 mod test_types_scope;
 mod test_types;
+mod test_real_text;

@@ -15,6 +15,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"];
+/// `x as string`, `str(x)`: the text form of an exact value
+const TEXT_TYPES: [&str; 4] = ["string", "str", "text", "String"];
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -25,6 +27,8 @@ enum Value {
 	/// explicit `as float`: IEEE from here on
 	Float(f64),
 	Bool(bool),
+	/// a text joined with an exact value keeps its symbolic form: `"f" + √2` is "f√2"
+	Text(String),
 }
 
 enum Stop {
@@ -171,6 +175,8 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Evaluated {
 		Node::Number(number) => number_value(number),
 		Node::True => Ok(Value::Bool(true)),
 		Node::False => Ok(Value::Bool(false)),
+		Node::Text(text) => Ok(Value::Text(text.clone())),
+		Node::Char(character) => Ok(Value::Text(character.to_string())),
 		Node::Symbol(name) => scope.get(name).cloned().ok_or(Stop::Unsupported),
 		Node::Key(left, op, right) => key(left, *op, right, scope),
 		Node::List(items, _, separator) => list(items, separator, scope),
@@ -201,6 +207,9 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 		[head, argument] if function_name(head).is_some() && !scope.contains_key(&head.name()) => {
 			let argument = evaluate(argument, scope)?;
 			call(function_name(head).unwrap_or_default(), argument)
+		}
+		[head, argument] if TEXT_TYPES.contains(&head.name().as_str()) && !scope.contains_key(&head.name()) => {
+			convert(evaluate(argument, scope)?, &head.name())
 		}
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
 			let mut last = Err(Stop::Unsupported);
@@ -240,7 +249,11 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 			_ => Err(Stop::Unsupported),
 		},
 		_ if op.is_comparison() => compare(evaluate(left, scope)?, op, evaluate(right, scope)?),
-		Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Pow => arithmetic(evaluate(left, scope)?, op, evaluate(right, scope)?),
+		Op::Add => match (evaluate(left, scope)?, evaluate(right, scope)?) {
+			(left @ Value::Text(_), right) | (left, right @ Value::Text(_)) => Ok(Value::Text(text_of(left)? + &text_of(right)?)),
+			(left, right) => arithmetic(left, op, right),
+		},
+		Op::Sub | Op::Mul | Op::Div | Op::Pow => arithmetic(evaluate(left, scope)?, op, evaluate(right, scope)?),
 		_ => Err(Stop::Unsupported),
 	}
 }
@@ -248,10 +261,20 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 /// `x as float` / `as fast` / `as f64`: the f64 nearest to the exact value; `as real` / `as exact` keep it
 fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
+		(value, text) if TEXT_TYPES.contains(&text) => Ok(Value::Text(text_of(value)?)),
 		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(real.to_f64())),
 		(value @ Value::Real(_), "real" | "exact") => Ok(value),
 		(value @ Value::Float(_), "float" | "fast" | "f64" | "double") => Ok(value),
 		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// The text form of a value: an exact real symbolically (`√2`, `π/2`), as it prints
+fn text_of(value: Value) -> Result<String, Stop> {
+	match value {
+		Value::Text(text) => Ok(text),
+		Value::Bool(_) => Err(Stop::Unsupported),
+		number => Ok(number.into_node().serialize()),
 	}
 }
 
@@ -326,7 +349,7 @@ fn float_of(value: Value) -> Result<f64, Stop> {
 	match value {
 		Value::Float(f) => Ok(f),
 		Value::Real(real) => Ok(real.to_f64()),
-		Value::Bool(_) => Err(Stop::Unsupported),
+		Value::Bool(_) | Value::Text(_) => Err(Stop::Unsupported),
 	}
 }
 
@@ -600,6 +623,7 @@ impl Value {
 				None => Node::Number(Number::real(Real::Exact(exact))),
 			},
 			Value::Real(approximation) => Node::Number(Number::real(approximation)),
+			Value::Text(text) => Node::Text(text),
 		}
 	}
 }
