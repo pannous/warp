@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::extensions::numbers::Number;
 use num_bigint::{BigInt, Sign};
-use wasmtime::{AsContextMut, Instance, Linker, Module, Store, Val};
+use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
 use wasmtime_wasi::{WasiCtxBuilder, p1};
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
@@ -184,6 +184,12 @@ impl GcObject {
 		self.read_string(ptr, len)
 	}
 
+	/// The Node this struct encodes
+	pub fn to_node(&self) -> Node {
+		let mut store = self.store.borrow_mut();
+		node_of(&self.inner, &mut store.as_context_mut(), &self.instance)
+	}
+
 	/// Get the data field as a child GcObject (for Key nodes where data is a node ref)
 	pub fn data_as_node(&self) -> Result<GcObject> {
 		let val = self.data()?;
@@ -354,81 +360,97 @@ fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, in
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
-fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -> Result<Node> {
+fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Result<Node> {
 	match result {
-		Val::I64(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n))),
-		Val::I32(n) => Ok(Node::Number(crate::extensions::numbers::Number::Int(*n as i64))),
-		Val::F64(bits) => Ok(Node::Number(crate::extensions::numbers::Number::Float(f64::from_bits(*bits)))),
-		Val::AnyRef(anyref_opt) => {
-			// Handle GC struct result
-			if let Some(anyref) = anyref_opt {
-				if let Ok(structref) = anyref.unwrap_struct(&store) {
-					// Read Node struct: (kind: i64, data: anyref, value: ref null $Node)
-					let kind_val = structref.field(&mut store, FIELD_KIND)?;
-					let kind = kind_val.unwrap_i64();
-					let tag = (kind & KIND_MASK) as u8;
-
-					match tag {
-						t if t == Kind::Empty as u8 => Ok(Node::Empty),
-						t if t == Kind::Int as u8 => {
-							let data_val = structref.field(&mut store, FIELD_DATA)?;
-							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
-						}
-						t if t == Kind::Float as u8 => {
-							let data_val = structref.field(&mut store, FIELD_DATA)?;
-							let float_box = data_val.unwrap_anyref().and_then(|data| data.unwrap_struct(&store).ok());
-							let value = match float_box {
-								Some(float_box) => float_box.field(&mut store, 0)?.unwrap_f64(),
-								None => 0.0,
-							};
-							Ok(Node::Number(crate::extensions::numbers::Number::Float(value)))
-						}
-						t if t == Kind::Codepoint as u8 => {
-							let data_val = structref.field(&mut store, FIELD_DATA)?;
-							let code = data_val.unwrap_anyref().and_then(|data| data.as_i31(&store).ok().flatten()).map(|code| code.get_u32());
-							Ok(code.and_then(char::from_u32).map_or(Node::Empty, Node::Char))
-						}
-						// an Error from a host call (fetch) carries its reason as text
-						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 || t == Kind::Error as u8 => {
-							let textual = |s: String| match tag {
-								t if t == Kind::Text as u8 => Node::Text(s),
-								t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(s))),
-								_ => Node::Symbol(s),
-							};
-							// data field contains $String struct (ptr, len)
-							let data_val = structref.field(&mut store, FIELD_DATA)?;
-							if let Some(data_anyref) = data_val.unwrap_anyref() {
-								if let Ok(str_struct) = data_anyref.unwrap_struct(&store) {
-									let ptr_val = str_struct.field(&mut store, 0)?;
-									let len_val = str_struct.field(&mut store, 1)?;
-									let ptr = ptr_val.unwrap_i32() as usize;
-									let len = len_val.unwrap_i32() as usize;
-
-									// Read string from memory
-									if let Some(memory) = instance.get_memory(&mut store, "memory") {
-										let data = memory.data(&store);
-										if ptr + len <= data.len() {
-											let string_bytes = &data[ptr..ptr + len];
-											if let Ok(s) = std::str::from_utf8(string_bytes) {
-												return Ok(textual(s.to_string()));
-											}
-										}
-									}
-								}
-							}
-							Ok(textual(String::new()))
-						}
-						_ => Ok(Node::Empty),
-					}
-				} else {
-					Ok(Node::Empty)
-				}
-			} else {
-				Ok(Node::Empty)
-			}
-		}
+		Val::I64(n) => Ok(Node::Number(Number::Int(*n))),
+		Val::I32(n) => Ok(Node::Number(Number::Int(*n as i64))),
+		Val::F64(bits) => Ok(Node::Number(Number::Float(f64::from_bits(*bits)))),
+		Val::AnyRef(_) => Ok(node_of(result, &mut store.as_context_mut(), instance)),
 		_ => Ok(Node::Empty),
 	}
+}
+
+/// The Node a GC `$Node` struct encodes (layout in CLAUDE.md "Serialization"); null is Empty. Generic over the store
+/// state, so runs with WASI or host imports read lists and keys like plain runs do.
+pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &Instance) -> Node {
+	use crate::node::Bracket;
+	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { return Node::Empty };
+	let mut field = |index: usize| structref.field(&mut *store, index);
+	let (Ok(kind), Ok(data), Ok(child)) = (field(FIELD_KIND), field(FIELD_DATA), field(FIELD_VALUE)) else { return Node::Empty };
+	let kind = kind.unwrap_i64();
+	let tag = (kind & KIND_MASK) as u8;
+	let high_byte = (kind >> 8) & 0xFF;
+	let mut node = |val: &Val| node_of(val, store, instance);
+	match tag {
+		t if t == Kind::Empty as u8 => Node::Empty,
+		t if t == Kind::Int as u8 => match read_payload(store, &data) {
+			Ok(number) => Node::Number(number),
+			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
+		},
+		t if t == Kind::Float as u8 => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
+		t if t == Kind::Codepoint as u8 => {
+			let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok()).map(|code| code.get_u32());
+			Node::Char(code.and_then(char::from_u32).unwrap_or('\0'))
+		}
+		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, instance)),
+		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, instance)),
+		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, instance)))),
+		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
+		t if t == Kind::Block as u8 => list_of(node(&data), node(&child), Bracket::Curly),
+		t if t == Kind::List as u8 => {
+			let bracket = match high_byte {
+				0 => Bracket::Curly,
+				1 => Bracket::Square,
+				2 => Bracket::Round,
+				3 => Bracket::Less,
+				_ => Bracket::None,
+			};
+			list_of(node(&data), node(&child), bracket)
+		}
+		t if t == Kind::Data as u8 => {
+			let type_name = text_of(store, &data, instance);
+			Node::Data(crate::meta::Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: crate::meta::DataType::Other })
+		}
+		// a closure reads as the name of its function
+		t if t == Kind::Function as u8 => match child.unwrap_anyref() {
+			Some(_) => node(&child),
+			None => Node::Symbol("function".to_string()),
+		},
+		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
+		_ => Node::Text(format!("Unknown Kind: {tag}")),
+	}
+}
+
+/// A cons cell: the first item and the rest, itself a list or a last single item
+fn list_of(first: Node, rest: Node, bracket: crate::node::Bracket) -> Node {
+	let mut items = Vec::new();
+	if first != Node::Empty {
+		items.push(first);
+	}
+	match rest {
+		Node::List(rest_items, _, _) => items.extend(rest_items),
+		Node::Empty => {}
+		other => items.push(other),
+	}
+	Node::List(items, bracket, crate::node::Separator::None)
+}
+
+fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
+	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+	float_box.field(&mut *store, 0).ok().map(|value| value.unwrap_f64())
+}
+
+/// The letters of a `$String(ptr, len)` in linear memory
+fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, instance: &Instance) -> String {
+	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
+		let string = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+		let ptr = string.field(&mut *store, 0).ok()?.unwrap_i32() as usize;
+		let len = string.field(&mut *store, 1).ok()?.unwrap_i32() as usize;
+		let memory = instance.get_memory(&mut *store, "memory")?;
+		let bytes = memory.data(&*store).get(ptr..ptr + len)?;
+		String::from_utf8(bytes.to_vec()).ok()
+	};
+	read(store).unwrap_or_default()
 }
 
 /// Create a node by calling a constructor function
