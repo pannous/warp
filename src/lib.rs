@@ -45,6 +45,7 @@ pub mod units;
 pub mod for_loop;
 pub mod type_constructor;
 pub mod type_name_matching;
+pub mod meta_entries;
 pub mod function_values;
 pub mod lambdas;
 pub mod library_words;

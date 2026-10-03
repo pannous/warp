@@ -113,7 +113,8 @@ fn with_defaults(type_def: &TypeDef, registry: &TypeRegistry, mut entries: Vec<N
 /// (neither `x?` nor with a default) is given
 fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entries: &[Node]) -> Option<Node> {
 	let name = &type_def.name;
-	let wrong_entry = entries.iter().find_map(|entry| {
+	// a meta entry `@source:"gps"` is never a field
+	let wrong_entry = entries.iter().filter(|entry| crate::node::meta_entry(entry).is_none()).find_map(|entry| {
 		let Node::Key(field, Op::Colon | Op::Assign, value) = entry.drop_meta() else {
 			let message = format!("{name}{{…}} takes fields as name:value, got {}", entry.serialize());
 			return Some(Diagnostic::at(located, message).into_error());

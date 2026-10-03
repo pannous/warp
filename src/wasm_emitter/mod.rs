@@ -3608,7 +3608,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(node)))));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(node))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -3756,7 +3756,7 @@ fn failed_run(failure: anyhow::Error) -> Node {
 	};
 	let trace = format!("{:?}", failure);
 	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
-		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == crate::node::ATTRIBUTE_MARK).collect();
 		format!("no field {name}")
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {

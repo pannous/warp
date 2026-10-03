@@ -14,6 +14,7 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const VALUES_EQUAL: &str = "values_equal";
+pub const IS_META_ENTRY: &str = "is_meta_entry";
 pub const IS_TRUTHY: &str = "is_truthy";
 const KIND_MASK: i64 = 0xFF;
 const MEMORY: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
@@ -105,6 +106,72 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// is_meta_entry(entry: anyref) -> i32: 1 for a meta entry `@name:value`, which is never a field, not counted and
+	/// ignored by == (user decision "Meta information on objects")
+	pub(crate) fn emit_is_meta_entry(&mut self) {
+		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let string_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(string) });
+		let (entry, key, name) = (0, 1, 2);
+		self.runtime_function(IS_META_ENTRY, vec![Self::any_ref()], vec![ValType::I32], vec![Self::any_ref(), string_ref], |_, f| {
+			let is_node_of_kind = |f: &mut Function, local: u32, kind: Kind| {
+				Self::test(f, local, HeapType::Concrete(node));
+				f.instruction(&I::I32Eqz);
+				Self::return_if(f, 0);
+				Self::field(f, local, node, 0);
+				f.instruction(&I::I64Const(KIND_MASK));
+				f.instruction(&I::I64And);
+				f.instruction(&I::I64Const(kind as i64));
+				f.instruction(&I::I64Ne);
+				Self::return_if(f, 0);
+			};
+			is_node_of_kind(f, entry, Kind::Key);
+			Self::field(f, entry, node, 1);
+			f.instruction(&I::LocalSet(key));
+			is_node_of_kind(f, key, Kind::Symbol);
+			Self::field(f, key, node, 1);
+			f.instruction(&I::RefCastNonNull(HeapType::Concrete(string)));
+			f.instruction(&I::LocalSet(name));
+			f.instruction(&I::LocalGet(name));
+			f.instruction(&I::StructGet { struct_type_index: string, field_index: 1 });
+			f.instruction(&I::I32Eqz);
+			Self::return_if(f, 0);
+			f.instruction(&I::LocalGet(name));
+			f.instruction(&I::StructGet { struct_type_index: string, field_index: 0 });
+			f.instruction(&I::I32Load8U(MEMORY));
+			f.instruction(&I::I32Const(crate::node::ATTRIBUTE_MARK as i32));
+			f.instruction(&I::I32Eq);
+		});
+	}
+
+	/// A list cell (local `cell`) whose entry is a meta entry: compare its rest instead, `values_equal(rest, other)`
+	fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32) {
+		let node = self.type_manager.node_type;
+		Self::test(f, cell, HeapType::Concrete(node));
+		f.instruction(&I::If(BlockType::Empty));
+		Self::field(f, cell, node, 0);
+		f.instruction(&I::I64Const(KIND_MASK));
+		f.instruction(&I::I64And);
+		f.instruction(&I::I64Const(Kind::List as i64));
+		f.instruction(&I::I64Eq);
+		f.instruction(&I::If(BlockType::Empty));
+		Self::field(f, cell, node, 1);
+		self.call(f, IS_META_ENTRY);
+		f.instruction(&I::If(BlockType::Empty));
+		let push_rest = |f: &mut Function| Self::field(f, cell, node, 2);
+		if cell == 0 {
+			push_rest(f);
+			f.instruction(&I::LocalGet(other));
+		} else {
+			f.instruction(&I::LocalGet(other));
+			push_rest(f);
+		}
+		f.instruction(&I::Call(recurse));
+		f.instruction(&I::Return);
+		f.instruction(&I::End);
+		f.instruction(&I::End);
+		f.instruction(&I::End);
+	}
+
 	fn any_ref() -> ValType {
 		Ref(RefType { nullable: true, heap_type: any_heap_type() })
 	}
@@ -185,7 +252,7 @@ impl WasmGcEmitter {
 
 	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.
 	/// Locals: 7 and 8 walk the cells of the list being checked and of the other, 9 flags that the entry was found.
-	fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32) {
+	fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32, is_meta_entry: u32) {
 		let (walked, other, found) = (7, 8, 9);
 		let cell_field = |f: &mut Function, local: u32, field_index: u32| {
 			f.instruction(&I::LocalGet(local));
@@ -203,8 +270,9 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalGet(walked));
 			f.instruction(&I::RefIsNull);
 			f.instruction(&I::BrIf(1));
-			f.instruction(&I::I32Const(0));
-			f.instruction(&I::LocalSet(found));
+			cell_field(f, walked, 1);
+			f.instruction(&I::Call(is_meta_entry));
+			f.instruction(&I::LocalSet(found)); // a meta entry needs no partner
 			f.instruction(&I::LocalGet(against));
 			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
 			f.instruction(&I::LocalSet(other));
@@ -251,6 +319,8 @@ impl WasmGcEmitter {
 		let cell = Ref(self.node_ref(true));
 		let locals = vec![i64t, i64t, i32t, i32t, i32t, cell, cell, i32t];
 		self.runtime_function(VALUES_EQUAL, vec![Self::any_ref(), Self::any_ref()], vec![i32t], locals, |s, f| {
+			s.skip_meta_cell(f, 0, 1, recurse);
+			s.skip_meta_cell(f, 1, 0, recurse);
 			// null equals only null
 			f.instruction(&I::LocalGet(0));
 			f.instruction(&I::RefIsNull);
@@ -292,7 +362,7 @@ impl WasmGcEmitter {
 			}
 			f.instruction(&I::I32And);
 			f.instruction(&I::If(BlockType::Empty));
-			Self::emit_unordered_entries_equal(f, node, recurse);
+			Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY));
 			f.instruction(&I::End);
 			Self::field(f, 0, node, 1);
 			Self::field(f, 1, node, 1);

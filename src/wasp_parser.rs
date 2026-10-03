@@ -281,6 +281,7 @@ struct UserOperator {
 }
 
 const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
+use crate::node::ATTRIBUTE_MARK;
 const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
 const USER_SUFFIX_BP: u8 = 200;
@@ -1105,13 +1106,24 @@ impl WaspParser {
 		}
 	}
 
-	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`
+	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`.
+	/// `@name:value` (inside a literal: `point{x:1 @source:"gps"}`) is the meta entry `@name`, never a field;
+	/// after a dot, `p.@name` names the meta key itself.
 	fn parse_attribute(&mut self) -> Node {
+		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
 		self.advance(); // skip '@'
 		let name = match self.parse_symbol() {
 			Ok(name) => name,
 			Err(message) => return error(&message),
 		};
+		if after_dot {
+			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
+		}
+		if self.current_char() == ':' && self.peek_char(1) != '=' {
+			self.advance();
+			self.skip_spaces();
+			return Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))), Op::Colon, Box::new(self.parse_atom()));
+		}
 		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
 		self.parse_atom().with_attribute(&name, value)
 	}
@@ -1524,6 +1536,20 @@ impl WaspParser {
 				// and NOT followed by a number (that would be comparison: i<9); `it<k` and `a<b` compare
 				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
+			}
+			// `info@pannous.com` in data is one word; `p@unit` in code reads the meta key: `p.@unit`
+			'@' if self.peek_char(1).is_alphabetic() && self.options.data_mode => {
+				let rest: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c) || matches!(c, '@' | '.' | '-')).collect();
+				let rest = rest.trim_end_matches(['.', '-']).to_string();
+				self.advance_by(rest.chars().count());
+				Symbol(format!("{symbol}{rest}"))
+			}
+			'@' if self.peek_char(1).is_alphabetic() => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(key) => Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))),
+					Err(message) => error(&message),
+				}
 			}
 			'(' => {
 				// Parse arguments as a proper Node

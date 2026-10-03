@@ -20,7 +20,18 @@ use crate::type_kinds::{AstKind, Kind};
 use crate::wasp_parser::parse;
 
 /// Prefix of a `@name(value)` annotation key
-const ATTRIBUTE_MARK: char = '@';
+pub const ATTRIBUTE_MARK: char = '@';
+
+/// The name and value of a meta entry `@name:value`
+pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
+	match entry.drop_meta() {
+		Key(key, Op::Colon, value) => match key.drop_meta() {
+			Symbol(key) => key.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref())),
+			_ => None,
+		},
+		_ => None,
+	}
+}
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
@@ -779,9 +790,23 @@ impl Node {
 		}
 	}
 
-	/// The value of the attribute `@name`
+	/// The value of the attribute `@name`: an annotation `@name(value) x`, else the meta entry `@name:value` of the literal
 	pub fn attribute(&self, name: &str) -> Option<&Node> {
-		self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value)
+		let annotation = self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value);
+		annotation.or_else(|| self.meta_entries().find(|(entry_name, _)| *entry_name == name).map(|(_, value)| value))
+	}
+
+	/// The meta entries `@name:value` written inside this literal (`point{x:1 @source:"gps"}`), never fields
+	pub fn meta_entries(&self) -> impl Iterator<Item = (&str, &Node)> {
+		let items: &[Node] = match self.drop_meta() {
+			List(items, _, _) => items,
+			Key(_, Op::Colon | Op::None, value) => match value.drop_meta() {
+				List(items, _, _) => items,
+				single => std::slice::from_ref(single),
+			},
+			_ => &[],
+		};
+		items.iter().filter_map(meta_entry)
 	}
 
 	/// The value slot of attribute `@name`; a missing attribute is created around the innermost node,

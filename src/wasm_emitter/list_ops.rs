@@ -21,6 +21,7 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(false);
 		let node_ref_nullable = self.node_ref(true);
 		self.emit_runtime_errors();
+		self.emit_is_meta_entry();
 		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			self.emit_text_units();
@@ -148,9 +149,12 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::RefIsNull);
 			func.instruction(&Instruction::BrIf(1)); // break to outer block
 
-			// count = count + 1
+			// count = count + 1, unless the entry is a meta entry `@name:value`
 			func.instruction(&Instruction::LocalGet(1));
-			func.instruction(&Instruction::I64Const(1));
+			self.emit_field(&mut func, 2, 1);
+			self.call(&mut func, super::equality::IS_META_ENTRY);
+			func.instruction(&Instruction::I32Eqz);
+			func.instruction(&Instruction::I64ExtendI32U);
 			func.instruction(&Instruction::I64Add);
 			func.instruction(&Instruction::LocalSet(1));
 
@@ -1047,16 +1051,20 @@ impl WasmGcEmitter {
 	pub(super) fn emit_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		match self.map_key(index) {
 			Some(key) => match crate::analyzer::constant_field_name(&key) {
-				// the value of the entry, or the runtime error naming the missing field
+				// the value of the entry, else of the meta entry `@name`, or the runtime error naming the missing field
 				Some(name) => {
 					let node_ref = Ref(self.node_ref(false));
 					func.instruction(&I::Block(BlockType::Result(node_ref)));
-					self.emit_lookup_target(func, target);
-					let (pointer, length) = self.allocate_string(&name);
-					Self::emit_list(func, &[I32Const(pointer as i32), I32Const(length as i32)]);
-					self.emit_call(func, "new_symbol");
-					self.emit_call(func, "map_find");
-					func.instruction(&I::BrOnNonNull(0));
+					let meta_name = format!("{}{name}", crate::node::ATTRIBUTE_MARK);
+					let fallback = (!name.starts_with(crate::node::ATTRIBUTE_MARK)).then_some(meta_name);
+					for key in std::iter::once(name.clone()).chain(fallback) {
+						self.emit_lookup_target(func, target);
+						let (pointer, length) = self.allocate_string(&key);
+						Self::emit_list(func, &[I32Const(pointer as i32), I32Const(length as i32)]);
+						self.emit_call(func, "new_symbol");
+						self.emit_call(func, "map_find");
+						func.instruction(&I::BrOnNonNull(0));
+					}
 					func.instruction(&I::Call(self.func_index(&format!("{NO_FIELD_PREFIX}{name}"))));
 					func.instruction(&I::Unreachable);
 					func.instruction(&I::End);

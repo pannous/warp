@@ -101,6 +101,7 @@ mod test_logic_grouped_operands;
 mod test_loop_forms;
 mod test_loops_in_functions;
 mod test_math;
+mod test_meta_attributes;
 mod test_meta;
 mod test_method_words;
 mod test_min_max_lists;
