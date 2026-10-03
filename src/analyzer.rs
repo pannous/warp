@@ -2264,6 +2264,9 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
 /// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
+	if crate::type_constructor::instance_parts_marked(type_node) {
+		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
+	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);

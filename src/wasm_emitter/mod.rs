@@ -22,6 +22,7 @@ mod string_table;
 mod type_manager;
 mod try_guard;
 pub use try_guard::RAN_WITHOUT_ERROR;
+mod witness;
 pub(crate) mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
@@ -164,6 +165,7 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
+	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 }
 
 impl Default for WasmGcEmitter {
@@ -205,6 +207,7 @@ impl WasmGcEmitter {
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
 			loop_labels: Vec::new(),
+			compare_witness: None,
 		}
 	}
 
@@ -765,6 +768,7 @@ impl WasmGcEmitter {
 		self.allocate_closure_captures(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
+		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
 		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
 			let mut rerun = Self::new();
@@ -1145,6 +1149,7 @@ impl WasmGcEmitter {
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 
 		let mut func = Function::new(locals);
+		self.emit_witness_installation(&mut func);
 		self.emit_node_instructions(&mut func, node);
 		func.instruction(&Instruction::End);
 
@@ -3186,6 +3191,9 @@ impl WasmGcEmitter {
 			self.module.section(&self.globals);
 		}
 		self.module.section(&self.exports);
+		if let Some(elements) = self.witness_elements() {
+			self.module.section(&elements);
+		}
 		self.module.section(&self.code);
 		// Get data section from string table
 		self.module.section(self.string_table.data_section());
@@ -3666,19 +3674,19 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = crate::type_tests::lower(node);
+	let node = crate::type_tests::lower(crate::traits::lower_declarations(node));
 	let node = crate::ambiguous_forms::lower(node);
 	let node = crate::analyzer::lower_list_times(node);
 	let node = crate::lambdas::lower(node);
 	let node = crate::function_values::lower(node);
 	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
-	let node = crate::type_constructor::lower(node);
+	let node = crate::traits::lower_conformances(crate::type_constructor::lower(node));
 	let node = crate::min_max::lower(node);
 	let node = crate::declarations::lower(node);
 	let node = crate::switch::lower(node);
 	let node = crate::phrase_words::lower(node);
-	let node = crate::library_words::lower(node);
+	let node = crate::traits::lower_dispatch(crate::library_words::lower(node));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}

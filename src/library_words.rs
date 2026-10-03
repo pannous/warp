@@ -126,7 +126,8 @@ pub fn lower(node: Node) -> Node {
 	let mut assigned_objects = HashMap::new();
 	collect_assigned_objects(&node, &mut assigned_objects);
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
-	Lowering { context, shadowed, objects, temporaries: Cell::new(0) }.expand(node)
+	let instances = crate::traits::InstanceTypes::of(&node);
+	Lowering { context, shadowed, objects, instances, temporaries: Cell::new(0) }.expand(node)
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
@@ -216,6 +217,8 @@ struct Lowering {
 	context: Context,
 	shadowed: HashSet<String>,
 	objects: HashMap<String, Node>,
+	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
+	instances: crate::traits::InstanceTypes,
 	temporaries: Cell<usize>,
 }
 
@@ -435,6 +438,10 @@ impl Lowering {
 
 	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
 	fn object_literal(&self, node: &Node) -> Option<Node> {
+		self.written_object(node).or_else(|| self.instances.fields_template(node))
+	}
+
+	fn written_object(&self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {

@@ -74,6 +74,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
+	if required.contains("list_sort") {
+		required.insert(super::library_ops::NODE_ORDER);
+	}
 	if required.contains(super::wasi_emitter::PRINT_VALUE) {
 		required.insert("list_join");
 	}
@@ -81,7 +84,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort"];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
