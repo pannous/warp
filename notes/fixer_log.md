@@ -16,3 +16,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   Before, the call's arguments were flattened (`print(upper "a")` = print(upper, "a")). The parser keeps the
   canonical forms `[print expr]` (space) and `print(a, b)` (round); `print_arguments_of` reads both.
 - `print "a"\n√9` already gives 3 on main (todo marked DONE).
+
+## 2026-10-03 fix-small
+- analyzer's copy of `collect_assigned_names` removed (identical to library_words').
+- `ages["alice"]` no longer hints `ages#("alice"+1)`: a quoted key counts no position (normalize.rs index_operator).
+  tests/test_key_subscript_hint.rs.

@@ -96,6 +96,7 @@ mod test_iteration_words;
 mod test_json;
 mod test_juxtaposition;
 mod test_key_lookup;
+mod test_key_subscript_hint;
 mod test_kitchensink;
 mod test_lambdas;
 mod test_law;
