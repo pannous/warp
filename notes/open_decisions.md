@@ -55,6 +55,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - #26 library: "Extend all". Unicode upper/lower, sort any comparable values, reverse works on text.
 - #23: "Warn on `it` shadowing". A loop's `it` still shadows a function's `it`, with a warning.
   #31 (switch message shows value; `min`/`d` units): neither option chosen, stays open.
+- #35: "Lists join to "[1 2]"" (the tests/test_cast_to_string.rs assertion may be edited; a general runtime serializer
+  later) and ""x" as float is loud" (error with a hint; only single-quote codepoints convert to numbers).
+- #34 deep traps under `try`: "Later". #37 first-class functions by specialisation: "Enough for now".
+- #14e: `download <url>` is an alias of `fetch`.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -145,7 +149,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
-14e. `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
+14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
 15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
 
@@ -185,14 +189,14 @@ D16 overflow contradict Decided rules). Found while implementing:
     (83a40987, content is merged) plus the older autostash entries. Drop them?
 33. DECIDED 2026-10-03 (see the top: by value + educate). A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
     closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
-34. `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
+34. DECIDED 2026-10-03 (later). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
-35. `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
+35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
 36. DECIDED 2026-10-03 (see 25). Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
-37. First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
+37. DECIDED 2026-10-03 (enough for now). First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
     not a funcref table: functions chosen at run time and capturing lambdas remain loud errors. A table needs one
     uniform (boxed) signature. Enough for now?
 38. DECIDED 2026-10-03 (see the top: truthy). Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
