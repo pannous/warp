@@ -37,6 +37,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - D2 `!` (evaluate / mutate / await): "let's think about this later", parked.
 - D13 `1 -1`: "ask and assume list". An Ask (signed operand glued after a space) whose default reading is the list
   `[1 -1]` (fallback Warning, taking the list); the arithmetic reading is written `1 - 1`.
+- D9 suffix precedence (`1+2 squared`): "Ask". An ungrouped mix asks `1+(2 squared)` or `(1+2) squared`.
+- D5 matching by type name: "General rule". Any noun can name a type/parameter (wiki matching.md); open detail: the
+  rule for unknown words (`photo`) and multi-word class names.
+- D4 constructor vs data: "Distinguish". `T{…}` with a known type constructs/validates, `k:{…}` is plain data, not equal.
+- D8 `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
