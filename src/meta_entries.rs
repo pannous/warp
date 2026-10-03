@@ -17,10 +17,18 @@ fn as_entries(node: Node) -> Node {
 			Some(entry) => with_entry(as_entries(*node), entry).unwrap_or_else(|inner| Node::Meta { node: Box::new(inner), data }),
 			None => Node::Meta { node: Box::new(as_entries(*node)), data },
 		},
+		Node::List(items, Bracket::Curly, separator) => Node::List(meta_last(items.into_iter().map(as_entries).collect()), Bracket::Curly, separator),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(as_entries).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(as_entries(*left)), op, Box::new(as_entries(*right))),
 		other => other,
 	}
+}
+
+/// The fields in their order, then the meta entries: `{x:1 @s:2 y:3}` → `{x:1 y:3 @s:2}`.
+/// A walk by position then never meets a meta entry before the last field (list_ops emit_list_walk).
+fn meta_last(items: Vec<Node>) -> Vec<Node> {
+	let (meta, fields): (Vec<Node>, Vec<Node>) = items.into_iter().partition(|item| meta_entry(item).is_some());
+	fields.into_iter().chain(meta).collect()
 }
 
 /// The annotation `@name(value)` a Meta layer carries, as the entry `@name:value`
