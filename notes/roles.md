@@ -7,12 +7,17 @@ be free of these tasks and just do high-level supervision".
 
 Tester and integrator are ONE role (the Integrator): the full suite only means something on the merged tree, so a
 separate merger would hand every merge to the tester and wait; one session doing merge → test → push has no handoff.
+The user asked "I don't see the tester" and agreed ("Makes sense"). Split a separate Tester off only if the Integrator
+becomes a bottleneck: it would take targeted-check requests and flaky-test hunts, the Integrator would keep merging.
 
-## Supervisor (warp-43)
+Current sessions (2026-10-03): Supervisor = BOSS-cheeky-shannon (was warp-43), Integrator = warp-6c (spawned as
+warp-integrator). Session names can change; ListAgents shows the current ones.
+
+## Supervisor
 High-level only: talks to the user, turns decisions into tasks (notes/open_decisions.md, the board
 notes/impl_2026-10-03.md), spawns and assigns workers, relays questions, watches load. No merging, no test runs.
 
-## Integrator (warp-integrator)
+## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
 - Keeps one integration worktree (probes/integrate, detached, follows origin/main).
 - Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
