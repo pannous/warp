@@ -75,6 +75,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, PRINT_VALUE);
 					return;
 				}
+				Kind::Error if self.reports_own_error(func, value) => return,
 				kind => {
 					let reason = format!("print of {} has no runtime text yet", crate::analyzer::kind_with_article(kind));
 					self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
@@ -88,6 +89,14 @@ impl WasmGcEmitter {
 			Node::Char(_) => self.emit_node_instructions(func, &Node::Text(text)), // a text, as analyzer::held_kind has it
 			_ => self.emit_node_instructions(func, value),
 		}
+	}
+
+	/// A value typed Error is usually a type error of its own (`print "a"*2`): emitting it reports that error, which is
+	/// the one to show; true when it did
+	fn reports_own_error(&mut self, func: &mut Function, value: &Node) -> bool {
+		let known = self.type_errors.len();
+		self.emit_node_instructions(func, value);
+		self.type_errors.len() > known
 	}
 
 	/// print_value(x): the text of x by list_join of the one-element list [x]; locals: text

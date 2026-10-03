@@ -779,12 +779,19 @@ impl WasmGcEmitter {
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
 		let is_number = |kind: Kind| matches!(kind, Kind::Int | Kind::Float);
 		let repeats_or_scales = *op == crate::operators::Op::Mul && ((left_kind == Kind::List && is_number(right_kind)) || (is_number(left_kind) && right_kind == Kind::List));
-		let fix = if repeats_or_scales {
-			"ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply"
+		let repeats_text = match (left_kind, right_kind) {
+			(Kind::Text, kind) if is_number(kind) => Some((left, right)),
+			(kind, Kind::Text) if is_number(kind) => Some((right, left)),
+			_ => None,
+		}.filter(|_| *op == crate::operators::Op::Mul);
+		let fix = if let Some((text, count)) = repeats_text {
+			format!("a text does not multiply; to repeat it: ({} times [{}]).join(\"\")", count.serialize(), text.serialize())
+		} else if repeats_or_scales {
+			"ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply".into()
 		} else if left_kind == Kind::List || right_kind == Kind::List {
-			"lists only concatenate with lists (+), element-wise arithmetic needs an explicit map"
+			"lists only concatenate with lists (+), element-wise arithmetic needs an explicit map".into()
 		} else {
-			"no implicit conversion, convert explicitly, e.g. int(\"5\") + 3"
+			"no implicit conversion, convert explicitly, e.g. int(\"5\") + 3".into()
 		};
 		self.emit_type_error(func, format!("type error: {left_kind} {op} {right_kind}: {fix}"));
 		true
