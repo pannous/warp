@@ -109,3 +109,15 @@ fn test_calling_a_non_function_or_the_wrong_arity_is_loud() {
 	fails_with("make_adder(n) := (x => x+n); a = make_adder(1); a(1, 2)", "wrong number of arguments");
 	fails_with("apply(f, x):=f(x); n=3; apply(n, 1)", "not a function");
 }
+
+#[test]
+fn an_item_of_a_function_list_called_directly() {
+	is!("fs=[x=>x*2, x=>x+1]; (fs#2)(5)", 6);
+	is!("fs=[x=>x*2, x=>x+1]; fs#2(5)", 6);
+	is!("fs=[x=>x*2, x=>x+1]; fs#1(5)", 10);
+}
+
+#[test]
+fn a_loop_variable_over_function_values_is_called() {
+	is!("fs=[x=>x*2, x=>x+1]; s=0; for f in fs { s+=f(1) }; s", 4);
+}

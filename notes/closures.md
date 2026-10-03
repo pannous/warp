@@ -27,7 +27,8 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
    - `f(args)` where `f` is a parameter or a variable assigned a function value becomes `closure_call_n(f, args…)`;
      `make_adder(1)(2)` / `add(1)(2)(3)` chain closure calls. "Assigned a function value" is judged from the source
      (`FunctionValues::settle`: lambdas, function names, calls of functions whose body ends in one, calls of closures,
-     `fs#i` of a list holding function values).
+     `fs#i` of a list holding function values, the variable of `for f in fs`). `(fs#2)(5)` calls an item directly, and
+     `fs#2(5)` (parsed `fs#(2*(5))`) too when fs holds function values.
 4. `lambdas::lower_strict`: an iteration word over a function known only at run time (`map xs f`, `reduce xs f`) calls
    the closure in its loop body (`closure_call_1(f, item)`).
 
@@ -63,7 +64,6 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   variable can hold would fix it.
 - A closure called with the wrong arity, or a non-function called as one, traps with `cast failure` instead of a
   wasp error message.
-- `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are not closure calls yet (assign first).
 - A lifted lambda prints as `closure_lambda_n`, not its source.
 - Float parameters of a closure unbox only from Float nodes (an Int argument traps).
 - Variables assigned in another function's body count as capturable everywhere (names, not scopes).

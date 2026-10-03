@@ -26,7 +26,7 @@ The supervisor should remove the DONE elements after a while.
 - typed-lists: `int_array_filled` wraps a count above 2^31 to i32 (zero_fill would loop that long); a typed list read before its first assignment traps on a null array instead of the Node path's behaviour
 - Closures (notes/closures.md): every closure call boxes through Nodes (universal Node -> Node entry); a typed call_ref fast path for one shared signature (Int -> Int) is open. (closures 2026-10-03)
 - Closures: the result kind of `closure_call_n` is joined over all closures of arity n in the program (Data when they differ); a per-variable flow analysis of the reachable targets would type each call site. (closures 2026-10-03)
-- `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03)
+- DONE: `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03) (fs#2(5), (fs#2)(5) and for f in fs { f(1) } call closures, night 2026-10-04)
 - `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
 - DONE: `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
 - DONE: analyzer::collect_assigned_names and library_words::collect_assigned_names are the same function twice. (closures 2026-10-03)

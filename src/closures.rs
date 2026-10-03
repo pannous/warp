@@ -18,6 +18,8 @@ pub const CLOSURE_NEW: &str = "closure_new";
 const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
+const FOR_WORD: &str = "for";
+const IN_WORD: &str = "in";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -115,8 +117,8 @@ pub fn lower(program: Node) -> Node {
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new() };
 	values.settle(&context, &program);
-	let FunctionValues { functions, returning: returns_function, variables: function_variables, .. } = values;
-	let mut lifting = Lifting { functions, variables, function_variables, returns_function, lifted: vec![] };
+	let FunctionValues { functions, returning: returns_function, variables: function_variables, lists: function_lists } = values;
+	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, lifted: vec![] };
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
 		return program;
@@ -155,11 +157,25 @@ impl FunctionValues {
 		}
 	}
 
+	/// `for f in fs {…}` over a list of function values: f holds one
+	fn loop_variable_over_functions<'a>(&self, node: &'a Node) -> Option<&'a str> {
+		let Node::List(items, _, _) = node else { return None };
+		let [keyword, variable, in_word, list, _body] = items.as_slice() else { return None };
+		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+		match (variable.drop_meta(), list.drop_meta()) {
+			(Node::Symbol(variable), Node::Symbol(list)) if is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD) && self.lists.contains(list) => Some(variable),
+			_ => None,
+		}
+	}
+
 	fn settle(&mut self, context: &Context, program: &Node) {
 		loop {
 			let returning: HashSet<String> = context.user_functions.values().filter(|function| self.is_function_value(tail(&function.body))).map(|function| function.name.clone()).collect();
 			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
 			program.visit(&mut |node| {
+				if let Some(variable) = self.loop_variable_over_functions(node) {
+					variables.insert(variable.to_string());
+				}
 				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
 				let Node::Symbol(name) = target.drop_meta() else { return };
 				if self.functions.contains(name) {
@@ -211,6 +227,8 @@ struct Lifting {
 	function_variables: HashSet<String>,
 	/// Functions whose body ends in a function value: `make_adder(2)(5)` calls their result
 	returns_function: HashSet<String>,
+	/// Variables assigned a list of function values: `(fs#2)(5)` and `fs#2(5)` call an item
+	function_lists: HashSet<String>,
 	lifted: Vec<Node>,
 }
 
@@ -239,6 +257,11 @@ impl Lifting {
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				let value = self.walk(*value, bound);
 				Node::Key(target, op, Box::new(self.function_value(value, bound)))
+			}
+			Node::Key(list, Op::Hash, index) if self.indexed_call(&list, &index).is_some() => {
+				let (position, arguments) = self.indexed_call(&list, &index).expect("guarded");
+				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
+				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.walk(*left, bound)), op, Box::new(self.walk(*right, bound))),
 			Node::List(items, bracket, separator) => {
@@ -273,7 +296,11 @@ impl Lifting {
 				_ => None,
 			}).collect();
 			if let (true, Some(argument_lists)) = (!groups.is_empty() && self.returns_closure(head, bound), argument_lists) {
-				return argument_lists.into_iter().fold(head.clone(), closure_call);
+				let function = match head.drop_meta() {
+					Node::List(inner, Bracket::Round, _) if matches!(inner.as_slice(), [Node::Key(_, Op::Hash, _)]) => inner[0].clone(),
+					_ => head.clone(),
+				};
+				return argument_lists.into_iter().fold(function, closure_call);
 			}
 		}
 		if bracket == Bracket::Square {
@@ -283,12 +310,30 @@ impl Lifting {
 		Node::List(items, bracket, separator)
 	}
 
-	/// A call of a function that returns a function value, or of a closure (which may)
+	/// A call of a function that returns a function value, or of a closure (which may), or `(fs#2)`: an item of a list
+	/// of function values
 	fn returns_closure(&self, node: &Node, bound: &HashSet<String>) -> bool {
-		let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() else { return false };
+		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return false };
 		match items.first().map(Node::drop_meta) {
+			Some(Node::Key(list, Op::Hash, _)) if items.len() == 1 => self.is_function_list(list),
 			Some(Node::Symbol(name)) => self.returns_function.contains(name) || self.may_hold_function(name, bound) || closure_call_arity(name).is_some(),
 			_ => false,
+		}
+	}
+
+	fn is_function_list(&self, list: &Node) -> bool {
+		matches!(list.drop_meta(), Node::Symbol(name) if self.function_lists.contains(name))
+	}
+
+	/// `fs#2(5)` parses as `fs#(2*(5))`: of a list of function values it is the call of item 2 with (5)
+	fn indexed_call(&self, list: &Node, index: &Node) -> Option<(Node, Vec<Node>)> {
+		if !self.is_function_list(list) {
+			return None;
+		}
+		let Node::Key(position, Op::Mul, group) = index.drop_meta() else { return None };
+		match (position.drop_meta(), group.drop_meta()) {
+			(Node::Number(_), Node::List(arguments, Bracket::Round, _)) => Some((position.as_ref().clone(), arguments.clone())),
+			_ => None,
 		}
 	}
 
