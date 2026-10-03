@@ -226,7 +226,7 @@ impl Default for Style {
         Self {
             list_type: ListTypeStyle::Plural,
             cast: CastStyle::AsOperator,
-            function_def: FunctionStyle::ColonEquals,
+            function_def: FunctionStyle::Def,
             var_def: VarStyle::ColonEquals,
             logical: LogicalStyle::Words,
             quotes: QuoteStyle::Double,
