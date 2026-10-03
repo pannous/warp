@@ -13,13 +13,14 @@ area(image{width:3 height:4})   // 12
 
 ## Duck typing, by design
 
-Wasp judges a value by what is done with it. How a typed parameter `p:photo` treats its argument depends on how much
-the compiler knows about that argument:
+Wasp judges a value by what is done with it. How a place declared `photo`, a typed parameter `area(p:photo)` or a
+typed variable `p:photo = …`, treats its value depends on how much the compiler knows about that value:
 
-| argument | result |
+| value | result |
 |---|---|
-| a `photo` | accepted |
-| a value of **unknown** type: an untyped parameter passed on, a written map `{width:3 height:4}` | **duck typed**: accepted, and judged by its uses. A field it lacks is a loud runtime error: `no field height` |
+| a `photo`, or a value of a type declared `like photo` | accepted |
+| a value of **unknown** type: an untyped parameter passed on | **duck typed**: accepted, and judged by its uses. A field it lacks is a loud runtime error: `no field height` |
+| **written data**: `pic{width:3 height:4}` with no `class pic`, or a map `{width:3 height:4}` | accepted; the name `pic` is only a label. The fields are checked against photo's: a missing required field or an extra field is a warning (`pic{width:3} lacks field height of photo`) |
 | a value of a **known other** type: `image{…}` | compile error that teaches `like`: `image is not a photo; fix: declare image like photo to use it as one` |
 | a known non-object: `3`, `"x"` | compile error: `area needs a photo for parameter p, got 3 (an Int)` |
 

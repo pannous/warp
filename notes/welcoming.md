@@ -26,12 +26,14 @@ User, verbatim: "if it's truly unknown then this is a duck typing like a python;
 different type then we should create an error and tell the user about a new keyword image like photo, so the image will
 be treated like a photo and judged by uses. We should write that as a very central philosophy."
 
-What a typed parameter `p:photo` accepts:
+What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed variable `p:photo = …` alike (user,
+2026-10-03: "assignments to typed variables should be checked; if image is a known type we should be strict"):
 
-| argument | result |
+| value | result |
 |---|---|
-| a photo | accepted |
-| a value of unknown type (an untyped parameter passed on, a written map `{width:3}`) | duck typed: accepted, judged by the fields its uses read; a missing field fails loudly ("no field height") |
+| a photo, or a value of a type declared `like photo` | accepted |
+| a value of unknown type (an untyped parameter passed on) | duck typed: accepted, judged by the fields its uses read; a missing field fails loudly ("no field height") |
+| written data: an ad hoc name `pic{width:3}` (no `class pic`, so the name is only a label, D4) or a map `{width:3}` | accepted as data without its label; its fields are compared with photo's: a required field it lacks or a field it has extra is a warning ("pic{width:3} lacks field height of photo"), an error under `use strict` |
 | a value of a known other type (`image{…}`) | compile error that teaches the keyword: "image is not a photo; fix: declare `image like photo` to use it as one" |
 | a known non-object (`3`, `"x"`) | compile error: "keep needs a photo for parameter p, got 3 (an Int)" |
 

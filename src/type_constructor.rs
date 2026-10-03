@@ -99,7 +99,7 @@ fn entries(fields: &Node) -> Vec<Node> {
 	}
 }
 
-fn entry_name(entry: &Node) -> Option<String> {
+pub(crate) fn entry_name(entry: &Node) -> Option<String> {
 	match entry.drop_meta() {
 		Node::Key(field, Op::Colon | Op::Assign, _) => Some(field.name()),
 		_ => None,
