@@ -3408,7 +3408,7 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		_ => None,
 	}
 }
-// Tests moved to tests/test_parser.rs
+// Tests moved to tests/parser/test_parser.rs
 
 /// `f := …`, `f x := …`, `f(x) := …` define f
 fn defined_function_name(target: &Node) -> Option<String> {
