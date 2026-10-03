@@ -59,6 +59,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   later) and ""x" as float is loud" (error with a hint; only single-quote codepoints convert to numbers).
 - #34 deep traps under `try`: "Later". #37 first-class functions by specialisation: "Enough for now".
 - #14e: `download <url>` is an alias of `fetch`.
+- #31: "Show runtime value, min/d stay non-units". `no case for n = 4`; `min` stays the function, `d` free.
+- #14b test_wasm expectation defects: "Yes, minimal edits" (tolerance compares, expectations per current decisions,
+  each edit listed in the commit).
+- #19 / #32 stashes: "Drop them if they contain nothing valuable otherwise merge". Checked: concat-wip-tag, the global
+  compound-assignment autostash and the README/Footguns autostash were already on main; pre-history-rewrite held only
+  .DS_Store and test_results.txt. All 4 dropped. The one unmerged line, the user's 2026-09-27 note on chained
+  comparison "BUT NOT WITH == etc !!", became #39 below.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -144,7 +151,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     Add exact-Int `<<` / `>>`, or make the parser reject them loudly?
 
 ## Test defects (can't pass unedited)
-14b. test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
+14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
 14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
@@ -157,7 +164,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 17. Delete duplicate test files `tests/test_footgun_application.rs`, `tests/test_footgun_list_index_bounds.rs` (approved; hook blocked).
 18. Remove scratch worktrees probes/review_wt, probes/float_trunc_wt, probes/wt_before, probes/stage_check,
     ../warp-semicolon-survey; delete probes/review_target, probes/head_check; agent helper scripts in probes/*.py.
-19. Old `stash@{0}: autostash` (2026-09-27, README.md + test_results.txt) — keep or drop?
+19. DECIDED 2026-10-03 (dropped). Old `stash@{0}: autostash` (2026-09-27, README.md + test_results.txt) — keep or drop?
 20. CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
 
 ## New questions 2026-09-30 (supervisor warp-e0), none blocking
@@ -183,9 +190,9 @@ D16 overflow contradict Decided rules). Found while implementing:
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
 30. DECIDED 2026-10-03 (see the top: only `is` tests types). `is` and `==` are the same operator, so a type word on the right of `==` is now also a type test (`3 == int` → 1).
     `3 is rational` → 1 (int is a special case of rational). Keep both?
-31. `switch n {…}` without a match reports `no case for n` (the subject as written, not its runtime value 4).
+31. DECIDED 2026-10-03 (see the top). `switch n {…}` without a match reports `no case for n` (the subject as written, not its runtime value 4).
     Units: no `min`/`d` (clash with the function `min`), `s`/`h` are now unit words. OK?
-32. Stash entries left by workers (the hook blocks `git stash drop`): `stash@{0}` "On text-concat: concat-wip-tag"
+32. DECIDED 2026-10-03 (dropped). Stash entries left by workers (the hook blocks `git stash drop`): `stash@{0}` "On text-concat: concat-wip-tag"
     (83a40987, content is merged) plus the older autostash entries. Drop them?
 33. DECIDED 2026-10-03 (see the top: by value + educate). A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
     closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
@@ -201,3 +208,6 @@ D16 overflow contradict Decided rules). Found while implementing:
     uniform (boxed) signature. Enough for now?
 38. DECIDED 2026-10-03 (see the top: truthy). Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
     when it has a first element.
+39. Chained comparison and `==` (user's note from a dropped 2026-09-27 stash on wiki/Footguns.md: "Intended: mathematical
+    chaining as in Python, `3>2>1` → `true`. BUT NOT WITH == etc !!"). Today all comparisons share one level, so
+    `1<2==2` chains (`1<2 and 2==2` → true). Should `==`/`!=` stop chaining with `<`/`>`?
