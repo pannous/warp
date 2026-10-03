@@ -5,7 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending; parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03)
+Batches paused until 2026-10-03 17:30 local (5-hour limit at 93%, BOSS-cheeky-shannon).
+- P21 `try X else e => Y`: is the caught `e` its message text ("index out of range") or an Error value?
+  Options: Message text / Error value (returning it re-raises; `e.message` for the text).
+  Assumed: message text, so returning it is a normal value. Asked by warp-bc (cloud-eval), branch
+  claude/try-exits-and-naming. (Not asked: a named else skips the fast `xs#i` / `a/b` checks, same results, slower.)
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
