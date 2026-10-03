@@ -13,7 +13,6 @@ pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analyzer;
-pub mod compiler;
 pub mod node;
 #[cfg(feature = "native")]
 pub mod run;
@@ -28,7 +27,6 @@ pub mod wasm_optimizer;
 pub mod wasp_parser;
 pub mod wisp_parser;
 pub mod operators;
-pub mod ast;
 pub mod meta;
 pub mod host;
 pub mod ffi;

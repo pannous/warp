@@ -19,11 +19,6 @@ name = "warp"
 path = "src/main.rs"
 required-features = ["native"]
 
-[[bin]]
-name = "test_op"
-path = "src/bin/test_op.rs"
-required-features = ["native"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 # disable all "never used" warnings
@@ -64,11 +59,11 @@ ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 # can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 anyhow = "1.0"
-regex = "1.10.3"
+#regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
+#wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 #wast = "*"
 wat = "1.259"
 wasmparser = "0.259"
@@ -110,7 +105,7 @@ wasmtime-wasi = { version = "49.0.1", optional = true }
 
 #wasm-builder = "*" #Wasm builder is a utility for building a rust project as a Wasm binary
 
-parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
+#parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
 #Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
 # parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
 

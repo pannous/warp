@@ -1,13 +1,11 @@
 #![allow(dead_code, unused_imports)]
 // type string = str; NO! ugly for a reason!
-extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{CloneAny, Dada, DataType, LineInfo};
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
-use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
