@@ -1,10 +1,8 @@
-//! Texts as Unicode: `upper` and `lower` with the simple case mapping of Rust's `char::to_uppercase`, `reverse` of a text and
-//! `chars` (the list of characters) by code points.
+//! Texts as Unicode: `upper` and `lower` with the case mapping of Rust's `char::to_uppercase` / `to_lowercase` for every
+//! code point (user decision #26), `reverse` of a text and `chars` (the list of characters) by code points.
 //!
-//! The case mapping is a table in linear memory, one entry per code point of the covered ranges: up to three code points
-//! (`ß` is `SS`), zeros for a character that does not change. Covered: everything below U+0530 (Latin with its extensions,
-//! IPA, Greek, Cyrillic, Armenian start) and U+1E00 to U+1FFF (Latin Extended Additional, Greek Extended). Cased letters
-//! elsewhere (Georgian, Cherokee, full-width Latin, enclosed letters, Deseret …) pass through unchanged.
+//! The case mapping is a table in linear memory with one entry per code point that changes, sorted by code point and
+//! binary searched: the code point, then up to three mapped code points (`ß` is `SS`), zeros for unused slots.
 
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::WasmGcEmitter;
@@ -20,14 +18,9 @@ const KIND_MASK: i64 = 0xFF;
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;
 
-/// The covered code point ranges, in table order
-const LOW_RANGE_END: u32 = 0x530;
-const HIGH_RANGE_START: u32 = 0x1E00;
-const HIGH_RANGE_END: u32 = 0x2000;
-const TABLE_ENTRIES: u32 = LOW_RANGE_END + (HIGH_RANGE_END - HIGH_RANGE_START);
-/// The longest mapping of one code point in the covered ranges (`ΐ` upper is three)
+/// The longest mapping of one code point (`ΐ` upper is three)
 const MAPPED_SLOTS: u32 = 3;
-const ENTRY_BYTES: u32 = MAPPED_SLOTS * 4;
+const ENTRY_BYTES: u32 = (1 + MAPPED_SLOTS) * 4;
 /// A code point takes at most this many bytes more after its mapping than before it (2 bytes → 3 × 2 bytes)
 const OUTPUT_FACTOR: i32 = 3;
 
@@ -35,20 +28,17 @@ const CONTINUATION_MASK: i32 = 0xC0;
 const CONTINUATION_MARK: i32 = 0x80;
 const PAYLOAD_MASK: i32 = 0x3F;
 
-/// The case table of the covered ranges, `MAPPED_SLOTS` little-endian u32 per code point
+/// The code points whose case mapping changes them, each as little-endian u32: the code point, then `MAPPED_SLOTS` mapped ones
 fn case_table(is_upper: bool) -> Vec<u8> {
-	let code_points = (0..LOW_RANGE_END).chain(HIGH_RANGE_START..HIGH_RANGE_END);
-	let mut table = Vec::with_capacity((TABLE_ENTRIES * ENTRY_BYTES) as usize);
-	for code_point in code_points {
-		let mapped: Vec<u32> = match char::from_u32(code_point) {
-			Some(letter) if is_upper => letter.to_uppercase().map(u32::from).collect(),
-			Some(letter) => letter.to_lowercase().map(u32::from).collect(),
-			None => vec![code_point],
-		};
-		let unchanged = mapped == [code_point];
+	let mut table = vec![];
+	for letter in (0..=char::MAX as u32).filter_map(char::from_u32) {
+		let mapped: Vec<u32> = if is_upper { letter.to_uppercase().map(u32::from).collect() } else { letter.to_lowercase().map(u32::from).collect() };
+		if mapped == [u32::from(letter)] {
+			continue;
+		}
+		table.extend(u32::from(letter).to_le_bytes());
 		for slot in 0..MAPPED_SLOTS as usize {
-			let value = if unchanged { 0 } else { mapped.get(slot).copied().unwrap_or(0) };
-			table.extend(value.to_le_bytes());
+			table.extend(mapped.get(slot).copied().unwrap_or(0).to_le_bytes());
 		}
 	}
 	table
@@ -111,17 +101,20 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::End, I::End, I::End]);
 	}
 
-	/// text_upper(text) / text_lower(text): a fresh text with every code point of the covered ranges mapped
+	/// text_upper(text) / text_lower(text): a fresh text with every code point mapped
 	pub(super) fn emit_text_case(&mut self, name: &'static str, is_upper: bool) {
 		if !self.should_emit_function(name) {
 			return;
 		}
 		self.emit_text_heap_global();
-		let table = self.allocate_bytes(name, &case_table(is_upper)) as i32;
+		let case_table = case_table(is_upper);
+		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
+		let table = self.allocate_bytes(name, &case_table) as i32;
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 12], |s, f| {
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 15], |s, f| {
 			let (pointer, end, capacity, destination, index, out) = (1, 2, 3, 4, 5, 6);
 			let (first_byte, code_point, step, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
+			let (low, high, middle) = (13, 14, 15);
 			s.emit_codepoint_as_text(f, 0);
 			s.emit_is_text(f);
 			f.instruction(&I::I32Eqz);
@@ -133,15 +126,20 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
 			s.emit_decode_at(f, index, first_byte, code_point, step);
 			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(step), I::I32Add, I::LocalSet(index)]);
-			// the table entry of the code point, -1 outside the covered ranges
-			Self::emit_list(f, &[I32Const(-1), I::LocalSet(entry), I::LocalGet(code_point), I32Const(LOW_RANGE_END as i32), I::I32LtU, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(entry), I::Else]);
-			Self::emit_list(f, &[I::LocalGet(code_point), I32Const(HIGH_RANGE_START as i32), I::I32Sub, I::LocalTee(entry), I32Const((HIGH_RANGE_END - HIGH_RANGE_START) as i32), I::I32LtU, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(entry), I32Const(LOW_RANGE_END as i32), I::I32Add, I::LocalSet(entry), I::Else, I32Const(-1), I::LocalSet(entry), I::End, I::End]);
+			// binary search for the entry of the code point, -1 when it does not change
+			Self::emit_list(f, &[I32Const(0), I::LocalSet(low), I32Const(entries), I::LocalSet(high)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(high), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(low), I::LocalGet(high), I::I32Add, I32Const(1), I::I32ShrU, I::LocalTee(middle)]);
+			Self::emit_list(f, &[I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::I32Load(WORD), I::LocalGet(code_point), I::I32LtU]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(middle), I32Const(1), I::I32Add, I::LocalSet(low), I::Else, I::LocalGet(middle), I::LocalSet(high), I::End]);
+			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I32Const(-1), I::LocalSet(entry), I::LocalGet(low), I32Const(entries), I::I32LtU, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(low), I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::I32Load(WORD), I::LocalGet(code_point), I::I32Eq]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(low), I::LocalSet(entry), I::End, I::End]);
 			// write the mapped code points, or the code point itself when the entry is empty or missing
 			Self::emit_list(f, &[I32Const(0), I::LocalSet(slot), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(entry), I32Const(0), I::I32GeS, I::If(BlockType::Result(ValType::I32))]);
-			Self::emit_list(f, &[I::LocalGet(entry), I32Const(ENTRY_BYTES as i32), I::I32Mul, I::LocalGet(slot), I32Const(4), I::I32Mul, I::I32Add, I32Const(table), I::I32Add, I::I32Load(WORD)]);
+			Self::emit_list(f, &[I::LocalGet(entry), I32Const(ENTRY_BYTES as i32), I::I32Mul, I::LocalGet(slot), I32Const(1), I::I32Add, I32Const(4), I::I32Mul, I::I32Add, I32Const(table), I::I32Add, I::I32Load(WORD)]);
 			Self::emit_list(f, &[I::Else, I32Const(0), I::End, I::LocalSet(mapped)]);
 			Self::emit_list(f, &[I::LocalGet(mapped), I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(slot), I::BrIf(2)]);
 			Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(mapped), I::End]);

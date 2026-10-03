@@ -40,6 +40,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 14] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+const NODE_ORDER: &str = "node_order";
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
@@ -128,31 +129,109 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// list_sort(list): a new list of ints in ascending order (insertion into a sorted list)
+	/// node_order(a, b): negative, 0 or positive as a is before, with or after b. Numbers by value (as f64 when either is a
+	/// float), texts and characters by code points (the order of their UTF-8 bytes); anything else is not comparable.
+	fn emit_node_order(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let float_box = self.type_manager.f64_box_type;
+		let exact = self.int_runtime();
+		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64];
+		locals.extend([ValType::I32; 6]);
+		self.runtime_function(NODE_ORDER, vec![node_ref, node_ref], vec![ValType::I32], locals, |s, f| {
+			let (first, second, kinds) = (0, 1, [2, 3]);
+			let (first_float, second_float) = (4, 5);
+			let (first_pointer, second_pointer, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
+			let is_kind = |f: &mut Function, local: u32, kind: Kind| Self::emit_list(f, &[I::LocalGet(local), I::I64Const(kind as i64), I::I64Eq]);
+			let both = |f: &mut Function, kind: Kind, either: I<'static>| {
+				is_kind(f, kinds[0], kind);
+				is_kind(f, kinds[1], kind);
+				f.instruction(&either);
+			};
+			s.emit_codepoint_as_text(f, first);
+			s.emit_codepoint_as_text(f, second);
+			for (node, kind) in [(first, kinds[0]), (second, kinds[1])] {
+				s.emit_field(f, node, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
+			}
+			// texts: the first differing byte, else the shorter one first
+			both(f, Kind::Text, I::I32And);
+			f.instruction(&I::If(BlockType::Empty));
+			for (node, pointer, length) in [(first, first_pointer, first_length), (second, second_pointer, second_length)] {
+				s.emit_text_field(f, node, 0);
+				f.instruction(&I::LocalSet(pointer));
+				s.emit_text_field(f, node, 1);
+				f.instruction(&I::LocalSet(length));
+			}
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(first_length), I::I32GeU, I::LocalGet(index), I::LocalGet(second_length), I::I32GeU, I::I32Or, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(first_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE)]);
+			Self::emit_list(f, &[I::LocalGet(second_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::I32Sub, I::LocalTee(difference)]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(difference), I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(first_length), I::LocalGet(second_length), I::I32Sub, I::Return, I::End]);
+			// numbers only from here
+			for kind in kinds {
+				is_kind(f, kind, Kind::Int);
+				is_kind(f, kind, Kind::Float);
+				Self::emit_list(f, &[I::I32Or, I::I32Eqz]);
+				s.emit_fail_if(f, "not_comparable");
+			}
+			both(f, Kind::Int, I::I32And);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_int_value_of(f, first);
+			s.emit_int_value_of(f, second);
+			if exact {
+				s.call(f, "exact_cmp");
+			} else {
+				// both kinds are known to be Int here, so their locals hold the values
+				let (a, b) = (kinds[0], kinds[1]);
+				Self::emit_list(f, &[I::LocalSet(b), I::LocalSet(a), I::LocalGet(a), I::LocalGet(b), I::I64GtS, I::LocalGet(a), I::LocalGet(b), I::I64LtS, I::I32Sub]);
+			}
+			Self::emit_list(f, &[I::Return, I::End]);
+			// a float on either side compares both as f64
+			for (node, kind, float) in [(first, kinds[0], first_float), (second, kinds[1], second_float)] {
+				is_kind(f, kind, Kind::Float);
+				f.instruction(&I::If(BlockType::Result(ValType::F64)));
+				s.emit_field(f, node, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Else]);
+				s.emit_int_value_of(f, node);
+				if exact {
+					s.call(f, "exact_to_f64");
+				} else {
+					f.instruction(&I::F64ConvertI64S);
+				}
+				Self::emit_list(f, &[I::End, I::LocalSet(float)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(first_float), I::LocalGet(second_float), I::F64Gt, I::LocalGet(first_float), I::LocalGet(second_float), I::F64Lt, I::I32Sub]);
+		});
+	}
+
+	/// list_sort(list): a new list of comparable values in ascending order (insertion into a sorted list, see node_order)
 	fn emit_list_sort(&mut self) {
 		if !self.should_emit_function("list_sort") {
 			return;
 		}
+		self.emit_node_order();
 		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// insert_sorted(sorted, element, value, kind): the cells of sorted before the first larger value, the element, the rest shared
+		// insert_sorted(sorted, element, kind): the cells of sorted before the first value not before element, the element, the rest shared
 		let insert_sorted = next_index(self);
-		let params = vec![nullable, node_ref, ValType::I64, ValType::I64];
+		let params = vec![nullable, node_ref, ValType::I64];
 		self.runtime_function("list_insert_sorted", params, vec![node_ref], vec![nullable], |s, f| {
-			let (sorted, element, value, kind, head) = (0, 1, 2, 3, 4);
+			let (sorted, element, kind, head) = (0, 1, 2, 3);
 			Self::emit_list(f, &[I::LocalGet(sorted), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
 			s.emit_field(f, sorted, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head)]);
-			s.emit_int_value_of(f, head);
-			Self::emit_list(f, &[I::LocalGet(value), I::I64GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head), I::LocalGet(head), I::RefAsNonNull, I::LocalGet(element)]);
+			s.call(f, NODE_ORDER);
+			Self::emit_list(f, &[I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
 			Self::emit_list(f, &[I::LocalGet(sorted), I::StructNew(node_type), I::Return, I::End]);
 			s.emit_field(f, sorted, 0);
 			s.emit_field(f, sorted, 1);
 			s.emit_field(f, sorted, 2);
-			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(value), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
+			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
 		});
 		assert_eq!(self.func_index("list_insert_sorted"), insert_sorted, "recursive call index");
 
@@ -163,9 +242,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
-			s.emit_require_kind(f, element, Kind::Int, "not_an_int");
 			Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
-			s.emit_int_value_of(f, element);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
 			s.emit_field(f, 0, 2);

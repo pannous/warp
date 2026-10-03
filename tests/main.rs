@@ -81,6 +81,7 @@ mod test_kitchensink;
 mod test_lambdas;
 mod test_law;
 mod test_less_than_compare;
+mod test_library_unicode;
 mod test_list_arithmetic;
 mod test_list_number_comparison;
 mod test_list_parameters;
