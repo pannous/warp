@@ -86,7 +86,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_join");
 	}
 	if required.contains("list_join") {
-		required.insert(super::float_text::FLOAT_TEXT);
+		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT]); // a float or a nested list joins as its text
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {

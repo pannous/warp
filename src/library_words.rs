@@ -146,7 +146,23 @@ pub fn lower(node: Node) -> Node {
 	collect_assigned_objects(&node, &mut assigned_objects);
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
-	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), temporaries: Cell::new(0) }.expand(node)
+	let call_results = call_results(&node, &context);
+	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
+}
+
+/// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
+fn call_results(node: &Node, context: &Context) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+			let calls_user_function = matches!(value.drop_meta(), Node::List(items, Bracket::Round, _)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function)));
+			if let (Node::Symbol(name), true) = (target.drop_meta(), calls_user_function) {
+				names.insert(name.clone());
+			}
+		}
+	});
+	names
 }
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding or libm
@@ -271,6 +287,8 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// Variables assigned the result of a user function call (call_results)
+	call_results: HashSet<String>,
 	temporaries: Cell<usize>,
 }
 
@@ -476,7 +494,8 @@ impl Lowering {
 			return Some(Node::List(call, Bracket::Round, Separator::None));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
-		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || self.instances.is_declared_field(name);
+		let is_call_result = matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
+		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || is_call_result || self.instances.is_declared_field(name);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}

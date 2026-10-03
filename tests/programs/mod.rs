@@ -8,3 +8,4 @@ mod test_all_samples;
 mod test_kitchensink;
 mod test_samples;
 mod test_calculator_fixes;
+mod test_json_parser_fixes;

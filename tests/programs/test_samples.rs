@@ -148,3 +148,6 @@ fn test_sine() { assert!(warp::wasm_emitter::eval("samples/sine.wasp").serialize
 
 #[test] // 14 + 20 + 5
 fn test_calculator() { is!("samples/calculator.wasp", 39); }
+
+#[test] // age 30 + first score 95
+fn test_json_parser() { is!("samples/json_parser.wasp", 125.0); }
