@@ -18,6 +18,21 @@ fn print_joins_its_arguments_with_a_space() {
 }
 
 #[test]
+#[cfg(feature = "native")]
+fn print_of_a_braceless_call_prints_its_result() {
+	assert!(printed("print first [10, 5]").starts_with("10\n"));
+	assert!(printed("print(upper \"ab\")").starts_with("AB\n"));
+	assert!(printed("print upper \"ab\", \"c\"").starts_with("AB c\n"));
+}
+
+#[test]
+fn print_of_a_braceless_call_is_worth_its_result() {
+	is!("print first [10, 5]", 10);
+	is!("print(upper \"ab\")", "AB");
+	is!("x=print upper \"ab\"; x", "AB");
+}
+
+#[test]
 fn print_of_several_arguments_is_worth_the_printed_text() {
 	is!("g=\"hi\"; print(g, g)", "hi hi");
 	is!("g=\"hi\"; print g, g", "hi hi");

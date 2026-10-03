@@ -62,14 +62,56 @@ const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
-/// `print a, b`: the comma binds looser than the space, so the comma list [[print a], b] becomes the call print(a, b)
-fn print_call_with_several_arguments(items: Vec<Node>) -> Node {
-	match items[0].drop_meta() {
-		Node::List(head, Bracket::None, Separator::Space) if matches!(head[0].drop_meta(), Symbol(word) if word == PRINT_WORD) => {
-			let arguments = head.iter().chain(&items[1..]).cloned().collect();
-			Node::List(arguments, Bracket::Round, Separator::None)
+fn is_print_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+}
+
+/// Words separated by spaces form one expression: `upper "a"` is one argument of print
+fn one_expression(words: &[Node]) -> Node {
+	match words {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+	}
+}
+
+/// The call print(a, b, …): its arguments are separated by commas, like Python's
+fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
+	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
+}
+
+/// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
+fn print_arguments(arguments: Node) -> Vec<Node> {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if items.len() > 1 => vec![arguments],
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		_ => vec![arguments],
+	}
+}
+
+/// The arguments of a parsed print list: the call print(a, b) has several, `print first xs` the one expression `first xs`
+pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> {
+	match bracket {
+		Bracket::Round => call[1..].to_vec(),
+		_ => vec![one_expression(&call[1..])],
+	}
+}
+
+/// A list as grouped by its separators, with the braceless print forms made explicit:
+/// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
+/// so the comma list [[print a], b] becomes the call print(a, b)
+fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
+		return Node::List(items, bracket, separator);
+	}
+	match (&separator, items[0].drop_meta()) {
+		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
+			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
 		}
-		_ => Node::List(items, Bracket::None, Separator::Colon),
+		(Separator::Colon, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
+			print_call(head[1..].iter().chain(&items[1..]).cloned())
+		}
+		_ => Node::List(items, bracket, separator),
 	}
 }
 
@@ -1578,6 +1620,8 @@ impl WaspParser {
 						Separator::None,
 					);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+				} else if symbol == PRINT_WORD {
+					print_call(print_arguments(args_node))
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
@@ -3218,7 +3262,7 @@ impl WaspParser {
 				// Only unwrap single items for implicit groupings
 				return items[0].clone();
 			}
-			return Node::List(items, bracket, Separator::Space);
+			return grouped_list(items, bracket, Separator::Space);
 		}
 
 		// Start with the loosest (highest precedence value) separator
@@ -3279,10 +3323,8 @@ impl WaspParser {
 			// Only unwrap single items for implicit groupings (Bracket::None)
 			// Explicit brackets like {x} or [x] should preserve the wrapper
 			grouped_nodes[0].clone()
-		} else if split_sep == Separator::Colon && bracket == Bracket::None {
-			print_call_with_several_arguments(grouped_nodes)
 		} else {
-			Node::List(grouped_nodes, bracket, split_sep)
+			grouped_list(grouped_nodes, bracket, split_sep)
 		}
 	}
 

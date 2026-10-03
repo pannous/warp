@@ -172,11 +172,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
 				}
-				if name == PRINT_CALL && items.len() == 2 {
-					return held_kind(&items[1], || infer_type(&items[1], scope)); // `print x` is worth x, `print "c"` a text
-				}
-				if name == PRINT_CALL && items.len() > 2 {
-					return Kind::Text; // `print a, b` is worth the joined text "a b"
+				if name == PRINT_CALL && items.len() >= 2 {
+					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
+						[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
+						_ => Kind::Text, // `print a, b` is worth the joined text "a b"
+					};
 				}
 			}
 			// Check for function calls: (funcname args...) where first item is a symbol

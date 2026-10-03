@@ -20,8 +20,8 @@ const PRINT: &str = "print";
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
 /// The value `print` writes: its one argument, or several joined by a space
-fn printed_value(arguments: &[Node]) -> Node {
-	match arguments {
+fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
+	match crate::wasp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => single.clone(),
 		several => super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
 	}
@@ -122,7 +122,7 @@ impl WasmGcEmitter {
 		}
 
 		if items.len() >= 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
-			self.emit_print(func, &printed_value(&items[1..]));
+			self.emit_print(func, &printed_value(items, bracket));
 			return;
 		}
 
