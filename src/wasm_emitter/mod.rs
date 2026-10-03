@@ -3208,8 +3208,23 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_names(&mut self) {
+		// Subsections must ascend by id (binaryen warns otherwise): module 0, function 1, type 4, global 7, field 10, tag 11
 		// Module name
 		self.names.module("wasp_compact");
+
+		// Function names - sort by index for deterministic output
+		let mut func_names = NameMap::new();
+		let mut sorted: Vec<_> = self.ctx
+			.func_registry
+			.all()
+			.iter()
+			.map(|f| (f.name.as_str(), f.call_index as u32))
+			.collect();
+		sorted.sort_by_key(|(_, idx)| *idx);
+		for (name, idx) in sorted {
+			func_names.append(idx, name);
+		}
+		self.names.functions(&func_names);
 
 		// Type names
 		let mut type_names = NameMap::new();
@@ -3222,6 +3237,34 @@ impl WasmGcEmitter {
 			type_names.append(*idx, name);
 		}
 		self.names.types(&type_names);
+
+		// Global names for Kind constants
+		if self.next_global_idx > 0 {
+			let global_names_list = [
+				"kind_empty",
+				"kind_int",
+				"kind_float",
+				"kind_text",
+				"kind_codepoint",
+				"kind_symbol",
+				"kind_key",
+				"kind_block",
+				"kind_list",
+				"kind_data",
+				"kind_meta",
+				"kind_error",
+			];
+			let mut global_names = NameMap::new();
+			for (idx, name) in global_names_list.iter().enumerate() {
+				if (idx as u32) < self.next_global_idx {
+					global_names.append(idx as u32, name);
+				}
+			}
+			for (idx, name) in &self.extra_global_names {
+				global_names.append(*idx, name);
+			}
+			self.names.globals(&global_names);
+		}
 
 		// Field names for struct types
 		let mut type_field_names = IndirectNameMap::new();
@@ -3259,47 +3302,6 @@ impl WasmGcEmitter {
 
 		self.names.fields(&type_field_names);
 
-		// Function names - sort by index for deterministic output
-		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self.ctx
-			.func_registry
-			.all()
-			.iter()
-			.map(|f| (f.name.as_str(), f.call_index as u32))
-			.collect();
-		sorted.sort_by_key(|(_, idx)| *idx);
-		for (name, idx) in sorted {
-			func_names.append(idx, name);
-		}
-		self.names.functions(&func_names);
-
-		// Global names for Kind constants
-		if self.next_global_idx > 0 {
-			let global_names_list = [
-				"kind_empty",
-				"kind_int",
-				"kind_float",
-				"kind_text",
-				"kind_codepoint",
-				"kind_symbol",
-				"kind_key",
-				"kind_block",
-				"kind_list",
-				"kind_data",
-				"kind_meta",
-				"kind_error",
-			];
-			let mut global_names = NameMap::new();
-			for (idx, name) in global_names_list.iter().enumerate() {
-				if (idx as u32) < self.next_global_idx {
-					global_names.append(idx as u32, name);
-				}
-			}
-			for (idx, name) in &self.extra_global_names {
-				global_names.append(*idx, name);
-			}
-			self.names.globals(&global_names);
-		}
 		if let Some(tag_names) = self.error_tag_names() {
 			self.names.tags(&tag_names);
 		}
@@ -3467,8 +3469,13 @@ impl WasmGcEmitter {
 			module.section(&data);
 		}
 
-		// Name section for field name resolution
+		// Name section for field name resolution, subsections in ascending id order (function 1, type 4, field 10)
 		let mut names = NameSection::new();
+
+		// Function names
+		let mut func_names = NameMap::new();
+		func_names.append(0, "main");
+		names.functions(&func_names);
 
 		// Type names
 		let mut type_names = NameMap::new();
@@ -3489,11 +3496,6 @@ impl WasmGcEmitter {
 		}
 		type_field_names.append(struct_type_idx, &struct_fields_names);
 		names.fields(&type_field_names);
-
-		// Function names
-		let mut func_names = NameMap::new();
-		func_names.append(0, "main");
-		names.functions(&func_names);
 
 		module.section(&names);
 
