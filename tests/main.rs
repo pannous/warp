@@ -216,6 +216,7 @@ mod test_try_deep;
 mod test_type_of_real_variable;
 mod test_type_test_is_only;
 mod test_type_name_matching;
+mod test_typed_returns;
 mod test_type_tests;
 mod test_type_upgrading;
 mod test_type_words;
