@@ -1,35 +1,29 @@
-// Size and timing of a big-int heavy program (notes/multi_value.md)
-// `multi_value_bench <label>` writes the compiled program to probes/<label>.wasm;
-// `multi_value_bench a.wasm b.wasm …` runs the files alternately and reports per-file timings
+// Size and timing of programs for notes/multi_value.md; copy to examples/multi_value_bench.rs and
+// `cargo run --release --example multi_value_bench`: each program is compiled once, then run alternately
 use std::time::Instant;
 use warp::wasm_emitter::compile;
 use warp::wasm_reader::read_bytes;
 
-const PROGRAM: &str = "fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f//10 }; s";
+const PROGRAMS: [(&str, &str); 3] = [
+	("big-int digit sum", "fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f//10 }; s"),
+	("divmod as list", "dm(a, b) := [a//b, a%b]; s = 0; i = 0; while i < 200000 { p = dm(i, 7); s += p#1 + p#2; i++ }; s"),
+	("divmod as tuple", "dm(a, b) := return a//b, a%b; s = 0; i = 0; while i < 200000 { q, r = dm(i, 7); s += q + r; i++ }; s"),
+];
 const ROUNDS: usize = 9;
 
 fn main() {
-	let arguments: Vec<String> = std::env::args().skip(1).collect();
-	if let [label] = arguments.as_slice() {
-		if !label.ends_with(".wasm") {
-			let module = compile(PROGRAM).unwrap_or_else(|error| panic!("{error:?}"));
-			std::fs::write(format!("probes/{label}.wasm"), &module.bytes).unwrap();
-			println!("{label}: {} bytes", module.bytes.len());
-			return;
-		}
-	}
-	let modules: Vec<Vec<u8>> = arguments.iter().map(|path| std::fs::read(path).unwrap()).collect();
+	let modules: Vec<Vec<u8>> = PROGRAMS.iter().map(|(_, program)| compile(program).unwrap_or_else(|error| panic!("{error:?}")).bytes).collect();
 	let mut times = vec![Vec::new(); modules.len()];
 	for _ in 0..ROUNDS {
-		for (module, timings) in modules.iter().zip(&mut times) {
+		for ((module, timings), (label, _)) in modules.iter().zip(&mut times).zip(PROGRAMS) {
 			let start = Instant::now();
 			let result = read_bytes(module).unwrap();
 			timings.push(start.elapsed().as_secs_f64() * 1000.0);
-			assert_eq!(format!("{result:?}"), "10539");
+			assert!(matches!(format!("{result:?}").as_str(), "10539" | "2857642852"), "{label}: {result:?}");
 		}
 	}
-	for (path, timings) in arguments.iter().zip(&mut times) {
+	for ((timings, module), (label, _)) in times.iter_mut().zip(&modules).zip(PROGRAMS) {
 		timings.sort_by(f64::total_cmp);
-		println!("{path}: min {:.0} ms, median {:.0} ms", timings[0], timings[ROUNDS / 2]);
+		println!("{label}: {} bytes, min {:.0} ms, median {:.0} ms", module.len(), timings[0], timings[ROUNDS / 2]);
 	}
 }

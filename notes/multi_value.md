@@ -23,11 +23,10 @@ Left as is, and why:
   `exact_is_nan`, `exact_infinity_rank`, `exact_neg`, `exact_pow`; small win, not done.
 - smart pointers (src/smarty.rs, `WaspSmartPointers`): not used by the emitter; wiki/multi-value.md already calls them
   obsolete.
-- Language level (`return a, b`, `x, y = f()`): no decided syntax in wiki/ or notes/open_decisions.md, and user
-  functions return a Node; open question for the supervisor, nothing invented.
+- Language level: built afterwards as tuple returns, see below.
 
 ## Measurements
-Program (probes/multi_value/bench.rs, copy to examples/ to run it): digit sum of 1000!
+Program (first entry of probes/multi_value/bench.rs, copy to examples/ to run it): digit sum of 1000!
 `fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f//10 }; s` → 10539.
 Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::read_bytes`), machine under heavy load:
 
@@ -44,3 +43,29 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
 - Next step (not done): `a//b` still costs two long divisions (`%`, then `/`), because the parser rewrites it to
   `(a - a%b)/b` (wasp_parser.rs `floor_division`). A Euclidean `exact_floor_div` built on `int_divmod_slow` would make
   it one; it needs the rewrite to become an operator of its own.
+
+## Tuple returns (branch tuple-returns, user decision "yes")
+`return a, b` and `x, y = f()` (src/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/test_tuple_returns.rs).
+- Parsing: the comma binds loosest, so `f() := return 1, 2` arrives as `(f() := return 1), 2` and `x, y = f()` as
+  `x, (y = f())`. tuples::lower (first lowering) regroups them into `return 1 2` and `$destructure (x, y) f()`.
+  `{ return a, b }` in a block too; `{a, b=2}` stays data; a bare `a=1,2,3` is untouched and still asks (D12).
+- Analysis: `UserFunctionDef.tuple_kinds` holds the value kinds, refined with the return kinds (a recursive
+  `fibpair` settles at Int, Int). Destructured variables find them as function kinds `f#0`, `f#1`
+  (tuples::element_key). Mixed kinds per position: Int+Float → Float, otherwise a Node.
+- Wasm: the function has one result per value (`(result i64 i64)`); `x, y = f()` calls it and stores the results in
+  reverse order. Every other call goes on to `f$list`, the packer that builds `[a b]`. So for the rest of the compiler
+  f is an ordinary List-returning function (return_kind List).
+- Checked loudly: a tuple function that also returns a single value, or does not end with `return a, b`; a
+  destructuring arity mismatch (`f returns 2 values, not 3`); `x, y = 1, 2, 3`.
+- `x, y = y, x` swaps (all values first, then the stores).
+
+Measured (same bench, release, 9 rounds, compile + run): 200000 calls of a divmod,
+`dm(a, b) := [a//b, a%b]` with `p#1 + p#2` against `dm(a, b) := return a//b, a%b` with `q, r = dm(i, 7)`:
+| version | bytes | min | median |
+|---|---|---|---|
+| list return | 11565 | 374 ms | 387 ms |
+| tuple return | 8013 | 46 ms | 47 ms |
+About 8x faster: no list cells, no boxing, no indexing.
+
+Not done: destructuring a list value at run time (`x, y = some_list`) is an error that names the two supported forms;
+calling a tuple function through a closure / function value (closures.rs adapters assume one result).
