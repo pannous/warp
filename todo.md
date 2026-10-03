@@ -58,3 +58,4 @@
 - Traits: default methods in a trait (`trait shape{area; describe(s) := …}`) are a loud error for now; Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open. (impl-traits 2026-10-03)
 - Static instance types (traits::InstanceTypes) are flow-insensitive per variable name: a variable assigned an instance and later something whose shape is unknown keeps the instance shape. (impl-traits 2026-10-03)
 - Later, when machine load is low (user 2026-10-03): an agent fixes the red tests on main of pannous/russh (Rust, Semver, CodeQL on schedule: code scanning likely not enabled) and pannous/warpgate (Test); they mail nightly until then (notes/ci_policy.md).
+- `a//b` is rewritten to `(a - a%b)/b` (wasp_parser.rs floor_division): two big long divisions where one Euclidean divmod (`int_divmod_slow`) would do; needs an operator of its own (notes/multi_value.md). (multi-value 2026-10-03)
