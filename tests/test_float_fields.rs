@@ -25,3 +25,9 @@ fn test_zero_argument_call_in_float_context() {
 	is!("def f() { return random() }; f() >= 0", true);
 	is!("def f() { return 1.5 }; f() * 2.0", 3.0);
 }
+
+#[test] // a function reading an outer variable set by a call got 0 (the capture was typed before the function kinds)
+fn test_captured_variable_set_by_a_call() {
+	is!("def g() := [3]; x = g(); def f() { return count(x) }; f()", 1);
+	is!("def g() := 2.5; x = g(); def f() { return x * 2 }; f()", 5.0);
+}

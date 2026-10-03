@@ -337,7 +337,7 @@ impl WasmGcEmitter {
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	fn allocate_closure_captures(&mut self, program: &Node) {
-		let mut outer = Scope::new();
+		let mut outer = Scope::with_function_kinds(self.user_function_kinds()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		let functions: Vec<UserFunctionDef> = self.ctx.user_functions.values().cloned().collect();
 		for function in functions {
