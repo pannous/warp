@@ -17,8 +17,8 @@ data: property access is row 7 of wiki_features.md.
 ## Known gaps
 
 - `sum` of a list of decimals or floats: the `for` loop over such a list traps (`for i in [1.5 2] {i}` → cast failure). Fix the loop, not `sum`.
-- `first [10, 5]` (prefix word, then a comma list) is read as the subscript `first[10, 5]` (a space before `[` still subscripts,
-  Decided: `[1] [2]` is a subscript). Write `first([10, 5])`. Lists with spaces (`first [10 5]`) work.
+- A space before `[` never indexes (decided 2026-10-03): `first [10, 5]` and `reduce [7] (a b)->a+b` pass the list
+  (tests/test_surface_syntax.rs). Still open: `x = reduce xs (a b)->a+b` and `print first [10, 5]` (see TODO.md).
 - `upper`/`lower` beyond ASCII need Unicode case tables. `reverse` and `first`/`last` of a text: `first`/`last` work (graphemes), `reverse` of a text is an error.
 - `sort` compares ints only (no floats, texts, mixed): the comparison of two Nodes is not a runtime function yet.
 - `x.upper!` (in-place, inventions.md) is not implemented: `x.upper` returns a new text, value semantics.
@@ -121,7 +121,7 @@ Same compile-time way as `map` (`lambdas::ITERATIONS`, one loop template per wor
 (the value is the body of the last item, 0 for an empty list). The function is a literal block/lambda or a defined function; a wrong
 number of parameters is `reduce takes a function of two arguments`, anything else `functions are not first-class values yet`.
 Body `a-b` of a lambda with parameters a and b is the difference (kebab rule). Parser quirks that bite: `{it<k}` reads `it<k}` as a type
-application (write `it < k`), and `reduce [7] (a b)->…` reads `reduce [7]` as a subscript (bind the list first).
+application (write `it < k`).
 
 # First-class functions (compile-time)
 

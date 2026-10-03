@@ -18,3 +18,8 @@
 - DONE: `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)
 - `print` of a list, a float or a map has no runtime text yet ("print of a List has no runtime text yet"), like `xs as string`; a runtime serializer is undecided (tests/test_cast_to_string.rs). (fix-print 2026-10-02)
 - `x=1; x+=sqrt(2)` gives the f64 2.414… while `x=1; x=sqrt(2)` keeps the exact real √2: compound assignment skips the exact-real lowering. (fix-print 2026-10-02)
+- A statement sequence as the left operand of `or`/`and` at the top level is wrong: `(x=0; x) or 5` gives 0, `(x=0; x) and 5` gives 5; assigned (`z=(x=0; x) or 5`) it is right. `a ≈ b` with a call operand lowers to such a sequence (`f() ≈ 1 or …`). (impl-surface 2026-10-03)
+- `print first [10, 5]` and `print(upper "a")` print nothing and give ø: print of a prefix word call; `print first([10, 5])` works. (impl-surface 2026-10-03)
+- `x = reduce xs (a b)->a+b` is "functions are not first-class values yet" / "cannot extract a numeric value": the lambda after a prefix word does not stay inside the assigned value; `reduce xs (a b)->a+b` alone works. (impl-surface 2026-10-03)
+- `double := it*2; double 4` gives 4: `double` is a type word, so the definition is shadowed silently instead of a loud clash. (impl-surface 2026-10-03)
+- `l=π; d=abs(l-3.14); d <= 1e-9*abs(l)` is "l is a float where an exact Int is expected"; inline (`abs(l-3.14) <= 1e-9*abs(l)`) works. (impl-surface 2026-10-03)

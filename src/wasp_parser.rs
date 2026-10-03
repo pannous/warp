@@ -34,6 +34,8 @@ const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
+/// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
+const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
@@ -841,6 +843,9 @@ impl WaspParser {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
 		}
 
+		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
+			return Some((Op::Similar, word.len()));
+		}
 		// Keywords (4-char)
 		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
 		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
@@ -865,6 +870,7 @@ impl WaspParser {
 			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),
+			('~', '~') => return Some((Op::Similar, 2)),
 			(':', ':') => return Some((Op::Scope, 2)),
 			('-', '>') => return Some((Op::Arrow, 2)),
 			('=', '>') => return Some((Op::FatArrow, 2)),
@@ -893,6 +899,7 @@ impl WaspParser {
 		// Keywords (2-char)
 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
+		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
@@ -922,6 +929,7 @@ impl WaspParser {
 			'≤' => Some((Op::Le, 1)),
 			'≥' => Some((Op::Ge, 1)),
 			'≠' => Some((Op::Ne, 1)),
+			'≈' | '⋍' | '~' => Some((Op::Similar, 1)),
 			'!' => Some((Op::Not, 1)),
 			'¬' => Some((Op::Not, 1)),
 			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`

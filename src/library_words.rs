@@ -76,6 +76,12 @@ const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
 const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
 const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
+const SIMILAR_LEFT_PLACEHOLDER: &str = "similar_placeholder_left";
+const SIMILAR_RIGHT_PLACEHOLDER: &str = "similar_placeholder_right";
+const SIMILAR_TEMPORARY: &str = "similar_tmp";
+/// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
+const TOLERANCE_VARIABLE: &str = "tolerance";
+const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
@@ -238,10 +244,36 @@ impl Lowering {
 				let (receiver, word) = (self.expand(*left), *right);
 				self.safe_lookup(receiver, word)
 			}
+			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
+	}
+
+	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
+	/// arithmetic is computed once into a temporary
+	fn lower_similar(&self, left: Node, right: Node) -> Node {
+		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
+		let mut bindings = vec![];
+		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
+		let (l, r) = (SIMILAR_LEFT_PLACEHOLDER, SIMILAR_RIGHT_PLACEHOLDER);
+		let comparison = self.from_template(
+			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
+			&[(l, &left), (r, &right)],
+		);
+		crate::min_max::with_bindings(bindings, comparison)
+	}
+
+	fn bound_once(&self, operand: Node, bindings: &mut Vec<Node>) -> Node {
+		if crate::min_max::is_plain(&operand) {
+			return operand;
+		}
+		let number = self.temporaries.get();
+		self.temporaries.set(number + 1);
+		let temporary = Node::Symbol(format!("{SIMILAR_TEMPORARY}_{number}"));
+		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
+		temporary
 	}
 
 	/// The word after a dot, `word` or `word(arguments)`: only the arguments are expanded, the word is not a call of its own
