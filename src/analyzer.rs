@@ -104,6 +104,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Text // concatenation
 	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
 		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
+	} else if repeats_text(left, op, right) {
+		Kind::Text // `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -111,6 +113,12 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	} else {
 		Kind::Int
 	}
+}
+
+/// text * int or int * text: the text repeated (Python), user decision 2026-10-03
+pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
+	let is_text = |kind: Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
 }
 
 /// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
@@ -174,6 +182,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
+				}
+				if name == crate::wasp_parser::TEXT_TIMES {
+					return Kind::Text;
 				}
 				if name == PRINT_CALL && items.len() >= 2 {
 					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
@@ -351,9 +362,11 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// Either branch a reference type (Text, Symbol, List…): the value is a Node, else a number
+/// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
-	if then_kind.is_ref() || else_kind.is_ref() {
+	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
+		Kind::Codepoint
+	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
 		Kind::Float
@@ -402,6 +415,16 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 	let node = node.drop_meta();
 	if function_definition_body(node).is_some() {
 		return 0;
+	}
+	if let Some((names, values)) = crate::tuples::destructuring(node) {
+		let temporaries = values.iter().map(|value| collect_variables_inner(value, scope, false, in_structure)).sum();
+		for (index, name) in names.iter().enumerate() {
+			if scope.lookup(name).is_none() && !scope.is_global(name) {
+				let kind = destructured_kind(values, index, scope);
+				scope.define(name.clone(), None, kind);
+			}
+		}
+		return temporaries;
 	}
 	match node {
 		// Global declarations: global:Key(name, =, value) - don't create local
@@ -521,6 +544,16 @@ fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 }
 
 /// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
+/// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
+fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
+	match values {
+		[call] => crate::tuples::call_parts(call)
+			.and_then(|(function, _)| scope.function_kinds.get(&crate::tuples::element_key(function, index)).copied())
+			.unwrap_or(Kind::Data),
+		_ => values.get(index).map_or(Kind::Data, |value| binding_kind(value, scope)),
+	}
+}
+
 fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	held_kind(value, || infer_type(value, scope))
 }
@@ -2242,12 +2275,42 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Kind {
+/// The parameters and variables of a function body, typed
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
+	scope
+}
+
+/// The kinds of the values `return a, b` gives back, position by position over every such return:
+/// one kind when all agree, Float for Int mixed with Float, else a Node
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
+	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
+	let scope = function_body_scope(params, body, function_kinds, globals);
+	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
+	body.visit(&mut |node| {
+		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
+			let value_kind = infer_type(value, &scope);
+			*kind = Some(match *kind {
+				None => value_kind,
+				Some(known) if known == value_kind => known,
+				Some(known) if known.is_primitive() && value_kind.is_primitive() && (known.is_float() || value_kind.is_float()) => Kind::Float,
+				Some(_) => Kind::Data,
+			});
+		}
+	});
+	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
+}
+
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+	if crate::tuples::tuple_arity(body).is_some() {
+		return Kind::List; // used whole, a tuple function's values are packed into a list
+	}
+	let scope = function_body_scope(params, body, function_kinds, globals);
 	let last_kind = match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),
@@ -2312,8 +2375,8 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
-	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
+	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
@@ -2415,7 +2478,14 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
 	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
-	refine_return_kinds(ctx);
+	refine_return_kinds(ctx, &declared_globals(node));
+}
+
+/// The program's `global` declarations with their kinds
+fn declared_globals(program: &Node) -> HashMap<String, Local> {
+	let mut scope = Scope::new();
+	collect_variables(program, &mut scope);
+	scope.globals
 }
 
 /// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
@@ -2498,13 +2568,17 @@ fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
-	let name = format!("{kind:?}");
-	let article = if name.starts_with(|first: char| "AEIOU".contains(first)) { "an" } else { "a" };
+	with_article(&format!("{kind:?}"))
+}
+
+/// `a photo`, `an Int`, `an image`
+pub fn with_article(name: &str) -> String {
+	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) { "an" } else { "a" };
 	format!("{article} {name}")
 }
 
 /// The kind a call argument certainly has, judged from the literal alone
-fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
@@ -2573,24 +2647,34 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
 /// until the kinds settle: a call of a float-returning function is itself Float
-fn refine_return_kinds(ctx: &mut Context) {
+fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
-					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds));
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
 				(function.name.clone(), kind)
 			})
 			.collect();
-		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
+		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
+			.flat_map(|function| {
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
+				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
+			})
+			.collect();
+		let settled = inferred.iter().chain(&tuples).all(|(name, kind)| function_kinds.get(name) == Some(kind));
 		function_kinds.extend(inferred);
+		function_kinds.extend(tuples);
 		if settled {
 			break;
 		}
 	}
 	for function in ctx.user_functions.values_mut() {
 		function.return_kind = function_kinds[&function.name];
+		function.tuple_kinds = (0..crate::tuples::tuple_arity(&function.body).unwrap_or(0))
+			.map(|index| function_kinds[&crate::tuples::element_key(&function.name, index)])
+			.collect();
 	}
 }
 
@@ -2937,7 +3021,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
-			if matches!(op, Op::If | Op::While | Op::Question | Op::Not) {
+			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
@@ -3150,6 +3234,25 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 		}
 		Node::Meta { ref node, .. } => {
 			extract_ffi_imports(ctx, node);
+		}
+		_ => {}
+	}
+}
+
+/// Calls of the host words (`sleep(ms)`, `random()` …) import them, unless the program defines a function of that name
+pub fn extract_host_words(ctx: &mut Context, node: &Node) {
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+				}
+			}
+			items.iter().for_each(|item| extract_host_words(ctx, item));
+		}
+		Node::Key(left, _, right) => {
+			extract_host_words(ctx, left);
+			extract_host_words(ctx, right);
 		}
 		_ => {}
 	}

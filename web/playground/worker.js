@@ -3,7 +3,8 @@
 
 importScripts("reader.js", "host.js");
 
-const COMPILER_URL = "warp.wasm";
+// warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
+const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
 
 let compiler; // the compiler instance's exports
 let panicMessage; // the compiler's last panic message
@@ -31,19 +32,19 @@ function passText(text) {
 	return [pointer, bytes.length];
 }
 
-function evaluate(code, answers) {
+function evaluate(code, acknowledged) {
 	panicMessage = undefined;
 	const codeText = passText(code);
-	const answersText = passText(JSON.stringify(answers));
+	const acknowledgedText = passText(JSON.stringify(acknowledged));
 	try {
-		const length = compiler.web_evaluate(...codeText, ...answersText);
+		const length = compiler.web_evaluate(...codeText, ...acknowledgedText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		compiler.web_free(...codeText);
-		compiler.web_free(...answersText);
+		compiler.web_free(...acknowledgedText);
 		return report;
 	} catch (crash) {
 		compiler = undefined; // a panic leaves the compiler's memory in an unknown state: load it again
-		return { value: `compiler crashed: ${panicMessage ?? crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], asks: [], notes: [] };
+		return { value: `compiler crashed: ${panicMessage ?? crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
 	}
 }
 
@@ -53,6 +54,6 @@ self.onmessage = async ({ data }) => {
 	await ready;
 	if (!compiler) await loadCompiler();
 	const started = performance.now();
-	const report = evaluate(data.code, data.answers ?? {});
+	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });
 };

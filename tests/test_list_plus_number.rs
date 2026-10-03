@@ -1,13 +1,8 @@
 //! D3 (user, 2026-10-03): `[1 2 3]+4` asks append or add to each element, fallback Error;
 //! `.+` is element-wise, `xs + [4]` concatenates (like `[x]*n`, topic list-times)
 use crate::common::fails_with;
-use warp::diagnostic::{with_asker, ScriptedAnswers};
 use warp::node::ints;
 use warp::*;
-
-fn answer(meaning: &str) -> ScriptedAnswers {
-	ScriptedAnswers(vec![("list-plus".to_string(), meaning.to_string())])
-}
 
 #[test]
 fn a_list_literal_plus_a_number_asks() {
@@ -18,11 +13,10 @@ fn a_list_literal_plus_a_number_asks() {
 }
 
 #[test]
-fn the_answer_compiles_the_chosen_reading() {
-	with_asker(answer("append"), || is!("[1 2 3]+4", ints(vec![1, 2, 3, 4])));
-	with_asker(answer("prepend"), || is!("4+[1 2 3]", ints(vec![4, 1, 2, 3])));
-	with_asker(answer("add to each element"), || is!("[1 2 3]+4", ints(vec![5, 6, 7])));
-	with_asker(answer("add to each element"), || is!("4+[1 2 3]", ints(vec![5, 6, 7])));
+fn each_reading_has_its_explicit_form() {
+	is!("[1 2 3] + [4]", ints(vec![1, 2, 3, 4]));
+	is!("[4] + [1 2 3]", ints(vec![4, 1, 2, 3]));
+	is!("[1 2 3] .+ 4", ints(vec![5, 6, 7]));
 }
 
 #[test]

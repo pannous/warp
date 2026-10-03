@@ -1,11 +1,14 @@
 // The page: the editor, the worker that compiles and runs (worker.js), and the report shown like the CLI prints it:
-// the value, printed output, errors, warnings, hints. An Ask (src/diagnostic.rs) is a question with one button per
-// reading; a click answers it, the answer is remembered in this browser and the program runs again.
+// the value, printed output, errors, warnings, hints. An ambiguity is a warning naming its explicit form; "got it"
+// silences a warning's topic in this browser (it never changes the value) until "show again".
 
-const ANSWERS_KEY = "warp-playground-answers";
+const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
+const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
 const TYPING_DELAY_MS = 300;
 const DEFAULT_EXAMPLE = "welcome";
+const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
+const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -23,36 +26,44 @@ let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
 let queued; // code waiting for the running evaluation to finish
 let typingTimer;
+const debugBuild = new URLSearchParams(location.search).has(DEBUG_PARAMETER);
 let lastModule; // the bytes of the last module the compiler emitted, for the download button
 
-// ---- answers remembered in this browser ---------------------------------------------------------------------
+// ---- acknowledged topics, remembered in this browser ---------------------------------------------------------
 
-function loadAnswers() {
-	try { return JSON.parse(localStorage.getItem(ANSWERS_KEY)) ?? {}; } catch { return {}; }
+function loadAcknowledged() {
+	try {
+		const saved = JSON.parse(localStorage.getItem(ACKNOWLEDGED_KEY));
+		if (Array.isArray(saved)) return saved;
+		const old = JSON.parse(localStorage.getItem(OLD_ANSWERS_KEY)) ?? {};
+		return Object.keys(old).filter(key => key.startsWith(ACKNOWLEDGED_PREFIX)).map(key => key.slice(ACKNOWLEDGED_PREFIX.length));
+	} catch { return []; }
 }
 
-function saveAnswers(answers) {
-	try { localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers)); } catch { /* private window: answers last for this page */ }
-	sessionAnswers = answers;
+function saveAcknowledged(topics) {
+	acknowledged = [...new Set(topics)].sort();
+	try { localStorage.setItem(ACKNOWLEDGED_KEY, JSON.stringify(acknowledged)); } catch { /* private window: lasts for this page */ }
 }
 
-let sessionAnswers = loadAnswers();
+let acknowledged = loadAcknowledged();
 
-function answer(topic, form) {
-	saveAnswers({ ...sessionAnswers, [topic]: form });
+// what web_evaluate takes: `ack:<topic>` keys (the newer compiler also takes the plain list of topics)
+const acknowledgements = () => Object.fromEntries(acknowledged.map(topic => [ACKNOWLEDGED_PREFIX + topic, ACKNOWLEDGED]));
+
+function acknowledge(topic) {
+	saveAcknowledged([...acknowledged, topic]);
 	runNow();
 }
 
-function forget(topic) {
-	const { [topic]: _, ...rest } = sessionAnswers;
-	saveAnswers(rest);
+function showAgain(topic) {
+	saveAcknowledged(acknowledged.filter(known => known !== topic));
 	runNow();
 }
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
 function startWorker() {
-	worker = new Worker("worker.js");
+	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "ready") return resolve();
@@ -87,10 +98,10 @@ async function evaluate(code) {
 			worker.terminate(); // a program that does not stop blocks the worker: replace it
 			const printed = pending.printed;
 			startWorker();
-			finish({ value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed, warnings: [], runtime_warnings: [], hints: [], asks: [], notes: [] });
+			finish({ value: `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, error: true, printed, warnings: [], runtime_warnings: [], hints: [], notes: [] });
 		}, RUN_TIMEOUT_MS);
 		pending = { id, resolve, printed: [], timer };
-		worker.postMessage({ id, code, answers: sessionAnswers });
+		worker.postMessage({ id, code, acknowledged: acknowledgements() });
 	});
 }
 
@@ -109,30 +120,10 @@ function diagnostic(kind, position, ...content) {
 
 const code = text => element("code", {}, text);
 
-function showAsks(asks) {
-	const box = $("asks");
-	box.replaceChildren(...asks.map(ask => {
-		const buttons = ask.readings.map((reading, index) => element("button", {
-			className: index === ask.default ? "reading default" : "reading",
-			title: index === ask.default ? "the default the compiler takes when nobody answers" : "",
-			onclick: () => answer(ask.topic, reading.explicit_form),
-		}, `${reading.meaning} `, code(reading.explicit_form)));
-		const fallback = ask.fallback === "error" ? "unanswered this is an error" : `unanswered it takes ${ask.readings[ask.default].meaning}`;
-		return element("div", { className: "ask" },
-			element("p", {}, element("span", { className: "label" }, "ask"), element("span", { className: "position" }, at(ask.line, ask.column)), ask.question),
-			element("div", { className: "readings" }, ...buttons),
-			element("p", { className: "fallback" }, `${fallback}; your answer is remembered and the explicit form is hinted`));
-	}));
-	box.hidden = asks.length === 0;
-}
-
-function showAnswers() {
-	const topics = Object.keys(sessionAnswers).sort();
-	$("answers").replaceChildren(...topics.map(topic => element("li", {},
-		topic.startsWith(ACKNOWLEDGED_PREFIX) ? `${topic.slice(ACKNOWLEDGED_PREFIX.length)}: note acknowledged ` : `${topic} = `,
-		topic.startsWith(ACKNOWLEDGED_PREFIX) ? "" : code(sessionAnswers[topic]),
-		element("button", { className: "forget", title: "forget this answer", onclick: () => forget(topic) }, "forget"))));
-	$("answered").hidden = topics.length === 0;
+function showAcknowledged() {
+	$("acknowledged").replaceChildren(...acknowledged.map(topic => element("li", {}, `${topic} `,
+		element("button", { className: "forget", title: "warn about it again", onclick: () => showAgain(topic) }, "show again"))));
+	$("silenced").hidden = acknowledged.length === 0;
 }
 
 function showReport(report) {
@@ -147,12 +138,11 @@ function showReport(report) {
 		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
 		...report.hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason))),
-		...report.notes.map(topic => diagnostic("note", "", `the ${topic} hint above shows until you `,
-			element("button", { onclick: () => answer(ACKNOWLEDGED_PREFIX + topic, ACKNOWLEDGED) }, "got it"))),
+		...report.notes.map(topic => diagnostic("note", "", `the ${topic} warning above shows until you `,
+			element("button", { onclick: () => acknowledge(topic) }, "got it"))),
 	];
 	$("diagnostics").replaceChildren(...items);
-	showAsks(report.asks);
-	showAnswers();
+	showAcknowledged();
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
 }
 
@@ -163,6 +153,15 @@ async function show(code) {
 	}
 	setStatus("running…");
 	showReport(await evaluate(code));
+}
+
+// a link to the same page with the other compiler build
+function showBuildSwitch() {
+	const url = new URL(location.href);
+	if (debugBuild) url.searchParams.delete(DEBUG_PARAMETER);
+	else url.searchParams.set(DEBUG_PARAMETER, "");
+	Object.assign($("build"), { href: url.href, textContent: debugBuild ? "debug build ⇄ optimized" : "optimized build ⇄ debug",
+		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
 }
 
 function downloadModule() {
@@ -206,6 +205,7 @@ function initialize() {
 	});
 	$("run").onclick = runNow;
 	$("download").onclick = downloadModule;
+	showBuildSwitch();
 	fillExamples();
 	startWorker();
 	const requested = new URLSearchParams(location.search).get("example");
@@ -213,6 +213,6 @@ function initialize() {
 }
 
 // for the headless probe (probes/web_playground.sh): evaluate code as the page does and return the report
-window.playground = { evaluate, lastModule: () => lastModule, answer: (topic, form) => saveAnswers({ ...sessionAnswers, [topic]: form }), forgetAll: () => saveAnswers({}) };
+window.playground = { evaluate, lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
 initialize();

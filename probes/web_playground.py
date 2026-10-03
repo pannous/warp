@@ -80,18 +80,30 @@ def main():
 		print(f"{'ok  ' if ok else 'FAIL'} {code!r} → {report['value']}")
 		if not ok: failures.append(code)
 
-	# the Ask flow: unanswered it falls back to exclusive, answered inclusive by the page's button
+	# an ambiguity is a warning; "got it" silences its topic and never changes the value
 	browser("eval", "playground.forgetAll()")
-	browser("select", "#examples", "ask")
+	browser("select", "#examples", "ambiguity")
 	time.sleep(1.5)
-	before = browser("get", "text", "#value")
-	browser("click", ".ask .reading:not(.default)")
+	before = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
+	browser("click", ".note button")
 	time.sleep(1.5)
-	after = browser("get", "text", "#value")
-	asked = before == "6" and after == "10"
-	print(f"{'ok  ' if asked else 'FAIL'} Ask clicked: {before} → {after}")
-	if not asked: failures.append("ask")
+	after = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
+	silenced = before == ("6", True) and after == ("6", False)
+	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
+	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
+
+	# the debug build (?debug, warp.debug.wasm) compiles the same programs
+	browser("open", PAGE + "?debug")
+	for _ in range(60):
+		if browser("get", "text", "#status") not in ("", "loading the compiler…"):
+			break
+		time.sleep(1)
+	debug = evaluate_in_page(["3+3"])[0]["value"]
+	ok = debug == "6" and "debug build" in browser("get", "text", "#build")
+	print(f"{'ok  ' if ok else 'FAIL'} the debug build evaluates 3+3 → {debug}")
+	if not ok: failures.append("debug build")
+	browser("open", PAGE)
 
 	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".wasp"))
 	sources = [open(os.path.join(REPOSITORY, "samples", name + ".wasp"), encoding="utf-8").read() for name in names]

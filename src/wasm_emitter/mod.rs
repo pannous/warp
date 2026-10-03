@@ -8,6 +8,7 @@ mod equality;
 mod function_builder;
 mod config;
 mod ffi_emitter;
+mod float_text;
 mod import_manager;
 mod key_emitter;
 mod layout;
@@ -23,7 +24,8 @@ mod reflection;
 mod string_table;
 mod type_manager;
 mod try_guard;
-pub use try_guard::RAN_WITHOUT_ERROR;
+mod tuple_emitter;
+pub use try_guard::{CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
@@ -46,6 +48,8 @@ const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up"
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
+/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
+const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
@@ -109,6 +113,7 @@ use log::{trace, warn};
 use std::collections::HashMap;
 use std::thread::scope;
 use wasm_encoder::*;
+#[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
@@ -169,6 +174,8 @@ pub struct WasmGcEmitter {
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
+	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
+	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
@@ -213,6 +220,8 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			returns_node: true,
+			returned_tuple: vec![],
+			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
@@ -384,17 +393,22 @@ impl WasmGcEmitter {
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().map(|param| self.storage_type(param_kind(param))).collect();
-		let result_type = if returns_node {
-			Ref(self.node_ref(false))
+		let result_types = if !user_fn.tuple_kinds.is_empty() {
+			self.tuple_result_types(&user_fn.tuple_kinds)
+		} else if returns_node {
+			vec![Ref(self.node_ref(false))]
 		} else {
-			self.storage_type(user_fn.return_kind)
+			vec![self.storage_type(user_fn.return_kind)]
 		};
-		self.type_manager.types_mut().ty().function(param_types, vec![result_type]);
+		self.type_manager.types_mut().ty().function(param_types, result_types);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
 		let func_idx = self.next_func_idx;
 		self.next_func_idx += 1;
+		if !user_fn.tuple_kinds.is_empty() {
+			self.register_tuple_packer(name, &user_fn.tuple_kinds);
+		}
 
 		// Store the function index and whether it returns a Node
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
@@ -434,6 +448,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 		let mut func = Function::new(locals);
 
 		// Captured variables read their definition-time globals
@@ -442,8 +457,14 @@ impl WasmGcEmitter {
 			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
 			.collect();
 
+		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if returns_node {
+		if !user_fn.tuple_kinds.is_empty() {
+			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
+			self.emit_node_instructions(&mut func, &user_fn.body);
+			func.instruction(&Instruction::Drop);
+			func.instruction(&Instruction::Unreachable);
+		} else if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {
 			self.emit_value_of_kind(&mut func, &user_fn.body, user_fn.return_kind);
@@ -459,6 +480,10 @@ impl WasmGcEmitter {
 
 		// Add to code section
 		self.code.function(&func);
+		if !user_fn.tuple_kinds.is_empty() {
+			self.compile_tuple_packer(&user_fn.tuple_kinds);
+		}
+		self.returned_tuple = saved_returned_tuple;
 
 		// Restore scope
 		self.scope = saved_scope;
@@ -495,7 +520,10 @@ impl WasmGcEmitter {
 	/// unless libm's f64 version is imported
 	fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).collect()
+		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
+			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
+		});
+		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -528,8 +556,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Inner helper for emitting user function calls
+	/// Inner helper for emitting user function calls; a tuple function's values are packed into a list
 	fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+		self.emit_user_function_values(func, user_fn, args);
+		if !user_fn.tuple_kinds.is_empty() && user_fn.func_index.is_some() {
+			self.emit_pack_tuple(func, &user_fn.name);
+		}
+	}
+
+	/// Arguments and the call: the function's own results on the stack, several for a tuple function
+	fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
 		let Some(func_index) = user_fn.func_index else {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
@@ -758,6 +794,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		crate::analyzer::extract_host_words(&mut self.ctx, node);
 		self.type_errors.extend(self.ctx.parameter_conflicts.drain(..));
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
@@ -1138,6 +1175,7 @@ impl WasmGcEmitter {
 		}
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 
 		let mut func = Function::new(locals);
 		self.emit_witness_installation(&mut func);
@@ -1171,7 +1209,7 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
@@ -1476,32 +1514,45 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return left; else return right
-			self.emit_float_value(func, left);
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-			func.instruction(&Instruction::F64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-			self.emit_float_value(func, left); // return left (0.0)
-			func.instruction(&Instruction::Else);
-			self.emit_float_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_float");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_float_value(func, left);
-		func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-		func.instruction(&Instruction::F64Ne);
+		// and: a falsy left is the value, else right; or: a truthy left is the value, else right. Left is evaluated once.
+		self.emit_held_left_is_falsy(func, left, true);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-		self.emit_float_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::And, right, true);
 		func.instruction(&Instruction::Else);
-		self.emit_float_value(func, right); // return right
+		self.emit_logical_branch(func, op == &Op::Or, right, true);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_float");
 		true
+	}
+
+	/// Push i32 1 when `left` is falsy (0 or 0.0), keeping its value in a scratch local (a float as its bits)
+	fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
+		let held = self.scratch(LOGICAL_SCRATCH);
+		if is_float {
+			self.emit_float_value(func, left);
+			Self::emit_list(func, &[Instruction::I64ReinterpretF64, Instruction::LocalTee(held), Instruction::F64ReinterpretI64]);
+			Self::emit_list(func, &[Instruction::F64Const(Ieee64::new(0.0f64.to_bits())), Instruction::F64Eq]);
+		} else {
+			self.emit_numeric_value(func, left);
+			Self::emit_list(func, &[Instruction::LocalTee(held), Instruction::I64Eqz]);
+		}
+	}
+
+	/// The held left value, raw
+	fn emit_held_left(&self, func: &mut Function, is_float: bool) {
+		func.instruction(&Instruction::LocalGet(self.scratch(LOGICAL_SCRATCH)));
+		if is_float {
+			func.instruction(&Instruction::F64ReinterpretI64);
+		}
+	}
+
+	/// One branch of a numeric and/or: the held left value or right, raw
+	fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
+		match (is_left, is_float) {
+			(true, _) => self.emit_held_left(func, is_float),
+			(false, true) => self.emit_float_value(func, right),
+			(false, false) => self.emit_numeric_value(func, right),
+		}
 	}
 
 	fn emit_int_truthy_logical(
@@ -1515,27 +1566,11 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return 0; else return right
-			self.emit_numeric_value(func, left);
-			func.instruction(&Instruction::I64Eqz);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
-			func.instruction(&Instruction::Else);
-			self.emit_numeric_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_int");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_numeric_value(func, left);
-		func.instruction(&Instruction::I64Eqz);
+		self.emit_held_left_is_falsy(func, left, false);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-		self.emit_numeric_value(func, right); // return right (left was falsy)
+		self.emit_logical_branch(func, op == &Op::And, right, false);
 		func.instruction(&Instruction::Else);
-		self.emit_numeric_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::Or, right, false);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_int");
 		true
@@ -1673,65 +1708,56 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(self.type_manager.node_type),
 		};
 
-		// For numeric left operand, extract its value for truthiness check
-		let left_is_numeric = self.is_numeric(left);
+		// A call of number kind is tested at run time like a numeric variable, and evaluated once
+		let is_call = matches!(left.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		let left_is_numeric = self.is_numeric(left) || (is_call && matches!(self.get_type(left), Kind::Int | Kind::Float));
 
 		if left_is_numeric {
-			// Emit left as numeric and check truthiness
-			if self.get_type(left).is_float() {
-				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-				if *op == Op::And {
-					// and: if left == 0, return left (falsy); else return right
-					func.instruction(&Instruction::F64Eq);
-				} else {
-					// or: if left != 0, return left (truthy); else return right
-					func.instruction(&Instruction::F64Ne);
-				}
-			} else {
-				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Eqz);
-				if *op == Op::And {
-					// and: if left == 0 (eqz is true), return left
-					// eqz returns 1 if zero, 0 if non-zero
-				} else {
-					// or: if left != 0 (eqz is false), return left
-					func.instruction(&Instruction::I32Eqz); // flip the condition
-				}
+			let is_float = self.get_type(left).is_float();
+			self.emit_held_left_is_falsy(func, left, is_float);
+			if *op == Op::Or {
+				func.instruction(&Instruction::I32Eqz); // or: a truthy left is the value
 			}
-
-			// If condition is true, return left; else return right
 			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
-			self.emit_node_instructions(func, left);
+			self.emit_held_left(func, is_float);
+			self.emit_call(func, if is_float { "new_float" } else { "new_int" });
 			func.instruction(&Instruction::Else);
 			self.emit_node_instructions(func, right);
 			func.instruction(&Instruction::End);
-		} else {
-			// Left is non-numeric - check if it's falsy at compile time
-			let left_is_falsy = left.is_falsy();
-
+		} else if Self::is_run_time_value(left) {
+			// a variable, call or element holding a Node: its truthiness is known at run time only
+			let held = self.node_scratch();
+			self.emit_node_instructions(func, left);
+			func.instruction(&Instruction::LocalTee(held));
+			self.emit_call(func, IS_TRUTHY);
 			if *op == Op::And {
-				if left_is_falsy {
-					// and with falsy left: return left
-					self.emit_node_instructions(func, left);
-				} else {
-					// and with truthy left: return right
-					self.emit_node_instructions(func, right);
-				}
-			} else {
-				// Op::Or
-				if left_is_falsy {
-					// or with falsy left: return right
-					self.emit_node_instructions(func, right);
-				} else {
-					// or with truthy left: return left
-					self.emit_node_instructions(func, left);
-				}
+				func.instruction(&Instruction::I32Eqz); // and: a falsy left is the value
 			}
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			Self::emit_list(func, &[Instruction::LocalGet(held), Instruction::RefAsNonNull, Instruction::Else]);
+			self.emit_node_instructions(func, right);
+			func.instruction(&Instruction::End);
+		} else {
+			// a literal left is falsy or not at compile time: `[] or 3`, `"a" and 4`
+			let left_is_value = left.is_falsy() == (*op == Op::And);
+			self.emit_node_instructions(func, if left_is_value { left } else { right });
 		}
 	}
 
+	/// A name, call, element or field: its value exists only at run time
+	fn is_run_time_value(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(_) => true,
+			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+			Node::Key(_, Op::Hash | Op::Dot, _) => true,
+			_ => false,
+		}
+	}
 
+	/// The one nullable Node local of every function, after its int scratch locals
+	fn node_scratch(&self) -> u32 {
+		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+	}
 
 	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
@@ -2062,7 +2088,7 @@ impl WasmGcEmitter {
 			return;
 		};
 
-		// A branch yielding a text, list or error (`if x {x} else {"offline"}`): both branches are Node values
+		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
 			Node::List(items, Bracket::Curly, _) if items.len() == 1 => items[0].clone(),
 			other => other.clone(),
@@ -2070,7 +2096,8 @@ impl WasmGcEmitter {
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
 		let is_node_valued = |emitter: &Self, value: &Node| {
-			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || crate::analyzer::branch_kind(value, &emitter.scope).is_ref())
+			let kind = crate::analyzer::branch_kind(value, &emitter.scope);
+			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
 			self.emit_condition(func, condition, Self::emit_block_value);
@@ -2268,7 +2295,7 @@ impl WasmGcEmitter {
 	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
 		let kind = self.get_type(value);
 		let node = match kind {
-			Kind::Int | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
+			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			Kind::List => {
 				let text = |text: &str| Box::new(Node::Text(text.to_string()));
@@ -2545,7 +2572,7 @@ impl WasmGcEmitter {
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
 		}
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
 			return;
 		}
 		let located = node;
@@ -2826,6 +2853,7 @@ impl WasmGcEmitter {
 							} else {
 								self.emit_numeric_value(func, &items[1]);
 							}
+							self.emit_leave_tries(func, 0);
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
@@ -2908,7 +2936,7 @@ impl WasmGcEmitter {
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
 		}
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
 		let located = node;
@@ -3164,6 +3192,12 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 
+	#[cfg(not(feature = "validate"))]
+	fn try_validate_wasm(_bytes: &[u8]) -> Result<(), String> {
+		Ok(()) // the engine that runs the module validates it (the browser build, web/playground)
+	}
+
+	#[cfg(feature = "validate")]
 	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
@@ -3227,6 +3261,7 @@ impl WasmGcEmitter {
 			.map(|f| (f.call_index as u32, f.name.clone()))
 			.chain(self.ctx.user_functions.values().filter_map(|function| Some((function.func_index?, function.name.clone()))))
 			.chain(self.closures.entry_names())
+			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
@@ -3635,7 +3670,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(node)))))));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(node))))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -3758,13 +3793,9 @@ fn eval_program(node: Node) -> Node {
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
-	let result = if needs_ffi {
-		read_bytes_with_ffi(&bytes)
-	} else if needs_wasi {
-		read_bytes_with_wasi(&bytes)
-	} else if needs_host {
-		read_bytes_with_host(&bytes)
+	use crate::wasm_reader::{read_bytes_with_imports, Imports};
+	let result = if needs_ffi || needs_wasi || needs_host {
+		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
 	} else {
 		read_bytes(&bytes)
 	};

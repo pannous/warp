@@ -53,6 +53,8 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
 const PRINT_WORD: &str = "print";
+/// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
+const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
@@ -64,6 +66,14 @@ const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else"
 
 fn is_print_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+}
+
+/// `print` or the call `print(…)`: a print statement starts here
+fn starts_print(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		other => is_print_word(other),
+	}
 }
 
 /// Words separated by spaces form one expression: `upper "a"` is one argument of print
@@ -105,6 +115,10 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 		return Node::List(items, bracket, separator);
 	}
 	match (&separator, items[0].drop_meta()) {
+		(Separator::Space, head) if starts_print(head) && items.iter().skip(2).any(starts_print) => {
+			let second = items.iter().skip(2).find(|item| starts_print(item)).expect("guarded");
+			Diagnostic::at(second, TWO_STATEMENTS_ON_ONE_LINE).into_error()
+		}
 		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
 			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
 		}
@@ -128,6 +142,8 @@ const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
+/// The call `n times text` is parsed to: the text repeated n times
+pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
@@ -1090,6 +1106,7 @@ impl WaspParser {
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
 	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	/// `try X else e => Y` names the caught error: `marker(X, Y, e)`, never a lambda.
 	fn parse_guard(&mut self, marker: &'static str) -> Node {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
@@ -1107,7 +1124,11 @@ impl WaspParser {
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		let parts = match fallback.drop_meta() {
+			Key(name, Op::FatArrow, body) if marker == TRY_MARKER && matches!(name.drop_meta(), Symbol(_)) => vec![guarded, body.as_ref().clone(), name.as_ref().clone()],
+			_ => vec![guarded, fallback],
+		};
+		Node::List([vec![Symbol(marker.to_string())], parts].concat(), Bracket::Round, Separator::None)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
@@ -2353,6 +2374,8 @@ impl WaspParser {
 				let list = self.parse_atom();
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
+			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
@@ -2567,6 +2590,8 @@ impl WaspParser {
 				}
 				Ok(None) => {}
 			}
+			// a bare `$name` is text here but stays a hole for sql/sh templates (injection::parts), so it is not escaped
+			let bare_dollar_name = ch == '$' && (self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_');
 			let literal = if ch == '\\' {
 				self.advance();
 				let escaped = self.current_char();
@@ -2583,7 +2608,7 @@ impl WaspParser {
 			self.advance();
 			s.push(literal);
 			match literal {
-				'$' => template.push_str("$$"),
+				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
 		}
@@ -2599,7 +2624,8 @@ impl WaspParser {
 		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
 	}
 
-	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	/// `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`, `$ `).
+	/// User decision D1: "only the one with the curly braces must interpolate the other is text like dollar money".
 	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
 		let (line, column) = self.get_position();
 		let next = self.peek_char(1);
@@ -2609,13 +2635,6 @@ impl WaspParser {
 			set_hint_position(line, column);
 			norm::interpolation(&format!("${{{expression}}}"), &expression);
 			expression
-		} else if next.is_alphabetic() || next == '_' {
-			self.advance();
-			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-			self.advance_by(name.chars().count());
-			set_hint_position(line, column);
-			norm::interpolation(&format!("${name}"), &name);
-			name
 		} else {
 			return Ok(None);
 		};

@@ -11,8 +11,8 @@ use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
-use crate::wasm_emitter::RAN_WITHOUT_ERROR;
-use std::cell::Cell;
+use crate::wasm_emitter::{CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
@@ -80,6 +80,7 @@ const EXPANDED_WORDS: [(&str, usize, &str); 4] = [
 const TRY_TEMPORARY: &str = "try_tmp";
 const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
 const TRY_FALLBACK_PLACEHOLDER: &str = "try_placeholder_fallback";
+const CAUGHT_NAME_PLACEHOLDER: &str = "try_placeholder_caught";
 const LIST_PLACEHOLDER: &str = "try_placeholder_list";
 const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
@@ -134,7 +135,7 @@ pub fn lower(node: Node) -> Node {
 	collect_assigned_objects(&node, &mut assigned_objects);
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
-	Lowering { context, shadowed, objects, instances, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), temporaries: Cell::new(0) }.expand(node)
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
@@ -152,7 +153,7 @@ fn is_field_lookup(node: &Node) -> bool {
 }
 
 /// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
-fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
+pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let single;
 	let items: &[Node] = match node.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
@@ -226,14 +227,16 @@ struct Lowering {
 	objects: HashMap<String, Node>,
 	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
 	instances: crate::traits::InstanceTypes,
+	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
+	parameters: RefCell<Vec<String>>,
 	temporaries: Cell<usize>,
 }
 
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], TRY_MARKER) => {
-				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
+			Node::List(items, Bracket::Round, _) if matches!(items.len(), 3 | 4) && is_marker(&items[0], TRY_MARKER) => {
+				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()), items.get(3).cloned())
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
@@ -250,7 +253,8 @@ impl Lowering {
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
 			}
 			Node::Key(left, Op::Assign, right) => {
-				let (left, right) = (self.expand(*left), self.expand(*right));
+				let left = self.expand(*left);
+				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
 			}
 			Node::Key(left, Op::SafeDot, right) => {
@@ -258,10 +262,29 @@ impl Lowering {
 				self.safe_lookup(receiver, word)
 			}
 			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+			Node::Key(left, Op::Define, right) => {
+				let left = self.expand(*left);
+				let right = self.in_definition(&left, *right);
+				Node::Key(Box::new(left), Op::Define, Box::new(right))
+			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
+	}
+
+	/// The right side of `head = right` or `head := right`, with the untyped parameters of a definition head in scope
+	fn in_definition(&self, head: &Node, right: Node) -> Node {
+		let parameters = crate::traits::untyped_parameters(head);
+		let scope = self.parameters.borrow().len();
+		self.parameters.borrow_mut().extend(parameters);
+		let right = self.expand(right);
+		self.parameters.borrow_mut().truncate(scope);
+		right
+	}
+
+	fn is_parameter(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
 	}
 
 	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
@@ -406,7 +429,7 @@ impl Lowering {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
-		let is_object = literal.is_some() || is_field_lookup(receiver);
+		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
@@ -520,25 +543,34 @@ impl Lowering {
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
 	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
 	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
-	fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
+	/// `try X else Y`; `try X else e => Y` (`caught` is e) names the caught error in Y: its message text (CAUGHT_ERROR_TEXT)
+	fn lower_try(&self, guarded: Node, fallback: Node, caught: Option<Node>) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
 		match guarded.drop_meta() {
 			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
-				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
+				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback, caught)))
 			}
-			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.from_template(
+			// the checked shortcuts know no error to name
+			Node::Key(list, Op::Hash, index) if caught.is_none() && !matches!(list.drop_meta(), Node::Empty) => self.from_template(
 				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),
-			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.from_template(
+			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) if caught.is_none() => self.from_template(
 				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{{DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}})"),
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
-			_ => self.from_template(
-				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
-				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
-				&[(value, &guarded), (fallback_placeholder, &fallback)],
-			),
+			_ => {
+				let name = caught.unwrap_or(Node::Empty);
+				let caught = match name {
+					Node::Empty => String::new(),
+					_ => format!("{CAUGHT_NAME_PLACEHOLDER} = {CAUGHT_ERROR_TEXT}(try_tmp_finished, try_tmp_value); "),
+				};
+				self.from_template(
+					// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
+					&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{caught}{fallback_placeholder}}})"),
+					&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_NAME_PLACEHOLDER, &name)],
+				)
+			}
 		}
 	}
 

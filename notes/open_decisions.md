@@ -5,33 +5,8 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
-  Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
-- P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
-  Options: Fix the docs / Vendor for real. Assumed: unchanged. notes/code_quality.md.
-- P9 code quality 1: may the stale C++ feature flags go, with their `#[cfg]` branches in tests/test_wasm.rs, test_web.rs
-  (keeping the branch that runs today)? Options: Remove them / Keep. Assumed: kept. notes/code_quality.md.
-- P10 code quality 2: delete `smarty.rs` (with its asserts in tests/test_angle.rs) and tests/test_asts.rs (tests `syn`)?
-  Options: Delete both / Delete test_asts only / Keep both. Assumed: kept.
-- P11 code quality 4: keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
-  Options: Keep + add a roundtrip test / Delete. Assumed: kept as is.
-- P12 code quality 5: which GC reading API stays? Options: GcObject (docs guide) / gc_traits wrappers / Both.
-  Assumed: both.
-- P13 code quality 6: keep the hand-written libm table (`LIBM_UNARY`/`LIBM_BINARY`) or rely on header-driven FFI only?
-  Options: Keep the table / Generic FFI only. Assumed: kept.
-- P14 code quality 3: regroup tests/ into topic subdirectories (pure moves) and move `probe_*.rs` out of the suite?
-  Options: Move probes out only / Regroup and move probes / Leave as is. Assumed: as is.
-- P15 code quality 8: replace CLAUDE.md with a symlink to AGENTS.md (AGENTS.md already rewritten from §1)?
-  Options: Symlink to AGENTS.md / Keep both files. Assumed: both kept, CLAUDE.md untouched.
-- P16 code quality 9: root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links,
-  `build_debug.sh`, `add_ignore_to_failing_tests.sh`, `nextest.sh`). Options: Move to notes/OLD / Delete / Keep.
-  Assumed: kept.
-- P17 D10 return-type polymorphism (`render "hello" as pdf`, `docx example = render "x"`), parked 2026-10-03.
-  Options: Keep parked / `as` stays a cast only / Return-type dispatch, Ask when ambiguous. Assumed: `as` is a cast.
-- P18 #10 Polish notation for .wat/.wast (`(module a b)` → node `module` with children, test_wast), parked.
-  Options: Keep parked / ParserOptions mode. Assumed: test_wast stays ignored.
-- P19 #16 commented `"a".s() + 2` lines in test_string.rs, parked ("don't care").
-  Options: Leave them / Delete the commented lines. Assumed: left.
+Batches paused until 2026-10-03 17:30 local (5-hour limit at 93%, BOSS-cheeky-shannon).
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -57,7 +32,67 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
+- `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
+  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+- text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
+  type error" from 2026-10-02.
+
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
+  otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
+  the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
+- Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
+  to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
+  python if it has all the fields but is a known different type then we should create an error and get the user about
+  a new keyword image like photo so the image will be treated like a photo and judged by users we should write that as
+  a very central philosophy which needs to be implemented". So: a value of truly unknown type passed to `p:photo` is
+  duck typed (judged by the fields it is used with); a value of a KNOWN different type (an `image` with all of photo's
+  fields) is an error that teaches `image like photo`, which declares image usable as a photo, judged by uses.
+  Keyword: "`image like photo`" (chosen over `as`/`is`). Written map `{width:7}` for `p:photo`: "Accept
+  structurally". `p.word` typo on an untyped parameter: "Field lookup, runtime error" ("no field word").
+- libm FFI (warp-12 experiment: headers serve all of libm on macOS incl. hypot; glibc's __MATHCALL macros defeat the
+  header parser on Linux): "Headers first, table fallback". Header-driven linking always; LIBM_UNARY/LIBM_BINARY link
+  only when the headers give nothing for "m". Patch: warp.worktrees.noindex/ffi-libm-experiment.patch.
+- tests/ folders (asked by warp-1a, branch tests-tidy, notes/tests_layout.md): "OK as listed" (17 topic folders,
+  welcoming one folder). Duplicates: "Only probes condense". Probe lines condense into topic files; assertions in
+  regular test files stay even when duplicated.
+- Wiki remote `main` (asked by warp-d0, notes/wiki_branch.md): "Delete remote main". GitHub wikis serve only master;
+  master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
+  `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
+- #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
+- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
+  tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
+  folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
+  topic folders.
+- CLAUDE.md (P15, code quality 8): "Symlink to AGENTS.md".
+- Root clutter (P16, code quality 9): "Move to notes/OLD" (the dangling `wasp`/`warp` links are deleted).
+- D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
+  `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
+  Asks-become-warnings rule).
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
+- GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
+- libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
+  quickly try if it works without the hard coding". So `LIBM_UNARY`/`LIBM_BINARY` get a comment saying they are deliberate
+  examples of hand-linked FFI, and an experiment checks whether the header-driven FFI serves the same calls without
+  them (result decides whether they become example-only).
+- Type-word shadowing (P20, asked by warp-bc, branch claude/type-word-user-function): "Clash error". A user function
+  named like a type word (`double := it*2`) is an error: "double is a type; rename your function". Reverts the
+  shadow-with-warning default.
+- cdylib (P7, code quality 10), verbatim: "what is that it doesn't mean that didn't need that before can we gate it".
+  Answer: the cdylib is the browser-wasm output, and web/playground/build.sh already asks for it itself
+  (`cargo rustc --crate-type cdylib`), so it is already gated. Cargo.toml keeps only `rlib` (since 2024-02 it listed
+  `["cdylib", "rlib"]`); the per-worktree crate-type patch is no longer needed.
+- vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
+  just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
+  `--offline` builds from the registry cache.
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+  tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
   don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an

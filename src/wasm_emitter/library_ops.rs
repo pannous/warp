@@ -335,6 +335,8 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
+		self.emit_float_text(); // after int_to_decimal, which it calls
+		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -352,6 +354,12 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				is_kind(f, Kind::Float);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_field(f, element, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
+				s.call(f, super::float_text::FLOAT_TEXT);
+				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
 					f.instruction(&I::If(BlockType::Empty));

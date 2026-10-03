@@ -104,6 +104,11 @@ impl fmt::Display for TemplateError {
 
 /// Split a template literal into literal text and holes: `$name`, `${expr}`, `$$` for a literal `$`
 pub fn parts(source: &str) -> Result<Vec<Part>, TemplateError> {
+	parts_with(source, true)
+}
+
+/// As `parts`; without `bare_names` a `$name` is literal text (interpolated text holes need braces, decision D1)
+pub fn parts_with(source: &str, bare_names: bool) -> Result<Vec<Part>, TemplateError> {
 	let mut parts = vec![];
 	let mut literal = String::new();
 	let mut chars = source.chars().peekable();
@@ -133,7 +138,7 @@ pub fn parts(source: &str) -> Result<Vec<Part>, TemplateError> {
 				}
 				WaspParser::parse(&expression)
 			}
-			Some(c) if c.is_alphabetic() || c == '_' => {
+			Some(c) if bare_names && (c.is_alphabetic() || c == '_') => {
 				let mut name = String::new();
 				while let Some(c) = chars.peek().copied().filter(|c| c.is_alphanumeric() || *c == '_') {
 					name.push(c);

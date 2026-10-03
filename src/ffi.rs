@@ -50,22 +50,9 @@ impl FfiSignature {
     }
 }
 
-/// FFI state for running modules with native function imports
-#[derive(Default)]
-pub struct FfiState {
-    // Memory pointer for string operations
-    pub memory_ptr: Option<*const u8>,
-    pub memory_len: usize,
-}
-
-impl FfiState {
-    pub fn new() -> Self {
-        FfiState {
-            memory_ptr: None,
-            memory_len: 0,
-        }
-    }
-}
+/// FFI functions run in the program's one state, with the host functions and WASI
+#[cfg(feature = "native")]
+pub use crate::host::HostState as FfiState;
 
 // ============================================================================
 // C Header Parsing for Dynamic FFI Signature Discovery
@@ -367,7 +354,10 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// libm functions linked under the import module "m"
+/// libm functions linked under the import module "m".
+/// Deliberately hand-linked FFI examples (user decision 2026-10-03, kept as marked examples): the explicit form of what
+/// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
+/// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
 const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 
@@ -506,6 +496,9 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
             results: vec![ValType::I32],
         },
     );
+    for (name, params, results) in crate::host::host_word_signatures() {
+        sigs.insert(name.to_string(), FfiSignature::new(name, crate::host::HOST_LIBRARY, params, results));
+    }
 
     sigs
 }
@@ -557,6 +550,44 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 /// Link FFI functions into a wasmtime linker
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
+    link_libm(linker, engine, &libm_header_signatures())?;
+    link_libc_functions(linker, engine)
+}
+
+/// The import module of libm
+const LIBM: &str = "m";
+
+/// Where the libm functions of a run come from
+#[derive(Debug, PartialEq)]
+pub enum LibmSource {
+    /// that many functions declared by the system headers
+    Headers(usize),
+    /// the hand-linked LIBM_UNARY/LIBM_BINARY
+    Table,
+}
+
+/// The libm functions the system headers declare (none from glibc, which declares them through macros)
+#[cfg(feature = "native")]
+pub fn libm_header_signatures() -> Vec<FfiHeaderSignature> {
+    crate::ffi_parser::find_library_headers(LIBM).iter().flat_map(|header| parse_header_file(header, LIBM)).collect()
+}
+
+/// libm from its headers first; the hand-linked table only when they declare nothing for "m" (user decision 2026-10-03)
+#[cfg(feature = "native")]
+pub fn link_libm(linker: &mut Linker<FfiState>, engine: &Engine, header_signatures: &[FfiHeaderSignature]) -> Result<LibmSource> {
+    let linked = match get_or_load_library(LIBM) {
+        Some(library) => header_signatures.iter().filter(|signature| link_single_function(linker, engine, LIBM, &library, signature).is_ok()).count(),
+        None => 0,
+    };
+    if linked > 0 {
+        return Ok(LibmSource::Headers(linked));
+    }
+    link_libm_table(linker, engine)?;
+    Ok(LibmSource::Table)
+}
+
+#[cfg(feature = "native")]
+fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
     use wasmtime::ValType;
 
     for (name, function) in LIBM_UNARY {
@@ -573,6 +604,13 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
             Ok(())
         })?;
     }
+    Ok(())
+}
+
+/// The hand-linked libc functions under the import module "c"
+#[cfg(feature = "native")]
+fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
+    use wasmtime::ValType;
 
     // libc: abs(i32) -> i32
     let abs_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
@@ -1186,7 +1224,7 @@ pub fn link_module_libraries(
     for import in module.imports() {
         let module_name = import.module();
         // Skip built-in libraries that are already linked
-        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1") {
+        if !matches!(module_name, "m" | "c" | "libm" | "libc" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY) {
             libs_to_link.insert(module_name.to_string());
         }
     }

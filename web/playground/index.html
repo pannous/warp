@@ -24,18 +24,18 @@
 	<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
 	<label><input id="auto" type="checkbox" checked> run while typing</label>
 	<button id="download" title="the WebAssembly module of the last run">⤓ wasm</button>
+	<a id="build" class="build"></a>
 	<span id="status" class="status">loading the compiler…</span>
 </nav>
 <main>
 	<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
 	<section class="output-pane">
-		<div id="asks" class="asks" hidden></div>
 		<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
 		<pre id="printed" class="printed" hidden></pre>
 		<ul id="diagnostics" class="diagnostics"></ul>
-		<details id="answered" class="answered" hidden>
-			<summary>your answers</summary>
-			<ul id="answers"></ul>
+		<details id="silenced" class="silenced" hidden>
+			<summary>silenced warnings</summary>
+			<ul id="acknowledged"></ul>
 		</details>
 	</section>
 </main>
