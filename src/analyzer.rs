@@ -14,6 +14,8 @@ use std::collections::{HashMap, HashSet};
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
+/// The error for a user function named like a type word; `{name}` is the word
+const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
 const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
 const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
 
@@ -1277,13 +1279,36 @@ fn common_type_word(words: &[String]) -> Option<String> {
 
 /// Semantic checks run before emission; the first violation comes back as an error value
 pub fn diagnose(program: &Node) -> Option<Node> {
-	check_parameter_annotations(program)
+	check_type_word_functions(program)
+		.or_else(|| check_parameter_annotations(program))
 		.or_else(|| check_declared_types(program, &mut HashMap::new()))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.map(Diagnostic::into_error)
+}
+
+/// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
+fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, program);
+	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(|name| type_word_kind(name).is_some()).collect();
+	clashes.sort();
+	let name = clashes.first()?;
+	let mut definition = None;
+	program.visit(&mut |node| {
+		if let (None, Node::Key(left, Op::Define | Op::Assign, _)) = (definition, node) {
+			let head = match left.drop_meta() {
+				Node::List(items, _, _) => items.first().map(Node::drop_meta),
+				other => Some(other),
+			};
+			if matches!(head, Some(Node::Symbol(word)) if word == *name) {
+				definition = Some(node);
+			}
+		}
+	});
+	Some(Diagnostic::at(definition.unwrap_or(program), TYPE_WORD_FUNCTION_CLASH.replace("{name}", name)))
 }
 
 /// Warnings that do not stop compilation: well-defined code that likely does not mean what it says
