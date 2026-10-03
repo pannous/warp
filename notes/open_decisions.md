@@ -9,13 +9,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   Options: Keep the type error with the repeat hint / Repeat with a hint / Ask (fallback Error).
   Assumed: type error naming `(2 times [greeting]).join("")`. Asked by warp-35 (web-playground);
   touches src/wasm_emitter/list_ops.rs emit_arithmetic_type_error, tests/test_print_type_error.rs.
-- P2 tuple returns: `return a, b` with destructuring `x, y = f()`, compiled to wasm multi-value (no list allocated)?
-  Options: Yes, Python-style syntax / Not now. Assumed: no new syntax; multi-value stays internal (big-int divmod).
-  Asked by warp-d7 and warp-5e (multi-value, merged 07beae19); notes/multi_value.md.
-- P3 closures next step: a typed Int->Int fast path (today every closure call boxes through Nodes)?
-  Options: Yes, as a follow-up branch / Not now. Assumed: nothing built yet. Asked by warp-5e (closures, merged).
 - P4 typed lists next step: Float arrays and whole-op Sum/Map ListOps (the GPU seam)?
   Options: Yes, continue / Not now. Assumed: nothing built yet. Asked by warp-5e (typed-lists, merged).
+  User answered "?" in warp-5e's session (2026-10-03): unclear, ask again with one line of context.
 - P5 D9 fallback: when nobody can answer the `1+2 squared` Ask (tests, CI), error or take `1+(2 squared)`?
   Options: Error / Warning taking `1+(2 squared)`. Assumed: Error. Asked by the D13/D9 implementer (#40).
 - P6 D1 detail: inside `sql`/`sh` templates, does `$x` stay a hole (bound parameter) rather than text interpolation?
@@ -73,6 +69,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
+  `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
+- Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
 - D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
