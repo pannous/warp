@@ -68,6 +68,14 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
+- `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
+  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+- text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
+  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
+  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
