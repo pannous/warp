@@ -48,6 +48,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   `word [..]` passes the list as an argument, only glued `a[..]` indexes.
 - #22 loops: "N once, keep rest". `N times {…}` evaluates N once; trailing `i++ while c` stays a plain while (with a
   hint); `a = 2 if c` keeps guarding the whole assignment.
+- #21 type(): "x=π stays real" (bug: `x=π; type(x)` must be real like `type(π)`). Not chosen: `2.0` stays int
+  (current), no `rat` alias.
+- #27: "Accept Unicode + `be`". `≤ ≥ ≠ × ÷ ¬ √` are accepted alternatives normalized to ASCII; `be` is implemented
+  as `:=` (wiki/be.md).
+- #26 library: "Extend all". Unicode upper/lower, sort any comparable values, reverse works on text.
+- #23: "Warn on `it` shadowing". A loop's `it` still shadows a function's `it`, with a warning.
+  #31 (switch message shows value; `min`/`d` units): neither option chosen, stays open.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -152,17 +159,17 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 ## New questions 2026-09-30 (supervisor warp-e0), none blocking
 Wiki survey: the 16 questions D1–D16 are in notes/wiki_features.md section 2 (D6 `|`/`&` as pipe, D7 lazy `:=` and
 D16 overflow contradict Decided rules). Found while implementing:
-21. `type(2.0)` is `int` (a decimal with zero fraction normalizes to an integer), `type(1.5f)` float, `type(π)` real,
+21. DECIDED 2026-10-03 (see the top). `type(2.0)` is `int` (a decimal with zero fraction normalizes to an integer), `type(1.5f)` float, `type(π)` real,
     but `x=π; type(x)` still float. OK? Add `rat` as an abbreviation of `rational`?
 22. DECIDED 2026-10-03 (see the top). `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
     (`i=5; i++ while i<3` never runs); `a = 2 if c` guards the whole assignment. Keep?
-23. `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
+23. DECIDED 2026-10-03 (warn). `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
 24. `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
 25. DECIDED 2026-10-03 (see the top: a space never indexes). `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
     Should a known prefix word followed by a space make `[…]` its argument?
-26. Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
+26. DECIDED 2026-10-03 (extend all). Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
     Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
-27. Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
+27. DECIDED 2026-10-03 (Unicode + be). Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
