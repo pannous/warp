@@ -1,8 +1,10 @@
 #![allow(mixed_script_confusables)]
-//! One test crate for all tests: every tests/*.rs file is a module, so cargo links one test binary instead of one per file.
+//! One test crate for all tests: every topic folder tests/<topic>/ is a module (its mod.rs lists the files), so cargo
+//! links one test binary instead of one per file. Layout: notes/tests_layout.md.
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
+mod web;
 mod node_values_test;
 mod probe_def_syntax;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -217,8 +219,6 @@ mod test_multi_value;
 mod test_tuple_returns;
 mod test_undefined_calls;
 mod test_undefined_variable;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_uniscript;
 mod test_units_arithmetic;
 mod test_units_compare;
 mod test_units_followup;
@@ -237,8 +237,6 @@ mod test_wasm;
 mod test_wasp_format;
 mod test_wasp_position;
 mod test_wast;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_web;
 mod test_welcoming_ask;
 mod test_welcoming_break;
 mod test_welcoming_count_argument;
@@ -257,7 +255,6 @@ mod test_welcoming_sugar;
 mod test_while_paren_condition;
 mod test_while_value;
 mod test_wasm_names_order;
-mod test_web_playground;
 mod test_wit_types;
 mod test_wit;
 mod test_xml;

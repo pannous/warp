@@ -75,7 +75,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
   `--offline` builds from the registry cache.
 - Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
-  tests/test_web.rs go, keeping the branch that runs today (approved test edit).
+  tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
   don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
