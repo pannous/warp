@@ -253,6 +253,8 @@ pub struct WaspParser {
 	user_operators: Vec<UserOperator>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
+	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
+	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -350,6 +352,7 @@ impl WaspParser {
 		WaspParser {
 			user_operators,
 			declared_types,
+			phrase_definitions: Default::default(),
 			input,
 			chars,
 			pos: 0,
@@ -1169,15 +1172,37 @@ impl WaspParser {
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
 		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
-		let typed_slots = crate::type_name_matching::parameter_slots(&words, crate::type_name_matching::uses_it(&body));
+		let declared_types = &self.declared_types;
+		let is_known_type = |word: &str| {
+			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
+		};
+		let parameters = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(parameters) => parameters,
+			Err(message) => return Some(error(&message)),
+		};
+		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
+			return Some(clash);
+		}
 		let head = if parameters.is_empty() {
 			Symbol(name)
 		} else {
 			self.functions_with_parameters.insert(name.clone());
-			let parameters = typed_slots.unwrap_or_else(|| parameters.into_iter().map(Symbol).collect());
+			self.phrase_definitions.insert(name.clone(), parameters.clone());
 			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
+	fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
+		let earlier = self.phrase_definitions.get(name).filter(|earlier| earlier.len() == parameters.len())?;
+		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
+		let differing: Vec<(&Node, &Node)> = earlier.iter().zip(parameters).filter(|(before, now)| before != now).collect();
+		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
+			return None;
+		}
+		let classes: Vec<String> = differing.iter().flat_map(|(before, now)| [before.name(), now.name()]).map(|noun| format!("class {noun}")).collect();
+		Some(error(&format!("{name} is defined twice; declare {} to dispatch on them", classes.join(" and "))))
 	}
 
 	/// Move back to the end of the last thing before the whitespace run behind the cursor

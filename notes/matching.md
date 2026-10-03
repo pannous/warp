@@ -2,7 +2,9 @@
 
 User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun can name a type or a parameter
 (wiki/matching.md, wiki/type.md, wiki/signature.md). This note sets the rule for the open details: unknown words
-(`photo`) and multi-word names. Status: proposal sent to warp-43; only the known-type-word cases are implemented.
+(`photo`) and multi-word names. Status: approved by warp-43 (2026-10-03) as an assumption for the user to review;
+implemented in src/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in wasp_parser.rs and by the spaced
+`f T x = …` form), tests/test_type_name_matching.rs.
 
 ## Forms covered
 
@@ -22,8 +24,10 @@ User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun
 
 1. A definition head splits into slots at prepositions (`to of from with in into at by for on`, never the first word,
    which is the verb or name); in the plain form `f T x = …` each word run without prepositions is one slot.
-2. A slot is `[article] words…`. An article (`a an the`) counts only when another word follows it in the same slot,
-   so `a` in `to add a to b` is a name.
+2. A slot is `[article] words…`. An article (`a an the`) counts only when another word follows it in the same slot
+   and that word is a known type or the body never uses the article as a name: `a` in `to add a to b` and
+   `to add a b: a+b` is a name, in `to square a number: a*a` an article (so `a` is undefined there).
+   After a type word an article is a name when a preposition or the end follows: `number a to number b`.
 3. The last word of a slot names the parameter. The words before it are its type, written type-first as in
    `number a`. Without a written type, the name itself is matched as a type (matching by type name):
    - a known type (builtin `int number text …`, a plural `numbers`, a declared `class`/`type`/`struct`) types it;
@@ -36,5 +40,11 @@ User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun
    another module's names unless imported. Otherwise the head noun (last word) decides: `phone number` is typed
    number, `bar name` is typed name. A multi-word parameter is referred to in the body by its head noun when that is
    unique in the signature (`first name`, `last name` both need the full phrase, which needs multi-word identifiers:
-   out of scope, an error "use one-word parameter names here" until then).
+   out of scope, an error "use one-word parameter names here" until then). Not implemented yet: matching declared
+   multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
+6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
+
+Limits found: object values as function arguments do not work yet (`measure(photo{width:3})` with `p.width` inside:
+"undefined function: width"), so a class-typed parameter is checked only by its annotation; arguments are not
+type-checked against it.

@@ -28,3 +28,37 @@ fn test_to_phrase_with_a_type_word() {
 	is!("to cube a number: number*number*number; cube 2", 8);
 	is!("to halve number x: x/2; halve 3", eval("1.5"));
 }
+
+// The general rule (notes/matching.md), approved by warp-43 as an assumption for the user to review
+
+#[test]
+fn test_prepositions_separate_parameter_slots() {
+	is!("to add number a to number b: a+b; add(1, 2)", 3);
+	is!("to add a to b: a+b; add(1, 2)", 3);
+	is!("to add a b: a+b; add 2 3", 5);
+}
+
+#[test]
+fn test_an_unknown_noun_is_an_untyped_name() {
+	is!("to measure a parcel: parcel+1; measure 2", 3);
+}
+
+#[test]
+fn test_a_declared_class_types_its_noun() {
+	let definition = warp::wasp_parser::parse("class photo{width:int}; to keep a photo: photo").serialize();
+	assert!(definition.contains("keep photo:photo"), "{definition}");
+	let untyped = warp::wasp_parser::parse("to keep a photo: photo").serialize();
+	assert!(!untyped.contains("photo:photo"), "{untyped}");
+}
+
+#[test]
+fn test_phrases_differing_only_by_unknown_nouns_are_a_redefinition() {
+	crate::common::fails_with("to kill a person: 1; to kill a dog: 2; kill 0", "kill is defined twice; declare class person and class dog");
+	is!("class person{name}; class dog{name}; to kill a person: 1; to kill a dog: 2; 3", 3);
+}
+
+#[test]
+fn test_a_multi_word_noun_is_named_and_typed_by_its_head() {
+	is!("to call a phone number: number+1; call 41", 42);
+	crate::common::fails_with("to join a first name with a last name: name; 1", "use one-word parameter names");
+}
