@@ -64,8 +64,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `==`/`!=` by value: structured values, and any text (`peek() == " "` of a function returning text)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right))
+		let is_text = |node: &Node| self.get_type(node) == Kind::Text;
+		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || is_text(left) || is_text(right))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value
