@@ -57,3 +57,4 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - control/ (tests-tidy-control): pure move
 - scope/ (tests-tidy-scope): pure move
 - modules/ (tests-tidy-modules): pure move
+- ffi/ (tests-tidy-ffi): pure move
