@@ -76,6 +76,7 @@ PASSED:
   ✓ a_runtime_value_as_string
   ✓ a_runtime_warning_is_reported_and_yields_nothing
   ✓ a_space_before_a_bracket_makes_a_list
+  ✓ a_spaced_double_slash_is_always_a_comment_and_says_so_once
   ✓ a_superscript_plus_adds_to_the_exponent_chain
   ✓ a_switch_can_be_bound
   ✓ a_switch_chooses_a_case_by_the_same_equality
@@ -775,9 +776,11 @@ PASSED:
   ✓ test_leading_dot_literal
   ✓ test_leading_zero_is_not_octal
   ✓ test_length_prefix_under_bracket_style
+  ✓ test_levenshtein
   ✓ test_levenshtein_idiomatic
   ✓ test_library_optimization
   ✓ test_library_words_refuse_what_they_cannot_do
+  ✓ test_life
   ✓ test_life_idiomatic
   ✓ test_line_comments
   ✓ test_list_of_lists_has_no_plural_spelling
@@ -993,6 +996,7 @@ PASSED:
   ✓ test_property_word_counts_text_characters
   ✓ test_pure_rejects_divergence
   ✓ test_quadratic
+  ✓ test_queens
   ✓ test_queens_idiomatic
   ✓ test_quote_hint_position_is_the_opening_quote
   ✓ test_quoted_and_unquoted_keys_are_the_same_key
@@ -1049,6 +1053,7 @@ PASSED:
   ✓ test_shift_right_floors_by_a_power_of_two
   ✓ test_shifts_of_big_exact_ints
   ✓ test_shrinking_recursion_is_total
+  ✓ test_sieve
   ✓ test_sieve_idiomatic
   ✓ test_simple_index_assign
   ✓ test_simple_separators
@@ -1067,6 +1072,7 @@ PASSED:
   ✓ test_smart_return_harder
   ✓ test_smart_types
   ✓ test_sort
+  ✓ test_sorting
   ✓ test_sorting_idiomatic
   ✓ test_spaced_known_unit_multiplies
   ✓ test_spaced_number_and_symbol_is_still_a_list
@@ -1345,4 +1351,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-68 ignored, 1340 passed, 0 failed, 1340 total tested
+68 ignored, 1346 passed, 0 failed, 1346 total tested
