@@ -55,6 +55,7 @@ mod test_empty_block_binding;
 mod test_empty_block;
 mod test_empty_list_argument;
 mod test_empty_list_count;
+mod test_eval_state;
 mod test_export_declaration;
 mod test_ffi_import_group;
 mod test_ffi_warning_once;

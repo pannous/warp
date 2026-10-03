@@ -3580,7 +3580,7 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
-	crate::diagnostic::take_assumptions(); // only the guesses made for this program explain its errors
+	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
 	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
@@ -3636,6 +3636,7 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 /// Evaluate foreign data with an empty capability set: a program that would call any host, WASI or FFI
 /// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
 pub fn eval_untrusted(code: &str) -> Node {
+	crate::diagnostic::begin_program();
 	let program = WaspParser::parse(code);
 	match crate::effects::EffectReport::of(&program).externals.keys().next() {
 		Some(external) => crate::node::error(&format!("untrusted code has no capabilities, refusing to call {external}")),
@@ -3730,6 +3731,7 @@ fn write_debug_module(bytes: &[u8]) {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
+	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&lower_for_emission(program)?))
 }
 
