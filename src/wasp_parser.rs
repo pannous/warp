@@ -3097,7 +3097,7 @@ fn is_minus_one(end: &Node) -> bool {
 	}
 }
 
-fn mentions(node: &Node, name: &str) -> bool {
+pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol == name,
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
