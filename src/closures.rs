@@ -90,6 +90,14 @@ pub fn closure_call_arities(program: &Node) -> Vec<usize> {
 	found
 }
 
+/// A value that cannot be a function where one is needed: `needer needs a function[ for parameter p], got 5 (an Int); fix: …`
+pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix: &str) -> Node {
+	let kind = crate::analyzer::infer_type(value, &crate::analyzer::Scope::new());
+	let parameter = parameter.map(|name| format!(" for parameter {name}")).unwrap_or_default();
+	let message = format!("{needer} needs a function{parameter}, got {} ({}); fix: {fix}", value.serialize(), crate::analyzer::kind_with_article(kind));
+	crate::diagnostic::Diagnostic::at(value, message).into_error()
+}
+
 /// A function value that a call cannot be specialised for: a variable, a lambda, a call that may return a function
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {

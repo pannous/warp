@@ -1,12 +1,12 @@
 //! First-class functions, resolved at compile time. A function that takes a function as a parameter (`apply(f, x) := f(x)`) is
 //! specialised for every function it is called with: `apply(double, 3)` calls `apply__double(3)`, whose body has `double` where
 //! the parameter was. The functions passed are named functions, `&name`, aliases (`g = double`), operators (`+`) and lambdas that
-//! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable stays the
-//! error `functions are not first-class values yet`: that needs a funcref table and closures.
+//! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable is passed
+//! as a closure to a generic version of the function (closures.rs).
 
 use crate::closures::may_be_function_value;
 use crate::diagnostic::Diagnostic;
-use crate::lambdas::{lambda_definition, NOT_FIRST_CLASS};
+use crate::lambdas::lambda_definition;
 use crate::library_words::{collect_assigned_names, substitute};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -228,7 +228,9 @@ impl Specialising {
 					self.make_generic(name);
 					return None;
 				}
-				return Some(Diagnostic::at(head, NOT_FIRST_CLASS).into_error());
+				let param = self.definitions[name].param_names().get(*index).cloned().unwrap_or_default();
+				let given = argument.cloned().unwrap_or(Node::Empty);
+				return Some(crate::closures::needs_a_function(name, Some(&param), &given, "a lambda like x => …"));
 			};
 			targets.push(target);
 		}
