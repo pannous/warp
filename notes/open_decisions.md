@@ -23,7 +23,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
   `xs + [4]` concatenates.
-- D12 `a=1 2 3` / `a=1,2,3`: user "idk", stays parked.
+- D12 `a=1 2 3` / `a=1,2,3`: first "idk", then "Ask on bare forms": an unbracketed `a=1,2,3` / `a=1 2 3` asks list or
+  separate statements, fallback Error; bracketed lists never ask.
+- #39 chained comparison: "== never chains". `a<b<c` chains as before, but `1<2==2` is `(1<2)==2` (wiki/Footguns.md
+  "Chained comparison" and test_chained_comparison's `1<2==2` line need updating; ask before editing that test).
 - D1 interpolation: "Both". Double-quoted text accepts Swift `"\(expr)"` and `"${expr}"` (also `$x`); the normalizer
   picks one canonical form. Single quotes stay literal. Open detail: `$` holes in sql/sh templates must keep working.
 - D6 pipe: "The pipe operator is just an operator that behaves differently with different types unified". So `|` is one
@@ -208,6 +211,6 @@ D16 overflow contradict Decided rules). Found while implementing:
     uniform (boxed) signature. Enough for now?
 38. DECIDED 2026-10-03 (see the top: truthy). Is a list containing only ø falsy (`not ({[ø]})` → true, test_wasm_logic_on_objects)? Today a list is truthy
     when it has a first element.
-39. Chained comparison and `==` (user's note from a dropped 2026-09-27 stash on wiki/Footguns.md: "Intended: mathematical
+39. DECIDED 2026-10-03 (== never chains). Chained comparison and `==` (user's note from a dropped 2026-09-27 stash on wiki/Footguns.md: "Intended: mathematical
     chaining as in Python, `3>2>1` → `true`. BUT NOT WITH == etc !!"). Today all comparisons share one level, so
     `1<2==2` chains (`1<2 and 2==2` → true). Should `==`/`!=` stop chaining with `<`/`>`?
