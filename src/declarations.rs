@@ -8,13 +8,22 @@ const ENUM_WORD: &str = "enum";
 const FIRST_CASE_INDEX: i64 = 0;
 
 pub fn lower(node: Node) -> Node {
+	lower_lists(node, enum_object)
+}
+
+/// C definitions, before any pass reads `real f(…)` as a conversion of a call
+pub fn lower_c_functions(node: Node) -> Node {
+	lower_lists(node, c_function)
+}
+
+fn lower_lists(node: Node, lowering: fn(&[Node]) -> Option<Node>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(lower).collect();
-			enum_object(&items).or_else(|| c_function(&items)).unwrap_or(Node::List(items, bracket, separator))
+			let items: Vec<Node> = items.into_iter().map(|item| lower_lists(item, lowering)).collect();
+			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_lists(*left, lowering)), op, Box::new(lower_lists(*right, lowering))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_lists(*node, lowering)), data },
 		other => other,
 	}
 }

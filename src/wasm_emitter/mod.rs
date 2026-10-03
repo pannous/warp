@@ -2821,7 +2821,9 @@ impl WasmGcEmitter {
 					self.emit_call(func, "get_int_value");
 				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
-					if local.kind.is_ref() {
+					if local.kind == Kind::Codepoint {
+						self.emit_codepoint_of_node(func);
+					} else if local.kind.is_ref() {
 						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
 						self.emit_call(func, "get_int_value");
 					} else if local.kind.is_float() {
@@ -3694,7 +3696,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(node))))))));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(crate::declarations::lower_c_functions(node)))))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
