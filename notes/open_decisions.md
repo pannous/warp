@@ -18,6 +18,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
+  that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
+- D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
+  `xs + [4]` concatenates.
+- D12 `a=1 2 3` / `a=1,2,3`: user "idk", stays parked.
+
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
 - Text + number concatenates, the number in its text form (`"F:" + 13` → `"F:13"`, `"5"+3` → `"53"`, JS/Kotlin), with a
   hint `str(13)`. Reversed: the 2026-09 "no implicit conversion" rule (DESIGN.md "Dangerous implicitness", wiki/Footguns.md
@@ -144,7 +151,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     Units: no `min`/`d` (clash with the function `min`), `s`/`h` are now unit words. OK?
 32. Stash entries left by workers (the hook blocks `git stash drop`): `stash@{0}` "On text-concat: concat-wip-tag"
     (83a40987, content is merged) plus the older autostash entries. Drop them?
-33. A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
+33. DECIDED 2026-10-03 (see the top: by value + educate). A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
     closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
 34. `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
