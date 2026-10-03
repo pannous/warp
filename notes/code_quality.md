@@ -31,7 +31,7 @@ test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the fi
 tests/test_wasm.rs and tests/test_web.rs are gone (the default-build branch kept); `--all-features` is now `native` +
 `optimizer` + `ffi`, the same program as plain `cargo test` plus the optimizer and FFI tests.
 
-smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/test_angle.rs) and
+smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/numbers/test_angle.rs) and
 tests/test_asts.rs, the only user of the `syn` dev-dependency, which is gone too.
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
@@ -261,7 +261,7 @@ Whole files (never referenced, or only by a test of themselves):
 - `src/ast.rs` (103): 7 structs never constructed, `walk` unused.
 - `src/wasm_emitter/node_emitter.rs` (100): `EmitContext`, `NodeEmitter` never used.
 - `src/extensions/_mod.rs` (8): not a module (extensions.rs is).
-- `src/smarty.rs` (221): its own header says "OBSOLETE"; used only by `tests/test_angle.rs` (decision: delete with test?).
+- `src/smarty.rs` (221): its own header says "OBSOLETE"; used only by `tests/numbers/test_angle.rs` (decision: delete with test?).
 - `src/bin/test_op.rs` (58): a debugging printer, built as a second binary.
 - `tests/test_asts.rs`: tests the `syn` crate, the only reason for the heavy `syn` v3 "full" dev-dependency.
 - `tests/probes/*.rs` (2 files): not in tests/main.rs, never compiled.
@@ -395,7 +395,7 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 
 1. May the stale C++ feature flags go, including their `#[cfg]` branches in tests/test_wasm.rs and tests/web/test_web.rs
    (keeping the branch that runs today)?
-2. Delete `smarty.rs` with its asserts in tests/test_angle.rs, and `tests/test_asts.rs` (a test of `syn`)?
+2. Delete `smarty.rs` with its asserts in tests/numbers/test_angle.rs, and `tests/test_asts.rs` (a test of `syn`)?
 3. Regroup tests/ into topic subdirectories (pure moves), and move `probe_*.rs` out of the suite?
 4. Keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
 5. Which GC reading API stays: `GcObject` or the `gc_traits` wrappers?

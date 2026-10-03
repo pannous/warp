@@ -35,6 +35,12 @@ pub const LIKE_WORD: &str = "like";
 const NOT_LIKE_MESSAGE: &str = "GIVEN is not a DECLARED";
 const NOT_LIKE_FIX: &str = "declare `GIVEN like DECLARED` to use it as one (judged by the fields it is used with)";
 const LIKE_OF_UNDECLARED: &str = "NAME is not a declared type: `like` relates two classes";
+/// Data given for a declared type (an ad hoc name `pic{…}` or a map): its fields are compared with the declared ones
+/// (DATA, FIELDS, THEM, DECLARED)
+const MISSING_FIELDS_WARNING: &str = "DATA lacks FIELDS of DECLARED";
+const MISSING_FIELDS_FIX: &str = "give FIELDS, or declare THEM optional (x?) or with a default in DECLARED";
+const EXTRA_FIELDS_WARNING: &str = "DATA has FIELDS, which DECLARED does not declare";
+const EXTRA_FIELDS_FIX: &str = "drop FIELDS, or declare THEM in DECLARED";
 pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
@@ -192,6 +198,39 @@ fn like_declaration(node: &Node) -> Option<Likeness> {
 fn undeclared_likeness(likenesses: &[Likeness], registry: &TypeRegistry) -> Option<Node> {
 	let undeclared = likenesses.iter().flat_map(|likeness| [&likeness.kind, &likeness.like]).find(|name| registry.get_by_name(name).is_none())?;
 	Some(crate::node::error(&LIKE_OF_UNDECLARED.replace("NAME", undeclared)))
+}
+
+/// Written data given for a declared type, without its ad hoc name: `pic{width:3}` (no `class pic`) and `{width:3}` are the
+/// data `{width:3}`, the name is only a label (user, 2026-10-03)
+fn written_data(value: &Node, registry: &TypeRegistry) -> Option<Node> {
+	if let Node::Key(label, Op::Colon, data) = value.drop_meta() {
+		if matches!(label.drop_meta(), Node::Symbol(name) if registry.get_by_name(name).is_none()) && matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+			return Some(data.as_ref().clone());
+		}
+	}
+	crate::library_words::object_entries(value).map(|_| value.clone())
+}
+
+/// The warnings for data whose fields differ from the declared type's: a required field it lacks, a field it has extra
+fn field_warnings(value: &Node, data: &Node, declared: &str, registry: &TypeRegistry) -> Vec<Diagnostic> {
+	let Some(type_def) = registry.get_by_name(declared) else { return vec![] };
+	let entries = crate::library_words::object_entries(data).unwrap_or_default();
+	let given: Vec<String> = entries.into_iter().map(|(name, _)| name).filter(|name| !name.starts_with(crate::node::ATTRIBUTE_MARK)).collect();
+	let missing: Vec<String> = type_def.fields.iter().filter(|field| registry.is_required(type_def, field) && !given.contains(&field.name)).map(|field| field.name.clone()).collect();
+	let extra: Vec<String> = given.iter().filter(|name| !type_def.fields.iter().any(|field| field.name == **name)).cloned().collect();
+	let warning = |fields: &[String], message: &str, fix: &str| {
+		let (field_word, pronoun) = if fields.len() == 1 { ("field", "it") } else { ("fields", "them") };
+		let fill = |template: &str| template.replace("DATA", &value.serialize()).replace("FIELDS", &format!("{field_word} {}", fields.join(", "))).replace("THEM", pronoun).replace("DECLARED", declared);
+		(!fields.is_empty()).then(|| Diagnostic::at(value, fill(message)).fix(fill(fix)))
+	};
+	[warning(&missing, MISSING_FIELDS_WARNING, MISSING_FIELDS_FIX), warning(&extra, EXTRA_FIELDS_WARNING, EXTRA_FIELDS_FIX)].into_iter().flatten().collect()
+}
+
+/// `p:photo = …`: the variable and its declared type, when that is a declared type
+fn typed_target(target: &Node, registry: &TypeRegistry) -> Option<(String, String)> {
+	let Node::Key(name, Op::Colon, type_node) = target.drop_meta() else { return None };
+	let (Node::Symbol(name), Node::Symbol(type_name)) = (name.drop_meta(), type_node.drop_meta()) else { return None };
+	registry.get_by_name(type_name).map(|_| (name.clone(), type_name.clone()))
 }
 
 /// `image is not a photo`, with the fix `declare image like photo`
@@ -706,6 +745,12 @@ impl Dispatch {
 			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => Node::Key(head, op, Box::new(self.expand(*body))),
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.expand(*left), self.expand(*right));
+				if let (Op::Assign, Some((name, declared))) = (&op, typed_target(&left, &self.types.registry)) {
+					return match self.admit(&right, &declared, &format!("{name}:{declared} needs {}", crate::analyzer::with_article(&declared))) {
+						Ok(right) => Node::Key(Box::new(left), op, Box::new(right)),
+						Err(error) => self.fail(error).expect("fail gives the error"),
+					};
+				}
 				self.operator(&left, &op, &right).unwrap_or(Node::Key(Box::new(left), op, Box::new(right)))
 			}
 			Node::List(items, bracket, separator) => {
@@ -724,7 +769,7 @@ impl Dispatch {
 				return Some(error);
 			}
 			let comparison = witness_call(COMPARE, &type_name, vec![left.clone(), right.clone()]);
-			return Some(Node::Key(Box::new(comparison), op.clone(), Box::new(Node::int(0))));
+			return Some(Node::Key(Box::new(comparison), *op, Box::new(Node::int(0))));
 		}
 		if matches!(op, Op::Eq | Op::Ne) && self.has_witness(EQUALS, &type_name) {
 			let equal = witness_call(EQUALS, &type_name, vec![left.clone(), right.clone()]);
@@ -750,32 +795,46 @@ impl Dispatch {
 				_ => {}
 			}
 		}
-		if let Some(error) = self.refused_argument(items, bracket, separator) {
-			return Some(error);
+		let admitted = match self.admitted_arguments(items, bracket, separator) {
+			Ok(admitted) => admitted,
+			Err(error) => return self.fail(error),
+		};
+		match admitted {
+			Some(items) => Some(self.operation_call(&items, bracket, separator).unwrap_or(Node::List(items, bracket.clone(), separator.clone()))),
+			None => self.operation_call(items, bracket, separator),
 		}
-		self.operation_call(items, bracket, separator)
 	}
 
-	/// `keep(3)`, `keep page{…}` for `keep(p:photo)`: an argument known at compile time not to be an instance of the declared
-	/// type of its parameter is an error, which teaches `page like photo` for a declared type; an argument of unknown type,
-	/// or of a type declared like the parameter's, is left to its uses (a missing field fails loudly)
-	fn refused_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let name = called_name(items, bracket, separator)?;
-		let parameters = self.signatures.get(name)?;
-		let refusal = items[1..].iter().zip(parameters).find_map(|(argument, (parameter, declared))| {
-			let declared = declared.as_ref()?;
-			let needs = format!("{name} needs {} for parameter {parameter}, got {}", crate::analyzer::with_article(declared), argument.serialize());
-			match self.instance_type(argument) {
-				Some(type_name) if self.is_like(&type_name, declared) => None,
-				Some(type_name) => Some(not_like(argument, &needs, &type_name, declared)),
-				None if crate::library_words::object_entries(argument).is_some() => None, // a written map: judged by the fields its uses read
-				None => {
-					let given = crate::analyzer::kind_with_article(crate::analyzer::argument_literal_kind(argument)?);
-					Some(Diagnostic::at(argument, format!("{needs} ({given})")).into_error())
-				}
-			}
-		})?;
-		self.fail(refusal)
+	/// The value given for a place of declared type T (a parameter, a typed variable): the value to use, or the error.
+	/// An instance of T or of a type declared like T stays; an instance of another known type is an error that teaches
+	/// `like`; written data (`pic{…}` of no declared pic, `{…}`) is used without its ad hoc name, with a warning for each
+	/// field it lacks or has extra; a known non-object is an error; anything else is judged by its uses
+	fn admit(&self, value: &Node, declared: &str, needs: &str) -> Result<Node, Node> {
+		let got = format!("{needs}, got {}", value.serialize());
+		if let Some(type_name) = self.instance_type(value) {
+			return if self.is_like(&type_name, declared) { Ok(value.clone()) } else { Err(not_like(value, &got, &type_name, declared)) };
+		}
+		if let Some(data) = written_data(value, &self.types.registry) {
+			crate::diagnostic::report(&field_warnings(value, &data, declared, &self.types.registry))?;
+			return Ok(data);
+		}
+		match crate::analyzer::argument_literal_kind(value) {
+			Some(kind) => Err(Diagnostic::at(value, format!("{got} ({})", crate::analyzer::kind_with_article(kind))).into_error()),
+			None => Ok(value.clone()),
+		}
+	}
+
+	/// The arguments of a call of a function with class-typed parameters, each admitted for its parameter (`admit`):
+	/// None when every argument stays as written
+	fn admitted_arguments(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Result<Option<Vec<Node>>, Node> {
+		let Some(name) = called_name(items, bracket, separator) else { return Ok(None) };
+		let Some(parameters) = self.signatures.get(name) else { return Ok(None) };
+		let mut admitted = items.to_vec();
+		for (argument, (parameter, declared)) in admitted[1..].iter_mut().zip(parameters) {
+			let Some(declared) = declared else { continue };
+			*argument = self.admit(argument, declared, &format!("{name} needs {} for parameter {parameter}", crate::analyzer::with_article(declared)))?;
+		}
+		Ok((admitted != items).then_some(admitted))
 	}
 
 	/// `area(s)`, `area s`, `compare(p, q)`: the witness of the type of the first argument

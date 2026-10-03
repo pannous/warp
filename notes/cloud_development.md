@@ -122,6 +122,27 @@ Reporting: the run cannot message back. The channel is the pushed branch (with a
 (`RemoteTrigger get_run_log`). GitHub "Rust CI" also starts on every claude/* push. It ran twice here (one push per
 commit), so a cloud task should push all its commits once at the end, or once per step.
 
+### Batch 2026-10-03 afternoon (cloud steward cloud-eval → Integrator)
+Ten branches from 3 cloud sessions, all green in the cloud before handoff: object-arguments, try-exits-and-naming,
+like-keyword (+ typed-variables follow-up), remove-named-else, type-word-user-function, zero-warnings (redone as
+zero-warnings-2 on current main), plus the earlier pilot branches. Credit: about $22 of $250 for all of it, roughly
+$2–4 per feature with Opus.
+Lessons:
+- **Limits**: five_hour went 82 → 100 % while 3 cloud sessions and ~4 local ones ran; the credit moved only about $1 per
+  10 min. Local sessions are the main 5-hour consumer, but BOSS suspects cloud also counts toward the WEEKLY limit.
+  Keep at most 2 cloud sessions busy when weekly is above ~70 %.
+- **Disk**: each cloud worktree's `target/` is about 5 GB. The VM's free space ran out with 4 worktrees, which killed two
+  suites mid-run. Tell sessions to keep ≤ 2 worktrees and delete `target/` of finished ones.
+- **Classifier stalls**: the cloud's auto-mode classifier once denied a read-only grep as "Irreversible Local
+  Destruction", and the session stopped and asked. Resume with `claude -p "continue …" --cloud <id>`.
+- **Old branches don't merge**: a branch based on a main that is 25 merges old conflicts (zero-warnings-0h6ky3). Redo it
+  on current main by intent, using the old commit messages as the spec, rather than rebasing blindly.
+- **Decisions arrive mid-task**: send them right away as a `claude -p` message. The sessions adapt (D1 switched from
+  shadow + warning to clash error). A decision that reverses already-merged work needs a new branch from main (M4).
+- **The user may archive sessions** at any time, and archived sessions reject messages. Check ListAgents (cloud rows) or
+  a `claude -p` ping before assigning.
+- **Integrator renames**: it was warp-6c, later warp-7f. Find it via tmux `warp-warp-integrator` / ListAgents.
+
 ## 4. Recommended workflow (supervisor → cloud)
 
 1. **Pick cloud-suitable tasks**: pure Rust in src/ and tests/ that needs no Mac and no network (parser, analyzer,

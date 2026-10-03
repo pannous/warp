@@ -2,8 +2,7 @@
 //! Each case is the Python program's result; `#[ignore = "next"]` marks what does not work yet.
 
 use crate::common::fails_with;
-use warp::wasm_emitter::eval;
-use warp::{is, Node};
+use warp::is;
 
 #[test]
 fn probe_unpack_tuple_values() {

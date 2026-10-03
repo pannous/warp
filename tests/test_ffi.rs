@@ -605,6 +605,7 @@ fn test_ffi_abs_from_c() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
 fn test_ffi_fabs_from_m() {
 	// fabs from libm takes f64 and returns f64
 	is!("import fabs from 'm'\nfabs(-3.14)", 3.14);

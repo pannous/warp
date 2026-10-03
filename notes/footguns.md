@@ -14,7 +14,7 @@
   `test_equality_across_kinds_is_structural`, `test_empty_values_are_falsy`, `test_unicode_normalization` (tests/probe_footguns.rs).
 - `x=1;x++;x` and `++i`: fixed, pinned by `test_increment_changes_variable`, `test_prefix_increment`.
 - Already fixed before the 2026-09-29 sweep, now in wiki/Footguns.md: `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`,
-  9d54997d; tests/test_angle.rs covers `1+square 2+3`) and list index errors: `x[3]`, `x#0`, `x[-1]` → `Error('index out of range')`
+  9d54997d; tests/numbers/test_angle.rs covers `1+square 2+3`) and list index errors: `x[3]`, `x#0`, `x[-1]` → `Error('index out of range')`
   (`test_index_out_of_bounds_is_an_error`, `test_negative_index_is_an_error`).
 - `'héllo'#2`: fixed, pinned by `test_character_indexing_is_unicode_safe`.
 - String mutation through aliases: fixed, pinned by `test_mutation_through_alias_is_not_visible`.
@@ -169,12 +169,12 @@
   `is!(…, true)` only works for Int 1/0 results; the time evaluator returns Int 1/0 like the rest of eval.
 
 ## Work area "number decisions" (2026-09-28)
-- Fixed/decided: Negative modulo (`%` stays truncating, pinned by tests/test_unbounded_int.rs; new infix `mod` is floored,
+- Fixed/decided: Negative modulo (`%` stays truncating, pinned by tests/numbers/test_unbounded_int.rs; new infix `mod` is floored,
   lowered in the parser to `(a % b + b) % b`); Rounding mode (`round` = half even, `round_half_even`, `round_half_up`
   in list_emitter, half up = floor(x) + (frac ≥ ½) via a scratch local holding the f64 bits); Booleans are integers
   (analyzer `check_boolean_arithmetic` in `diagnose`: arithmetic on true/false, comparisons or prefix `not` is an error with
   an `int(…)` fix-it). Validated on CI (branch claude/footguns-numbers2; no local build, crates.io blocked).
-- Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/test_node_operators.rs);
+- Left open: a distinct `Kind::Bool` (True/False are Int 1/0 at the Node boundary, pinned by tests/node/test_node_operators.rs);
   the boolean check does not follow variables; `false == 0` still true; `mod` evaluates its divisor three times;
   rounding is via f64, no half-away-from-zero; no `mod=`.
 

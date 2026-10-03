@@ -1,7 +1,7 @@
 # Multi-value results (branch multi-value, 2026-10-03)
 
 User functions return the general Node, so multi-value pays off only inside the runtime helpers, where a helper
-naturally produces two numbers. Tests: tests/test_multi_value.rs (result counts read from the name section, results of
+naturally produces two numbers. Tests: tests/functions/test_multi_value.rs (result counts read from the name section, results of
 big division and exact division, an optimized module through wasm-opt).
 
 ## Survey: where two values travel today
@@ -45,7 +45,7 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
   it one; it needs the rewrite to become an operator of its own.
 
 ## Tuple returns (branch tuple-returns, user decision "yes")
-`return a, b` and `x, y = f()` (src/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/test_tuple_returns.rs).
+`return a, b` and `x, y = f()` (src/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/functions/test_tuple_returns.rs).
 - Parsing: the comma binds loosest, so `f() := return 1, 2` arrives as `(f() := return 1), 2` and `x, y = f()` as
   `x, (y = f())`. tuples::lower (first lowering) regroups them into `return 1 2` and `$destructure (x, y) f()`.
   `{ return a, b }` in a block too; `{a, b=2}` stays data; a bare `a=1,2,3` is untouched and still asks (D12).

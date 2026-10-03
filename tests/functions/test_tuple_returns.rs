@@ -1,9 +1,9 @@
 // Tuple returns (decision: notes/open_decisions.md "Tuple returns"): `return a, b` leaves both values on the wasm
 // stack (multi-value), `x, y = f()` binds them without allocating a list (notes/multi_value.md)
 use crate::common::fails_with;
-use crate::test_multi_value::result_count;
-use warp::wasm_emitter::{compile, eval};
-use warp::{is, Node};
+use crate::functions::test_multi_value::result_count;
+use warp::wasm_emitter::compile;
+use warp::is;
 
 #[test]
 fn test_two_returned_values_destructure() {

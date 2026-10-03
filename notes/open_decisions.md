@@ -5,7 +5,21 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending) Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+- P22 known-type field mismatch: `p:photo = pic{width:3}` (pic a known other type, lacks height). Error that teaches
+  `pic like photo` (D4 "Strict" + the like philosophy) or a got-it warning, then duck typed?
+  Options: Error, teach `like` / Got-it warning (error under `use strict`). Assumed: warning (branch default; it
+  conflicts with the recorded decisions, so likely undone). Asked by warp-bc, branch claude/like-keyword 19f8b73f.
+  Asked once 2026-10-03, no answer (user away).
+- P23 type-word clash scope: does the clash error cover every type word incl. generic ones (`number := …`), or only
+  concrete types (int/float/double)? Options: Every type word / Concrete types only. Assumed: every type word.
+  Asked by warp-bc, branch claude/type-word-user-function.
+- P24 should the suffix form `4 doubled` and the number-dot form `4.square` call user functions?
+  Options: Yes, both (a letter after `4.` is never a decimal) / Suffix form only / Neither. Assumed: unsupported
+  (todo.md). Asked by warp-bc. Note: the suffix form is wiki syntax (D9 `1+2 squared`).
+- P25 `int('5')` for a character: the code point 53 (like `'5' as int`), the digit value 5 (like Python's int("5")),
+  or an error naming `as int` / digit()? Options: Digit value 5 / Code point 53 / Error with hints.
+  Assumed: code point 53 (since 913c5b1e, before: error "not an int"). Asked by warp-d2, branch samples-2; todo.md.
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -33,10 +47,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 
 ## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
 - `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
-  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+  or a newline" (wasp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
   text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
-  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/text/test_text_repeat.rs).
   text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
   type error" from 2026-10-02.
 
@@ -66,7 +80,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
   `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
 - #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
-- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- #16 commented `"a".s() + 2` lines in tests/text/test_string.rs (P19): "Delete the lines" (approved test-file edit).
 - tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
   tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
   folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
@@ -76,7 +90,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
   `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
   Asks-become-warnings rule).
-- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/numbers/test_angle.rs).
 - Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
 - GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
 - libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
@@ -108,7 +122,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
 - D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
-  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
@@ -152,7 +166,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - #26 library: "Extend all". Unicode upper/lower, sort any comparable values, reverse works on text.
 - #23: "Warn on `it` shadowing". A loop's `it` still shadows a function's `it`, with a warning.
   #31 (switch message shows value; `min`/`d` units): neither option chosen, stays open.
-- #35: "Lists join to "[1 2]"" (the tests/test_cast_to_string.rs assertion may be edited; a general runtime serializer
+- #35: "Lists join to "[1 2]"" (the tests/text/test_cast_to_string.rs assertion may be edited; a general runtime serializer
   later) and ""x" as float is loud" (error with a hint; only single-quote codepoints convert to numbers).
 - #34 deep traps under `try`: "Later". #37 first-class functions by specialisation: "Enough for now".
 - #14e: `download <url>` is an alias of `fetch`.
@@ -207,7 +221,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
-  (`x=ø; x.size` → 0); tests/test_empty_list_count.rs un-ignored.
+  (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
   `##` (doc comment) and the directives in wasp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
@@ -242,7 +256,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 
 ## Decided 2026-10-02
 - `upto` excludes the end as wiki/range.md says (`1 upto 10` = 1..9); every `upto` hints the explicit forms
-  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
+  (`..<`/`..` exclusive, `to`/`...` inclusive). tests/control/test_loop_forms.rs `upto_excludes_the_end_unlike_to` follows.
 
 ## Original questions
 ## Blocking finished work
@@ -274,7 +288,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
-14. RESOLVED (near! in tests/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14. RESOLVED (near! in tests/numbers/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
@@ -305,7 +319,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
-    that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
+    that assertion line? The fix (a small arm in check_null_use) is ready; tests/lists/test_empty_list_count.rs waits #[ignore]d.
 29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
@@ -320,7 +334,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 34. DECIDED 2026-10-03 (now, round 3). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
-35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
+35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/text/test_cast_to_string.rs (added today by a worker) pins it;
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
 36. DECIDED 2026-10-03 (see 25). Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).

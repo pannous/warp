@@ -1,0 +1,20 @@
+mod test_cast_to_string;
+mod test_character_comparison;
+mod test_constant_expression_text;
+mod test_declared_text_one_character;
+mod test_interpolation;
+mod test_library_unicode;
+mod test_print_arguments;
+mod test_print_type_error;
+mod test_quote_output;
+mod test_runtime_text_as_int;
+mod test_string;
+mod test_text_bytes;
+mod test_text_casts;
+mod test_text_concat;
+mod test_text_functions;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_text_getters;
+mod test_text_repeat;
+mod test_text_runtime;
+mod test_text_variable_assignment;

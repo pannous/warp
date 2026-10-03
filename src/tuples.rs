@@ -104,7 +104,7 @@ fn regroup_return(items: &[Node]) -> Option<Node> {
 fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	match node {
 		Node::Meta { node, data } => Some(Node::Meta { node: Box::new(with_trailing_return(node, more)?), data: data.clone() }),
-		Node::Key(left, op, right) => Some(Node::Key(left.clone(), op.clone(), Box::new(with_trailing_return(right, more)?))),
+		Node::Key(left, op, right) => Some(Node::Key(left.clone(), *op, Box::new(with_trailing_return(right, more)?))),
 		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && is_symbol(&items[0], RETURN) => {
 			Some(Node::List(items.iter().chain(more).cloned().collect(), Bracket::None, Separator::Space))
 		}

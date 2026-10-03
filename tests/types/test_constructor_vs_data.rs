@@ -3,7 +3,6 @@
 
 use crate::common::fails_with;
 use warp::is;
-use warp::wasm_emitter::eval;
 
 const POINT: &str = "class point{x:int y:int}; ";
 
