@@ -96,7 +96,7 @@ fn every_for_header_bound_minus_one_asks() {
 
 #[test]
 fn a_runtime_error_names_the_range_hint_and_the_guesses_behind_it() {
-	let failure = format!("{:?}", eval("samples/life.wasp"));
+	let failure = format!("{:?}", eval("samples/life_kotlin_ranges.wasp"));
 	assert!(failure.contains("index out of range"), "{failure}");
 	assert!(failure.contains("`..` excludes the end; `...` or `to` include it"), "{failure}");
 	assert!(failure.contains("assumed at 23:13, 24:15") && failure.contains("loop bound `..size-1`"), "{failure}");
