@@ -658,6 +658,13 @@ PASSED:
   ✓ test_library_unicode::sort_orders_texts
   ✓ test_library_unicode::sort_still_orders_ints
   ✓ test_library_unicode::upper_and_lower_cover_unicode_scripts
+  ✓ test_like::a_known_other_type_teaches_like
+  ✓ test_like::a_like_type_is_judged_by_its_uses
+  ✓ test_like::a_type_can_be_like_several_and_likeness_chains
+  ✓ test_like::an_unknown_value_is_duck_typed_by_its_uses
+  ✓ test_like::like_goes_one_way
+  ✓ test_like::like_makes_a_type_usable_as_another
+  ✓ test_like::like_relates_declared_types_only
   ✓ test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
@@ -719,11 +726,11 @@ PASSED:
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
   ✓ test_math::test_variable_minus
-  ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -992,6 +999,13 @@ PASSED:
   ✓ test_records_classes::an_enum_names_its_cases_by_index
   ✓ test_records_classes::an_optional_field_defaults_to_null
   ✓ test_records_classes::record_stays_usable_as_a_variable_name
+  ✓ test_return_type_dispatch::test_a_picked_overload_warns_nothing
+  ✓ test_return_type_dispatch::test_a_single_definition_with_a_result_type
+  ✓ test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
+  ✓ test_return_type_dispatch::test_a_typed_parameter_picks_the_overload
+  ✓ test_return_type_dispatch::test_as_picks_the_overload
+  ✓ test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
+  ✓ test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
   ✓ test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
   ✓ test_runtime_text_as_int::a_text_variable_converts_to_int
   ✓ test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
@@ -1597,4 +1611,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1592 passed, 0 failed, 1592 total tested
+58 ignored, 1606 passed, 0 failed, 1606 total tested
