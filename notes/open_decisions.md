@@ -41,6 +41,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Text quotes in printed output (asked by warp-6c; user WIP commit ec968e18 expected single quotes in
+  tests/test_method_words.rs): "Keep double quotes". The printer keeps `"HELLO"`; the WIP test edits are reverted to
+  double quotes (user decision) and the 5 ignored tests un-ignored.
 - `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
   otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
   the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
