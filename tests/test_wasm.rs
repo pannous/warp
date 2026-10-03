@@ -49,7 +49,6 @@ fn test_merge_own() {}
 // #[test] fn test_wasm_stuff();
 #[test]
 fn test_emitter() {
-	#[cfg(not(feature = "RUNTIME_ONLY"))]
 	{
 		// clearAnalyzerContext();
 		// clearEmitterContext();
@@ -307,7 +306,6 @@ fn test_norm() {
 }
 
 #[test]
-#[ignore]
 fn test_math_operators() {
 	//	is!(("42 2 *"), 84);
 	is!("- -3", 3);
@@ -344,11 +342,6 @@ fn test_math_operators() {
 
 	is!("i=3.7;.3+i", 4);
 	is!("i=3.71;.3+i", 4.01);
-	#[cfg(feature = "WASM")]
-	{
-		is!("i=3.70001;.3+i", 4.0000100000000005); // lol todo what?
-	}
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("i=3.70001;.3+i", 4.00001);
 	}
@@ -356,11 +349,6 @@ fn test_math_operators() {
 	is!("i=3;i++", 4);
 	is!("- √9", -3);
 	is!("i=-9;-i", 9);
-	#[cfg(feature = "WASM")]
-	{
-		is!("√ π ²", 3.141592653589793); // fu ;);
-	}
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("√ π ²", std::f64::consts::PI);
 	}
@@ -373,7 +361,7 @@ fn test_math_operators() {
 		is!(("3⁴"), 9 * 9);
 	);
 
-	is!("i=3.70001;.3+i", 4);
+	is!("i=3.70001;.3+i", 4.00001);
 	is!("i=3.7;.3+i", 4);
 }
 
@@ -385,14 +373,6 @@ fn test_math_operators_runtime() {
 	is!("42^2", 1764); // NO SUCH PRIMITIVE
 	is!("√3^0", 1);
 	is!("√3^0", 1.0);
-	#[cfg(feature = "WASM")]
-	{
-		is!("√3^2", 2.9999999999999996); // bad sqrt!?
-		is!("π**2", 9.869604401089358);
-	}
-	#[cfg(not(feature = "WASM"))]
-	{}
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("√3^2", 3);
 		is!("π**2", 9.869604401089358);
@@ -515,7 +495,6 @@ fn test_comparison_primitives() {
 	is!("2≥112", false);
 	is!("12≤2", false);
 	is!("112≤24", false);
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("452==452", 1); // forces runtime eq
 		is!("13==14", False);
@@ -523,7 +502,6 @@ fn test_comparison_primitives() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_primitives() {
 	skip!(
 	// todo: if emit returns Node:
@@ -541,13 +519,12 @@ fn test_wasm_logic_primitives() {
 
 	is!("nil", false);
 	is!("null", false);
-	is!("null", 0);
+	is!("null", Empty);
 	// is!("null",  nullptr);
 	is!("ø", false);
 	is!("nil", Empty);
 }
 #[test]
-#[ignore]
 fn test_wasm_variables0() {
 	//	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
 	is!("i=123;i", 123);
@@ -561,19 +538,14 @@ fn test_wasm_variables0() {
 	is!("i=0;i", 0);
 	is!("i:=true;i", true);
 	is!("i=true;i", true);
-	is!("i=123.4;i", 123); // main returning int
+	is!("i=123.4;i", 123.4); // main returning int
 	skip!(
 
 		is!("i=0.0;i", 0.0);
 		is!("i=ø;i", nullptr);
 		is!("i=123.4;i", 123.4); // main returning int
 	);
-	is!("8.33333333332248946124e-03", 0); // todo in wasm
-	#[cfg(feature = "WASM")]
-	{
-		is!("8.33333333332248946124e+01", 83.33333333322489);
-	}
-	#[cfg(not(feature = "WASM"))]
+	is!("8.33333333332248946124e-03", 8.33333333332248946124e-03); // todo in wasm
 	{
 		is!("8.33333333332248946124e+01", 83.333_333_333_224_9);
 	}
@@ -637,7 +609,6 @@ fn test_wasm_logic_unary() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_on_objects() {
 	is!("not 'a'", false);
 	is!("not {a:2}", false);
@@ -649,7 +620,7 @@ fn test_wasm_logic_on_objects() {
 	is!("not ()", true);
 	is!("not {}", true);
 	is!("not []", true);
-	is!("not ({[ø]})", true); // might skip :);
+	is!("not ({[ø]})", false); // might skip :);
 }
 
 #[test]
@@ -847,10 +818,6 @@ fn test_old_random_bugs() {
 
 #[test]
 fn test_merge_wabt() {
-	#[cfg(feature = "WABT_MERGE")]
-	{
-		// merge_files({"test/merge/main.wasm", "test/merge/lib.wasm"});
-	}
 }
 #[test]
 #[ignore = "WABT_MERGE types not defined"]
@@ -858,10 +825,6 @@ fn test_merge_wabt_by_hand() {}
 #[test]
 #[ignore]
 fn test_wasm_runtime_extension() {
-	#[cfg(feature = "TRACE")]
-	{
-		eprintln!("TRACE mode currently SIGTRAP's in test_wasm_runtime_extension. OK, Switch to Debug mode. WHY though?");
-	}
 
 	is!("43", 43);
 	is!("strlen('123')", 3); // todo broke
@@ -874,7 +837,6 @@ fn test_wasm_runtime_extension() {
 	);
 	is!("parseLong('123')", 123);
 	is!("parseLong('123'+'456')", 123456);
-	#[cfg(not(feature = "TRACE"))]
 	{
 		// todo why??
 		is!("parseLong('123000') + parseLong('456')", 123456);
@@ -958,7 +920,6 @@ fn test_object_properties_wasm() {
 #[test]
 #[ignore]
 fn test_array_indices_wasm() {
-	#[cfg(not(feature = "WEBAPP"))]
 	{
 		assert_throws("surface=(1,2,3);i=1;k#i=4;k#i") // no such k!
 		                                         //	caught in wrong place?
@@ -967,15 +928,6 @@ fn test_array_indices_wasm() {
 	//	testArrayIndices(); //	assert! node based (non-primitive) interpretation first
 	//	data_mode = true;// todo remove hack
 	is!("x={1 2 3}; x#3=4;x#3", 4);
-	#[cfg(feature = "WASM")]
-	{
-		is!("puts('ok');", -1); // todo: fix puts return
-	}
-	#[cfg(feature = "WASMEDGE")]
-	{
-		is!("puts('ok');", 8);
-	}
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("puts('ok');", 0);
 	}
@@ -987,7 +939,6 @@ fn test_array_indices_wasm() {
 	is!("(1 4 3)[1]", 4);
 	assert_throws("(1 4 3)#0");
 
-	#[cfg(not(feature = "WASM"))]
 	{
 		// TODO!
 		is!("'αβγδε'#3", 'γ');
@@ -1043,11 +994,9 @@ fn test_recent_random_bugs() {
 	// testRecentRandomBugsAgain = false;
 	is!("-42", -42);
 	is!("‖3‖-1", 2);
-	#[cfg(not(feature = "WASMTIME"))]
 	{
 		is!("test42+1", 43); // OK in WASM too? todo
 		is!("square 3*42 > square 2*3", 1);
-		#[cfg(not(feature = "WASM"))]
 		{
 			test_squares();
 		}
@@ -1086,7 +1035,6 @@ fn test_recent_random_bugs() {
 	//    is!("puts('ok');", 0);
 	let result = parse("{ç:☺}");
 	eq!(result["ç"], "☺");
-	#[cfg(not(feature = "WASMTIME"))]
 	{
 		// and !LINUX // todo why
 		is!("x=123;x + 4 is 127", true);
@@ -1129,7 +1077,6 @@ fn test_square() {
 	is!("√9", 3);
 	//	is!("√-9 is -3i", -3);// if «use complex numbers»
 	skip!(is!(".1", 0.1));
-	#[cfg(not(feature = "WASMTIME"))]
 	{
 		// and !LINUX // todo why
 		skip!(
@@ -1251,7 +1198,6 @@ fn test_import_wasm() {
 #[test]
 fn test_math_library() {
 	// todo generic power i as builtin
-	#[cfg(not(feature = "WASMTIME"))]
 	{
 		skip!(
 
@@ -1272,7 +1218,6 @@ fn test_smart_return_harder() {
 	//    is!("'a'", 'a');
 	is!("10007.0%10000.0", 7);
 	is!("10007.0%10000", 7);
-	#[cfg(not(feature = "WASM"))]
 	{
 		is!("x='abcde';x#4='f';x[3]", 'f');
 		is!("x='abcde';x#4='x';x[3]", 'x');
@@ -1282,7 +1227,6 @@ fn test_smart_return_harder() {
 }
 #[test]
 fn test_smart_return() {
-	#[cfg(not(feature = "WASM"))]
 	{
 		test_smart_return_harder(); // todo
 	}
@@ -1318,7 +1262,6 @@ fn test_is() {
 	is!("x=123;x + 4 is 127", true); //  is! sometimes causes Heap corruption! test earlier
 	is!("x='123';x is '123'", true); // ok
 	is!("'hello';(1 2 3 4);10", 10); // -> data array […;…;10] ≠ 10
-	#[cfg(not(feature = "TRACE"))]
 	{
 		is!("x='123';x + '4' is '1234'", true); // ok
 		is!("'123' + '4' is '1234'", true); // ok needs runtime for concat();
@@ -1375,25 +1318,12 @@ fn test_for_loop_classic() {
 #[test]
 #[ignore]
 fn test_for_loops() {
-	#[cfg(not(feature = "WASM"))]
 	{
 		// todo: fix for wasm
 		test_for_loop_classic();
 	}
 	// is!("for i in 1 to 5 : {print i};i", 6);
 	// todo: generic dispatch print in WasmEdge
-	#[cfg(feature = "WASM")]
-	{
-		// cheat!
-		is!("for i in 1 to 5 : {print i};i", 6);
-		is!("for i in 1 to 5 : {print i};i", 6); // EXC_BAD_ACCESS as of 2025-03-06 under SANITIZE
-		is!("for i in 1 to 5 {print i}", 5);
-		is!("for i in 1 to 5 {print i};i", 6); // after loop :(
-		is!("for i in 1 to 5 : print i", 5);
-		is!("for i in 1 to 5\n  print i", 5);
-		// is!("for i in 1 to 5\n  print i\ni", 6);
-	}
-	#[cfg(not(feature = "WASM"))]
 	{
 		// # else // todo : why puti !in WASM??
 		// is!("for i in 1 to 5 : {put(i)};i", 6);
@@ -1451,7 +1381,6 @@ fn test_arguments() {
 #[test]
 #[ignore]
 fn test_host_download() {
-	#[cfg(not(feature = "WASMEDGE"))]
 	{
 		is!("download https://pannous.com/files/test", "test 2 5 3 7");
 	}
@@ -1621,11 +1550,6 @@ fn test_all_wasm() {
 	);
 	//	data_mode = false;
 	// test_wasm_memory_integrity();
-	#[cfg(feature = "RUNTIME_ONLY")]
-	{
-		eprintln!("RUNTIME_ONLY");
-		eprintln!("NO WASM emission...");
-	}
 	//	is! !compatible with Wasmer, don't ask why, we don't know;);
 	//    skip!(
 
@@ -1764,12 +1688,6 @@ fn test_dom_property() {
 #[test]
 #[ignore]
 fn test_host_integration() {
-	#[cfg(feature = "WASMTIME")]
-	{
-		//         WASMEDGE
-		return;
-	}
-	#[cfg(not(feature = "WASM"))]
 	{
 		test_host_download(); // no is!
 	}

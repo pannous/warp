@@ -1,0 +1,4 @@
+// the file's own definition wins over the sibling's
+use folder
+area(r) := r
+area(3)

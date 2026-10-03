@@ -1,19 +1,14 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
+use crate::type_kinds::{CURLY_LIST_KIND, SQUARE_LIST_KIND};
+use crate::wasm_emitter::layout::BYTE;
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
-/// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
-const KIND_MASK: i64 = 0xFF;
-/// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
-const SQUARE_BRACKET_INFO: i64 = 1;
-const KIND_SHIFT: i64 = 8;
-const CURLY_BRACKET_INFO: i64 = 0;
 const KEY_KIND: i64 = Kind::Key as i64;
 /// An i64 has at most 19 digits, plus the sign
 const MAX_INT_BYTES: i32 = 20;
@@ -23,11 +18,12 @@ const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 14] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 15] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
 	(crate::library_words::COLLECTION_CONTAINS, crate::library_words::COLLECTION_CONTAINS),
+	(crate::library_words::COLLECTION_POSITION, crate::library_words::COLLECTION_POSITION),
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
@@ -40,12 +36,16 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 14] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+pub const NODE_ORDER: &str = "node_order";
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
 		self.emit_text_reverse(); // list_reverse hands a text to it
 		self.emit_list_reverse();
 		self.emit_text_chars(); // and it ends with list_reverse
+		if self.should_emit_function(NODE_ORDER) {
+			self.emit_node_order();
+		}
 		self.emit_list_sort();
 		self.emit_text_case("text_upper", true);
 		self.emit_text_case("text_lower", false);
@@ -128,7 +128,89 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// list_sort(list): a new list of ints in ascending order (insertion into a sorted list)
+	/// node_order(a, b): negative, 0 or positive as a is before, with or after b. Numbers by value (as f64 when either is a
+	/// float), texts and characters by code points (the order of their UTF-8 bytes), instances by the Comparable witness of
+	/// their type (witness.rs); anything else is not comparable.
+	fn emit_node_order(&mut self) {
+		let witness = self.compare_witness_table();
+		let node_ref = Ref(self.node_ref(false));
+		let float_box = self.type_manager.f64_box_type;
+		let exact = self.int_runtime();
+		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64];
+		locals.extend([ValType::I32; 6]);
+		self.runtime_function(NODE_ORDER, vec![node_ref, node_ref], vec![ValType::I32], locals, |s, f| {
+			let (first, second, kinds) = (0, 1, [2, 3]);
+			let (first_float, second_float) = (4, 5);
+			let (first_pointer, second_pointer, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
+			let is_kind = |f: &mut Function, local: u32, kind: Kind| Self::emit_list(f, &[I::LocalGet(local), I::I64Const(kind as i64), I::I64Eq]);
+			let both = |f: &mut Function, kind: Kind, either: I<'static>| {
+				is_kind(f, kinds[0], kind);
+				is_kind(f, kinds[1], kind);
+				f.instruction(&either);
+			};
+			s.emit_codepoint_as_text(f, first);
+			s.emit_codepoint_as_text(f, second);
+			for (node, kind) in [(first, kinds[0]), (second, kinds[1])] {
+				s.emit_field(f, node, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
+			}
+			// texts: the first differing byte, else the shorter one first
+			both(f, Kind::Text, I::I32And);
+			f.instruction(&I::If(BlockType::Empty));
+			for (node, pointer, length) in [(first, first_pointer, first_length), (second, second_pointer, second_length)] {
+				s.emit_text_field(f, node, 0);
+				f.instruction(&I::LocalSet(pointer));
+				s.emit_text_field(f, node, 1);
+				f.instruction(&I::LocalSet(length));
+			}
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(first_length), I::I32GeU, I::LocalGet(index), I::LocalGet(second_length), I::I32GeU, I::I32Or, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(first_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE)]);
+			Self::emit_list(f, &[I::LocalGet(second_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::I32Sub, I::LocalTee(difference)]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(difference), I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(first_length), I::LocalGet(second_length), I::I32Sub, I::Return, I::End]);
+			if let Some(table) = witness {
+				s.emit_instance_order(f, table, kinds, first, second);
+			}
+			// numbers only from here
+			for kind in kinds {
+				is_kind(f, kind, Kind::Int);
+				is_kind(f, kind, Kind::Float);
+				Self::emit_list(f, &[I::I32Or, I::I32Eqz]);
+				s.emit_fail_if(f, "not_comparable");
+			}
+			both(f, Kind::Int, I::I32And);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_int_value_of(f, first);
+			s.emit_int_value_of(f, second);
+			if exact {
+				s.call(f, "exact_cmp");
+			} else {
+				// both kinds are known to be Int here, so their locals hold the values
+				let (a, b) = (kinds[0], kinds[1]);
+				Self::emit_list(f, &[I::LocalSet(b), I::LocalSet(a), I::LocalGet(a), I::LocalGet(b), I::I64GtS, I::LocalGet(a), I::LocalGet(b), I::I64LtS, I::I32Sub]);
+			}
+			Self::emit_list(f, &[I::Return, I::End]);
+			// a float on either side compares both as f64
+			for (node, kind, float) in [(first, kinds[0], first_float), (second, kinds[1], second_float)] {
+				is_kind(f, kind, Kind::Float);
+				f.instruction(&I::If(BlockType::Result(ValType::F64)));
+				s.emit_field(f, node, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Else]);
+				s.emit_int_value_of(f, node);
+				if exact {
+					s.call(f, "exact_to_f64");
+				} else {
+					f.instruction(&I::F64ConvertI64S);
+				}
+				Self::emit_list(f, &[I::End, I::LocalSet(float)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(first_float), I::LocalGet(second_float), I::F64Gt, I::LocalGet(first_float), I::LocalGet(second_float), I::F64Lt, I::I32Sub]);
+		});
+	}
+
+	/// list_sort(list): a new list of comparable values in ascending order (insertion into a sorted list, see node_order)
 	fn emit_list_sort(&mut self) {
 		if !self.should_emit_function("list_sort") {
 			return;
@@ -137,22 +219,22 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
-		// insert_sorted(sorted, element, value, kind): the cells of sorted before the first larger value, the element, the rest shared
+		// insert_sorted(sorted, element, kind): the cells of sorted before the first value not before element, the element, the rest shared
 		let insert_sorted = next_index(self);
-		let params = vec![nullable, node_ref, ValType::I64, ValType::I64];
+		let params = vec![nullable, node_ref, ValType::I64];
 		self.runtime_function("list_insert_sorted", params, vec![node_ref], vec![nullable], |s, f| {
-			let (sorted, element, value, kind, head) = (0, 1, 2, 3, 4);
+			let (sorted, element, kind, head) = (0, 1, 2, 3);
 			Self::emit_list(f, &[I::LocalGet(sorted), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
 			s.emit_field(f, sorted, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head)]);
-			s.emit_int_value_of(f, head);
-			Self::emit_list(f, &[I::LocalGet(value), I::I64GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head), I::LocalGet(head), I::RefAsNonNull, I::LocalGet(element)]);
+			s.call(f, NODE_ORDER);
+			Self::emit_list(f, &[I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
 			Self::emit_list(f, &[I::LocalGet(sorted), I::StructNew(node_type), I::Return, I::End]);
 			s.emit_field(f, sorted, 0);
 			s.emit_field(f, sorted, 1);
 			s.emit_field(f, sorted, 2);
-			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(value), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
+			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
 		});
 		assert_eq!(self.func_index("list_insert_sorted"), insert_sorted, "recursive call index");
 
@@ -163,9 +245,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
-			s.emit_require_kind(f, element, Kind::Int, "not_an_int");
 			Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
-			s.emit_int_value_of(f, element);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
 			s.emit_field(f, 0, 2);
@@ -182,7 +262,6 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let square_list = (SQUARE_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 8]);
 		self.runtime_function("text_split", vec![node_ref, node_ref], vec![node_ref], locals, |s, f| {
@@ -201,7 +280,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalTee(start), I::LocalSet(index)]);
 			// the bytes from `start` up to the local `stop` as a text at the front of `pieces`
 			let push_piece = |f: &mut Function, stop: u32| {
-				Self::emit_list(f, &[I::I64Const(square_list), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+				Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalGet(pieces), I::StructNew(node_type), I::LocalSet(pieces)]);
 			};
@@ -256,6 +335,8 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
+		self.emit_float_text(); // after int_to_decimal, which it calls
+		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -273,6 +354,12 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				is_kind(f, Kind::Float);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_field(f, element, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
+				s.call(f, super::float_text::FLOAT_TEXT);
+				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
 					f.instruction(&I::If(BlockType::Empty));
@@ -413,15 +500,24 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
-		let curly_list = (CURLY_BRACKET_INFO << KIND_SHIFT) | Kind::List as i64;
 		let colon = crate::operators::op_to_code(&crate::operators::Op::Colon);
 
-		// replace_entry(cells, name, entry): the cells with the entry of that name replaced, or `entry` added at the end
+		// replace_entry(cells, name, entry): the cells with the entry of that name replaced, or `entry` added at the end of
+		// the fields: meta entries `@name:value` stay behind every field, so a walk by position never meets one
+		let is_meta_entry = super::equality::IS_META_ENTRY;
 		let replace_entry = next_index(self);
 		self.runtime_function("map_replace_entry", vec![nullable, node_ref, node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (cells, name, entry, head) = (0, 1, 2, 3);
-			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::I64Const(curly_list), I::LocalGet(entry)]);
+			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::I64Const(CURLY_LIST_KIND), I::LocalGet(entry)]);
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
+			// a new field goes in front of the first meta entry
+			s.emit_field(f, cells, 1);
+			s.call(f, is_meta_entry);
+			f.instruction(&I::LocalGet(entry));
+			s.call(f, is_meta_entry);
+			Self::emit_list(f, &[I::I32Eqz, I::I32And, I::If(BlockType::Empty)]);
+			s.emit_field(f, cells, 0);
+			Self::emit_list(f, &[I::LocalGet(entry), I::LocalGet(cells), I::StructNew(node_type), I::Return, I::End]);
 			s.emit_field(f, cells, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head), I::LocalGet(head), I::RefAsNonNull, I::LocalGet(name)]);
 			s.call(f, "map_entry_has_key");
@@ -455,12 +551,23 @@ impl WasmGcEmitter {
 			// a single entry: replaced when it has the name, else the two entries as an object
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "map_entry_has_key");
-			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(entry), I::RefAsNonNull, I::Else, I::LocalGet(0), I::LocalGet(entry), I::RefNull(HeapType::Concrete(node_type))]);
-			Self::emit_list(f, &[I::I64Const(0)]);
-			s.call(f, "new_list");
-			Self::emit_list(f, &[I::I64Const(0)]);
-			s.call(f, "new_list");
-			Self::emit_list(f, &[I::End, I::Return, I::End]);
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(entry), I::RefAsNonNull, I::Else]);
+			// the two entries as an object, a meta entry behind the field
+			f.instruction(&I::LocalGet(0));
+			s.call(f, super::equality::IS_META_ENTRY);
+			f.instruction(&I::LocalGet(entry));
+			s.call(f, super::equality::IS_META_ENTRY);
+			Self::emit_list(f, &[I::I32Eqz, I::I32And, I::If(BlockType::Result(node_ref))]);
+			for (first, second) in [(entry, 0), (0, entry)] {
+				Self::emit_list(f, &[I::LocalGet(first), I::LocalGet(second), I::RefNull(HeapType::Concrete(node_type)), I::I64Const(0)]);
+				s.call(f, "new_list");
+				f.instruction(&I::I64Const(0));
+				s.call(f, "new_list");
+				if first == entry {
+					f.instruction(&I::Else);
+				}
+			}
+			Self::emit_list(f, &[I::End, I::End, I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty)]);
 			s.call(f, "not_an_object");
 			Self::emit_list(f, &[I::End, I::LocalGet(0), I::LocalGet(1), I::LocalGet(entry), I::RefAsNonNull, I::Call(replace_entry)]);

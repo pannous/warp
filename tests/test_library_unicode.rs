@@ -19,7 +19,9 @@ fn upper_and_lower_cover_unicode_scripts() {
 fn sort_orders_floats() {
 	is!("([2.5 1.5 3.25].sort)#1", 1.5);
 	is!("([2.5 1.5 3.25].sort)#3", 3.25);
-	is!("x=[2.5 -1.0 0.5]; (sort x)#1", -1.0);
+	is!("x=[2.5, -1.0, 0.5]; (x.sort)#1", -1.0);
+	is!("([2.5f 1.5f 3.25f].sort)#1", 1.5); // IEEE floats
+	is!("([2.5f 1 0.5].sort)#3", 2.5); // a float among exact numbers
 }
 
 #[test]

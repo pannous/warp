@@ -1,51 +1,6 @@
-#![allow(dead_code, unused_imports)]
-mod extensions;
-use extensions::lists::*;
-use extensions::numbers::*;
-use extensions::strings::*;
-use extensions::utils::*;
-pub mod node;
-pub mod context;
-pub mod wasm_emitter;
-pub mod wasm_reader;
-pub mod wasp_parser;
-pub mod type_kinds;
-pub mod gc_traits;
-pub mod analyzer;
-pub mod ast;
-pub mod meta;
-pub mod smarty;
-pub mod operators;
-pub mod host;
-pub mod ffi;
-pub mod ffi_parser;
-pub mod util;
-pub mod function;
-pub mod normalize;
-pub mod run;
-pub mod local;
-pub mod law;
-pub mod function_equality;
-pub mod effects;
-pub mod diagnostic;
-pub mod injection;
-pub mod interpolation;
-pub mod time;
-pub mod real;
-pub mod units;
-pub mod for_loop;
-pub mod type_constructor;
-pub mod function_values;
-pub mod lambdas;
-pub mod library_words;
-pub mod type_tests;
-pub mod min_max;
-pub mod switch;
-pub mod phrase_words;
-pub mod declarations;
-pub mod modules;
-pub mod package_tools;
-pub mod versions;
+#![cfg_attr(test, allow(unused))] // main() is not compiled under test
+use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasp_parser};
+use warp::node;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
@@ -58,9 +13,9 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// Answers to the compiler's questions (Asks), remembered per project: one `topic = explicit form` per line
-const ANSWERS_FILE: &str = ".wasp-answers";
-/// Never ask, every ambiguity falls back to its warning or error (as in CI or a pipe)
+/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
+/// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 
 fn node_to_i32(node: &Node) -> i32 {
@@ -93,12 +48,12 @@ fn main() {
         args.remove(flag);
     }
 
-    // Ambiguities are asked on the terminal unless nobody is there to answer
+    // "got it?" is asked on the terminal after a warning or note unless nobody is there to answer
     let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
-        diagnostic::set_asker(Some(std::rc::Rc::new(diagnostic::TerminalAsker)));
+        diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::use_answers_file(ANSWERS_FILE);
+    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
 
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
@@ -110,7 +65,6 @@ fn main() {
 
     if args.len() == 1 {
         // No args, just program name
-        #[cfg(not(feature = "wasm"))]
         if !io::stdin().is_terminal() {
             // Read from stdin pipe
             let mut input = String::new();
@@ -128,14 +82,6 @@ fn main() {
     }
 
     if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
-        #[cfg(feature = "WEBAPP")]
-        {
-            // start_server in thread, open webview
-            let arg = format!("http://localhost:{}/{}", 9999, arg_string);
-            println!("Serving {}", arg);
-            // open_webview(arg);
-        }
-        #[cfg(not(feature = "WEBAPP"))]
         println!("warp compiled without webview");
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
         let code = if file_exists(target) { load_file(target) } else { target.to_string() };
@@ -174,8 +120,10 @@ fn main() {
             }
         }
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
-        let warp_code = load_file(&arg_string);
-        let result = eval(&warp_code);
+        if !file_exists(&arg_string) {
+            eprintln!("Error: Could not read file '{}'", arg_string);
+        }
+        let result = eval(&arg_string); // a file: its folder is in scope (D15)
         println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
@@ -186,12 +134,6 @@ fn main() {
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wasm") {
         if args.len() >= 3 {
-            #[cfg(any(feature = "WABT_MERGE", feature = "INCLUDE_MERGER"))]
-            {
-                // merge_files
-                todo!("linking files needs compilation with WABT_MERGE");
-            }
-            #[cfg(not(any(feature = "WABT_MERGE", feature = "INCLUDE_MERGER")))]
             {
                 todo!("linking files needs compilation with WABT_MERGE");
             }
@@ -201,15 +143,11 @@ fn main() {
             std::process::exit(node_to_i32(&result));
         }
     } else if arg_string == "test" || arg_string == "tests" {
-        #[cfg(not(feature = "release"))]
         {
             println!("Run tests with: cargo test");
         }
-        #[cfg(feature = "release")]
-        println!("warp release compiled without tests");
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Wasp documentation can be found at https://github.com/pannous/warp/wiki");
-        #[cfg(not(feature = "wasm"))]
         {
             let _ = std::process::Command::new("open")
                 .arg("https://github.com/pannous/warp/")
@@ -224,23 +162,8 @@ fn main() {
     } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
         console();
     } else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
-        #[cfg(feature = "GRAFIX")]
-        {
-            // init_graphics();
-        }
-        #[cfg(not(feature = "GRAFIX"))]
         println!("warp compiled without sdl/webview");
     } else if matches!(arg_string.as_str(), "app" | "webview" | "browser") {
-        #[cfg(feature = "WEBAPP")]
-        {
-            #[cfg(feature = "GRAFIX")]
-            {
-                // init_graphics();
-            }
-            #[cfg(not(feature = "GRAFIX"))]
-            println!("warp compiled without sdl/webview");
-        }
-        #[cfg(not(feature = "WEBAPP"))]
         {
             println!("must compile with WEBAPP support");
             std::process::exit(-1);
@@ -257,7 +180,6 @@ fn main() {
             println!("Wasp compiled without server OR no program given!");
         }
     } else if arg_string == "lsp" {
-        #[cfg(not(feature = "wasm"))]
         {
             // lsp_main();
             println!("LSP not yet implemented");
@@ -286,9 +208,14 @@ fn compiled_output_path(target: &str) -> String {
 fn structure(node: &Node) -> String {
     match node.drop_meta() {
         Node::Key(left, op, right) => format!("({} {} {})", op, structure(left), structure(right)),
-        Node::List(items, bracket, _) => {
+        Node::List(items, bracket, separator) => {
             let inner: Vec<String> = items.iter().map(structure).collect();
-            format!("{}{}", bracket.opening(), inner.join(" "))
+            let joiner = match separator.to_char() {
+                Some(' ') | None => " ".to_string(),
+                Some('\n') => "⏎ ".to_string(),
+                Some(other) => format!("{other} "),
+            };
+            format!("{}{}{}", bracket.opening(), inner.join(&joiner), bracket.closing())
         }
         other => other.serialize(),
     }
@@ -305,7 +232,7 @@ fn usage() {
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
-    println!("  --no-ask             Never ask about ambiguities: take their default with a warning (or fail)");
+    println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

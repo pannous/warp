@@ -1,6 +1,5 @@
-//! `value as string` is the serialized text of a literal; a value only known at runtime is a loud error, never a panic
+//! `value as string` is the serialized text of a literal; an int list known only at runtime joins to "[1 2]" (user decision #35)
 
-use crate::common::fails_with;
 use warp::is;
 
 #[test]
@@ -14,6 +13,6 @@ fn an_object_literal_as_string_is_its_text() {
 }
 
 #[test]
-fn a_variable_holding_a_list_as_string_is_an_error_value() {
-	fails_with("x=[1 2]; x as string", "as string");
+fn a_variable_holding_an_int_list_as_string_is_its_text() {
+	is!("x=[1 2]; x as string", "[1 2]"); // was an error value until user decision #35
 }

@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
+const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
 const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
 
 fn is_constant_keyword(node: &Node) -> bool {
@@ -77,7 +78,20 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
 fn is_statement_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline))
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, Separator::Semicolon | Separator::Newline) => true,
+		Node::List(items, Bracket::Curly, _) => matches!(items.as_slice(), [single] if is_update(single.drop_meta())), // `{x=x+1}`, `{n++}`
+		_ => false,
+	}
+}
+
+/// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
+fn is_update(node: &Node) -> bool {
+	match node {
+		Node::Key(target, Op::Assign, value) => matches!(target.drop_meta(), Node::Symbol(name) if crate::wasp_parser::mentions(value, name)),
+		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => matches!(target.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
 }
 
 /// Infer the Kind for an expression
@@ -90,6 +104,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Text // concatenation
 	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
 		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
+	} else if repeats_text(left, op, right) {
+		Kind::Text // `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -97,6 +113,12 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	} else {
 		Kind::Int
 	}
+}
+
+/// text * int or int * text: the text repeated (Python), user decision 2026-10-03
+pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
+	let is_text = |kind: Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
 }
 
 /// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
@@ -146,14 +168,26 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
+				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
+					return infer_type(&items[1], scope); // `return x` is worth x
+				}
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
+				}
+				if name == crate::closures::CLOSURE_NEW {
+					return Kind::Function;
 				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
 				}
-				if name == PRINT_CALL && items.len() == 2 {
-					return held_kind(&items[1], || infer_type(&items[1], scope)); // `print x` is worth x, `print "c"` a text
+				if name == crate::wasp_parser::TEXT_TIMES {
+					return Kind::Text;
+				}
+				if name == PRINT_CALL && items.len() >= 2 {
+					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
+						[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
+						_ => Kind::Text, // `print a, b` is worth the joined text "a b"
+					};
 				}
 			}
 			// Check for function calls: (funcname args...) where first item is a symbol
@@ -187,8 +221,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			// Function call with parentheses: a library word has its own result, any other call is assumed Int
 			if *bracket == Bracket::Round && items.len() >= 2 {
 				if let Node::Symbol(name) = items[0].drop_meta() {
-					if name == crate::library_words::SLICE {
-						// a slice of a text is a text, of anything else a list
+					if name == crate::library_words::SLICE || name == "reverse" {
+						// a slice or reversal of a text is a text, of anything else a list
 						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
 					}
 					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
@@ -309,9 +343,10 @@ fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
 		REAL_WORD => Some(Kind::Float),
-		word => match type_word_kind(word)? {
-			Kind::Codepoint => Some(Kind::Text),
-			kind => Some(kind),
+		word => match type_word_kind(word) {
+			Some(Kind::Codepoint) => Some(Kind::Text),
+			Some(kind) => Some(kind),
+			None => Some(Kind::Empty), // instances, keys, symbols: held as Nodes
 		},
 	}
 }
@@ -324,9 +359,11 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// Either branch a reference type (Text, Symbol, List…): the value is a Node, else a number
+/// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
-	if then_kind.is_ref() || else_kind.is_ref() {
+	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
+		Kind::Codepoint
+	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
 		Kind::Float
@@ -376,6 +413,16 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 	if function_definition_body(node).is_some() {
 		return 0;
 	}
+	if let Some((names, values)) = crate::tuples::destructuring(node) {
+		let temporaries = values.iter().map(|value| collect_variables_inner(value, scope, false, in_structure)).sum();
+		for (index, name) in names.iter().enumerate() {
+			if scope.lookup(name).is_none() && !scope.is_global(name) {
+				let kind = destructured_kind(values, index, scope);
+				scope.define(name.clone(), None, kind);
+			}
+		}
+		return temporaries;
+	}
 	match node {
 		// Global declarations: global:Key(name, =, value) - don't create local
 		// Tag structures: html:body - body is structure context (attributes, not variables)
@@ -410,6 +457,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		}
 		// Assign creates variables only at top level (not inside structures)
 		Node::Key(left, Op::Assign, right) => {
+			// the variables the value binds come first, so its kind is known: `a = (t = 1 + 2; t)` makes a an Int
+			let inner_temporaries = collect_variables_inner(right, scope, false, in_structure);
 			if !skip_first_assign && !in_structure {
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
@@ -439,7 +488,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					_ => {}
 				}
 			}
-			collect_variables_inner(right, scope, false, in_structure)
+			inner_temporaries
 		}
 		// Compound assignments don't create new variables
 		Node::Key(left, op, right) if op.is_compound_assign() => {
@@ -492,6 +541,16 @@ fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 }
 
 /// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
+/// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
+fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
+	match values {
+		[call] => crate::tuples::call_parts(call)
+			.and_then(|(function, _)| scope.function_kinds.get(&crate::tuples::element_key(function, index)).copied())
+			.unwrap_or(Kind::Data),
+		_ => values.get(index).map_or(Kind::Data, |value| binding_kind(value, scope)),
+	}
+}
+
 fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	held_kind(value, || infer_type(value, scope))
 }
@@ -551,12 +610,21 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
 	let mut meant_global: Vec<String> = vec![];
+	let blocks = block_function_names(&program);
+	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
+	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
 	for function in functions {
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name);
 		let mut decided: HashSet<&String> = HashSet::new();
 		for (node, name) in find_assignments(&function.body, &is_main_variable) {
 			if !decided.insert(name) {
+				continue;
+			}
+			if blocks.contains(&function.name) {
+				if outside_blocks.lookup(name).is_some() {
+					educate_block_assignment(node, name, &function.name);
+				}
 				continue;
 			}
 			if !starts_with_fresh_binding(&function.body, name) {
@@ -570,6 +638,39 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 		}
 	}
 	Ok(declare_global(program, &meant_global))
+}
+
+/// The functions defined as a block of statements, `inc := {x = x+1}`
+fn block_function_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Define, body) = node {
+			if let (Node::Symbol(name), true) = (name.drop_meta(), is_statement_block(body)) {
+				names.insert(name.clone());
+			}
+		}
+	});
+	names
+}
+
+fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
+	match node {
+		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => Node::Empty,
+		Node::Key(left, op, right) => Node::Key(Box::new(without_block_bodies(*left, blocks)), op, Box::new(without_block_bodies(*right, blocks))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_block_bodies(item, blocks)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_block_bodies(*node, blocks)), data },
+		other => other,
+	}
+}
+
+/// A block captures the outer variables by value (user decision D7): its assignment changes the block's own copy,
+/// so `x=1; inc:={x=x+1}; do inc; x` stays 1. Educate toward the forms that change x: `global x`, or returning the value.
+fn educate_block_assignment(assignment: &Node, name: &str, block: &str) {
+	crate::normalize::set_position_of(assignment);
+	let written = crate::normalize::operand_text(assignment);
+	let reason = format!("the block {block} captures {name} by value: its change stays inside the block");
+	crate::normalize::hint(&written, &format!("global {name}"), &reason);
+	crate::normalize::hint(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it");
 }
 
 const LOCAL_OR_GLOBAL: &str = "local-or-global";
@@ -1020,6 +1121,8 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
+		"function" | "closure" => Kind::Function,
+		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
 		_ => return None,
 	})
 }
@@ -1061,6 +1164,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				_ => list_type_name(&items[1], scope).replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1), // the values
 			}
 		}
+		// `sort(xs)`, `reverse(xs)`: the same elements
+		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
+			list_type_name(&items[1], scope)
+		}
 		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
@@ -1101,6 +1208,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// The type name of a map literal, `map of <value type>` when its values share one
 const MAP_TYPE: &str = "map";
+/// Library words whose list result has the elements of their list argument
+const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
@@ -1182,7 +1291,43 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
 	warnings.extend(kebab_ambiguities(program));
+	program.visit(&mut |node| {
+		if let Node::Key(_, Op::Define, body) = node {
+			if uses_it_outside_loops(body) {
+				hidden_function_it(body, &mut warnings);
+			}
+		}
+	});
 	warnings
+}
+
+/// `for 1..4 {…}`: a loop that binds the implicit `it`
+fn is_it_loop(items: &[Node]) -> bool {
+	matches!(items, [keyword, _, body] if matches!(keyword.drop_meta(), Node::Symbol(word) if word == "for")
+		&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
+}
+
+/// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
+fn uses_it_outside_loops(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => word == "it",
+		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
+		Node::List(items, _, _) if is_it_loop(items) => uses_it_outside_loops(&items[1]),
+		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
+		_ => false,
+	}
+}
+
+/// The loops in a function with an implicit `it` whose own `it` hides the function's (user decision #23: kept, warned)
+fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			if is_it_loop(items) && uses_it(&items[2]) {
+				warnings.push(Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")
+					.fix(format!("for i in {} {{…}}", crate::normalize::operand_text(&items[1]))));
+			}
+		}
+	});
 }
 
 fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
@@ -1641,7 +1786,8 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 	let expected = builtin_type_kind(type_name)?;
 	let actual = literal_kind(value)?;
 	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
-	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal {
+	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
+	if expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text {
 		return None;
 	}
 	let value_text = value.serialize();
@@ -1650,7 +1796,7 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 }
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
-/// the widening of an Int literal assigned to a float becomes an explicit Float literal
+/// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
 	lower_declarations_among(node, &variables)
@@ -1735,6 +1881,7 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
 						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float(number.clone().into()))),
+						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
 						_ => value,
 					};
 					Node::Key(Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())), op, value)
@@ -1923,16 +2070,18 @@ fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 }
 
 /// `[x]*n` and `n*[x]` with a list literal: Python repeats the list, NumPy multiplies each element (wiki/Footguns.md
-/// "Lists and arithmetic"), so the user is asked; unanswered it is an error naming both explicit forms
+/// "Lists and arithmetic"), so the user is asked; unanswered it is an error naming both explicit forms.
+/// Likewise `[1 2 3]+4`: append or add to each element?
 pub fn lower_list_times(node: Node) -> Node {
+	let list_arithmetic = |key: &Node, positioned: &Node| list_times(key, positioned).or_else(|| list_plus(key, positioned));
 	match node {
 		Node::Meta { node: inner, data } => {
 			let positioned = Node::Meta { node: inner.clone(), data: data.clone() };
-			list_times(&inner, &positioned).unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
+			list_arithmetic(&inner, &positioned).unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
 		}
 		Node::Key(left, op, right) => {
 			let key = Node::Key(Box::new(lower_list_times(*left)), op, Box::new(lower_list_times(*right)));
-			list_times(&key, &key).unwrap_or(key)
+			list_arithmetic(&key, &key).unwrap_or(key)
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_list_times).collect(), bracket, separator),
 		other => other,
@@ -1943,8 +2092,7 @@ const LIST_TIMES_TOPIC: &str = "list-times";
 
 fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
-	let is_list = |side: &Node| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _));
-	let (list, count) = match (is_list(left), is_list(right)) {
+	let (list, count) = match (is_list_literal(left), is_list_literal(right)) {
 		(true, false) => (left.as_ref(), right.as_ref()),
 		(false, true) => (right.as_ref(), left.as_ref()),
 		_ => return None,
@@ -1965,6 +2113,54 @@ fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 		}
 		Err(error) => error,
 	})
+}
+
+const LIST_PLUS_TOPIC: &str = "list-plus";
+
+fn is_list_literal(side: &Node) -> bool {
+	matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))
+}
+
+/// `[1 2 3]+4` and `4+[1 2 3]` with a list literal and a number: append (prepend) or add to each element?
+/// Unanswered it is an error naming `[1 2 3] + [4]` and `[1 2 3] .+ 4`
+fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Add, right) = key.drop_meta() else { return None };
+	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
+	let (list, number, list_first) = match (is_list_literal(left), is_list_literal(right)) {
+		(true, false) if is_number(right) => (left.as_ref(), right.as_ref(), true),
+		(false, true) if is_number(left) => (right.as_ref(), left.as_ref(), false),
+		_ => return None,
+	};
+	let written = key.drop_meta().serialize();
+	let (list_text, number_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(number));
+	let (joining, joined) = match list_first {
+		true => ("append", format!("{list_text} + [{number_text}]")),
+		false => ("prepend", format!("[{number_text}] + {list_text}")),
+	};
+	let readings = vec![
+		crate::diagnostic::reading(joining, &joined),
+		crate::diagnostic::reading("add to each element", &format!("{list_text} .+ {number_text}")),
+	];
+	let question = crate::diagnostic::Ask::new(LIST_PLUS_TOPIC, format!("type error: list + number: does `{written}` {joining} {number_text} or add it to each element?"),
+		readings, crate::diagnostic::Fallback::Error).written(&written).at_node(positioned);
+	let singleton = Node::List(vec![number.clone()], Bracket::Square, Separator::Space);
+	Some(match crate::diagnostic::ask(&question) {
+		Ok(0) if list_first => Node::Key(Box::new(list.clone()), Op::Add, Box::new(singleton)),
+		Ok(0) => Node::Key(Box::new(singleton), Op::Add, Box::new(list.clone())),
+		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
+		Err(error) => error,
+	})
+}
+
+/// The element name of the lambda an element-wise operator maps with: no wasp program writes it
+const EACH_ELEMENT: &str = "each_element";
+
+/// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
+pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
+	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
+	let lambda = Node::Key(element(), Op::FatArrow, Box::new(Node::Key(element(), op, Box::new(operand))));
+	let call = Node::List(vec![Node::Symbol("map".to_string()), lambda], Bracket::Round, Separator::None);
+	Node::Key(Box::new(list), Op::Dot, Box::new(call))
 }
 
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
@@ -2063,7 +2259,7 @@ fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
 }
 
 /// Kind of a value known before running the program
-fn literal_kind(value: &Node) -> Option<Kind> {
+pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(_) | Number::BigInt(_)) | Node::True | Node::False => Some(Kind::Int),
 		Node::Number(_) => Some(Kind::Float),
@@ -2076,12 +2272,42 @@ fn literal_kind(value: &Node) -> Option<Kind> {
 
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>) -> Kind {
+/// The parameters and variables of a function body, typed
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
+	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
+	scope
+}
+
+/// The kinds of the values `return a, b` gives back, position by position over every such return:
+/// one kind when all agree, Float for Int mixed with Float, else a Node
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
+	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
+	let scope = function_body_scope(params, body, function_kinds, globals);
+	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
+	body.visit(&mut |node| {
+		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
+			let value_kind = infer_type(value, &scope);
+			*kind = Some(match *kind {
+				None => value_kind,
+				Some(known) if known == value_kind => known,
+				Some(known) if known.is_primitive() && value_kind.is_primitive() && (known.is_float() || value_kind.is_float()) => Kind::Float,
+				Some(_) => Kind::Data,
+			});
+		}
+	});
+	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
+}
+
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+	if crate::tuples::tuple_arity(body).is_some() {
+		return Kind::List; // used whole, a tuple function's values are packed into a list
+	}
+	let scope = function_body_scope(params, body, function_kinds, globals);
 	let last_kind = match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),
@@ -2110,6 +2336,9 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
 /// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
 fn annotated_kind(type_node: &Node) -> Option<Kind> {
+	if crate::type_constructor::instance_parts_marked(type_node) {
+		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
+	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);
@@ -2143,15 +2372,19 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new());
-	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
+	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
+	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
+	let mut called: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
+		if let Some(name) = crate::closures::called_closure(node) {
+			called.insert(name.to_string());
+		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
 				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
@@ -2174,7 +2407,13 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		indexed.insert(source.clone());
 	}
 	params.into_iter().map(|param| {
-		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
+		let used_as = if called.contains(&param.name) {
+			Some(Kind::Function)
+		} else if indexed.contains(&param.name) {
+			Some(Kind::List)
+		} else {
+			None
+		};
 		Param { used_as, ..param }
 	}).collect()
 }
@@ -2200,6 +2439,11 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 		for function in ctx.user_functions.values() {
 			function.body.visit(&mut |node| {
 				let Node::List(items, _, _) = node else { return };
+				// `closure_new(target, captured…)` passes the captured values to the target's first parameters
+				let items = match crate::closures::as_closure_new(node) {
+					Some(_) => &items[1..],
+					None => &items[..],
+				};
 				let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) else { return };
 				let Some(called) = ctx.user_functions.get(callee) else { return };
 				for (argument, called_param) in items[1..].iter().zip(&called.params) {
@@ -2226,9 +2470,19 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
+	crate::closures::register_closure_calls(ctx, node);
 	infer_parameters_from_calls(ctx, node);
 	infer_forwarded_parameters(ctx);
-	refine_return_kinds(ctx);
+	infer_closure_parameters(ctx, node);
+	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
+	refine_return_kinds(ctx, &declared_globals(node));
+}
+
+/// The program's `global` declarations with their kinds
+fn declared_globals(program: &Node) -> HashMap<String, Local> {
+	let mut scope = Scope::new();
+	collect_variables(program, &mut scope);
+	scope.globals
 }
 
 /// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
@@ -2237,25 +2491,16 @@ pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
 	let mut bound: HashSet<String> = ctx.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())).collect();
-	collect_assigned_names(&node, &mut bound);
+	crate::library_words::collect_assigned_names(&node, &mut bound);
 	negate_calls(node, &ctx.user_functions, &bound)
 }
 
-fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.clone());
-			}
-			collect_assigned_names(value, names);
-		}
-		Node::Key(left, _, right) => {
-			collect_assigned_names(left, names);
-			collect_assigned_names(right, names);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
-		_ => {}
-	}
+/// The functions a word can apply: the program's functions that take arguments and the built-in real functions
+pub fn applicable_function_names(node: &Node) -> HashSet<String> {
+	let mut ctx = Context::new();
+	extract_user_functions_inner(&mut ctx, node);
+	let user_functions = ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name);
+	user_functions.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
 }
 
 fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
@@ -2276,18 +2521,65 @@ fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound:
 	}
 }
 
+/// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
+/// parameter of the enclosing function, a literal variable), its parameters the kinds of the literal arguments of the closure
+/// calls of its arity
+fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
+	let variable_kinds = literal_variable_kinds(program, ctx);
+	loop {
+		let mut inferred: Vec<(String, usize, Kind)> = vec![];
+		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
+			let params: HashMap<String, Kind> = function.params.iter().map(|param| (param.name.clone(), param_kind(param))).collect();
+			(function.body.as_ref(), params)
+		}));
+		for (body, params) in scopes {
+			body.visit(&mut |node| {
+				let value_kind = |value: &Node| match value.drop_meta() {
+					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					_ => argument_literal_kind(value),
+				};
+				if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+					inferred.extend(captured.iter().enumerate().filter_map(|(index, value)| Some((target.to_string(), index, value_kind(value)?))));
+				}
+				let Node::List(items, _, _) = node else { return };
+				let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+				let Some(arity) = crate::closures::closure_call_arity(name) else { return };
+				for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)) {
+					inferred.extend(items[2..].iter().enumerate().filter_map(|(index, argument)| Some((target.clone(), captured + index, argument_literal_kind(argument)?))));
+				}
+			});
+		}
+		let mut changed = false;
+		for (target, index, kind) in inferred {
+			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
+			if kind != Kind::Int && param.annotation.is_none() && param.default.is_none() && param.used_as.is_none() {
+				param.used_as = Some(kind);
+				changed = true;
+			}
+		}
+		if !changed {
+			return;
+		}
+	}
+}
+
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
-	let name = format!("{kind:?}");
-	let article = if name.starts_with(|first: char| "AEIOU".contains(first)) { "an" } else { "a" };
+	with_article(&format!("{kind:?}"))
+}
+
+/// `a photo`, `an Int`, `an image`
+pub fn with_article(name: &str) -> String {
+	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) { "an" } else { "a" };
 	format!("{article} {name}")
 }
 
 /// The kind a call argument certainly has, judged from the literal alone
-fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
 		Node::List(entries, Bracket::Curly, _) if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => Some(Kind::List), // a map
 		_ => None,
 	}
@@ -2352,20 +2644,34 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
 /// until the kinds settle: a call of a float-returning function is itself Float
-fn refine_return_kinds(ctx: &mut Context) {
+fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
-			.map(|function| (function.name.clone(), infer_function_return_kind(&function.params, &function.body, &function_kinds)))
+			.map(|function| {
+				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals));
+				(function.name.clone(), kind)
+			})
 			.collect();
-		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
+		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
+			.flat_map(|function| {
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
+				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
+			})
+			.collect();
+		let settled = inferred.iter().chain(&tuples).all(|(name, kind)| function_kinds.get(name) == Some(kind));
 		function_kinds.extend(inferred);
+		function_kinds.extend(tuples);
 		if settled {
 			break;
 		}
 	}
 	for function in ctx.user_functions.values_mut() {
 		function.return_kind = function_kinds[&function.name];
+		function.tuple_kinds = (0..crate::tuples::tuple_arity(&function.body).unwrap_or(0))
+			.map(|index| function_kinds[&crate::tuples::element_key(&function.name, index)])
+			.collect();
 	}
 }
 
@@ -2374,10 +2680,10 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	match node {
 		// Pattern: name(param1, param2, ...) = body
 		Node::Key(left, Op::Assign, body) => {
-			if let Node::List(items, _, _) = left.drop_meta() {
+			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items), body));
+						ctx.user_functions.insert(name.clone(), user_function(name, extract_params(items, bracket), body));
 						return;
 					}
 				}
@@ -2390,7 +2696,7 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			if let Node::List(items, bracket, _) = left.drop_meta() {
 				if !items.is_empty() {
 					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params = extract_params(items);
+						let params = extract_params(items, bracket);
 						let implicit_param = uses_dollar_param(body) || uses_it(body);
 						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
 						if !params.is_empty() || implicit_param || written_call {
@@ -2404,7 +2710,9 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
 			if let Node::Symbol(name) = left.drop_meta() {
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					let params = if is_statement_block(body) { vec![] } else { vec![Param::untyped("it")] };
+					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
+					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
+					let params = if takes_it { vec![Param::untyped("it")] } else { vec![] };
 					ctx.user_functions.insert(name.clone(), user_function(name, params, body));
 					return;
 				}
@@ -2436,13 +2744,14 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	}
 }
 
-/// The parameters after the function name in a signature list
-fn extract_params(signature: &[Node]) -> Vec<Param> {
+/// The parameters after the function name in a signature list. Only a spaced signature `f int x` pairs a type word with
+/// the next name; in the call form `f(T, y)` every item is a parameter (the parser made `f(int x)` the item `x:int`)
+fn extract_params(signature: &[Node], bracket: &Bracket) -> Vec<Param> {
 	let mut items = signature.iter().skip(1).peekable();
 	let mut params = vec![];
 	while let Some(item) = items.next() {
 		let type_first_name = match (item.drop_meta(), items.peek().map(|next| next.drop_meta())) {
-			(Node::Symbol(type_name), Some(Node::Symbol(name))) if type_word_kind(type_name).is_some() => Some(name),
+			(Node::Symbol(type_name), Some(Node::Symbol(name))) if *bracket != Bracket::Round && type_word_kind(type_name).is_some() => Some(name),
 			_ => None,
 		};
 		match type_first_name {
@@ -2509,10 +2818,10 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 
 	// Pattern 1: def (name params...): body
 	if let Node::Key(sig, Op::Colon, body) = first {
-		if let Node::List(sig_items, _, _) = sig.drop_meta() {
+		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					return Some(user_function(name, extract_params(sig_items), body));
+					return Some(user_function(name, extract_params(sig_items, bracket), body));
 				}
 			}
 		}
@@ -2709,7 +3018,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
-			if matches!(op, Op::If | Op::While | Op::Question | Op::Not) {
+			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
@@ -2922,6 +3231,25 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 		}
 		Node::Meta { ref node, .. } => {
 			extract_ffi_imports(ctx, node);
+		}
+		_ => {}
+	}
+}
+
+/// Calls of the host words (`sleep(ms)`, `random()` …) import them, unless the program defines a function of that name
+pub fn extract_host_words(ctx: &mut Context, node: &Node) {
+	match node.drop_meta() {
+		Node::List(items, _, _) => {
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+				}
+			}
+			items.iter().for_each(|item| extract_host_words(ctx, item));
+		}
+		Node::Key(left, _, right) => {
+			extract_host_words(ctx, left);
+			extract_host_words(ctx, right);
 		}
 		_ => {}
 	}

@@ -2,7 +2,7 @@
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
 `use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and loads its uniscript.wasp (notes/packages.md); index format: its src/index.rs.
-Tests: tests/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.
+Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tests/test_text_bytes.rs, tests/test_text_functions.rs.
 
 ## Language features added for it (Rust)
 - `text + text`, `text + 'c'`, `'a' + 'b'` concatenate (`text_concat`, a codepoint is UTF-8 encoded by reusing

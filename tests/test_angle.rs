@@ -1,7 +1,4 @@
-use warp::smarty::{float_data28, smarty32};
-use warp::Node;
-use warp::Node::Empty;
-use warp::{is, Number};
+use warp::is;
 
 #[test]
 #[ignore]
@@ -325,44 +322,6 @@ fn test_switch() {
 	is!("{a:1 b:2}[b]", 2);
 }
 
-#[test]
-fn test_smart_types() {
-	// smarty32  is pretty useless but serves as nice demonstration of smart64,
-	// which   is pretty useless but serves as nice demonstration of multi return
-	// which  is pretty useless but serves as nice demonstration of node as wit/gc type
-	// which is pretty useless but serves as nice demonstration of emitted structs
-	assert_eq!(smarty32(0xC000221a), '√');
-	assert_eq!(smarty32(0xC000221a), "√");
-	assert_eq!(smarty32(0xC0000020), ' ');
-	assert_eq!(smarty32(0x00000000), Empty);
-	assert_eq!(smarty32(0x00000009), 9);
-	assert_eq!(smarty32((-9i32) as u32), -9);
-	assert_eq!(smarty32(0xFFFFFFFFu32), -1);
-	// assert_eq!(smarty32(0x00000000), 0);
-	// char* hi="Hello";
-	// strcpy2(&memoryChars[0x1000], hi);
-	// printf!(">>>%s<<<", &memoryChars[0x1000]);
-	// assert!(Node(0x90001000)==hi);
-	// short typ=getSmartType(string_header_32);
-	// assert!(typ==0x1);
-	// printf!("%08x", '√');// ok 0x221a
-	println!("𒈚"); // too small: character too large for enclosing character literal type
-	assert_eq!(smarty32(0xC001221A), '𒈚');
-	assert_eq!(smarty32(0xC001221A), "𒈚");
-	//	assert!(Node(0xD808DE1A)=='𒈚'); // utf-8-bytes
-
-	// let node = smarty32(0.1f32.to_bits()); accident!
-	let node = smarty32(float_data28(0.1f32)); // safe!
-	if let Node::Number(n) = node {
-		if let Number::Float(f) = n {
-			assert!(f - 0.1 < 0.00001);
-		} else {
-			panic!("Expected Float number");
-		}
-	} else {
-		panic!("Expected Number node");
-	}
-}
 // #[test] fn nl() {
 //     put_char('\n');
 // }

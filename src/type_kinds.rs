@@ -3,6 +3,15 @@ use wasm_encoder::ValType::Ref;
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
 
+/// A node's kind field holds the `Kind` in its low KIND_BITS bits and extra info above them:
+/// the bracket of a list (Curly=0, Square=1, Round=2 …) or the operator of a key
+pub const KIND_BITS: i64 = 8;
+pub const KIND_MASK: i64 = 0xFF;
+pub const CURLY_BRACKET_INFO: i64 = 0;
+pub const SQUARE_BRACKET_INFO: i64 = 1;
+pub const CURLY_LIST_KIND: i64 = (CURLY_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
+pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
+
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]
@@ -25,6 +34,7 @@ pub enum Kind {
 	Pointer = 13,  // FFI pointer (i64 handle)
 	Int32 = 14,    // explicit i32 (for FFI)
 	Float32 = 15,  // explicit f32 (for FFI)
+	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 }
 
 impl Kind {
@@ -96,6 +106,7 @@ impl std::fmt::Display for Kind {
 			Kind::Error => write!(f, "error"),
 			Kind::TypeDef => write!(f, "typedef"),
 			Kind::Pointer => write!(f, "pointer"),
+			Kind::Function => write!(f, "function"),
 		}
 	}
 }
@@ -253,6 +264,8 @@ fn extract_field_values(body: &crate::node::Node) -> Vec<type_kinds::RawFieldVal
 pub struct TypeRegistry {
 	types: Vec<TypeDef>,
 	name_to_idx: std::collections::HashMap<String, usize>,
+	/// (type, field) pairs declared with a default value, `class p{x=0}` or `x:int=0`: a construction may leave them out
+	defaults: std::collections::HashMap<(String, String), crate::node::Node>,
 }
 
 impl TypeRegistry {
@@ -301,6 +314,39 @@ impl TypeRegistry {
 		&self.types
 	}
 
+	/// A construction `T{…}` must give this field: neither optional (`email?`) nor declared with a default
+	pub fn is_required(&self, type_def: &TypeDef, field: &FieldDef) -> bool {
+		!field.is_optional() && self.default_of(type_def, field).is_none()
+	}
+
+	pub fn default_of(&self, type_def: &TypeDef, field: &FieldDef) -> Option<&crate::node::Node> {
+		self.defaults.get(&(type_def.name.clone(), field.name.clone()))
+	}
+
+	fn field_items(body: &crate::node::Node) -> impl Iterator<Item = &crate::node::Node> {
+		use crate::node::Node;
+		match body.drop_meta() {
+			Node::List(items, _, _) => items.iter().collect::<Vec<_>>().into_iter(),
+			other => vec![other].into_iter(),
+		}
+	}
+
+	/// The name and default value of a field declared `x=0`, `x:int=0` or `x:0` (a literal after the colon is no type)
+	fn field_default(item: &crate::node::Node) -> Option<(String, crate::node::Node)> {
+		use crate::node::Node;
+		use crate::operators::Op;
+		match item.drop_meta() {
+			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
+				Node::Key(name, Op::Colon, _) => Some((name.drop_meta().to_string(), value.drop_meta().clone())),
+				name => Some((name.to_string(), value.drop_meta().clone())),
+			},
+			Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False) => {
+				Some((name.drop_meta().to_string(), value.drop_meta().clone()))
+			}
+			_ => None,
+		}
+	}
+
 	/// Set WASM type index for a registered type
 	pub fn set_wasm_type_idx(&mut self, name: &str, wasm_idx: u32) {
 		if let Some(&idx) = self.name_to_idx.get(name) {
@@ -325,6 +371,9 @@ impl TypeRegistry {
 				_ => return None,
 			};
 			let fields = Self::extract_fields(body);
+			for (field, value) in Self::field_items(body).filter_map(Self::field_default) {
+				self.defaults.insert((type_name.clone(), field), value);
+			}
 			Some(self.register(type_name, fields))
 		} else {
 			None
@@ -360,6 +409,10 @@ impl TypeRegistry {
 		use crate::node::Node;
 		let node = node.drop_meta();
 		match node {
+			// `x:int=0`: the typed field x with a default
+			Node::Key(target, crate::operators::Op::Assign, _) if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) => {
+				Self::extract_field(target)
+			}
 			Node::Key(name_node, _, type_node) => {
 				let name = match name_node.drop_meta() {
 					Node::Symbol(s) | Node::Text(s) => s.clone(),
@@ -370,10 +423,10 @@ impl TypeRegistry {
 					Node::Type { name: type_name_node, .. } => {
 						match type_name_node.drop_meta() {
 							Node::Symbol(s) | Node::Text(s) => s.clone(),
-							_ => "Any".to_string(),
+							_ => UNTYPED_FIELD.to_string(),
 						}
 					}
-					_ => "Any".to_string(), // default type
+					_ => UNTYPED_FIELD.to_string(), // a default value `x=0` or `x:0`, no type
 				};
 				Some(FieldDef { name, type_name })
 			}

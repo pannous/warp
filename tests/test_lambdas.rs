@@ -1,5 +1,5 @@
 //! Compile-time lambdas: `f = x=>x*x` defines a function at that point (capture by value), a block with bindings is called
-//! at once, `map` over a literal block or lambda is a loop. Functions are not first-class values yet.
+//! at once, `map` over a literal block or lambda is a loop. A lambda that cannot be inlined is a closure (test_closures.rs).
 use warp::wasm_emitter::eval;
 use warp::*;
 use crate::common::fails_with;
@@ -46,9 +46,9 @@ fn test_map_as_a_method() {
 }
 
 #[test]
-fn test_a_lambda_that_cannot_be_inlined_is_a_loud_error() {
-	fails_with("apply(f, x):=x; apply(y=>y+1, 2)", "functions are not first-class values yet");
-	fails_with("map [1 2 3] 5", "functions are not first-class values yet");
+fn test_a_lambda_that_cannot_be_inlined_is_a_closure_value() {
+	is!("apply(f, x):=x; apply(y=>y+1, 2)", 2);
+	fails_with("map [1 2 3] 5", "map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)");
 }
 
 #[test]

@@ -1,24 +1,32 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
+mod closures;
 pub(crate) mod exact;
-#[macro_use]
 mod constructors;
 mod equality;
+mod function_builder;
 mod config;
 mod ffi_emitter;
+mod float_text;
 mod import_manager;
 mod key_emitter;
+mod layout;
 mod list_emitter;
+mod list_dispatch;
 mod library_ops;
 mod text_unicode;
 mod list_ops;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
-mod node_emitter;
+mod reflection;
 mod string_table;
 mod type_manager;
+mod try_guard;
+mod tuple_emitter;
+pub use try_guard::{CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
+mod witness;
 pub(crate) mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
@@ -40,6 +48,8 @@ const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up"
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
+/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
+const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
@@ -51,6 +61,10 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 ];
 
 /// An index out of range in a program with an exclusive range is often an end the writer meant to include
+/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
+pub const TRAP_DETAIL: &str = "trap_detail";
+/// How a trapped run carries that value into its error: `trap detail: <value>`
+pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
 const INDEX_OUT_OF_RANGE: &str = "index out of range";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
 
@@ -58,6 +72,15 @@ const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
 
 /// The condition and the then-branch of `if condition then branch`
+/// The call `join(list, separator)`: the items' text forms with the separator between them
+pub(super) fn join_call(list: Node, separator: &str) -> Node {
+	Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
+}
+
+pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
+	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
+}
+
 fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else { return None };
 	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else { return None };
@@ -75,27 +98,30 @@ use crate::context::{Context, UserFunctionDef};
 use crate::local::Local;
 use crate::extensions::numbers::Number;
 use crate::function::{Function as FuncDef, Signature};
+#[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
-use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
+#[cfg(feature = "native")]
 use crate::util::gc_engine;
+#[cfg(feature = "native")]
 use crate::wasm_reader::read_bytes;
 use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
 use std::collections::HashMap;
 use std::thread::scope;
-use wasm_ast::instruction;
 use wasm_encoder::*;
+#[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
 use ValType::Ref;
 
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArithmeticWrap {
-	None,
 	Int,
 	Float,
 }
@@ -119,6 +145,10 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	memory: MemorySection,
 	globals: GlobalSection,
+	tags: TagSection,
+	guards_errors: bool, // the program has a `try` that catches runtime errors
+	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	extra_global_names: Vec<(u32, &'static str)>,
 
 	// Configuration
 	config: EmitterConfig,
@@ -143,13 +173,17 @@ pub struct WasmGcEmitter {
 	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
-	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
+	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
+	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
+	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	closures: closures::ClosureTypes,
 }
 
 impl Default for WasmGcEmitter {
@@ -168,6 +202,10 @@ impl WasmGcEmitter {
 			names: NameSection::new(),
 			memory: MemorySection::new(),
 			globals: GlobalSection::new(),
+			tags: TagSection::new(),
+			guards_errors: false,
+			error_catching: None,
+			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
 			import_manager: ImportManager::new(),
@@ -181,12 +219,16 @@ impl WasmGcEmitter {
 			wrapping_ints: false,
 			int_heap_global: 0,
 			int_count_global: 0,
-			int_remainder_global: 0,
 			returns_node: true,
+			returned_tuple: vec![],
+			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
 			loop_labels: Vec::new(),
+			typed_lists: HashMap::new(),
+			compare_witness: None,
+			closures: closures::ClosureTypes::default(),
 		}
 	}
 
@@ -252,14 +294,6 @@ impl WasmGcEmitter {
 	fn ffi_func_index(&self, name: &str) -> Option<u32> {
 		let ffi_name = format!("ffi_{}", name);
 		self.ctx.func_registry.get(&ffi_name).map(|f| f.call_index as u32)
-	}
-
-	/// Register an import function
-	fn register_import(&mut self, name: &'static str) -> u32 {
-		let func = FuncDef::host(name);
-		let idx = self.ctx.func_registry.register(func);
-		self.next_func_idx = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
-		idx
 	}
 
 	/// Register a code function
@@ -338,11 +372,17 @@ impl WasmGcEmitter {
 		for name in &func_names {
 			self.register_user_function_signature(name);
 		}
+		self.register_closure_entries();
 
 		// PASS 2: Compile all function bodies
 		for name in func_names {
-			self.compile_user_function_body(&name);
+			if self.is_closure_call(&name) {
+				self.compile_closure_call(&name);
+			} else {
+				self.compile_user_function_body(&name);
+			}
 		}
+		self.compile_closure_entries();
 	}
 
 	/// Register a user function's signature and assign it an index (PASS 1)
@@ -353,17 +393,22 @@ impl WasmGcEmitter {
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().map(|param| self.storage_type(param_kind(param))).collect();
-		let result_type = if returns_node {
-			Ref(self.node_ref(false))
+		let result_types = if !user_fn.tuple_kinds.is_empty() {
+			self.tuple_result_types(&user_fn.tuple_kinds)
+		} else if returns_node {
+			vec![Ref(self.node_ref(false))]
 		} else {
-			self.storage_type(user_fn.return_kind)
+			vec![self.storage_type(user_fn.return_kind)]
 		};
-		self.type_manager.types_mut().ty().function(param_types, vec![result_type]);
+		self.type_manager.types_mut().ty().function(param_types, result_types);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
 		let func_idx = self.next_func_idx;
 		self.next_func_idx += 1;
+		if !user_fn.tuple_kinds.is_empty() {
+			self.register_tuple_packer(name, &user_fn.tuple_kinds);
+		}
 
 		// Store the function index and whether it returns a Node
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
@@ -387,6 +432,8 @@ impl WasmGcEmitter {
 
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
+		let typed_lists = self.find_typed_lists(&user_fn.body);
+		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -401,6 +448,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 		let mut func = Function::new(locals);
 
 		// Captured variables read their definition-time globals
@@ -409,8 +457,14 @@ impl WasmGcEmitter {
 			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
 			.collect();
 
+		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if returns_node {
+		if !user_fn.tuple_kinds.is_empty() {
+			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
+			self.emit_node_instructions(&mut func, &user_fn.body);
+			func.instruction(&Instruction::Drop);
+			func.instruction(&Instruction::Unreachable);
+		} else if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {
 			self.emit_value_of_kind(&mut func, &user_fn.body, user_fn.return_kind);
@@ -426,6 +480,10 @@ impl WasmGcEmitter {
 
 		// Add to code section
 		self.code.function(&func);
+		if !user_fn.tuple_kinds.is_empty() {
+			self.compile_tuple_packer(&user_fn.tuple_kinds);
+		}
+		self.returned_tuple = saved_returned_tuple;
 
 		// Restore scope
 		self.scope = saved_scope;
@@ -433,6 +491,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
 		self.restore_loop_labels(saved_loop_labels);
+		self.typed_lists = saved_typed_lists;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -461,7 +520,10 @@ impl WasmGcEmitter {
 	/// unless libm's f64 version is imported
 	fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).collect()
+		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
+			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
+		});
+		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -494,8 +556,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Inner helper for emitting user function calls
+	/// Inner helper for emitting user function calls; a tuple function's values are packed into a list
 	fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+		self.emit_user_function_values(func, user_fn, args);
+		if !user_fn.tuple_kinds.is_empty() && user_fn.func_index.is_some() {
+			self.emit_pack_tuple(func, &user_fn.name);
+		}
+	}
+
+	/// Arguments and the call: the function's own results on the stack, several for a tuple function
+	fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
 		let Some(func_index) = user_fn.func_index else {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
@@ -724,6 +794,7 @@ impl WasmGcEmitter {
 		// Analyze: Extract FFI imports, user functions, and required functions
 		extract_ffi_imports(&mut self.ctx, node);
 		extract_user_functions(&mut self.ctx, node);
+		crate::analyzer::extract_host_words(&mut self.ctx, node);
 		self.type_errors.extend(self.ctx.parameter_conflicts.drain(..));
 		self.scope.function_kinds = self.user_function_kinds();
 		self.derive_imports_from_effects(node);
@@ -733,6 +804,7 @@ impl WasmGcEmitter {
 			Need::MathImport(_) => None,
 		}));
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -746,6 +818,7 @@ impl WasmGcEmitter {
 		self.allocate_closure_captures(node);
 		// Compile user functions after builtin infrastructure is set up
 		self.compile_user_functions();
+		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
 		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
 			let mut rerun = Self::new();
@@ -928,6 +1001,10 @@ impl WasmGcEmitter {
 		self.emit_equality_ops();
 		// Emit helper functions
 		self.emit_getters();
+		self.emit_text_as_int(); // after the getters: it calls get_int_value
+		if self.config.emit_reflection {
+			self.emit_reflection();
+		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
@@ -938,41 +1015,38 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(true);
 
 		// get_kind(node: ref $Node) -> i64
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
-		self.functions.function(func_type);
-		let mut func = Function::new(vec![]);
-		func.instruction(&Instruction::LocalGet(0));
-		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.type_manager.node_type,
-			field_index: 0,
+		self.exported_function("get_kind", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: s.type_manager.node_type,
+				field_index: 0,
+			});
 		});
-		func.instruction(&Instruction::End);
-		self.code.function(&func);
-		let idx = self.register_func("get_kind");
-		self.exports.export("get_kind", ExportKind::Func, idx);
 
 		// get_int_value(node: ref $Node) -> i64
-		// Extract integer from Node's data field (i64box)
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
-		self.functions.function(func_type);
-		let mut func = Function::new(vec![]);
-		func.instruction(&Instruction::LocalGet(0)); // Node
-		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.type_manager.node_type,
-			field_index: 1, // data field
+		// Extract integer from Node's data field (i64box); a node that is no Int is the runtime error not_an_int,
+		// which a `try` catches, never a raw cast trap
+		self.exported_function("get_int_value", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
+			Self::emit_list(func, &[
+				Instruction::LocalGet(0),
+				Instruction::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
+				Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
+				Instruction::If(BlockType::Empty),
+			]);
+			s.emit_runtime_error(func, "not_an_int");
+			func.instruction(&Instruction::End);
+			func.instruction(&Instruction::LocalGet(0)); // Node
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: s.type_manager.node_type,
+				field_index: 1, // data field
+			});
+			s.emit_int_from_payload(func);
 		});
-		self.emit_int_from_payload(&mut func);
-		func.instruction(&Instruction::End);
-		self.code.function(&func);
-		let idx = self.register_func("get_int_value");
-		self.exports.export("get_int_value", ExportKind::Func, idx);
 
 		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
 		// so a host without GC field access (JavaScript) can read a result text from memory
 		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
-			self.runtime_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
+			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
 				let string = HeapType::Concrete(s.type_manager.string_type);
 				s.emit_field(f, 0, 1);
 				f.instruction(&Instruction::RefTestNonNull(string));
@@ -982,7 +1056,6 @@ impl WasmGcEmitter {
 				f.instruction(&Instruction::I32Const(0));
 				f.instruction(&Instruction::End);
 			});
-			self.exports.export(name, ExportKind::Func, self.func_index(name));
 		}
 	}
 
@@ -991,56 +1064,45 @@ impl WasmGcEmitter {
 		// i64_pow(base: i64, exp: i64) -> i64
 		// Computes base^exp using a loop
 		if self.should_emit_function("i64_pow") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![ValType::I64, ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
+			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |_, func| {
+				// Locals: 0=base, 1=exp, 2=result
+				// result = 1
+				func.instruction(&Instruction::I64Const(1));
+				func.instruction(&Instruction::LocalSet(2));
 
-			// Locals: 0=base, 1=exp, 2=result
-			let mut func = Function::new(vec![(1, ValType::I64)]);
+				// block $done
+				func.instruction(&Instruction::Block(BlockType::Empty));
+				// loop $loop
+				func.instruction(&Instruction::Loop(BlockType::Empty));
 
-			// result = 1
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::LocalSet(2));
+				// br_if $done (i64.eqz (local.get $exp))
+				func.instruction(&Instruction::LocalGet(1)); // exp
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::BrIf(1)); // break to $done
 
-			// block $done
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			// loop $loop
-			func.instruction(&Instruction::Loop(BlockType::Empty));
+				// result = result * base
+				func.instruction(&Instruction::LocalGet(2)); // result
+				func.instruction(&Instruction::LocalGet(0)); // base
+				func.instruction(&Instruction::I64Mul);
+				func.instruction(&Instruction::LocalSet(2));
 
-			// br_if $done (i64.eqz (local.get $exp))
-			func.instruction(&Instruction::LocalGet(1)); // exp
-			func.instruction(&Instruction::I64Eqz);
-			func.instruction(&Instruction::BrIf(1)); // break to $done
+				// exp = exp - 1
+				func.instruction(&Instruction::LocalGet(1)); // exp
+				func.instruction(&Instruction::I64Const(1));
+				func.instruction(&Instruction::I64Sub);
+				func.instruction(&Instruction::LocalSet(1));
 
-			// result = result * base
-			func.instruction(&Instruction::LocalGet(2)); // result
-			func.instruction(&Instruction::LocalGet(0)); // base
-			func.instruction(&Instruction::I64Mul);
-			func.instruction(&Instruction::LocalSet(2));
+				// br $loop
+				func.instruction(&Instruction::Br(0));
 
-			// exp = exp - 1
-			func.instruction(&Instruction::LocalGet(1)); // exp
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::LocalSet(1));
+				// end loop
+				func.instruction(&Instruction::End);
+				// end block
+				func.instruction(&Instruction::End);
 
-			// br $loop
-			func.instruction(&Instruction::Br(0));
-
-			// end loop
-			func.instruction(&Instruction::End);
-			// end block
-			func.instruction(&Instruction::End);
-
-			// return result
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::End);
-
-			self.code.function(&func);
-			let idx = self.register_func("i64_pow");
-			self.exports.export("i64_pow", ExportKind::Func, idx);
+				// return result
+				func.instruction(&Instruction::LocalGet(2));
+			});
 		}
 	}
 
@@ -1083,13 +1145,14 @@ impl WasmGcEmitter {
 	fn local_declarations(&self, skipped: usize) -> Vec<(u32, ValType)> {
 		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
 		sorted_locals.sort_by_key(|local| local.position);
-		sorted_locals.into_iter().skip(skipped).map(|local| (1, self.storage_type(local.kind))).collect()
+		sorted_locals.into_iter().skip(skipped).map(|local| (1, self.local_storage_type(&local.name, local.kind))).collect()
 	}
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
+		self.typed_lists = self.find_typed_lists(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
@@ -1112,8 +1175,10 @@ impl WasmGcEmitter {
 		}
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 
 		let mut func = Function::new(locals);
+		self.emit_witness_installation(&mut func);
 		self.emit_node_instructions(&mut func, node);
 		func.instruction(&Instruction::End);
 
@@ -1144,7 +1209,15 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
+			return;
+		}
+		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
+			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			return;
+		}
+		if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+			self.emit_closure_new(func, target, captured);
 			return;
 		}
 		let node = node.drop_meta();
@@ -1183,6 +1256,9 @@ impl WasmGcEmitter {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
 					}
+					return;
+				}
+				if self.emit_typed_list_as_node(func, s) {
 					return;
 				}
 				// Check if this is a local variable lookup
@@ -1332,6 +1408,7 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, right);
 		} else {
 			self.emit_numeric_value(func, right);
+			self.emit_fits_declared(func, left);
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
 			if let Some(local) = self.scope.lookup(name) {
@@ -1355,6 +1432,7 @@ impl WasmGcEmitter {
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			self.emit_int_step(func, local_pos, op);
+			self.emit_fits_declared(func, left);
 			// Store and return new value
 			func.instruction(&Instruction::LocalTee(local_pos));
 			true
@@ -1396,6 +1474,7 @@ impl WasmGcEmitter {
 				self.emit_float_arithmetic(func, &base_op);
 			} else {
 				self.emit_int_compound_op(func, &base_op, right);
+				self.emit_fits_declared(func, left);
 			}
 			// Store result and leave on stack
 			func.instruction(&Instruction::LocalTee(local_pos));
@@ -1435,32 +1514,45 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return left; else return right
-			self.emit_float_value(func, left);
-			func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-			func.instruction(&Instruction::F64Eq);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-			self.emit_float_value(func, left); // return left (0.0)
-			func.instruction(&Instruction::Else);
-			self.emit_float_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_float");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_float_value(func, left);
-		func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-		func.instruction(&Instruction::F64Ne);
+		// and: a falsy left is the value, else right; or: a truthy left is the value, else right. Left is evaluated once.
+		self.emit_held_left_is_falsy(func, left, true);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::F64)));
-		self.emit_float_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::And, right, true);
 		func.instruction(&Instruction::Else);
-		self.emit_float_value(func, right); // return right
+		self.emit_logical_branch(func, op == &Op::Or, right, true);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_float");
 		true
+	}
+
+	/// Push i32 1 when `left` is falsy (0 or 0.0), keeping its value in a scratch local (a float as its bits)
+	fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
+		let held = self.scratch(LOGICAL_SCRATCH);
+		if is_float {
+			self.emit_float_value(func, left);
+			Self::emit_list(func, &[Instruction::I64ReinterpretF64, Instruction::LocalTee(held), Instruction::F64ReinterpretI64]);
+			Self::emit_list(func, &[Instruction::F64Const(Ieee64::new(0.0f64.to_bits())), Instruction::F64Eq]);
+		} else {
+			self.emit_numeric_value(func, left);
+			Self::emit_list(func, &[Instruction::LocalTee(held), Instruction::I64Eqz]);
+		}
+	}
+
+	/// The held left value, raw
+	fn emit_held_left(&self, func: &mut Function, is_float: bool) {
+		func.instruction(&Instruction::LocalGet(self.scratch(LOGICAL_SCRATCH)));
+		if is_float {
+			func.instruction(&Instruction::F64ReinterpretI64);
+		}
+	}
+
+	/// One branch of a numeric and/or: the held left value or right, raw
+	fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
+		match (is_left, is_float) {
+			(true, _) => self.emit_held_left(func, is_float),
+			(false, true) => self.emit_float_value(func, right),
+			(false, false) => self.emit_numeric_value(func, right),
+		}
 	}
 
 	fn emit_int_truthy_logical(
@@ -1474,27 +1566,11 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		if *op == Op::And {
-			// Truthy and: if left is 0, return 0; else return right
-			self.emit_numeric_value(func, left);
-			func.instruction(&Instruction::I64Eqz);
-			func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-			func.instruction(&Instruction::I64Const(0)); // return 0 (falsy)
-			func.instruction(&Instruction::Else);
-			self.emit_numeric_value(func, right); // return right
-			func.instruction(&Instruction::End);
-			self.emit_call(func, "new_int");
-			return true;
-		}
-
-		// Op::Or
-		// Truthy or: if left is non-0, return left; else return right
-		self.emit_numeric_value(func, left);
-		func.instruction(&Instruction::I64Eqz);
+		self.emit_held_left_is_falsy(func, left, false);
 		func.instruction(&Instruction::If(BlockType::Result(ValType::I64)));
-		self.emit_numeric_value(func, right); // return right (left was falsy)
+		self.emit_logical_branch(func, op == &Op::And, right, false);
 		func.instruction(&Instruction::Else);
-		self.emit_numeric_value(func, left); // return left (truthy)
+		self.emit_logical_branch(func, op == &Op::Or, right, false);
 		func.instruction(&Instruction::End);
 		self.emit_call(func, "new_int");
 		true
@@ -1604,6 +1680,8 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::I64ExtendI32U);
 		} else {
 			self.emit_int_op(func, op, left_range, right_range);
+			let width = crate::fixed_width::wider(self.declared_fixed_width(left), self.declared_fixed_width(right));
+			self.emit_fixed_width_check(func, width);
 		}
 	}
 
@@ -1617,7 +1695,6 @@ impl WasmGcEmitter {
 
 	fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
 		match wrap {
-			ArithmeticWrap::None => {}
 			ArithmeticWrap::Int => self.emit_call(func, "new_int"),
 			ArithmeticWrap::Float => self.emit_call(func, "new_float"),
 		}
@@ -1631,65 +1708,56 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(self.type_manager.node_type),
 		};
 
-		// For numeric left operand, extract its value for truthiness check
-		let left_is_numeric = self.is_numeric(left);
+		// A call of number kind is tested at run time like a numeric variable, and evaluated once
+		let is_call = matches!(left.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		let left_is_numeric = self.is_numeric(left) || (is_call && matches!(self.get_type(left), Kind::Int | Kind::Float));
 
 		if left_is_numeric {
-			// Emit left as numeric and check truthiness
-			if self.get_type(left).is_float() {
-				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits())));
-				if *op == Op::And {
-					// and: if left == 0, return left (falsy); else return right
-					func.instruction(&Instruction::F64Eq);
-				} else {
-					// or: if left != 0, return left (truthy); else return right
-					func.instruction(&Instruction::F64Ne);
-				}
-			} else {
-				self.emit_numeric_value(func, left);
-				func.instruction(&Instruction::I64Eqz);
-				if *op == Op::And {
-					// and: if left == 0 (eqz is true), return left
-					// eqz returns 1 if zero, 0 if non-zero
-				} else {
-					// or: if left != 0 (eqz is false), return left
-					func.instruction(&Instruction::I32Eqz); // flip the condition
-				}
+			let is_float = self.get_type(left).is_float();
+			self.emit_held_left_is_falsy(func, left, is_float);
+			if *op == Op::Or {
+				func.instruction(&Instruction::I32Eqz); // or: a truthy left is the value
 			}
-
-			// If condition is true, return left; else return right
 			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
-			self.emit_node_instructions(func, left);
+			self.emit_held_left(func, is_float);
+			self.emit_call(func, if is_float { "new_float" } else { "new_int" });
 			func.instruction(&Instruction::Else);
 			self.emit_node_instructions(func, right);
 			func.instruction(&Instruction::End);
-		} else {
-			// Left is non-numeric - check if it's falsy at compile time
-			let left_is_falsy = left.is_falsy();
-
+		} else if Self::is_run_time_value(left) {
+			// a variable, call or element holding a Node: its truthiness is known at run time only
+			let held = self.node_scratch();
+			self.emit_node_instructions(func, left);
+			func.instruction(&Instruction::LocalTee(held));
+			self.emit_call(func, IS_TRUTHY);
 			if *op == Op::And {
-				if left_is_falsy {
-					// and with falsy left: return left
-					self.emit_node_instructions(func, left);
-				} else {
-					// and with truthy left: return right
-					self.emit_node_instructions(func, right);
-				}
-			} else {
-				// Op::Or
-				if left_is_falsy {
-					// or with falsy left: return right
-					self.emit_node_instructions(func, right);
-				} else {
-					// or with truthy left: return left
-					self.emit_node_instructions(func, left);
-				}
+				func.instruction(&Instruction::I32Eqz); // and: a falsy left is the value
 			}
+			func.instruction(&Instruction::If(BlockType::Result(Ref(node_ref))));
+			Self::emit_list(func, &[Instruction::LocalGet(held), Instruction::RefAsNonNull, Instruction::Else]);
+			self.emit_node_instructions(func, right);
+			func.instruction(&Instruction::End);
+		} else {
+			// a literal left is falsy or not at compile time: `[] or 3`, `"a" and 4`
+			let left_is_value = left.is_falsy() == (*op == Op::And);
+			self.emit_node_instructions(func, if left_is_value { left } else { right });
 		}
 	}
 
+	/// A name, call, element or field: its value exists only at run time
+	fn is_run_time_value(node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(_) => true,
+			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+			Node::Key(_, Op::Hash | Op::Dot, _) => true,
+			_ => false,
+		}
+	}
 
+	/// The one nullable Node local of every function, after its int scratch locals
+	fn node_scratch(&self) -> u32 {
+		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+	}
 
 	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
@@ -1899,6 +1967,19 @@ impl WasmGcEmitter {
 		self.next_global_idx - 1
 	}
 
+	/// Leave `value` in the exported global `trap_detail` (declared on first use), for the runtime error that follows
+	/// to name it: the runner reads it after the trap (wasm_reader::with_trap_detail)
+	pub(super) fn emit_trap_detail(&mut self, func: &mut Function, value: &Node) {
+		const TRAP_DETAIL_GLOBAL: &str = "trap·detail"; // not a wasp name, so no user global meets it
+		if !self.ctx.user_globals.contains_key(TRAP_DETAIL_GLOBAL) {
+			let index = self.declare_mutable_global(Kind::Empty);
+			self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
+			self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		}
+		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
+		func.instruction(&Instruction::Drop);
+	}
+
 	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
 	fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
 		let Some((name, value)) = Self::global_declaration_parts(decl) else {
@@ -2007,7 +2088,7 @@ impl WasmGcEmitter {
 			return;
 		};
 
-		// A branch yielding a text, list or error (`if x {x} else {"offline"}`): both branches are Node values
+		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
 			Node::List(items, Bracket::Curly, _) if items.len() == 1 => items[0].clone(),
 			other => other.clone(),
@@ -2015,7 +2096,8 @@ impl WasmGcEmitter {
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
 		let is_node_valued = |emitter: &Self, value: &Node| {
-			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || crate::analyzer::branch_kind(value, &emitter.scope).is_ref())
+			let kind = crate::analyzer::branch_kind(value, &emitter.scope);
+			!matches!(value.drop_meta(), Node::Empty) && (emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint)
 		};
 		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
 			self.emit_condition(func, condition, Self::emit_block_value);
@@ -2211,13 +2293,9 @@ impl WasmGcEmitter {
 	/// `x as string` for a variable: an Int, a Text or a character is the join of the one-element list;
 	/// anything else has no runtime text yet
 	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
-		let join_call = |list: Node, separator: &str| {
-			Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
-		};
-		let one_item_list = |item: Node| Node::List(vec![item], Bracket::Square, Separator::Space);
 		let kind = self.get_type(value);
 		let node = match kind {
-			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			Kind::List => {
 				let text = |text: &str| Box::new(Node::Text(text.to_string()));
@@ -2277,6 +2355,12 @@ impl WasmGcEmitter {
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
 						self.emit_truncating_cast(func);
+						self.emit_call(func, "new_int");
+					}
+					// Runtime: a text, or a value known only at run time (a list element), parses its digits
+					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+						self.emit_node_instructions(func, value);
+						self.emit_call(func, list_ops::TEXT_AS_INT);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible; a ratio is truncated
@@ -2344,7 +2428,8 @@ impl WasmGcEmitter {
 					Node::Text(s) => {
 						self.emit_string_call(func, s, "new_text");
 					}
-					_ if !self.mentions_variable(value) => {
+					// data and names are their source text; an Int expression (`str(1+2)`) is the text of its value
+					_ if !self.mentions_variable(value) && self.get_type(value) != Kind::Int => {
 						let (ptr, len) = self.allocate_string(&value.serialize());
 						func.instruction(&I32Const(ptr as i32));
 						func.instruction(&I32Const(len as i32));
@@ -2484,7 +2569,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
 			return;
 		}
 		let located = node;
@@ -2544,6 +2629,11 @@ impl WasmGcEmitter {
 							self.emit_type_error(func, message);
 							return;
 						}
+						if self.emit_typed_list_store(func, name, right) {
+							func.instruction(&Instruction::Drop);
+							func.instruction(&Instruction::I64Const(0));
+							return;
+						}
 						if kind.is_ref() {
 							// a variable holding ø, a list or a text: the value lives in the local, a number is also the value of the assignment
 							self.emit_node_instructions(func, right);
@@ -2556,6 +2646,7 @@ impl WasmGcEmitter {
 							return;
 						}
 						self.emit_value_of_kind(func, right, kind);
+						self.emit_fits_declared(func, left);
 						func.instruction(&Instruction::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
 						if kind.is_float() {
@@ -2577,6 +2668,7 @@ impl WasmGcEmitter {
 				if let Node::Symbol(name) = left.drop_meta() {
 					let Some(local_pos) = self.defined_local_position(func, name) else { return };
 					self.emit_int_step(func, local_pos, op);
+					self.emit_fits_declared(func, left);
 					// Store and return new value
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -2601,6 +2693,7 @@ impl WasmGcEmitter {
 					// Emit y
 					self.emit_numeric_value(func, right);
 					self.emit_int_compound_op(func, &base_op, right);
+					self.emit_fits_declared(func, left);
 					// Store result and leave on stack
 					func.instruction(&Instruction::LocalTee(local_pos));
 				} else {
@@ -2674,13 +2767,11 @@ impl WasmGcEmitter {
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
 			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
 				let counter = self.counting_getter(property).expect("guarded");
-				self.emit_node_instructions(func, counted);
-				self.emit_call(func, counter);
+				self.emit_list_count(func, counted, counter);
 			}
 			// Prefix # means count/length: #list returns element count
 			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
-				self.emit_node_instructions(func, right);
-				self.emit_call(func, "node_count");
+				self.emit_list_count(func, right, "node_count");
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
@@ -2689,13 +2780,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, "get_int_value");
 					return;
 				}
-				self.emit_integral_index_check(func, index);
-				// Emit the list as a Node reference
-				self.emit_node_instructions(func, list);
-				// Emit the index
-				self.emit_numeric_value(func, index);
-				// Call list_at
-				self.emit_call(func, "list_at");
+				self.emit_list_element_number(func, list, index);
 			}
 			// Ternary operator: condition ? then_expr : else_expr
 			Node::Key(condition, Op::Question, then_else) => {
@@ -2720,7 +2805,9 @@ impl WasmGcEmitter {
 						return;
 					}
 				}
-				if let Some(local) = self.scope.lookup(name) {
+				if self.emit_typed_list_as_node(func, name) {
+					self.emit_call(func, "get_int_value");
+				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
@@ -2763,6 +2850,7 @@ impl WasmGcEmitter {
 							} else {
 								self.emit_numeric_value(func, &items[1]);
 							}
+							self.emit_leave_tries(func, 0);
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
@@ -2842,7 +2930,7 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
 		let located = node;
@@ -2951,7 +3039,10 @@ impl WasmGcEmitter {
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if self.emit_typed_list_as_node(func, name) {
+					self.emit_call(func, "get_int_value");
+					self.emit_int_to_f64(func, None);
+				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						self.emit_call(func, "get_int_value");
@@ -3094,10 +3185,17 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 
+	#[cfg(not(feature = "validate"))]
+	fn try_validate_wasm(_bytes: &[u8]) -> Result<(), String> {
+		Ok(()) // the engine that runs the module validates it (the browser build, web/playground)
+	}
+
+	#[cfg(feature = "validate")]
 	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
 		features.set(WasmFeatures::GC, true);
+		features.set(WasmFeatures::EXCEPTIONS, true);
 		let mut validator = Validator::new_with_features(features);
 		match validator.validate_all(bytes) {
 			Ok(_) => {
@@ -3122,10 +3220,20 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.functions);
 		self.module.section(&self.memory);
+		if !self.tags.is_empty() {
+			self.module.section(&self.tags);
+		}
 		if self.next_global_idx > 0 {
 			self.module.section(&self.globals);
 		}
 		self.module.section(&self.exports);
+		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
+		let declared_functions: Vec<u32> = self.closures.declared_functions().into_iter().chain(self.witness_dispatcher()).collect();
+		if !declared_functions.is_empty() {
+			let mut elements = ElementSection::new();
+			elements.declared(Elements::Functions(declared_functions.into()));
+			self.module.section(&elements);
+		}
 		self.module.section(&self.code);
 		// Get data section from string table
 		self.module.section(self.string_table.data_section());
@@ -3138,95 +3246,55 @@ impl WasmGcEmitter {
 		Ok(bytes)
 	}
 
+	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
 	fn emit_names(&mut self) {
-		// Module name
 		self.names.module("wasp_compact");
 
-		// Type names
-		let mut type_names = NameMap::new();
-		type_names.append(self.type_manager.string_type, "String");
-		type_names.append(self.type_manager.i64_box_type, "i64box");
-		type_names.append(self.type_manager.f64_box_type, "f64box");
-		type_names.append(self.type_manager.node_type, "Node");
-		// User-defined type names
-		for (name, idx) in &self.ctx.user_type_indices {
-			type_names.append(*idx, name);
+		let functions: Vec<(u32, String)> = self.ctx.func_registry.all().iter()
+			.map(|f| (f.call_index as u32, f.name.clone()))
+			.chain(self.ctx.user_functions.values().filter_map(|function| Some((function.func_index?, function.name.clone()))))
+			.chain(self.closures.entry_names())
+			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
+			.collect();
+		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
+
+		let tm = &self.type_manager;
+		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
+			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList")];
+		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
+		self.names.types(&name_map(&mut types));
+
+		if self.next_global_idx > 0 {
+			const KIND_GLOBALS: [&str; 12] = ["kind_empty", "kind_int", "kind_float", "kind_text", "kind_codepoint", "kind_symbol",
+				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
+			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
+				.filter(|(idx, _)| (*idx as u32) < self.next_global_idx).map(|(idx, name)| (idx as u32, *name)).collect();
+			globals.extend(self.extra_global_names.iter().copied());
+			self.names.globals(&name_map(&mut globals));
 		}
-		self.names.types(&type_names);
 
-		// Field names for struct types
-		let mut type_field_names = IndirectNameMap::new();
-
-		// $Node fields
-		let mut node_fields = NameMap::new();
-		node_fields.append(0, "kind");
-		node_fields.append(1, "data");
-		node_fields.append(2, "value");
-		type_field_names.append(self.type_manager.node_type, &node_fields);
-
-		// $String fields
-		Self::append_string_field_names(&mut type_field_names, self.type_manager.string_type);
-
-		// $i64box field
-		let mut i64box_fields = NameMap::new();
-		i64box_fields.append(0, "value");
-		type_field_names.append(self.type_manager.i64_box_type, &i64box_fields);
-
-		// $f64box field
-		let mut f64box_fields = NameMap::new();
-		f64box_fields.append(0, "value");
-		type_field_names.append(self.type_manager.f64_box_type, &f64box_fields);
-
-		// User-defined type fields
+		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
+			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
+			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
+			(tm.i64_box_type, vec![(0, "value")]),
+			(tm.f64_box_type, vec![(0, "value")]),
+			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
+		];
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
-				let mut field_names = NameMap::new();
-				for (i, field) in type_def.fields.iter().enumerate() {
-					field_names.append(i as u32, &field.name);
-				}
-				type_field_names.append(type_idx, &field_names);
+				fields.push((type_idx, type_def.fields.iter().enumerate().map(|(i, field)| (i as u32, field.name.as_str())).collect()));
 			}
 		}
-
+		fields.sort_by_key(|(type_idx, _)| *type_idx);
+		fields.dedup_by_key(|(type_idx, _)| *type_idx);
+		let mut type_field_names = IndirectNameMap::new();
+		for (type_idx, mut names) in fields {
+			type_field_names.append(type_idx, &name_map(&mut names));
+		}
 		self.names.fields(&type_field_names);
 
-		// Function names - sort by index for deterministic output
-		let mut func_names = NameMap::new();
-		let mut sorted: Vec<_> = self.ctx
-			.func_registry
-			.all()
-			.iter()
-			.map(|f| (f.name.as_str(), f.call_index as u32))
-			.collect();
-		sorted.sort_by_key(|(_, idx)| *idx);
-		for (name, idx) in sorted {
-			func_names.append(idx, name);
-		}
-		self.names.functions(&func_names);
-
-		// Global names for Kind constants
-		if self.next_global_idx > 0 {
-			let global_names_list = [
-				"kind_empty",
-				"kind_int",
-				"kind_float",
-				"kind_text",
-				"kind_codepoint",
-				"kind_symbol",
-				"kind_key",
-				"kind_block",
-				"kind_list",
-				"kind_data",
-				"kind_meta",
-				"kind_error",
-			];
-			let mut global_names = NameMap::new();
-			for (idx, name) in global_names_list.iter().enumerate() {
-				if (idx as u32) < self.next_global_idx {
-					global_names.append(idx as u32, name);
-				}
-			}
-			self.names.globals(&global_names);
+		if let Some(tag_names) = self.error_tag_names() {
+			self.names.tags(&tag_names);
 		}
 	}
 
@@ -3392,8 +3460,13 @@ impl WasmGcEmitter {
 			module.section(&data);
 		}
 
-		// Name section for field name resolution
+		// Name section for field name resolution, subsections in ascending id order (function 1, type 4, field 10)
 		let mut names = NameSection::new();
+
+		// Function names (subsection 1 comes before types and fields)
+		let mut func_names = NameMap::new();
+		func_names.append(0, "main");
+		names.functions(&func_names);
 
 		// Type names
 		let mut type_names = NameMap::new();
@@ -3415,11 +3488,6 @@ impl WasmGcEmitter {
 		type_field_names.append(struct_type_idx, &struct_fields_names);
 		names.fields(&type_field_names);
 
-		// Function names
-		let mut func_names = NameMap::new();
-		func_names.append(0, "main");
-		names.functions(&func_names);
-
 		module.section(&names);
 
 		let bytes = module.finish();
@@ -3428,6 +3496,18 @@ impl WasmGcEmitter {
 	}
 }
 
+/// A name map in index order (the name section requires it), one name per index
+fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
+	names.sort_by_key(|(idx, _)| *idx);
+	names.dedup_by_key(|(idx, _)| *idx);
+	let mut map = NameMap::new();
+	for (idx, name) in names.iter() {
+		map.append(*idx, name);
+	}
+	map
+}
+
+#[cfg(feature = "native")]
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	use wasmtime::{Linker, Module, Val};
@@ -3495,23 +3575,21 @@ fn find_instantiation_recursive(registry: &TypeRegistry, node: &Node) -> Option<
 }
 
 // Re-export eval function for tests
+/// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
-	// Detect file path and load file content
-	let code = if !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp")) {
-		if let Ok(content) = std::fs::read_to_string(code) {
-			content
-		} else {
-			code.to_string()
-		}
-	} else {
-		code.to_string()
-	};
+	let names_a_file = !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp"));
+	match names_a_file.then(|| std::fs::read_to_string(code).ok()).flatten() {
+		Some(source) => crate::modules::with_program_file(std::path::Path::new(code), || eval_source(&source)),
+		None => eval_source(code),
+	}
+}
 
-	crate::diagnostic::take_assumptions(); // only the guesses made for this program explain its errors
-	match lawful_program(&code) {
+fn eval_source(code: &str) -> Node {
+	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
+	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
-			explain_runtime_error(eval_parsed(program, &code), exclusive_range)
+			explain_runtime_error(eval_parsed(program, code), exclusive_range)
 		}
 		Err(violation) => violation,
 	}
@@ -3563,6 +3641,7 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 /// Evaluate foreign data with an empty capability set: a program that would call any host, WASI or FFI
 /// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
 pub fn eval_untrusted(code: &str) -> Node {
+	crate::diagnostic::begin_program();
 	let program = WaspParser::parse(code);
 	match crate::effects::EffectReport::of(&program).externals.keys().next() {
 		Some(external) => crate::node::error(&format!("untrusted code has no capabilities, refusing to call {external}")),
@@ -3583,7 +3662,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::modules::resolve(node)));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(node))))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -3601,18 +3680,20 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = crate::type_tests::lower(node);
+	let node = crate::type_tests::lower(crate::traits::lower_declarations(node));
+	let node = crate::ambiguous_forms::lower(node);
 	let node = crate::analyzer::lower_list_times(node);
 	let node = crate::lambdas::lower(node);
 	let node = crate::function_values::lower(node);
+	let node = crate::closures::lower(node);
 	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
-	let node = crate::type_constructor::lower(node);
+	let node = crate::traits::lower_conformances(crate::type_constructor::lower(node));
 	let node = crate::min_max::lower(node);
 	let node = crate::declarations::lower(node);
 	let node = crate::switch::lower(node);
 	let node = crate::phrase_words::lower(node);
-	let node = crate::library_words::lower(node);
+	let node = crate::traits::lower_dispatch(crate::library_words::lower(node));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -3656,6 +3737,7 @@ fn write_debug_module(bytes: &[u8]) {
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
 /// answer of a program that needs no module.
 pub fn compile(code: &str) -> Result<CompiledModule, Node> {
+	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(lawful_program(code)?, |program| choose_module(&lower_for_emission(program)?))
 }
 
@@ -3680,13 +3762,12 @@ pub fn eval_parsed(node: Node, _code: &str) -> Node {
 }
 
 fn eval_program(node: Node) -> Node {
-	use crate::wasm_reader::{read_bytes_with_host, read_bytes_with_wasi, read_bytes_with_ffi};
-
 	let node = match lower_for_emission(node) {
 		Ok(node) => node,
 		Err(final_value) => return final_value,
 	};
 
+	#[cfg(feature = "native")]
 	if let Some(wasm_bytes) = raw_struct_module(&node) {
 		match run_raw_struct(&wasm_bytes) {
 			Ok(result) => return result,
@@ -3695,22 +3776,28 @@ fn eval_program(node: Node) -> Node {
 	}
 
 	// Fallback to standard Node encoding
-	let CompiledModule { bytes, needs_host, needs_wasi, needs_ffi } = match emit_module(&node) {
-		Ok(module) => module,
-		Err(type_error) => return type_error,
-	};
+	match emit_module(&node) {
+		Ok(module) => run_module(module),
+		Err(type_error) => type_error,
+	}
+}
 
-	// Use appropriate linker based on imports needed
-	let result = if needs_ffi {
-		read_bytes_with_ffi(&bytes)
-	} else if needs_wasi {
-		read_bytes_with_wasi(&bytes)
-	} else if needs_host {
-		read_bytes_with_host(&bytes)
+/// Run a compiled program with the linker its imports need
+#[cfg(feature = "native")]
+fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
+	use crate::wasm_reader::{read_bytes_with_imports, Imports};
+	let result = if needs_ffi || needs_wasi || needs_host {
+		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
 	} else {
 		read_bytes(&bytes)
 	};
 	result.unwrap_or_else(failed_run)
+}
+
+/// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
+#[cfg(not(feature = "native"))]
+fn run_module(module: CompiledModule) -> Node {
+	crate::web::run_in_host(&module.bytes)
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget
@@ -3722,23 +3809,36 @@ pub fn out_of_fuel(steps: u64) -> Node {
 
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
-fn failed_run(failure: anyhow::Error) -> Node {
+#[cfg(feature = "native")]
+pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
 		Some(trap) => trap,
 	};
-	let trace = format!("{:?}", failure);
+	trap_error(&format!("{:?}", failure), trap.to_string())
+}
+
+/// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
+/// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
+pub fn trap_error(trace: &str, trap: String) -> Node {
 	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
-		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+		let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == crate::node::ATTRIBUTE_MARK).collect();
 		format!("no field {name}")
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		format!("no case for {label}")
+		match trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
+			Some(value) => format!("no case for {label} = {value}"),
+			None => format!("no case for {label}"),
+		}
 	});
-	let runtime_error = missing_field.or(no_case).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
+	let overflow = trace.split_once(crate::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
+		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+		crate::fixed_width::overflow_message(&type_name)
+	});
+	let runtime_error = missing_field.or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
-	let message = runtime_error.or(exact_trap).unwrap_or_else(|| trap.to_string());
+	let message = runtime_error.or(exact_trap).unwrap_or(trap);
 	crate::node::error(&message)
 }

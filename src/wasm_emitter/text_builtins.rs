@@ -4,12 +4,13 @@
 //! Offsets are bytes, not characters: code that scans UTF-8 itself (a parser, a binary index) needs them.
 
 use crate::node::Node;
-use crate::type_kinds::Kind;
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::type_kinds::{Kind, KIND_MASK};
+use crate::wasm_emitter::{WasmGcEmitter, CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
+use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
@@ -21,21 +22,19 @@ const HOST_READ: &str = "host_read";
 const ERROR: &str = "error";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
 const IS_ERROR: &str = "is_error";
-const KIND_MASK: i64 = 0xFF;
 const ERROR_OF: &str = "error_of";
 const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 7] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 9] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text),
+	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (CAUGHT_ERROR_TEXT, 2, Kind::Text),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -74,14 +73,23 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
+	if required.contains(super::list_ops::TEXT_AS_INT) {
+		required.insert("get_int_value");
+	}
+	if required.contains("list_sort") {
+		required.insert(super::library_ops::NODE_ORDER);
+	}
 	if required.contains(super::wasi_emitter::PRINT_VALUE) {
 		required.insert("list_join");
+	}
+	if required.contains("list_join") {
+		required.insert(super::float_text::FLOAT_TEXT);
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars"];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -125,12 +133,13 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
+			(CAUGHT_ERROR_TEXT, [finished, value]) => self.emit_caught_error_text(func, finished, value),
 			// a hole names a variable: a word that names nothing is loud, never its own spelling
 			(TEXT_FORM, [value]) => match value.drop_meta() {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | IS_ERROR, _) => {
+			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -157,6 +166,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
 				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
 			}
+			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
 			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
 		}
 	}
@@ -172,8 +182,7 @@ impl WasmGcEmitter {
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
 		if self.get_type(operand) == Kind::Empty {
 			// a value held as a Node (a map value) may be a number at runtime: joined, a number takes its text form
-			let joined = Node::List(vec![Node::Symbol("join".into()), Node::List(vec![operand.clone()], crate::node::Bracket::Square, crate::node::Separator::Colon), Node::Text(String::new())], crate::node::Bracket::Round, crate::node::Separator::None);
-			self.emit_node_instructions(func, &joined);
+			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;
 		}
 		if !is_number(self.get_type(operand)) {

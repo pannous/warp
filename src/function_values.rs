@@ -1,11 +1,12 @@
 //! First-class functions, resolved at compile time. A function that takes a function as a parameter (`apply(f, x) := f(x)`) is
 //! specialised for every function it is called with: `apply(double, 3)` calls `apply__double(3)`, whose body has `double` where
 //! the parameter was. The functions passed are named functions, `&name`, aliases (`g = double`), operators (`+`) and lambdas that
-//! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable stays the
-//! error `functions are not first-class values yet`: that needs a funcref table and closures.
+//! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable is passed
+//! as a closure to a generic version of the function (closures.rs).
 
+use crate::closures::may_be_function_value;
 use crate::diagnostic::Diagnostic;
-use crate::lambdas::{lambda_definition, NOT_FIRST_CLASS};
+use crate::lambdas::lambda_definition;
 use crate::library_words::{collect_assigned_names, substitute};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -172,6 +173,8 @@ struct Specialising {
 	specialised: HashMap<String, Vec<(String, Definition)>>,
 	names: HashMap<(String, Vec<String>), String>,
 	lambda_definitions: Vec<Node>,
+	/// Functions that are also called with closures: their generic version
+	generic: HashMap<String, Definition>,
 	counter: usize,
 }
 
@@ -218,14 +221,35 @@ impl Specialising {
 		}
 		let mut targets = Vec::new();
 		for index in &indexes {
-			let Some(target) = arguments.get(*index).and_then(|argument| self.function_name(argument)) else {
-				return Some(Diagnostic::at(head, NOT_FIRST_CLASS).into_error());
+			let argument = arguments.get(*index);
+			let Some(target) = argument.and_then(|argument| self.function_name(argument)) else {
+				// a function known only at run time is passed as a closure to the generic version (closures.rs)
+				if argument.is_some_and(may_be_function_value) {
+					self.make_generic(name);
+					return None;
+				}
+				let param = self.definitions[name].param_names().get(*index).cloned().unwrap_or_default();
+				let given = argument.cloned().unwrap_or(Node::Empty);
+				return Some(crate::closures::needs_a_function(name, Some(&param), &given, "a lambda like x => …"));
 			};
 			targets.push(target);
 		}
 		let specialised = self.specialise(name, &targets);
 		let remaining: Vec<Node> = arguments.iter().enumerate().filter(|(index, _)| !indexes.contains(index)).map(|(_, argument)| argument.clone()).collect();
 		Some(Node::List([vec![Node::Symbol(specialised)], remaining].concat(), Bracket::Round, Separator::None))
+	}
+
+	/// The version of `name` that takes its functions as closures, made once: `f x` with a function parameter `f` is the call `f(x)`,
+	/// which closures.rs makes a closure call
+	fn make_generic(&mut self, name: &str) {
+		if self.generic.contains_key(name) {
+			return;
+		}
+		let original = self.definitions[name].clone();
+		self.generic.insert(name.to_string(), original.clone());
+		let function_params: Vec<String> = self.higher_order[name].iter().filter_map(|index| original.param_names().get(*index).cloned()).collect();
+		let body = self.rewrite(round_calls(original.body.clone(), &function_params));
+		self.generic.insert(name.to_string(), Definition { body, ..original });
 	}
 
 	/// The specialisation of `name` for the functions `targets` (one per function parameter), made once
@@ -250,6 +274,19 @@ impl Specialising {
 		let definition = Definition { name: specialised_name.clone(), params, body };
 		self.specialised.entry(name.to_string()).or_default().push((specialised_name.clone(), definition));
 		specialised_name
+	}
+}
+
+/// `f x` with a parameter `f` that is a function: the call `f(x)`
+fn round_calls(node: Node, function_params: &[String]) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) => {
+			Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), Bracket::Round, Separator::None)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| round_calls(item, function_params)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(round_calls(*left, function_params)), op, Box::new(round_calls(*right, function_params))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(round_calls(*node, function_params)), data },
+		other => other,
 	}
 }
 
@@ -280,10 +317,10 @@ fn assemble(node: Node, specialising: &Specialising) -> Node {
 			let items = items
 				.into_iter()
 				.flat_map(|item| match Definition::from(&item) {
-					Some(definition) if specialising.higher_order.contains_key(&definition.name) => match specialising.specialised.get(&definition.name) {
-						Some(made) => made.iter().map(|(_, specialised)| specialised.node()).collect(),
-						None => vec![],
-					},
+					Some(definition) if specialising.higher_order.contains_key(&definition.name) => {
+						let specialised = specialising.specialised.get(&definition.name).into_iter().flatten().map(|(_, specialised)| specialised.node());
+						specialised.chain(specialising.generic.get(&definition.name).map(Definition::node)).collect()
+					}
 					_ => vec![assemble(item, specialising)],
 				})
 				.collect();
@@ -335,6 +372,7 @@ pub fn lower(program: Node) -> Node {
 		specialised: HashMap::new(),
 		names: HashMap::new(),
 		lambda_definitions: Vec::new(),
+		generic: HashMap::new(),
 		counter: 0,
 	};
 	// calls in the code that is not the body of a function taking functions

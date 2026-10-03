@@ -38,8 +38,7 @@ fn a_runtime_value_as_string() {
 	is!("x=3; x as string", "3");
 	is!("x=\"hi\"; x as string", "hi");
 	is!("x=3 as string; x", "3");
-	let list_variable = format!("{:?}", eval("x=[1 2]; x as string"));
-	assert!(list_variable.contains("cannot cast list to string"), "{list_variable}");
+	is!("x=[1 2]; x as string", "[1 2]"); // user decision #35
 }
 
 #[test]

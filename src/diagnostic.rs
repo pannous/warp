@@ -49,13 +49,14 @@ pub enum WarningMode {
 
 /// `use strict` in wasp source makes warnings errors for that program
 const STRICT_PRAGMA: [&str; 2] = ["use", "strict"];
-/// The remembered answer of an acknowledged `educate_once` note, stored under `ack:<topic>`
-pub const ACKNOWLEDGED: &str = "acknowledged";
+/// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
+const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
 
 thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
@@ -81,9 +82,15 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		_ => {
 			warnings.iter().for_each(|warning| eprintln!("warning: {warning}"));
+			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
 			Ok(())
 		}
 	}
+}
+
+/// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
+pub fn take_warnings() -> Vec<Diagnostic> {
+	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
 }
 
 /// A warning the running program reports with `warning(message)`
@@ -121,10 +128,12 @@ pub fn without_strict_pragma(program: Node) -> (Node, bool) {
 }
 
 // ============================================================================
-// Ask: an ambiguity the compiler asks the user about (notes/welcoming.md)
+// Ask: an ambiguity the compiler warns about (notes/welcoming.md). It never asks which reading was meant and never
+// remembers a choice: the same source always compiles the same way. A guessable ambiguity takes its default with a
+// "got it" warning, a dangerous one is an error naming the explicit forms.
 // ============================================================================
 
-/// What an unanswerable Ask becomes: a warning (take the default reading, continue) or an error (too dangerous to guess)
+/// What an ambiguity becomes: a warning (take the default reading, continue) or an error (too dangerous to guess)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fallback {
 	Warning,
@@ -132,6 +141,7 @@ pub enum Fallback {
 }
 
 /// One reading of an ambiguous construct and the explicit wasp form that says it without ambiguity
+/// (the seed of a later "change the code" action that rewrites `written` to it)
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reading {
 	pub meaning: String,
@@ -142,12 +152,12 @@ pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
 	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string() }
 }
 
-/// An ambiguity: asked interactively when a user can be reached, otherwise its `fallback` applies
+/// An ambiguity: its readings, the default reading and whether guessing it is allowed (`fallback`)
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ask {
-	/// Stable name of this kind of ambiguity (`upto`, `kotlin-range`): answers are remembered per topic
+	/// Stable name of this kind of ambiguity (`upto`, `kotlin-range`): "got it" is remembered per topic
 	pub topic: String,
-	/// The ambiguous source text, which the answer's explicit form replaces
+	/// The ambiguous source text, which an explicit form replaces
 	pub written: String,
 	pub question: String,
 	pub readings: Vec<Reading>,
@@ -175,8 +185,8 @@ impl Ask {
 		self.at(line, column)
 	}
 
-	/// The fallback diagnostic: the question, the default taken (or none), and how to say it explicitly
-	fn unanswered(&self) -> Diagnostic {
+	/// The diagnostic: the question, the default taken (or none), and how to say it explicitly
+	fn diagnostic(&self) -> Diagnostic {
 		let (message, fix) = match self.fallback {
 			Fallback::Warning => {
 				let default = &self.readings[self.default];
@@ -191,57 +201,31 @@ impl Ask {
 	}
 }
 
-/// Who answers an Ask: a terminal prompt in the CLI, scripted answers in tests, later a web page or an IDE.
-/// `None` means no user can be reached and the Ask falls back.
-pub trait Asker {
-	fn answer(&self, ask: &Ask) -> Option<usize>;
-
-	/// Whether the user acknowledges a note shown by `educate_once`, so it is never shown again
-	fn acknowledge(&self, _topic: &str) -> bool {
+/// Who says "got it" to a warning or note so it is never shown again: the terminal in the CLI, the playground's
+/// buttons, a list in tests. Nobody (the default) means the warning simply shows
+pub trait Acknowledger {
+	/// Whether the user said "got it" to `topic` before this run (a host keeping its own list, like the playground)
+	fn has_acknowledged(&self, _topic: &str) -> bool {
 		false
 	}
+
+	/// Asked once per run after a warning or note of `topic` was shown: does the user say "got it" now?
+	fn acknowledge(&self, topic: &str) -> bool;
 }
 
-/// Answers by topic, for tests: the reading whose meaning or explicit form is the scripted text;
-/// the answer `ACKNOWLEDGED` acknowledges the note of that topic
-pub struct ScriptedAnswers(pub Vec<(String, String)>);
+/// Acknowledges the listed topics, for tests
+pub struct Acknowledging(pub Vec<String>);
 
-impl ScriptedAnswers {
-	fn scripted(&self, topic: &str) -> Option<&String> {
-		self.0.iter().find(|(scripted_topic, _)| scripted_topic == topic).map(|(_, answer)| answer)
-	}
-}
-
-impl Asker for ScriptedAnswers {
-	fn answer(&self, ask: &Ask) -> Option<usize> {
-		let wanted = self.scripted(&ask.topic)?;
-		ask.readings.iter().position(|reading| reading.meaning == *wanted || reading.explicit_form == *wanted)
-	}
-
+impl Acknowledger for Acknowledging {
 	fn acknowledge(&self, topic: &str) -> bool {
-		self.scripted(topic).is_some_and(|answer| answer == ACKNOWLEDGED)
+		self.0.iter().any(|acknowledged| acknowledged == topic)
 	}
 }
 
-/// Asks on the terminal: the readings numbered, the default marked, Enter takes the default
-pub struct TerminalAsker;
+/// Asks "got it?" on the terminal after the warning or note
+pub struct TerminalAcknowledger;
 
-impl Asker for TerminalAsker {
-	fn answer(&self, ask: &Ask) -> Option<usize> {
-		eprintln!("\x1b[35mask\x1b[0m {}:{}: {}", ask.line, ask.column, ask.question);
-		for (number, reading) in ask.readings.iter().enumerate() {
-			let marker = if number == ask.default { " (default)" } else { "" };
-			eprintln!("  [{}] {}: `{}`{}", number + 1, reading.meaning, reading.explicit_form, marker);
-		}
-		eprint!("which did you mean? [1-{}, Enter = {}] ", ask.readings.len(), ask.default + 1);
-		let mut line = String::new();
-		std::io::stdin().read_line(&mut line).ok().filter(|&bytes| bytes > 0)?; // end of input: nobody answers
-		match line.trim() {
-			"" => Some(ask.default),
-			choice => choice.parse::<usize>().ok().filter(|n| (1..=ask.readings.len()).contains(n)).map(|n| n - 1),
-		}
-	}
-
+impl Acknowledger for TerminalAcknowledger {
 	fn acknowledge(&self, _topic: &str) -> bool {
 		eprint!("      got it? [y = don't tell me again, Enter = keep reminding] ");
 		let mut line = String::new();
@@ -250,105 +234,110 @@ impl Asker for TerminalAsker {
 }
 
 thread_local! {
-	static ASKER: std::cell::RefCell<Option<std::rc::Rc<dyn Asker>>> = const { std::cell::RefCell::new(None) };
-	static ANSWERS: std::cell::RefCell<std::collections::HashMap<String, String>> = std::cell::RefCell::new(Default::default());
-	static ANSWERS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+	static ACKNOWLEDGER: std::cell::RefCell<Option<std::rc::Rc<dyn Acknowledger>>> = const { std::cell::RefCell::new(None) };
+	static ACKNOWLEDGED_TOPICS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Who answers the Asks of later compilations on this thread; `None` (the default) never asks, every Ask falls back
-pub fn set_asker(asker: Option<std::rc::Rc<dyn Asker>>) {
-	ASKER.with(|current| *current.borrow_mut() = asker);
+/// Who acknowledges the warnings and notes of later compilations on this thread; `None` (the default): nobody
+pub fn set_acknowledger(acknowledger: Option<std::rc::Rc<dyn Acknowledger>>) {
+	ACKNOWLEDGER.with(|current| *current.borrow_mut() = acknowledger);
 }
 
-/// Run `body` with another asker and fresh answer and note memory, then restore all three
-pub fn with_asker<R>(asker: impl Asker + 'static, body: impl FnOnce() -> R) -> R {
-	let previous = ASKER.with(|current| current.replace(Some(std::rc::Rc::new(asker))));
-	let remembered = ANSWERS.with(|answers| std::mem::take(&mut *answers.borrow_mut()));
+/// Run `body` with another acknowledger and fresh acknowledgement and note memory, then restore all three
+pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: impl FnOnce() -> R) -> R {
+	let previous = ACKNOWLEDGER.with(|current| current.replace(Some(std::rc::Rc::new(acknowledger))));
+	let acknowledged = ACKNOWLEDGED_TOPICS.with(|topics| std::mem::take(&mut *topics.borrow_mut()));
+	let file = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow_mut().take());
 	let shown = NOTES_SHOWN.with(|notes| std::mem::take(&mut *notes.borrow_mut()));
 	let result = body();
-	ASKER.with(|current| *current.borrow_mut() = previous);
-	ANSWERS.with(|answers| *answers.borrow_mut() = remembered);
+	ACKNOWLEDGER.with(|current| *current.borrow_mut() = previous);
+	ACKNOWLEDGED_TOPICS.with(|topics| *topics.borrow_mut() = acknowledged);
+	ACKNOWLEDGEMENTS_FILE.with(|current| *current.borrow_mut() = file);
 	NOTES_SHOWN.with(|notes| *notes.borrow_mut() = shown);
 	result
 }
 
-/// Remember answers across runs in `path` (one `topic = explicit form` per line), loading the ones already there
-pub fn use_answers_file(path: impl Into<std::path::PathBuf>) {
-	let path = path.into();
-	let saved = std::fs::read_to_string(&path).unwrap_or_default();
-	ANSWERS.with(|answers| {
-		let mut answers = answers.borrow_mut();
-		for (topic, form) in saved.lines().filter_map(|line| line.split_once(" = ")) {
-			answers.insert(topic.trim().to_string(), form.trim().to_string());
-		}
-	});
-	ANSWERS_FILE.with(|file| *file.borrow_mut() = Some(path));
+/// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
+pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
+	ACKNOWLEDGEMENTS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
+	load_acknowledgements();
 }
 
-fn remember(topic: &str, explicit_form: &str) {
-	ANSWERS.with(|answers| answers.borrow_mut().insert(topic.to_string(), explicit_form.to_string()));
-	let Some(path) = ANSWERS_FILE.with(|file| file.borrow().clone()) else { return };
-	let lines: String = ANSWERS.with(|answers| {
-		let answers = answers.borrow();
-		let mut topics: Vec<_> = answers.keys().collect();
-		topics.sort();
-		topics.iter().map(|topic| format!("{} = {}\n", topic, answers[*topic])).collect()
-	});
+/// The topics acknowledged in the acknowledgements file, none without one
+fn load_acknowledgements() {
+	let saved = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok())).unwrap_or_default();
+	let topics = saved.lines().filter_map(|line| line.split_once(" = "))
+		.filter(|(_, value)| value.trim() == ACKNOWLEDGED)
+		.filter_map(|(key, _)| key.trim().strip_prefix(ACKNOWLEDGED_PREFIX).map(str::to_string));
+	ACKNOWLEDGED_TOPICS.with(|acknowledged| *acknowledged.borrow_mut() = topics.collect());
+}
+
+/// A new program (eval, compile) starts with no assumptions, no notes shown and only the acknowledgements of the
+/// file: what one program assumed or showed never reaches the next one on the same thread
+pub fn begin_program() {
+	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().clear());
+	NOTES_SHOWN.with(|notes| notes.borrow_mut().clear());
+	load_acknowledgements();
+}
+
+fn is_acknowledged(topic: &str) -> bool {
+	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
+	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(topic))
+		|| acknowledger.is_some_and(|acknowledger| acknowledger.has_acknowledged(topic))
+}
+
+fn remember_acknowledged(topic: &str) {
+	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow_mut().insert(topic.to_string()));
+	let Some(path) = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().clone()) else { return };
+	let mut topics: Vec<String> = ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().iter().cloned().collect());
+	topics.sort();
+	let lines: String = topics.iter().map(|topic| format!("{ACKNOWLEDGED_PREFIX}{topic} = {ACKNOWLEDGED}\n")).collect();
 	if let Err(problem) = std::fs::write(&path, lines) {
-		eprintln!("warning: could not remember the answer in {}: {problem}", path.display());
+		eprintln!("warning: could not remember \"got it\" in {}: {problem}", path.display());
 	}
 }
 
-fn remembered_answer(topic: &str) -> Option<String> {
-	ANSWERS.with(|answers| answers.borrow().get(topic).cloned())
+/// After a warning or note of `topic` was shown, once per run: does the user say "got it"? Then it is never shown again
+fn offer_acknowledgement(topic: &str) {
+	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
+		return;
+	}
+	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
+	if acknowledger.is_some_and(|acknowledger| acknowledger.acknowledge(topic)) {
+		remember_acknowledged(topic);
+	}
 }
 
-fn remembered(ask: &Ask) -> Option<usize> {
-	let form = remembered_answer(&ask.topic)?;
-	ask.readings.iter().position(|reading| reading.explicit_form == form)
-}
-
-/// Educate with acknowledge-once: the hint (`written` → `preferred`, and why) is shown once per run until the user
-/// acknowledges it; the acknowledgement is remembered like an answer (`ack:<topic> = acknowledged`), never blocks
-/// non-interactive runs, which just show the hint
+/// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
+/// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	let key = format!("{ACKNOWLEDGED_PREFIX}{topic}");
-	let first_this_run = NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(key.clone()));
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off;
-	if !first_this_run || hints_off || remembered_answer(&key).is_some() {
+	if hints_off || is_acknowledged(topic) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
 	crate::normalize::hint(written, preferred, reason);
-	let asker = ASKER.with(|current| current.borrow().clone());
-	if asker.is_some_and(|asker| asker.acknowledge(topic)) {
-		remember(&key, ACKNOWLEDGED);
-	}
+	offer_acknowledgement(topic);
 }
 
-/// The reading the user means: remembered, asked, or — when nobody can be asked — the fallback:
-/// a warning taking the default (an error under `use strict`), or an error
+/// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the
+/// default, with a warning shown until the user says "got it" (an error under `use strict`, acknowledged or not)
 pub fn ask(question: &Ask) -> Result<usize, Node> {
-	let answered = remembered(question).or_else(|| {
-		let asker = ASKER.with(|current| current.borrow().clone())?;
-		let chosen = asker.answer(question)?;
-		remember(&question.topic, &question.readings[chosen].explicit_form);
-		Some(chosen)
-	});
-	if let Some(chosen) = answered {
-		let explicit_form = &question.readings[chosen].explicit_form;
-		crate::normalize::hint(&question.written, explicit_form, "as you answered; the explicit form needs no question");
-		return Ok(chosen);
+	let diagnostic = question.diagnostic();
+	if question.fallback == Fallback::Error {
+		return Err(diagnostic.into_error());
 	}
-	match question.fallback {
-		Fallback::Warning => {
-			let assumption = question.unanswered();
-			ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().push(assumption.clone()));
-			report(&[assumption]).map(|_| question.default)
-		}
-		Fallback::Error => Err(question.unanswered().into_error()),
+	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().push(diagnostic.clone()));
+	if warning_mode() == WarningMode::Error {
+		return Err(diagnostic.into_error());
 	}
+	if !is_acknowledged(&question.topic) {
+		report(&[diagnostic])?;
+		offer_acknowledgement(&question.topic);
+	}
+	Ok(question.default)
 }
 
 /// The defaults unanswered Asks took on this thread since the last call: a later runtime error names them,

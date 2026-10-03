@@ -26,6 +26,10 @@ const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", 
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 
+const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
+/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
+const ELEMENT_WISE_OPERATORS: [(char, Op); 4] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div)];
+
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
@@ -48,6 +52,9 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
+const PRINT_WORD: &str = "print";
+/// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
+const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
@@ -56,6 +63,71 @@ const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
+
+fn is_print_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+}
+
+/// `print` or the call `print(…)`: a print statement starts here
+fn starts_print(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		other => is_print_word(other),
+	}
+}
+
+/// Words separated by spaces form one expression: `upper "a"` is one argument of print
+fn one_expression(words: &[Node]) -> Node {
+	match words {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+	}
+}
+
+/// The call print(a, b, …): its arguments are separated by commas, like Python's
+fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
+	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
+}
+
+/// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
+fn print_arguments(arguments: Node) -> Vec<Node> {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if items.len() > 1 => vec![arguments],
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		_ => vec![arguments],
+	}
+}
+
+/// The arguments of a parsed print list: the call print(a, b) has several, `print first xs` the one expression `first xs`
+pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> {
+	match bracket {
+		Bracket::Round => call[1..].to_vec(),
+		_ => vec![one_expression(&call[1..])],
+	}
+}
+
+/// A list as grouped by its separators, with the braceless print forms made explicit:
+/// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
+/// so the comma list [[print a], b] becomes the call print(a, b)
+fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
+		return Node::List(items, bracket, separator);
+	}
+	match (&separator, items[0].drop_meta()) {
+		(Separator::Space, head) if starts_print(head) && items.iter().skip(2).any(starts_print) => {
+			let second = items.iter().skip(2).find(|item| starts_print(item)).expect("guarded");
+			Diagnostic::at(second, TWO_STATEMENTS_ON_ONE_LINE).into_error()
+		}
+		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
+			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
+		}
+		(Separator::Colon, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
+			print_call(head[1..].iter().chain(&items[1..]).cloned())
+		}
+		_ => Node::List(items, bracket, separator),
+	}
+}
 
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
@@ -69,15 +141,17 @@ const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
-/// Articles that start a typed verb phrase in `to square a number:`
-const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
+/// The call `n times text` is parsed to: the text repeated n times
+pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
 /// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
 const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
+/// `x is int` tests the type; `x == int` stays equality (user decision #30)
+const IS_WORD: &str = "is";
 const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
@@ -241,6 +315,8 @@ pub struct WaspParser {
 	in_for_header: bool,
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
+	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
+	signed_list_element: Option<usize>,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
@@ -255,6 +331,10 @@ pub struct WaspParser {
 	functions_with_parameters: std::collections::HashSet<String>,
 	/// Operators the program declares (`suffix operator ‼ := it*2`), longest glyph first, found by a pre-scan of the source
 	user_operators: Vec<UserOperator>,
+	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
+	declared_types: std::collections::HashSet<String>,
+	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
+	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -271,6 +351,7 @@ struct UserOperator {
 }
 
 const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
+use crate::node::ATTRIBUTE_MARK;
 const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
 const USER_SUFFIX_BP: u8 = 200;
@@ -284,6 +365,17 @@ fn is_operator_glyph(glyph: &str) -> bool {
 
 fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`)
+fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	words.windows(2)
+		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
+		.map(|pair| pair[1])
+		.filter(|name| is_plain_name(name))
+		.map(str::to_string)
+		.collect()
 }
 
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
@@ -302,6 +394,18 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	}
 	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
 	found
+}
+
+/// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
+/// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
+fn typed_parameter(arguments: Node) -> Node {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if matches!(items.as_slice(), [type_word, name]
+			if matches!(type_word.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) && matches!(name.drop_meta(), Symbol(_))) => {
+			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
+		}
+		_ => arguments,
+	}
 }
 
 fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
@@ -325,8 +429,11 @@ impl WaspParser {
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
+		let declared_types = if options == ParserOptions::default() { scan_declared_types(&input) } else { Default::default() };
 		WaspParser {
 			user_operators,
+			declared_types,
+			phrase_definitions: Default::default(),
 			input,
 			chars,
 			pos: 0,
@@ -340,6 +447,7 @@ impl WaspParser {
 			equals_compares: false,
 			in_for_header: false,
 			stops_at_else: false,
+			signed_list_element: None,
 			stops_at_end: false,
 			times_loops: 0,
 			after_function_keyword: false,
@@ -547,6 +655,39 @@ impl WaspParser {
 	fn at_floor_division(&self) -> bool {
 		let previous = self.prev_char();
 		self.current_char() == '/' && self.peek_char(1) == '/' && self.pos > 0 && (is_identifier_char(previous) || matches!(previous, ')' | ']'))
+	}
+
+	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator
+	fn element_wise_operator(&self) -> Option<Op> {
+		if self.current_char() != '.' {
+			return None;
+		}
+		ELEMENT_WISE_OPERATORS.iter().find(|(glyph, _)| *glyph == self.peek_char(1)).map(|(_, op)| *op)
+	}
+
+	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
+	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`
+	fn signed_number_starts_a_list(&mut self, lhs: &Node) -> Result<bool, Node> {
+		if self.signed_list_element == Some(self.pos) {
+			return Ok(true); // answered for the operand inside
+		}
+		if !matches!(lhs.drop_meta(), Node::Number(_)) || !self.prev_char().is_whitespace() || !self.number_starts_at(1) {
+			return Ok(false);
+		}
+		let signed: String = self.chars[self.pos..].iter().take_while(|ch| !ch.is_whitespace() && !matches!(ch, ']' | ')' | '}' | ',' | ';')).collect();
+		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
+		let written = format!("{first} {signed}");
+		let readings = vec![
+			crate::diagnostic::reading("the list", &format!("[{written}]")),
+			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
+		];
+		let question = crate::diagnostic::Ask::new(SIGNED_OPERAND_TOPIC, format!("is `{written}` a list or arithmetic?"), readings, crate::diagnostic::Fallback::Warning)
+			.written(&written).at(self.line_nr, self.column);
+		let is_list = crate::diagnostic::ask(&question)? == 0;
+		if is_list {
+			self.signed_list_element = Some(self.pos);
+		}
+		Ok(is_list)
 	}
 
 	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
@@ -965,6 +1106,7 @@ impl WaspParser {
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
 	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	/// `try X else e => Y` names the caught error: `marker(X, Y, e)`, never a lambda.
 	fn parse_guard(&mut self, marker: &'static str) -> Node {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
@@ -982,7 +1124,11 @@ impl WaspParser {
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		let parts = match fallback.drop_meta() {
+			Key(name, Op::FatArrow, body) if marker == TRY_MARKER && matches!(name.drop_meta(), Symbol(_)) => vec![guarded, body.as_ref().clone(), name.as_ref().clone()],
+			_ => vec![guarded, fallback],
+		};
+		Node::List([vec![Symbol(marker.to_string())], parts].concat(), Bracket::Round, Separator::None)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
@@ -1035,13 +1181,24 @@ impl WaspParser {
 		}
 	}
 
-	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`
+	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`.
+	/// `@name:value` (inside a literal: `point{x:1 @source:"gps"}`) is the meta entry `@name`, never a field;
+	/// after a dot, `p.@name` names the meta key itself.
 	fn parse_attribute(&mut self) -> Node {
+		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
 		self.advance(); // skip '@'
 		let name = match self.parse_symbol() {
 			Ok(name) => name,
 			Err(message) => return error(&message),
 		};
+		if after_dot {
+			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
+		}
+		if self.current_char() == ':' && self.peek_char(1) != '=' {
+			self.advance();
+			self.skip_spaces();
+			return Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))), Op::Colon, Box::new(self.parse_atom()));
+		}
 		let value = if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True };
 		self.parse_atom().with_attribute(&name, value)
 	}
@@ -1123,8 +1280,8 @@ impl WaspParser {
 	}
 
 	/// `to name params: body`, after the word `to`: the function `name(params) := body`.
-	/// The body is the rest of the statement, a `{…}` block or an indented block. Plain parameter names only: an article
-	/// (`to square a number:`) starts a typed phrase, which is not supported yet. Anything else is no definition.
+	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
+	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
 	fn try_parse_to_definition(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
@@ -1147,21 +1304,42 @@ impl WaspParser {
 				}
 			}
 		}
-		let is_typed_phrase = parameters.windows(2).any(|pair| PHRASE_ARTICLES.contains(&pair[0].as_str()) && crate::analyzer::type_word_kind(&pair[1]).is_some());
-		if is_typed_phrase {
-			return Some(error("typed phrase parameters are not supported yet"));
-		}
 		self.advance(); // the colon
 		self.skip_spaces();
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
+		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
+		let declared_types = &self.declared_types;
+		let is_known_type = |word: &str| {
+			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
+		};
+		let parameters = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(parameters) => parameters,
+			Err(message) => return Some(error(&message)),
+		};
+		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
+			return Some(clash);
+		}
 		let head = if parameters.is_empty() {
 			Symbol(name)
 		} else {
 			self.functions_with_parameters.insert(name.clone());
-			Node::List([vec![Symbol(name)], parameters.into_iter().map(Symbol).collect()].concat(), Bracket::Round, Separator::None)
+			self.phrase_definitions.insert(name.clone(), parameters.clone());
+			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
+	fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
+		let earlier = self.phrase_definitions.get(name).filter(|earlier| earlier.len() == parameters.len())?;
+		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
+		let differing: Vec<(&Node, &Node)> = earlier.iter().zip(parameters).filter(|(before, now)| before != now).collect();
+		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
+			return None;
+		}
+		let classes: Vec<String> = differing.iter().flat_map(|(before, now)| [before.name(), now.name()]).map(|noun| format!("class {noun}")).collect();
+		Some(error(&format!("{name} is defined twice; declare {} to dispatch on them", classes.join(" and "))))
 	}
 
 	/// Move back to the end of the last thing before the whitespace run behind the cursor
@@ -1413,7 +1591,9 @@ impl WaspParser {
 		match ch {
 			'{' => {
 				let block = self.parse_bracketed('{');
-				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
+				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
 				let length = self.type_application_length().expect("guarded");
@@ -1432,6 +1612,20 @@ impl WaspParser {
 				let generic = self.parse_bracketed('<');
 				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(generic))
 			}
+			// `info@pannous.com` in data is one word; `p@unit` in code reads the meta key: `p.@unit`
+			'@' if self.peek_char(1).is_alphabetic() && self.options.data_mode => {
+				let rest: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c) || matches!(c, '@' | '.' | '-')).collect();
+				let rest = rest.trim_end_matches(['.', '-']).to_string();
+				self.advance_by(rest.chars().count());
+				Symbol(format!("{symbol}{rest}"))
+			}
+			'@' if self.peek_char(1).is_alphabetic() => {
+				self.advance();
+				match self.parse_symbol() {
+					Ok(key) => Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))),
+					Err(message) => error(&message),
+				}
+			}
 			'(' => {
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
@@ -1447,10 +1641,12 @@ impl WaspParser {
 						Separator::None,
 					);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+				} else if symbol == PRINT_WORD {
+					print_call(print_arguments(args_node))
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
-					match args_node {
+					match typed_parameter(args_node) {
 						Node::List(args, _, _) => items.extend(args),
 						Node::Empty => {}
 						other => items.push(other),
@@ -1593,6 +1789,20 @@ impl WaspParser {
 				continue;
 			}
 
+			// Step 3d: element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+			if let Some(op) = self.element_wise_operator() {
+				let (l_bp, r_bp) = op.binding_power();
+				if l_bp < min_bp {
+					break;
+				}
+				self.advance_by(2);
+				self.skip_whitespace();
+				let operand = self.parse_expr(r_bp);
+				lhs = crate::analyzer::element_wise(lhs, op, operand);
+				previous_comparand = None;
+				continue;
+			}
+
 			// Step 3c: membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`
 			// a unit word stays in the flat counting phrase: `number of chars in t`
 			let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
@@ -1644,6 +1854,21 @@ impl WaspParser {
 			// Stop if operator binds less tightly than our minimum
 			if l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
+			}
+			if matches!(op, Op::Add | Op::Sub) {
+				match self.signed_number_starts_a_list(&lhs) {
+					Ok(false) => {}
+					Ok(true) => {
+						if op == Op::Add {
+							self.advance_by(1); // `+1` is the element 1
+						}
+						break; // `1 -1`: the signed number is the next element
+					}
+					Err(strict) => {
+						lhs = strict;
+						break;
+					}
+				}
 			}
 
 			// Consume the operator
@@ -1709,6 +1934,7 @@ impl WaspParser {
 				continue;
 			}
 
+			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
@@ -1998,14 +2224,23 @@ impl WaspParser {
 		Some(Node::Key(Box::new(lhs.clone()), op, Box::new(Empty)))
 	}
 
-	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway
+	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.
+	/// After a function or method the `!` mutates in place (user decision D2, by position): `x.upper!` and `upper(x)!`
+	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
 	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
+		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
-		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !is_evaluable {
+		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
+		let glued_suffix = !self.prev_char().is_whitespace() && matches!(self.peek_char(1), ' ' | '\t');
+		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();
-		Some(lhs.clone())
+		Some(match (mutated, lhs.drop_meta()) {
+			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
+			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
+			(None, _) => lhs.clone(),
+		})
 	}
 
 	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md).
@@ -2051,6 +2286,12 @@ impl WaspParser {
 		self.advance_by(word.len());
 		self.skip_spaces();
 		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(Op::If.binding_power().1));
+		if guard == Op::While {
+			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+			let (statement, test) = (crate::normalize::operand_text(lhs), crate::normalize::operand_text(&condition));
+			crate::normalize::hint(&format!("{statement} {word} {test}"), &format!("{word} {test} {{ {statement} }}"),
+				"a trailing loop word tests before the first round, the statement may never run");
+		}
 		let condition = if negated { Node::Key(Box::new(Empty), Op::Not, Box::new(condition)) } else { condition };
 		Some(match guard {
 			Op::While => while_do(condition, lhs.clone()),
@@ -2133,12 +2374,26 @@ impl WaspParser {
 				let list = self.parse_atom();
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
+			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
 		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
+		// the count is evaluated once, before the first round (user decision #22): the body may change what it reads
+		let (count_binding, count) = match count.drop_meta() {
+			Node::Number(_) => (None, count),
+			_ => {
+				let held = Symbol(format!("{TIMES_WORD}·count·{}", self.times_loops));
+				(Some(Node::Key(Box::new(held.clone()), Op::Assign, Box::new(count))), held)
+			}
+		};
 		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space)
+		let rounds = Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space);
+		match count_binding {
+			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
+			None => rounds,
+		}
 	}
 
 	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
@@ -2312,6 +2567,10 @@ impl WaspParser {
 				let mut chars = s.chars();
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
+						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
+							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); only a single-quoted character converts to its code point");
+							return Diagnostic { message, line: quote_line, column: quote_column, fix: Some(format!("'{c}' as {number_type}")) }.into_error();
+						}
 						return Node::codepoint(c);
 					}
 				}
@@ -2331,6 +2590,8 @@ impl WaspParser {
 				}
 				Ok(None) => {}
 			}
+			// a bare `$name` is text here but stays a hole for sql/sh templates (injection::parts), so it is not escaped
+			let bare_dollar_name = ch == '$' && (self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_');
 			let literal = if ch == '\\' {
 				self.advance();
 				let escaped = self.current_char();
@@ -2347,13 +2608,24 @@ impl WaspParser {
 			self.advance();
 			s.push(literal);
 			match literal {
-				'$' => template.push_str("$$"),
+				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
 		}
 	}
 
-	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	/// The number type of a following `as int` / `as float` …
+	fn number_cast_follows(&self) -> Option<String> {
+		let rest: String = self.chars[self.pos..].iter().take(32).collect();
+		let words: Vec<&str> = rest.split_whitespace().take(2).collect();
+		let number_type = words.get(1)?.trim_end_matches(|c: char| !is_identifier_char(c));
+		use crate::type_kinds::Kind::{Float, Int};
+		let is_number = matches!(crate::analyzer::builtin_type_kind(number_type), Some(Int | Float)) && !number_type.starts_with("bool");
+		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
+	}
+
+	/// `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`, `$ `).
+	/// User decision D1: "only the one with the curly braces must interpolate the other is text like dollar money".
 	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
 		let (line, column) = self.get_position();
 		let next = self.peek_char(1);
@@ -2363,13 +2635,6 @@ impl WaspParser {
 			set_hint_position(line, column);
 			norm::interpolation(&format!("${{{expression}}}"), &expression);
 			expression
-		} else if next.is_alphabetic() || next == '_' {
-			self.advance();
-			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-			self.advance_by(name.chars().count());
-			set_hint_position(line, column);
-			norm::interpolation(&format!("${name}"), &name);
-			name
 		} else {
 			return Ok(None);
 		};
@@ -3018,7 +3283,7 @@ impl WaspParser {
 				// Only unwrap single items for implicit groupings
 				return items[0].clone();
 			}
-			return Node::List(items, bracket, Separator::Space);
+			return grouped_list(items, bracket, Separator::Space);
 		}
 
 		// Start with the loosest (highest precedence value) separator
@@ -3080,7 +3345,7 @@ impl WaspParser {
 			// Explicit brackets like {x} or [x] should preserve the wrapper
 			grouped_nodes[0].clone()
 		} else {
-			Node::List(grouped_nodes, bracket, split_sep)
+			grouped_list(grouped_nodes, bracket, split_sep)
 		}
 	}
 
@@ -3166,7 +3431,7 @@ fn is_minus_one(end: &Node) -> bool {
 	}
 }
 
-fn mentions(node: &Node, name: &str) -> bool {
+pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol == name,
 		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),

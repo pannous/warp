@@ -1,7 +1,25 @@
-# Open decisions for the user (TODO sweep 2026-09-29)
+# Open decisions for the user
 
-Each item blocks ignored tests or a finished-but-uncommitted change. Answer any subset; unanswered items stay parked.
+Only the Interviewer asks the user (notes/roles.md). Nothing here blocks: each question names the assumption the code
+already follows. Answers move to a Decided section with the date and the user's words.
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
+
+## Pending questions (ordered by impact; recommended option first)
+Batches paused until 2026-10-03 17:30 local (5-hour limit at 93%, BOSS-cheeky-shannon).
+- P21 `try X else e => Y`: is the caught `e` its message text ("index out of range") or an Error value?
+  Options: Message text / Error value (returning it re-raises; `e.message` for the text).
+  Assumed: message text, so returning it is a normal value. Asked by warp-bc (cloud-eval), branch
+  claude/try-exits-and-naming. (Not asked: a named else skips the fast `xs#i` / `a/b` checks, same results, slower.)
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
+uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
+#24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
+
+## User to-dos (not questions)
+- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
+  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
+- Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
+  the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided by the user (2026-09-29) — implementation: notes/cloud_tasks.md
 - #1 yes: avoid panics everywhere, errors as values. #2 leave the trailers. #3 juxtaposition yes, spaced only if the unit exists.
@@ -18,7 +36,82 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
+- `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
+  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+- text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
+  type error" from 2026-10-02.
+
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
+  to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
+  python if it has all the fields but is a known different type then we should create an error and get the user about
+  a new keyword image like photo so the image will be treated like a photo and judged by users we should write that as
+  a very central philosophy which needs to be implemented". So: a value of truly unknown type passed to `p:photo` is
+  duck typed (judged by the fields it is used with); a value of a KNOWN different type (an `image` with all of photo's
+  fields) is an error that teaches `image like photo`, which declares image usable as a photo, judged by uses.
+  Keyword: "`image like photo`" (chosen over `as`/`is`). Written map `{width:7}` for `p:photo`: "Accept
+  structurally". `p.word` typo on an untyped parameter: "Field lookup, runtime error" ("no field word").
+- libm FFI (warp-12 experiment: headers serve all of libm on macOS incl. hypot; glibc's __MATHCALL macros defeat the
+  header parser on Linux): "Headers first, table fallback". Header-driven linking always; LIBM_UNARY/LIBM_BINARY link
+  only when the headers give nothing for "m". Patch: warp.worktrees.noindex/ffi-libm-experiment.patch.
+- tests/ folders (asked by warp-1a, branch tests-tidy, notes/tests_layout.md): "OK as listed" (17 topic folders,
+  welcoming one folder). Duplicates: "Only probes condense". Probe lines condense into topic files; assertions in
+  regular test files stay even when duplicated.
+- Wiki remote `main` (asked by warp-d0, notes/wiki_branch.md): "Delete remote main". GitHub wikis serve only master;
+  master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
+  `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
+- #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
+- #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
+- tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
+  tests by condensing that what really matters. We should start a new agent to sort that all out and just grouped into
+  folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
+  topic folders.
+- CLAUDE.md (P15, code quality 8): "Symlink to AGENTS.md".
+- Root clutter (P16, code quality 9): "Move to notes/OLD" (the dangling `wasp`/`warp` links are deleted).
+- D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
+  `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
+  Asks-become-warnings rule).
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
+- GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
+- libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
+  quickly try if it works without the hard coding". So `LIBM_UNARY`/`LIBM_BINARY` get a comment saying they are deliberate
+  examples of hand-linked FFI, and an experiment checks whether the header-driven FFI serves the same calls without
+  them (result decides whether they become example-only).
+- Type-word shadowing (P20, asked by warp-bc, branch claude/type-word-user-function): "Clash error". A user function
+  named like a type word (`double := it*2`) is an error: "double is a type; rename your function". Reverts the
+  shadow-with-warning default.
+- cdylib (P7, code quality 10), verbatim: "what is that it doesn't mean that didn't need that before can we gate it".
+  Answer: the cdylib is the browser-wasm output, and web/playground/build.sh already asks for it itself
+  (`cargo rustc --crate-type cdylib`), so it is already gated. Cargo.toml keeps only `rlib` (since 2024-02 it listed
+  `["cdylib", "rlib"]`); the per-worktree crate-type patch is no longer needed.
+- vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
+  just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
+  `--offline` builds from the registry cache.
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+  tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
+- Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
+  warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
+  don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
+  extra feature for later as an intelligent intent to change the code." Assigned to warp-b8 (ask-to-warning).
+- Error-fallback Asks (`[x]*n`, `insert(0, 4)` order, `[1 2 3]+4`, bare `a=1 2 3`, `1+2 squared`): "Stay loud errors".
+  They name the explicit forms, no default reading is taken. Asked by warp-b8; its assumption stands.
+- Text * number (P1, asked by warp-35): first "actually, why not use the python app approach? Is it really a foot gun",
+  then "Python repeat". `"ab"*2` → "abab"; digit text `"5"*3` → "555" with a got-it warning that it is text, not 15.
+  Replaces the type error with the repeat hint (also the earlier "text * number: Always ask").
+- Typed lists follow-up (P4, asked by warp-5e): "Yes, continue". Float typed arrays, then whole-op Sum/Map ListOps.
+- D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
+- D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
+  the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
+  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  `"\(expr)"` was not asked about and stays.
+- Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
+  `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
+- Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
 - D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.
 - D3 `[1 2 3]+4`: "Ask". Like `[x]*n`: append or add to each element? Fallback Error. `.+` is element-wise,
@@ -69,6 +162,30 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   compound-assignment autostash and the README/Footguns autostash were already on main; pre-history-rewrite held only
   .DS_Store and test_results.txt. All 4 dropped. The one unmerged line, the user's 2026-09-27 note on chained
   comparison "BUT NOT WITH == etc !!", became #39 below.
+- D4 fields (asked again 2026-10-03, wiki/constructor.md says optional + extendible): "Strict". A missing field is an
+  error unless `?` or defaulted (`!` = explicit required); an undeclared field is an error with the hint `T:{…}`.
+- Meta information on objects (user idea 2026-10-03: "Think of a special syntax to extend known objects with meta
+  information"): existing `@name(value) X` prefix and `X["@name"]` stay; chosen additions: `@key` inside a literal
+  (`point{x:1 y:2 @source:"gps"}`, never a field, not counted, ignored by == and by strict validation), `x.@key`
+  read/write, glued postfix `x@key`, and attributes survive wasm emission/eval. User: "Can we also access them
+  normally as a fallback? point.source first, check if it's a real attribute, then check if it's a meta. Or is that
+  too complicated and overkill?" Answer (warp-43): not overkill, one fallback in the field lookup: field first, then
+  meta; when both exist the field wins and a hint names `.@source`; neither → the strict "has no field" error.
+- Round 3 (2026-10-03, multiple choice):
+  - #40 `x -1`: "Keep subtracting". Only a number literal on the left asks (`1 -1`); variables, calls, words subtract.
+  - D2 `!`: "By position". `fn!` after a function/method mutates in place (`x.upper!`), `{…}!` evaluates a block,
+    await gets its own word `await job` (no `job!`).
+  - D14 `in` warning: "Never warn". `3 in [1 2 3]` gives the position silently (the impl-sem warning goes).
+  - D5 type-name matching rule (notes/matching.md): "Accept".
+  - D15 auto-imports: "Yes, folder scope" (REVISED the same day: opt-in `use folder/package/project`, see above).
+  - Meta keys in iteration: "Skip @ keys". Iteration, keys, values and count ignore `@` entries.
+  - #34 deep traps under `try`: "Do it now".
+  - 14d test_comments2: user "what? 0.length() ???"; explained: the test parses two lines, `y=0` is one Key whose
+    length is 0 (C++ counted the 3-item list `[y = 0]`). Correct for the current model, closed.
+- D15 REVISED (user to warp-b8, 2026-10-03): "revision of my previous decision create special keyword use folder and
+  use package and use Project to automatically include everything but not by default anymore". No automatic folder
+  scope; `use folder` (the program's folder), `use package` (below the nearest folder holding <name>.wasp),
+  `use project` (below the nearest .git), lazy per-name lookup, same conflict rules.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -156,19 +273,19 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
-14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
-14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
-14d. `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
+14. RESOLVED (near! in tests/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
+14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
-15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
+15. DECIDED 2026-09-30 (delete). `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
 
 ## Housekeeping (blocked by the destructive-git hook)
-17. Delete duplicate test files `tests/test_footgun_application.rs`, `tests/test_footgun_list_index_bounds.rs` (approved; hook blocked).
-18. Remove scratch worktrees probes/review_wt, probes/float_trunc_wt, probes/wt_before, probes/stage_check,
+17. DONE. Delete duplicate test files `tests/test_footgun_application.rs`, `tests/test_footgun_list_index_bounds.rs` (approved; hook blocked).
+18. DONE. Remove scratch worktrees probes/review_wt, probes/float_trunc_wt, probes/wt_before, probes/stage_check,
     ../warp-semicolon-survey; delete probes/review_target, probes/head_check; agent helper scripts in probes/*.py.
 19. DECIDED 2026-10-03 (dropped). Old `stash@{0}: autostash` (2026-09-27, README.md + test_results.txt) — keep or drop?
-20. CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
+20. RESOLVED for AGENTS.md (CLAUDE.md: pending P15). CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
 
 ## New questions 2026-09-30 (supervisor warp-e0), none blocking
 Wiki survey: the 16 questions D1–D16 are in notes/wiki_features.md section 2 (D6 `|`/`&` as pipe, D7 lazy `:=` and
@@ -178,7 +295,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 22. DECIDED 2026-10-03 (see the top). `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
     (`i=5; i++ while i<3` never runs); `a = 2 if c` guards the whole assignment. Keep?
 23. DECIDED 2026-10-03 (warn). `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
-24. `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
+24. OBSOLETE (upto excludes the end, decided 2026-10-02). `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
 25. DECIDED 2026-10-03 (see the top: a space never indexes). `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
     Should a known prefix word followed by a space make `[…]` its argument?
 26. DECIDED 2026-10-03 (extend all). Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
@@ -188,7 +305,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
     that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
-29. The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
+29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
 30. DECIDED 2026-10-03 (see the top: only `is` tests types). `is` and `==` are the same operator, so a type word on the right of `==` is now also a type test (`3 == int` → 1).
@@ -199,7 +316,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     (83a40987, content is merged) plus the older autostash entries. Drop them?
 33. DECIDED 2026-10-03 (see the top: by value + educate). A block function that assigns an outer variable does not change it (`inc:={x=x+1}; do inc; x` → 1), because
     closures capture by value (Decided). Should zero-parameter blocks run in the caller's scope instead?
-34. DECIDED 2026-10-03 (later). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
+34. DECIDED 2026-10-03 (now, round 3). `try X else Y` catches Error values and the traps directly under `try` (index, /, %, rem); a trap deeper inside X
     (`try 1 + [1 2]#5 else 0`) still ends the program. Full catching needs a host import that runs the guarded body.
     Worth it?
 35. DECIDED 2026-10-03 (see the top). `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;

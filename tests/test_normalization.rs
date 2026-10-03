@@ -218,19 +218,25 @@ fn test_variable_definition_let_style() {
 
 #[test]
 fn test_function_definition() {
-	expect_hint("def f(x): x*2", "def f(x): ...", "f(x) := ...", "1:1");
-	expect_hint("fn f(x) = x*2", "fn f(x) = ...", "f(x) := ...", "1:1");
-	expect_hint("fun f(x) = x*2", "fun f(x) = ...", "f(x) := ...", "1:1");
-	expect_hint("function f(x) { x*2 }", "function f(x) { ... }", "f(x) := ...", "1:1");
+	// user 2026-10-03: function definitions are "don't care" by default, every form without a hint
+	expect_no_hint("def f(x): x*2");
+	expect_no_hint("fn f(x) = x*2");
+	expect_no_hint("fun f(x) = x*2");
+	expect_no_hint("function f(x) { x*2 }");
 	expect_no_hint("f(x) := x*2");
+}
+
+/// The short `f(x) := …` form as an explicit preference (the default is FunctionStyle::Any)
+fn colon_equals_functions() -> Style {
+	Style { function_def: FunctionStyle::ColonEquals, ..Style::default() }
 }
 
 #[test]
 fn test_function_hint_quotes_the_body_form_actually_written() {
-	expect_hint("def f(x){x*2}", "def f(x) { ... }", "f(x) := ...", "1:1");
-	expect_hint("def f(x) { x*2 }", "def f(x) { ... }", "f(x) := ...", "1:1");
-	expect_hint("fn f(x): x*2", "fn f(x): ...", "f(x) := ...", "1:1");
-	expect_hint("function f(x) = x*2", "function f(x) = ...", "f(x) := ...", "1:1");
+	expect_styled_hint(colon_equals_functions(), "def f(x){x*2}", "def f(x) { ... }", "f(x) := ...", "1:1");
+	expect_styled_hint(colon_equals_functions(), "def f(x) { x*2 }", "def f(x) { ... }", "f(x) := ...", "1:1");
+	expect_styled_hint(colon_equals_functions(), "fn f(x): x*2", "fn f(x): ...", "f(x) := ...", "1:1");
+	expect_styled_hint(colon_equals_functions(), "function f(x) = x*2", "function f(x) = ...", "f(x) := ...", "1:1");
 	let style = Style { function_def: FunctionStyle::Function, ..Style::default() };
 	expect_styled_hint(style, "def f(x): x*2", "def f(x): ...", "function f(x) { ... }", "1:1");
 }
@@ -264,7 +270,8 @@ fn test_length_prefix_under_bracket_style() {
 
 #[test]
 fn test_define_keyword() {
-	expect_hint("define f(x): x*2", "define f(x): ...", "f(x) := ...", "1:1");
+	expect_styled_hint(colon_equals_functions(), "define f(x): x*2", "define f(x): ...", "f(x) := ...", "1:1");
+	expect_no_hint("define f(x): x*2");
 	let style = Style { function_def: FunctionStyle::Define, ..Style::default() };
 	expect_styled_hint(style.clone(), "def f(x): x*2", "def f(x): ...", "define f(x): ...", "1:1");
 	expect_styled_no_hint(style, "define f(x): x*2");
@@ -274,10 +281,14 @@ fn test_define_keyword() {
 fn test_each_form_is_hinted_once_when_evaluated() {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Always);
-	for code in ["def f(x): x*2; f(2)", "let x = 5; x", "float(3)", "2 ** 3", "5 as str", "s = \"abc\"; s[1]"] {
+	for code in ["let x = 5; x", "float(3)", "2 ** 3", "5 as str", "s = \"abc\"; s[1]"] {
 		let (_, hints) = capture_hints(|| eval(code));
 		assert_eq!(hints.len(), 1, "{code}: {hints:?}");
 	}
+	set_style(colon_equals_functions());
+	let (_, hints) = capture_hints(|| eval("def f(x): x*2; f(2)"));
+	set_style(Style::default());
+	assert_eq!(hints.len(), 1, "def under an explicit := style: {hints:?}");
 }
 
 // ---- forms without a canonical counterpart in the Style struct

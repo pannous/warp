@@ -1,79 +1,88 @@
 // Snake Game
-// Classic arcade game
+// Classic arcade game, playing itself: the snake steers toward the food (there is no keyboard input yet)
+// positions are (x, y) pairs, read with #1 and #2; lists are values, so the game state is global
 
 width = 20
 height = 15
-snake = [(10, 7), (9, 7), (8, 7)]
-direction = (1, 0)
-food = (15, 7)
-score = 0
-game_over = false
+global snake = [(10, 7), (9, 7), (8, 7)]
+global direction = (1, 0)
+global food = (15, 7)
+global score = 0
+global game_over = false
+global foods_eaten = 0
 
+// the next food: a fixed walk over the board, so every game is the same
 def spawn_food() {
-    loop {
-        x = random_int(0, width)
-        y = random_int(0, height)
-        if (x, y) not in snake { return (x, y) }
+    for attempt in 1 to width * height {
+        x = (foods_eaten * 7 + attempt * 3) % width
+        y = (foods_eaten * 5 + attempt * 11) % height
+        if not ((x, y) in snake) { return (x, y) }
     }
+    return (0, 0)
+}
+
+def is_free(position) {
+    x = position#1
+    y = position#2
+    return x >= 0 and x < width and y >= 0 and y < height and not (position in snake)
+}
+
+// turn toward the food, never into a wall or itself when another way is free
+def steer() {
+    head = snake#1
+    wanted = direction
+    if food#1 > head#1 { wanted = (1, 0) }
+    if food#1 < head#1 { wanted = (-1, 0) }
+    if food#1 == head#1 and food#2 > head#2 { wanted = (0, 1) }
+    if food#1 == head#1 and food#2 < head#2 { wanted = (0, -1) }
+    for option in [wanted, direction, (0, 1), (0, -1), (1, 0), (-1, 0)] {
+        if is_free((head#1 + option#1, head#2 + option#2)) {
+            direction = option
+            return direction
+        }
+    }
+    return direction
 }
 
 def update() {
-    if game_over { return }
-
-    head = snake[0]
-    new_head = (head.0 + direction.0, head.1 + direction.1)
-
-    // Wall collision
-    if new_head.0 < 0 or new_head.0 >= width or
-       new_head.1 < 0 or new_head.1 >= height {
+    head = snake#1
+    new_head = (head#1 + direction#1, head#2 + direction#2)
+    if not is_free(new_head) {
         game_over = true
-        return
+        return 0
     }
-
-    // Self collision
-    if new_head in snake {
-        game_over = true
-        return
-    }
-
-    snake.insert(0, new_head)
-
+    snake = [new_head] + snake
     if new_head == food {
         score = score + 10
+        foods_eaten = foods_eaten + 1
         food = spawn_food()
     } else {
-        snake.pop()
+        snake = snake.slice(0, count(snake) - 1)
     }
+    return 1
 }
 
 def render() {
-    clear()
     for y in 0..height {
         line = ""
         for x in 0..width {
-            if (x, y) == snake[0] { line = line + "@" }
-            else if (x, y) in snake { line = line + "o" }
-            else if (x, y) == food { line = line + "*" }
-            else { line = line + "." }
+            cell = "."
+            if (x, y) == food { cell = "*" }
+            if (x, y) in snake { cell = "o" }
+            if (x, y) == snake#1 { cell = "@" }
+            line = line + cell
         }
         print line
     }
-    print "Score: " + score
-    if game_over { print "GAME OVER" }
+    print "Score: " + str(score)
 }
 
-on_key(key => {
-    match key {
-        "up" if direction != (0, 1) => direction = (0, -1)
-        "down" if direction != (0, -1) => direction = (0, 1)
-        "left" if direction != (1, 0) => direction = (-1, 0)
-        "right" if direction != (-1, 0) => direction = (1, 0)
+for turn in 1 to 60 {
+    if not game_over {
+        steer()
+        update()
     }
-})
-
-loop {
-    update()
-    render()
-    sleep(150)
-    if game_over { break }
 }
+render()
+if game_over { print "GAME OVER" }
+score

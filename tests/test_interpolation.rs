@@ -1,4 +1,5 @@
-//! D1 (user decision 2026-10-03): double-quoted text interpolates both Swift `"\(expr)"` and `"${expr}"` / `"$x"`;
+//! D1 (user decisions 2026-10-03): double-quoted text interpolates Swift `"\(expr)"` and `"${expr}"`; a bare `"$x"`
+//! is text ("only the one with the curly braces must interpolate the other is text like dollar money").
 //! `\(…)` is the canonical form the normalizer hints. Single quotes stay literal; `$` holes in sql/sh templates and
 //! `$0` arguments keep working; `$` before a digit or a space stays a dollar sign.
 
@@ -24,10 +25,19 @@ fn swift_holes_interpolate_any_expression() {
 }
 
 #[test]
-fn dollar_holes_interpolate_too() {
+fn curly_dollar_holes_interpolate_bare_dollars_stay_text() {
 	is!("x=3; \"a ${x+1} b\"", "a 4 b");
-	is!("name=\"Bob\"; \"hi $name!\"", "hi Bob!");
-	is!("n=7; \"$n items\"", "7 items");
+	is!("name=\"Bob\"; \"hi $name!\"", "hi $name!"); // user decision: "the other is text like dollar money"
+	is!("n=7; \"$n items\"", "$n items");
+	is!("x=3; \"$x and ${x}\"", "$x and 3");
+}
+
+#[test]
+fn holes_take_parameters_lists_and_exact_numbers() {
+	is!("f(n):=\"n is \\(n)\"; f(4)", "n is 4");
+	is!("xs=[1 2]; \"xs=\\(xs)\"", "xs=[1 2]");
+	is!("y=2.5; \"v=\\(y)\"", "v=2.5");
+	is!("\"a \\(\"b\") c\"", "a b c"); // a text inside a hole
 }
 
 #[test]
@@ -50,7 +60,7 @@ fn a_dollar_before_a_digit_or_space_is_a_dollar_sign() {
 
 #[test]
 fn an_unknown_name_in_a_hole_is_loud() {
-	fails_with("\"hi $nobody\"", "nobody");
+	fails_with("\"hi ${nobody}\"", "nobody");
 }
 
 #[test]
@@ -66,11 +76,14 @@ fn dollar_arguments_and_templates_keep_working() {
 	is!(&format!("{injected};q#2"), "x' OR '1'='1");
 	is!("name=\"x\";q=sql \"SELECT * FROM t WHERE name = \\(name)\";q#1", "SELECT * FROM t WHERE name = ?");
 	is!("file=\"a b\";c=sh \"rm -f \\(file)\";c#3", "a b");
+	// a bare $name stays a sql/sh hole, also next to curly ones
+	is!("a=\"x\";b=\"y\";q=sql \"SELECT * FROM t WHERE a = $a AND b = ${b}\";q#3", "y");
+	is!("a=\"x\";b=\"y\";q=sql \"SELECT * FROM t WHERE a = $a AND b = ${b}\";q#1", "SELECT * FROM t WHERE a = ? AND b = ?");
 }
 
 #[test]
 fn the_normalizer_hints_the_swift_form() {
 	assert_eq!(hints_of("x=1; \"a ${x} b\""), vec![("${x}".to_string(), "\\(x)".to_string())]);
-	assert_eq!(hints_of("x=1; \"a $x b\""), vec![("$x".to_string(), "\\(x)".to_string())]);
+	assert_eq!(hints_of("x=1; \"a $x b\""), vec![]); // a bare $x is text, nothing to hint
 	assert_eq!(hints_of("x=1; \"a \\(x) b\""), vec![]);
 }

@@ -74,6 +74,7 @@ fn test_law_lean_export_modulo_is_euclidean() {
 
 #[test]
 fn test_law_proved_by_lean() {
+	crate::requires!(crate::common::LEAN);
 	let reports = verify(&format!("{SQUARE}\nadd(a,b) := a+b\nlaw add(a,b) == add(b,a)"));
 	assert_eq!(reports.len(), 2);
 	for report in reports {
@@ -99,6 +100,7 @@ fn test_law_overflow_promotion_holds_in_property_tests() {
 
 #[test]
 fn test_law_overflow_promotion_proved_by_lean() {
+	crate::requires!(crate::common::LEAN);
 	let lawful = separate_laws(parse(PROMOTING));
 	assert_eq!(lean::prove(&lawful.functions, &lawful.laws[0]), Verdict::Holds);
 	let reports = verify(PROMOTING);

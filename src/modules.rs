@@ -30,6 +30,11 @@ const REPLACED_DIRECTORY: &str = ".replaced";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
+/// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
+const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", Scope::Package), ("project", Scope::Project)];
+/// Folders a package or project scope never looks into, besides hidden ones and nested repositories
+const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
+const PROJECT_MARKER: &str = ".git";
 const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
@@ -43,8 +48,134 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: None };
-	loader.resolve(with_module_directory(program, Path::new("."))).unwrap_or_else(|failure| failure)
+	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let folder = file.as_deref().map(folder_of);
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None };
+	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
+	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
+		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
+		None => Ok(program),
+	});
+	resolved.unwrap_or_else(|failure| failure)
+}
+
+thread_local! {
+	/// The file being compiled; its folder is in scope (D15). None for inline code
+	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
+pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
+	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
+	let result = body();
+	PROGRAM_FILE.with(|current| *current.borrow_mut() = previous);
+	result
+}
+
+fn folder_of(file: &Path) -> PathBuf {
+	match file.parent() {
+		Some(folder) if !folder.as_os_str().is_empty() => folder.to_path_buf(),
+		_ => PathBuf::from("."),
+	}
+}
+
+/// Another module file of the program's folder, parsed only when its text mentions a name the program needs
+struct Sibling {
+	path: PathBuf,
+	source: String,
+	statements: Option<Vec<Node>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Scope {
+	/// the files of the program's folder
+	Folder,
+	/// every file below the package folder: the nearest folder holding `<folder name>.wasp`
+	Package,
+	/// every file below the project root: the nearest folder holding .git
+	Project,
+}
+
+fn scope_word(name: &str) -> Option<Scope> {
+	SCOPE_WORDS.iter().find(|(word, _)| *word == name).map(|(_, scope)| *scope)
+}
+
+/// The other module files of the scope around the program (the working directory for inline code)
+fn scope_files(scope: Scope, file: Option<&Path>) -> Result<Vec<Sibling>, Node> {
+	let folder = file.map(folder_of).unwrap_or_else(|| PathBuf::from("."));
+	let mut paths = Vec::new();
+	match scope {
+		Scope::Folder => collect_module_files(&folder, false, &mut paths),
+		Scope::Package => collect_module_files(&package_root(&folder)?, true, &mut paths),
+		Scope::Project => collect_module_files(&project_root(&folder)?, true, &mut paths),
+	}
+	let itself = file.and_then(|file| file.canonicalize().ok());
+	paths.retain(|path| path.canonicalize().ok() != itself);
+	paths.sort();
+	Ok(paths.into_iter().filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None })).collect())
+}
+
+fn is_module_file(path: &Path) -> bool {
+	path.is_file() && path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
+}
+
+fn collect_module_files(directory: &Path, below: bool, paths: &mut Vec<PathBuf>) {
+	let Ok(entries) = std::fs::read_dir(directory) else { return };
+	for path in entries.filter_map(|entry| entry.ok().map(|entry| entry.path())) {
+		if is_module_file(&path) {
+			paths.push(path);
+		} else if below && path.is_dir() && is_scoped_directory(&path) {
+			collect_module_files(&path, below, paths);
+		}
+	}
+}
+
+/// Hidden folders, fetched packages, build output and nested repositories belong to no scope
+fn is_scoped_directory(directory: &Path) -> bool {
+	let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+	!name.starts_with('.') && !UNSCOPED_DIRECTORIES.contains(&name.as_str()) && !directory.join(PROJECT_MARKER).exists()
+}
+
+fn package_root(folder: &Path) -> Result<PathBuf, Node> {
+	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
+	let holds_its_module = |directory: &&Path| {
+		let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
+	};
+	absolute.ancestors().find(holds_its_module).map(Path::to_path_buf)
+		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.wasp", folder.display())))
+}
+
+fn project_root(folder: &Path) -> Result<PathBuf, Node> {
+	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
+	absolute.ancestors().find(|directory| directory.join(PROJECT_MARKER).exists()).map(Path::to_path_buf)
+		.ok_or_else(|| error(&format!("use project: no project root around {}: the project root holds {PROJECT_MARKER}", folder.display())))
+}
+
+impl Sibling {
+	/// The statements of the file; a file that does not parse is reported and contributes nothing
+	fn statements(&mut self) -> Result<&[Node], Node> {
+		if self.statements.is_none() {
+			let module = WaspParser::parse(&self.source);
+			let parsed = match module.first_error() {
+				Some(failure) => {
+					let warning = crate::diagnostic::Diagnostic::at(&module, format!("folder scope skips {}: {}", self.path.display(), failure.serialize()));
+					crate::diagnostic::report(&[warning])?;
+					vec![]
+				}
+				None => statements(with_module_directory(module, &folder_of(&self.path))),
+			};
+			self.statements = Some(parsed);
+		}
+		Ok(self.statements.as_deref().unwrap_or_default())
+	}
+
+	fn declarations_of(&mut self, name: &str) -> Result<Vec<Node>, Node> {
+		if !self.source.contains(name) {
+			return Ok(vec![]);
+		}
+		Ok(self.statements()?.iter().filter(|statement| is_declaration(statement) && declared_name(statement).as_deref() == Some(name)).cloned().collect())
+	}
 }
 
 fn with_module_directory(module: Node, directory: &Path) -> Node {
@@ -58,6 +189,8 @@ struct Loader<'a> {
 	included: HashSet<PathBuf>,
 	/// the directory of the file being loaded; None for the program itself, which searches from the working directory
 	including_directory: Option<PathBuf>,
+	/// the widest `use folder|package|project` met
+	scope: Option<Scope>,
 }
 
 impl Loader<'_> {
@@ -88,6 +221,10 @@ impl Loader<'_> {
 	/// the `use` itself for a native library
 	fn import(&mut self, used: &Used, statement: &Node) -> Result<Vec<Node>, Node> {
 		let (import, name) = (used.import, used.name.as_str());
+		if let Some(scope) = scope_word(name).filter(|_| import == Import::Use && used.requirement.is_none()) {
+			self.scope = self.scope.max(Some(scope));
+			return Ok(vec![]);
+		}
 		if import == Import::Use && is_builtin_library(name) {
 			return Ok(vec![as_use(statement)]);
 		}
@@ -170,6 +307,62 @@ impl Loader<'_> {
 			}
 		}
 		candidates
+	}
+
+	/// D15 `use folder|package|project`: a name the program uses but does not define comes from the one file of the scope
+	/// defining it, together with what that definition uses in turn and that file's own `use`s; two files defining it
+	/// differently is an error
+	fn with_scope(&mut self, program: Node, scope: Scope, file: Option<&Path>) -> Result<Node, Node> {
+		let mut siblings = scope_files(scope, file)?;
+		let mut own = statements(program.clone());
+		let mut known = HashSet::new();
+		bound_names(&program, &mut known);
+		let mut needed: Vec<String> = mentioned_names(&own).into_iter().filter(|name| !known.contains(name)).collect();
+		let mut imports = Vec::new();
+		let mut using_siblings = HashSet::new();
+		while let Some(name) = needed.pop() {
+			if !known.insert(name.clone()) {
+				continue;
+			}
+			let mut providers: Vec<(usize, Vec<Node>)> = Vec::new();
+			for (index, sibling) in siblings.iter_mut().enumerate() {
+				let declarations = sibling.declarations_of(&name)?;
+				let same_as_before = providers.iter().any(|(_, earlier)| same_definitions(earlier, &declarations));
+				if !declarations.is_empty() && !same_as_before {
+					providers.push((index, declarations)); // the same definition in two files is no conflict
+				}
+			}
+			let (index, declarations) = match providers.len() {
+				0 => continue,
+				1 => providers.remove(0),
+				_ => {
+					let files: Vec<String> = providers.iter().map(|(index, _)| siblings[*index].path.display().to_string()).collect();
+					return Err(error(&format!("{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean", files.join(" and "))));
+				}
+			};
+			if using_siblings.insert(index) {
+				imports.extend(self.uses_of(&mut siblings[index])?);
+			}
+			let mut parameters = HashSet::new();
+			declarations.iter().for_each(|declaration| bound_names(declaration, &mut parameters));
+			parameters.remove(&name);
+			needed.extend(mentioned_names(&declarations).into_iter().filter(|used| !parameters.contains(used)));
+			imports.extend(declarations);
+		}
+		if imports.is_empty() {
+			return Ok(program);
+		}
+		imports.append(&mut own);
+		Ok(Node::List(imports, Bracket::None, Separator::Newline))
+	}
+
+	/// The modules a sibling file uses, resolved from its folder
+	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let outer_directory = std::mem::replace(&mut self.including_directory, Some(folder_of(&sibling.path)));
+		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
+		self.including_directory = outer_directory;
+		Ok(resolved?.into_iter().flat_map(statements).collect())
 	}
 
 	/// A file that cannot be found: an error listing where it was looked for
@@ -289,6 +482,9 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 		clone(name, url, &cached, Some(tag))?;
 	}
 	std::fs::create_dir_all(packages).map_err(|failure| format!("package {name}: {failure}"))?;
+	#[cfg(not(unix))]
+	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
+	#[cfg(unix)]
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
 		_ => Ok(link),
@@ -466,6 +662,101 @@ fn is_declaration(statement: &Node) -> bool {
 		}
 		_ => false,
 	}
+}
+
+/// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
+fn declared_name(statement: &Node) -> Option<String> {
+	match statement.drop_meta() {
+		Node::Type { name, .. } => leftmost_symbol(name),
+		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
+		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
+		_ => None,
+	}
+}
+
+fn leftmost_symbol(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, _, _) => leftmost_symbol(items.first()?),
+		Node::Key(left, Op::Colon | Op::Assign | Op::Define, _) => leftmost_symbol(left),
+		_ => None,
+	}
+}
+
+/// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
+fn binds_names(keyword: &str) -> bool {
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || matches!(keyword, "for" | "require" | "include")
+}
+
+/// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`
+fn header(definition: &Node) -> &Node {
+	match definition.drop_meta() {
+		Node::Key(header, Op::Colon | Op::Assign | Op::Define, _) => header,
+		Node::List(items, _, _) if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) => &items[0],
+		_ => definition,
+	}
+}
+
+/// Every name the program binds anywhere: variables, functions, parameters, loop variables, imports.
+/// Generous on purpose: a bound name never comes from a sibling
+fn bound_names(node: &Node, names: &mut HashSet<String>) {
+	match node.drop_meta() {
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() => {
+			names.extend(mentioned_names(std::slice::from_ref(target.as_ref())));
+			bound_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			bound_names(left, names);
+			bound_names(right, names);
+		}
+		Node::List(items, _, _) => {
+			if let [keyword, bound, ..] = items.as_slice() {
+				if matches!(keyword.drop_meta(), Node::Symbol(word) if binds_names(word)) {
+					names.extend(mentioned_names(std::slice::from_ref(header(bound))));
+				}
+			}
+			items.iter().for_each(|item| bound_names(item, names));
+		}
+		Node::Type { name, body } => {
+			bound_names(name, names);
+			names.extend(leftmost_symbol(name));
+			bound_names(body, names);
+		}
+		_ => {}
+	}
+}
+
+fn same_definitions(first: &[Node], second: &[Node]) -> bool {
+	first.len() == second.len() && first.iter().zip(second).all(|(a, b)| a.serialize() == b.serialize())
+}
+
+/// Every word the statements mention
+fn mentioned_names(statements: &[Node]) -> Vec<String> {
+	fn collect(node: &Node, names: &mut Vec<String>) {
+		match node {
+			Node::Symbol(name) => names.push(name.clone()),
+			Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
+				collect(receiver, names); // `xs.add(x)` names a method of xs, no definition of the folder
+				if let Node::List(call, _, _) = member.drop_meta() {
+					call.iter().skip(1).for_each(|argument| collect(argument, names));
+				}
+			}
+			Node::Key(left, _, right) => {
+				collect(left, names);
+				collect(right, names);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
+			Node::Meta { node, .. } => collect(node, names),
+			Node::Type { name, body } => {
+				collect(name, names);
+				collect(body, names);
+			}
+			_ => {}
+		}
+	}
+	let mut names = Vec::new();
+	statements.iter().for_each(|statement| collect(statement, &mut names));
+	names
 }
 
 /// `require x` and `import x` of a native library stay in the program as `use x`

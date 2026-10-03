@@ -80,6 +80,11 @@ impl WasmGcEmitter {
 		}
 		if is_ref_assign {
 			if let Node::Symbol(name) = left.drop_meta() {
+				if self.emit_typed_list_store(func, name, right) {
+					func.instruction(&Instruction::Drop);
+					self.emit_typed_list_as_node(func, name);
+					return;
+				}
 				// Emit the right side as a Node reference
 				self.emit_node_instructions(func, right);
 				// Store in ref-type local
@@ -250,9 +255,8 @@ impl WasmGcEmitter {
 	fn emit_hash_op(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		// Check if prefix (count) or infix (index)
 		if matches!(left.drop_meta(), Node::Empty) {
-			// Prefix #x = count - emit the node and call node_count
-			self.emit_node_instructions(func, right);
-			self.emit_call(func, "node_count");
+			// Prefix #x = count
+			self.emit_list_count(func, right, "node_count");
 			// node_count returns i64, wrap in new_int
 			self.emit_call(func, "new_int");
 		} else {
@@ -286,8 +290,7 @@ impl WasmGcEmitter {
 		if let Some(ref method) = method_name {
 			if let Some(counter) = crate::analyzer::counting_method(method, &self.ctx) {
 				// obj.count, obj.length: elements, or graphemes of a text; obj.bytes/chars/graphemes
-				self.emit_node_instructions(func, left);
-				self.emit_call(func, counter);
+				self.emit_list_count(func, left, counter);
 				self.emit_call(func, "new_int");
 				return;
 			}
@@ -301,7 +304,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
-	fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
+	pub(super) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
 		self.emit_node_instructions(func, left);
 		// For struct instances like Person{...}, emit block as list
 		let right_node = right.drop_meta();

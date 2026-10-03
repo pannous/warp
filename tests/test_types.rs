@@ -222,7 +222,7 @@ fn test_type_confusion() {
 
 
 #[test]
-#[soon]
+#[ignore = "soon"]
 fn test_function_return_types() {
 	let _result = analyze(parse("def f(x):float := 42.0"));
 	let _result = analyze(parse("def f(x):int := 42"));
@@ -312,7 +312,7 @@ fn test_types_simple2() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system and Signature implementation
+#[ignore = "soon"] // TODO: requires complete type system and Signature implementation
 fn test_typed_functions() {
 	// todo name 'id' clashes with 'id' in preRegisterFunctions();
 	clear_analyzer_context();
@@ -335,7 +335,7 @@ fn test_typed_functions() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_empty_typed_functions() {
 	// todo int a(){} should be compiler error
 	// todo do we really want / need int a(); #[test] fn a(){} ?
@@ -377,7 +377,7 @@ fn test_types() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism() {
 	// debug:
 	//	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
@@ -396,7 +396,7 @@ fn test_polymorphism() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism2() {
 	clear_analyzer_context();
 	let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");
@@ -411,7 +411,7 @@ fn test_polymorphism2() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism3() {
 	is!(
 		"fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
@@ -431,7 +431,7 @@ fn test_generics() {
 }
 
 #[test]
-#[soon] // TODO: requires complete type system
+#[ignore = "soon"] // TODO: requires complete type system
 fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
 	is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");

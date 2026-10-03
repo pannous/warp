@@ -3,7 +3,7 @@
 //!   definition); `f 3` calls it; the parser itself reads `f = {it*2}` as the definition `f := {it*2}`
 //! - `{x*x}(x=5)` defines an anonymous function and calls it at once
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
-//! - a lambda anywhere else (an argument of another call, `map` over a non-function) is the error `functions are not first-class values yet`
+//! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
@@ -14,8 +14,7 @@ use crate::operators::Op;
 use crate::wasp_parser::parse;
 use std::cell::Cell;
 
-pub const NOT_FIRST_CLASS: &str = "functions are not first-class values yet";
-const IMPLICIT_PARAMETER: &str = "it";
+pub const IMPLICIT_PARAMETER: &str = "it";
 const ON_WORD: &str = "on";
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -45,9 +44,9 @@ const ITERATIONS: [Iteration; 5] = [
 	},
 ];
 
-struct Lambda {
-	params: Vec<String>,
-	body: Node,
+pub(crate) struct Lambda {
+	pub(crate) params: Vec<String>,
+	pub(crate) body: Node,
 }
 
 /// Lower the lambdas and iteration words whose function is known; an iteration word over a parameter is left for the
@@ -56,7 +55,8 @@ pub fn lower(node: Node) -> Node {
 	lowering(node, false)
 }
 
-/// The final run: an iteration word over a function that is still unknown is the error `functions are not first-class values yet`
+/// The final run: an iteration word over a function known only at run time calls it as a closure; over a value that is no
+/// function it is the error `map needs a function, got …`
 pub fn lower_strict(node: Node) -> Node {
 	lowering(node, true)
 }
@@ -129,6 +129,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	match left.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
+		Node::Empty => Some(vec![]), // `() => body`
 		Node::List(items, _, _) => items
 			.iter()
 			.map(|item| match item.drop_meta() {
@@ -141,7 +142,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 }
 
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)`
-fn arrow_lambda(node: &Node) -> Option<Lambda> {
+pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
 		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
 			let params = parameter_names(left)?;
@@ -234,7 +235,7 @@ impl Lowering {
 					items
 				};
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
-				self.immediate_call(&items).or_else(|| self.iteration_call(&items, &bracket, &separator)).or_else(|| self.escaping_lambda(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
+				self.immediate_call(&items).or_else(|| self.iteration_call(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
@@ -352,7 +353,7 @@ impl Lowering {
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
 	/// defined function; anything else cannot be inlined
 	/// `Err(None)` when the function is not known yet (a parameter of a function that is specialised later)
-	fn applied(&self, iteration: &Iteration, function: &Node, arguments: &[Node]) -> Result<Node, Option<Node>> {
+	fn applied(&self, iteration: &Iteration, list: &Node, function: &Node, arguments: &[Node]) -> Result<Node, Option<Node>> {
 		match arrow_lambda(function).or_else(|| block_lambda(function)).or_else(|| operator_lambda(function)) {
 			Some(lambda) if lambda.params.len() == arguments.len() => {
 				Ok(lambda.params.iter().zip(arguments).fold(lambda.body, |body, (param, argument)| substitute(body, param, argument)))
@@ -366,7 +367,13 @@ impl Lowering {
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => Ok(call(name, arguments.to_vec())),
 				Node::Symbol(_) if !self.strict => Err(None),
-				_ => Err(Some(Diagnostic::at(function, NOT_FIRST_CLASS).into_error())),
+				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one
+				_ if crate::closures::may_be_function_value(function) => Ok(crate::closures::closure_call(function.clone(), arguments.to_vec())),
+				_ => {
+					let params = if iteration.function_arguments == 1 { "x" } else { "(a b)" };
+					let fix = format!("{} {} ({params} => …)", iteration.word, list.serialize());
+					Err(Some(crate::closures::needs_a_function(iteration.word, None, function, &fix)))
+				}
 			},
 		}
 	}
@@ -376,7 +383,7 @@ impl Lowering {
 		let names: Vec<(&str, String)> = ["out", "item", "acc", "list", "index", "value"].into_iter().map(|name| (name, self.fresh(&format!("loop_{name}")))).collect();
 		let symbol = |name: &str| Node::Symbol(names.iter().find(|(prefix, _)| *prefix == name).expect("a loop name").1.clone());
 		let arguments: Vec<Node> = if iteration.function_arguments == 2 { vec![symbol("acc"), symbol("item")] } else { vec![symbol("item")] };
-		let applied = match self.applied(iteration, &function, &arguments) {
+		let applied = match self.applied(iteration, &list, &function, &arguments) {
 			Ok(applied) => applied,
 			Err(error) => return error,
 		};
@@ -389,16 +396,6 @@ impl Lowering {
 			program = substitute(program, START_PLACEHOLDER, start);
 		}
 		Some(program)
-	}
-
-	/// A lambda given as an argument of a call that is not inlined
-	fn escaping_lambda(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		if !self.strict {
-			return None; // a function that takes it as a parameter is specialised for it first
-		}
-		call_name(items, bracket, separator)?;
-		let escaped = items[1..].iter().find(|argument| arrow_lambda(argument).is_some())?;
-		Some(Diagnostic::at(escaped, NOT_FIRST_CLASS).into_error())
 	}
 }
 
