@@ -1142,6 +1142,10 @@ impl WasmGcEmitter {
 		if self.emit_loop_jump(func, node) {
 			return;
 		}
+		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
+			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			return;
+		}
 		let node = node.drop_meta();
 
 		match node {

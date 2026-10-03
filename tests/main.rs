@@ -34,6 +34,7 @@ mod test_colon_body_extent;
 mod test_comments;
 mod test_compile_only;
 mod test_condition_block;
+mod test_constructor_vs_data;
 mod test_control_words;
 mod test_counting_units;
 mod test_data_scope;

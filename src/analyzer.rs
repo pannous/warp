@@ -2064,7 +2064,7 @@ fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
 }
 
 /// Kind of a value known before running the program
-fn literal_kind(value: &Node) -> Option<Kind> {
+pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(_) | Number::BigInt(_)) | Node::True | Node::False => Some(Kind::Int),
 		Node::Number(_) => Some(Kind::Float),

@@ -251,6 +251,8 @@ pub struct WaspParser {
 	functions_with_parameters: std::collections::HashSet<String>,
 	/// Operators the program declares (`suffix operator ‼ := it*2`), longest glyph first, found by a pre-scan of the source
 	user_operators: Vec<UserOperator>,
+	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
+	declared_types: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -280,6 +282,17 @@ fn is_operator_glyph(glyph: &str) -> bool {
 
 fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`)
+fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	words.windows(2)
+		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
+		.map(|pair| pair[1])
+		.filter(|name| is_plain_name(name))
+		.map(str::to_string)
+		.collect()
 }
 
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
@@ -333,8 +346,10 @@ impl WaspParser {
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
+		let declared_types = if options == ParserOptions::default() { scan_declared_types(&input) } else { Default::default() };
 		WaspParser {
 			user_operators,
+			declared_types,
 			input,
 			chars,
 			pos: 0,
@@ -1414,7 +1429,9 @@ impl WaspParser {
 		match ch {
 			'{' => {
 				let block = self.parse_bracketed('{');
-				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
+				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
 				let length = self.type_application_length().expect("guarded");
