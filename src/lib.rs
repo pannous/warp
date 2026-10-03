@@ -1,6 +1,5 @@
 #![allow(dead_code, unused_imports)]
 // shared code with wasp tests etc
-// ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
@@ -67,7 +66,6 @@ pub mod versions;
 pub mod web;
 pub mod ambiguous_forms;
 pub mod traits;
-// ⚠️ modules also need to be used in main.rs AND lib.rs to be compiled
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
