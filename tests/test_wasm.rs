@@ -1,5 +1,3 @@
-#![allow(mixed_script_confusables)]
-
 use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::type_kinds::NodeKind;

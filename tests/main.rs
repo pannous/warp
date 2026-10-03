@@ -235,7 +235,6 @@ mod test_units_followup;
 mod test_use_modules;
 mod test_use_scopes;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_utils;
 mod test_versions;
 mod test_warning_mode;
 mod test_wasi;

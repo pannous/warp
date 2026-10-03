@@ -96,7 +96,6 @@ wasmtime-wasi = { version = "49.0.1", optional = true }
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]
 # only compiled and included when running tests or examples
-once_cell = "1.21.3" # used by tests/test_utils.rs
 wat = "1.259" # tests build modules from WAT text; the compiler itself parses WAT through wasmtime's "wat" feature
 
 
