@@ -147,7 +147,13 @@ fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }
 
+/// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
+/// would be the ambiguous `x*2 as int`
 fn as_type(value: Node, type_name: &Node) -> Node {
+	let value = match value.drop_meta() {
+		Node::Key(_, op, _) if op.is_arithmetic() => Node::List(vec![value], Bracket::Round, Separator::None),
+		_ => value,
+	};
 	Node::Key(Box::new(value), Op::As, Box::new(type_name.clone()))
 }
 

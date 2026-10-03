@@ -16,3 +16,10 @@ fn a_type_word_item_in_a_comma_list_is_no_cast() {
 fn a_written_constructor_call_is_still_hinted() {
 	assert_eq!(cast_hints("int(3)"), vec!["int(3)".to_string()]);
 }
+
+#[test]
+fn a_c_style_definition_is_no_cast() {
+	assert_eq!(cast_hints("int g(int x){ return x*2 }; g(3)"), Vec::<String>::new());
+	let warnings = warp::diagnostic::take_warnings();
+	assert!(warnings.iter().all(|warning| !warning.to_string().contains("converts the whole")), "{warnings:?}");
+}
