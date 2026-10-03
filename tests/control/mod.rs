@@ -23,3 +23,4 @@ mod test_try_exits_and_naming;
 mod test_try_deep;
 mod test_while_paren_condition;
 mod test_while_value;
+mod test_try_else_value;

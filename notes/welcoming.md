@@ -41,7 +41,7 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
 fields are a decision the writer states once, in one line). Implemented in src/traits.rs (`Likeness`,
-`Dispatch::refused_argument`), tests/test_like.rs, wiki page wiki_pages/like.md.
+`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
 
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural

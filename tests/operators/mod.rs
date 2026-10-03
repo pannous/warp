@@ -10,3 +10,5 @@ mod test_operator_parsing;
 mod test_operators;
 mod test_structural_equality;
 mod test_truthiness_of_objects;
+mod test_logical_calls;
+mod test_like;

@@ -21,3 +21,7 @@ mod test_typed_arrays;
 mod test_types_scope;
 mod test_types;
 mod test_real_text;
+mod test_float_fields;
+mod test_records;
+mod test_spaced_construction;
+mod test_type_word_user_function;
