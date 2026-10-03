@@ -6,7 +6,7 @@ TEMP_FILE=$(mktemp)
 
 unset CARGO_TARGET_DIR
 
-FEATURES="--all-features"
+FEATURES="--all-features" # native + optimizer + ffi: the default build plus the optimizer and FFI tests
 echo "Compiling all tests..."
 cargo --offline nextest run $FEATURES --no-run || exit 1
 

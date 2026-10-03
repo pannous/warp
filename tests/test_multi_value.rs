@@ -11,7 +11,7 @@ fn int(digits: &str) -> Node {
 }
 
 /// Result types of the function `name` in a module, from its name section
-fn result_count(bytes: &[u8], name: &str) -> Option<usize> {
+pub(crate) fn result_count(bytes: &[u8], name: &str) -> Option<usize> {
 	let (mut imported, mut type_of_function, mut result_counts) = (0u32, Vec::new(), Vec::new());
 	let mut index = None;
 	for payload in Parser::new(0).parse_all(bytes) {

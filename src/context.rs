@@ -27,6 +27,8 @@ pub struct UserFunctionDef {
     pub params: Vec<Param>,
     pub body: Box<Node>,
     pub return_kind: Kind,
+    /// Kinds of the values a `return a, b` function returns as wasm multi-value results (empty: one Node or number)
+    pub tuple_kinds: Vec<Kind>,
     pub func_index: Option<u32>,
 }
 

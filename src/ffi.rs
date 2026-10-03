@@ -353,7 +353,9 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// libm functions linked under the import module "m"
+/// libm functions linked under the import module "m".
+/// Deliberately hand-linked FFI examples (user decision 2026-10-03, kept as marked examples): the explicit form of what
+/// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
 const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 

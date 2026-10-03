@@ -400,6 +400,16 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 	if function_definition_body(node).is_some() {
 		return 0;
 	}
+	if let Some((names, values)) = crate::tuples::destructuring(node) {
+		let temporaries = values.iter().map(|value| collect_variables_inner(value, scope, false, in_structure)).sum();
+		for (index, name) in names.iter().enumerate() {
+			if scope.lookup(name).is_none() && !scope.is_global(name) {
+				let kind = destructured_kind(values, index, scope);
+				scope.define(name.clone(), None, kind);
+			}
+		}
+		return temporaries;
+	}
 	match node {
 		// Global declarations: global:Key(name, =, value) - don't create local
 		// Tag structures: html:body - body is structure context (attributes, not variables)
@@ -518,6 +528,16 @@ fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 }
 
 /// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
+/// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
+fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
+	match values {
+		[call] => crate::tuples::call_parts(call)
+			.and_then(|(function, _)| scope.function_kinds.get(&crate::tuples::element_key(function, index)).copied())
+			.unwrap_or(Kind::Data),
+		_ => values.get(index).map_or(Kind::Data, |value| binding_kind(value, scope)),
+	}
+}
+
 fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	held_kind(value, || infer_type(value, scope))
 }
@@ -2239,13 +2259,42 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
-fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+/// The parameters and variables of a function body, typed
+fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define(param.name.clone(), None, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
+	scope
+}
+
+/// The kinds of the values `return a, b` gives back, position by position over every such return:
+/// one kind when all agree, Float for Int mixed with Float, else a Node
+fn infer_tuple_kinds(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Vec<Kind> {
+	let Some(arity) = crate::tuples::tuple_arity(body) else { return vec![] };
+	let scope = function_body_scope(params, body, function_kinds, globals);
+	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
+	body.visit(&mut |node| {
+		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
+			let value_kind = infer_type(value, &scope);
+			*kind = Some(match *kind {
+				None => value_kind,
+				Some(known) if known == value_kind => known,
+				Some(known) if known.is_primitive() && value_kind.is_primitive() && (known.is_float() || value_kind.is_float()) => Kind::Float,
+				Some(_) => Kind::Data,
+			});
+		}
+	});
+	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
+}
+
+fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &HashMap<String, Kind>, globals: &HashMap<String, Local>) -> Kind {
+	if crate::tuples::tuple_arity(body).is_some() {
+		return Kind::List; // used whole, a tuple function's values are packed into a list
+	}
+	let scope = function_body_scope(params, body, function_kinds, globals);
 	let last_kind = match body.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
 		_ => infer_type(body, &scope),
@@ -2311,7 +2360,7 @@ pub fn param_kind(param: &Param) -> Kind {
 fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, body);
 	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new());
-	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, func_index: None }
+	UserFunctionDef { name: name.to_string(), params, body: Box::new(body.clone()), return_kind, tuple_kinds: vec![], func_index: None }
 }
 
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
@@ -2588,14 +2637,24 @@ fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 				(function.name.clone(), kind)
 			})
 			.collect();
-		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
+		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
+			.flat_map(|function| {
+				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals);
+				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
+			})
+			.collect();
+		let settled = inferred.iter().chain(&tuples).all(|(name, kind)| function_kinds.get(name) == Some(kind));
 		function_kinds.extend(inferred);
+		function_kinds.extend(tuples);
 		if settled {
 			break;
 		}
 	}
 	for function in ctx.user_functions.values_mut() {
 		function.return_kind = function_kinds[&function.name];
+		function.tuple_kinds = (0..crate::tuples::tuple_arity(&function.body).unwrap_or(0))
+			.map(|index| function_kinds[&crate::tuples::element_key(&function.name, index)])
+			.collect();
 	}
 }
 
