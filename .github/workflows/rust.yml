@@ -76,8 +76,8 @@ jobs:
     - id: build
       run: cargo build --verbose
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
-    # Zero warnings in src/: -D warnings on the crate itself only (cargo rustc), so the dependencies stay cached.
-    # Default (native), all features, and the browser build without native. tests/ is not denied yet.
+    # Zero warnings: -D warnings on the crate itself only (cargo rustc), so the dependencies stay cached.
+    # Default (native), all features, the browser build without native, and the test binary.
     - id: warnings
       run: |
         cargo rustc --lib -- -D warnings
@@ -85,15 +85,21 @@ jobs:
         cargo rustc --lib --all-features -- -D warnings
         cargo rustc --bin warp --all-features -- -D warnings
         cargo rustc --lib --no-default-features -- -D warnings
+        cargo rustc --test tests --all-features -- -D warnings
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - id: tests
       run: cargo test --verbose --no-fail-fast
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
-    - run: cargo clippy -- -D warnings
-      continue-on-error: true
+    # Clippy is denied in src/ (library and binary); tests/ is not clippy-linted here (style lints left there)
+    - id: clippy
+      run: |
+        cargo clippy --lib --bins -- -D warnings
+        cargo clippy --lib --bins --all-features -- -D warnings
+        cargo clippy --lib --no-default-features -- -D warnings
+      continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - name: Agent result
       if: always() && startsWith(github.ref, 'refs/heads/claude/')
       run: |
-        result="AGENT_CI_RESULT build=${{ steps.build.outcome }} warnings=${{ steps.warnings.outcome }} tests=${{ steps.tests.outcome }}"
+        result="AGENT_CI_RESULT build=${{ steps.build.outcome }} warnings=${{ steps.warnings.outcome }} clippy=${{ steps.clippy.outcome }} tests=${{ steps.tests.outcome }}"
         echo "$result"
         echo "$result" >> "$GITHUB_STEP_SUMMARY"

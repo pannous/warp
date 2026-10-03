@@ -21,7 +21,7 @@ required-features = ["native"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# Zero warnings: these warn locally and CI denies them in the library and the binary (rust.yml "Deny warnings").
+# Zero warnings: these warn locally and CI denies them, and clippy in src/ (rust.yml steps "warnings" and "clippy").
 # Fix or delete the code instead of a crate-level #![allow(...)].
 [lints.rust]
 unused = "warn"
