@@ -331,8 +331,8 @@ fn test_smart_types() {
 	// which   is pretty useless but serves as nice demonstration of multi return
 	// which  is pretty useless but serves as nice demonstration of node as wit/gc type
 	// which is pretty useless but serves as nice demonstration of emitted structs
-	assert_eq!(smarty32(0xC000221a), '√');
-	assert_eq!(smarty32(0xC000221a), "√");
+	assert_eq!(smarty32(0xC000221A), '√');
+	assert_eq!(smarty32(0xC000221A), "√");
 	assert_eq!(smarty32(0xC0000020), ' ');
 	assert_eq!(smarty32(0x00000000), Empty);
 	assert_eq!(smarty32(0x00000009), 9);

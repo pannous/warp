@@ -542,6 +542,7 @@ fn test_wasm_logic_primitives() {
 	is!("nil", Empty);
 }
 #[test]
+#[allow(clippy::excessive_precision)] // the expected value is written exactly as the wasp source literal
 fn test_wasm_variables0() {
 	//	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
 	is!("i=123;i", 123);
