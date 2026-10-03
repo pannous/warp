@@ -41,7 +41,7 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
 fields are a decision the writer states once, in one line). Implemented in src/traits.rs (`Likeness`,
-`Dispatch::refused_argument`), tests/test_like.rs, wiki page wiki_pages/like.md.
+`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
 
 ## Field test 2026-10-02
 Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
@@ -73,7 +73,7 @@ User decisions from that round:
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
-  …) never warn. tests/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
+  …) never warn. tests/welcoming/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
 - A wrong guess fails far away, so `eval` names it: a runtime error lists the defaults the warnings took
   (`assumed at 23:13, 24:15: …; fix: ..<`, diagnostic::take_assumptions), and an index out of range in a program with an
   exclusive range adds "hint: `..` excludes the end; `...` or `to` include it". The kotlin-range warning fires for every

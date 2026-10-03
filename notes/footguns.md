@@ -4,14 +4,14 @@
   `git add footguns.md` silently stages nothing for the untracked file; use the real name.
 - `probes/footguns/footguns.sh` rebuilds warp and evaluates every case in `probes/footguns/cases.warp`
   (cases separated by `---` lines) into `probes/footguns/results.txt`. Rerun it after compiler changes and diff.
-- `tests/probe_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a clear answer.
+- `tests/welcoming/test_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a clear answer.
   When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
 
 ## Plain bugs found while probing (2026-09-26), all fixed — each entry names its regression test
-- `1/4+1/4` → 0: fixed, pinned by `test_sum_of_quotients_is_not_truncated` (tests/probe_footguns.rs).
+- `1/4+1/4` → 0: fixed, pinned by `test_sum_of_quotients_is_not_truncated` (tests/welcoming/test_footguns.rs).
 - `"abc"=="abc"`, `0==""`, `null==false`, `if "" …`, NFC vs NFD compare: fixed, pinned by `test_string_equality_is_by_value`,
-  `test_equality_across_kinds_is_structural`, `test_empty_values_are_falsy`, `test_unicode_normalization` (tests/probe_footguns.rs).
+  `test_equality_across_kinds_is_structural`, `test_empty_values_are_falsy`, `test_unicode_normalization` (tests/welcoming/test_footguns.rs).
 - `x=1;x++;x` and `++i`: fixed, pinned by `test_increment_changes_variable`, `test_prefix_increment`.
 - Already fixed before the 2026-09-29 sweep, now in wiki/Footguns.md: `f := it*10; 1 + f 3` → 31 (`test_braceless_call_as_operand`,
   9d54997d; tests/numbers/test_angle.rs covers `1+square 2+3`) and list index errors: `x[3]`, `x#0`, `x[-1]` → `Error('index out of range')`
@@ -219,7 +219,7 @@
   the BigInt/ratio slow path is `exact_mod`; integer `x /= y` is the matching quotient `(x - x % y) / y`, `x %= y` follows `%`.
   Lean exports `%` as `Int.emod`, `rem` as `Int.tmod`. The analyzer lints `%` with a negative literal or negated operand.
 - Tests changed with maintainer authorization: test_unbounded_int.rs (`-7 % 3` → 2, big `% 1000` → 110) and
-  probe_footguns.rs test_modulo_and_remainder_are_both_named. Validated on CI (branch claude/footguns-euclid).
+  test_footguns.rs test_modulo_and_remainder_are_both_named. Validated on CI (branch claude/footguns-euclid).
 - Left open: float `%=` falls back to multiplication in the compound-assign float path (pre-existing, `_ => F64Mul`);
   float `%` goes through the integer path. No `rem=`.
 
@@ -318,7 +318,7 @@ Warp now (2026-09-28): `√2*√2 == 2`, `sqrt(8) == 2*√2`, `∛27 == 3`, `sin
 `ln(ℯ) == 1`, `π > 3.14`, `π < 355/113`; `π+ℯ`, `√2+√3`, `π/2`, `2√2` print symbolically; `sin(1)` prints `≈0.8414709848078965`;
 `π as float` is 3.141592653589793. A bare `e` or `i` stays a free name; the constants are `ℯ`/`euler` and `ⅈ`.
 Constant expressions are evaluated exactly at compile time; inside functions and loops exact reals are still f64 (next: WASM GC form).
-Tests: tests/probe_footguns.rs test_square_roots_multiply_exactly … test_euler_identity.  
+Tests: tests/welcoming/test_footguns.rs test_square_roots_multiply_exactly … test_euler_identity.  
 Decision: an exact real is a sparse polynomial with rational coefficients over named generators (π, ℯ, ⅈ, √r, ∛r) in a
 normal form; ε and ω join later as generators ordered by lowest ε power.  
 Decision: π and ℯ are treated as algebraically independent (Schanuel's conjecture, unproven), so equal normal forms ⇔ equal values.  
@@ -399,7 +399,7 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
 - Decided: case mapping is locale-independent, Unicode default (`"i".upper` → "I", `"İ".lower` → "i̇", `"straße".upper`
   → "STRASSE"), as JS `toUpperCase` and Rust `to_uppercase`. Locale-aware mapping (Turkish/Azeri dotted İ/ı, Lithuanian)
   is left open: no locale syntax exists yet.
-- Tests: probe_footguns.rs test_number_of_chars_in_text, test_number_of_graphemes_in_text, test_number_of_bytes_in_text,
+- Tests: test_footguns.rs test_number_of_chars_in_text, test_number_of_graphemes_in_text, test_number_of_bytes_in_text,
   test_number_of_codepoints_in_text, test_count_of_text_without_unit, test_case_mapping_is_locale_independent.
 - Left open: locales for case mapping and collation; `number of words/lines in t`; `number of X in list` (count matches).
 
@@ -412,7 +412,7 @@ unit `t#i` indexes by; `size` is a synonym of `count` (2026-09-29, was: bytes). 
 `t.bytes`; `number of chars in t` = `number of codepoints in t` = `t.chars`; `number of graphemes in t` = `t.graphemes`.
 `number of chars in "héllo"` → 5, `number of bytes in "héllo"` → 6, `number of codepoints in "👍🏽"` → 2,
 `number of graphemes in "👍🏽"` → 1. A `char` is a code point; a user-perceived character is a grapheme.
-Tests: probe_footguns.rs test_number_of_{chars,graphemes,bytes,codepoints}_in_text, test_count_of_text_without_unit.
+Tests: test_footguns.rs test_number_of_{chars,graphemes,bytes,codepoints}_in_text, test_count_of_text_without_unit.
 
 ### Case mapping and the Turkish İ
 `"i".toUpperCase()` in a Turkish locale is "İ" in Java (default locale), breaking identifiers and keyword matching.
@@ -489,13 +489,13 @@ in useful fragments, and Warp answers only there: never a guess, never a panic.
   `undecidable: f == g …`, with `they differ: counterexample x=2` when a quick property test finds one
   (`f(x):=x%2; g(x):=x%3`). For more, state a `law` or prove it in Lean.
 - Tests: test_function_equality_up_to_renaming, test_polynomial_function_equality,
-  test_finite_domain_function_equality, test_undecidable_function_equality_is_an_error (tests/probe_footguns.rs).
+  test_finite_domain_function_equality, test_undecidable_function_equality_is_an_error (tests/welcoming/test_footguns.rs).
 
 ## Decision update (2026-09-29): `size` = `count`
 `size` (function, `size of x`, `x.size`) counts elements, of a text its characters (graphemes), exactly like `count`. This replaces
 the earlier "size counts bytes" decision (wiki/Footguns.md is not part of this repository; the record is here). Bytes are counted
 only by an explicit unit: `byte count of x`, `number of bytes in x`, `#bytes in x`, `x.bytes` (8 per list element).
-Tests still pinning the old rule (not edited, supervisor decides): tests/probe_footguns.rs lines ~366, 370, 411; tests/sweeps/test_todo.rs:103.
+Tests still pinning the old rule (not edited, supervisor decides): tests/welcoming/test_footguns.rs lines ~366, 370, 411; tests/sweeps/test_todo.rs:103.
 
 ## Work area "globals" (2026-10-02)
 - Fixed: a function changes a main-level variable declared `global`: `global n=0; def f(x){n+=1;x}; f(3); n` → 1, for
@@ -518,7 +518,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/probe_f
   -9223372036854775807. Required with list_join whenever the int runtime is (text_builtins::add_dependencies).
 - Fixed: an exact variable later assigned an f64 (`import floor from "m"; x=10.0; x=floor(2.5)`, `x=1; x=2.5 as float`)
   holds an f64 throughout (analyzer `widen_to_float`), as expressions mixing in an f64 do; before, WASM validation failed.
-- Tests: tests/test_welcoming_print.rs, probes/print/.
+- Tests: tests/welcoming/test_welcoming_print.rs, probes/print/.
 
 ## For wiki/Footguns.md
 
@@ -536,4 +536,4 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/probe_f
   global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.wasp relies on
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
-- Tests: tests/test_welcoming_globals.rs.
+- Tests: tests/welcoming/test_welcoming_globals.rs.

@@ -9,7 +9,7 @@ Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than th
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/test_welcoming_ask.rs pins its explanation).
+- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
 ## Wasp habits the old samples get wrong (sample-side fixes)
 - Lists are values: a function cannot change a list it is passed. Return the new list, or make the state `global`.

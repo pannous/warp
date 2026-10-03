@@ -42,7 +42,7 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
 
 ## Map words (fix-maps, Dijkstra field test)
 
-One map path for every spelling (tests/test_welcoming_maps.rs, probes/maps/):
+One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/maps/):
 - Keys compare by name at runtime: `map_key_name` turns a text or a character (`"A"` is a Codepoint) into the symbol of the
   same letters, used by `map_entry_has_key` and `field_with`. So `{"A":1}`, `{A:1}`, `m["A"]`, `m.A`, `k="A"; m[k]` are one key.
 - `{}` is the empty object: `d["A"]=5` grows it (`field_with` on ø returns the entry), `d[k]=v` with a variable key too.

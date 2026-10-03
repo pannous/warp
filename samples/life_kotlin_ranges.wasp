@@ -55,4 +55,4 @@ for r in 0..size-1 {
 }
 checksum
 
-// Kotlin habit kept on purpose: `0..size-1` meant inclusive; wasp excludes the end and explains it (tests/test_welcoming_ask.rs)
+// Kotlin habit kept on purpose: `0..size-1` meant inclusive; wasp excludes the end and explains it (tests/welcoming/test_welcoming_ask.rs)

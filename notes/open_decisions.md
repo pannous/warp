@@ -211,7 +211,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   hint `str(13)`. Reversed: the 2026-09 "no implicit conversion" rule (DESIGN.md "Dangerous implicitness", wiki/Footguns.md
   "String + number"), which was there because one-character strings used to add as code points (`"5"+3` → 56). `"5"*3`
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
-  probe_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
+  test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
 - `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, lowered to `(a - a%b)/b` (`%` is Euclidean: exact
   for a positive divisor, `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment.
@@ -223,7 +223,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is a comment; floor division is written glued: a//b", shown until acknowledged, never again after. The earlier
   floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
-  are 0; arithmetic on ø still needs the check. Changed line: tests/probe_footguns.rs test_null_needs_a_check
+  are 0; arithmetic on ø still needs the check. Changed line: tests/welcoming/test_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
@@ -253,7 +253,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
     `[x].map(x => x*n)`; a list variable times a number stays the plain type error. Topic `insert-order`
     (list_emitter insert_position_and_value, two Int arguments): "position first, as Python" / "value first, as wasp".
     Unanswered (tests, CI, pipes): "<question> (too ambiguous to guess); fix: <both explicit forms>". The list-times
-    question starts with "type error: list * number:" so probe_footguns' `[1 2 3]*2` → "type error" still holds.
+    question starts with "type error: list * number:" so test_footguns' `[1 2 3]*2` → "type error" still holds.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
 
 
@@ -263,7 +263,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 
 ## Original questions
 ## Blocking finished work
-1. **should_panic test** `tests/probe_footguns.rs:56-60` pins the old compiler panic on undefined variables.
+1. **should_panic test** `tests/welcoming/test_footguns.rs:56-60` pins the old compiler panic on undefined variables.
    B9(2) turns all 9 panics into `Error('undefined variable: a')`. Replace with `fails_with("a+1", "undefined variable: a")`?
    (work saved in probes/b9_part2.patch)
 2. **Claude-Session trailers** in 27 pushed supervisor commits (forbidden by global CLAUDE.md): rewrite history or leave?
@@ -320,7 +320,7 @@ D16 overflow contradict Decided rules). Found while implementing:
     Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
 27. DECIDED 2026-10-03 (Unicode + be). Leftovers from earlier sessions: Unicode operators (≤ ≥ ≠ × ÷ ¬ √) and `is` for `==`: canonical or alternatives?
     `be` for `:=` (wiki/be.md) is not accepted by the parser: implement or drop?
-28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
+28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/welcoming/test_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
     that assertion line? The fix (a small arm in check_null_use) is ready; tests/lists/test_empty_list_count.rs waits #[ignore]d.
 29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from

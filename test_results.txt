@@ -73,11 +73,14 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
   ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
+  ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ control::test_try_deep::try_catches_a_failed_cast
   ✓ control::test_try_deep::try_catches_an_error_inside_a_called_function
   ✓ control::test_try_deep::try_catches_an_error_inside_an_expression
   ✓ control::test_try_deep::try_in_a_loop_catches_each_time
   ✓ control::test_try_deep::try_inside_a_called_function_restores_the_depth
+  ✓ control::test_try_else_value::an_arrow_fallback_is_a_function_value
+  ✓ control::test_try_else_value::try_else_takes_a_value_or_an_action
   ✓ control::test_try_else::assert_gives_the_condition_or_an_error
   ✓ control::test_try_else::try_falls_back_on_an_error_value
   ✓ control::test_try_else::try_falls_back_on_division_and_modulo_by_zero
@@ -141,7 +144,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_strcmp
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
-  ✓ ffi::test_ffi::test_ffi_strlen
   ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
@@ -266,6 +268,13 @@ PASSED:
   ✓ functions::test_multi_value::test_divmod_returns_quotient_and_remainder
   ✓ functions::test_multi_value::test_int_divmod_returns_both_results
   ✓ functions::test_multi_value::test_optimized_multi_value_division
+  ✓ functions::test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
+  ✓ functions::test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
+  ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
+  ✓ functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
+  ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
+  ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
+  ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
@@ -293,6 +302,13 @@ PASSED:
   ✓ functions::test_property_words::test_property_word_after_a_name_counts
   ✓ functions::test_property_words::test_property_word_agrees_with_of_and_getter
   ✓ functions::test_property_words::test_property_word_counts_text_characters
+  ✓ functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing
+  ✓ functions::test_return_type_dispatch::test_a_single_definition_with_a_result_type
+  ✓ functions::test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
+  ✓ functions::test_return_type_dispatch::test_a_typed_parameter_picks_the_overload
+  ✓ functions::test_return_type_dispatch::test_as_picks_the_overload
+  ✓ functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
+  ✓ functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
   ✓ functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form
   ✓ functions::test_suffix_words::a_variable_is_no_suffix_form
   ✓ functions::test_suffix_words::an_ungrouped_mix_asks
@@ -311,6 +327,9 @@ PASSED:
   ✓ functions::test_tuple_returns::test_tuple_function_returns_wasm_multi_value
   ✓ functions::test_tuple_returns::test_tuple_returns_inside_functions
   ✓ functions::test_tuple_returns::test_two_returned_values_destructure
+  ✓ functions::test_typed_returns::test_block_bodies_and_returns_convert_too
+  ✓ functions::test_typed_returns::test_return_type_after_the_parameters
+  ✓ functions::test_typed_returns::test_type_before_the_name_converts_the_result
   ✓ functions::test_typed_signatures::several_typed_parameters
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
@@ -322,6 +341,8 @@ PASSED:
   ✓ functions::test_undefined_calls::test_unresolved_call_inside_collections
   ✓ functions::test_undefined_calls::test_unresolved_call_is_an_error
   ✓ functions::test_undefined_calls::test_variable_is_not_callable
+  ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
+  ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
@@ -396,6 +417,8 @@ PASSED:
   ✓ lists::test_size_count::test_size_of_text_is_character_count
   ✓ lists::test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ lists::test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
+  ✓ lists::test_tuples::test_tuple_of_computed_items
   ✓ lists::test_typed_lists::test_appended_int_list_is_an_array
   ✓ lists::test_typed_lists::test_float_array_elements_are_numbers
   ✓ lists::test_typed_lists::test_float_list_is_a_float_array
@@ -409,6 +432,26 @@ PASSED:
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ lists::test_unpacking::for_loop_unpacking
+  ✓ lists::test_unpacking::list_target
+  ✓ lists::test_unpacking::nested_unpacking
+  ✓ lists::test_unpacking::parenthesized_target
+  ✓ lists::test_unpacking::star_init
+  ✓ lists::test_unpacking::star_middle
+  ✓ lists::test_unpacking::star_rest_empty
+  ✓ lists::test_unpacking::star_rest_from_list
+  ✓ lists::test_unpacking::star_rest_from_values
+  ✓ lists::test_unpacking::swap
+  ✓ lists::test_unpacking::too_few_values_is_loud
+  ✓ lists::test_unpacking::too_many_values_is_loud
+  ✓ lists::test_unpacking::underscore_discards
+  ✓ lists::test_unpacking::unpack_list_function
+  ✓ lists::test_unpacking::unpack_list_literal
+  ✓ lists::test_unpacking::unpack_list_variable
+  ✓ lists::test_unpacking::unpack_parenthesized_tuple
+  ✓ lists::test_unpacking::unpack_text
+  ✓ lists::test_unpacking::unpack_tuple_function
+  ✓ lists::test_unpacking::unpack_tuple_values
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
@@ -439,6 +482,7 @@ PASSED:
   ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
   ✓ modules::test_use_modules::test_use_imports_globals_and_functions
   ✓ modules::test_use_modules::test_use_loads_module_from_samples
+  ✓ modules::test_use_modules::test_use_math_stays_builtin
   ✓ modules::test_use_modules::test_use_missing_module_is_an_error_value
   ✓ modules::test_use_modules::test_use_twice_is_a_no_op
   ✓ modules::test_use_modules::test_warp_extension_is_found
@@ -664,9 +708,24 @@ PASSED:
   ✓ operators::test_in_position::the_position_never_warns
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
+  ✓ operators::test_like::a_known_other_type_teaches_like
+  ✓ operators::test_like::a_like_type_is_judged_by_its_uses
+  ✓ operators::test_like::a_missing_field_is_a_warning
+  ✓ operators::test_like::a_type_can_be_like_several_and_likeness_chains
+  ✓ operators::test_like::a_typed_variable_holds_its_type
+  ✓ operators::test_like::a_typed_variable_refuses_a_known_other_type_until_like
+  ✓ operators::test_like::an_ad_hoc_name_is_checked_by_its_fields
+  ✓ operators::test_like::an_extra_field_is_a_warning
+  ✓ operators::test_like::an_unknown_value_is_duck_typed_by_its_uses
+  ✓ operators::test_like::like_goes_one_way
+  ✓ operators::test_like::like_makes_a_type_usable_as_another
+  ✓ operators::test_like::like_relates_declared_types_only
   ✓ operators::test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
   ✓ operators::test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
   ✓ operators::test_logic_grouped_operands::the_logic_table_of_negations
+  ✓ operators::test_logical_calls::test_call_operand_is_evaluated_once
+  ✓ operators::test_logical_calls::test_call_operand_of_and_or
+  ✓ operators::test_logical_calls::test_node_operand_of_and_or
   ✓ operators::test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
   ✓ operators::test_mutating_bang::a_method_with_bang_assigns_back
   ✓ operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
@@ -891,155 +950,6 @@ PASSED:
   ✓ parser::test_xml::test_xml_roundtrip
   ✓ parser::test_xml::test_xml_to_json
   ✓ parser::test_xml::test_xml_with_attributes
-  ✓ probe_destructuring::probe_for_loop_unpacking
-  ✓ probe_destructuring::probe_list_target
-  ✓ probe_destructuring::probe_nested_unpacking
-  ✓ probe_destructuring::probe_parenthesized_target
-  ✓ probe_destructuring::probe_star_init
-  ✓ probe_destructuring::probe_star_middle
-  ✓ probe_destructuring::probe_star_rest_empty
-  ✓ probe_destructuring::probe_star_rest_from_list
-  ✓ probe_destructuring::probe_star_rest_from_tuple_function
-  ✓ probe_destructuring::probe_star_rest_from_values
-  ✓ probe_destructuring::probe_swap
-  ✓ probe_destructuring::probe_too_few_values_is_loud
-  ✓ probe_destructuring::probe_too_many_values_is_loud
-  ✓ probe_destructuring::probe_underscore_discards
-  ✓ probe_destructuring::probe_unpack_list_function
-  ✓ probe_destructuring::probe_unpack_list_literal
-  ✓ probe_destructuring::probe_unpack_list_variable
-  ✓ probe_destructuring::probe_unpack_parenthesized_tuple
-  ✓ probe_destructuring::probe_unpack_text
-  ✓ probe_destructuring::probe_unpack_tuple_function
-  ✓ probe_destructuring::probe_unpack_tuple_values
-  ✓ probe_footguns::test_addition_is_associative_by_default
-  ✓ probe_footguns::test_and_or_ternary_is_linted
-  ✓ probe_footguns::test_append_method_rebinds_the_list
-  ✓ probe_footguns::test_approximation_is_marked
-  ✓ probe_footguns::test_as_converts_the_whole_expression
-  ✓ probe_footguns::test_as_float_converts_exact_values
-  ✓ probe_footguns::test_booleans_are_not_numbers
-  ✓ probe_footguns::test_braceless_argument_extent_is_consistent
-  ✓ probe_footguns::test_braceless_call_as_operand
-  ✓ probe_footguns::test_braceless_call_in_argument_is_ambiguous
-  ✓ probe_footguns::test_braceless_call_takes_whole_argument
-  ✓ probe_footguns::test_braceless_recursive_call_takes_identifier_argument
-  ✓ probe_footguns::test_calendar_day_is_not_24_hours
-  ✓ probe_footguns::test_calendar_overflow_is_explicit
-  ✓ probe_footguns::test_case_mapping_is_locale_independent
-  ✓ probe_footguns::test_chained_comparison
-  ✓ probe_footguns::test_character_indexing_is_unicode_safe
-  ✓ probe_footguns::test_closures_capture_values
-  ✓ probe_footguns::test_closures_in_loop_capture_each_iteration
-  ✓ probe_footguns::test_compiler_failures_are_error_values
-  ✓ probe_footguns::test_compound_index_assignment
-  ✓ probe_footguns::test_const_is_single_assignment
-  ✓ probe_footguns::test_cosine_of_pi
-  ✓ probe_footguns::test_count_of_text_without_unit
-  ✓ probe_footguns::test_cube_roots_are_exact
-  ✓ probe_footguns::test_data_does_not_execute
-  ✓ probe_footguns::test_data_keeps_number_literals
-  ✓ probe_footguns::test_date_and_time_types_are_distinct
-  ✓ probe_footguns::test_date_literal_needs_strict_form
-  ✓ probe_footguns::test_default_argument_is_fresh_per_call
-  ✓ probe_footguns::test_digit_separators
-  ✓ probe_footguns::test_division_by_zero_is_extended_rational
-  ✓ probe_footguns::test_division_is_not_truncating
-  ✓ probe_footguns::test_duplicate_keys_are_reported
-  ✓ probe_footguns::test_empty_condition_does_not_panic
-  ✓ probe_footguns::test_empty_parens_is_the_empty_list
-  ✓ probe_footguns::test_empty_values_are_falsy
-  ✓ probe_footguns::test_equal_literals_are_not_shared
-  ✓ probe_footguns::test_equality_across_kinds_is_structural
-  ✓ probe_footguns::test_equality_does_not_chain
-  ✓ probe_footguns::test_equals_in_condition_compares
-  ✓ probe_footguns::test_euler_identity
-  ✓ probe_footguns::test_exact_decimal_arithmetic
-  ✓ probe_footguns::test_exact_rationals_stay_exact
-  ✓ probe_footguns::test_explicit_wrap_inside_function
-  ✓ probe_footguns::test_failed_fetch_is_an_error_value
-  ✓ probe_footguns::test_fast_floats_are_not_associative
-  ✓ probe_footguns::test_fetch_result_needs_a_check
-  ✓ probe_footguns::test_fetch_times_out_loudly
-  ✓ probe_footguns::test_finite_domain_function_equality
-  ✓ probe_footguns::test_fuel_budget_can_be_raised
-  ✓ probe_footguns::test_function_equality_up_to_renaming
-  ✓ probe_footguns::test_hidden_side_effect_is_rejected
-  ✓ probe_footguns::test_increment_changes_variable
-  ✓ probe_footguns::test_index_assignment_of_multi_byte_character
-  ✓ probe_footguns::test_index_out_of_bounds_is_an_error
-  ✓ probe_footguns::test_infinite_loop_runs_out_of_fuel
-  ✓ probe_footguns::test_integer_overflow_does_not_wrap
-  ✓ probe_footguns::test_integers_beyond_double_precision
-  ✓ probe_footguns::test_invalid_number_text_is_an_error
-  ✓ probe_footguns::test_is_compares_by_value
-  ✓ probe_footguns::test_law_catches_a_false_property
-  ✓ probe_footguns::test_law_holds_because_integers_do_not_wrap
-  ✓ probe_footguns::test_leading_dot_literal
-  ✓ probe_footguns::test_leading_zero_is_not_octal
-  ✓ probe_footguns::test_list_plus_concatenates
-  ✓ probe_footguns::test_logic_binds_weaker_than_comparison
-  ✓ probe_footguns::test_modulo_and_remainder_are_both_named
-  ✓ probe_footguns::test_months_are_one_based
-  ✓ probe_footguns::test_mutation_through_alias_is_not_visible
-  ✓ probe_footguns::test_nan_bits_are_canonical
-  ✓ probe_footguns::test_negative_index_is_an_error
-  ✓ probe_footguns::test_negative_literals_after_power_fix
-  ✓ probe_footguns::test_negative_modulo_is_linted
-  ✓ probe_footguns::test_negative_power_precedence
-  ✓ probe_footguns::test_newline_ends_statement
-  ✓ probe_footguns::test_no_array_store_exception
-  ✓ probe_footguns::test_no_implicit_time_zone
-  ✓ probe_footguns::test_no_loose_equality
-  ✓ probe_footguns::test_norm_bars_are_brackets
-  ✓ probe_footguns::test_norway_problem_in_data
-  ✓ probe_footguns::test_not_binds_weaker_than_comparison
-  ✓ probe_footguns::test_null_needs_a_check
-  ✓ probe_footguns::test_number_declaration_spellings_agree
-  ✓ probe_footguns::test_number_of_bytes_in_text
-  ✓ probe_footguns::test_number_of_chars_in_text
-  ✓ probe_footguns::test_number_of_codepoints_in_text
-  ✓ probe_footguns::test_number_of_graphemes_in_text
-  ✓ probe_footguns::test_optional_local_runs
-  ✓ probe_footguns::test_optional_type_declaration
-  ✓ probe_footguns::test_parameter_shadows_outer_variable
-  ✓ probe_footguns::test_pi_compares_by_interval_arithmetic
-  ✓ probe_footguns::test_pi_plus_euler_prints_symbolically
-  ✓ probe_footguns::test_polynomial_function_equality
-  ✓ probe_footguns::test_power_is_right_associative
-  ✓ probe_footguns::test_prefix_increment
-  ✓ probe_footguns::test_proof_model_matches_unbounded_int
-  ✓ probe_footguns::test_pure_rejects_divergence
-  ✓ probe_footguns::test_repeated_local_time_needs_disambiguation
-  ✓ probe_footguns::test_rounding_mode_is_named
-  ✓ probe_footguns::test_rule_change_is_not_silent
-  ✓ probe_footguns::test_running_queries_and_commands_needs_a_capability
-  ✓ probe_footguns::test_scientific_notation
-  ✓ probe_footguns::test_scientific_notation_forms
-  ✓ probe_footguns::test_shell_holes_are_whole_arguments
-  ✓ probe_footguns::test_shrinking_recursion_is_total
-  ✓ probe_footguns::test_sine_at_rational_multiple_of_pi
-  ✓ probe_footguns::test_skipped_local_time_can_be_chosen_explicitly
-  ✓ probe_footguns::test_sql_from_built_text_is_rejected
-  ✓ probe_footguns::test_sql_holes_are_parameters_not_text
-  ✓ probe_footguns::test_square_roots_are_reduced
-  ✓ probe_footguns::test_square_roots_multiply_exactly
-  ✓ probe_footguns::test_string_equality_is_by_value
-  ✓ probe_footguns::test_sum_of_different_roots_stays_exact
-  ✓ probe_footguns::test_sum_of_quotients_is_not_truncated
-  ✓ probe_footguns::test_symbolic_logic_next_to_comparison_needs_grouping
-  ✓ probe_footguns::test_text_is_indexed_by_grapheme
-  ✓ probe_footguns::test_text_plus_number_is_a_type_error
-  ✓ probe_footguns::test_text_units_are_explicit
-  ✓ probe_footguns::test_type_annotation_is_enforced
-  ✓ probe_footguns::test_typed_literals_bind_tightly
-  ✓ probe_footguns::test_undecidable_function_equality_is_an_error
-  ✓ probe_footguns::test_undefined_variable_is_an_error
-  ✓ probe_footguns::test_unicode_normalization
-  ✓ probe_footguns::test_unproven_recursion_may_diverge
-  ✓ probe_footguns::test_while_loop_may_diverge
-  ✓ probe_footguns::test_zero_string_is_truthy
-  ✓ probe_footguns::test_zoned_time_records_its_rules_version
   ✓ programs::test_algo_dijkstra::test_dijkstra
   ✓ programs::test_algo_dijkstra::test_dijkstra_idiomatic
   ✓ programs::test_algo_levenshtein::test_levenshtein
@@ -1053,11 +963,17 @@ PASSED:
   ✓ programs::test_algo_sorting::test_sorting
   ✓ programs::test_algo_sorting::test_sorting_idiomatic
   ✓ programs::test_all_samples::test_parse_all_samples
+  ✓ programs::test_calculator_fixes::test_else_on_the_next_line
+  ✓ programs::test_calculator_fixes::test_error_returns
+  ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
+  ✓ programs::test_calculator_fixes::test_run_time_math
+  ✓ programs::test_calculator_fixes::test_text_comparisons
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
+  ✓ programs::test_samples::test_calculator
   ✓ programs::test_samples::test_collatz
   ✓ programs::test_samples::test_comments
   ✓ programs::test_samples::test_factorial
@@ -1148,174 +1064,6 @@ PASSED:
   ✓ sweeps::test_todo::test_type_annotated
   ✓ sweeps::test_todo::test_type_equivalence
   ✓ sweeps::test_todo::test_utf8_char_indexing
-  ✓ test_c_style::test_c_style_definition
-  ✓ test_c_style::test_if_assigning_a_float
-  ✓ test_c_style::test_if_parenthesized_condition_then_statement
-  ✓ test_float_fields::test_captured_variable_set_by_a_call
-  ✓ test_float_fields::test_declared_float_field_in_arithmetic
-  ✓ test_float_fields::test_float_conditionals
-  ✓ test_float_fields::test_global_from_a_call
-  ✓ test_float_fields::test_zero_argument_call_in_float_context
-  ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
-  ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
-  ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
-  ✓ test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
-  ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
-  ✓ test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
-  ✓ test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
-  ✓ test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
-  ✓ test_like::a_known_other_type_teaches_like
-  ✓ test_like::a_like_type_is_judged_by_its_uses
-  ✓ test_like::a_missing_field_is_a_warning
-  ✓ test_like::a_type_can_be_like_several_and_likeness_chains
-  ✓ test_like::a_typed_variable_holds_its_type
-  ✓ test_like::a_typed_variable_refuses_a_known_other_type_until_like
-  ✓ test_like::an_ad_hoc_name_is_checked_by_its_fields
-  ✓ test_like::an_extra_field_is_a_warning
-  ✓ test_like::an_unknown_value_is_duck_typed_by_its_uses
-  ✓ test_like::like_goes_one_way
-  ✓ test_like::like_makes_a_type_usable_as_another
-  ✓ test_like::like_relates_declared_types_only
-  ✓ test_logical_calls::test_call_operand_is_evaluated_once
-  ✓ test_logical_calls::test_call_operand_of_and_or
-  ✓ test_logical_calls::test_node_operand_of_and_or
-  ✓ test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
-  ✓ test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
-  ✓ test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
-  ✓ test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
-  ✓ test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
-  ✓ test_object_arguments::an_instance_of_another_class_is_a_type_error
-  ✓ test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
-  ✓ test_records::test_optional_field_is_empty_and_settable
-  ✓ test_records::test_optional_field_marks
-  ✓ test_records::test_parameter_passed_a_text_by_recursion
-  ✓ test_records::test_recursive_list_function
-  ✓ test_records::test_returns
-  ✓ test_return_type_dispatch::test_a_picked_overload_warns_nothing
-  ✓ test_return_type_dispatch::test_a_single_definition_with_a_result_type
-  ✓ test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
-  ✓ test_return_type_dispatch::test_a_typed_parameter_picks_the_overload
-  ✓ test_return_type_dispatch::test_as_picks_the_overload
-  ✓ test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
-  ✓ test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
-  ✓ test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
-  ✓ test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
-  ✓ test_spaced_construction::test_spaced_construction_of_a_declared_type
-  ✓ test_style_dont_care::an_explicit_function_style_still_hints
-  ✓ test_style_dont_care::any_axis_can_stop_caring
-  ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
-  ✓ test_text_as_float::test_text_as_float
-  ✓ test_try_else_value::an_arrow_fallback_is_a_function_value
-  ✓ test_try_else_value::try_else_takes_a_value_or_an_action
-  ✓ test_tuples::test_loop_over_list_with_global_tuple
-  ✓ test_tuples::test_tuple_of_computed_items
-  ✓ test_type_word_user_function::a_clash_is_an_error_not_a_warning
-  ✓ test_type_word_user_function::a_function_with_another_name_is_no_clash
-  ✓ test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error
-  ✓ test_type_word_user_function::the_type_word_still_casts_without_a_definition
-  ✓ test_typed_returns::test_block_bodies_and_returns_convert_too
-  ✓ test_typed_returns::test_return_type_after_the_parameters
-  ✓ test_typed_returns::test_type_before_the_name_converts_the_result
-  ✓ test_user_method_form::a_method_form_call_passes_the_further_arguments
-  ✓ test_user_method_form::a_user_function_is_called_in_method_form
-  ✓ test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
-  ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
-  ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
-  ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
-  ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
-  ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
-  ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
-  ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
-  ✓ test_welcoming_ask::an_educating_note_shows_until_acknowledged
-  ✓ test_welcoming_ask::an_old_answers_line_never_picks_a_reading
-  ✓ test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error
-  ✓ test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form
-  ✓ test_welcoming_ask::every_for_header_bound_minus_one_asks
-  ✓ test_welcoming_ask::questions_quote_prefix_operators_as_written
-  ✓ test_welcoming_ask::upto_asks_and_defaults_to_exclusive
-  ✓ test_welcoming_break::break_leaves_the_innermost_loop
-  ✓ test_welcoming_break::break_outside_a_loop_is_a_compile_error
-  ✓ test_welcoming_break::continue_skips_to_the_next_pass_and_keeps_the_for_step
-  ✓ test_welcoming_break::next_is_continue_unless_it_names_a_variable
-  ✓ test_welcoming_count_argument::a_count_inside_brackets_is_a_value_not_a_comment
-  ✓ test_welcoming_elements::bracketed_elements_stay_list_items
-  ✓ test_welcoming_elements::loop_variable_over_nested_lists
-  ✓ test_welcoming_elements::one_character_texts_as_keys_and_arguments
-  ✓ test_welcoming_elements::returned_list_literal
-  ✓ test_welcoming_elements::variables_bound_to_elements_keep_their_type
-  ✓ test_welcoming_empty_push::an_empty_list_is_typed_by_its_first_push
-  ✓ test_welcoming_empty_push::levenshtein_with_a_pushed_row
-  ✓ test_welcoming_globals::test_changing_an_undeclared_main_variable_educates
-  ✓ test_welcoming_globals::test_fresh_binding_of_a_main_name_asks_local_or_global
-  ✓ test_welcoming_globals::test_function_changes_a_declared_global
-  ✓ test_welcoming_globals::test_function_changes_global_floats_lists_and_texts
-  ✓ test_welcoming_globals::test_own_names_and_reads_stay_fine
-  ✓ test_welcoming_globals::test_print_statement_in_a_function
-  ✓ test_welcoming_globals::test_reassigning_from_a_rounding_builtin
-  ✓ test_welcoming_indent::an_indented_block_after_a_trailing_colon_is_the_body
-  ✓ test_welcoming_indent::do_end_and_then_end_enclose_all_their_statements
-  ✓ test_welcoming_indent::one_end_for_both_then_and_do_is_ambiguous
-  ✓ test_welcoming_listexpr::a_function_local_does_not_leak_into_the_caller
-  ✓ test_welcoming_listexpr::a_list_literal_keeps_its_computed_elements
-  ✓ test_welcoming_listexpr::min_and_max_take_any_expressions
-  ✓ test_welcoming_listexpr::push_takes_any_expression
-  ✓ test_welcoming_listparams::declared_list_parameters_refuse_other_kinds
-  ✓ test_welcoming_listparams::indexed_text_parameters
-  ✓ test_welcoming_listparams::list_annotations_on_parameters
-  ✓ test_welcoming_listparams::list_parameters_inferred_from_counting_walking_forwarding
-  ✓ test_welcoming_listparams::list_parameters_inferred_in_every_definition_form
-  ✓ test_welcoming_listparams::parameters_shadow_literal_variables
-  ✓ test_welcoming_maps::test_absent_key
-  ✓ test_welcoming_maps::test_dijkstra_core
-  ✓ test_welcoming_maps::test_empty_map_grows
-  ✓ test_welcoming_maps::test_for_destructures_pairs
-  ✓ test_welcoming_maps::test_for_in_a_map_walks_its_keys
-  ✓ test_welcoming_maps::test_for_key_value_in_a_map
-  ✓ test_welcoming_maps::test_in_and_contains
-  ✓ test_welcoming_maps::test_key_in_a_variable
-  ✓ test_welcoming_maps::test_keys_values_has
-  ✓ test_welcoming_maps::test_list_returned_by_a_function_holds_maps
-  ✓ test_welcoming_maps::test_map_parameter
-  ✓ test_welcoming_maps::test_one_character_argument_is_a_text
-  ✓ test_welcoming_maps::test_quoted_and_unquoted_keys_are_the_same_key
-  ✓ test_welcoming_maps::test_quoted_key_with_a_list_value
-  ✓ test_welcoming_parse::a_counting_word_after_return_is_the_variable
-  ✓ test_welcoming_parse::a_space_before_a_bracket_makes_a_list
-  ✓ test_welcoming_parse::elif_elsif_and_elseif_are_else_if
-  ✓ test_welcoming_parse::else_if_chains_another_if
-  ✓ test_welcoming_parse::else_takes_a_python_colon
-  ✓ test_welcoming_parse::for_destructures_a_tuple_or_comma_names
-  ✓ test_welcoming_parse::membership_in_binds_like_a_comparison
-  ✓ test_welcoming_parse::return_takes_the_whole_expression
-  ✓ test_welcoming_print::test_exact_numbers_have_a_text_form
-  ✓ test_welcoming_print::test_exact_variable_assigned_a_float_widens
-  ✓ test_welcoming_print::test_print_runtime_values
-  ✓ test_welcoming_rangeblock::a_variable_range_end_keeps_the_block_as_loop_body
-  ✓ test_welcoming_rangeblock::range_calls_are_exclusive_ranges
-  ✓ test_welcoming_slices::a_fractional_bound_must_be_an_integer_like_an_index
-  ✓ test_welcoming_slices::a_fractional_index_error_names_the_fix
-  ✓ test_welcoming_slices::a_fractional_index_in_a_variable_must_be_an_integer
-  ✓ test_welcoming_slices::a_hint_is_given_once_per_compilation
-  ✓ test_welcoming_slices::a_negative_index_or_bound_is_an_error_that_names_last
-  ✓ test_welcoming_slices::copy_and_clone_are_the_value_itself
-  ✓ test_welcoming_slices::python_slices_of_a_list
-  ✓ test_welcoming_slices::range_slices_of_a_list
-  ✓ test_welcoming_slices::slices_of_a_text_are_texts_of_characters
-  ✓ test_welcoming_slices::the_slice_method_takes_an_optional_end
-  ✓ test_welcoming_sugar::a_fractional_index_says_so
-  ✓ test_welcoming_sugar::a_glued_hash_name_statement_counts
-  ✓ test_welcoming_sugar::a_hash_glued_to_an_expression_counts_at_line_start
-  ✓ test_welcoming_sugar::a_number_joins_a_text_in_its_text_form
-  ✓ test_welcoming_sugar::a_spaced_double_slash_is_always_a_comment_and_says_so_once
-  ✓ test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading
-  ✓ test_welcoming_sugar::an_unknown_word_as_statement_is_loud
-  ✓ test_welcoming_sugar::glued_double_slash_is_floor_division
-  ✓ test_welcoming_sugar::insert_never_guesses_the_argument_order
-  ✓ test_welcoming_sugar::len_counts
-  ✓ test_welcoming_sugar::let_var_and_const_declare_inside_any_block
-  ✓ test_welcoming_sugar::n_times_a_one_element_list_repeats_it
-  ✓ test_welcoming_sugar::the_empty_list_counts_zero_and_grows
-  ✓ test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -1374,6 +1122,7 @@ PASSED:
   ✓ text::test_string::test_string_set_at
   ✓ text::test_string::test_string_substring
   ✓ text::test_string::test_string_substring_from
+  ✓ text::test_text_as_float::test_text_as_float
   ✓ text::test_text_bytes::byte_at_reads_one_byte
   ✓ text::test_text_bytes::byte_slice_cuts_by_byte_offsets
   ✓ text::test_text_bytes::plus_concatenates_texts_and_characters
@@ -1430,6 +1179,11 @@ PASSED:
   ✓ types::test_data::test_node_data_metadata
   ✓ types::test_data::test_node_data_type_mismatch
   ✓ types::test_data::test_node_data_various_types
+  ✓ types::test_float_fields::test_captured_variable_set_by_a_call
+  ✓ types::test_float_fields::test_declared_float_field_in_arithmetic
+  ✓ types::test_float_fields::test_float_conditionals
+  ✓ types::test_float_fields::test_global_from_a_call
+  ✓ types::test_float_fields::test_zero_argument_call_in_float_context
   ✓ types::test_generic_types::test_angle_and_of_forms_are_the_same_type
   ✓ types::test_generic_types::test_angle_brackets_after_a_name_are_not_a_variable_lookup
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
@@ -1444,6 +1198,14 @@ PASSED:
   ✓ types::test_records_classes::an_enum_names_its_cases_by_index
   ✓ types::test_records_classes::an_optional_field_defaults_to_null
   ✓ types::test_records_classes::record_stays_usable_as_a_variable_name
+  ✓ types::test_records::test_optional_field_is_empty_and_settable
+  ✓ types::test_records::test_optional_field_marks
+  ✓ types::test_records::test_parameter_passed_a_text_by_recursion
+  ✓ types::test_records::test_recursive_list_function
+  ✓ types::test_records::test_returns
+  ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
+  ✓ types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
+  ✓ types::test_spaced_construction::test_spaced_construction_of_a_declared_type
   ✓ types::test_struct_field_of_constructor::a_field_in_arithmetic
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
@@ -1505,6 +1267,10 @@ PASSED:
   ✓ types::test_type_upgrading::test_global_with_float
   ✓ types::test_type_upgrading::test_global_with_reference
   ✓ types::test_type_upgrading::test_int_plus_pi_type_upgrading
+  ✓ types::test_type_word_user_function::a_clash_is_an_error_not_a_warning
+  ✓ types::test_type_word_user_function::a_function_with_another_name_is_no_clash
+  ✓ types::test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error
+  ✓ types::test_type_word_user_function::the_type_word_still_casts_without_a_definition
   ✓ types::test_type_words::test_type_constructor_words
   ✓ types::test_type_words::test_type_first_parameter
   ✓ types::test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error
@@ -1649,6 +1415,246 @@ PASSED:
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
+  ✓ welcoming::test_c_style::test_c_style_definition
+  ✓ welcoming::test_c_style::test_if_assigning_a_float
+  ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_footguns::test_addition_is_associative_by_default
+  ✓ welcoming::test_footguns::test_and_or_ternary_is_linted
+  ✓ welcoming::test_footguns::test_append_method_rebinds_the_list
+  ✓ welcoming::test_footguns::test_approximation_is_marked
+  ✓ welcoming::test_footguns::test_as_converts_the_whole_expression
+  ✓ welcoming::test_footguns::test_as_float_converts_exact_values
+  ✓ welcoming::test_footguns::test_booleans_are_not_numbers
+  ✓ welcoming::test_footguns::test_braceless_argument_extent_is_consistent
+  ✓ welcoming::test_footguns::test_braceless_call_as_operand
+  ✓ welcoming::test_footguns::test_braceless_call_in_argument_is_ambiguous
+  ✓ welcoming::test_footguns::test_braceless_call_takes_whole_argument
+  ✓ welcoming::test_footguns::test_braceless_recursive_call_takes_identifier_argument
+  ✓ welcoming::test_footguns::test_calendar_day_is_not_24_hours
+  ✓ welcoming::test_footguns::test_calendar_overflow_is_explicit
+  ✓ welcoming::test_footguns::test_case_mapping_is_locale_independent
+  ✓ welcoming::test_footguns::test_chained_comparison
+  ✓ welcoming::test_footguns::test_character_indexing_is_unicode_safe
+  ✓ welcoming::test_footguns::test_closures_capture_values
+  ✓ welcoming::test_footguns::test_closures_in_loop_capture_each_iteration
+  ✓ welcoming::test_footguns::test_compiler_failures_are_error_values
+  ✓ welcoming::test_footguns::test_compound_index_assignment
+  ✓ welcoming::test_footguns::test_const_is_single_assignment
+  ✓ welcoming::test_footguns::test_cosine_of_pi
+  ✓ welcoming::test_footguns::test_count_of_text_without_unit
+  ✓ welcoming::test_footguns::test_cube_roots_are_exact
+  ✓ welcoming::test_footguns::test_data_does_not_execute
+  ✓ welcoming::test_footguns::test_data_keeps_number_literals
+  ✓ welcoming::test_footguns::test_date_and_time_types_are_distinct
+  ✓ welcoming::test_footguns::test_date_literal_needs_strict_form
+  ✓ welcoming::test_footguns::test_default_argument_is_fresh_per_call
+  ✓ welcoming::test_footguns::test_digit_separators
+  ✓ welcoming::test_footguns::test_division_by_zero_is_extended_rational
+  ✓ welcoming::test_footguns::test_division_is_not_truncating
+  ✓ welcoming::test_footguns::test_duplicate_keys_are_reported
+  ✓ welcoming::test_footguns::test_empty_condition_does_not_panic
+  ✓ welcoming::test_footguns::test_empty_parens_is_the_empty_list
+  ✓ welcoming::test_footguns::test_empty_values_are_falsy
+  ✓ welcoming::test_footguns::test_equal_literals_are_not_shared
+  ✓ welcoming::test_footguns::test_equality_across_kinds_is_structural
+  ✓ welcoming::test_footguns::test_equality_does_not_chain
+  ✓ welcoming::test_footguns::test_equals_in_condition_compares
+  ✓ welcoming::test_footguns::test_euler_identity
+  ✓ welcoming::test_footguns::test_exact_decimal_arithmetic
+  ✓ welcoming::test_footguns::test_exact_rationals_stay_exact
+  ✓ welcoming::test_footguns::test_explicit_wrap_inside_function
+  ✓ welcoming::test_footguns::test_failed_fetch_is_an_error_value
+  ✓ welcoming::test_footguns::test_fast_floats_are_not_associative
+  ✓ welcoming::test_footguns::test_fetch_result_needs_a_check
+  ✓ welcoming::test_footguns::test_fetch_times_out_loudly
+  ✓ welcoming::test_footguns::test_finite_domain_function_equality
+  ✓ welcoming::test_footguns::test_fuel_budget_can_be_raised
+  ✓ welcoming::test_footguns::test_function_equality_up_to_renaming
+  ✓ welcoming::test_footguns::test_hidden_side_effect_is_rejected
+  ✓ welcoming::test_footguns::test_increment_changes_variable
+  ✓ welcoming::test_footguns::test_index_assignment_of_multi_byte_character
+  ✓ welcoming::test_footguns::test_index_out_of_bounds_is_an_error
+  ✓ welcoming::test_footguns::test_infinite_loop_runs_out_of_fuel
+  ✓ welcoming::test_footguns::test_integer_overflow_does_not_wrap
+  ✓ welcoming::test_footguns::test_integers_beyond_double_precision
+  ✓ welcoming::test_footguns::test_invalid_number_text_is_an_error
+  ✓ welcoming::test_footguns::test_is_compares_by_value
+  ✓ welcoming::test_footguns::test_law_catches_a_false_property
+  ✓ welcoming::test_footguns::test_law_holds_because_integers_do_not_wrap
+  ✓ welcoming::test_footguns::test_leading_dot_literal
+  ✓ welcoming::test_footguns::test_leading_zero_is_not_octal
+  ✓ welcoming::test_footguns::test_list_plus_concatenates
+  ✓ welcoming::test_footguns::test_logic_binds_weaker_than_comparison
+  ✓ welcoming::test_footguns::test_modulo_and_remainder_are_both_named
+  ✓ welcoming::test_footguns::test_months_are_one_based
+  ✓ welcoming::test_footguns::test_mutation_through_alias_is_not_visible
+  ✓ welcoming::test_footguns::test_nan_bits_are_canonical
+  ✓ welcoming::test_footguns::test_negative_index_is_an_error
+  ✓ welcoming::test_footguns::test_negative_literals_after_power_fix
+  ✓ welcoming::test_footguns::test_negative_modulo_is_linted
+  ✓ welcoming::test_footguns::test_negative_power_precedence
+  ✓ welcoming::test_footguns::test_newline_ends_statement
+  ✓ welcoming::test_footguns::test_no_array_store_exception
+  ✓ welcoming::test_footguns::test_no_implicit_time_zone
+  ✓ welcoming::test_footguns::test_no_loose_equality
+  ✓ welcoming::test_footguns::test_norm_bars_are_brackets
+  ✓ welcoming::test_footguns::test_norway_problem_in_data
+  ✓ welcoming::test_footguns::test_not_binds_weaker_than_comparison
+  ✓ welcoming::test_footguns::test_null_needs_a_check
+  ✓ welcoming::test_footguns::test_number_declaration_spellings_agree
+  ✓ welcoming::test_footguns::test_number_of_bytes_in_text
+  ✓ welcoming::test_footguns::test_number_of_chars_in_text
+  ✓ welcoming::test_footguns::test_number_of_codepoints_in_text
+  ✓ welcoming::test_footguns::test_number_of_graphemes_in_text
+  ✓ welcoming::test_footguns::test_optional_local_runs
+  ✓ welcoming::test_footguns::test_optional_type_declaration
+  ✓ welcoming::test_footguns::test_parameter_shadows_outer_variable
+  ✓ welcoming::test_footguns::test_pi_compares_by_interval_arithmetic
+  ✓ welcoming::test_footguns::test_pi_plus_euler_prints_symbolically
+  ✓ welcoming::test_footguns::test_polynomial_function_equality
+  ✓ welcoming::test_footguns::test_power_is_right_associative
+  ✓ welcoming::test_footguns::test_prefix_increment
+  ✓ welcoming::test_footguns::test_proof_model_matches_unbounded_int
+  ✓ welcoming::test_footguns::test_pure_rejects_divergence
+  ✓ welcoming::test_footguns::test_repeated_local_time_needs_disambiguation
+  ✓ welcoming::test_footguns::test_rounding_mode_is_named
+  ✓ welcoming::test_footguns::test_rule_change_is_not_silent
+  ✓ welcoming::test_footguns::test_running_queries_and_commands_needs_a_capability
+  ✓ welcoming::test_footguns::test_scientific_notation
+  ✓ welcoming::test_footguns::test_scientific_notation_forms
+  ✓ welcoming::test_footguns::test_shell_holes_are_whole_arguments
+  ✓ welcoming::test_footguns::test_shrinking_recursion_is_total
+  ✓ welcoming::test_footguns::test_sine_at_rational_multiple_of_pi
+  ✓ welcoming::test_footguns::test_skipped_local_time_can_be_chosen_explicitly
+  ✓ welcoming::test_footguns::test_sql_from_built_text_is_rejected
+  ✓ welcoming::test_footguns::test_sql_holes_are_parameters_not_text
+  ✓ welcoming::test_footguns::test_square_roots_are_reduced
+  ✓ welcoming::test_footguns::test_square_roots_multiply_exactly
+  ✓ welcoming::test_footguns::test_string_equality_is_by_value
+  ✓ welcoming::test_footguns::test_sum_of_different_roots_stays_exact
+  ✓ welcoming::test_footguns::test_sum_of_quotients_is_not_truncated
+  ✓ welcoming::test_footguns::test_symbolic_logic_next_to_comparison_needs_grouping
+  ✓ welcoming::test_footguns::test_text_is_indexed_by_grapheme
+  ✓ welcoming::test_footguns::test_text_plus_number_is_a_type_error
+  ✓ welcoming::test_footguns::test_text_units_are_explicit
+  ✓ welcoming::test_footguns::test_type_annotation_is_enforced
+  ✓ welcoming::test_footguns::test_typed_literals_bind_tightly
+  ✓ welcoming::test_footguns::test_undecidable_function_equality_is_an_error
+  ✓ welcoming::test_footguns::test_undefined_variable_is_an_error
+  ✓ welcoming::test_footguns::test_unicode_normalization
+  ✓ welcoming::test_footguns::test_unproven_recursion_may_diverge
+  ✓ welcoming::test_footguns::test_while_loop_may_diverge
+  ✓ welcoming::test_footguns::test_zero_string_is_truthy
+  ✓ welcoming::test_footguns::test_zoned_time_records_its_rules_version
+  ✓ welcoming::test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
+  ✓ welcoming::test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
+  ✓ welcoming::test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
+  ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
+  ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
+  ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
+  ✓ welcoming::test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
+  ✓ welcoming::test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
+  ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
+  ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
+  ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
+  ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
+  ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
+  ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
+  ✓ welcoming::test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
+  ✓ welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
+  ✓ welcoming::test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
+  ✓ welcoming::test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
+  ✓ welcoming::test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
+  ✓ welcoming::test_welcoming_ask::an_educating_note_shows_until_acknowledged
+  ✓ welcoming::test_welcoming_ask::an_old_answers_line_never_picks_a_reading
+  ✓ welcoming::test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error
+  ✓ welcoming::test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form
+  ✓ welcoming::test_welcoming_ask::every_for_header_bound_minus_one_asks
+  ✓ welcoming::test_welcoming_ask::questions_quote_prefix_operators_as_written
+  ✓ welcoming::test_welcoming_ask::upto_asks_and_defaults_to_exclusive
+  ✓ welcoming::test_welcoming_break::break_leaves_the_innermost_loop
+  ✓ welcoming::test_welcoming_break::break_outside_a_loop_is_a_compile_error
+  ✓ welcoming::test_welcoming_break::continue_skips_to_the_next_pass_and_keeps_the_for_step
+  ✓ welcoming::test_welcoming_break::next_is_continue_unless_it_names_a_variable
+  ✓ welcoming::test_welcoming_count_argument::a_count_inside_brackets_is_a_value_not_a_comment
+  ✓ welcoming::test_welcoming_elements::bracketed_elements_stay_list_items
+  ✓ welcoming::test_welcoming_elements::loop_variable_over_nested_lists
+  ✓ welcoming::test_welcoming_elements::one_character_texts_as_keys_and_arguments
+  ✓ welcoming::test_welcoming_elements::returned_list_literal
+  ✓ welcoming::test_welcoming_elements::variables_bound_to_elements_keep_their_type
+  ✓ welcoming::test_welcoming_empty_push::an_empty_list_is_typed_by_its_first_push
+  ✓ welcoming::test_welcoming_empty_push::levenshtein_with_a_pushed_row
+  ✓ welcoming::test_welcoming_globals::test_changing_an_undeclared_main_variable_educates
+  ✓ welcoming::test_welcoming_globals::test_fresh_binding_of_a_main_name_asks_local_or_global
+  ✓ welcoming::test_welcoming_globals::test_function_changes_a_declared_global
+  ✓ welcoming::test_welcoming_globals::test_function_changes_global_floats_lists_and_texts
+  ✓ welcoming::test_welcoming_globals::test_own_names_and_reads_stay_fine
+  ✓ welcoming::test_welcoming_globals::test_print_statement_in_a_function
+  ✓ welcoming::test_welcoming_globals::test_reassigning_from_a_rounding_builtin
+  ✓ welcoming::test_welcoming_indent::an_indented_block_after_a_trailing_colon_is_the_body
+  ✓ welcoming::test_welcoming_indent::do_end_and_then_end_enclose_all_their_statements
+  ✓ welcoming::test_welcoming_indent::one_end_for_both_then_and_do_is_ambiguous
+  ✓ welcoming::test_welcoming_listexpr::a_function_local_does_not_leak_into_the_caller
+  ✓ welcoming::test_welcoming_listexpr::a_list_literal_keeps_its_computed_elements
+  ✓ welcoming::test_welcoming_listexpr::min_and_max_take_any_expressions
+  ✓ welcoming::test_welcoming_listexpr::push_takes_any_expression
+  ✓ welcoming::test_welcoming_listparams::declared_list_parameters_refuse_other_kinds
+  ✓ welcoming::test_welcoming_listparams::indexed_text_parameters
+  ✓ welcoming::test_welcoming_listparams::list_annotations_on_parameters
+  ✓ welcoming::test_welcoming_listparams::list_parameters_inferred_from_counting_walking_forwarding
+  ✓ welcoming::test_welcoming_listparams::list_parameters_inferred_in_every_definition_form
+  ✓ welcoming::test_welcoming_listparams::parameters_shadow_literal_variables
+  ✓ welcoming::test_welcoming_maps::test_absent_key
+  ✓ welcoming::test_welcoming_maps::test_dijkstra_core
+  ✓ welcoming::test_welcoming_maps::test_empty_map_grows
+  ✓ welcoming::test_welcoming_maps::test_for_destructures_pairs
+  ✓ welcoming::test_welcoming_maps::test_for_in_a_map_walks_its_keys
+  ✓ welcoming::test_welcoming_maps::test_for_key_value_in_a_map
+  ✓ welcoming::test_welcoming_maps::test_in_and_contains
+  ✓ welcoming::test_welcoming_maps::test_key_in_a_variable
+  ✓ welcoming::test_welcoming_maps::test_keys_values_has
+  ✓ welcoming::test_welcoming_maps::test_list_returned_by_a_function_holds_maps
+  ✓ welcoming::test_welcoming_maps::test_map_parameter
+  ✓ welcoming::test_welcoming_maps::test_one_character_argument_is_a_text
+  ✓ welcoming::test_welcoming_maps::test_quoted_and_unquoted_keys_are_the_same_key
+  ✓ welcoming::test_welcoming_maps::test_quoted_key_with_a_list_value
+  ✓ welcoming::test_welcoming_parse::a_counting_word_after_return_is_the_variable
+  ✓ welcoming::test_welcoming_parse::a_space_before_a_bracket_makes_a_list
+  ✓ welcoming::test_welcoming_parse::elif_elsif_and_elseif_are_else_if
+  ✓ welcoming::test_welcoming_parse::else_if_chains_another_if
+  ✓ welcoming::test_welcoming_parse::else_takes_a_python_colon
+  ✓ welcoming::test_welcoming_parse::for_destructures_a_tuple_or_comma_names
+  ✓ welcoming::test_welcoming_parse::membership_in_binds_like_a_comparison
+  ✓ welcoming::test_welcoming_parse::return_takes_the_whole_expression
+  ✓ welcoming::test_welcoming_print::test_exact_numbers_have_a_text_form
+  ✓ welcoming::test_welcoming_print::test_exact_variable_assigned_a_float_widens
+  ✓ welcoming::test_welcoming_print::test_print_runtime_values
+  ✓ welcoming::test_welcoming_rangeblock::a_variable_range_end_keeps_the_block_as_loop_body
+  ✓ welcoming::test_welcoming_rangeblock::range_calls_are_exclusive_ranges
+  ✓ welcoming::test_welcoming_slices::a_fractional_bound_must_be_an_integer_like_an_index
+  ✓ welcoming::test_welcoming_slices::a_fractional_index_error_names_the_fix
+  ✓ welcoming::test_welcoming_slices::a_fractional_index_in_a_variable_must_be_an_integer
+  ✓ welcoming::test_welcoming_slices::a_hint_is_given_once_per_compilation
+  ✓ welcoming::test_welcoming_slices::a_negative_index_or_bound_is_an_error_that_names_last
+  ✓ welcoming::test_welcoming_slices::copy_and_clone_are_the_value_itself
+  ✓ welcoming::test_welcoming_slices::python_slices_of_a_list
+  ✓ welcoming::test_welcoming_slices::range_slices_of_a_list
+  ✓ welcoming::test_welcoming_slices::slices_of_a_text_are_texts_of_characters
+  ✓ welcoming::test_welcoming_slices::the_slice_method_takes_an_optional_end
+  ✓ welcoming::test_welcoming_sugar::a_fractional_index_says_so
+  ✓ welcoming::test_welcoming_sugar::a_glued_hash_name_statement_counts
+  ✓ welcoming::test_welcoming_sugar::a_hash_glued_to_an_expression_counts_at_line_start
+  ✓ welcoming::test_welcoming_sugar::a_number_joins_a_text_in_its_text_form
+  ✓ welcoming::test_welcoming_sugar::a_spaced_double_slash_is_always_a_comment_and_says_so_once
+  ✓ welcoming::test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading
+  ✓ welcoming::test_welcoming_sugar::an_unknown_word_as_statement_is_loud
+  ✓ welcoming::test_welcoming_sugar::glued_double_slash_is_floor_division
+  ✓ welcoming::test_welcoming_sugar::insert_never_guesses_the_argument_order
+  ✓ welcoming::test_welcoming_sugar::len_counts
+  ✓ welcoming::test_welcoming_sugar::let_var_and_const_declare_inside_any_block
+  ✓ welcoming::test_welcoming_sugar::n_times_a_one_element_list_repeats_it
+  ✓ welcoming::test_welcoming_sugar::the_empty_list_counts_zero_and_grows
+  ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
   ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
@@ -1670,4 +1676,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1665 passed, 0 failed, 1665 total tested
+58 ignored, 1671 passed, 0 failed, 1671 total tested

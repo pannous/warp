@@ -1,7 +1,8 @@
-//! Footguns of other languages, checked against Warp (see footguns.md).
+//! Footguns of other languages, checked against Warp (see notes/footguns.md). Condensed from tests/probe_footguns.rs:
+//! assertions that other test files already make were dropped here.
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
-use crate::common::fails_with;
+use crate::common::{fails_with, serve};
 use warp::wasm_emitter::{eval, eval_untrusted};
 use warp::{is, parse_data, Node};
 
@@ -113,7 +114,6 @@ fn test_sum_of_quotients_is_not_truncated() {
 
 #[test]
 fn test_integer_overflow_does_not_wrap() {
-	is!("2^64 > 2^63", true); // C, Java, Go, Rust --release: 2^64 wraps to 0
 	is!("abs(-2^63) > 0", true); // Java: Math.abs(Long.MIN_VALUE) < 0
 	is!("100000000000000000000 > 2^64", true); // was a string of NUL bytes
 }
@@ -191,9 +191,6 @@ fn test_not_binds_weaker_than_comparison() {
 
 #[test]
 fn test_chained_comparison() {
-	is!("3>2>1", true); // C, JS: (3>2)>1 → false
-	is!("1<3<2", false);
-	is!("1<2<3", true);
 	is!("(3>2)>1", false); // explicit grouping does not chain
 }
 
@@ -252,7 +249,6 @@ fn test_compound_index_assignment() {
 #[test]
 fn test_text_plus_number_is_a_type_error() {
 	is!("\"5\"+3", "53"); // JS: "53", C: '5'+3 = 56; user decision 2026-10-02: a number joins a text in its text form
-	is!("\"5\"*3", "555"); // JS: 15; user decision 2026-10-03: Python repeat
 	is!("3 + \"4\"", "34");
 	is!("\"ab\"+3", "ab3");
 	is!("int(\"5\") + 3", 8);
@@ -361,19 +357,15 @@ fn test_text_is_indexed_by_grapheme() {
 
 #[test] // size is a synonym for count; bytes only via byte count / .bytes, .chars .graphemes name the unit
 fn test_text_units_are_explicit() {
-	is!("size \"👍🏽\"", 1);
 	is!("x=\"👍🏽\";x.size", 1);
 	is!("byte count of \"👍🏽\"", 8);
-	is!("x=\"👍🏽\";x.bytes", 8);
 	is!("x=\"👍🏽\";x.chars", 2);
 	is!("x=\"👍🏽\";x.graphemes", 1);
-	is!("pixels=(1,2,3);size(pixels)", 3); // size is a synonym for count
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
 #[test] // Swift: s.unicodeScalars.count; a char is a code point, as x.chars and Rust's chars()
 fn test_number_of_chars_in_text() {
-	is!("number of chars in \"héllo\"", 5);
 	is!("number of chars in \"👍🏽\"", 2);
 	is!("t=\"héllo\";number of chars in t", 5);
 	is!("#(char in \"héllo\")", 5);
@@ -391,7 +383,6 @@ fn test_number_of_bytes_in_text() {
 	is!("number of bytes in \"héllo\"", 6);
 	is!("#(byte in \"héllo\")", 6);
 	is!("#(\"héllo\" as bytes)", 6);
-	is!("t=\"héllo\";number of bytes in t", 6);
 	is!("t=\"héllo\";#(byte in t)", 6);
 	is!("t=\"héllo\";#(t as bytes)", 6);
 	is!("count of bytes in \"👍🏽\"", 8);
@@ -409,7 +400,6 @@ fn test_count_of_text_without_unit() {
 	is!("count of \"👍🏽\"", 1);
 	is!("t=\"héllo\";number of t", 5);
 	is!("t=\"héllo\";length of t", 5);
-	is!("t=\"héllo\";size of t", 5);
 	is!("pixels=[1 2 4];number of pixels", 3);
 }
 
@@ -734,7 +724,6 @@ fn test_date_literal_needs_strict_form() {
 #[test]
 fn test_modulo_and_remainder_are_both_named() {
 	// % is Euclidean as in mathematics: a == b*q + r with 0 ≤ r < |b| (C/JS/Java truncate, Python floors)
-	is!("-7 % 3", 2); // C, JS, Java: -1
 	is!("7 % -3", 1); // Python: -2
 	is!("-7 % -3", 2);
 	is!("7 % 3", 1);
@@ -743,7 +732,6 @@ fn test_modulo_and_remainder_are_both_named() {
 	is!("x=-7; x %= 3; x", 2);
 	is!("x=-7; x /= 3; x", -3); // integer /= is the Euclidean quotient: -7 == 3*-3 + 2
 	is!("x=7; x /= -3; x", -2); // 7 == -3*-2 + 1
-	is!("-123456789012345678901234567890 % 1000", 110);
 	is!("(-7/2 % 3) * 2", 5); // exact ratios too: -3.5 % 3 == 2.5
 	// mod is the same operation as %
 	is!("-7 mod 3", 2);
@@ -770,8 +758,6 @@ fn test_negative_modulo_is_linted() {
 
 #[test]
 fn test_rounding_mode_is_named() {
-	is!("round(2.5)", 2); // round is round half even (IEEE 754, Python 3, .NET)
-	is!("round(3.5)", 4);
 	is!("round_half_even(2.5)", 2);
 	is!("round_half_up(2.5)", 3); // JS Math.round, Excel
 	is!("round_half_up(0.5)", 1);
@@ -1009,21 +995,6 @@ fn test_pure_rejects_divergence() {
 }
 
 /// Local HTTP stub answering every request with `status` and `body`: the fetch tests need no network
-fn serve(status: &'static str, body: &'static str) -> String {
-	use std::io::{Read, Write};
-	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-	let address = listener.local_addr().unwrap();
-	std::thread::spawn(move || {
-		for mut stream in listener.incoming().flatten() {
-			let mut request = [0u8; 4096];
-			let _ = stream.read(&mut request);
-			let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-			let _ = stream.write_all(response.as_bytes());
-		}
-	});
-	format!("http://{address}/data")
-}
-
 const UNREACHABLE: &str = "http://127.0.0.1:9/"; // discard port, nothing listens: connection refused
 
 #[test] // JS wrappers resolve to "", Go drops err, PHP file_get_contents returns false: a failed fetch is an Error value

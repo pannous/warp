@@ -337,14 +337,14 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   `tests/control/` (loops, switch, try, if), `tests/functions/`, `tests/units_time/`, `tests/modules/` (use, packages,
   folder scope), `tests/welcoming/` (15 `test_welcoming_*`), `tests/algo/` (6 `test_algo_*`), `tests/runtime/` (wasm,
   wasi, host, ffi, gc_struct, reader). A pure `git mv` + `mod` lines, no test body changes.
-- Not tests in tests/: `probe_*.rs` ×7 (probe_footguns.rs 1 088 lines runs in the suite), `tests/probes/*.rs` (dead),
+- Not tests in tests/: `probe_*.rs` ×7 (test_footguns.rs 1 088 lines runs in the suite), `tests/probes/*.rs` (dead),
   `tests/notes/` (session notes → notes/OLD), `tests/test_utils.rs` (dead cache, 11 warnings), `tests/sweeps/test_todo.rs` /
   `test_node_todo.rs` (todo lists as tests).
 - Oversized: test_wasm.rs 1 781 (a port of the C++ test_wasm.cpp, 35 feature `cfg` branches, 65 assertion lines
-  repeated inside the file), probe_footguns.rs 1 088, test_ffi.rs 621, test_types.rs 602, test_xml.rs 537.
+  repeated inside the file), test_footguns.rs 1 088, test_ffi.rs 621, test_types.rs 602, test_xml.rs 537.
 - Duplicated assertions: 250 identical `is!/eq!/assert_eq!` lines appear more than once (e.g. `is!("42", 42)` ×6);
   between files mostly test_wasm.rs ↔ test_angle.rs / test_global_modifiers.rs, probe_type.rs ↔ test_todo.rs,
-  probe_footguns.rs ↔ test_size_count.rs. When a probe's case is promoted to a test, delete it from the probe.
+  test_footguns.rs ↔ test_size_count.rs. When a probe's case is promoted to a test, delete it from the probe.
 - Overlapping names to merge when grouped: test_wasm_emitter / test_emitter (optimizer-gated) / test_wasm;
   test_operators / test_node_operators; test_switch_* ×3; test_units_* ×3; test_text_* ×7; test_web / test_web_playground;
   test_wit / test_wit_types; test_min_max / test_min_max_lists.

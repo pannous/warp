@@ -28,7 +28,7 @@ The supervisor should remove the DONE elements after a while.
 - `x=[1 2]; (sort x)#1` is the symbol `sort`: a spaced round group `(sort x)` stays data, so the braceless call inside parentheses does not run; `(x.sort)#1` works. (impl-text 2026-10-03)
 - `[2.5 -1.0 0.5]` is the two-item list `[1.5 0.5]`: the glued sign subtracts (D13 Ask, impl-ask). (impl-text 2026-10-03)
 - An int list `as string` joins at runtime to "[1 2]"; a list of texts joins unquoted ("[a b]", its literal prints `["a" "b"]`) and a nested list is "not a joinable item": the general runtime serializer is still open (#35). (impl-text 2026-10-03)
-- tests/common/mod.rs `serve` duplicates probe_footguns.rs `serve` (the local HTTP stub); probe_footguns could use the common one. (impl-text 2026-10-03)
+- DONE tests/common/mod.rs `serve` duplicates probe_footguns.rs `serve` (the local HTTP stub); probe_footguns could use the common one. (impl-text 2026-10-03)
 - `x != int` is `undefined variable: int`: #30 made `x == int` false with the hint `x is int`, but `!=` with a type word has no reading yet (`not x is int`?). (impl-sem 2026-10-03)
 - `x == a number` (a spaced type phrase after `==`) still type-tests through type_tests::spaced_type_test; only a single type word after `==` is marked as equality. (impl-sem 2026-10-03)
 - The shared cargo target dir also shares the unhashed `debug/warp` binary between checkouts/exports: `cargo build --bin warp` in one copy is overwritten by the next, so CLI probes may run another copy's code. (impl-sem 2026-10-03)

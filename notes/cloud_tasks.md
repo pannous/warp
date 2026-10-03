@@ -60,4 +60,4 @@ Permitted test edits: test_sin → compare with a tolerance; test_named_data_sec
 test_comments2 → expect the Rust model (`(y=0)` is a Key, length 0) or assert the 2-statement shape; test_paint_wasm →
 assign `w`, write `(x - c)`; the commented `"a".s() + 2` lines in test_string.rs may be deleted. Remove the WIT emitter
 paragraph from CLAUDE.md and AGENTS.md (src/wit_emitter.rs does not exist). Delete tests/test_footgun_application.rs and
-tests/test_footgun_list_index_bounds.rs (duplicates of tests/probe_footguns.rs). Report which tests now pass.
+tests/test_footgun_list_index_bounds.rs (duplicates of tests/welcoming/test_footguns.rs). Report which tests now pass.

@@ -53,7 +53,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 ### What cannot run in the browser, and why
 - Not compiled (`#[cfg(feature = "native")]` on their mod lines in tests/main.rs): wasmtime APIs (test_gc_struct,
   test_person_struct, test_struct_types, test_text_getters, test_wasm_reader, test_wasm_emitter, test_utils,
-  test_compile_only, test_host, probe_footguns (one wasmtime test in it)), network/ureq (test_web), the package tool
+  test_compile_only, test_host, test_footguns (one wasmtime test in it)), network/ureq (test_web), the package tool
   runner (test_package_tools, test_uniscript).
 - Skipped by libtest itself: the 5 `#[should_panic]` tests (test_node_operators type mismatches,
   test_newline_precedence::newline_form_is_really_evaluated): with panic=abort libtest ignores them.

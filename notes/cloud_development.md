@@ -111,7 +111,7 @@ wasmtime_runner.rs and mod.rs now use KIND_MASK. `(kind >> 8) & 0xFF` is untouch
 | total wall time, fire → pushed | 23 min |
 
 Suite in the cloud: 1442 passed, 7 failed, 81 ignored, the same before and after. The 7 failures are environmental:
-- lean missing: test_law ×2, probe_footguns::test_proof_model_matches_unbounded_int
+- lean missing: test_law ×2, test_footguns::test_proof_model_matches_unbounded_int
 - package sub-builds need `miniz_oxide`, missing from the vendor branch: test_package_tools ×2,
   test_uniscript::the_index_matches_the_readable_entities, test_package_pin::header_signatures_are_parsed_once.
   Fix: vendor the packages' own lockfiles into the `vendor` branch as well.
