@@ -41,3 +41,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `str(1+2)`, `"" + (1+2)`, `"a" + 2*3`: an Int constant expression converts by its value ("3", "a6"), not its source
   (emit_cast "string": the source-text branch is for data and names only). Float/real constants still serialize (todo).
   tests/test_constant_expression_text.rs.
+
+## 2026-10-03 fix-wasm-target
+- A package tool build without the wasm32-wasip1 standard library reports "missing rust target wasm32-wasip1; fix:
+  rustup target add wasm32-wasip1" (package_tools.rs build_from_source, rustc's "target may not be installed" note),
+  user decision relayed by BOSS 2026-10-03. Checked rustc's wording with an uninstalled target; no test edits.
