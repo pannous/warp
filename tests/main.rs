@@ -189,6 +189,7 @@ mod test_text_concat;
 mod test_text_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;
+mod test_text_repeat;
 mod test_text_runtime;
 mod test_text_variable_assignment;
 mod test_times_count_once;

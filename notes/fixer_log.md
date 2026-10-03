@@ -51,3 +51,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `print a    print b` (a print word or print(…) call after the first print of a space list) is the error "two statements
   on one line? separate them with `;` or a newline" (user decision). tests/test_one_line_statements.rs.
 - notes/open_decisions.md records this and the text * number decision (repeat + got-it warning, an assumption).
+
+## 2026-10-03 fix-text-repeat
+- text * int repeats (`"ab"*2` → "abab", `"5"*3` → "555"), educate_once "got it" warning naming `n times text`, and
+  `int("5")*3` for a digit text (user decision "Python repeat"). `n times "ab"` / `n times g` repeat (parser marker
+  `times·text`, a non-text is an error naming `n times [x]`). text * float/text stay type errors.
+  tests/test_text_repeat.rs; approved edits of test_print_type_error, probe_footguns, test_welcoming_sugar in their own commit.

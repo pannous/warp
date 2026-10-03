@@ -39,6 +39,7 @@ impl WasmGcEmitter {
 			|| type_word_kind(&name.to_lowercase()).is_some()
 			|| is_function_keyword(name)
 			|| name == PRINT
+			|| name == crate::wasp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::type_tests::IS_TYPE
@@ -118,6 +119,19 @@ impl WasmGcEmitter {
 					func.instruction(&Instruction::Unreachable);
 					return;
 				}
+			}
+		}
+
+		if let [word, count, repeated] = items {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
+				match self.get_type(repeated) {
+					crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+					kind => {
+						let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
+						self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+					}
+				}
+				return;
 			}
 		}
 
