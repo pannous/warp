@@ -1,7 +1,6 @@
 use warp::is;
 
 #[test]
-#[ignore = "next"] // by design: `/` exact, `len(items) / 2` indexes with 2.5 ("index must be an integer"); passes with `as int`
 fn test_sorting() { is!("samples/sorting.wasp", "-3,0,1,2,5,5,6,7,8,9"); }
 
 #[test]

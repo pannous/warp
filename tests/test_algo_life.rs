@@ -2,7 +2,6 @@ use warp::is;
 
 // natural first draft: blocked by `else if` inside blocks, `0..size {…}`, fun params typed Int for list variables, `return count`, tuple destructuring
 #[test]
-#[ignore = "next"] // by design: `0..size-1` excludes the end (Kotlin habit), fails late as "index out of range"; passes with `...`
 fn test_life() { is!("samples/life.wasp", 131); }
 
 #[test]

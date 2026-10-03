@@ -2,7 +2,6 @@ use warp::is;
 
 // natural scripting-style version: `let` inside blocks, string parameters indexed with [], push of indexed values, Kotlin-inclusive 0..n
 #[test]
-#[ignore = "next"] // by design: `let` is immutable, `..` excludes the end; then a real bug: `xs=[]` + push inside a fun types xs[i] as a Node (`fun g() { xs = []; xs.push(5); return xs[0] }; g() + 1` traps)
 fn test_levenshtein() { is!("samples/levenshtein.wasp", 11); }
 
 #[test]

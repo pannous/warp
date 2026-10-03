@@ -2,7 +2,6 @@ use warp::is;
 
 // 25 primes below 100 sum to 1060; 97 sits at index 24; 50 is absent (-1)
 #[test]
-#[ignore = "next"] // by design: `[true] * n` ambiguous (`n times [true]`), `/` exact ("index must be an integer", `as int`); passes with both
 fn test_sieve() { is!("samples/sieve.wasp", 1083); }
 
 // scratch bisection: evaluates every probes/algo/sieve/*.wasp snippet and prints its result

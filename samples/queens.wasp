@@ -23,7 +23,7 @@ fn place(queens, row, n) {
 
 fn count_queens(n) {
     // wasp: `[0] * n` is refused as ambiguous (repeat or multiply?); repeating a list is `n times [0]`
-    board = [0] * n
+    board = n times [0]
     return place(board, 0, n)
 }
 
