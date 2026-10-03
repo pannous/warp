@@ -40,6 +40,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Wiki remote `main` (asked by warp-d0, notes/wiki_branch.md): "Delete remote main". GitHub wikis serve only master;
+  master stays the only branch, agents push `HEAD:master`. The hook blocks agents, so the user runs
+  `git -C /Users/me/dev/angles/warp/wiki push origin --delete main`.
 - #10 Polish notation for .wat/.wast (P18): "Keep parked". test_wast stays ignored.
 - #16 commented `"a".s() + 2` lines in tests/test_string.rs (P19): "Delete the lines" (approved test-file edit).
 - tests/ layout (P14, code quality 3), verbatim: "The official policy was that probes are can be turned into a real
