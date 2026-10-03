@@ -17,7 +17,7 @@ const INCLUDE_DIRS: &[&str] = &[
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
 
-fn include_dirs() -> Vec<String> {
+pub(crate) fn include_dirs() -> Vec<String> {
     match std::env::var(INCLUDE_VARIABLE) {
         Ok(list) => list.split(':').filter(|dir| !dir.is_empty()).map(str::to_string).collect(),
         Err(_) => INCLUDE_DIRS.iter().map(|dir| dir.to_string()).collect(),

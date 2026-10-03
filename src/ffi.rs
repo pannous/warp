@@ -239,10 +239,59 @@ pub fn get_library_header_paths(library: &str) -> Vec<String> {
     crate::ffi_parser::find_library_headers(resolve_library_alias(library))
 }
 
+/// glibc's math.h declares libm through the macros of this header: `__MATHCALL (sqrt,, (_Mdouble_ __x));`
+const GLIBC_MATHCALLS: &str = "bits/mathcalls.h";
+/// The glibc declaration macros: (macro, whether its first argument is the result type)
+const GLIBC_MATH_MACROS: [(&str, bool); 7] = [
+    ("__MATHCALL_VEC", false), ("__MATHCALLX", false), ("__MATHCALL", false),
+    ("__MATHDECL_VEC", true), ("__MATHDECLX", true), ("__MATHDECL_1", true), ("__MATHDECL", true),
+];
+
+/// The header text, followed by the double variants of glibc's mathcalls.h declarations when it includes that header
+fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
+    if !content.contains(GLIBC_MATHCALLS) {
+        return content;
+    }
+    let header_dir = std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
+    let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::ffi_parser::include_dirs()).collect();
+    match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| std::fs::read_to_string(path).ok()) {
+        Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
+        None => content,
+    }
+}
+
+/// `__MATHCALL (sqrt,, (_Mdouble_ __x));` → `double sqrt (double __x);`, `__MATHDECL (int,ilogb,, (_Mdouble_ __x));` →
+/// `int ilogb (double __x);`: plain declarations of the double variants
+pub fn expand_glibc_math_macros(source: &str) -> String {
+    let declaration = |line: &str| -> Option<String> {
+        let (macro_name, typed) = GLIBC_MATH_MACROS.iter().find(|(name, _)| line.strip_prefix(name).is_some_and(|rest| rest.trim_start().starts_with('(')))?;
+        let inner = line[macro_name.len()..].trim_start().strip_prefix('(')?;
+        let inner = &inner[..inner.rfind(')')?];
+        let mut parts = vec![String::new()];
+        let mut depth = 0;
+        for c in inner.chars() {
+            match c {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                ',' if depth == 0 => {
+                    parts.push(String::new());
+                    continue;
+                }
+                _ => {}
+            }
+            parts.last_mut()?.push(c);
+        }
+        let (result, rest) = if *typed { (parts.first()?.trim().to_string(), &parts[1..]) } else { ("double".to_string(), &parts[..]) };
+        let (name, arguments) = (rest.first()?.trim(), rest.get(2)?.trim());
+        Some(format!("{} {name} {};", result.replace("_Mdouble_", "double"), arguments.replace("_Mdouble_", "double")))
+    };
+    source.lines().filter_map(|line| declaration(line.trim())).collect::<Vec<_>>().join("\n")
+}
+
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
     let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
+        Ok(c) => with_glibc_mathcalls(c, path),
         Err(_) => return Vec::new(),
     };
 
