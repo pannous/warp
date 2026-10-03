@@ -27,8 +27,15 @@ test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the fi
 - #9 (part) the 15 libm bindings are a table (`LIBM_UNARY`, `LIBM_BINARY`); the two header parsers remain.
 - #14 AGENTS.md architecture/build/test sections match the tree (CLAUDE.md untouched, see question 8).
 
+#2 (user decision 2026-10-03, "Remove them"): the 21 C++ feature flags and their `#[cfg]` branches in src/main.rs,
+tests/test_wasm.rs and tests/test_web.rs are gone (the default-build branch kept); `--all-features` is now `native` +
+`optimizer` + `ffi`, the same program as plain `cargo test` plus the optimizer and FFI tests.
+
+smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/test_angle.rs) and
+tests/test_asts.rs, the only user of the `syn` dev-dependency, which is gone too.
+
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
-#2 feature flags (test edits), #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
+#4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
 wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is
 linked from ~/dev/script/rust), the crate-wide `#![allow(dead_code, unused_imports)]`.
 Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_mismatch` (should_panic) with

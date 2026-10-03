@@ -8,7 +8,6 @@ pub use extensions::lists::*;
 pub use extensions::numbers::*;
 pub use extensions::strings::*;
 pub use extensions::utils::*;
-pub mod smarty;
 pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
@@ -64,6 +63,7 @@ pub mod package_tools;
 pub mod versions;
 pub mod web;
 pub mod ambiguous_forms;
+pub mod tuples;
 pub mod traits;
 
 // ==================== Core Re-exports ====================

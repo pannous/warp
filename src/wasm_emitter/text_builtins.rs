@@ -73,6 +73,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
+	if required.contains(super::list_ops::TEXT_AS_INT) {
+		required.insert("get_int_value");
+	}
 	if required.contains("list_sort") {
 		required.insert(super::library_ops::NODE_ORDER);
 	}
@@ -175,8 +178,7 @@ impl WasmGcEmitter {
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
 		if self.get_type(operand) == Kind::Empty {
 			// a value held as a Node (a map value) may be a number at runtime: joined, a number takes its text form
-			let joined = Node::List(vec![Node::Symbol("join".into()), Node::List(vec![operand.clone()], crate::node::Bracket::Square, crate::node::Separator::Colon), Node::Text(String::new())], crate::node::Bracket::Round, crate::node::Separator::None);
-			self.emit_node_instructions(func, &joined);
+			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;
 		}
 		if !is_number(self.get_type(operand)) {

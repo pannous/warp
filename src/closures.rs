@@ -341,7 +341,7 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 		let values = (1..=arity).map(|index| Param { used_as: Some(Kind::Data), ..Param::untyped(&format!("value{index}")) });
 		let name = closure_call_name(arity);
 		let params = std::iter::once(function).chain(values).collect();
-		context.user_functions.insert(name.clone(), UserFunctionDef { name, params, body: Box::new(Node::Empty), return_kind: Kind::Data, func_index: None });
+		context.user_functions.insert(name.clone(), UserFunctionDef { name, params, body: Box::new(Node::Empty), return_kind: Kind::Data, tuple_kinds: vec![], func_index: None });
 	}
 }
 

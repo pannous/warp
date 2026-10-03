@@ -418,7 +418,7 @@ pub mod hints {
         hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
     }
 
-    /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
+    /// A dollar hole `${expr}` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
     pub fn interpolation(written: &str, expression: &str) {
         hint(written, &format!("\\({expression})"), "canonical interpolation hole");
     }
@@ -620,6 +620,10 @@ pub mod hints {
 
     /// Bracket indexing (counts from 0) vs hash indexing (counts from 1)
     pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
+        let looks_up_a_key = idx.starts_with(['"', '\'']); // `ages["alice"]` counts no position
+        if looks_up_a_key {
+            return;
+        }
         let s = style();
         match (used_bracket, s.index) {
             (true, IndexStyle::Hash) => {

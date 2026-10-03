@@ -15,7 +15,7 @@ xs#1 + #xs + max(xs)`,
 ages.bob + ages.alice`,
 	texts: `name = "warp"
 "Hi " + name + ", " + #name + " letters"`,
-	ask: `// an ambiguity is a question: click a reading below
+	ambiguity: `// an ambiguity is a warning naming the explicit form; "got it" silences it, the value stays
 x=0
 for i in 1 upto 4 { x += i }
 x`,
@@ -31,5 +31,6 @@ n`,
 x`,
 	"runtime error": `xs = [1 2 3]
 xs[3]`,
-	fetch: `fetch https://raw.githubusercontent.com/pannous/warp/main/README.md`,
+	fetch: `// the browser fetches only from servers that allow it (CORS)
+fetch https://pannous.com/files/test`,
 };

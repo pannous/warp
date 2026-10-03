@@ -52,6 +52,9 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
+const PRINT_WORD: &str = "print";
+/// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
+const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
@@ -60,6 +63,71 @@ const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
+
+fn is_print_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+}
+
+/// `print` or the call `print(…)`: a print statement starts here
+fn starts_print(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		other => is_print_word(other),
+	}
+}
+
+/// Words separated by spaces form one expression: `upper "a"` is one argument of print
+fn one_expression(words: &[Node]) -> Node {
+	match words {
+		[single] => single.clone(),
+		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+	}
+}
+
+/// The call print(a, b, …): its arguments are separated by commas, like Python's
+fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
+	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
+}
+
+/// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
+fn print_arguments(arguments: Node) -> Vec<Node> {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if items.len() > 1 => vec![arguments],
+		Node::List(items, _, _) => items.clone(),
+		Node::Empty => vec![],
+		_ => vec![arguments],
+	}
+}
+
+/// The arguments of a parsed print list: the call print(a, b) has several, `print first xs` the one expression `first xs`
+pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> {
+	match bracket {
+		Bracket::Round => call[1..].to_vec(),
+		_ => vec![one_expression(&call[1..])],
+	}
+}
+
+/// A list as grouped by its separators, with the braceless print forms made explicit:
+/// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
+/// so the comma list [[print a], b] becomes the call print(a, b)
+fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
+		return Node::List(items, bracket, separator);
+	}
+	match (&separator, items[0].drop_meta()) {
+		(Separator::Space, head) if starts_print(head) && items.iter().skip(2).any(starts_print) => {
+			let second = items.iter().skip(2).find(|item| starts_print(item)).expect("guarded");
+			Diagnostic::at(second, TWO_STATEMENTS_ON_ONE_LINE).into_error()
+		}
+		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
+			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
+		}
+		(Separator::Colon, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
+			print_call(head[1..].iter().chain(&items[1..]).cloned())
+		}
+		_ => Node::List(items, bracket, separator),
+	}
+}
 
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
@@ -1566,6 +1634,8 @@ impl WaspParser {
 						Separator::None,
 					);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+				} else if symbol == PRINT_WORD {
+					print_call(print_arguments(args_node))
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
@@ -2153,7 +2223,9 @@ impl WaspParser {
 	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		let is_evaluable = matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
-		if self.current_char() != '!' || self.peek_char(1) == '=' || self.operand_follows(1) || !(is_evaluable || mutated.is_some()) {
+		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
+		let glued_suffix = !self.prev_char().is_whitespace() && matches!(self.peek_char(1), ' ' | '\t');
+		if self.current_char() != '!' || self.peek_char(1) == '=' || (self.operand_follows(1) && !glued_suffix) || !(is_evaluable || mutated.is_some()) {
 			return None;
 		}
 		self.advance();
@@ -2509,6 +2581,8 @@ impl WaspParser {
 				}
 				Ok(None) => {}
 			}
+			// a bare `$name` is text here but stays a hole for sql/sh templates (injection::parts), so it is not escaped
+			let bare_dollar_name = ch == '$' && (self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_');
 			let literal = if ch == '\\' {
 				self.advance();
 				let escaped = self.current_char();
@@ -2525,7 +2599,7 @@ impl WaspParser {
 			self.advance();
 			s.push(literal);
 			match literal {
-				'$' => template.push_str("$$"),
+				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
 		}
@@ -2541,7 +2615,8 @@ impl WaspParser {
 		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
 	}
 
-	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	/// `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`, `$ `).
+	/// User decision D1: "only the one with the curly braces must interpolate the other is text like dollar money".
 	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
 		let (line, column) = self.get_position();
 		let next = self.peek_char(1);
@@ -2551,13 +2626,6 @@ impl WaspParser {
 			set_hint_position(line, column);
 			norm::interpolation(&format!("${{{expression}}}"), &expression);
 			expression
-		} else if next.is_alphabetic() || next == '_' {
-			self.advance();
-			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-			self.advance_by(name.chars().count());
-			set_hint_position(line, column);
-			norm::interpolation(&format!("${name}"), &name);
-			name
 		} else {
 			return Ok(None);
 		};
@@ -3206,7 +3274,7 @@ impl WaspParser {
 				// Only unwrap single items for implicit groupings
 				return items[0].clone();
 			}
-			return Node::List(items, bracket, Separator::Space);
+			return grouped_list(items, bracket, Separator::Space);
 		}
 
 		// Start with the loosest (highest precedence value) separator
@@ -3268,7 +3336,7 @@ impl WaspParser {
 			// Explicit brackets like {x} or [x] should preserve the wrapper
 			grouped_nodes[0].clone()
 		} else {
-			Node::List(grouped_nodes, bracket, split_sep)
+			grouped_list(grouped_nodes, bracket, split_sep)
 		}
 	}
 

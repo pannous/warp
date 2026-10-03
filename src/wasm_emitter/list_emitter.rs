@@ -16,6 +16,16 @@ const BUILTIN_CALLS: [&str; 15] = [
 ];
 
 const PRINT: &str = "print";
+/// `print a, b` writes "a b", like Python
+const PRINT_ARGUMENT_SEPARATOR: &str = " ";
+
+/// The value `print` writes: its one argument, or several joined by a space
+fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
+	match crate::wasp_parser::print_arguments_of(call, bracket).as_slice() {
+		[single] => single.clone(),
+		several => super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
+	}
+}
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
 
@@ -111,8 +121,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if items.len() == 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
-			self.emit_print(func, &items[1]);
+		if items.len() >= 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
+			self.emit_print(func, &printed_value(items, bracket));
 			return;
 		}
 

@@ -1,11 +1,12 @@
 //! Interpolated text (user decision D1, 2026-10-03): double-quoted text in code takes Swift holes `"a \(x+1) b"` and
-//! dollar holes `"${x+1}"` / `"$x"`; `\(…)` is the canonical form the normalizer hints. Single quotes stay literal.
+//! dollar holes `"${x+1}"`; `\(…)` is the canonical form the normalizer hints. A bare `"$x"` is text ("only the one with
+//! the curly braces must interpolate the other is text like dollar money"), single quotes stay literal.
 //!
 //! The parser keeps such a literal as its template text (holes written `${expr}`, a literal dollar `$$`, the syntax of
 //! injection::parts) marked as a template, so `sql "…"` / `sh "…"` still see the literal and turn holes into parameters.
 //! Every other template becomes text building here: `"a \(x) b"` → `"a " + text_form(x) + " b"`.
 
-use crate::injection::{parts, Part};
+use crate::injection::{parts_with, Part};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::text_builtins::TEXT_FORM;
@@ -39,7 +40,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 fn interpolated(template: &str) -> Node {
-	let pieces = match parts(template) {
+	let pieces = match parts_with(template, false) {
 		Ok(pieces) => pieces,
 		Err(error) => return crate::node::error(&error.0),
 	};

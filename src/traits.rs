@@ -286,6 +286,21 @@ fn definition_head(head: &Node) -> Option<&[Node]> {
 	}
 }
 
+/// The parameters of a definition head written without a type: `p` and `p=default` in `f(p, q=1)`, the implicit `it` of
+/// a head without parameters (`f := it.width`)
+pub fn untyped_parameters(head: &Node) -> Vec<String> {
+	if matches!(head.drop_meta(), Node::Symbol(_)) {
+		return vec![crate::lambdas::IMPLICIT_PARAMETER.to_string()];
+	}
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	let untyped = |parameter: &Node| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, Op::Assign, _) => Some(name.name()),
+		_ => None,
+	};
+	parameters.iter().filter_map(untyped).collect()
+}
+
 /// The declared type a parameter `name:T` names
 fn parameter_type<'a>(parameter: &'a Node, registry: &TypeRegistry) -> Option<&'a str> {
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else { return None };
@@ -562,7 +577,8 @@ pub fn lower_dispatch(node: Node) -> Node {
 		return node;
 	}
 	let witnesses = defined_functions(&node);
-	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, missing: RefCell::new(None) };
+	let signatures = instance_signatures(&node, &types.registry);
+	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, missing: RefCell::new(None) };
 	let node = dispatch.expand(node);
 	dispatch.missing.into_inner().unwrap_or(node)
 }
@@ -571,6 +587,8 @@ struct Dispatch {
 	traits: Traits,
 	types: InstanceTypes,
 	witnesses: Vec<String>,
+	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
+	signatures: HashMap<String, Vec<(String, Option<String>)>>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
 	missing: RefCell<Option<Node>>,
 }
@@ -651,24 +669,42 @@ impl Dispatch {
 				_ => {}
 			}
 		}
+		if let Some(error) = self.refused_argument(items, bracket, separator) {
+			return Some(error);
+		}
 		self.operation_call(items, bracket, separator)
+	}
+
+	/// `keep(3)`, `keep page{…}` for `keep(p:photo)`: an argument known at compile time not to be an instance of the declared
+	/// type of its parameter is an error; an argument of unknown type is left to its uses (a missing field fails loudly)
+	fn refused_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let name = called_name(items, bracket, separator)?;
+		let parameters = self.signatures.get(name)?;
+		let refusal = items[1..].iter().zip(parameters).find_map(|(argument, (parameter, declared))| {
+			let declared = declared.as_ref()?;
+			let given = match self.instance_type(argument) {
+				Some(type_name) if type_name == *declared => return None,
+				Some(type_name) => crate::analyzer::with_article(&type_name),
+				None if crate::library_words::object_entries(argument).is_some() => return None, // a written map: judged by the fields its uses read
+				None => crate::analyzer::kind_with_article(crate::analyzer::argument_literal_kind(argument)?),
+			};
+			let message = format!("{name} needs {} for parameter {parameter}, got {} ({given})", crate::analyzer::with_article(declared), argument.serialize());
+			Some(Diagnostic::at(argument, message).into_error())
+		})?;
+		self.fail(refusal)
 	}
 
 	/// `area(s)`, `area s`, `compare(p, q)`: the witness of the type of the first argument
 	fn operation_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		let [head, first, ..] = items else { return None };
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
-		if call_name(items, bracket, separator).is_none() && !spaced {
-			return None;
-		}
+		let name = called_name(items, bracket, separator)?;
 		let (required, operation) = self.traits.operation(name)?;
 		let arguments = items[1..].to_vec();
 		match self.instance_type(first) {
 			Some(type_name) if self.has_witness(name, &type_name) => Some(witness_call(name, &type_name, arguments)),
 			Some(type_name) => self.fail(missing_conformance(head, &type_name, required, operation, &format!("{name}({})", first.serialize()))),
 			// a declared operation of an argument whose type is unknown here: the one type that defines it, else ask for the type
-			None if !is_builtin_trait(&required.name) && !self.witnesses.contains(name) => {
+			None if !is_builtin_trait(&required.name) && !self.witnesses.iter().any(|witness| witness == name) => {
 				let defining: Vec<&str> = self.witnesses.iter().filter_map(|witness| witness_type(witness, name)).collect();
 				match defining.as_slice() {
 					[type_name] => Some(witness_call(name, type_name, arguments)),
@@ -682,6 +718,22 @@ impl Dispatch {
 			None => None,
 		}
 	}
+}
+
+/// The function a list calls: `f(a, b)`, or spaced `f a b`
+fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
+	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+}
+
+/// Every function's parameters with the declared type each one takes, for the functions that take any
+fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, Vec<(String, Option<String>)>> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, node);
+	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| registry.get_by_name(type_name).is_some());
+	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
+	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
 }
 
 fn witness_call(operation: &str, type_name: &str, arguments: Vec<Node>) -> Node {

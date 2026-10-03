@@ -1,8 +1,7 @@
 // Ask and educate state belongs to one compilation: two evals on one thread (a test thread reused by the harness, a
-// REPL) must not see each other's assumptions, remembered answers or shown notes, and the hint configuration of one
+// REPL) must not see each other's assumptions or shown notes, and the hint configuration of one
 // thread is not another's (found on Linux CI 2026-10-03: one program's "assumed at …" in another test's error).
-use std::cell::Cell;
-use warp::diagnostic::{with_asker, Ask, Asker};
+use warp::diagnostic::{take_warnings, with_acknowledger, Acknowledging};
 use warp::normalize::{capture_hints, hint_mode, set_hint_mode, HintMode};
 use warp::wasm_emitter::eval;
 use warp::Node;
@@ -28,20 +27,15 @@ fn every_eval_shows_its_educate_once_note() {
 	assert_eq!(let_notes("let y = 4; y"), 1, "the note of the first program hid the second one's");
 }
 
-/// Answers the first question it is asked, then nothing
-struct AnswersOnce(Cell<bool>);
-
-impl Asker for AnswersOnce {
-	fn answer(&self, ask: &Ask) -> Option<usize> {
-		(!self.0.replace(true)).then_some(ask.readings.len() - 1)
-	}
-}
-
 #[test]
-fn an_answer_given_in_one_eval_is_not_remembered_by_the_next() {
-	with_asker(AnswersOnce(Cell::new(false)), || {
-		assert_eq!(eval(KOTLIN_BOUND), 3, "answered inclusive: 0+1+2");
-		assert_eq!(eval(KOTLIN_BOUND), 1, "unanswered: the default, exclusive: 0+1");
+fn a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value() {
+	let bound_warnings = || take_warnings().iter().filter(|warning| warning.message.contains("loop bound")).count();
+	with_acknowledger(Acknowledging(vec!["kotlin-range".to_string()]), || {
+		take_warnings();
+		assert_eq!(eval(KOTLIN_BOUND), 1, "the default, exclusive: 0+1");
+		assert_eq!(bound_warnings(), 1);
+		assert_eq!(eval(KOTLIN_BOUND), 1, "the same value every time");
+		assert_eq!(bound_warnings(), 1, "nothing remembered it");
 	});
 }
 

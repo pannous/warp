@@ -229,7 +229,6 @@ PASSED:
   ✓ test_angle::test_if_math
   ✓ test_angle::test_if_two
   ✓ test_angle::test_logic_precedence
-  ✓ test_angle::test_smart_types
   ✓ test_angle::test_switch
   ✓ test_angle::test_switch_evaluation
   ✓ test_angle::test_truthy_and
@@ -246,7 +245,6 @@ PASSED:
   ✓ test_array_types::test_declared_typed_arrays_keep_working
   ✓ test_array_types::test_plural_declarations_are_lists
   ✓ test_array_types::test_typed_array_as_a_value
-  ✓ test_asts::test_ast
   ✓ test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ test_attributes::attribute_names_may_be_kebab_case
   ✓ test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -257,7 +255,7 @@ PASSED:
   ✓ test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
-  ✓ test_bare_list_assignment::the_answer_compiles_the_chosen_reading
+  ✓ test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ test_block_assigns_outer::the_declared_and_returned_forms_change_it
@@ -315,6 +313,7 @@ PASSED:
   ✓ test_compile_only::compile_command_writes_wasm_without_running
   ✓ test_condition_block::a_condition_still_ends_before_its_block
   ✓ test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ test_constructor_vs_data::test_construction_checks_field_types
   ✓ test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -353,6 +352,7 @@ PASSED:
   ✓ test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ test_do_block::a_user_function_named_do_wins
   ✓ test_do_block::do_runs_a_block_literal
   ✓ test_do_block::do_runs_a_named_block
@@ -390,7 +390,7 @@ PASSED:
   ✓ test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ test_equality_never_chains::orderings_still_chain
-  ✓ test_eval_state::an_answer_given_in_one_eval_is_not_remembered_by_the_next
+  ✓ test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ test_eval_state::every_eval_shows_its_educate_once_note
   ✓ test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
@@ -536,6 +536,11 @@ PASSED:
   ✓ test_glyph_aliases::equality_glyphs_compare
   ✓ test_glyph_aliases::glyphs_inside_text_stay_text
   ✓ test_glyph_aliases::logic_glyphs_are_and_or
+  ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
+  ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
+  ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
+  ✓ test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
+  ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ test_host::test_emit_host_imports
@@ -561,9 +566,9 @@ PASSED:
   ✓ test_inline_comments::test_hash_without_space_is_still_the_index_operator
   ✓ test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
   ✓ test_interpolation::an_unknown_name_in_a_hole_is_loud
+  ✓ test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
   ✓ test_interpolation::data_keeps_dollars_as_text
   ✓ test_interpolation::dollar_arguments_and_templates_keep_working
-  ✓ test_interpolation::dollar_holes_interpolate_too
   ✓ test_interpolation::holes_take_parameters_lists_and_exact_numbers
   ✓ test_interpolation::holes_take_text_results_of_library_words
   ✓ test_interpolation::single_quotes_stay_literal
@@ -606,6 +611,7 @@ PASSED:
   ✓ test_key_lookup::test_missing_key_is_an_error
   ✓ test_key_lookup::test_object_variable_is_looked_up_by_key
   ✓ test_key_lookup::test_text_value_is_looked_up
+  ✓ test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
   ✓ test_kitchensink::test_kitchensink_all_node_types
   ✓ test_kitchensink::test_kitchensink_complex_tree
   ✓ test_kitchensink::test_kitchensink_wasmtime_execution
@@ -646,7 +652,8 @@ PASSED:
   ✓ test_list_parameters::named_parameter_indexed_as_list
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
-  ✓ test_list_plus_number::the_answer_compiles_the_chosen_reading
+  ✓ test_list_plus_number::each_reading_has_its_explicit_form
+  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -695,7 +702,6 @@ PASSED:
   ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
-  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
   ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
@@ -713,11 +719,13 @@ PASSED:
   ✓ test_meta::test_meta_field
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
+  ✓ test_method_words::test_chars_of_text_literal_in_assignment
   ✓ test_method_words::test_first_and_last
   ✓ test_method_words::test_join
   ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
+  ✓ test_method_words::test_replace
   ✓ test_method_words::test_reverse
   ✓ test_method_words::test_sort
   ✓ test_method_words::test_split
@@ -819,6 +827,15 @@ PASSED:
   ✓ test_number::test_number
   ✓ test_number::test_number_floats
   ✓ test_number::test_number_mix
+  ✓ test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
+  ✓ test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
+  ✓ test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
+  ✓ test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
+  ✓ test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
+  ✓ test_object_arguments::an_instance_of_another_class_is_a_type_error
+  ✓ test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
+  ✓ test_one_line_statements::separated_prints_still_run
+  ✓ test_one_line_statements::two_prints_on_one_line_need_a_separator
   ✓ test_operator_declarations::test_built_in_operators_are_untouched
   ✓ test_operator_declarations::test_infix_operator
   ✓ test_operator_declarations::test_infix_operator_declared_by_its_pattern
@@ -909,6 +926,12 @@ PASSED:
   ✓ test_person_struct::test_person_struct_roundtrip
   ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
+  ✓ test_print_arguments::print_joins_its_arguments_with_a_space
+  ✓ test_print_arguments::print_of_a_braceless_call_is_worth_its_result
+  ✓ test_print_arguments::print_of_a_braceless_call_prints_its_result
+  ✓ test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
+  ✓ test_print_type_error::print_of_a_type_error_reports_that_error
+  ✓ test_print_type_error::text_times_number_says_how_to_repeat_a_text
   ✓ test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ test_property_access::test_dot_on_a_variable_and_nested
   ✓ test_property_access::test_dot_on_an_object_literal
@@ -938,6 +961,12 @@ PASSED:
   ✓ test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ test_rational_type::test_rational_and_rationals_are_type_words
   ✓ test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ test_read_bytes_plain_result::a_main_without_a_result_is_empty
+  ✓ test_read_bytes_plain_result::a_null_result_is_empty
+  ✓ test_read_bytes_plain_result::a_plain_f64_result_is_a_float
+  ✓ test_read_bytes_plain_result::a_plain_i32_result_is_an_int
+  ✓ test_read_bytes_plain_result::a_plain_i64_result_is_an_int
+  ✓ test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
   ✓ test_records_classes::a_class_has_untyped_fields
   ✓ test_records_classes::a_missing_required_field_is_an_error
   ✓ test_records_classes::a_record_is_a_struct
@@ -945,6 +974,8 @@ PASSED:
   ✓ test_records_classes::an_optional_field_defaults_to_null
   ✓ test_records_classes::record_stays_usable_as_a_variable_name
   ✓ test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ test_runtime_text_as_int::a_text_variable_converts_to_int
+  ✓ test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ test_samples::test_ackermann
   ✓ test_samples::test_collatz
   ✓ test_samples::test_factorial
@@ -955,6 +986,7 @@ PASSED:
   ✓ test_samples::test_power
   ✓ test_samples::test_primes
   ✓ test_samples::test_quadratic
+  ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
   ✓ test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ test_semicolon_square::test_square_brackets_keep_all_semicolon_items
@@ -967,14 +999,15 @@ PASSED:
   ✓ test_shift_operators::test_shifts_of_big_exact_ints
   ✓ test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
+  ✓ test_signed_operand_list::each_reading_has_its_explicit_form
   ✓ test_signed_operand_list::spaced_or_glued_operators_stay_arithmetic
-  ✓ test_signed_operand_list::the_answer_compiles_the_chosen_reading
   ✓ test_signed_operand_list::under_strict_the_default_is_an_error
   ✓ test_size_count::test_bytes_need_explicit_unit
   ✓ test_size_count::test_size_is_element_count
   ✓ test_size_count::test_size_of_text_is_character_count
   ✓ test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ test_statement_terminators::semicolon_inside_a_line_still_groups
@@ -1028,9 +1061,10 @@ PASSED:
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
   ✓ test_suffix_words::a_function_name_with_ed_is_its_suffix_form
+  ✓ test_suffix_words::a_variable_is_no_suffix_form
   ✓ test_suffix_words::an_ungrouped_mix_asks
   ✓ test_suffix_words::an_unknown_word_is_no_suffix_form
-  ✓ test_suffix_words::the_answer_compiles_the_chosen_reading
+  ✓ test_suffix_words::each_reading_has_its_explicit_form
   ✓ test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ test_superscript_signs::a_negative_superscript_is_a_reciprocal_power
   ✓ test_superscript_signs::a_negative_superscript_on_a_variable
@@ -1144,6 +1178,14 @@ PASSED:
   ✓ test_try_else::try_falls_back_when_the_index_is_out_of_range
   ✓ test_try_else::try_keeps_a_value
   ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
+  ✓ test_tuple_returns::test_bare_list_assignment_still_asks
+  ✓ test_tuple_returns::test_destructuring_arity_mismatch_is_loud
+  ✓ test_tuple_returns::test_parallel_assignment_and_swap
+  ✓ test_tuple_returns::test_recursive_tuple_function
+  ✓ test_tuple_returns::test_tuple_function_as_whole_value_is_a_list
+  ✓ test_tuple_returns::test_tuple_function_returns_wasm_multi_value
+  ✓ test_tuple_returns::test_tuple_returns_inside_functions
+  ✓ test_tuple_returns::test_two_returned_values_destructure
   ✓ test_type_name_matching::test_a_declared_class_types_its_noun
   ✓ test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
   ✓ test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
@@ -1366,18 +1408,18 @@ PASSED:
   ✓ test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
-  ✓ test_web_playground::an_unanswered_ask_is_reported_with_its_readings_and_falls_back
+  ✓ test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
+  ✓ test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ test_web_playground::evaluate_reports_the_value_the_cli_prints
-  ✓ test_web_playground::the_pages_answer_is_taken_and_hinted
   ✓ test_web::test_fetch
   ✓ test_web::test_html_wasp
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
-  ✓ test_welcoming_ask::an_answer_is_remembered_so_the_user_is_not_asked_twice
+  ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
   ✓ test_welcoming_ask::an_educating_note_shows_until_acknowledged
+  ✓ test_welcoming_ask::an_old_answers_line_never_picks_a_reading
   ✓ test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error
   ✓ test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form
-  ✓ test_welcoming_ask::answers_persist_in_the_project_answers_file
   ✓ test_welcoming_ask::every_for_header_bound_minus_one_asks
   ✓ test_welcoming_ask::questions_quote_prefix_operators_as_written
   ✓ test_welcoming_ask::upto_asks_and_defaults_to_exclusive
@@ -1519,4 +1561,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1514 passed, 0 failed, 1514 total tested
+58 ignored, 1556 passed, 0 failed, 1556 total tested

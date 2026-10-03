@@ -23,6 +23,7 @@ mod reflection;
 mod string_table;
 mod type_manager;
 mod try_guard;
+mod tuple_emitter;
 pub use try_guard::RAN_WITHOUT_ERROR;
 mod witness;
 pub(crate) mod wasi_emitter;
@@ -68,6 +69,15 @@ const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
 
 /// The condition and the then-branch of `if condition then branch`
+/// The call `join(list, separator)`: the items' text forms with the separator between them
+pub(super) fn join_call(list: Node, separator: &str) -> Node {
+	Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
+}
+
+pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
+	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
+}
+
 fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else { return None };
 	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else { return None };
@@ -160,6 +170,8 @@ pub struct WasmGcEmitter {
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
+	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
+	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
@@ -204,6 +216,8 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			returns_node: true,
+			returned_tuple: vec![],
+			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
@@ -375,17 +389,22 @@ impl WasmGcEmitter {
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().map(|param| self.storage_type(param_kind(param))).collect();
-		let result_type = if returns_node {
-			Ref(self.node_ref(false))
+		let result_types = if !user_fn.tuple_kinds.is_empty() {
+			self.tuple_result_types(&user_fn.tuple_kinds)
+		} else if returns_node {
+			vec![Ref(self.node_ref(false))]
 		} else {
-			self.storage_type(user_fn.return_kind)
+			vec![self.storage_type(user_fn.return_kind)]
 		};
-		self.type_manager.types_mut().ty().function(param_types, vec![result_type]);
+		self.type_manager.types_mut().ty().function(param_types, result_types);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
 		let func_idx = self.next_func_idx;
 		self.next_func_idx += 1;
+		if !user_fn.tuple_kinds.is_empty() {
+			self.register_tuple_packer(name, &user_fn.tuple_kinds);
+		}
 
 		// Store the function index and whether it returns a Node
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
@@ -433,8 +452,14 @@ impl WasmGcEmitter {
 			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
 			.collect();
 
+		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if returns_node {
+		if !user_fn.tuple_kinds.is_empty() {
+			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
+			self.emit_node_instructions(&mut func, &user_fn.body);
+			func.instruction(&Instruction::Drop);
+			func.instruction(&Instruction::Unreachable);
+		} else if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {
 			self.emit_value_of_kind(&mut func, &user_fn.body, user_fn.return_kind);
@@ -450,6 +475,10 @@ impl WasmGcEmitter {
 
 		// Add to code section
 		self.code.function(&func);
+		if !user_fn.tuple_kinds.is_empty() {
+			self.compile_tuple_packer(&user_fn.tuple_kinds);
+		}
+		self.returned_tuple = saved_returned_tuple;
 
 		// Restore scope
 		self.scope = saved_scope;
@@ -486,7 +515,10 @@ impl WasmGcEmitter {
 	/// unless libm's f64 version is imported
 	fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
-		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).collect()
+		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
+			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
+		});
+		rounding.chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -519,8 +551,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Inner helper for emitting user function calls
+	/// Inner helper for emitting user function calls; a tuple function's values are packed into a list
 	fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+		self.emit_user_function_values(func, user_fn, args);
+		if !user_fn.tuple_kinds.is_empty() && user_fn.func_index.is_some() {
+			self.emit_pack_tuple(func, &user_fn.name);
+		}
+	}
+
+	/// Arguments and the call: the function's own results on the stack, several for a tuple function
+	fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
 		let Some(func_index) = user_fn.func_index else {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
@@ -955,6 +995,7 @@ impl WasmGcEmitter {
 		self.emit_equality_ops();
 		// Emit helper functions
 		self.emit_getters();
+		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1161,7 +1202,7 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
@@ -2256,13 +2297,9 @@ impl WasmGcEmitter {
 	/// `x as string` for a variable: an Int, a Text or a character is the join of the one-element list;
 	/// anything else has no runtime text yet
 	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
-		let join_call = |list: Node, separator: &str| {
-			Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
-		};
-		let one_item_list = |item: Node| Node::List(vec![item], Bracket::Square, Separator::Space);
 		let kind = self.get_type(value);
 		let node = match kind {
-			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+			Kind::Int | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			Kind::List => {
 				let text = |text: &str| Box::new(Node::Text(text.to_string()));
@@ -2322,6 +2359,12 @@ impl WasmGcEmitter {
 					_ if self.get_type(value).is_float() => {
 						self.emit_float_value(func, value);
 						self.emit_truncating_cast(func);
+						self.emit_call(func, "new_int");
+					}
+					// Runtime: a text, or a value known only at run time (a list element), parses its digits
+					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+						self.emit_node_instructions(func, value);
+						self.emit_call(func, list_ops::TEXT_AS_INT);
 						self.emit_call(func, "new_int");
 					}
 					// Already int or coercible; a ratio is truncated
@@ -2389,7 +2432,8 @@ impl WasmGcEmitter {
 					Node::Text(s) => {
 						self.emit_string_call(func, s, "new_text");
 					}
-					_ if !self.mentions_variable(value) => {
+					// data and names are their source text; an Int expression (`str(1+2)`) is the text of its value
+					_ if !self.mentions_variable(value) && self.get_type(value) != Kind::Int => {
 						let (ptr, len) = self.allocate_string(&value.serialize());
 						func.instruction(&I32Const(ptr as i32));
 						func.instruction(&I32Const(len as i32));
@@ -2529,7 +2573,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
 			return;
 		}
 		let located = node;
@@ -2889,7 +2933,7 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
-		if self.emit_loop_jump(func, node) {
+		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
 		let located = node;
@@ -3207,6 +3251,7 @@ impl WasmGcEmitter {
 			.map(|f| (f.call_index as u32, f.name.clone()))
 			.chain(self.ctx.user_functions.values().filter_map(|function| Some((function.func_index?, function.name.clone()))))
 			.chain(self.closures.entry_names())
+			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
@@ -3614,7 +3659,7 @@ pub struct CompiledModule {
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(node)))))));
+	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(node))))))));
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}

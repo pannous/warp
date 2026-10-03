@@ -21,8 +21,8 @@ the supervisor runs the one full suite before merging.
    (~/.swiftly/bin) and can be tried with `-C link-arg=-fuse-ld=lld` in `[target.aarch64-apple-darwin] rustflags`;
    measure before adopting.
 4. `cargo build --timings` once to see which crates dominate (likely wasmtime/cranelift).
-5. Features: wasmtime is the only runtime (wasmer and wasmedge are gone); `--all-features` additionally turns on ~20
-   empty C++ feature flags that switch test branches (notes/code_quality.md #2).
+5. Features: wasmtime is the only runtime; besides `native` only `optimizer` and `ffi` exist (the ~20 empty C++
+   flags are gone, 2026-10-03), so `--all-features` builds the default program plus the optimizer and FFI tests.
 6. DONE 2026-10-03: the warp binary no longer re-declares every module (`mod x;` in main.rs compiled the crate twice).
 Not useful here: splitting crates is a large refactor for unclear gain; debug-info tuning is already done.
 
