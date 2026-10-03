@@ -1,41 +1,41 @@
-// The compiler in the browser (web/playground): evaluate reports what the CLI prints plus the page's Asks,
+// The compiler in the browser (web/playground): evaluate reports what the CLI prints plus the topics to say "got it" to,
 // and a run in the page comes back as a JSON tree read through the module's reflection exports
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use warp::web::{evaluate, node_from_tree, run_outcome};
 use warp::Node;
 
 const UPTO_LOOP: &str = "x=0; for i in 1 upto 4 {x+=i}; x";
 
-fn answers(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-	pairs.iter().map(|(topic, form)| (topic.to_string(), form.to_string())).collect()
+fn acknowledged(topics: &[&str]) -> HashSet<String> {
+	topics.iter().map(|topic| topic.to_string()).collect()
 }
 
 #[test]
 fn evaluate_reports_the_value_the_cli_prints() {
-	let report = evaluate("3+3", HashMap::new());
+	let report = evaluate("3+3", HashSet::new());
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["error"], false);
-	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashMap::new())["value"], "[1 2.5 'x' a:3]");
-	assert_eq!(evaluate("xs=[1 2]; xs#5", HashMap::new())["error"], true);
+	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"], "[1 2.5 'x' a:3]");
+	assert_eq!(evaluate("xs=[1 2]; xs#5", HashSet::new())["error"], true);
 }
 
 #[test]
-fn an_unanswered_ask_is_reported_with_its_readings_and_falls_back() {
-	let report = evaluate(UPTO_LOOP, HashMap::new());
+fn an_ambiguity_is_a_warning_the_page_can_acknowledge() {
+	let report = evaluate(UPTO_LOOP, HashSet::new());
 	assert_eq!(report["value"], "6");
-	let ask = &report["asks"][0];
-	assert_eq!(ask["topic"], "upto");
-	assert!(ask["readings"].as_array().unwrap().len() >= 2);
 	assert!(report["warnings"][0]["message"].as_str().unwrap().contains("taking"));
+	assert_eq!(report["warnings"][0]["fix"], "..<");
+	assert!(report["notes"].as_array().unwrap().contains(&json!("upto")));
 }
 
 #[test]
-fn the_pages_answer_is_taken_and_hinted() {
-	let report = evaluate(UPTO_LOOP, answers(&[("upto", "...")]));
-	assert_eq!(report["value"], "10");
-	assert_eq!(report["asks"], json!([]));
-	assert!(report["hints"].as_array().unwrap().iter().any(|hint| hint["canonical"] == "..."));
+fn an_acknowledged_warning_is_silent_and_the_value_stays() {
+	let report = evaluate(UPTO_LOOP, acknowledged(&["upto"]));
+	assert_eq!(report["value"], "6");
+	assert_eq!(report["warnings"], json!([]));
+	assert_eq!(report["notes"], json!([]));
+	assert_eq!(warp::web::acknowledged_topics(r#"{"ack:upto": "acknowledged", "upto": "..."}"#), acknowledged(&["upto"]));
 }
 
 #[test]

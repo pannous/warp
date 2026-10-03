@@ -1,12 +1,8 @@
 //! D13 (user, 2026-10-03): `1 -1` (a space before the sign, none after) asks list or arithmetic; unanswered it takes
 //! the list `[1 -1]` with a warning; the arithmetic is written `1 - 1`
-use warp::diagnostic::{take_assumptions, with_asker, with_warning_mode, ScriptedAnswers, WarningMode};
+use warp::diagnostic::{take_assumptions, with_warning_mode, WarningMode};
 use warp::node::ints;
 use warp::*;
-
-fn answer(meaning: &str) -> ScriptedAnswers {
-	ScriptedAnswers(vec![("signed-operand".to_string(), meaning.to_string())])
-}
 
 #[test]
 fn a_glued_sign_after_a_space_is_a_list_by_default() {
@@ -35,10 +31,10 @@ fn spaced_or_glued_operators_stay_arithmetic() {
 }
 
 #[test]
-fn the_answer_compiles_the_chosen_reading() {
-	with_asker(answer("arithmetic"), || is!("1 -1", 0));
-	with_asker(answer("arithmetic"), || is!("[3 -1]", ints(vec![2])));
-	with_asker(answer("the list"), || is!("[3 -1]", ints(vec![3, -1])));
+fn each_reading_has_its_explicit_form() {
+	is!("1 - 1", 0);
+	is!("[3 - 1]", ints(vec![2]));
+	is!("[3 -1]", ints(vec![3, -1]));
 }
 
 #[test]

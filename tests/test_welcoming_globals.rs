@@ -1,7 +1,7 @@
 // A function changes a main-level variable only when it is declared `global` (wiki/effects.md: State effect);
 // without the declaration the compiler educates instead of shadowing or mutating silently. probes/globals/
 use warp::*;
-use warp::diagnostic::{with_asker, with_warning_mode, ScriptedAnswers, WarningMode};
+use warp::diagnostic::{with_warning_mode, WarningMode};
 
 use crate::common;
 
@@ -45,10 +45,10 @@ fn test_fresh_binding_of_a_main_name_asks_local_or_global() {
 	// unanswered: a warning taking the default, a new local of the function; main's name is unchanged
 	is!("n=0; def f(x){n=5;x}; f(3); n", 0);
 	is!("def f(){ total = 5; total }; total = f(); total", 5);
-	let answer = |form: &str| ScriptedAnswers(vec![("local-or-global".to_string(), form.to_string())]);
-	with_asker(answer("global n"), || is!("n=0; def f(x){n=5;x}; f(3); n", 5));
-	with_asker(answer("global xs"), || is!("xs=[1,2]; def f(){xs=[7,8,9];0}; f(); count(xs)", 3));
-	with_asker(answer("let n = …"), || is!("n=0; def f(x){n=5;x}; f(3); n", 0));
+	// the explicit forms say each reading without a warning
+	is!("global n=0; def f(x){n=5;x}; f(3); n", 5);
+	is!("global xs=[1,2]; def f(){xs=[7,8,9];0}; f(); count(xs)", 3);
+	is!("n=0; def f(x){let n=5;x}; f(3); n", 0);
 	with_warning_mode(WarningMode::Error, || common::fails_with("n=0; def f(x){n=5;x}; f(3); n", "fix: let n = …"));
 }
 

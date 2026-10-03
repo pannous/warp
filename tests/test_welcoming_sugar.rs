@@ -75,12 +75,11 @@ fn insert_never_guesses_the_argument_order() {
 
 #[test]
 fn an_answered_ask_compiles_the_chosen_reading() {
-	use warp::diagnostic::{with_asker, ScriptedAnswers};
-	let answer = |topic: &str, meaning: &str| ScriptedAnswers(vec![(topic.to_string(), meaning.to_string())]);
-	with_asker(answer("list-times", "repeat the list"), || is!("[0]*3", ints(vec![0, 0, 0])));
-	with_asker(answer("list-times", "multiply each element"), || is!("[1 2]*3", ints(vec![3, 6])));
-	with_asker(answer("insert-order", "position first, as Python"), || is!("xs=[1 2]; xs.insert(0, 4); xs", ints(vec![4, 1, 2])));
-	with_asker(answer("insert-order", "value first, as wasp"), || is!("xs=[1 2]; xs.insert(4, 0); xs", ints(vec![4, 1, 2])));
+	// no remembered answers (user 2026-10-03): each reading is written in its explicit form
+	is!("3 times [0]", ints(vec![0, 0, 0]));
+	is!("[1 2].map(x => x*3)", ints(vec![3, 6]));
+	is!("xs=[1 2]; xs.insert(4, at: 0); xs", ints(vec![4, 1, 2]));
+	is!("xs=[1 2]; xs.insert(0, at: 4); xs", ints(vec![1, 2, 0]));
 }
 
 #[test]
@@ -121,18 +120,18 @@ fn a_glued_hash_name_statement_counts() {
 
 #[test]
 fn the_let_note_is_shown_until_acknowledged() {
-	use warp::diagnostic::{use_answers_file, with_asker, ScriptedAnswers, ACKNOWLEDGED};
+	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	let let_hints = || capture_hints(|| warp::wasm_emitter::eval("let x = 3; x")).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
 	let path = "scratch/test_welcoming_sugar.acknowledged";
 	std::fs::create_dir_all("scratch").unwrap();
 	let _ = std::fs::remove_file(path);
-	with_asker(ScriptedAnswers(vec![("let".to_string(), ACKNOWLEDGED.to_string())]), || {
-		use_answers_file(path);
+	with_acknowledger(Acknowledging(vec!["let".to_string()]), || {
+		use_acknowledgements_file(path);
 		assert_eq!(let_hints(), 1);
 	});
-	with_asker(ScriptedAnswers(vec![]), || {
-		use_answers_file(path);
+	with_acknowledger(Acknowledging(vec![]), || {
+		use_acknowledgements_file(path);
 		assert_eq!(let_hints(), 0, "acknowledged in an earlier run");
 	});
 	std::fs::remove_file(path).unwrap();
@@ -150,7 +149,7 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 
 #[test]
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
-	use warp::diagnostic::{use_answers_file, with_asker, ScriptedAnswers, ACKNOWLEDGED};
+	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	// user decision: no guessing; only glued `a//b` divides, `a // b` is a comment
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
@@ -164,13 +163,13 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	let path = "scratch/test_welcoming_sugar.slash_comment";
 	std::fs::create_dir_all("scratch").unwrap();
 	let _ = std::fs::remove_file(path);
-	with_asker(ScriptedAnswers(vec![]), || assert_eq!(notes("// a note\n3"), 0));
-	with_asker(ScriptedAnswers(vec![("slash-comment".to_string(), ACKNOWLEDGED.to_string())]), || {
-		use_answers_file(path);
+	with_acknowledger(Acknowledging(vec![]), || assert_eq!(notes("// a note\n3"), 0));
+	with_acknowledger(Acknowledging(vec!["slash-comment".to_string()]), || {
+		use_acknowledgements_file(path);
 		assert_eq!(notes("x = 7 // 2\nx"), 1);
 	});
-	with_asker(ScriptedAnswers(vec![]), || {
-		use_answers_file(path);
+	with_acknowledger(Acknowledging(vec![]), || {
+		use_acknowledgements_file(path);
 		assert_eq!(notes("x = 7 // 2\nx"), 0, "acknowledged in an earlier run");
 	});
 	std::fs::remove_file(path).unwrap();
