@@ -76,6 +76,16 @@ jobs:
     - id: build
       run: cargo build --verbose
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
+    # Zero warnings in src/: -D warnings on the crate itself only (cargo rustc), so the dependencies stay cached.
+    # Default (native), all features, and the browser build without native. tests/ is not denied yet.
+    - id: warnings
+      run: |
+        cargo rustc --lib -- -D warnings
+        cargo rustc --bin warp -- -D warnings
+        cargo rustc --lib --all-features -- -D warnings
+        cargo rustc --bin warp --all-features -- -D warnings
+        cargo rustc --lib --no-default-features -- -D warnings
+      continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - id: tests
       run: cargo test --verbose --no-fail-fast
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
@@ -84,6 +94,6 @@ jobs:
     - name: Agent result
       if: always() && startsWith(github.ref, 'refs/heads/claude/')
       run: |
-        result="AGENT_CI_RESULT build=${{ steps.build.outcome }} tests=${{ steps.tests.outcome }}"
+        result="AGENT_CI_RESULT build=${{ steps.build.outcome }} warnings=${{ steps.warnings.outcome }} tests=${{ steps.tests.outcome }}"
         echo "$result"
         echo "$result" >> "$GITHUB_STEP_SUMMARY"

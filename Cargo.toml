@@ -21,6 +21,14 @@ required-features = ["native"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Zero warnings: these warn locally and CI denies them in the library and the binary (rust.yml "Deny warnings").
+# Fix or delete the code instead of a crate-level #![allow(...)].
+[lints.rust]
+unused = "warn"
+dead_code = "warn"
+unreachable_code = "warn"
+deprecated = "warn"
+
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native"]
