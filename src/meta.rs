@@ -2,7 +2,6 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
 use std::fmt;
-use log::trace;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct LineInfo {

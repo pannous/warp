@@ -4,7 +4,6 @@ use crate::context::Context;
 use crate::function::Function as FuncDef;
 use crate::wasm_emitter::config::EmitterConfig;
 use crate::wasm_emitter::type_manager::TypeManager;
-use std::collections::HashMap;
 use wasm_encoder::*;
 
 /// Manages WASM imports: host functions, WASI functions, FFI functions

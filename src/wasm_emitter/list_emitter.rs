@@ -3,7 +3,6 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::normalize::hints as norm;
 use wasm_encoder::*;
 
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};

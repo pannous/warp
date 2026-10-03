@@ -24,7 +24,6 @@ use crate::extensions::numbers::Number;
 use crate::node::Node::*;
 use crate::node::*;
 use crate::operators::Op;
-use crate::type_kinds::Kind;
 
 pub struct WispParser {
 	chars: Vec<char>,
@@ -676,7 +675,8 @@ macro_rules! wis {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{expression, put, wis};
+	use crate::{expression, put};
+	use crate::type_kinds::Kind;
 
 	#[test]
 	fn test_wisp_basic_atom_types() {

@@ -3,7 +3,7 @@ use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, 
 use warp::node;
 use std::env;
 use std::fs;
-use std::io::{self, Read, IsTerminal};
+use std::io::{self, IsTerminal};
 use node::Node;
 use wasm_emitter::eval;
 use extensions::numbers::Number;
@@ -68,8 +68,8 @@ fn main() {
         #[cfg(not(feature = "wasm"))]
         if !io::stdin().is_terminal() {
             // Read from stdin pipe
-            let mut input = String::new();
-            if io::stdin().read_to_string(&mut input).is_ok() && !input.is_empty() {
+            let input = io::read_to_string(io::stdin()).unwrap_or_default();
+            if !input.is_empty() {
                 let result = eval(&input);
                 println!("{}", result.serialize());
                 return;

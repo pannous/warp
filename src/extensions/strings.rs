@@ -2,11 +2,6 @@ use std::fmt::Debug; // for println!("{:?}", item)
 use std::fmt::Display; // for println!("{}", item)
 					   // use crate::put;
 
-struct WasmString {
-	length: u32,
-	data: *const u8,
-}
-
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn String(s: &str) -> String {
@@ -194,30 +189,6 @@ impl StringExtensions for str {
 	}
 }
 
-pub(crate) trait IntegerExtensions {
-	fn to_char(&self) -> char; // 3 -> '3' … 10 -> panic
-}
-
-impl IntegerExtensions for i32 {
-	fn to_char(&self) -> char {
-		match *self {
-			0..=9 => std::char::from_digit(*self as u32, 10).unwrap(),
-			10 => 'A',
-			11 => 'B',
-			12 => 'C',
-			13 => 'D',
-			14 => 'E',
-			15 => 'F',
-			100 => '💯',
-			1000 => '𓆼',  // 𐄢
-			10000 => '𓂭', // 𐄫
-			100000 => '𓆐',
-			1000000 => '𓁨',
-			_ => '…',
-		}
-	}
-}
-
 // by value
 // call with &arg if you encounter "Borrow of moved value" error (later)
 pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
@@ -226,8 +197,6 @@ pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
 	}
 }
 
-use crate::eq;
-use std::cmp::PartialEq;
 // only traits defined in the current crate can be implemented for types defined outside of the crate
 // use Wrapper or compare via s == *s2
 // impl PartialEq for String {
@@ -249,40 +218,16 @@ use std::cmp::PartialEq;
 //     }
 // }
 
-// use std::cmp::PartialEq;
-
+/// `'l'.is("l")`, exercised by the unit tests only
+#[cfg(test)]
 trait PartialEqStr {
 	fn is(&self, other: &str) -> bool;
 }
-trait PartialEqChar {
-	fn is(&self, other: &char) -> bool;
-}
 
-trait PartialEqNum {
-	fn is(&self, other: &i64) -> bool;
-}
-
+#[cfg(test)]
 impl PartialEqStr for char {
 	fn is(&self, other: &str) -> bool {
 		other.len() == 1 && other.starts_with(*self)
-	}
-}
-
-// impl PartialEqNum for char {
-//     fn is(&self, other: &i64) -> bool {
-//         self.to_digit(10) == Some(*other as u32)
-//     }
-// }
-
-impl PartialEqChar for str {
-	fn is(&self, other: &char) -> bool {
-		self.len() == 1 && self.starts_with(*other)
-	}
-}
-
-impl PartialEqChar for String {
-	fn is(&self, other: &char) -> bool {
-		self.as_str() == other.to_string()
 	}
 }
 

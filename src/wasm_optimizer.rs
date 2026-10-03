@@ -11,10 +11,9 @@ const BINARYEN_FEATURES: [&str; 6] = [
 	"--enable-extended-const",
 	"--enable-multivalue",
 ];
-use std::io::Write;
 use std::path::Path;
 use std::process::Command;
-use crate::{s, strings};
+use crate::strings;
 
 /// Optimization mode for WASM output
 #[derive(Debug, Clone, Copy, PartialEq)]

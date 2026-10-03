@@ -1,4 +1,3 @@
-use serde_json::json;
 use std::cell::Cell;
 #[cfg(feature = "native")]
 use wasmtime::{Config, Engine, Store};
@@ -70,7 +69,7 @@ pub fn gc_engine() -> Engine {
 
 
 pub fn show_type_name<T>(_: &T) {
-	use std::any::{type_name, type_name_of_val};
+	use std::any::type_name;
 	// println!("{}", type_name_of_val(*json!({"name": "Alice"})));
 	println!("{}", type_name::<T>());
 }

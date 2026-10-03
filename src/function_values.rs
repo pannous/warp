@@ -5,7 +5,6 @@
 //! as a closure to a generic version of the function (closures.rs).
 
 use crate::closures::may_be_function_value;
-use crate::diagnostic::Diagnostic;
 use crate::lambdas::lambda_definition;
 use crate::library_words::{collect_assigned_names, substitute};
 use crate::node::{Bracket, Node, Separator};

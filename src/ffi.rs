@@ -9,11 +9,14 @@
 // 1. Built-in signatures from ffi_parser (libc, libm basics)
 // 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
+#[cfg(feature = "native")]
 use anyhow::Result;
 #[cfg(feature = "native")]
 use libloading::Library;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
+#[cfg(feature = "native")]
+use std::sync::Arc;
 #[cfg(feature = "native")]
 use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
@@ -339,6 +342,7 @@ fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature>
 // ============================================================================
 
 // Extern C functions from libc/libm
+#[cfg(feature = "native")]
 extern "C" {
 	// libm math functions
 	fn fmin(x: f64, y: f64) -> f64;
@@ -368,7 +372,9 @@ extern "C" {
 }
 
 /// libm functions linked under the import module "m"
+#[cfg(feature = "native")]
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+#[cfg(feature = "native")]
 const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
 
 /// Get known FFI function signatures by parsing system header files, once per process

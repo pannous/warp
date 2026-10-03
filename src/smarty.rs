@@ -1,6 +1,3 @@
-#![allow(unused)]
-use crate::extensions::numbers::Number;
-use crate::extensions::strings::String;
 use crate::node::{error, int, float, text, Node};
 use crate::node::Node::{Empty, True, False};
 use crate::wasp_parser::parse;
@@ -170,10 +167,7 @@ pub fn float_data28(f: f32) -> u32 {
 
 // often only makes sense for 32 bit pointers in wasm linear memory!
 pub fn smarty32(smart: u32) -> Node {
-	let header16 = (smart >> 16) as u16;
-	let header8 = (smart >> 24) as u8;
 	let header4 = (smart >> 28) as u8; // just one nibble u4
-	let data16 = smart & 0x0000FFFF;
 	let data24 = smart & 0x00FFFFFF; // small header + 24 bits data
 	let data28 = smart & 0x0FFFFFFF;
 	if smart == 0 { return Empty; } // null pointer or 0 we neither know nor care?
@@ -194,8 +188,6 @@ pub fn smarty(smart: u64) -> Node {
 	if smart == 0 {
 		return Empty;
 	};
-	let header64 = smart & 0xFFFFFFFF00000000;
-	let header32 = (smart >> 32) as u32;
 	let header16 = (smart >> 48) as u16;
 	let header8 = (smart >> 56) as u8;
 	let data32 = (smart & 0x00000000FFFFFFFF) as u32;

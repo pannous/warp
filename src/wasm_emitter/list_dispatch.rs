@@ -7,8 +7,8 @@
 //!   `(array (mut i64))` with spare capacity, see `find_typed_lists`: O(1) index and count, amortised O(1) append
 //!   (`out.add(x)`, which `map` lowers to), no box per element. Wherever the program needs it as a value (a result, an
 //!   argument, a print) it becomes the same Node list the literal would have built (`int_list_as_node`).
-//! - `Host`: reserved for a host-native or GPU implementation behind a host import, taking over above
-//!   `HOST_BACKEND_MIN_LENGTH` at run time; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
+//! A host-native or GPU backend behind a host import, taking over above a minimum length at run time, would be a
+//! third variant here; none exists yet (no wasm SIMD, user decision). notes/typed_lists.md
 //!
 //! A typed list keeps value semantics: `ys = xs` copies it when either variable is updated (by index or by an append).
 
@@ -20,9 +20,6 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
-
-/// Element count from which a host/GPU backend would take over a list operation at run time; `None`: no such backend
-pub const HOST_BACKEND_MIN_LENGTH: Option<u32> = None;
 
 pub const INT_LIST_AT: &str = "int_list_at";
 pub const INT_LIST_SET: &str = "int_list_set";
@@ -38,16 +35,10 @@ const SQUARE_BRACKET_INFO: i64 = 1;
 /// The list operations that go through the dispatch layer
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ListOp {
-	/// `#xs`, `count xs`, `xs.size`
-	Count,
 	/// `xs#i` as a number or as a Node
 	Element,
 	/// `xs#i = v`, `xs#i += v`
 	SetElement,
-	/// `xs = [1 2 3]`, `ys = xs`
-	Store,
-	/// `xs` where a Node is needed
-	AsNode,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -60,8 +51,6 @@ pub enum ElementType {
 pub enum Backend {
 	NodeCells,
 	TypedArray(ElementType),
-	/// host-native or GPU, behind a host import (not implemented)
-	Host,
 }
 
 /// A list variable held as a typed array
@@ -219,8 +208,8 @@ impl WasmGcEmitter {
 		Some((self.scope.lookup(name)?.position, list))
 	}
 
-	/// The backend that runs `op` on `target`. A host backend would be picked here for its element types, with the
-	/// length test against HOST_BACKEND_MIN_LENGTH emitted around the call.
+	/// The backend that runs `op` on `target`. A host backend would be picked here for its element types, with a
+	/// minimum-length test emitted around the call.
 	pub(super) fn list_backend(&self, _op: ListOp, target: &Node) -> Backend {
 		match self.typed_list(target) {
 			Some((_, list)) => Backend::TypedArray(list.element),

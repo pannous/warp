@@ -8,6 +8,7 @@ use std::time::Duration;
 
 /// The module's bump pointer for runtime texts; texts the host returns are allocated from it too, so they never overlap
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
+#[cfg(feature = "native")]
 const PAGE_BITS: u32 = 16;
 
 /// Other spellings of the host words (user decision #14e: `download <url>` is `fetch <url>`)
@@ -21,7 +22,9 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
+#[cfg(feature = "native")]
 use anyhow::{anyhow, Result};
+#[cfg(feature = "native")]
 use log::trace;
 #[cfg(feature = "native")]
 use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};

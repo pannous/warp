@@ -154,15 +154,6 @@ impl Number {
 	pub fn parse_integer(digits: &str) -> Option<Number> {
 		digits.parse::<BigInt>().ok().map(Number::from_bigint)
 	}
-
-	pub(crate) fn is_number(token: &str) -> bool {
-		token.parse::<f64>().is_ok()
-	}
-
-	pub(crate) fn parse(token: &str) -> Self {
-		let parsed = token.parse().expect("Expected a valid number");
-		Number::Float(parsed)
-	}
 }
 
 impl Display for Number {
