@@ -118,6 +118,7 @@ mod test_sweep_fixes;
 mod test_switch_match;
 mod test_switch_no_case_value;
 mod test_switch_value;
+mod test_text_as_float;
 mod test_text_bytes;
 mod test_text_casts;
 mod test_text_concat;
