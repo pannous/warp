@@ -67,8 +67,6 @@ const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
-/// Articles that start a typed verb phrase in `to square a number:`
-const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
@@ -1127,8 +1125,8 @@ impl WaspParser {
 	}
 
 	/// `to name params: body`, after the word `to`: the function `name(params) := body`.
-	/// The body is the rest of the statement, a `{…}` block or an indented block. Plain parameter names only: an article
-	/// (`to square a number:`) starts a typed phrase, which is not supported yet. Anything else is no definition.
+	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
+	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
 	fn try_parse_to_definition(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
@@ -1151,19 +1149,18 @@ impl WaspParser {
 				}
 			}
 		}
-		let is_typed_phrase = parameters.windows(2).any(|pair| PHRASE_ARTICLES.contains(&pair[0].as_str()) && crate::analyzer::type_word_kind(&pair[1]).is_some());
-		if is_typed_phrase {
-			return Some(error("typed phrase parameters are not supported yet"));
-		}
 		self.advance(); // the colon
 		self.skip_spaces();
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
+		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
+		let typed_slots = crate::type_name_matching::parameter_slots(&words, crate::type_name_matching::uses_it(&body));
 		let head = if parameters.is_empty() {
 			Symbol(name)
 		} else {
 			self.functions_with_parameters.insert(name.clone());
-			Node::List([vec![Symbol(name)], parameters.into_iter().map(Symbol).collect()].concat(), Bracket::Round, Separator::None)
+			let parameters = typed_slots.unwrap_or_else(|| parameters.into_iter().map(Symbol).collect());
+			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}
