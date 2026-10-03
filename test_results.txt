@@ -649,6 +649,8 @@ PASSED:
   ✓ test_law::test_law_violation_reported_by_verify
   ✓ test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ test_less_than_compare::test_generics_still_start_after_a_type_name
+  ✓ test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
+  ✓ test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ test_library_unicode::reverse_works_on_text_by_code_points
   ✓ test_library_unicode::sort_orders_floats
   ✓ test_library_unicode::sort_orders_mixed_numbers
@@ -701,6 +703,7 @@ PASSED:
   ✓ test_math::test_if_then_else
   ✓ test_math::test_logarithm_in_runtime
   ✓ test_math::test_modulo
+  ✓ test_math::test_modulo_with_variables
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
   ✓ test_math::test_runtime_equality_autocast
@@ -714,7 +717,6 @@ PASSED:
   ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
-  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
   ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
@@ -1578,4 +1580,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1573 passed, 0 failed, 1573 total tested
+58 ignored, 1575 passed, 0 failed, 1575 total tested
