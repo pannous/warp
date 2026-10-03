@@ -2760,12 +2760,15 @@ impl WaspParser {
 		Node::Key(Box::new(number), Op::Mul, Box::new(factor))
 	}
 
-	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`
+	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`, and so does a
+	/// unit word that starts the next entry or assignment: `{w:2 h:3}`
 	fn at_spaced_unit(&self) -> bool {
 		let rest = &self.chars[self.pos..];
 		let spaces = rest.iter().take_while(|c| **c == ' ').count();
 		let word: String = rest[spaces..].iter().take_while(|c| is_identifier_char(**c)).collect();
-		spaces > 0 && crate::units::is_unit(&word)
+		let after_word: String = rest[spaces + word.chars().count()..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
+		spaces > 0 && crate::units::is_unit(&word) && !starts_entry
 	}
 
 	fn at_ordinal_suffix(&self) -> bool {
