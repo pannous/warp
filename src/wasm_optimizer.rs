@@ -1,9 +1,16 @@
 #![cfg(feature = "optimizer")]
 
-/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts, exceptions for `try`); extended constant
-/// expressions are Wasm 3.0 and on by default in wasmtime and wasmparser, so they are on here too
-const BINARYEN_FEATURES: [&str; 5] =
-	["--enable-gc", "--enable-reference-types", "--enable-bulk-memory", "--enable-exception-handling", "--enable-extended-const"];
+/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts, exceptions for `try`, multi-value results
+/// for mag_divmod and the host text imports); extended constant expressions are Wasm 3.0 and on by default in wasmtime
+/// and wasmparser, so they are on here too
+const BINARYEN_FEATURES: [&str; 6] = [
+	"--enable-gc",
+	"--enable-reference-types",
+	"--enable-bulk-memory",
+	"--enable-exception-handling",
+	"--enable-extended-const",
+	"--enable-multivalue",
+];
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;

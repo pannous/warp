@@ -1,4 +1,5 @@
 use crate::node::Node;
+use crate::type_kinds::KIND_MASK;
 use crate::wasm_reader;
 use std::fs::read;
 use std::path::Path;
@@ -116,7 +117,7 @@ pub fn run_wat(wat_code: &str) -> Node {
 			// Read kind field (i64) - field 0
 			if let Ok(kind_val) = structref.field(&mut store, 0) {
 				let kind = kind_val.unwrap_i64();
-				let tag = (kind & 0xFF) as u8;
+				let tag = (kind & KIND_MASK) as u8;
 
 				match tag {
 					t if t == Kind::Empty as u8 => return Node::Empty,

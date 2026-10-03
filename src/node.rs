@@ -17,7 +17,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::operators::{is_function_keyword, Op};
 // use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, Kind};
+use crate::type_kinds::{AstKind, Kind, KIND_MASK};
 use crate::wasp_parser::parse;
 
 /// Prefix of a `@name(value)` annotation key
@@ -306,7 +306,7 @@ impl Node {
 			Ok(k) => k,
 			Err(_) => return Empty, // Null ref becomes Empty
 		};
-		let tag = (kind & 0xFF) as u8;
+		let tag = (kind & KIND_MASK) as u8;
 
 		match tag {
 			t if t == Kind::Empty as u8 => Empty,

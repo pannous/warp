@@ -3,6 +3,9 @@ use wasm_encoder::ValType::Ref;
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
 
+/// Mask selecting the Kind tag from a node's `kind` field (lower 8 bits; the rest is op/bracket info)
+pub const KIND_MASK: i64 = 0xFF;
+
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]

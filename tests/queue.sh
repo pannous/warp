@@ -1,17 +1,39 @@
 #!/bin/bash
-# The one gate for running warp tests on this machine (notes/roles.md, "Tester"): every test run waits for one
+# The one gate for running warp tests on this machine (notes/roles.md, "Enforcement"): every test run waits for one
 # machine-wide lock, so at most one test binary runs at a time; the others queue instead of overloading the Mac.
 #   tests/queue.sh [cargo test args]      e.g. tests/queue.sh -- test_traits      (cargo --offline test …)
 #   tests/queue.sh cargo browser-test x   any cargo command
 #   tests/queue.sh ./test.sh              a script (test.sh re-enters through here by itself)
 # A run that already holds the lock (WARP_TEST_LOCKED) runs directly, so nesting never deadlocks.
-LOCK="$HOME/.cargo/warp-tests.lock"
+# Waiters are served first come, first served by ticket files in $QUEUE; a full ./test.sh (the Integrator's run)
+# gets priority and takes the next slot ahead of targeted runs. Tickets of dead processes are dropped.
+LOCK="${WARP_TEST_LOCK:-$HOME/.cargo/warp-tests.lock}"
+QUEUE="$LOCK.queue"
+POLL_SECONDS=2
 
 if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
 
-if ! lockf -s -t 0 "$LOCK" true; then
-	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder))" >&2
+case "${run[0]}" in *test.sh) priority=0 ;; *) priority=1 ;; esac
+mkdir -p "$QUEUE"
+ticket="$QUEUE/$priority-$(date +%s)-$$"
+echo "$PWD ${run[*]}" > "$ticket"
+
+drop_stale_tickets() {
+	for t in "$QUEUE"/*; do
+		[ -e "$t" ] && ! kill -0 "${t##*-}" 2>/dev/null && rm -f "$t"
+	done
+}
+first_ticket() { ls "$QUEUE" | sort | head -1; }
+
+drop_stale_tickets
+if [ "$(first_ticket)" != "${ticket##*/}" ] || ! lockf -s -t 0 "$LOCK" true; then
+	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder)," \
+		"$(($(ls "$QUEUE" | sort | grep -n "^${ticket##*/}$" | cut -d: -f1) - 1)) ahead of us)" >&2
 fi
+while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $POLL_SECONDS; done
+
+# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1
-exec lockf -k "$LOCK" bash -c 'echo "$PPID $PWD $*" > "$0.owner"; "$@"' "$LOCK" "${run[@]}"
+exec lockf -k "$LOCK" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
+	"$LOCK" "$ticket" "${run[@]}"

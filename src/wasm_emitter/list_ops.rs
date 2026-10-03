@@ -1,15 +1,14 @@
 //! List and string operation functions for WASM
 
-use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, BYTE, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
@@ -270,6 +269,7 @@ impl WasmGcEmitter {
 		}
 
 		self.emit_with_at_functions();
+		self.emit_typed_list_runtime();
 		self.emit_list_concat();
 		self.emit_list_insert_at();
 	}
@@ -747,6 +747,9 @@ impl WasmGcEmitter {
 		if let Some(key) = self.dynamic_key(index) {
 			return self.emit_entry_assignment(func, target, &key, value, NODE_WITH_KEY);
 		}
+		if self.emit_typed_element_assignment(func, target, index, value) {
+			return;
+		}
 		let assigned = self.scratch(2);
 		self.emit_node_instructions(func, target);
 		self.emit_numeric_value(func, index);
@@ -1009,7 +1012,6 @@ const STRUCT_BODY: &str = "struct_body";
 const KIND_BITS: i64 = 8;
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KEY_KIND: i64 = 6;
-const KIND_MASK: i64 = 0xFF;
 const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
 const CURLY_LIST_KIND: i64 = Kind::List as i64; // bracket_info Curly=0
 pub const MAP_KEY_NAME: &str = "map_key_name";
@@ -1033,12 +1035,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
-	fn dynamic_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn dynamic_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		(self.get_type(key) == Kind::Empty && !matches!(key.drop_meta(), Node::Empty)).then(|| key.clone())
 	}
 
-	fn map_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
 		is_name.then(|| key.clone())
@@ -1086,12 +1088,7 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, &key);
 					self.emit_call(func, NODE_AT_KEY);
 				}
-				None => {
-					self.emit_integral_index_check(func, index);
-					self.emit_node_instructions(func, target);
-					self.emit_numeric_value(func, index);
-					self.emit_call(func, "node_index_at");
-				}
+				None => self.emit_list_element_node(func, target, index),
 			},
 		}
 	}
