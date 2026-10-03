@@ -59,3 +59,52 @@ fn like_relates_declared_types_only() {
 	fails_with(&program(&[PHOTO], "banana like photo; 1"), "banana is not a declared type");
 	fails_with(&program(&[PHOTO], "photo like banana; 1"), "banana is not a declared type");
 }
+
+// Typed variables are checked like parameters (user, 2026-10-03): a known type needs `like`; an ad hoc name
+// (`pic{…}` with no `class pic`) is only a label on data, so its fields are compared with the declared type's: a
+// missing or an extra field is a warning, and the data is used as the declared type, judged by its uses
+
+fn warnings_of(code: &str) -> (warp::Node, Vec<String>) {
+	warp::diagnostic::take_warnings();
+	let value = warp::wasm_emitter::eval(code);
+	(value, warp::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect())
+}
+
+#[test]
+fn a_typed_variable_holds_its_type() {
+	is!(&program(&[PHOTO], "p:photo = photo{width:3 height:4}; p.width"), 3);
+}
+
+#[test]
+fn a_typed_variable_refuses_a_known_other_type_until_like() {
+	fails_with(&program(&[PHOTO, IMAGE], "p:photo = image{width:3 height:4}; p.width"), "declare `image like photo`");
+	is!(&program(&[PHOTO, IMAGE], "image like photo; p:photo = image{width:3 height:4}; p.height"), 4);
+	fails_with(&program(&[PHOTO], "p:photo = 3; p"), "photo");
+}
+
+#[test]
+fn an_ad_hoc_name_is_checked_by_its_fields() {
+	let (value, warnings) = warnings_of(&program(&[PHOTO], "p:photo = pic{width:3 height:4}; p.width"));
+	assert_eq!(value, warp::Node::int(3));
+	assert!(warnings.iter().all(|warning| !warning.contains("photo")), "{warnings:?}");
+	let (value, warnings) = warnings_of(&program(&[PHOTO, KEEP], "keep(pic{width:5 height:4})"));
+	assert_eq!(value, warp::Node::int(5));
+	assert!(warnings.iter().all(|warning| !warning.contains("photo")), "{warnings:?}");
+}
+
+#[test]
+fn a_missing_field_is_a_warning() {
+	let (value, warnings) = warnings_of(&program(&[PHOTO], "p:photo = pic{width:3}; p.width"));
+	assert_eq!(value, warp::Node::int(3));
+	assert!(warnings.iter().any(|warning| warning.contains("height") && warning.contains("photo")), "{warnings:?}");
+	let (value, warnings) = warnings_of(&program(&[PHOTO, KEEP], "keep({width:6})"));
+	assert_eq!(value, warp::Node::int(6));
+	assert!(warnings.iter().any(|warning| warning.contains("height") && warning.contains("photo")), "{warnings:?}");
+}
+
+#[test]
+fn an_extra_field_is_a_warning() {
+	let (value, warnings) = warnings_of(&program(&[PHOTO], "p:photo = pic{width:3 height:4 color:7}; p.width"));
+	assert_eq!(value, warp::Node::int(3));
+	assert!(warnings.iter().any(|warning| warning.contains("color") && warning.contains("photo")), "{warnings:?}");
+}
