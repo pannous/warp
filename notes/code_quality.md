@@ -31,6 +31,9 @@ test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the fi
 tests/test_wasm.rs and tests/test_web.rs are gone (the default-build branch kept); `--all-features` is now `native` +
 `optimizer` + `ffi`, the same program as plain `cargo test` plus the optimizer and FFI tests.
 
+smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/test_angle.rs) and
+tests/test_asts.rs, the only user of the `syn` dev-dependency, which is gone too.
+
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
 wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is
@@ -43,7 +46,7 @@ Observed once: a 4-thread run aborted in `test_struct_types::test_magic_object_m
 | # | Finding | Files | Sev | Effort | Proposal | Kind |
 |---|---------|-------|-----|--------|----------|------|
 | 1 | `main.rs` redeclares all 45 modules with `mod x;`: the whole compiler is compiled twice (lib + bin), 107 bin warnings | src/main.rs | High | S | `main.rs` uses `warp::…`, drop its `mod` list and the "modules also need to be used in main.rs" comments in lib.rs | Mechanical |
-| 2 | 21 stale C++ feature flags (`WASM`, `WASMEDGE`, `RUNTIME_ONLY`, `release`, `wasm`, …); agents run tests with `--all-features`, which flips 53 `#[cfg]` branches (35 in tests/test_wasm.rs, 15 in main.rs, 3 in test_web.rs) | Cargo.toml, src/main.rs, tests/test_wasm.rs, tests/test_web.rs | High | S | Keep `native`, `optimizer`, `ffi`; delete the rest and their `cfg` branches (keep the branch that runs today) | Mechanical + test edit (needs OK) |
+| 2 | 21 stale C++ feature flags (`WASM`, `WASMEDGE`, `RUNTIME_ONLY`, `release`, `wasm`, …); agents run tests with `--all-features`, which flips 53 `#[cfg]` branches (35 in tests/test_wasm.rs, 15 in main.rs, 3 in test_web.rs) | Cargo.toml, src/main.rs, tests/test_wasm.rs, tests/web/test_web.rs | High | S | Keep `native`, `optimizer`, `ffi`; delete the rest and their `cfg` branches (keep the branch that runs today) | Mechanical + test edit (needs OK) |
 | 3 | Dead files and dead dependencies: `compiler/` (wasm_reader declared but unused, parity_wasm_reader not even declared), `run/wasmer_runner.rs`, `run/wasmedge_runner.rs`, `ast.rs`, `wasm_emitter/node_emitter.rs`, `extensions/_mod.rs`, `smarty.rs` (self-described OBSOLETE C++ ABI), `bin/test_op.rs`; crates `parity-wasm`, `wasm-ast`, `regex` used by nothing, `syn` (dev) used only by a test of syn itself | 10 files, ~1 000 lines, 4 crates | High | S | Delete (list in §4) | Mechanical; smarty/test_asts need test OK |
 | 4 | The compile pipeline (`lower_for_emission`, `eval*`, `compile`, `run_module`, ~330 lines) lives in `wasm_emitter/mod.rs`; 25 lowering passes are flat `src/*.rs` files, composed by a 7-deep nested call | src/wasm_emitter/mod.rs, 22 src/*.rs | High | M | `src/pipeline.rs` (driver) + `src/lowering/` with an ordered `PASSES` table (§1) | Mechanical moves; pass order unchanged |
 | 5 | One 42-module dependency cycle (every module except leaves); `wasm_emitter` fans out to 41 modules, `node` (the core type) depends on parser, wasm_reader, gc_traits; `extensions` depends on analyzer and emitter | whole crate | Med | M | Follows from #4, #8, #9: node becomes a leaf, emitter stops importing passes, test macros leave `extensions` | Design |
@@ -367,9 +370,8 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   slower crates); `wat` → dev-dependency. Cargo.lock has 245 packages.
 - No `vendor/` exists although Cargo.toml and AGENTS.md describe vendored offline builds; `--offline` works from the
   registry cache. Fix the docs, or vendor for real (decision).
-- `crate-type = ["cdylib", "rlib"]`: the cdylib (for wasm-pack) makes every checkout share one unhashed `libwarp.rlib`
-  (notes/build_speed.md pitfall). Proposal: a separate tiny `web/` crate (or `[lib]` only in a wasm-pack profile) owns the
-  cdylib, so the main crate is plain `rlib` and copies stop clobbering each other.
+- DONE 2026-10-04: `crate-type = ["cdylib", "rlib"]` is now `["rlib"]`; the playground build asks for the cdylib itself
+  (`cargo rustc --crate-type cdylib`, web/playground/build.sh), so copies no longer share one unhashed `libwarp.rlib`.
 - `[package.metadata.clippy] warn = false` does nothing (not a clippy key); remove.
 - `#![allow(dead_code, unused_imports)]` crate-wide (lib.rs, main.rs, node.rs) + `#![allow(unused)]` (smarty.rs) hide 88
   lib warnings; remove after §4.
@@ -391,7 +393,7 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 
 ## Open questions for the user
 
-1. May the stale C++ feature flags go, including their `#[cfg]` branches in tests/test_wasm.rs and tests/test_web.rs
+1. May the stale C++ feature flags go, including their `#[cfg]` branches in tests/test_wasm.rs and tests/web/test_web.rs
    (keeping the branch that runs today)?
 2. Delete `smarty.rs` with its asserts in tests/test_angle.rs, and `tests/test_asts.rs` (a test of `syn`)?
 3. Regroup tests/ into topic subdirectories (pure moves), and move `probe_*.rs` out of the suite?
@@ -402,4 +404,4 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 8. CLAUDE.md: replace with a symlink to AGENTS.md, and may AGENTS.md's architecture section be rewritten from §1?
 9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links, `build_debug.sh`,
    `add_ignore_to_failing_tests.sh`, `nextest.sh`): delete or move to notes/OLD?
-10. Split the `cdylib` into its own small crate for the web playground?
+10. DONE (user: "can we gate it"): no split needed, the cdylib is gated to web/playground/build.sh.

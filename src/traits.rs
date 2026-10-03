@@ -28,6 +28,13 @@ const DEFAULT_PARAMETER: &str = "x";
 const BUILTIN_COMPARABLE: [&str; 6] = ["int", "rational", "real", "float", "text", "codepoint"];
 
 pub const COMPARABLE: &str = "Comparable";
+/// `image like photo`: an image is usable wherever a photo is expected, judged by the fields it is used with
+/// (notes/welcoming.md, "Duck typing and like")
+pub const LIKE_WORD: &str = "like";
+/// A known type passed where another is expected: the error names both and teaches `like` (GIVEN, DECLARED)
+const NOT_LIKE_MESSAGE: &str = "GIVEN is not a DECLARED";
+const NOT_LIKE_FIX: &str = "declare `GIVEN like DECLARED` to use it as one (judged by the fields it is used with)";
+const LIKE_OF_UNDECLARED: &str = "NAME is not a declared type: `like` relates two classes";
 pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
@@ -148,21 +155,55 @@ pub fn lower_declarations(node: Node) -> Node {
 }
 
 fn collect_declarations(node: &Node, traits: &mut Vec<Trait>) {
+	collect_declared(node, traits)
+}
+
+/// The values the declarations of the program carry (a Trait, a Likeness), in order
+fn collect_declared<T: Clone + 'static>(node: &Node, found: &mut Vec<T>) {
 	match node {
 		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) if dada.downcast_ref::<Trait>().is_some() => traits.push(dada.downcast_ref::<Trait>().expect("checked").clone()),
-			_ => collect_declarations(node, traits),
+			Node::Data(dada) if dada.downcast_ref::<T>().is_some() => found.push(dada.downcast_ref::<T>().expect("checked").clone()),
+			_ => collect_declared(node, found),
 		},
 		Node::Key(left, _, right) => {
-			collect_declarations(left, traits);
-			collect_declarations(right, traits);
+			collect_declared(left, found);
+			collect_declared(right, found);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_declarations(item, traits)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_declared(item, found)),
 		_ => {}
 	}
 }
 
+/// `image like photo`: values of `kind` are accepted wherever `like` is expected
+#[derive(Clone, Debug, PartialEq)]
+pub struct Likeness {
+	pub kind: String,
+	pub like: String,
+}
+
+/// `image like photo` written as a statement
+fn like_declaration(node: &Node) -> Option<Likeness> {
+	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return None };
+	let [Node::Symbol(kind), Node::Symbol(word), Node::Symbol(like)] = items.iter().map(Node::drop_meta).collect::<Vec<_>>()[..] else { return None };
+	(word == LIKE_WORD).then(|| Likeness { kind: kind.clone(), like: like.clone() })
+}
+
+/// A likeness naming something that is no declared type: the error of the program
+fn undeclared_likeness(likenesses: &[Likeness], registry: &TypeRegistry) -> Option<Node> {
+	let undeclared = likenesses.iter().flat_map(|likeness| [&likeness.kind, &likeness.like]).find(|name| registry.get_by_name(name).is_none())?;
+	Some(crate::node::error(&LIKE_OF_UNDECLARED.replace("NAME", undeclared)))
+}
+
+/// `image is not a photo`, with the fix `declare image like photo`
+fn not_like(argument: &Node, needs: &str, given: &str, declared: &str) -> Node {
+	let fill = |template: &str| template.replace("GIVEN", given).replace("DECLARED", declared);
+	Diagnostic::at(argument, format!("{needs}: {}", fill(NOT_LIKE_MESSAGE))).fix(fill(NOT_LIKE_FIX)).into_error()
+}
+
 fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
+	if let Some(likeness) = like_declaration(&node) {
+		return Node::meta(Node::Empty, Node::data(likeness));
+	}
 	if let Some(declared) = declaration(&node) {
 		return match declared {
 			Ok(declared) => Node::meta(Node::Empty, Node::data(declared)),
@@ -284,6 +325,21 @@ fn definition_head(head: &Node) -> Option<&[Node]> {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) && items.len() > 1 => Some(items),
 		_ => None,
 	}
+}
+
+/// The parameters of a definition head written without a type: `p` and `p=default` in `f(p, q=1)`, the implicit `it` of
+/// a head without parameters (`f := it.width`)
+pub fn untyped_parameters(head: &Node) -> Vec<String> {
+	if matches!(head.drop_meta(), Node::Symbol(_)) {
+		return vec![crate::lambdas::IMPLICIT_PARAMETER.to_string()];
+	}
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	let untyped = |parameter: &Node| match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, Op::Assign, _) => Some(name.name()),
+		_ => None,
+	};
+	parameters.iter().filter_map(untyped).collect()
 }
 
 /// The declared type a parameter `name:T` names
@@ -422,6 +478,8 @@ pub enum Shape {
 /// like library_words' object variables); parameters `p:person` are instances
 pub struct InstanceTypes {
 	variables: HashMap<String, Option<Shape>>,
+	/// The shapes user functions return, from their bodies: `make(t) := pdf(t)` returns a pdf
+	results: HashMap<String, Option<Shape>>,
 	registry: TypeRegistry,
 }
 
@@ -432,14 +490,14 @@ impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
 		let mut registry = TypeRegistry::new();
 		collect_all_types(&mut registry, node);
-		let mut types = InstanceTypes { variables: HashMap::new(), registry };
+		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry };
 		if types.registry.types().is_empty() {
 			return types;
 		}
 		for _ in 0..INFERENCE_ROUNDS {
-			let mut variables = HashMap::new();
-			types.collect(node, &mut variables);
-			types.variables = variables;
+			let (mut variables, mut results) = (HashMap::new(), HashMap::new());
+			types.collect(node, &mut variables, &mut results);
+			(types.variables, types.results) = (variables, results);
 		}
 		types
 	}
@@ -457,17 +515,24 @@ impl InstanceTypes {
 		variables.insert(name.to_string(), agreed);
 	}
 
-	fn collect(&self, node: &Node, variables: &mut HashMap<String, Option<Shape>>) {
+	fn collect(&self, node: &Node, variables: &mut HashMap<String, Option<Shape>>, results: &mut HashMap<String, Option<Shape>>) {
 		match node.drop_meta() {
 			Node::Key(target, Op::Assign | Op::Define, value) => {
-				if let Node::Symbol(name) = target.drop_meta() {
-					Self::bind(variables, name, self.shape(value), crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)));
+				let is_plain = crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_));
+				match (target.drop_meta(), definition_head(target)) {
+					(Node::Symbol(name), _) => Self::bind(variables, name, self.shape(value), is_plain),
+					// `d:docx = …` of a declared type
+					(Node::Key(name, Op::Colon, type_node), _) if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() => {
+						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
+					}
+					(_, Some(head)) => Self::bind(results, &head[0].name(), self.shape(value), is_plain),
+					_ => {}
 				}
-				self.collect(value, variables);
+				self.collect(value, variables, results);
 			}
 			Node::Key(left, _, right) => {
-				self.collect(left, variables);
-				self.collect(right, variables);
+				self.collect(left, variables, results);
+				self.collect(right, variables, results);
 			}
 			Node::List(items, _, _) => {
 				// `for x in xs`: x is an item of xs
@@ -478,7 +543,7 @@ impl InstanceTypes {
 						}
 					}
 				}
-				items.iter().for_each(|item| self.collect(item, variables))
+				items.iter().for_each(|item| self.collect(item, variables, results))
 			}
 			_ => {}
 		}
@@ -523,7 +588,9 @@ impl InstanceTypes {
 			Node::List(items, _, separator) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
-				// `(x)`, and `(t = a; value)` as min_max binds its operands; a call `f(s)` is not its argument
+				// `make(t)`: what the user function returns
+				[function, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.results.contains_key(name)) => self.results[&function.name()].clone(),
+				// `(x)`, and `(t = a; value)` as min_max binds its operands; another call `f(s)` is not its argument
 				[single] => self.shape(single),
 				[.., last] if matches!(separator, Separator::Semicolon | Separator::Newline) => self.shape(last),
 				_ => None,
@@ -564,11 +631,17 @@ fn diverges(branch: &Node) -> bool {
 /// `x is shape` of a known instance is answered here
 pub fn lower_dispatch(node: Node) -> Node {
 	let types = InstanceTypes::of(&node);
+	let mut likenesses = vec![];
+	collect_declared(&node, &mut likenesses);
+	if let Some(error) = undeclared_likeness(&likenesses, &types.registry) {
+		return error;
+	}
 	if types.registry.types().is_empty() {
 		return node;
 	}
 	let witnesses = defined_functions(&node);
-	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, missing: RefCell::new(None) };
+	let signatures = instance_signatures(&node, &types.registry);
+	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, likenesses, missing: RefCell::new(None) };
 	let node = dispatch.expand(node);
 	dispatch.missing.into_inner().unwrap_or(node)
 }
@@ -577,6 +650,10 @@ struct Dispatch {
 	traits: Traits,
 	types: InstanceTypes,
 	witnesses: Vec<String>,
+	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
+	signatures: HashMap<String, Vec<(String, Option<String>)>>,
+	/// The `image like photo` declarations
+	likenesses: Vec<Likeness>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
 	missing: RefCell<Option<Node>>,
 }
@@ -585,6 +662,22 @@ impl Dispatch {
 	fn fail(&self, error: Node) -> Option<Node> {
 		self.missing.borrow_mut().get_or_insert(error.clone());
 		Some(error)
+	}
+
+	/// Is `kind` usable as `like`: the same type, or like it through declared likenesses (`thumb like image`, `image like photo`)
+	fn is_like(&self, kind: &str, like: &str) -> bool {
+		let mut reached = vec![kind.to_string()];
+		let mut next = 0;
+		while let Some(current) = reached.get(next).cloned() {
+			if current == like {
+				return true;
+			}
+			let further = self.likenesses.iter().filter(|likeness| likeness.kind == current).map(|likeness| likeness.like.clone());
+			let new: Vec<String> = further.filter(|name| !reached.contains(name)).collect();
+			reached.extend(new);
+			next += 1;
+		}
+		false
 	}
 
 	fn has_witness(&self, operation: &str, type_name: &str) -> bool {
@@ -657,24 +750,45 @@ impl Dispatch {
 				_ => {}
 			}
 		}
+		if let Some(error) = self.refused_argument(items, bracket, separator) {
+			return Some(error);
+		}
 		self.operation_call(items, bracket, separator)
+	}
+
+	/// `keep(3)`, `keep page{…}` for `keep(p:photo)`: an argument known at compile time not to be an instance of the declared
+	/// type of its parameter is an error, which teaches `page like photo` for a declared type; an argument of unknown type,
+	/// or of a type declared like the parameter's, is left to its uses (a missing field fails loudly)
+	fn refused_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let name = called_name(items, bracket, separator)?;
+		let parameters = self.signatures.get(name)?;
+		let refusal = items[1..].iter().zip(parameters).find_map(|(argument, (parameter, declared))| {
+			let declared = declared.as_ref()?;
+			let needs = format!("{name} needs {} for parameter {parameter}, got {}", crate::analyzer::with_article(declared), argument.serialize());
+			match self.instance_type(argument) {
+				Some(type_name) if self.is_like(&type_name, declared) => None,
+				Some(type_name) => Some(not_like(argument, &needs, &type_name, declared)),
+				None if crate::library_words::object_entries(argument).is_some() => None, // a written map: judged by the fields its uses read
+				None => {
+					let given = crate::analyzer::kind_with_article(crate::analyzer::argument_literal_kind(argument)?);
+					Some(Diagnostic::at(argument, format!("{needs} ({given})")).into_error())
+				}
+			}
+		})?;
+		self.fail(refusal)
 	}
 
 	/// `area(s)`, `area s`, `compare(p, q)`: the witness of the type of the first argument
 	fn operation_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		let [head, first, ..] = items else { return None };
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
-		if call_name(items, bracket, separator).is_none() && !spaced {
-			return None;
-		}
+		let name = called_name(items, bracket, separator)?;
 		let (required, operation) = self.traits.operation(name)?;
 		let arguments = items[1..].to_vec();
 		match self.instance_type(first) {
 			Some(type_name) if self.has_witness(name, &type_name) => Some(witness_call(name, &type_name, arguments)),
 			Some(type_name) => self.fail(missing_conformance(head, &type_name, required, operation, &format!("{name}({})", first.serialize()))),
 			// a declared operation of an argument whose type is unknown here: the one type that defines it, else ask for the type
-			None if !is_builtin_trait(&required.name) && !self.witnesses.contains(name) => {
+			None if !is_builtin_trait(&required.name) && !self.witnesses.iter().any(|witness| witness == name) => {
 				let defining: Vec<&str> = self.witnesses.iter().filter_map(|witness| witness_type(witness, name)).collect();
 				match defining.as_slice() {
 					[type_name] => Some(witness_call(name, type_name, arguments)),
@@ -688,6 +802,22 @@ impl Dispatch {
 			None => None,
 		}
 	}
+}
+
+/// The function a list calls: `f(a, b)`, or spaced `f a b`
+fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
+	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+}
+
+/// Every function's parameters with the declared type each one takes, for the functions that take any
+fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, Vec<(String, Option<String>)>> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, node);
+	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| registry.get_by_name(type_name).is_some());
+	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
+	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
 }
 
 fn witness_call(operation: &str, type_name: &str, arguments: Vec<Node>) -> Node {

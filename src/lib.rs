@@ -8,7 +8,6 @@ pub use extensions::lists::*;
 pub use extensions::numbers::*;
 pub use extensions::strings::*;
 pub use extensions::utils::*;
-pub mod smarty;
 pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
@@ -66,6 +65,7 @@ pub mod web;
 pub mod ambiguous_forms;
 pub mod tuples;
 pub mod traits;
+pub mod overloads;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp

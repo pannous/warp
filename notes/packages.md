@@ -17,7 +17,7 @@
 - uniscript ships its compiled entity data, `data/entities.idx`; warp only reads it and never compiles the
   `data/entities/**/*.wasp` sources. What was slow was compiling `use uniscript` itself: ~8 s per program, almost all
   of it re-parsing the C headers of m, c and SDL2 for every name the analyzer met (`ffi::get_signatures_from_headers`,
-  `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/test_uniscript.rs 335 s → 24 s.
+  `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/web/test_uniscript.rs 335 s → 24 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
 - Package tools are prebuilt WebAssembly, never built from source into a shared target (src/package_tools.rs):
@@ -26,7 +26,7 @@
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
   else (loudly) `cargo build --target wasm32-wasip1 --bin <name>` with CARGO_TARGET_DIR in the package's own build
   directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).
-  Why: on 2026-10-02 16:54 tests/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
+  Why: on 2026-10-02 16:54 tests/web/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
   -- check` inside the fetched ~/.cache/warp/packages/uniscript@1.0.0 without CARGO_TARGET_DIR, so cargo used
   ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary
   and rlib (Sublime lost completions; its main.rs compiled against that rlib). With CARGO_TARGET_DIR set, the same
@@ -37,7 +37,7 @@
   For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.wasp
-  and data/uniscript/. warp's tests/test_uniscript.rs still tests it (through `use uniscript`).
+  and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
 - Versions (src/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
   The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.

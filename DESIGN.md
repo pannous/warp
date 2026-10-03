@@ -318,6 +318,14 @@ not silently request different observable semantics.
 | SIMD/parallel/no-allocation | optional contract | checked requirement | selected implementation |
 | Source style | multiple accepted views | absent | absent |
 
+## Typing by use, mixing by declaration
+
+A value whose type is unknown at compile time is duck typed: a typed parameter accepts it and every use judges it (a
+missing field is a loud runtime error). A value of a known type is never silently taken for another declared type,
+even when it has all the needed fields: the compiler refuses and teaches the one-line declaration `image like photo`,
+after which an image stands wherever a photo is expected, still judged by its uses. The explicit choice persists in the
+source, so the same program always compiles the same way (notes/welcoming.md, "Duck typing and like").
+
 ## Dangerous implicitness
 
 The following should not be added as emitter heuristics:

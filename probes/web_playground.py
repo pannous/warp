@@ -93,6 +93,18 @@ def main():
 	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
 
+	# the debug build (?debug, warp.debug.wasm) compiles the same programs
+	browser("open", PAGE + "?debug")
+	for _ in range(60):
+		if browser("get", "text", "#status") not in ("", "loading the compiler…"):
+			break
+		time.sleep(1)
+	debug = evaluate_in_page(["3+3"])[0]["value"]
+	ok = debug == "6" and "debug build" in browser("get", "text", "#build")
+	print(f"{'ok  ' if ok else 'FAIL'} the debug build evaluates 3+3 → {debug}")
+	if not ok: failures.append("debug build")
+	browser("open", PAGE)
+
 	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".wasp"))
 	sources = [open(os.path.join(REPOSITORY, "samples", name + ".wasp"), encoding="utf-8").read() for name in names]
 	reports = evaluate_in_page(sources)

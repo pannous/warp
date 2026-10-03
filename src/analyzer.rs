@@ -104,6 +104,8 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Text // concatenation
 	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
 		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
+	} else if repeats_text(left, op, right) {
+		Kind::Text // `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error
 	} else if left == Kind::Float || right == Kind::Float {
@@ -111,6 +113,12 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	} else {
 		Kind::Int
 	}
+}
+
+/// text * int or int * text: the text repeated (Python), user decision 2026-10-03
+pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
+	let is_text = |kind: Kind| matches!(kind, Kind::Text | Kind::Codepoint);
+	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
 }
 
 /// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
@@ -160,6 +168,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
+				if name == crate::library_words::LIST_SUM && items.len() == 3 {
+					return infer_type(&items[2], scope); // the loop it dispatches around
+				}
 				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 					return infer_type(&items[1], scope); // `return x` is worth x
 				}
@@ -171,6 +182,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
+				}
+				if name == crate::wasp_parser::TEXT_TIMES {
+					return Kind::Text;
 				}
 				if name == PRINT_CALL && items.len() >= 2 {
 					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
@@ -2052,7 +2066,8 @@ fn zero_element(type_word: &str) -> Option<Node> {
 	let element = plural_element_type(type_word).unwrap_or(type_word);
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
-		Kind::Float => Node::float(0.0),
+		// `0.0f`: a bare 0.0 is an exact decimal, so an Int
+		Kind::Float => Node::Key(Box::new(Node::float(0.0)), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string()))),
 		Kind::Text => Node::Text(String::new()),
 		Kind::Codepoint => Node::Char('\0'),
 		_ => return None,
@@ -2654,13 +2669,17 @@ fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
-	let name = format!("{kind:?}");
-	let article = if name.starts_with(|first: char| "AEIOU".contains(first)) { "an" } else { "a" };
+	with_article(&format!("{kind:?}"))
+}
+
+/// `a photo`, `an Int`, `an image`
+pub fn with_article(name: &str) -> String {
+	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) { "an" } else { "a" };
 	format!("{article} {name}")
 }
 
 /// The kind a call argument certainly has, judged from the literal alone
-fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),

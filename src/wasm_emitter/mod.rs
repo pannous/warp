@@ -113,6 +113,7 @@ use log::{trace, warn};
 use std::collections::HashMap;
 use std::thread::scope;
 use wasm_encoder::*;
+#[cfg(feature = "validate")]
 use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 use StorageType::Val;
@@ -1446,6 +1447,10 @@ impl WasmGcEmitter {
 		}
 	}
 
+	fn is_float_variable(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_float()))
+	}
+
 	fn emit_compound_assign(
 		&mut self,
 		func: &mut Function,
@@ -2573,6 +2578,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) {
 			return;
 		}
@@ -2856,6 +2864,7 @@ impl WasmGcEmitter {
 							} else {
 								self.emit_numeric_value(func, &items[1]);
 							}
+							self.emit_leave_tries(func, 0);
 							func.instruction(&Instruction::Return);
 							// After return, emit unreachable to satisfy block types
 							func.instruction(&Instruction::I64Const(0));
@@ -2935,6 +2944,9 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
@@ -2989,6 +3001,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// Arithmetic operators with float
+			// `s += x` on a float variable, also as a statement of a loop body
+			Node::Key(left, op, right) if op.is_compound_assign() && self.is_float_variable(left) => {
+				self.emit_compound_assign(func, left, op, right, true);
+			}
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
@@ -3038,6 +3054,7 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
 				self.emit_float_value(func, value);
 			}
+			Node::Key(list, Op::Hash, index) if self.is_typed_list(list) => self.emit_typed_element_float(func, list, index),
 			Node::Key(_, Op::As, _) => {
 				self.emit_numeric_value(func, node);
 				self.emit_int_to_f64(func, None);
@@ -3199,6 +3216,12 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 
+	#[cfg(not(feature = "validate"))]
+	fn try_validate_wasm(_bytes: &[u8]) -> Result<(), String> {
+		Ok(()) // the engine that runs the module validates it (the browser build, web/playground)
+	}
+
+	#[cfg(feature = "validate")]
 	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
@@ -3268,7 +3291,7 @@ impl WasmGcEmitter {
 
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
-			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList")];
+			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];
 		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
 
@@ -3287,6 +3310,7 @@ impl WasmGcEmitter {
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
+			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
 		];
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
@@ -3696,7 +3720,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let node = crate::closures::lower(node);
 	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
-	let node = crate::traits::lower_conformances(crate::type_constructor::lower(node));
+	let node = crate::traits::lower_conformances(crate::overloads::lower(crate::type_constructor::lower(node)));
 	let node = crate::min_max::lower(node);
 	let node = crate::declarations::lower(node);
 	let node = crate::switch::lower(node);

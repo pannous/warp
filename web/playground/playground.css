@@ -47,7 +47,8 @@ h1 span { color: var(--accent); font-weight: 500; }
 .source { color: var(--muted); }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; }
-.status { color: var(--muted); font-size: 0.9em; margin-left: auto; }
+.status { color: var(--muted); font-size: 0.9em; }
+.build { color: var(--muted); font-size: 0.9em; margin-left: auto; }
 .status.failed { color: var(--error); }
 
 button, select {
