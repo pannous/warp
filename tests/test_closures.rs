@@ -102,3 +102,9 @@ fn test_a_list_of_closures() {
 fn test_a_parameter_declared_a_function() {
 	is!("apply(f:function, x) := f(x); k=1; apply(x=>x+k, 1)", 2);
 }
+
+#[test]
+fn test_calling_a_non_function_or_the_wrong_arity_is_loud() {
+	fails_with("make_adder(n) := (x => x+n); a = make_adder(1); a(1, 2)", "wrong number of arguments");
+	fails_with("apply(f, x):=f(x); n=3; apply(n, 1)", "not a function");
+}

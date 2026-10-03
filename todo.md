@@ -58,3 +58,8 @@
 - Traits: default methods in a trait (`trait shape{area; describe(s) := …}`) are a loud error for now; Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open. (impl-traits 2026-10-03)
 - Static instance types (traits::InstanceTypes) are flow-insensitive per variable name: a variable assigned an instance and later something whose shape is unknown keeps the instance shape. (impl-traits 2026-10-03)
 - Later, when machine load is low (user 2026-10-03): an agent fixes the red tests on main of pannous/russh (Rust, Semver, CodeQL on schedule: code scanning likely not enabled) and pannous/warpgate (Test); they mail nightly until then (notes/ci_policy.md).
+- Closures (notes/closures.md): every closure call boxes through Nodes (universal Node -> Node entry); a typed call_ref fast path for one shared signature (Int -> Int) is open. (closures 2026-10-03)
+- Closures: the result kind of `closure_call_n` is joined over all closures of arity n in the program (Data when they differ); a per-variable flow analysis of the reachable targets would type each call site. (closures 2026-10-03)
+- `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03)
+- `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
+- analyzer::collect_assigned_names and library_words::collect_assigned_names are the same function twice. (closures 2026-10-03)
