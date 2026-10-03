@@ -13,9 +13,9 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// Answers to the compiler's questions (Asks), remembered per project: one `topic = explicit form` per line
-const ANSWERS_FILE: &str = ".wasp-answers";
-/// Never ask, every ambiguity falls back to its warning or error (as in CI or a pipe)
+/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
+/// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 
 fn node_to_i32(node: &Node) -> i32 {
@@ -48,12 +48,12 @@ fn main() {
         args.remove(flag);
     }
 
-    // Ambiguities are asked on the terminal unless nobody is there to answer
+    // "got it?" is asked on the terminal after a warning or note unless nobody is there to answer
     let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
-        diagnostic::set_asker(Some(std::rc::Rc::new(diagnostic::TerminalAsker)));
+        diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::use_answers_file(ANSWERS_FILE);
+    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
 
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
@@ -267,7 +267,7 @@ fn usage() {
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
-    println!("  --no-ask             Never ask about ambiguities: take their default with a warning (or fail)");
+    println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

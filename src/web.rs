@@ -1,9 +1,9 @@
 //! The compiler in the browser (web/playground): `evaluate` compiles a program the way the CLI does and reports
-//! what the CLI prints (the value, warnings, hints) plus the Asks a page shows as choices. Without wasmtime the
+//! what the CLI prints (the value, warnings, hints) plus the topics of the warnings and notes the page offers "got it" for. Without wasmtime the
 //! page runs the compiled module (`run_in_host`) and hands its result back as a JSON tree that its reader
 //! (web/playground/reader.js) walked through the module's reflection exports (wasm_emitter/reflection.rs).
 
-use crate::diagnostic::{self, Ask, Asker, Fallback};
+use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::meta::{Dada, DataType};
 use crate::node::{Bracket, Node, Separator};
@@ -11,74 +11,62 @@ use crate::type_kinds::{Kind, KIND_MASK};
 use num_bigint::{BigInt, Sign};
 use serde_json::{json, Value};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 use crate::type_kinds::KIND_BITS;
 
-/// The answer that acknowledges an `educate_once` note, stored under `ack:<topic>` like an answer
-const ACKNOWLEDGED_PREFIX: &str = "ack:";
-
-/// Answers the page already got (topic → explicit form, `ack:<topic>` → acknowledged); every Ask it cannot answer
-/// is recorded for the page and falls back, every note not yet acknowledged is recorded for its "got it" button
-struct PageAsker {
-	answers: HashMap<String, String>,
-	asked: Rc<RefCell<Vec<Ask>>>,
+/// The topics the page already said "got it" to; every other warning or note shown is recorded for its "got it" button
+struct PageAcknowledger {
+	acknowledged: HashSet<String>,
 	notes: Rc<RefCell<Vec<String>>>,
 }
 
-impl Asker for PageAsker {
-	fn answer(&self, ask: &Ask) -> Option<usize> {
-		let answered = self.answers.get(&ask.topic).and_then(|form| ask.readings.iter().position(|reading| reading.explicit_form == *form));
-		if answered.is_none() {
-			self.asked.borrow_mut().push(ask.clone());
-		}
-		answered
+impl Acknowledger for PageAcknowledger {
+	fn has_acknowledged(&self, topic: &str) -> bool {
+		self.acknowledged.contains(topic)
 	}
 
+	/// The page answers later, with its "got it" button
 	fn acknowledge(&self, topic: &str) -> bool {
-		let acknowledged = self.answers.contains_key(&format!("{ACKNOWLEDGED_PREFIX}{topic}"));
-		if !acknowledged {
-			self.notes.borrow_mut().push(topic.to_string());
-		}
-		acknowledged
+		self.notes.borrow_mut().push(topic.to_string());
+		false
 	}
 }
 
-/// Compile and run `code` as `warp file.wasp` does, with the page's answers. The report (JSON):
-/// `value` (what the CLI prints), `error`, `warnings`, `hints`, `asks` (unanswered, each with its readings),
-/// `notes` (topics of educate_once hints the user can acknowledge) and `runtime_warnings`.
-pub fn evaluate(code: &str, answers: HashMap<String, String>) -> Value {
-	let asked = Rc::new(RefCell::new(Vec::new()));
+/// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
+/// `value` (what the CLI prints), `error`, `warnings`, `hints`, `notes` (topics of the warnings and notes shown that
+/// the user can say "got it" to) and `runtime_warnings`. Acknowledging silences a warning, never changes the value.
+pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
-	let asker = PageAsker { answers, asked: asked.clone(), notes: notes.clone() };
+	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
 	diagnostic::take_warnings();
 	diagnostic::take_runtime_warnings();
-	let (result, hints) = diagnostic::with_asker(asker, || crate::normalize::capture_hints(|| crate::wasm_emitter::eval(code)));
+	let (result, hints) = diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| crate::wasm_emitter::eval(code)));
 	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| json!({
 		"message": warning.message, "line": warning.line, "column": warning.column, "fix": warning.fix,
 	})).collect();
 	let hints: Vec<Value> = hints.iter().map(|hint| json!({
 		"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
 	})).collect();
-	let asks: Vec<Value> = asked.borrow().iter().map(ask_json).collect();
 	json!({
 		"value": result.serialize(),
 		"error": matches!(result.drop_meta(), Node::Error(_)),
 		"warnings": warnings,
 		"runtime_warnings": diagnostic::take_runtime_warnings(),
 		"hints": hints,
-		"asks": asks,
+		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
 		"notes": *notes.borrow(),
 	})
 }
 
-fn ask_json(ask: &Ask) -> Value {
-	let readings: Vec<Value> = ask.readings.iter().map(|reading| json!({"meaning": reading.meaning, "explicit_form": reading.explicit_form})).collect();
-	json!({
-		"topic": ask.topic, "written": ask.written, "question": ask.question, "readings": readings, "default": ask.default,
-		"fallback": match ask.fallback { Fallback::Warning => "warning", Fallback::Error => "error" },
-		"line": ask.line, "column": ask.column,
-	})
+/// The topics the page acknowledged: a JSON array of topics, or the older object whose `ack:<topic>` keys are the
+/// acknowledged topics (its other keys were remembered Ask answers, which no longer exist)
+pub fn acknowledged_topics(json: &str) -> HashSet<String> {
+	match serde_json::from_str::<Value>(json).unwrap_or_default() {
+		Value::Array(topics) => topics.iter().filter_map(|topic| topic.as_str().map(str::to_string)).collect(),
+		Value::Object(answers) => answers.keys().filter_map(|key| key.strip_prefix("ack:").map(str::to_string)).collect(),
+		_ => HashSet::new(),
+	}
 }
 
 // ============================================================================
@@ -288,16 +276,17 @@ mod exports {
 		drop(unsafe { Vec::from_raw_parts(pointer, length.max(1), length.max(1)) });
 	}
 
-	/// Evaluate the code with the answers (a JSON object); returns the length of the report, read at `web_report()`
+	/// Evaluate the code with the acknowledged topics (see `acknowledged_topics`); returns the length of the report,
+	/// read at `web_report()`
 	#[no_mangle]
-	pub extern "C" fn web_evaluate(code: *const u8, code_length: usize, answers: *const u8, answers_length: usize) -> usize {
+	pub extern "C" fn web_evaluate(code: *const u8, code_length: usize, acknowledged: *const u8, acknowledged_length: usize) -> usize {
 		static HOOK: std::sync::Once = std::sync::Once::new();
 		HOOK.call_once(|| std::panic::set_hook(Box::new(|info| {
 			let message = info.to_string();
 			unsafe { page::panicked(message.as_ptr(), message.len()) }
 		})));
-		let answers: HashMap<String, String> = serde_json::from_str(text(answers, answers_length)).unwrap_or_default();
-		let report = evaluate(text(code, code_length), answers).to_string().into_bytes();
+		let acknowledged = super::acknowledged_topics(text(acknowledged, acknowledged_length));
+		let report = evaluate(text(code, code_length), acknowledged).to_string().into_bytes();
 		REPORT.with(|kept| {
 			*kept.borrow_mut() = report;
 			kept.borrow().len()
