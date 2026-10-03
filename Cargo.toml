@@ -1,6 +1,7 @@
 # cargo install --path . --locked --offline
 # GO OFFLINE against fucking 10 sec compilation every time!
-# --offline mode
+# --offline mode: dependencies come from the local registry cache. Vendoring is deactivated for now (no vendor/ on main;
+# the `vendor` branch and its refresh workflow are kept for offline cloud agents: notes/cloud_offline_build.md)
 
 
 [package]
