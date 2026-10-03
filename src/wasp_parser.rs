@@ -142,6 +142,8 @@ const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
 const TIMES_WORD: &str = "times";
+/// The call `n times text` is parsed to: the text repeated n times
+pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
@@ -1104,6 +1106,7 @@ impl WaspParser {
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
 	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
+	/// `try X else e => Y` names the caught error: `marker(X, Y, e)`, never a lambda.
 	fn parse_guard(&mut self, marker: &'static str) -> Node {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
@@ -1121,7 +1124,11 @@ impl WaspParser {
 		} else {
 			Empty
 		};
-		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+		let parts = match fallback.drop_meta() {
+			Key(name, Op::FatArrow, body) if marker == TRY_MARKER && matches!(name.drop_meta(), Symbol(_)) => vec![guarded, body.as_ref().clone(), name.as_ref().clone()],
+			_ => vec![guarded, fallback],
+		};
+		Node::List([vec![Symbol(marker.to_string())], parts].concat(), Bracket::Round, Separator::None)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
@@ -2367,6 +2374,8 @@ impl WaspParser {
 				let list = self.parse_atom();
 				return crate::analyzer::filled_list(count, &list).unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
 			}
+			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;

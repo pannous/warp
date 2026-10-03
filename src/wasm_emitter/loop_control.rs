@@ -72,15 +72,23 @@ pub(crate) fn has_jump(body: &Node) -> bool {
 
 /// Open control frames (block, loop, if, try) at the end of the code emitted so far
 pub(crate) fn open_control_frames(func: &Function) -> usize {
+	open_frames(func).len()
+}
+
+/// The open control frames, outermost first: true for a `try_table` (a running `try`, try_guard.rs)
+pub(crate) fn open_frames(func: &Function) -> Vec<bool> {
 	use wasmparser::Operator::*;
 	let body = func.clone().into_raw_body();
 	let reader = wasmparser::FunctionBody::new(wasmparser::BinaryReader::new(&body, 0));
-	let Ok(mut operators) = reader.get_operators_reader() else { return 0 };
-	let mut open = 0usize;
+	let Ok(mut operators) = reader.get_operators_reader() else { return vec![] };
+	let mut open = vec![];
 	while !operators.eof() {
 		match operators.read() {
-			Ok(Block { .. } | Loop { .. } | If { .. } | Try { .. } | TryTable { .. }) => open += 1,
-			Ok(End | Delegate { .. }) => open = open.saturating_sub(1),
+			Ok(TryTable { .. }) => open.push(true),
+			Ok(Block { .. } | Loop { .. } | If { .. } | Try { .. }) => open.push(false),
+			Ok(End | Delegate { .. }) => {
+				open.pop();
+			}
 			Ok(_) => {}
 			Err(_) => break,
 		}
@@ -117,6 +125,7 @@ impl WasmGcEmitter {
 		};
 		let target = if jump == Jump::Break { labels.break_frame } else { labels.continue_frame };
 		let depth = open_control_frames(func) - target;
+		self.emit_leave_tries(func, target);
 		func.instruction(&Instruction::Br(depth as u32));
 		true
 	}

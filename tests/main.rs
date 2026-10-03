@@ -1,10 +1,13 @@
 #![allow(mixed_script_confusables)]
-//! One test crate for all tests: every tests/*.rs file is a module, so cargo links one test binary instead of one per file.
+//! One test crate for all tests: every topic folder tests/<topic>/ is a module (its mod.rs lists the files), so cargo
+//! links one test binary instead of one per file. Layout: notes/tests_layout.md.
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
+mod web;
 mod node_values_test;
 mod probe_def_syntax;
+mod probe_destructuring;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod probe_footguns;
 mod probe_increment;
@@ -64,6 +67,7 @@ mod test_ffi_warning_once;
 mod test_ffi;
 mod test_fixed_width_ints;
 mod test_float_assignment;
+mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
 mod test_float_parameters;
@@ -88,7 +92,9 @@ mod test_got_it_warnings;
 mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
+mod test_host_words;
 mod test_if_call_condition;
+mod test_if_value_kind;
 mod test_in_position;
 mod test_include;
 mod test_inline_comments;
@@ -101,9 +107,12 @@ mod test_key_lookup;
 mod test_key_subscript_hint;
 mod test_kitchensink;
 mod test_lambdas;
+mod test_logical_calls;
 mod test_law;
 mod test_less_than_compare;
 mod test_library_unicode;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_libm_linking;
 mod test_like;
 mod test_list_arithmetic;
 mod test_list_number_comparison;
@@ -190,6 +199,7 @@ mod test_text_concat;
 mod test_text_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;
+mod test_text_repeat;
 mod test_text_runtime;
 mod test_text_variable_assignment;
 mod test_times_count_once;
@@ -200,6 +210,7 @@ mod test_trap_messages;
 mod test_traits;
 mod test_truthiness_of_objects;
 mod test_try_else;
+mod test_try_exits_and_naming;
 mod test_try_deep;
 mod test_type_of_real_variable;
 mod test_type_test_is_only;
@@ -209,14 +220,13 @@ mod test_type_upgrading;
 mod test_type_words;
 mod test_typed_arrays;
 mod test_types_scope;
+mod test_tuples;
 mod test_types;
 mod test_unbounded_int;
 mod test_multi_value;
 mod test_tuple_returns;
 mod test_undefined_calls;
 mod test_undefined_variable;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_uniscript;
 mod test_units_arithmetic;
 mod test_units_compare;
 mod test_units_followup;
@@ -235,8 +245,6 @@ mod test_wasm;
 mod test_wasp_format;
 mod test_wasp_position;
 mod test_wast;
-#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
-mod test_web;
 mod test_welcoming_ask;
 mod test_welcoming_break;
 mod test_welcoming_count_argument;
@@ -255,7 +263,6 @@ mod test_welcoming_sugar;
 mod test_while_paren_condition;
 mod test_while_value;
 mod test_wasm_names_order;
-mod test_web_playground;
 mod test_wit_types;
 mod test_wit;
 mod test_xml;

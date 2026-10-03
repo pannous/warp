@@ -3,7 +3,8 @@
 
 importScripts("reader.js", "host.js");
 
-const COMPILER_URL = "warp.wasm";
+// warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
+const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
 
 let compiler; // the compiler instance's exports
 let panicMessage; // the compiler's last panic message

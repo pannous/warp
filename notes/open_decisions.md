@@ -5,7 +5,8 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending; parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03)
+Batches paused until 2026-10-03 17:30 local (5-hour limit at 93%, BOSS-cheeky-shannon).
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
@@ -35,11 +36,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
   or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
-  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
-  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
-  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
+  Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/test_text_repeat.rs).
+  text * float and text * text stay type errors; `n times "ab"` is the explicit repeat. This replaces "`"5"*3` stays a
+  type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
+  otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
+  the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
 - Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
   to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
   python if it has all the fields but is a known different type then we should create an error and get the user about
@@ -87,7 +92,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
   `--offline` builds from the registry cache.
 - Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
-  tests/test_web.rs go, keeping the branch that runs today (approved test edit).
+  tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
   don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an

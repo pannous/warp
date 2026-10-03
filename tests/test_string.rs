@@ -141,19 +141,6 @@ fn test_string_concatenation() {
 	//	eq!(Node("✖️"), False);
 	//	eq!(Node("✖"), False);
 	is!("a2", "a2");
-
-	// TODO: implement string operator overloads
-	// eq!(huh, "a2");
-	// eq!("a" + 2, "a2");
-	// eq!("a" + 2.2, "a2.2");
-	// eq!("a" + "2.2", "a2.2");
-	// eq!("a" + 'b', "ab");
-	// eq!("a" + "bc", "abc");
-	// eq!("a" + true, "a✔️");
-	// eq!("a%sb" % "hi", "ahib");
-
-	// eq!("a%db" % 123, "a123b");
-	// eq!("a%s%db" % "hi" % 123, "ahi123b");
 }
 
 // From test_strings.rs

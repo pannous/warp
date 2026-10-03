@@ -14,13 +14,13 @@ rules in notes/open_decisions.md and wiki/Footguns.md.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Work in a git worktree outside the repo: `git worktree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
-  with the uncommitted build tweak `version = "0.1.1-<branch>"` + `crate-type = ["rlib"]` in its Cargo.toml.
+  with the uncommitted build tweak `version = "0.1.1-<branch>"` in its Cargo.toml.
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, remove the
-  worktree after the merge, report one line to the Supervisor.
+  worktree after the merge with `rm -rf <worktree> && git -C /Users/me/dev/angles/warp worktree prune` (git worktree remove refuses the dirty build tweak and the hook blocks --force; the branch commits are safe on main), report one line to the Supervisor.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go into todo.md on your branch.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki

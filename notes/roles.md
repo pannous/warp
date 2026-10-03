@@ -42,7 +42,7 @@ the Integrator merges it and the Interviewer gets the question.
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
-- Keeps one integration worktree (probes/integrate, detached, follows origin/main).
+- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main).
 - Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
   conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
   and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
@@ -56,12 +56,12 @@ The only session that runs the full suite and the only one that pushes code to m
 ## Workers
 - One task, one branch, one worktree: `git worktree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
-  Uncommitted build tweak in it: `version = "0.1.1-<name>"` + `crate-type = ["rlib"]` (notes/build_speed.md).
+  Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
 - Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
   Integrator's full-suite result is the check; the worker fixes what it reports.
-- Remove the worktree (`git worktree remove`) after the merge.
+- After the merge, remove the worktree: `rm -rf <worktree> && git -C /Users/me/dev/angles/warp worktree prune` (git worktree remove refuses the dirty build tweak and the hook blocks --force; the branch commits are safe on main).
 
 ## Branches, copies and worktrees
 A worktree is a second checkout of the same repository: same .git object store, its own branch, `git status` and

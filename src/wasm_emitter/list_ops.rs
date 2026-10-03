@@ -508,6 +508,17 @@ pub fn runtime_error_message(name: &str) -> String {
 	}
 }
 
+/// The message of the runtime error function `name` as `try X else e => …` names it: like its uncaught trap (trap_error)
+pub fn caught_error_message(name: &str) -> String {
+	if let Some(label) = name.strip_prefix(crate::switch::NO_CASE_PREFIX) {
+		return format!("no case for {label}");
+	}
+	match name.strip_prefix(crate::fixed_width::OVERFLOW_PREFIX) {
+		Some(type_name) => crate::fixed_width::overflow_message(type_name),
+		None => runtime_error_message(name),
+	}
+}
+
 pub const RUNTIME_ERRORS: [&str; 19] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
@@ -517,6 +528,8 @@ pub const RUNTIME_ERRORS: [&str; 19] = [
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
+/// The educate-once topic of `"ab"*2`, whose explicit form is `2 times "ab"`
+const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
 impl WasmGcEmitter {
 	/// `x as int` of a text held in a variable, like the literal `"12" as int`; no digits is the runtime error invalid_number
@@ -582,14 +595,19 @@ impl WasmGcEmitter {
 		});
 	}
 
-	fn emit_runtime_errors(&mut self) {
+	/// The runtime error functions, in the order of their error ids
+	pub(super) fn runtime_error_names(&self) -> Vec<&'static str> {
 		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
-		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
+		let no_case_errors = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str()));
 		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
+		RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).collect()
+	}
+
+	fn emit_runtime_errors(&mut self) {
 		if self.guards_errors {
 			self.declare_error_catching(); // the error functions throw while a `try` runs
 		}
-		for (error_id, name) in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).enumerate() {
+		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
 			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
@@ -798,6 +816,7 @@ impl WasmGcEmitter {
 	/// Returns true when it emitted the whole expression (a Node, or a trap after a recorded type error).
 	pub(super) fn emit_typed_arithmetic(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node) -> bool {
 		match self.arithmetic_type(left, op, right) {
+			Kind::Text if *op == crate::operators::Op::Mul => self.emit_arithmetic_type_error(func, left, op, right, Kind::Text),
 			Kind::Text => {
 				self.emit_text_concat(func, left, right);
 				true
@@ -813,12 +832,49 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `n times text` and `text * n`: the text n times, joined
+	pub(super) fn emit_text_repeat(&mut self, func: &mut Function, text: &Node, count: &Node) {
+		let copies = crate::analyzer::filled_list(count.clone(), &Node::List(vec![text.clone()], crate::node::Bracket::Square, crate::node::Separator::Space));
+		self.emit_node_instructions(func, &super::join_call(copies.expect("a one-element list"), ""));
+	}
+
+	/// `"ab"*2` repeats; the got-it warning names `2 times "ab"`, and for a text spelling a number how to multiply it
+	fn educate_text_multiplication(written: &str, text: &Node, count: &Node) {
+		// a one-character text parses as a codepoint, but `'5'` would read as a code point (decision #35): keep it a text
+		let text_written = match text.drop_meta() {
+			Node::Char(character) => format!("\"{character}\""),
+			_ => crate::normalize::operand_text(text),
+		};
+		let count_written = crate::normalize::operand_text(count);
+		let spells_a_number = match text.drop_meta() {
+			Node::Text(digits) => digits.trim().parse::<f64>().is_ok(),
+			Node::Char(digit) => digit.is_ascii_digit(),
+			_ => false,
+		};
+		let reason = if spells_a_number {
+			format!("got it: the text repeated; to multiply the number it spells: int({text_written})*{count_written}")
+		} else {
+			"got it: the text repeated".to_string()
+		};
+		crate::diagnostic::educate_once(TEXT_REPEAT_TOPIC, written, &format!("{count_written} times {text_written}"), &reason);
+	}
+
 	/// In a numeric context any collection or text operand is a type error
 	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
 		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
 			return false;
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
+		if crate::analyzer::repeats_text(left_kind, op, right_kind) {
+			let (text, count) = if right_kind == Kind::Int { (left, right) } else { (right, left) };
+			let fractional = matches!(count.drop_meta(), Node::Number(number) if f64::from(number.clone()).fract() != 0.0);
+			if !fractional {
+				let written = format!("{}*{}", crate::normalize::operand_text(left), crate::normalize::operand_text(right));
+				Self::educate_text_multiplication(&written, text, count);
+				self.emit_text_repeat(func, text, count);
+				return true;
+			}
+		}
 		let is_number = |kind: Kind| matches!(kind, Kind::Int | Kind::Float);
 		let repeats_or_scales = *op == crate::operators::Op::Mul && ((left_kind == Kind::List && is_number(right_kind)) || (is_number(left_kind) && right_kind == Kind::List));
 		let repeats_text = match (left_kind, right_kind) {
@@ -827,7 +883,7 @@ impl WasmGcEmitter {
 			_ => None,
 		}.filter(|_| *op == crate::operators::Op::Mul);
 		let fix = if let Some((text, count)) = repeats_text {
-			format!("a text does not multiply; to repeat it: ({} times [{}]).join(\"\")", count.serialize(), text.serialize())
+			format!("a text repeats a whole number of times: `{} times {}`", crate::normalize::operand_text(count), crate::normalize::operand_text(text))
 		} else if repeats_or_scales {
 			"ambiguous: Python repeats the list, NumPy multiplies each element; write `n times [x]` to repeat, or map to multiply".into()
 		} else if left_kind == Kind::List || right_kind == Kind::List {

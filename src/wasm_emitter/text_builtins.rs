@@ -5,7 +5,7 @@
 
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, CAUGHT_ERROR_TEXT, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -32,9 +32,9 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 8] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 9] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int),
+	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (CAUGHT_ERROR_TEXT, 2, Kind::Text),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -81,6 +81,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	if required.contains(super::wasi_emitter::PRINT_VALUE) {
 		required.insert("list_join");
+	}
+	if required.contains("list_join") {
+		required.insert(super::float_text::FLOAT_TEXT);
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
@@ -130,6 +133,7 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
+			(CAUGHT_ERROR_TEXT, [finished, value]) => self.emit_caught_error_text(func, finished, value),
 			// a hole names a variable: a word that names nothing is loud, never its own spelling
 			(TEXT_FORM, [value]) => match value.drop_meta() {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),

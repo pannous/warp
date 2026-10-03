@@ -42,6 +42,13 @@ PASSED:
   ✓ probe_def_syntax::probe_multiple_syntaxes
   ✓ probe_def_syntax::probe_parse_add_call
   ✓ probe_def_syntax::probe_test2_check
+  ✓ probe_destructuring::probe_for_loop_unpacking
+  ✓ probe_destructuring::probe_swap
+  ✓ probe_destructuring::probe_too_few_values_is_loud
+  ✓ probe_destructuring::probe_too_many_values_is_loud
+  ✓ probe_destructuring::probe_underscore_discards
+  ✓ probe_destructuring::probe_unpack_tuple_function
+  ✓ probe_destructuring::probe_unpack_tuple_values
   ✓ probe_footguns::test_addition_is_associative_by_default
   ✓ probe_footguns::test_and_or_ternary_is_linted
   ✓ probe_footguns::test_append_method_rebinds_the_list
@@ -468,6 +475,8 @@ PASSED:
   ✓ test_float_promotion::test_fractional_exponent_uses_libm_pow
   ✓ test_float_promotion::test_literal_float_operations_do_not_truncate
   ✓ test_float_promotion::test_undefined_float_power_is_refused_loudly
+  ✓ test_float_text::test_float_as_text
+  ✓ test_float_text::test_float_joins_texts
   ✓ test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
   ✓ test_float_to_int_range::test_rounding_functions_give_exact_ints
   ✓ test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -480,6 +489,7 @@ PASSED:
   ✓ test_for_loop::test_for_over_list_literal
   ✓ test_for_loop::test_for_over_list_variable
   ✓ test_for_loop::test_for_with_colon_body
+  ✓ test_for_loop::test_loop_body_with_a_list_statement
   ✓ test_for_loop::test_nested_for
   ✓ test_function_keyword::function_defines_like_def
   ✓ test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
@@ -543,12 +553,16 @@ PASSED:
   ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ test_header_search::only_sdl_names_read_the_sdl_headers
+  ✓ test_host_words::test_a_program_prints_and_uses_the_host
+  ✓ test_host_words::test_clock_and_sleep
+  ✓ test_host_words::test_random_stays_in_range
   ✓ test_host::test_emit_host_imports
   ✓ test_host::test_emitter_with_host_imports_valid
   ✓ test_host::test_host_fetch_import
   ✓ test_host::test_host_run_import
   ✓ test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
+  ✓ test_if_value_kind::test_if_of_characters_joins_a_text
   ✓ test_in_position::a_found_first_element_is_truthy
   ✓ test_in_position::in_gives_the_one_based_position
   ✓ test_in_position::maps_and_has_keep_their_truth_value
@@ -636,6 +650,8 @@ PASSED:
   ✓ test_law::test_law_violation_reported_by_verify
   ✓ test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ test_less_than_compare::test_generics_still_start_after_a_type_name
+  ✓ test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
+  ✓ test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ test_library_unicode::reverse_works_on_text_by_code_points
   ✓ test_library_unicode::sort_orders_floats
   ✓ test_library_unicode::sort_orders_mixed_numbers
@@ -668,6 +684,9 @@ PASSED:
   ✓ test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
   ✓ test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
   ✓ test_logic_grouped_operands::the_logic_table_of_negations
+  ✓ test_logical_calls::test_call_operand_is_evaluated_once
+  ✓ test_logical_calls::test_call_operand_of_and_or
+  ✓ test_logical_calls::test_node_operand_of_and_or
   ✓ test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ test_loop_forms::for_without_variable_binds_it
   ✓ test_loop_forms::ranges_in_for_headers_stay_ranges
@@ -702,9 +721,9 @@ PASSED:
   ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
+  ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
-  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -981,11 +1000,14 @@ PASSED:
   ✓ test_samples::test_factorial
   ✓ test_samples::test_fibonacci
   ✓ test_samples::test_fizzbuzz
+  ✓ test_samples::test_game_of_life
   ✓ test_samples::test_gcd
   ✓ test_samples::test_parse_all_samples
   ✓ test_samples::test_power
   ✓ test_samples::test_primes
   ✓ test_samples::test_quadratic
+  ✓ test_samples::test_quicksort
+  ✓ test_samples::test_snake
   ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
   ✓ test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -1111,6 +1133,10 @@ PASSED:
   ✓ test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ test_text_getters::text_getters_read_texts_and_errors
+  ✓ test_text_repeat::n_times_text_is_the_explicit_repeat
+  ✓ test_text_repeat::text_repeat_names_the_explicit_form
+  ✓ test_text_repeat::text_times_float_or_text_stays_a_type_error
+  ✓ test_text_repeat::text_times_int_repeats
   ✓ test_text_runtime::join_and_concatenation_take_non_ascii_characters
   ✓ test_text_runtime::reverse_of_a_text_is_by_characters
   ✓ test_text_runtime::the_characters_of_a_runtime_text
@@ -1178,6 +1204,14 @@ PASSED:
   ✓ test_try_else::try_falls_back_when_the_index_is_out_of_range
   ✓ test_try_else::try_keeps_a_value
   ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
+  ✓ test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
+  ✓ test_try_exits_and_naming::a_named_else_is_skipped_without_an_error
+  ✓ test_try_exits_and_naming::bare_try_else_still_works
+  ✓ test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::the_else_branch_names_a_caught_runtime_error
+  ✓ test_try_exits_and_naming::the_else_branch_names_an_error_value
   ✓ test_tuple_returns::test_bare_list_assignment_still_asks
   ✓ test_tuple_returns::test_destructuring_arity_mismatch_is_loud
   ✓ test_tuple_returns::test_parallel_assignment_and_swap
@@ -1186,6 +1220,8 @@ PASSED:
   ✓ test_tuple_returns::test_tuple_function_returns_wasm_multi_value
   ✓ test_tuple_returns::test_tuple_returns_inside_functions
   ✓ test_tuple_returns::test_two_returned_values_destructure
+  ✓ test_tuples::test_loop_over_list_with_global_tuple
+  ✓ test_tuples::test_tuple_of_computed_items
   ✓ test_type_name_matching::test_a_declared_class_types_its_noun
   ✓ test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
   ✓ test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
@@ -1274,21 +1310,6 @@ PASSED:
   ✓ test_undefined_variable::test_undefined_variable_increment_is_an_error_value
   ✓ test_undefined_variable::test_undefined_variable_use_is_an_error_value
   ✓ test_undefined_variable::test_unsupported_array_phrase_names_the_undefined_variable
-  ✓ test_uniscript::an_unknown_entity_is_an_error
-  ✓ test_uniscript::block_types_style_their_operands
-  ✓ test_uniscript::colors_and_geometry_are_suffix_controls
-  ✓ test_uniscript::effect_words_stack_on_one_operand
-  ✓ test_uniscript::entities_become_characters
-  ✓ test_uniscript::full_blocks_keep_their_spaces
-  ✓ test_uniscript::greek_is_transliterated_phonetically
-  ✓ test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
-  ✓ test_uniscript::spelling_back_round_trips
-  ✓ test_uniscript::the_header_declares_uniscript_and_its_version
-  ✓ test_uniscript::the_index_matches_the_readable_entities
-  ✓ test_uniscript::the_marker_is_escaped_by_single_character_entities
-  ✓ test_uniscript::unicode_spells_back_as_uniscript
-  ✓ test_uniscript::unsupported_characters_and_combinations_warn
-  ✓ test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ test_units_arithmetic::test_incompatible_units_are_an_error
   ✓ test_units_arithmetic::test_scaling_a_quantity
   ✓ test_units_arithmetic::test_spaced_known_unit_multiplies
@@ -1405,14 +1426,6 @@ PASSED:
   ✓ test_wasp_position::test_position_in_json_output
   ✓ test_wasp_position::test_position_tracking
   ✓ test_wasp_position::test_position_with_comments
-  ✓ test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
-  ✓ test_web_playground::a_trap_in_the_page_names_the_runtime_error
-  ✓ test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
-  ✓ test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
-  ✓ test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
-  ✓ test_web_playground::evaluate_reports_the_value_the_cli_prints
-  ✓ test_web::test_fetch
-  ✓ test_web::test_html_wasp
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
   ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
@@ -1540,6 +1553,29 @@ PASSED:
   ✓ wasm_optimizer_test::test_library_optimization
   ✓ wasm_optimizer_test::test_no_optimization
   ✓ wasm_optimizer_test::test_tools_availability
+  ✓ web::test_uniscript::an_unknown_entity_is_an_error
+  ✓ web::test_uniscript::block_types_style_their_operands
+  ✓ web::test_uniscript::colors_and_geometry_are_suffix_controls
+  ✓ web::test_uniscript::effect_words_stack_on_one_operand
+  ✓ web::test_uniscript::entities_become_characters
+  ✓ web::test_uniscript::full_blocks_keep_their_spaces
+  ✓ web::test_uniscript::greek_is_transliterated_phonetically
+  ✓ web::test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
+  ✓ web::test_uniscript::spelling_back_round_trips
+  ✓ web::test_uniscript::the_header_declares_uniscript_and_its_version
+  ✓ web::test_uniscript::the_index_matches_the_readable_entities
+  ✓ web::test_uniscript::the_marker_is_escaped_by_single_character_entities
+  ✓ web::test_uniscript::unicode_spells_back_as_uniscript
+  ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
+  ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
+  ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
+  ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
+  ✓ web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
+  ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
+  ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
+  ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
+  ✓ web::test_web::test_fetch
+  ✓ web::test_web::test_html_wasp
   ✓ wisp_parser::tests::test_wisp_basic_atom_types
   ✓ wisp_parser::tests::test_wisp_call
   ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
@@ -1561,4 +1597,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1556 passed, 0 failed, 1556 total tested
+58 ignored, 1592 passed, 0 failed, 1592 total tested

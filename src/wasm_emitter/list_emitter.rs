@@ -39,6 +39,7 @@ impl WasmGcEmitter {
 			|| type_word_kind(&name.to_lowercase()).is_some()
 			|| is_function_keyword(name)
 			|| name == PRINT
+			|| name == crate::wasp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::type_tests::IS_TYPE
@@ -93,6 +94,10 @@ impl WasmGcEmitter {
 						self.emit_user_function_call(func, fn_name, &[]);
 						return;
 					}
+					if self.ctx.ffi_imports.contains_key(fn_name) {
+						self.emit_ffi_call(func, fn_name, &[], None);
+						return;
+					}
 				}
 			}
 			self.emit_node_instructions(func, &items[0]);
@@ -113,11 +118,25 @@ impl WasmGcEmitter {
 				if s == "return" {
 					// Emit the return value and return instruction
 					self.emit_node_instructions(func, &items[1]);
+					self.emit_leave_tries(func, 0);
 					func.instruction(&Instruction::Return);
 					// Unreachable after return, push dummy value
 					func.instruction(&Instruction::Unreachable);
 					return;
 				}
+			}
+		}
+
+		if let [word, count, repeated] = items {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
+				match self.get_type(repeated) {
+					crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+					kind => {
+						let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
+						self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+					}
+				}
+				return;
 			}
 		}
 
@@ -247,8 +266,10 @@ impl WasmGcEmitter {
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
-			// Check for pure numeric expressions; a square list keeps all its items, whatever they compute
-			let has_arithmetic = *bracket != Bracket::Square && items.iter().any(|item| {
+			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
+			// whatever they compute
+			let is_tuple = *separator == Separator::Colon && items.len() > 1;
+			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && items.iter().any(|item| {
 				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
 			});
 			if has_arithmetic {
@@ -462,7 +483,7 @@ impl WasmGcEmitter {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) {
 			self.emit_float_value(func, item);
-		} else if self.is_ref_update(item) || self.is_output_call(item) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
@@ -477,6 +498,15 @@ impl WasmGcEmitter {
 					.or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind)).is_some_and(|kind| kind.is_ref()))
 			}
 			Node::Key(_, Op::Then | Op::Else, _) => self.get_type(item).is_ref(),
+			_ => false,
+		}
+	}
+
+	/// A list, text or other Node-valued expression statement (`xs`, `f()` returning a list): its value is no number
+	fn is_ref_value(&self, item: &Node) -> bool {
+		match item.drop_meta() {
+			Node::Key(_, op, _) if *op == Op::Assign || *op == Op::Define || op.is_compound_assign() => false,
+			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
 			_ => false,
 		}
 	}
