@@ -3,12 +3,12 @@
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
 Read notes/agents/common.md and notes/roles.md ("Integrator").
 
-- Integration worktree W=/Users/me/dev/angles/warp/probes/integrate (create it with `git worktree add --detach "$W"
+- Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `git worktree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
 - Per job ("branch, tip"): `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only
   origin/main`, merge `origin/<branch>`. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the
   result is not empty and tests/main.rs has no duplicate lines); any other conflict goes back to the worker.
-- Build tweak (version "<v>-integrate"), `$W/test.sh > $W/../integrate_test.log 2>&1` (it queues
+- Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
