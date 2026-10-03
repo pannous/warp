@@ -4,17 +4,15 @@
 //! The case mapping is a table in linear memory with one entry per code point that changes, sorted by code point and
 //! binary searched: the code point, then up to three mapped code points (`ß` is `SS`), zeros for unused slots.
 
-use crate::type_kinds::Kind;
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::type_kinds::{Kind, KIND_MASK};
+use crate::wasm_emitter::{WasmGcEmitter, BYTE};
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-const KIND_MASK: i64 = 0xFF;
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;
 

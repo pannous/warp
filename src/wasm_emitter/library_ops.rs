@@ -1,15 +1,13 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::type_kinds::Kind;
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::type_kinds::{Kind, KIND_MASK};
+use crate::wasm_emitter::{WasmGcEmitter, BYTE};
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// The low byte of a node's kind is its `Kind`; the bytes above carry brackets and operators
-const KIND_MASK: i64 = 0xFF;
 /// Bracket info of a square list, in the bits above the kind (see type_kinds: Curly=0, Square=1)
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KIND_SHIFT: i64 = 8;

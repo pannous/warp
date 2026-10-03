@@ -1,15 +1,14 @@
 //! List and string operation functions for WASM
 
-use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, BYTE, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
@@ -1009,7 +1008,6 @@ const STRUCT_BODY: &str = "struct_body";
 const KIND_BITS: i64 = 8;
 const SQUARE_BRACKET_INFO: i64 = 1;
 const KEY_KIND: i64 = 6;
-const KIND_MASK: i64 = 0xFF;
 const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
 const CURLY_LIST_KIND: i64 = Kind::List as i64; // bracket_info Curly=0
 pub const MAP_KEY_NAME: &str = "map_key_name";
