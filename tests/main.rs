@@ -148,6 +148,7 @@ mod test_text_functions;
 mod test_text_getters;
 mod test_text_runtime;
 mod test_text_variable_assignment;
+mod test_times_count_once;
 mod test_to_definition;
 mod test_todo;
 mod test_top_level_block;

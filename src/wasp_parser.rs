@@ -2046,6 +2046,12 @@ impl WaspParser {
 		self.advance_by(word.len());
 		self.skip_spaces();
 		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(Op::If.binding_power().1));
+		if guard == Op::While {
+			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+			let (statement, test) = (crate::normalize::operand_text(lhs), crate::normalize::operand_text(&condition));
+			crate::normalize::hint(&format!("{statement} {word} {test}"), &format!("{word} {test} {{ {statement} }}"),
+				"a trailing loop word tests before the first round, the statement may never run");
+		}
 		let condition = if negated { Node::Key(Box::new(Empty), Op::Not, Box::new(condition)) } else { condition };
 		Some(match guard {
 			Op::While => while_do(condition, lhs.clone()),
@@ -2132,8 +2138,20 @@ impl WaspParser {
 		};
 		self.times_loops += 1;
 		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
+		// the count is evaluated once, before the first round (user decision #22): the body may change what it reads
+		let (count_binding, count) = match count.drop_meta() {
+			Node::Number(_) => (None, count),
+			_ => {
+				let held = Symbol(format!("{TIMES_WORD}·count·{}", self.times_loops));
+				(Some(Node::Key(Box::new(held.clone()), Op::Assign, Box::new(count))), held)
+			}
+		};
 		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space)
+		let rounds = Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space);
+		match count_binding {
+			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
+			None => rounds,
+		}
 	}
 
 	fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
