@@ -3520,23 +3520,21 @@ fn find_instantiation_recursive(registry: &TypeRegistry, node: &Node) -> Option<
 }
 
 // Re-export eval function for tests
+/// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
-	// Detect file path and load file content
-	let code = if !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp")) {
-		if let Ok(content) = std::fs::read_to_string(code) {
-			content
-		} else {
-			code.to_string()
-		}
-	} else {
-		code.to_string()
-	};
+	let names_a_file = !code.contains('\n') && (code.ends_with(".wasp") || code.ends_with(".warp"));
+	match names_a_file.then(|| std::fs::read_to_string(code).ok()).flatten() {
+		Some(source) => crate::modules::with_program_file(std::path::Path::new(code), || eval_source(&source)),
+		None => eval_source(code),
+	}
+}
 
+fn eval_source(code: &str) -> Node {
 	crate::diagnostic::take_assumptions(); // only the guesses made for this program explain its errors
-	match lawful_program(&code) {
+	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
-			explain_runtime_error(eval_parsed(program, &code), exclusive_range)
+			explain_runtime_error(eval_parsed(program, code), exclusive_range)
 		}
 		Err(violation) => violation,
 	}
