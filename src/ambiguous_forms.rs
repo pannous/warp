@@ -4,7 +4,7 @@
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 const BARE_LIST_TOPIC: &str = "bare-list";
 const SUFFIX_PRECEDENCE_TOPIC: &str = "suffix-precedence";
@@ -13,11 +13,24 @@ const SUFFIX_WORD_ENDINGS: [&str; 2] = ["d", "ed"];
 const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow];
 
 pub fn lower(node: Node) -> Node {
-	let functions = crate::analyzer::applicable_function_names(&node);
-	lower_node(node, &functions)
+	let words = suffix_words(&node);
+	lower_node(node, &words)
 }
 
-fn lower_node(node: Node, functions: &HashSet<String>) -> Node {
+/// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
+/// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
+fn suffix_words(node: &Node) -> SuffixWords {
+	let mut variables = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(node, &mut variables);
+	let functions = crate::analyzer::applicable_function_names(node);
+	let words = functions.iter().flat_map(|function| SUFFIX_WORD_ENDINGS.map(|ending| (format!("{function}{ending}"), function.clone())));
+	words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect()
+}
+
+/// suffix word → function
+type SuffixWords = HashMap<String, String>;
+
+fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_node(*node, functions)), data },
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_node(*left, functions)), op, Box::new(lower_node(*right, functions))),
@@ -61,9 +74,9 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 }
 
 /// The function a suffix word applies: `squared` → `square`
-fn suffix_function(word: &Node, functions: &HashSet<String>) -> Option<String> {
+fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<String> {
 	let Node::Symbol(word) = word.drop_meta() else { return None };
-	SUFFIX_WORD_ENDINGS.iter().filter_map(|ending| word.strip_suffix(ending)).find(|stem| word.ends_with("ed") && functions.contains(*stem)).map(str::to_string)
+	functions.get(word).cloned()
 }
 
 fn call(function: &str, argument: Node) -> Node {
@@ -89,7 +102,7 @@ fn with_rightmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 }
 
 /// The suffix word heading `item`: `squared` or `squared+1`
-fn heading_suffix_word(item: &Node, functions: &HashSet<String>) -> Option<(Node, String)> {
+fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, String)> {
 	let mut leftmost = None;
 	with_leftmost(item.clone(), |leaf| {
 		leftmost = Some(leaf.clone());
@@ -108,7 +121,7 @@ fn grouped(node: Node) -> Node {
 }
 
 /// `x squared` is `square(x)`; after ungrouped arithmetic (`1+2 squared`) the user is asked what the word applies to (D9)
-fn apply_suffix_words(items: Vec<Node>, functions: &HashSet<String>, bracket: Bracket, separator: Separator) -> Node {
+fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracket, separator: Separator) -> Node {
 	if !matches!(bracket, Bracket::None | Bracket::Round) || separator != Separator::Space {
 		return Node::List(items, bracket, separator);
 	}

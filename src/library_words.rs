@@ -30,7 +30,7 @@ const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 16] = [
+const SYNONYMS: [(&str, &[&str]); 17] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -47,6 +47,7 @@ const SYNONYMS: [(&str, &[&str]); 16] = [
 	("last", &[]),
 	(SLICE, &[]),
 	(COPY, &["clone"]),
+	("replace", &[]),
 ];
 const SUM: &str = "sum";
 
@@ -64,11 +65,13 @@ const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 
-/// Source of the words expanded here; `word_argument` is the receiver, `word_tmp` a temporary that holds it once
-const EXPANDED_WORDS: [(&str, &str); 3] = [
-	("first", "word_tmp#1"),
-	("last", "word_tmp#(count(word_tmp))"),
-	(SUM, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
+/// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
+/// temporary that holds it once, `word_argument_2` … the arguments after the receiver
+const EXPANDED_WORDS: [(&str, usize, &str); 4] = [
+	("first", 1, "word_tmp#1"),
+	("last", 1, "word_tmp#(count(word_tmp))"),
+	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
+	("replace", 3, "join(split(word_tmp, word_argument_2), word_argument_3)"),
 ];
 /// Hidden variables and placeholders of the `try`/`assert` templates
 const TRY_TEMPORARY: &str = "try_tmp";
@@ -115,7 +118,8 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 }
 
 fn arity(word: &str) -> usize {
-	RUNTIME_WORDS.iter().find(|(name, _)| *name == word).map_or(1, |(_, arity)| *arity)
+	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
+	RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map_or(1, |(_, arity)| arity)
 }
 
 pub fn lower(node: Node) -> Node {
@@ -393,8 +397,9 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.chars` stays the count of characters; only `chars x` and `chars(x)` are the list
-		if let Some(word) = self.library_word(name).filter(|_| counting_method(name, &self.context).is_none()) {
+		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
+		let is_called = matches!(method.drop_meta(), Node::List(..));
+		if let Some(word) = self.library_word(name).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
@@ -488,8 +493,8 @@ impl Lowering {
 			let plural = if wanted == 1 { "" } else { "s" };
 			return Diagnostic::at(head, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
-		match EXPANDED_WORDS.iter().find(|(name, _)| *name == word) {
-			Some((_, template)) => self.expanded(template, arguments.into_iter().next().unwrap_or(Node::Empty)),
+		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
+			Some((_, _, template)) => self.expanded(template, arguments),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
@@ -546,13 +551,17 @@ impl Lowering {
 		)
 	}
 
-	fn expanded(&self, template: &str, receiver: Node) -> Node {
+	/// The template of an expanded word with the receiver (held once in a temporary) and the further arguments in place
+	fn expanded(&self, template: &str, arguments: Vec<Node>) -> Node {
 		let number = self.temporaries.get();
 		self.temporaries.set(number + 1);
 		let temporary = format!("{TEMPORARY}_{number}");
 		let body = template.replace(TEMPORARY, &temporary);
 		let program = parse(&format!("({temporary}={RECEIVER_PLACEHOLDER}; {body})"));
-		substitute(program, RECEIVER_PLACEHOLDER, &receiver)
+		arguments.iter().enumerate().fold(program, |program, (index, argument)| {
+			let placeholder = if index == 0 { RECEIVER_PLACEHOLDER.to_string() } else { format!("{RECEIVER_PLACEHOLDER}_{}", index + 1) };
+			substitute(program, &placeholder, argument)
+		})
 	}
 }
 
