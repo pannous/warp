@@ -469,6 +469,7 @@ fn test_empty_condition_does_not_panic() {
 
 #[test]
 fn test_proof_model_matches_unbounded_int() {
+	crate::requires!(crate::common::LEAN);
 	let reports = warp::law::verify("square(x) := x*x\nlaw square(x) >= 0");
 	assert_eq!(reports[0].assurance, warp::law::Assurance::Proved, "{}", reports[0]);
 }
