@@ -353,6 +353,7 @@ PASSED:
   ✓ test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ test_do_block::a_user_function_named_do_wins
   ✓ test_do_block::do_runs_a_block_literal
   ✓ test_do_block::do_runs_a_named_block
@@ -1528,4 +1529,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1523 passed, 0 failed, 1523 total tested
+58 ignored, 1524 passed, 0 failed, 1524 total tested
