@@ -27,8 +27,10 @@ ask me decision questions."
   Every other session sends its question to the Interviewer instead and never waits for the answer.
 - Keeps the queue: "## Pending questions" at the top of notes/open_decisions.md (question, options with the
   recommendation first, the assumption already taken, who asked, which branch/test it touches).
-- Asks in batches of up to 4 when the user is there; records each answer verbatim in the Decided section with the
-  date; tells the asking session (and the Supervisor) the answer, so the assumption is kept or reverted.
+- Asks in batches of up to 4, never waiting to be prompted. User 2026-10-03: "since you're only task is to interview me
+  you don't need to wait just start the interview whenever you have a batch of questions". Records each answer
+  verbatim in the Decided section with the date, then tells the asking session (and the Supervisor) the answer, so the
+  assumption is kept or reverted.
 - Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
 
 ## Never blocked by a decision

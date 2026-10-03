@@ -5,6 +5,10 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
+- P20 type-word shadowing: a user function named like a type word (`double := it*2; double 4`, `x.double`,
+  `4 doubled`) wins in its scope with a warning naming the shadowed type word, or is it a loud clash error?
+  Options: Shadow with a got-it warning / Clash error "double is a type; rename your function".
+  Assumed: shadow + warning. Asked by warp-bc (cloud-eval); branch claude/type-word-user-function.
 - P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
   Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
 - P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
