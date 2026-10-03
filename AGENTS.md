@@ -91,7 +91,7 @@ The underlying cargo commands (what tests/queue.sh runs):
 ```bash
 cargo test                     # Run all tests
 cargo test <test_name>         # Run specific test by name
-cargo test --test tests <file_stem>::  # Run one test file: all tests/*.rs are modules of ONE test crate (tests/main.rs); add new files there as `mod x;`
+cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs are modules of ONE test crate (tests/main.rs); add a new file as `mod x;` in its folder's mod.rs
 ```
 
 #### Important Test Files
@@ -123,8 +123,9 @@ local registry cache. Use `--offline` flag when building.
 
 ### Test File Locations
 
-Tests are in `tests/` directory (not `src/`). Each test file is named `test_*.rs`, tests a specific module or feature,
-and is a module of the one test crate `tests/main.rs`.
+Tests are in `tests/<topic>/` folders (not `src/`). Each test file is named `test_*.rs`, tests a specific module or
+feature, and is declared in its folder's `mod.rs`; tests/main.rs declares the folders as modules of the one test crate.
+Folder plan and condensing rules: notes/tests_layout.md.
 
 ### Extension Utilities
 
