@@ -5,16 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P20 type-word shadowing: a user function named like a type word (`double := it*2; double 4`, `x.double`,
-  `4 doubled`) wins in its scope with a warning naming the shadowed type word, or is it a loud clash error?
-  Options: Shadow with a got-it warning / Clash error "double is a type; rename your function".
-  Assumed: shadow + warning. Asked by warp-bc (cloud-eval); branch claude/type-word-user-function.
-- P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
-  Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
-- P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
-  Options: Fix the docs / Vendor for real. Assumed: unchanged. notes/code_quality.md.
-- P9 code quality 1: may the stale C++ feature flags go, with their `#[cfg]` branches in tests/test_wasm.rs, test_web.rs
-  (keeping the branch that runs today)? Options: Remove them / Keep. Assumed: kept. notes/code_quality.md.
 - P10 code quality 2: delete `smarty.rs` (with its asserts in tests/test_angle.rs) and tests/test_asts.rs (tests `syn`)?
   Options: Delete both / Delete test_asts only / Keep both. Assumed: kept.
 - P11 code quality 4: keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
@@ -70,6 +60,18 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Type-word shadowing (P20, asked by warp-bc, branch claude/type-word-user-function): "Clash error". A user function
+  named like a type word (`double := it*2`) is an error: "double is a type; rename your function". Reverts the
+  shadow-with-warning default.
+- cdylib (P7, code quality 10), verbatim: "what is that it doesn't mean that didn't need that before can we gate it".
+  Answer: the cdylib is the browser-wasm output, and web/playground/build.sh already asks for it itself
+  (`cargo rustc --crate-type cdylib`), so it is already gated. Cargo.toml keeps only `rlib` (since 2024-02 it listed
+  `["cdylib", "rlib"]`); the per-worktree crate-type patch is no longer needed.
+- vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
+  just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
+  `--offline` builds from the registry cache.
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+  tests/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
   don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
