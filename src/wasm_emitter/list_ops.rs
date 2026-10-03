@@ -583,10 +583,11 @@ impl WasmGcEmitter {
 		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
 		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
 		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
-		for name in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors) {
-			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
-				f.instruction(&Instruction::Unreachable);
-			});
+		if self.guards_errors {
+			self.declare_error_catching(); // the error functions throw while a `try` runs
+		}
+		for (error_id, name) in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).enumerate() {
+			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
 
