@@ -9,6 +9,7 @@ mod config;
 mod ffi_emitter;
 mod import_manager;
 mod key_emitter;
+mod layout;
 mod list_emitter;
 mod library_ops;
 mod text_unicode;

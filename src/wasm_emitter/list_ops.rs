@@ -5,11 +5,11 @@ use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
+use crate::wasm_emitter::layout::BYTE;
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] =
@@ -283,7 +283,6 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
 		let list_insert_at = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![], |s, f| {
@@ -291,7 +290,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[
 				I::LocalGet(0), I::RefIsNull, I::LocalGet(1), I::I64Eqz, I::I32Or,
 				I::If(BlockType::Result(node_ref)),
-				I::I64Const(square_list_kind), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
+				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(2), I::LocalGet(0), I::StructNew(node_type),
 				I::Else,
 			]);
 			s.emit_field(f, 0, 0);
@@ -562,14 +561,13 @@ impl WasmGcEmitter {
 		let node = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node_ref = Ref(self.node_ref(true));
-		let square_list_kind = Kind::List as i64 | (SQUARE_BRACKET_INFO << KIND_BITS);
 		self.runtime_function(crate::analyzer::ZERO_FILL_CALL, vec![ValType::I64, node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
 			let rest = 2;
 			Self::emit_list(f, &[
 				I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(0), I::I64Const(0), I::I64LeS, I::BrIf(1),
-				I::I64Const(square_list_kind), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
+				I::I64Const(SQUARE_LIST_KIND), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
 				I::LocalGet(0), I::I64Const(1), I::I64Sub, I::LocalSet(0),
 				I::Br(0), I::End, I::End,
 				I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
@@ -1005,13 +1003,7 @@ impl WasmGcEmitter {
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
 const STRUCT_BODY: &str = "struct_body";
-/// A list node's kind is `Kind::List | bracket_info << KIND_BITS`, bracket_info 1 for `[…]` (see the serialization notes in CLAUDE.md)
-const KIND_BITS: i64 = 8;
-const SQUARE_BRACKET_INFO: i64 = 1;
-const KEY_KIND: i64 = 6;
-const KIND_MASK: i64 = 0xFF;
-const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
-const CURLY_LIST_KIND: i64 = Kind::List as i64; // bracket_info Curly=0
+const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
 pub const NODE_AT_KEY: &str = "node_at_key";

@@ -17,6 +17,7 @@ use num_bigint::BigInt;
 use num_traits::{One, Pow};
 use wasm_encoder::*;
 use Instruction as I;
+use crate::wasm_emitter::layout::BYTE;
 
 /// Largest shift count: `1 << n` allocates n bits, a bigger count is a runtime error instead of an out-of-memory
 pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
@@ -26,7 +27,6 @@ const INT_TEXT: &str = "int_text";
 const DECIMAL_BASE: i64 = 10;
 /// A ratio whose denominator has no other prime factors is a terminating decimal
 const DECIMAL_PRIMES: [i64; 2] = [2, 5];
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 impl WasmGcEmitter {
 	/// Decimal literal as the exact value of its shortest round-trip digits: `0.1` → 1/10

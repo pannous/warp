@@ -3,6 +3,15 @@ use wasm_encoder::ValType::Ref;
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
 
+/// A node's kind field holds the `Kind` in its low KIND_BITS bits and extra info above them:
+/// the bracket of a list (Curly=0, Square=1, Round=2 …) or the operator of a key
+pub const KIND_BITS: i64 = 8;
+pub const KIND_MASK: i64 = 0xFF;
+pub const CURLY_BRACKET_INFO: i64 = 0;
+pub const SQUARE_BRACKET_INFO: i64 = 1;
+pub const CURLY_LIST_KIND: i64 = (CURLY_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
+pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
+
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
 #[repr(u8)]

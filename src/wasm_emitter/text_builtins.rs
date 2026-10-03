@@ -10,6 +10,8 @@ use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
+use crate::type_kinds::KIND_MASK;
+use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
@@ -21,14 +23,12 @@ const HOST_READ: &str = "host_read";
 const ERROR: &str = "error";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
 const IS_ERROR: &str = "is_error";
-const KIND_MASK: i64 = 0xFF;
 const ERROR_OF: &str = "error_of";
 const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
-const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
 pub const TEXT_FORM: &str = "text_form";
 
