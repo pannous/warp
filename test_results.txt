@@ -2,54 +2,29 @@
 
 PASSED:
   ✓ extensions::strings::tests::test_char_str_eq
-  ✓ extensions::strings::tests::test_char_str_eq
-  ✓ extensions::strings::tests::test_str_plus
   ✓ extensions::strings::tests::test_str_plus
   ✓ ffi_parser::tests::test_parse_int32_return
-  ✓ ffi_parser::tests::test_parse_int32_return
-  ✓ ffi_parser::tests::test_parse_pointer_param
   ✓ ffi_parser::tests::test_parse_pointer_param
   ✓ ffi_parser::tests::test_parse_simple_function
-  ✓ ffi_parser::tests::test_parse_simple_function
-  ✓ ffi_parser::tests::test_parse_system_headers
   ✓ ffi_parser::tests::test_parse_system_headers
   ✓ ffi_parser::tests::test_parse_two_params
-  ✓ ffi_parser::tests::test_parse_two_params
-  ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
-  ✓ ffi_parser::tests::test_raylib_functions
-  ✓ ffi::tests::test_extract_function_signature_multi_param
   ✓ ffi::tests::test_extract_function_signature_multi_param
   ✓ ffi::tests::test_extract_function_signature_pointer
-  ✓ ffi::tests::test_extract_function_signature_pointer
-  ✓ ffi::tests::test_extract_function_signature_simple
   ✓ ffi::tests::test_extract_function_signature_simple
   ✓ ffi::tests::test_extract_function_signature_void_return
-  ✓ ffi::tests::test_extract_function_signature_void_return
-  ✓ ffi::tests::test_header_sig_to_ffi_sig
   ✓ ffi::tests::test_header_sig_to_ffi_sig
   ✓ ffi::tests::test_map_c_type_to_valtype
-  ✓ ffi::tests::test_map_c_type_to_valtype
-  ✓ ffi::tests::test_parse_header_file_math
   ✓ ffi::tests::test_parse_header_file_math
   ✓ function::tests::test_arg
-  ✓ function::tests::test_arg
-  ✓ function::tests::test_function_builder
   ✓ function::tests::test_function_builder
   ✓ function::tests::test_function_host
-  ✓ function::tests::test_function_host
-  ✓ function::tests::test_function_locals
   ✓ function::tests::test_function_locals
   ✓ function::tests::test_function_registry
-  ✓ function::tests::test_function_registry
-  ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
-  ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
-  ✓ function::tests::test_signature_format
-  ✓ host::tests::test_host_state
   ✓ host::tests::test_host_state
   ✓ node_values_test::test_values_empty
   ✓ node_values_test::test_values_key
@@ -58,10 +33,7 @@ PASSED:
   ✓ node_values_test::test_values_nested_key
   ✓ node_values_test::test_values_number
   ✓ normalize::tests::test_hint_mode
-  ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
-  ✓ normalize::tests::test_hint_position
-  ✓ normalize::tests::test_style_swap
   ✓ normalize::tests::test_style_swap
   ✓ probe_def_syntax::probe_def_add
   ✓ probe_def_syntax::probe_def_block_syntax
@@ -675,7 +647,6 @@ PASSED:
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ test_list_plus_number::the_answer_compiles_the_chosen_reading
-  ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
   ✓ test_lists::test_array_size
@@ -727,6 +698,7 @@ PASSED:
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -1547,4 +1519,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1542 passed, 0 failed, 1542 total tested
+58 ignored, 1514 passed, 0 failed, 1514 total tested
