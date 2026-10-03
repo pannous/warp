@@ -121,3 +121,9 @@ fn test_parse_all_samples() {
 
 #[test] // first row of the solution: 5 3 4
 fn test_sudoku() { is!("samples/sudoku.wasp", 534); }
+
+#[test] // the self-playing snake eats four foods in 60 turns
+fn test_snake() { is!("samples/snake.wasp", 40); }
+
+#[test] // both quicksorts agree
+fn test_quicksort() { is!("samples/quicksort.wasp", true); }
