@@ -157,7 +157,6 @@ pub struct WasmGcEmitter {
 	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
-	int_remainder_global: u32, // second result of mag_divmod (wasm-opt runs without multivalue)
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
@@ -199,7 +198,6 @@ impl WasmGcEmitter {
 			wrapping_ints: false,
 			int_heap_global: 0,
 			int_count_global: 0,
-			int_remainder_global: 0,
 			returns_node: true,
 			text_heap_global: None,
 			discovered_needs: Default::default(),

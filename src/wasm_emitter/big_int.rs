@@ -512,13 +512,7 @@ impl WasmGcEmitter {
 		self.int_heap_global = self.next_global_idx;
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
 		self.int_count_global = self.next_global_idx + 1;
-		let limbs = RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.limbs_type) };
-		self.globals.global(
-			GlobalType { val_type: Ref(limbs), mutable: true, shared: false },
-			&ConstExpr::ref_null(HeapType::Concrete(self.type_manager.limbs_type)),
-		);
-		self.int_remainder_global = self.next_global_idx + 2;
-		self.next_global_idx += 3;
+		self.next_global_idx += 2;
 	}
 
 	/// Push the anyref payload for the Int in `local`
@@ -810,10 +804,9 @@ impl WasmGcEmitter {
 			s.call(f, "big_trim");
 		});
 
-		// mag_divmod(a, b) -> quotient, remainder in its global; binary long division, b nonzero
+		// mag_divmod(a, b) -> (quotient, remainder) as two results; binary long division, b nonzero
 		// locals: quotient, remainder, bit, n, k, carry, v
-		let remainder_global = self.int_remainder_global;
-		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
+		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(2)]);
 			Self::emit_list(f, &[I::LocalGet(1), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(5), I::ArrayNewDefault(limbs_type), I::LocalSet(3)]);
 			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(4)]);
@@ -844,10 +837,9 @@ impl WasmGcEmitter {
 					I::ArraySet(limbs_type), I::End,
 				]);
 			});
-			f.instruction(&I::LocalGet(3));
-			s.call(f, "big_trim");
-			f.instruction(&I::GlobalSet(remainder_global));
 			f.instruction(&I::LocalGet(2));
+			s.call(f, "big_trim");
+			f.instruction(&I::LocalGet(3));
 			s.call(f, "big_trim");
 		});
 	}
@@ -941,7 +933,6 @@ impl WasmGcEmitter {
 		});
 
 		// big_divmod(a, b) -> quotient, or the remainder when `remainder`; truncated like i64.div_s / i64.rem_s
-		let remainder_global = self.int_remainder_global;
 		for (name, remainder) in [("big_quot", false), ("big_rem", true)] {
 			self.runtime_function(name, vec![big, big], vec![big], vec![limbs], |s, f| {
 				s.magnitude(f, 1);
@@ -949,16 +940,14 @@ impl WasmGcEmitter {
 				s.magnitude(f, 0);
 				s.magnitude(f, 1);
 				s.call(f, "mag_divmod");
-				if remainder {
-					f.instruction(&I::Drop);
-					s.negative(f, 0);
-					f.instruction(&I::GlobalGet(remainder_global));
-				} else {
-					f.instruction(&I::LocalSet(2));
-					s.negative(f, 0);
+				let keep_wanted = if remainder { [I::LocalSet(2), I::Drop] } else { [I::Drop, I::LocalSet(2)] };
+				Self::emit_list(f, &keep_wanted);
+				s.negative(f, 0);
+				if !remainder {
 					s.negative(f, 1);
-					Self::emit_list(f, &[I::I32Xor, I::LocalGet(2)]);
+					f.instruction(&I::I32Xor);
 				}
+				f.instruction(&I::LocalGet(2));
 				s.call(f, "big_new");
 			});
 		}
