@@ -1,6 +1,5 @@
 #![allow(mixed_script_confusables)]
 
-use std::process::exit;
 use warp::analyzer::analyze;
 use warp::extensions::print;
 use warp::type_kinds::NodeKind;
