@@ -39,6 +39,7 @@ mod test_comments;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compile_only;
 mod test_condition_block;
+mod test_constant_expression_text;
 mod test_constructor_vs_data;
 mod test_control_words;
 mod test_counting_units;
