@@ -18,3 +18,5 @@
 - DONE: `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)
 - `print` of a list, a float or a map has no runtime text yet ("print of a List has no runtime text yet"), like `xs as string`; a runtime serializer is undecided (tests/test_cast_to_string.rs). (fix-print 2026-10-02)
 - `x=1; x+=sqrt(2)` gives the f64 2.414… while `x=1; x=sqrt(2)` keeps the exact real √2: compound assignment skips the exact-real lowering. (fix-print 2026-10-02)
+- `double:=it*2; double 4` gives 4 and `4 doubled` stays data: `double` is a type word (f64), so a function named double is never called. (impl-ask 2026-10-03)
+- D13 asks only after a number literal (`1 -1`); `x -1`, `f(x) -1` keep subtracting (tests/test_negated_call.rs). Whether variables should ask too is open (warp-43, 2026-10-03). (impl-ask)
