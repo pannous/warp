@@ -42,6 +42,7 @@ mod test_decimal_list_elements;
 mod test_declared_float_exact_reals;
 mod test_do_block;
 mod test_dollar_names;
+mod test_download;
 mod test_effects;
 mod test_emitter;
 mod test_empty_block_binding;

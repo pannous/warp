@@ -10,6 +10,9 @@ use std::time::Duration;
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 const PAGE_BITS: u32 = 16;
 
+/// Other spellings of the host words (user decision #14e: `download <url>` is `fetch <url>`)
+const HOST_ALIASES: [(&str, &str); 1] = [("download", "fetch")];
+
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -337,5 +340,36 @@ mod tests {
 		let mut state = HostState::new();
 		assert_eq!(state.alloc(10), 65536);
 		assert_eq!(state.alloc(5), 65552); // 65536 + 10, aligned to 8 = 65544? No, 65536+10=65546, aligned = 65552
+	}
+}
+
+/// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
+pub fn lower_aliases(node: Node) -> Node {
+	let mut defined = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(&node, &mut defined);
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, &node);
+	defined.extend(context.user_functions.into_keys());
+	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
+	if aliases.is_empty() {
+		return node;
+	}
+	renamed_heads(node, &aliases)
+}
+
+fn renamed_heads(node: Node, aliases: &[(&str, &str)]) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut items: Vec<Node> = items.into_iter().map(|item| renamed_heads(item, aliases)).collect();
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if let Some((_, word)) = aliases.iter().find(|(alias, _)| alias == name) {
+					items[0] = Node::Symbol(word.to_string());
+				}
+			}
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(renamed_heads(*left, aliases)), op, Box::new(renamed_heads(*right, aliases))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_heads(*node, aliases)), data },
+		other => other,
 	}
 }
