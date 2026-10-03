@@ -129,6 +129,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 fn parameter_names(left: &Node) -> Option<Vec<String>> {
 	match left.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
+		Node::Empty => Some(vec![]), // `() => body`
 		Node::List(items, _, _) => items
 			.iter()
 			.map(|item| match item.drop_meta() {

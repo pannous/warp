@@ -1084,6 +1084,7 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 		"string" | "str" | "text" => Kind::Text,
 		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
 		"char" | "codepoint" => Kind::Codepoint,
+		"function" | "closure" => Kind::Function,
 		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
 		_ => return None,
 	})
@@ -2360,6 +2361,11 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 		for function in ctx.user_functions.values() {
 			function.body.visit(&mut |node| {
 				let Node::List(items, _, _) = node else { return };
+				// `closure_new(target, captured…)` passes the captured values to the target's first parameters
+				let items = match crate::closures::as_closure_new(node) {
+					Some(_) => &items[1..],
+					None => &items[..],
+				};
 				let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) else { return };
 				let Some(called) = ctx.user_functions.get(callee) else { return };
 				for (argument, called_param) in items[1..].iter().zip(&called.params) {
@@ -2390,6 +2396,7 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	infer_parameters_from_calls(ctx, node);
 	infer_forwarded_parameters(ctx);
 	infer_closure_parameters(ctx, node);
+	infer_forwarded_parameters(ctx); // the kinds closures gave their parameters reach the functions that pass them
 	refine_return_kinds(ctx);
 }
 

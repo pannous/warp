@@ -145,6 +145,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			let type_name = text();
 			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
 		}
+		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}

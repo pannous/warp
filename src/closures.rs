@@ -105,9 +105,9 @@ pub fn lower(program: Node) -> Node {
 	let mut variables = HashSet::new();
 	collect_assigned_names(&program, &mut variables);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
-	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new() };
+	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new() };
 	values.settle(&context, &program);
-	let FunctionValues { functions, returning: returns_function, variables: function_variables } = values;
+	let FunctionValues { functions, returning: returns_function, variables: function_variables, .. } = values;
 	let mut lifting = Lifting { functions, variables, function_variables, returns_function, lifted: vec![] };
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
@@ -130,16 +130,19 @@ struct FunctionValues {
 	functions: HashSet<String>,
 	returning: HashSet<String>,
 	variables: HashSet<String>,
+	/// Variables assigned a list of function values: `fs#2` is one
+	lists: HashSet<String>,
 }
 
 impl FunctionValues {
-	/// A lambda, a function name, a variable holding a function, a call returning one, or a choice between them
+	/// A lambda, a function name, a variable holding a function, a call returning one (a called closure may), or a choice between them
 	fn is_function_value(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.functions.contains(name) || self.variables.contains(name),
 			Node::Key(choice, Op::Else, otherwise) => self.is_function_value(otherwise) || self.is_function_value(choice),
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
-			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name)) => true,
+			Node::Key(list, Op::Hash, _) => matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains(name)),
+			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
 			other => arrow_lambda(other).is_some() || as_closure_new(other).is_some(),
 		}
 	}
@@ -147,21 +150,26 @@ impl FunctionValues {
 	fn settle(&mut self, context: &Context, program: &Node) {
 		loop {
 			let returning: HashSet<String> = context.user_functions.values().filter(|function| self.is_function_value(tail(&function.body))).map(|function| function.name.clone()).collect();
-			let mut variables = HashSet::new();
+			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
 			program.visit(&mut |node| {
-				if let Node::Key(target, Op::Assign | Op::Define, value) = node {
-					if let Node::Symbol(name) = target.drop_meta() {
-						if !self.functions.contains(name) && self.is_function_value(value) {
-							variables.insert(name.clone());
-						}
-					}
+				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
+				let Node::Symbol(name) = target.drop_meta() else { return };
+				if self.functions.contains(name) {
+					return;
+				}
+				if self.is_function_value(value) {
+					variables.insert(name.clone());
+				}
+				if matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.iter().any(|item| self.is_function_value(item))) {
+					lists.insert(name.clone());
 				}
 			});
-			if returning == self.returning && variables == self.variables {
+			if returning == self.returning && variables == self.variables && lists == self.lists {
 				return;
 			}
 			self.returning = returning;
 			self.variables = variables;
+			self.lists = lists;
 		}
 	}
 }
@@ -250,11 +258,14 @@ impl Lifting {
 				return Node::List([vec![items[0].clone()], arguments].concat(), bracket, separator);
 			}
 		}
-		if let ([head, arguments], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
-			if let (Some(called), Node::List(arguments, Bracket::Round, _)) = (self.called_function(head), arguments.drop_meta()) {
-				if self.returns_function.contains(&called) {
-					return closure_call(head.clone(), arguments.clone());
-				}
+		// `make_adder(1)(2)`, `add(1)(2)(3)`: each group calls the closure the call before returned
+		if let ([head, groups @ ..], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
+			let argument_lists: Option<Vec<Vec<Node>>> = groups.iter().map(|group| match group.drop_meta() {
+				Node::List(arguments, Bracket::Round, _) => Some(arguments.clone()),
+				_ => None,
+			}).collect();
+			if let (true, Some(argument_lists)) = (!groups.is_empty() && self.returns_closure(head, bound), argument_lists) {
+				return argument_lists.into_iter().fold(head.clone(), closure_call);
 			}
 		}
 		if bracket == Bracket::Square {
@@ -264,11 +275,12 @@ impl Lifting {
 		Node::List(items, bracket, separator)
 	}
 
-	fn called_function(&self, node: &Node) -> Option<String> {
-		let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() else { return None };
+	/// A call of a function that returns a function value, or of a closure (which may)
+	fn returns_closure(&self, node: &Node, bound: &HashSet<String>) -> bool {
+		let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() else { return false };
 		match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(name)) if self.functions.contains(name) => Some(name.clone()),
-			_ => None,
+			Some(Node::Symbol(name)) => self.returns_function.contains(name) || self.may_hold_function(name, bound) || closure_call_arity(name).is_some(),
+			_ => false,
 		}
 	}
 

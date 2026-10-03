@@ -59,3 +59,46 @@ fn test_closures_returning_text() {
 fn test_not_a_function_stays_loud() {
 	fails_with("map [1 2 3] 5", "functions are not first-class values yet");
 }
+
+#[test]
+fn test_float_closure() {
+	is!("scale(k) := (x => x*k); s = scale(1.5); s(2)", 3.0);
+}
+
+#[test]
+fn test_compose_returns_a_closure() {
+	is!("double(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(double, inc); h(3)", 8);
+	is!("compose(f, g) := (x => f(g(x))); k=10; h = compose(y=>y+k, y=>y*2); h(3)", 16);
+}
+
+#[test]
+fn test_curried_closures() {
+	is!("add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); h(3)", 6);
+}
+
+#[test]
+fn test_a_closure_prints_as_its_function() {
+	assert_eq!(printed("double(x):=x*2; pick(c) := if c then double else double; pick(1)"), "double");
+}
+
+#[test]
+fn test_chained_calls_of_returned_closures() {
+	is!("add(a) := (b => (c => a+b+c)); add(1)(2)(3)", 6);
+	is!("add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); h(3)+1", 7);
+}
+
+#[test]
+fn test_a_lambda_without_parameters() {
+	is!("make_counter() := (c=0; () => c+1); k=make_counter(); k()", 1);
+}
+
+#[test]
+fn test_a_list_of_closures() {
+	is!("fs=[x=>x+1, x=>x*2]; f=fs#2; f(5)", 10);
+	is!("triple(x):=x*3; fs=[triple, x=>x+1]; g=fs#1; g(7)", 21);
+}
+
+#[test]
+fn test_a_parameter_declared_a_function() {
+	is!("apply(f:function, x) := f(x); k=1; apply(x=>x+k, 1)", 2);
+}
