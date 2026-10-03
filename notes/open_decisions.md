@@ -19,7 +19,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P27 non-digit characters after "int('5') is 5": `int('a')` and `'a' as int` give 97 (pinned by test_text_casts,
   test_cast_bugs), but `c='a'; c as int` says "invalid number" (literal and variable disagree).
   Options: int('a') is an error (as in Python), `as int` gives the code point 97 for literal and variable alike /
-  97 everywhere / error everywhere with a hint to a codepoint word. Assumed: as is (inconsistent). Asked by warp-d2.
+  97 everywhere / error everywhere with a hint to a codepoint word. Assumed (warp-d2, branch int-of-char): a digit character is its digit, any other character its code point
+  (`x=65 as char; x as int` round-trips); `c='a'` holds the one-letter TEXT "a", so `c as int` is invalid_number.
+  Low priority: confirm only. Asked by warp-d2.
 - P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
   and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
   libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
