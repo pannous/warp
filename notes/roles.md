@@ -42,6 +42,9 @@ So branches are official, and every branch lives in a worktree under warp.worktr
 ## Enforcement
 - `tests/queue.sh`: every test run waits for one machine-wide lock (`~/.cargo/warp-tests.lock`, lockf), so at most one
   test binary runs at a time; `./test.sh` re-enters through it. The holder is in `~/.cargo/warp-tests.lock.owner`.
+  Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
+  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped); a full `./test.sh` (the Integrator) has priority 0 and
+  takes the next slot ahead of targeted runs. Plain lockf alone was not FIFO: a full run waited 15 min behind workers.
 - `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
   binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
   directory is this checkout, which includes all spawned workers.
