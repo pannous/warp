@@ -7,3 +7,4 @@ mod test_algo_sorting;
 mod test_all_samples;
 mod test_kitchensink;
 mod test_samples;
+mod test_calculator_fixes;

@@ -487,6 +487,8 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
         sigs.entry(name.to_string())
             .or_insert_with(|| FfiSignature::new(name, "m", vec![ValType::F64; arity], vec![ValType::F64]));
     }
+    // `ln(x)` is the natural logarithm: libm's log under the name the program calls
+    sigs.insert("ln".to_string(), FfiSignature::new("log", "m", vec![ValType::F64], vec![ValType::F64]));
     sigs.insert(
         "rand".to_string(),
         FfiSignature {

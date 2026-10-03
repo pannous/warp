@@ -2355,24 +2355,43 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
 	let scope = function_body_scope(params, body, function_kinds, globals);
-	let last_kind = match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], &scope),
-		_ => infer_type(body, &scope),
+	// `return error("…")` is the failure path: it does not decide what the function returns
+	let is_error = |value: &Node| {
+		let value = match value.drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") => &items[1],
+			other => other,
+		};
+		matches!(value.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "error"))
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
 	// (`return [dist, prev]`: a List when every returned Node is one)
 	let mut returned_nodes: Vec<Kind> = vec![];
+	let mut returned: Vec<Kind> = vec![];
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
-			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") {
+			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") && !is_error(&items[1]) {
 				// `return` alone returns ø: a Node, so the function's numbers are Nodes too
 				let kind = if matches!(items[1].drop_meta(), Node::Empty) { Kind::Empty } else { infer_type(&items[1], &scope) };
+				returned.push(kind);
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
 					returned_nodes.push(kind);
 				}
 			}
 		}
 	});
+	let last = match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => &statements[statements.len() - 1],
+		other => other,
+	};
+	let last_kind = match (is_error(last), returned.first()) {
+		(true, Some(_)) if returned.contains(&Kind::Float) => Kind::Float,
+		(true, Some(first)) => *first,
+		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
+		_ => match infer_type(last, &scope) {
+			Kind::Int if returned.contains(&Kind::Float) => Kind::Float,
+			kind => kind,
+		},
+	};
 	match returned_nodes.as_slice() {
 		_ if last_kind.is_ref() => last_kind,
 		[] => last_kind,
@@ -3321,7 +3340,8 @@ pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 /// imports nor defines links it from libm, as `import f from 'm'` would; without that it compiled to its argument
 fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
-	let implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
+	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
+	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
 	let mut called = HashSet::new();
 	node.visit(&mut |part| {
 		if let Node::List(items, bracket, separator) = part {
@@ -3340,6 +3360,9 @@ fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 		add_ffi_import(ctx, name, "m");
 	}
 }
+
+/// The natural logarithm under its usual name, libm's log
+const LIBM_LN: &str = "ln";
 
 fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();

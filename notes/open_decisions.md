@@ -16,9 +16,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P24 should the suffix form `4 doubled` and the number-dot form `4.square` call user functions?
   Options: Yes, both (a letter after `4.` is never a decimal) / Suffix form only / Neither. Assumed: unsupported
   (todo.md). Asked by warp-bc. Note: the suffix form is wiki syntax (D9 `1+2 squared`).
-- P25 `int('5')` for a character: the code point 53 (like `'5' as int`), the digit value 5 (like Python's int("5")),
-  or an error naming `as int` / digit()? Options: Digit value 5 / Code point 53 / Error with hints.
-  Assumed: code point 53 (since 913c5b1e, before: error "not an int"). Asked by warp-d2, branch samples-2; todo.md.
+- P27 non-digit characters after "int('5') is 5": `int('a')` and `'a' as int` give 97 (pinned by test_text_casts,
+  test_cast_bugs), but `c='a'; c as int` says "invalid number" (literal and variable disagree).
+  Options: int('a') is an error (as in Python), `as int` gives the code point 97 for literal and variable alike /
+  97 everywhere / error everywhere with a hint to a codepoint word. Assumed (warp-d2, branch int-of-char): a digit character is its digit, any other character its code point
+  (`x=65 as char; x as int` round-trips); `c='a'` holds the one-letter TEXT "a", so `c as int` is invalid_number.
+  Low priority: confirm only. Asked by warp-d2.
 - P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
   and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
   libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
@@ -58,6 +61,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- int of a character (P25, asked by warp-d2): user to warp-d2, verbatim: "obviously one of five is five". `int('5')`
+  is 5 (main does this since a13b4fd6; pinned by tests/text/test_character_comparison.rs, branch int-of-char).
 - Text quotes in printed output (asked by warp-6c; user WIP commit ec968e18 expected single quotes in
   tests/test_method_words.rs): "Keep double quotes". The printer keeps `"HELLO"`; the WIP test edits are reverted to
   double quotes (user decision) and the 5 ignored tests un-ignored.
