@@ -1,5 +1,5 @@
 use crate::node::Node;
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
@@ -89,7 +89,7 @@ impl GcObject {
 
 	/// Get the base tag (lower 8 bits of kind)
 	pub fn tag(&self) -> Result<u8> {
-		Ok((self.kind()? & 0xFF) as u8)
+		Ok((self.kind()? & KIND_MASK) as u8)
 	}
 
 	/// Get the data field as a Val
@@ -321,7 +321,7 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 					// Read Node struct: (kind: i64, data: anyref, value: ref null $Node)
 					let kind_val = structref.field(&mut store, FIELD_KIND)?;
 					let kind = kind_val.unwrap_i64();
-					let tag = (kind & 0xFF) as u8;
+					let tag = (kind & KIND_MASK) as u8;
 
 					match tag {
 						t if t == Kind::Empty as u8 => Ok(Node::Empty),

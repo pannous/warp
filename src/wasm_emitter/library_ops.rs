@@ -1,12 +1,12 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
-use crate::type_kinds::{CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
+use crate::type_kinds::{CURLY_LIST_KIND, SQUARE_LIST_KIND};
 use crate::wasm_emitter::layout::BYTE;
 
 const KEY_KIND: i64 = Kind::Key as i64;

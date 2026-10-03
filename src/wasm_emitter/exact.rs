@@ -204,22 +204,40 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 		});
 
-		// exact_div(a, b): a/b, an integer whenever b divides a
-		self.runtime_function("exact_div", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
+		// exact_div(a, b): a/b, an integer whenever b divides a; locals: quotient, remainder
+		let (quotient, remainder) = (2, 3);
+		self.runtime_function("exact_div", vec![i64t, i64t], vec![i64t], vec![i64t, i64t], |s, f| {
+			let ratio_of_both = |f: &mut Function| {
+				s.cross_product(f, 0, 1);
+				s.cross_product(f, 1, 0);
+				s.call(f, "ratio_new");
+			};
 			s.emit_fixnum_test(f, &[0, 1]);
 			Self::emit_list(f, &[
-				I::If(BlockType::Result(i32t)),
+				I::If(BlockType::Result(i64t)),
 				I::LocalGet(1), I::I64Eqz, I::If(BlockType::Result(i32t)), I::I32Const(0), I::Else,
 				I::LocalGet(0), I::LocalGet(1), I::I64RemS, I::I64Eqz, I::End,
-				I::Else, I::I32Const(0), I::End,
 				I::If(BlockType::Result(i64t)), I::LocalGet(0), I::LocalGet(1), I::I64DivS,
 			]);
 			s.call(f, "int_from_i64");
 			f.instruction(&I::Else);
-			s.cross_product(f, 0, 1);
-			s.cross_product(f, 1, 0);
-			s.call(f, "ratio_new");
-			f.instruction(&I::End);
+			ratio_of_both(f);
+			Self::emit_list(f, &[I::End, I::Else]);
+			// big integers: one long division gives quotient and remainder; ratio_new's gcd only when b does not divide a
+			for operand in [0, 1] {
+				f.instruction(&I::LocalGet(operand));
+				s.call(f, "is_ratio");
+			}
+			Self::emit_list(f, &[I::I32Or, I::LocalGet(1), I::I64Eqz, I::I32Or, I::If(BlockType::Result(i64t))]);
+			ratio_of_both(f);
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "int_divmod_slow");
+			Self::emit_list(f, &[
+				I::LocalSet(remainder), I::LocalSet(quotient),
+				I::LocalGet(remainder), I::I64Eqz, I::If(BlockType::Result(i64t)), I::LocalGet(quotient), I::Else,
+			]);
+			ratio_of_both(f);
+			Self::emit_list(f, &[I::End, I::End, I::End]);
 		});
 
 		// ── dispatch from the Int slow paths ──

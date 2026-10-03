@@ -10,10 +10,8 @@
 //! style.function_def = FunctionStyle::Def;
 //! ```
 
-use std::sync::LazyLock;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::Mutex;
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
 
@@ -240,27 +238,27 @@ impl Default for Style {
     }
 }
 
-/// Global style setting
-static STYLE: LazyLock<Mutex<Style>> = LazyLock::new(|| Mutex::new(Style::default()));
-
-/// Set the global style
-pub fn set_style(style: Style) {
-    if let Ok(mut s) = STYLE.lock() {
-        *s = style;
-    }
+// The style, hint mode and shown hints configure the compilations of one thread (the CLI has one): a parallel
+// test's setting must not leak into another test's compilation
+thread_local! {
+    static STYLE: RefCell<Style> = RefCell::new(Style::default());
+    static SHOWN_HINTS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+    static HINT_MODE: std::cell::Cell<HintMode> = const { std::cell::Cell::new(HintMode::Always) };
 }
 
-/// Get the current style (cloned)
+/// Set the style of this thread's compilations
+pub fn set_style(style: Style) {
+    STYLE.with(|current| *current.borrow_mut() = style);
+}
+
+/// The style of this thread's compilations (cloned)
 pub fn style() -> Style {
-    STYLE.lock().map(|s| s.clone()).unwrap_or_default()
+    STYLE.with(|current| current.borrow().clone())
 }
 
 // ============================================================================
 // Hint Mode Configuration
 // ============================================================================
-
-/// Global set of hints already shown (for "once" mode)
-static SHOWN_HINTS: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Hint display mode
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -273,26 +271,19 @@ pub enum HintMode {
     Off,
 }
 
-/// Global hint mode setting
-static HINT_MODE: LazyLock<Mutex<HintMode>> = LazyLock::new(|| Mutex::new(HintMode::Always));
-
-/// Set the global hint mode
+/// Set the hint mode of this thread's compilations
 pub fn set_hint_mode(mode: HintMode) {
-    if let Ok(mut m) = HINT_MODE.lock() {
-        *m = mode;
-    }
+    HINT_MODE.with(|current| current.set(mode));
 }
 
-/// Get the current hint mode
+/// The hint mode of this thread's compilations
 pub fn hint_mode() -> HintMode {
-    HINT_MODE.lock().map(|m| *m).unwrap_or(HintMode::Always)
+    HINT_MODE.with(|current| current.get())
 }
 
 /// Clear shown hints (useful for testing)
 pub fn clear_shown_hints() {
-    if let Ok(mut shown) = SHOWN_HINTS.lock() {
-        shown.clear();
-    }
+    SHOWN_HINTS.with(|shown| shown.borrow_mut().clear());
 }
 
 // ============================================================================
@@ -309,11 +300,8 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
     let key = format!("{}|{}", original, canonical);
 
     if mode == HintMode::Once {
-        if let Ok(mut shown) = SHOWN_HINTS.lock() {
-            if shown.contains(&key) {
-                return;
-            }
-            shown.insert(key);
+        if !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
+            return;
         }
     }
 

@@ -232,6 +232,7 @@ impl WasmGcEmitter {
 		}
 
 		self.emit_with_at_functions();
+		self.emit_typed_list_runtime();
 		self.emit_list_concat();
 		self.emit_list_insert_at();
 	}
@@ -507,11 +508,11 @@ pub fn runtime_error_message(name: &str) -> String {
 	}
 }
 
-pub const RUNTIME_ERRORS: [&str; 17] = [
+pub const RUNTIME_ERRORS: [&str; 19] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
-	"not_comparable",
+	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT,
 ];
 
 impl WasmGcEmitter {
@@ -706,6 +707,9 @@ impl WasmGcEmitter {
 		}
 		if let Some(key) = self.dynamic_key(index) {
 			return self.emit_entry_assignment(func, target, &key, value, NODE_WITH_KEY);
+		}
+		if self.emit_typed_element_assignment(func, target, index, value) {
+			return;
 		}
 		let assigned = self.scratch(2);
 		self.emit_node_instructions(func, target);
@@ -987,12 +991,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
-	fn dynamic_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn dynamic_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		(self.get_type(key) == Kind::Empty && !matches!(key.drop_meta(), Node::Empty)).then(|| key.clone())
 	}
 
-	fn map_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
 		is_name.then(|| key.clone())
@@ -1040,12 +1044,7 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, &key);
 					self.emit_call(func, NODE_AT_KEY);
 				}
-				None => {
-					self.emit_integral_index_check(func, index);
-					self.emit_node_instructions(func, target);
-					self.emit_numeric_value(func, index);
-					self.emit_call(func, "node_index_at");
-				}
+				None => self.emit_list_element_node(func, target, index),
 			},
 		}
 	}

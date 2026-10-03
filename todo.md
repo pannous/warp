@@ -29,7 +29,7 @@
 - `x=[1 2]; (sort x)#1` is the symbol `sort`: a spaced round group `(sort x)` stays data, so the braceless call inside parentheses does not run; `(x.sort)#1` works. (impl-text 2026-10-03)
 - `[2.5 -1.0 0.5]` is the two-item list `[1.5 0.5]`: the glued sign subtracts (D13 Ask, impl-ask). (impl-text 2026-10-03)
 - An int list `as string` joins at runtime to "[1 2]"; a list of texts joins unquoted ("[a b]", its literal prints `["a" "b"]`) and a nested list is "not a joinable item": the general runtime serializer is still open (#35). (impl-text 2026-10-03)
-- test_normalization's styled-hint tests flake under parallel runs: `set_style` is process-global while their mutex is file-private (seen: test_variable_definition_let_style with no hint). (impl-text 2026-10-03)
+- DONE: test_normalization's styled-hint tests flake under parallel runs: `set_style` is process-global while their mutex is file-private (seen: test_variable_definition_let_style with no hint). (impl-text 2026-10-03)
 - tests/common/mod.rs `serve` duplicates probe_footguns.rs `serve` (the local HTTP stub); probe_footguns could use the common one. (impl-text 2026-10-03)
 - The shared target's `libwarp.rlib` has no hash (crate-type cdylib + rlib): every checkout copy links the same file; copies need `crate-type = ["rlib"]` plus a unique version locally. (impl-text 2026-10-03)
 - `x != int` is `undefined variable: int`: #30 made `x == int` false with the hint `x is int`, but `!=` with a type word has no reading yet (`not x is int`?). (impl-sem 2026-10-03)
@@ -60,3 +60,12 @@
 - Later, when machine load is low (user 2026-10-03): an agent fixes the red tests on main of pannous/russh (Rust, Semver, CodeQL on schedule: code scanning likely not enabled) and pannous/warpgate (Test); they mail nightly until then (notes/ci_policy.md).
 - `test_struct_types::test_magic_object_mismatch` (should_panic) aborted a whole 4-thread suite run once: `assertion failed: a.comes_from_same_engine(b.engine())` raised while panicking (wasmtime types.rs:2074), so the binary aborts and every later test is skipped; it passes alone. The failing `is!` formats a wasm_object! value from another engine. (code-quality 2026-10-03)
 - Open code-quality proposals that need a decision or test edits: notes/code_quality.md "Status" (feature flags, module moves/splits, panics in Node operators, tests/ regrouping, GcObject vs gc_traits, extensions dead traits). (code-quality 2026-10-03)
+- `a//b` is rewritten to `(a - a%b)/b` (wasp_parser.rs floor_division): two big long divisions where one Euclidean divmod (`int_divmod_slow`) would do; needs an operator of its own (notes/multi_value.md). (multi-value 2026-10-03)
+- On Linux the FFI header parser finds no libm signatures: glibc's math.h declares them through __MATHCALL macros (bits/mathcalls.h), which ffi_parser does not expand. test_package_pin::header_signatures_are_parsed_once is gated `requires!(MACOS_C_HEADERS)` until it does. (r3-ci 2026-10-03)
+- typed-lists: bare `int[0]` (no assignment) is 'i' and `#(int[n])` is 1: only `x = int[N]` with a literal N is a zero fill, `int[n]` with a variable indexes the word "int"
+- typed-lists: `int_array_filled` wraps a count above 2^31 to i32 (zero_fill would loop that long); a typed list read before its first assignment traps on a null array instead of the Node path's behaviour
+- Closures (notes/closures.md): every closure call boxes through Nodes (universal Node -> Node entry); a typed call_ref fast path for one shared signature (Int -> Int) is open. (closures 2026-10-03)
+- Closures: the result kind of `closure_call_n` is joined over all closures of arity n in the program (Data when they differ); a per-variable flow analysis of the reachable targets would type each call site. (closures 2026-10-03)
+- `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03)
+- `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
+- analyzer::collect_assigned_names and library_words::collect_assigned_names are the same function twice. (closures 2026-10-03)

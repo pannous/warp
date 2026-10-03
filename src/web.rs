@@ -7,13 +7,13 @@ use crate::diagnostic::{self, Ask, Asker, Fallback};
 use crate::extensions::numbers::Number;
 use crate::meta::{Dada, DataType};
 use crate::node::{Bracket, Node, Separator};
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use num_bigint::{BigInt, Sign};
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::type_kinds::{KIND_BITS, KIND_MASK};
+use crate::type_kinds::KIND_BITS;
 
 /// The answer that acknowledges an `educate_once` note, stored under `ack:<topic>` like an answer
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -170,6 +170,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			let type_name = text();
 			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
 		}
+		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}

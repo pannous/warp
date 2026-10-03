@@ -1,4 +1,5 @@
 use crate::node::Node;
+use crate::type_kinds::KIND_MASK;
 use crate::wasm_reader;
 
 /// Run a compiled .wasm file; a failure is an error node

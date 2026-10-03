@@ -8,11 +8,10 @@ use super::WasmGcEmitter;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_kinds::{any_heap_type, Kind};
+use crate::type_kinds::{any_heap_type, Kind, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::KIND_MASK;
 use crate::wasm_emitter::layout::BYTE;
 
 pub const VALUES_EQUAL: &str = "values_equal";
