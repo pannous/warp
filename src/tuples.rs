@@ -10,13 +10,33 @@ use crate::operators::Op;
 
 pub const RETURN: &str = "return";
 pub const DESTRUCTURE: &str = "$destructure";
+/// The mark of the name taking the rest in `a, *rest = xs` (Python's starred target)
+pub const STARRED: &str = "*";
+/// The hidden names holding the value of a nested target: `(a, b), c = …`
+const UNPACKED: &str = "unpacked";
+
+/// `*rest` → `rest`, any other name as is
+pub fn unstarred(name: &str) -> &str {
+	name.strip_prefix(STARRED).unwrap_or(name)
+}
 
 pub fn lower(node: Node) -> Node {
 	let lowered = match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
+		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
+			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
+		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(lower).collect();
+			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
+			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
+			let lower_item = |(index, item): (usize, Node)| match item.drop_meta() {
+				Node::Key(left, Op::Assign, right) if index == 0 && takes_more_values && bracketed_targets(left).is_some() => {
+					Node::Key(left.clone(), Op::Assign, Box::new(lower(right.as_ref().clone())))
+				}
+				_ => lower(item),
+			};
+			let items: Vec<Node> = items.into_iter().enumerate().map(lower_item).collect();
 			let regrouped = match (&bracket, &separator) {
 				(Bracket::None, Separator::Colon) => regroup_return(&items).or_else(|| regroup_destructuring(&items)),
 				// `{ return a, b }` keeps its one statement; `{a, b=2}` stays data
@@ -112,22 +132,69 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	}
 }
 
-/// `x, (y = v), w` → `$destructure (x, y) v w`
+/// `x, (y = v), w` → `$destructure (x, y) v w`; `(x, y) = v, w` the same
 fn regroup_destructuring(items: &[Node]) -> Option<Node> {
 	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
 	let Node::Key(last_name, Op::Assign, first_value) = items[assignment].drop_meta() else { return None };
-	let names: Vec<Node> = items[..assignment].iter().chain([last_name.as_ref()]).cloned().collect();
-	if assignment == 0 || !names.iter().all(|name| symbol_name(name).is_some()) {
+	let names: Vec<Node> = match (assignment, bracketed_targets(last_name)) {
+		(0, Some(targets)) => targets.to_vec(),
+		(0, None) => return None,
+		_ => items[..assignment].iter().chain([last_name.as_ref()]).cloned().collect(),
+	};
+	if !names.iter().all(is_target) {
 		return None;
 	}
 	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
-	if values.len() > 1 && values.len() != names.len() {
-		let written = Node::List(items.to_vec(), Bracket::None, Separator::Colon).serialize();
-		return Some(error(&format!("`{}` gives {} values for {} names", written.trim(), values.len(), names.len())));
+	let written = Node::List(items.to_vec(), Bracket::None, Separator::Colon).serialize();
+	Some(destructure(names, values, written.trim(), ""))
+}
+
+/// `[a, b] = v` and `(a, b) = v`: the bracketed targets assigned one value
+fn regroup_bracketed_destructuring(left: &Node, value: &Node) -> Option<Node> {
+	let targets = bracketed_targets(left)?;
+	Some(destructure(targets.to_vec(), vec![value.clone()], &format!("{} = {}", left.serialize(), value.serialize()), ""))
+}
+
+/// The targets of `(a, b)` / `[a, b]`: at least two names, starred names or nested targets, separated by commas
+/// (`f(i) = …` defines f)
+fn bracketed_targets(node: &Node) -> Option<&[Node]> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::Square, Separator::Colon) if items.len() >= 2 && items.iter().all(is_target) => Some(items),
+		_ => None,
 	}
+}
+
+fn is_target(node: &Node) -> bool {
+	symbol_name(node).is_some() || bracketed_targets(node).is_some()
+}
+
+/// `$destructure (names) values…`; a nested target `(a, b)` takes a hidden name, unpacked by a following statement
+fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -> Node {
+	let starred = names.iter().filter(|name| symbol_name(name).is_some_and(|name| name.starts_with(STARRED))).count();
+	if starred > 1 {
+		return error("only one name may take the rest (`*rest`) in an unpacking");
+	}
+	// `a, *rest = 1, 2, 3` unpacks the list [1 2 3]; how many items the rest takes is known at run time
+	let values = if starred == 1 && values.len() > 1 { vec![Node::List(values, Bracket::Square, Separator::Colon)] } else { values };
+	if values.len() > 1 && values.len() != names.len() {
+		return error(&format!("`{written}` gives {} values for {} names", values.len(), names.len()));
+	}
+	let mut nested = vec![];
+	let names: Vec<Node> = names.into_iter().enumerate().map(|(index, name)| match bracketed_targets(&name) {
+		Some(targets) => {
+			let hidden = Node::Symbol(format!("{UNPACKED}{path}·{index}"));
+			nested.push(destructure(targets.to_vec(), vec![hidden.clone()], written, &format!("{path}·{index}")));
+			hidden
+		}
+		None => name,
+	}).collect();
 	let head = Node::Symbol(DESTRUCTURE.to_string());
 	let names = Node::List(names, Bracket::Round, Separator::Colon);
-	Some(Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space))
+	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
+	if nested.is_empty() {
+		return statement;
+	}
+	Node::List(std::iter::once(statement).chain(nested).collect(), Bracket::None, Separator::Semicolon)
 }
 
 /// A function that returns several values does so on every return, and ends with such a return

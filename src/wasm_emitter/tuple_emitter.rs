@@ -4,10 +4,12 @@
 
 use super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
-use crate::tuples::{call_parts, destructuring, returned_values};
+use crate::tuples::{call_parts, destructuring, returned_values, unstarred};
 use crate::type_kinds::Kind;
 use wasm_encoder::{Function, Instruction as I, ValType};
 
+/// `a, b = [1, 2, 3]`: the runtime error of unpacking another number of items than names
+pub(super) const WRONG_NUMBER_OF_VALUES: &str = "wrong_number_of_values";
 const LIST_BRACKET_INFO: i64 = 1; // `[a b]`, as emit_list_structure writes Bracket::Square
 
 /// How the statement's own value is read afterwards: emit_numeric_value, emit_node_instructions or emit_float_value
@@ -27,7 +29,7 @@ impl WasmGcEmitter {
 		let Some((names, values)) = destructuring(node) else { return false };
 		self.emit_destructuring(func, &names, values);
 		// the statement's value is the last name's, as `y = v` gives v
-		read(self, func, &Node::Symbol(names.last().cloned().unwrap_or_default()));
+		read(self, func, &Node::Symbol(names.last().map(|name| unstarred(name).to_string()).unwrap_or_default()));
 		true
 	}
 
@@ -46,6 +48,10 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_destructuring(&mut self, func: &mut Function, names: &[String], values: &[Node]) {
+		if let ([value], true) = (values, names.iter().any(|name| unstarred(name) != name)) {
+			self.emit_unpacking(func, names, value); // a tuple call packs its values into a list here
+			return;
+		}
 		let kinds: Vec<Kind> = match values {
 			[call] => match self.tuple_call(call) {
 				Some((function, kinds)) if kinds.len() != names.len() => {
@@ -59,8 +65,7 @@ impl WasmGcEmitter {
 					kinds
 				}
 				None => {
-					let message = format!("{} = {} needs a function returning {} values (`return a, b`) or {} values", names.join(", "), call.serialize().trim(), names.len(), names.len());
-					self.emit_type_error(func, message);
+					self.emit_unpacking(func, names, call);
 					return;
 				}
 			},
@@ -75,6 +80,51 @@ impl WasmGcEmitter {
 		};
 		for (name, kind) in names.iter().zip(kinds).rev() {
 			self.emit_store_destructured(func, name, kind);
+		}
+	}
+
+	/// `a, b = xs` (a list, a text, `(1, 2)`): the items by position into the names; another count of items is the
+	/// runtime error wrong_number_of_values, as Python's "too many / not enough values to unpack".
+	/// A starred name `*rest` takes the items the others leave, as a list (possibly empty).
+	fn emit_unpacking(&mut self, func: &mut Function, names: &[String], value: &Node) {
+		let (items, count) = (self.node_scratch(), self.scratch(0));
+		let star = names.iter().position(|name| unstarred(name) != name);
+		let fixed = names.len() as i64 - star.map_or(0, |_| 1);
+		self.emit_node_instructions(func, value);
+		func.instruction(&I::LocalSet(items));
+		func.instruction(&I::LocalGet(items));
+		func.instruction(&I::RefAsNonNull);
+		self.emit_call(func, "node_count");
+		func.instruction(&I::LocalTee(count));
+		func.instruction(&I::I64Const(fixed));
+		func.instruction(if star.is_some() { &I::I64LtS } else { &I::I64Ne });
+		self.emit_fail_if(func, WRONG_NUMBER_OF_VALUES);
+		for (position, name) in names.iter().enumerate() {
+			let after_star = star.is_some_and(|star| position > star);
+			let from_end = names.len() as i64 - position as i64; // 1 for the last name
+			func.instruction(&I::LocalGet(items));
+			if Some(position) == star {
+				// node_slice(items, star, count - names after it): 0-based, end exclusive, ø = to the end
+				func.instruction(&I::I64Const(position as i64));
+				self.emit_call(func, "new_int");
+				func.instruction(&I::LocalGet(count));
+				func.instruction(&I::I64Const(from_end - 1));
+				func.instruction(&I::I64Sub);
+				self.emit_call(func, "new_int");
+				self.emit_call(func, super::library_ops::NODE_SLICE);
+				self.emit_store_destructured(func, unstarred(name), Kind::List);
+				continue;
+			}
+			func.instruction(&I::RefAsNonNull);
+			if after_star {
+				func.instruction(&I::LocalGet(count));
+				func.instruction(&I::I64Const(from_end - 1));
+				func.instruction(&I::I64Sub);
+			} else {
+				func.instruction(&I::I64Const(position as i64 + 1));
+			}
+			self.emit_call(func, "node_index_at");
+			self.emit_store_destructured(func, name, Kind::Data);
 		}
 	}
 
