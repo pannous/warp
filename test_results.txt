@@ -690,7 +690,6 @@ PASSED:
   ✓ test_math::test_if_then_else
   ✓ test_math::test_logarithm_in_runtime
   ✓ test_math::test_modulo
-  ✓ test_math::test_modulo_with_variables
   ✓ test_math::test_power
   ✓ test_math::test_runtime_equality
   ✓ test_math::test_runtime_equality_autocast
@@ -711,6 +710,7 @@ PASSED:
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
+  ✓ test_meta_attributes::test_meta_entries_survive_eval
   ✓ test_meta_attributes::test_meta_key_in_parsed_data
   ✓ test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
   ✓ test_meta_attributes::test_meta_stays_reachable
@@ -1173,6 +1173,14 @@ PASSED:
   ✓ test_try_else::try_falls_back_when_the_index_is_out_of_range
   ✓ test_try_else::try_keeps_a_value
   ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
+  ✓ test_tuple_returns::test_bare_list_assignment_still_asks
+  ✓ test_tuple_returns::test_destructuring_arity_mismatch_is_loud
+  ✓ test_tuple_returns::test_parallel_assignment_and_swap
+  ✓ test_tuple_returns::test_recursive_tuple_function
+  ✓ test_tuple_returns::test_tuple_function_as_whole_value_is_a_list
+  ✓ test_tuple_returns::test_tuple_function_returns_wasm_multi_value
+  ✓ test_tuple_returns::test_tuple_returns_inside_functions
+  ✓ test_tuple_returns::test_two_returned_values_destructure
   ✓ test_type_name_matching::test_a_declared_class_types_its_noun
   ✓ test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
   ✓ test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
@@ -1267,7 +1275,6 @@ PASSED:
   ✓ test_uniscript::effect_words_stack_on_one_operand
   ✓ test_uniscript::entities_become_characters
   ✓ test_uniscript::full_blocks_keep_their_spaces
-  ✓ test_uniscript::greek_is_transliterated_phonetically
   ✓ test_uniscript::groups_join_hieroglyphs_and_compose_ideographs
   ✓ test_uniscript::spelling_back_round_trips
   ✓ test_uniscript::the_header_declares_uniscript_and_its_version
@@ -1548,4 +1555,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1543 passed, 0 failed, 1543 total tested
+58 ignored, 1550 passed, 0 failed, 1550 total tested
