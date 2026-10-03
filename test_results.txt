@@ -718,12 +718,12 @@ PASSED:
   ✓ test_math::test_superscript_powers
   ✓ test_math::test_ternary_with_comparison
   ✓ test_math::test_units
+  ✓ test_math::test_variable_minus
   ✓ test_math::test_while_loop
   ✓ test_meta_attributes::test_at_in_data_stays_text
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
-  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
@@ -1204,6 +1204,14 @@ PASSED:
   ✓ test_try_else::try_falls_back_when_the_index_is_out_of_range
   ✓ test_try_else::try_keeps_a_value
   ✓ test_try_else::try_of_an_assignment_assigns_the_fallback
+  ✓ test_try_exits_and_naming::a_jump_inside_a_try_keeps_the_try_catching
+  ✓ test_try_exits_and_naming::a_named_else_is_skipped_without_an_error
+  ✓ test_try_exits_and_naming::bare_try_else_still_works
+  ✓ test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
+  ✓ test_try_exits_and_naming::the_else_branch_names_a_caught_runtime_error
+  ✓ test_try_exits_and_naming::the_else_branch_names_an_error_value
   ✓ test_tuple_returns::test_bare_list_assignment_still_asks
   ✓ test_tuple_returns::test_destructuring_arity_mismatch_is_loud
   ✓ test_tuple_returns::test_parallel_assignment_and_swap
@@ -1589,4 +1597,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1584 passed, 0 failed, 1584 total tested
+58 ignored, 1592 passed, 0 failed, 1592 total tested
