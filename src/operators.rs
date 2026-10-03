@@ -82,6 +82,7 @@ pub enum Op {
 	Ge,  // >=  ≥
 	Eq,  // ==
 	Ne,  // !=  ≠
+	Similar, // ≈  ~  circa  approximately: equal within the relative `tolerance` (default 1e-9)
 
 	// Logical operators
 	And, // and  &&  ∧
@@ -169,7 +170,7 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne => (115, 116),
+			Op::Eq | Op::Ne | Op::Similar => (115, 116),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -255,6 +256,7 @@ impl Op {
 			Op::Ge => ">=",
 			Op::Eq => "==",
 			Op::Ne => "!=",
+			Op::Similar => "≈",
 
 			// Logical
 			Op::And => "and",
