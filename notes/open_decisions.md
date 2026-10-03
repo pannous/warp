@@ -19,6 +19,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P26 is libm (sin, exp, …) pure? Today any libm call needs the Ffi capability, so eval_untrusted refuses pure math
   and a `! pure` function calling sin is a violation. Options: libm counts as pure (deterministic, no effects) /
   libm stays Ffi like any C library. Assumed: Ffi. Asked by warp-d2, branch implicit-libm (effects.rs).
+- P28 `real x;` (declared without a value) read before an assignment: loud error "x is declared without a value"
+  (Java/Kotlin) / zero value of the type (Go). Assumed: error (analyzer::check_unassigned_declarations). Night
+  session 2026-10-04.
+- P29 `pair.0`: counts from 0 like `pair[0]` (Rust/Swift tuples) / from 1 like `pair#1`. Assumed: from 0
+  (library_words method_call). Night session 2026-10-04.
+- P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
+  are not required. Assumed: Python semantics. Night session 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

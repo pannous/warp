@@ -41,7 +41,7 @@ The supervisor should remove the DONE elements after a while.
 - Assigning a list literal to a parameter: `def qp(arr, lo) { arr = [2]; return arr }; qp([1], 0)` fails "WASM validation failed: type mismatch". (samples 2026-10-03)
 - DONE: An unused or only-forwarded `def` parameter is typed Int: `def v(g, n) { return 1 }; … v(grid, n)` → "v needs an Int for parameter g, got g (a List)". (samples 2026-10-03) (works on main)
 - Lists are linked cells, so `a[i]` walks i cells and every element update copies: an in-place-style quicksort of 1000 elements takes >2 min (samples/quicksort.wasp runs 100). (samples 2026-10-03)
-- `real x;` (declaration without a value) leaves x undefined: `real x; x*x` → "undefined variable: x". Zero value or loud "declared without a value"? (samples 2026-10-03)
+- DONE: `real x;` (declaration without a value) leaves x undefined: `real x; x*x` → "undefined variable: x". Zero value or loud "declared without a value"? (samples 2026-10-03) (loud error before an assignment, P28)
 - `int('5')` → "not an int" ('5' as int is 53 by design; int() of a character should say so or take the digit). An element of `s.chars()` has no compile-time kind, so `c as text` fails "no runtime text yet" (decision #35); `for c in s` works. (samples 2026-10-03)
 - DONE: `type(x)` inside a function body: "undefined variable: type" (works at main level). (samples 2026-10-03) (night 2026-10-04)
 - DONE: `h=(1,2); h.0` stays the data `(1 2).0`: tuple fields by number are not read (h#1 works). (samples 2026-10-03) (h.0 is h[0], night 2026-10-04)

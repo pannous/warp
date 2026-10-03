@@ -25,3 +25,4 @@ mod test_float_fields;
 mod test_records;
 mod test_spaced_construction;
 mod test_type_word_user_function;
+mod test_declaration_without_value;

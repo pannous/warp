@@ -1313,7 +1313,57 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
+		.or_else(|| check_unassigned_declarations(program))
 		.map(Diagnostic::into_error)
+}
+
+/// `real x; x*x`: a variable declared without a value is read before anything is assigned to it
+fn check_unassigned_declarations(program: &Node) -> Option<Diagnostic> {
+	let mut found = None;
+	program.visit(&mut |node| {
+		let Node::List(items, _, Separator::Semicolon | Separator::Newline) = node else { return };
+		let mut declared: Vec<&String> = Vec::new();
+		for item in items {
+			if found.is_some() {
+				return;
+			}
+			if let Some(name) = bare_declaration(item) {
+				declared.push(name);
+				continue;
+			}
+			if let Some(name) = declared.iter().find(|name| reads_variable(item, name)) {
+				found = Some(Diagnostic::at(item, format!("{name} is declared without a value: assign it before reading it ({name} = …)")));
+				return;
+			}
+			declared.retain(|name| !matches!(item.drop_meta(), Node::Key(target, Op::Assign | Op::Define, _) if is_word(target, name)));
+		}
+	});
+	found
+}
+
+/// `real x`, `int count`: a type word and a name, no value
+fn bare_declaration(item: &Node) -> Option<&String> {
+	match item.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[type_word, name] if matches!(type_word.drop_meta(), Node::Symbol(word) if type_word_kind(word).is_some()) => match name.drop_meta() {
+				Node::Symbol(name) => Some(name),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Does the statement read the variable (`x = 1` only writes it)
+fn reads_variable(statement: &Node, name: &str) -> bool {
+	let read_part = match statement.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) if is_word(target, name) => value.as_ref(),
+		other => other,
+	};
+	let mut reads = false;
+	read_part.visit(&mut |part| reads |= matches!(part, Node::Symbol(symbol) if symbol == name));
+	reads
 }
 
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
