@@ -145,3 +145,6 @@ fn test_sin() { is!("samples/sin.wasp", 841471); }
 
 #[test] // the Taylor kernel at π/2
 fn test_sine() { assert!(warp::wasm_emitter::eval("samples/sine.wasp").serialize().starts_with("1.0000000")); }
+
+#[test] // 14 + 20 + 5
+fn test_calculator() { is!("samples/calculator.wasp", 39); }
