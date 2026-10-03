@@ -100,12 +100,12 @@ fn is_update(node: &Node) -> bool {
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
-	} else if *op == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left, right) {
-		Kind::Text // concatenation
-	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
-		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
-	} else if repeats_text(left, op, right) {
-		Kind::Text // `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)
+		|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+		|| repeats_text(left, op, right)
+	{
+		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+		Kind::Text
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {
@@ -123,7 +123,7 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 
 /// `base ^ 0.5`: an exact base with a non-integral literal exponent is no exact number, it is computed as f64
 pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
-	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(number.clone()).fract() != 0.0);
+	let fractional_exponent = *op == Op::Pow && matches!(right_operand.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
 	match arithmetic_kind(left, op, right) {
 		Kind::Int if fractional_exponent => Kind::Float,
 		kind => kind,
@@ -1883,7 +1883,7 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 			match target.drop_meta() {
 				Node::Key(name, Op::Colon, type_name) if matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
-						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float(number.clone().into()))),
+						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => Box::new(Node::Number(Number::Float((*number).into()))),
 						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
 						_ => value,
 					};
@@ -1941,7 +1941,7 @@ fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator)
 			Node::Key(word, op, value) => {
 				let Node::Symbol(word) = word.drop_meta() else { return None };
 				type_name = format!("{type_name} of {word}");
-				assignment = Some((op.clone(), value.clone()));
+				assignment = Some((*op, value.clone()));
 				break;
 			}
 			_ => return None,

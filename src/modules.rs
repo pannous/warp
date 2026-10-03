@@ -274,7 +274,7 @@ impl Loader<'_> {
 		}
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
 		let module = with_module_directory(module, &directory);
-		let outer_directory = std::mem::replace(&mut self.including_directory, Some(directory));
+		let outer_directory = self.including_directory.replace(directory);
 		let module = self.resolve(module);
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
@@ -359,7 +359,7 @@ impl Loader<'_> {
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
 		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
-		let outer_directory = std::mem::replace(&mut self.including_directory, Some(folder_of(&sibling.path)));
+		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
 		Ok(resolved?.into_iter().flat_map(statements).collect())

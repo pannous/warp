@@ -183,13 +183,13 @@ impl Lowering {
 		let variant = self.overloads.contains_key(&name).then(|| self.result_type(&definition)).flatten().map(|result| witness_name(&name, &result));
 		let drops_result = definition.written_result.as_deref().is_some_and(|result| self.is_declared(result));
 		if variant.is_none() && !drops_result {
-			return Some(Node::Key(target.clone(), op.clone(), body));
+			return Some(Node::Key(target.clone(), *op, body));
 		}
 		let mut head = definition.head.to_vec();
 		if let Some(variant) = variant {
 			head[0] = Node::Symbol(variant);
 		}
-		Some(Node::Key(Box::new(Node::List(head, Bracket::Round, Separator::None)), op.clone(), body))
+		Some(Node::Key(Box::new(Node::List(head, Bracket::Round, Separator::None)), *op, body))
 	}
 
 	/// The written result type, else the type of the instance the body constructs

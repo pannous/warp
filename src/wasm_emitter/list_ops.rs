@@ -851,7 +851,7 @@ impl WasmGcEmitter {
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
 		if crate::analyzer::repeats_text(left_kind, op, right_kind) {
 			let (text, count) = if right_kind == Kind::Int { (left, right) } else { (right, left) };
-			let fractional = matches!(count.drop_meta(), Node::Number(number) if f64::from(number.clone()).fract() != 0.0);
+			let fractional = matches!(count.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
 			if !fractional {
 				let written = format!("{}*{}", crate::normalize::operand_text(left), crate::normalize::operand_text(right));
 				Self::educate_text_multiplication(&written, text, count);
