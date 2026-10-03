@@ -52,3 +52,4 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - functions/ (tests-tidy-functions): probe_def_syntax condensed into test_def_forms.rs; tests/probes/ (never compiled) removed
 - parser/ (tests-tidy-parser): pure move
 - node/ (tests-tidy-node): pure move
+- numbers/ (tests-tidy-numbers): pure move

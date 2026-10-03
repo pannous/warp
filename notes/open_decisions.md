@@ -76,7 +76,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
   `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
   Asks-become-warnings rule).
-- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/numbers/test_angle.rs).
 - Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
 - GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
 - libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
@@ -274,7 +274,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
-14. RESOLVED (near! in tests/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14. RESOLVED (near! in tests/numbers/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
