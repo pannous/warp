@@ -28,6 +28,13 @@ const DEFAULT_PARAMETER: &str = "x";
 const BUILTIN_COMPARABLE: [&str; 6] = ["int", "rational", "real", "float", "text", "codepoint"];
 
 pub const COMPARABLE: &str = "Comparable";
+/// `image like photo`: an image is usable wherever a photo is expected, judged by the fields it is used with
+/// (notes/welcoming.md, "Duck typing and like")
+pub const LIKE_WORD: &str = "like";
+/// A known type passed where another is expected: the error names both and teaches `like` (GIVEN, DECLARED)
+const NOT_LIKE_MESSAGE: &str = "GIVEN is not a DECLARED";
+const NOT_LIKE_FIX: &str = "declare `GIVEN like DECLARED` to use it as one (judged by the fields it is used with)";
+const LIKE_OF_UNDECLARED: &str = "NAME is not a declared type: `like` relates two classes";
 pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
@@ -148,21 +155,55 @@ pub fn lower_declarations(node: Node) -> Node {
 }
 
 fn collect_declarations(node: &Node, traits: &mut Vec<Trait>) {
+	collect_declared(node, traits)
+}
+
+/// The values the declarations of the program carry (a Trait, a Likeness), in order
+fn collect_declared<T: Clone + 'static>(node: &Node, found: &mut Vec<T>) {
 	match node {
 		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) if dada.downcast_ref::<Trait>().is_some() => traits.push(dada.downcast_ref::<Trait>().expect("checked").clone()),
-			_ => collect_declarations(node, traits),
+			Node::Data(dada) if dada.downcast_ref::<T>().is_some() => found.push(dada.downcast_ref::<T>().expect("checked").clone()),
+			_ => collect_declared(node, found),
 		},
 		Node::Key(left, _, right) => {
-			collect_declarations(left, traits);
-			collect_declarations(right, traits);
+			collect_declared(left, found);
+			collect_declared(right, found);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_declarations(item, traits)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_declared(item, found)),
 		_ => {}
 	}
 }
 
+/// `image like photo`: values of `kind` are accepted wherever `like` is expected
+#[derive(Clone, Debug, PartialEq)]
+pub struct Likeness {
+	pub kind: String,
+	pub like: String,
+}
+
+/// `image like photo` written as a statement
+fn like_declaration(node: &Node) -> Option<Likeness> {
+	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return None };
+	let [Node::Symbol(kind), Node::Symbol(word), Node::Symbol(like)] = items.iter().map(Node::drop_meta).collect::<Vec<_>>()[..] else { return None };
+	(word == LIKE_WORD).then(|| Likeness { kind: kind.clone(), like: like.clone() })
+}
+
+/// A likeness naming something that is no declared type: the error of the program
+fn undeclared_likeness(likenesses: &[Likeness], registry: &TypeRegistry) -> Option<Node> {
+	let undeclared = likenesses.iter().flat_map(|likeness| [&likeness.kind, &likeness.like]).find(|name| registry.get_by_name(name).is_none())?;
+	Some(crate::node::error(&LIKE_OF_UNDECLARED.replace("NAME", undeclared)))
+}
+
+/// `image is not a photo`, with the fix `declare image like photo`
+fn not_like(argument: &Node, needs: &str, given: &str, declared: &str) -> Node {
+	let fill = |template: &str| template.replace("GIVEN", given).replace("DECLARED", declared);
+	Diagnostic::at(argument, format!("{needs}: {}", fill(NOT_LIKE_MESSAGE))).fix(fill(NOT_LIKE_FIX)).into_error()
+}
+
 fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
+	if let Some(likeness) = like_declaration(&node) {
+		return Node::meta(Node::Empty, Node::data(likeness));
+	}
 	if let Some(declared) = declaration(&node) {
 		return match declared {
 			Ok(declared) => Node::meta(Node::Empty, Node::data(declared)),
@@ -573,12 +614,17 @@ fn diverges(branch: &Node) -> bool {
 /// `x is shape` of a known instance is answered here
 pub fn lower_dispatch(node: Node) -> Node {
 	let types = InstanceTypes::of(&node);
+	let mut likenesses = vec![];
+	collect_declared(&node, &mut likenesses);
+	if let Some(error) = undeclared_likeness(&likenesses, &types.registry) {
+		return error;
+	}
 	if types.registry.types().is_empty() {
 		return node;
 	}
 	let witnesses = defined_functions(&node);
 	let signatures = instance_signatures(&node, &types.registry);
-	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, missing: RefCell::new(None) };
+	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, likenesses, missing: RefCell::new(None) };
 	let node = dispatch.expand(node);
 	dispatch.missing.into_inner().unwrap_or(node)
 }
@@ -589,6 +635,8 @@ struct Dispatch {
 	witnesses: Vec<String>,
 	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
+	/// The `image like photo` declarations
+	likenesses: Vec<Likeness>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
 	missing: RefCell<Option<Node>>,
 }
@@ -597,6 +645,22 @@ impl Dispatch {
 	fn fail(&self, error: Node) -> Option<Node> {
 		self.missing.borrow_mut().get_or_insert(error.clone());
 		Some(error)
+	}
+
+	/// Is `kind` usable as `like`: the same type, or like it through declared likenesses (`thumb like image`, `image like photo`)
+	fn is_like(&self, kind: &str, like: &str) -> bool {
+		let mut reached = vec![kind.to_string()];
+		let mut next = 0;
+		while let Some(current) = reached.get(next).cloned() {
+			if current == like {
+				return true;
+			}
+			let further = self.likenesses.iter().filter(|likeness| likeness.kind == current).map(|likeness| likeness.like.clone());
+			let new: Vec<String> = further.filter(|name| !reached.contains(name)).collect();
+			reached.extend(new);
+			next += 1;
+		}
+		false
 	}
 
 	fn has_witness(&self, operation: &str, type_name: &str) -> bool {
@@ -676,20 +740,23 @@ impl Dispatch {
 	}
 
 	/// `keep(3)`, `keep page{…}` for `keep(p:photo)`: an argument known at compile time not to be an instance of the declared
-	/// type of its parameter is an error; an argument of unknown type is left to its uses (a missing field fails loudly)
+	/// type of its parameter is an error, which teaches `page like photo` for a declared type; an argument of unknown type,
+	/// or of a type declared like the parameter's, is left to its uses (a missing field fails loudly)
 	fn refused_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		let name = called_name(items, bracket, separator)?;
 		let parameters = self.signatures.get(name)?;
 		let refusal = items[1..].iter().zip(parameters).find_map(|(argument, (parameter, declared))| {
 			let declared = declared.as_ref()?;
-			let given = match self.instance_type(argument) {
-				Some(type_name) if type_name == *declared => return None,
-				Some(type_name) => crate::analyzer::with_article(&type_name),
-				None if crate::library_words::object_entries(argument).is_some() => return None, // a written map: judged by the fields its uses read
-				None => crate::analyzer::kind_with_article(crate::analyzer::argument_literal_kind(argument)?),
-			};
-			let message = format!("{name} needs {} for parameter {parameter}, got {} ({given})", crate::analyzer::with_article(declared), argument.serialize());
-			Some(Diagnostic::at(argument, message).into_error())
+			let needs = format!("{name} needs {} for parameter {parameter}, got {}", crate::analyzer::with_article(declared), argument.serialize());
+			match self.instance_type(argument) {
+				Some(type_name) if self.is_like(&type_name, declared) => None,
+				Some(type_name) => Some(not_like(argument, &needs, &type_name, declared)),
+				None if crate::library_words::object_entries(argument).is_some() => None, // a written map: judged by the fields its uses read
+				None => {
+					let given = crate::analyzer::kind_with_article(crate::analyzer::argument_literal_kind(argument)?);
+					Some(Diagnostic::at(argument, format!("{needs} ({given})")).into_error())
+				}
+			}
 		})?;
 		self.fail(refusal)
 	}
