@@ -166,6 +166,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
 				}
+				if name == crate::closures::CLOSURE_NEW {
+					return Kind::Function;
+				}
 				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 					return kind;
 				}
@@ -2297,8 +2300,12 @@ fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list
 fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut indexed: HashSet<String> = HashSet::new();
+	let mut called: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
+		if let Some(name) = crate::closures::called_closure(node) {
+			called.insert(name.to_string());
+		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
 				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()));
@@ -2321,7 +2328,13 @@ fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		indexed.insert(source.clone());
 	}
 	params.into_iter().map(|param| {
-		let used_as = if indexed.contains(&param.name) { Some(Kind::List) } else { None };
+		let used_as = if called.contains(&param.name) {
+			Some(Kind::Function)
+		} else if indexed.contains(&param.name) {
+			Some(Kind::List)
+		} else {
+			None
+		};
 		Param { used_as, ..param }
 	}).collect()
 }
@@ -2373,8 +2386,10 @@ fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	extract_user_functions_inner(ctx, node);
+	crate::closures::register_closure_calls(ctx, node);
 	infer_parameters_from_calls(ctx, node);
 	infer_forwarded_parameters(ctx);
+	infer_closure_parameters(ctx, node);
 	refine_return_kinds(ctx);
 }
 
@@ -2428,6 +2443,48 @@ fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound:
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions, bound)), data },
 		other => other,
+	}
+}
+
+/// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
+/// parameter of the enclosing function, a literal variable), its parameters the kinds of the literal arguments of the closure
+/// calls of its arity
+fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
+	let variable_kinds = literal_variable_kinds(program, ctx);
+	loop {
+		let mut inferred: Vec<(String, usize, Kind)> = vec![];
+		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
+			let params: HashMap<String, Kind> = function.params.iter().map(|param| (param.name.clone(), param_kind(param))).collect();
+			(function.body.as_ref(), params)
+		}));
+		for (body, params) in scopes {
+			body.visit(&mut |node| {
+				let value_kind = |value: &Node| match value.drop_meta() {
+					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					_ => argument_literal_kind(value),
+				};
+				if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+					inferred.extend(captured.iter().enumerate().filter_map(|(index, value)| Some((target.to_string(), index, value_kind(value)?))));
+				}
+				let Node::List(items, _, _) = node else { return };
+				let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+				let Some(arity) = crate::closures::closure_call_arity(name) else { return };
+				for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)) {
+					inferred.extend(items[2..].iter().enumerate().filter_map(|(index, argument)| Some((target.clone(), captured + index, argument_literal_kind(argument)?))));
+				}
+			});
+		}
+		let mut changed = false;
+		for (target, index, kind) in inferred {
+			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
+			if kind != Kind::Int && param.annotation.is_none() && param.default.is_none() && param.used_as.is_none() {
+				param.used_as = Some(kind);
+				changed = true;
+			}
+		}
+		if !changed {
+			return;
+		}
 	}
 }
 
@@ -2511,7 +2568,11 @@ fn refine_return_kinds(ctx: &mut Context) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
-			.map(|function| (function.name.clone(), infer_function_return_kind(&function.params, &function.body, &function_kinds)))
+			.map(|function| {
+				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
+					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds));
+				(function.name.clone(), kind)
+			})
 			.collect();
 		let settled = inferred.iter().all(|(name, kind)| function_kinds[name] == *kind);
 		function_kinds.extend(inferred);

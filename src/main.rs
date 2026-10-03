@@ -39,6 +39,7 @@ pub mod type_name_matching;
 pub mod meta_entries;
 pub mod function_values;
 pub mod lambdas;
+pub mod closures;
 pub mod library_words;
 pub mod type_tests;
 pub mod min_max;
