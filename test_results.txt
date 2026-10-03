@@ -35,6 +35,79 @@ PASSED:
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
+  ✓ operators::test_add_to::add_to_an_empty_list
+  ✓ operators::test_add_to::add_to_appends_an_element
+  ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering
+  ✓ operators::test_equality_never_chains::orderings_still_chain
+  ✓ operators::test_in_position::a_found_first_element_is_truthy
+  ✓ operators::test_in_position::in_gives_the_one_based_position
+  ✓ operators::test_in_position::maps_and_has_keep_their_truth_value
+  ✓ operators::test_in_position::the_position_never_warns
+  ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
+  ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
+  ✓ operators::test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
+  ✓ operators::test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
+  ✓ operators::test_logic_grouped_operands::the_logic_table_of_negations
+  ✓ operators::test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
+  ✓ operators::test_mutating_bang::a_method_with_bang_assigns_back
+  ✓ operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
+  ✓ operators::test_mutating_bang::without_bang_the_value_is_unchanged
+  ✓ operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
+  ✓ operators::test_negated_call::test_function_applied_to_a_negative_number
+  ✓ operators::test_negated_call::test_variable_minus_number_stays_subtraction
+  ✓ operators::test_operator_declarations::test_built_in_operators_are_untouched
+  ✓ operators::test_operator_declarations::test_infix_operator
+  ✓ operators::test_operator_declarations::test_infix_operator_declared_by_its_pattern
+  ✓ operators::test_operator_declarations::test_operators_declared_later_are_known_to_the_whole_program
+  ✓ operators::test_operator_declarations::test_precedence_declarations_are_refused
+  ✓ operators::test_operator_declarations::test_prefix_operator
+  ✓ operators::test_operator_declarations::test_suffix_operator
+  ✓ operators::test_operator_parsing::call_with_an_expression_argument_is_name_and_key
+  ✓ operators::test_operator_parsing::equals_and_colon_make_keys_with_their_own_operator
+  ✓ operators::test_operator_parsing::increment_suffix_and_while_condition_spacing
+  ✓ operators::test_operator_parsing::keys_with_different_names_differ
+  ✓ operators::test_operator_parsing::test_arithmetic_basic
+  ✓ operators::test_operator_parsing::test_arithmetic_precedence
+  ✓ operators::test_operator_parsing::test_assignment_right_assoc
+  ✓ operators::test_operator_parsing::test_comparison
+  ✓ operators::test_operator_parsing::test_comparison_eq
+  ✓ operators::test_operator_parsing::test_division_type_upgrade
+  ✓ operators::test_operator_parsing::test_hash_index
+  ✓ operators::test_operator_parsing::test_logical_and
+  ✓ operators::test_operator_parsing::test_logical_or
+  ✓ operators::test_operator_parsing::test_mixed_prefix_infix
+  ✓ operators::test_operator_parsing::test_power_right_assoc
+  ✓ operators::test_operator_parsing::test_prefix_neg
+  ✓ operators::test_operator_parsing::test_range
+  ✓ operators::test_operator_parsing::test_suffix_square
+  ✓ operators::test_operator_parsing::test_type_annotation_block_with_assignment
+  ✓ operators::test_operator_parsing::test_type_annotation_with_block
+  ✓ operators::test_operator_parsing::test_unicode_le
+  ✓ operators::test_operator_parsing::test_unicode_mul
+  ✓ operators::test_operator_parsing::typed_name_binds_before_assignment
+  ✓ operators::test_operators::test_add_boxed_list_item
+  ✓ operators::test_operators::test_add_item_list
+  ✓ operators::test_operators::test_add_list_item_explicit
+  ✓ operators::test_operators::test_add_lists
+  ✓ operators::test_operators::test_add_meta_on_right
+  ✓ operators::test_operators::test_add_numbers
+  ✓ operators::test_operators::test_add_text
+  ✓ operators::test_operators::test_add_with_meta
+  ✓ operators::test_operators::test_for_each
+  ✓ operators::test_operators::test_key
+  ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_structural_equality::a_float_equals_the_same_exact_number
+  ✓ operators::test_structural_equality::a_switch_chooses_a_case_by_the_same_equality
+  ✓ operators::test_structural_equality::a_text_never_equals_a_number
+  ✓ operators::test_structural_equality::lists_compare_element_by_element
+  ✓ operators::test_structural_equality::not_equal_is_the_negation
+  ✓ operators::test_structural_equality::objects_compare_by_their_entries
+  ✓ operators::test_structural_equality::struct_instances_compare_by_their_fields
+  ✓ operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter
+  ✓ operators::test_structural_equality::variables_holding_structures_compare_by_value
+  ✓ operators::test_truthiness_of_objects::an_object_is_truthy
+  ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ probe_def_syntax::probe_def_add
   ✓ probe_def_syntax::probe_def_block_syntax
   ✓ probe_def_syntax::probe_def_syntax
@@ -177,45 +250,12 @@ PASSED:
   ✓ probe_footguns::test_while_loop_may_diverge
   ✓ probe_footguns::test_zero_string_is_truthy
   ✓ probe_footguns::test_zoned_time_records_its_rules_version
-  ✓ probe_increment::probe_increment
-  ✓ probe_increment::probe_while_execution
   ✓ probe_index_loop::test_index_assign_25_elements
   ✓ probe_index_loop::test_index_assign_in_while_loop
   ✓ probe_index_loop::test_index_assign_in_while_with_increment
   ✓ probe_index_loop::test_index_assign_return_counter
   ✓ probe_index_loop::test_index_assign_with_variable
   ✓ probe_index_loop::test_simple_index_assign
-  ✓ probe_operators::test_arithmetic_basic
-  ✓ probe_operators::test_arithmetic_precedence
-  ✓ probe_operators::test_assignment_right_assoc
-  ✓ probe_operators::test_comparison
-  ✓ probe_operators::test_comparison_eq
-  ✓ probe_operators::test_division_type_upgrade
-  ✓ probe_operators::test_hash_index
-  ✓ probe_operators::test_logical_and
-  ✓ probe_operators::test_logical_or
-  ✓ probe_operators::test_mixed_prefix_infix
-  ✓ probe_operators::test_power_right_assoc
-  ✓ probe_operators::test_prefix_neg
-  ✓ probe_operators::test_range
-  ✓ probe_operators::test_suffix_square
-  ✓ probe_operators::test_unicode_le
-  ✓ probe_operators::test_unicode_mul
-  ✓ probe_precedence::probe_fib_parsing
-  ✓ probe_precedence::test_key_equality
-  ✓ probe_precedence::test_key_operators
-  ✓ probe_precedence::test_precedence
-  ✓ probe_precedence::test_type_annotation_block_with_assignment
-  ✓ probe_precedence::test_type_annotation_with_block
-  ✓ probe_type::test_type_float
-  ✓ probe_type::test_type_number
-  ✓ probe_type::test_type_string
-  ✓ probe_type::test_type_symbol
-  ✓ probe_type::test_type_typed_variable
-  ✓ probe_type::test_type_variable
-  ✓ test_add_to::add_to_an_empty_list
-  ✓ test_add_to::add_to_appends_an_element
-  ✓ test_add_to::add_to_takes_an_expression
   ✓ test_algo_dijkstra::test_dijkstra
   ✓ test_algo_dijkstra::test_dijkstra_idiomatic
   ✓ test_algo_levenshtein::test_levenshtein
@@ -244,14 +284,6 @@ PASSED:
   ✓ test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ test_argument_kinds::matching_arguments_still_pass
   ✓ test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
-  ✓ test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
-  ✓ test_array_types::hints::test_plural_word_needs_no_hint
-  ✓ test_array_types::test_bracketed_type_is_a_list_of_that_type
-  ✓ test_array_types::test_count_times_type_is_a_typed_array
-  ✓ test_array_types::test_declaration_with_count_times_type
-  ✓ test_array_types::test_declared_typed_arrays_keep_working
-  ✓ test_array_types::test_plural_declarations_are_lists
-  ✓ test_array_types::test_typed_array_as_a_value
   ✓ test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ test_attributes::attribute_names_may_be_kebab_case
   ✓ test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -274,11 +306,6 @@ PASSED:
   ✓ test_blocks::test_indent_as_block
   ✓ test_blocks::test_matrix_comma_index
   ✓ test_blocks::test_matrix_order
-  ✓ test_cast_bugs::a_cast_to_char_can_be_stored
-  ✓ test_cast_bugs::a_one_character_text_can_be_indexed
-  ✓ test_cast_bugs::a_runtime_value_as_string
-  ✓ test_cast_bugs::a_text_as_list_is_its_characters
-  ✓ test_cast_bugs::nonsense_casts_are_loud
   ✓ test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -321,14 +348,6 @@ PASSED:
   ✓ test_condition_block::a_condition_still_ends_before_its_block
   ✓ test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ test_constant_expression_text::a_constant_expression_converts_by_its_value
-  ✓ test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
-  ✓ test_constructor_vs_data::test_construction_checks_field_types
-  ✓ test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
-  ✓ test_constructor_vs_data::test_construction_is_not_data
-  ✓ test_constructor_vs_data::test_construction_needs_every_required_field
-  ✓ test_constructor_vs_data::test_construction_reads_its_fields
-  ✓ test_constructor_vs_data::test_construction_rejects_an_undeclared_field
-  ✓ test_constructor_vs_data::test_data_is_never_validated
   ✓ test_control_words::bang_evaluates_a_block
   ✓ test_control_words::n_times_repeats_its_block
   ✓ test_control_words::trailing_if_guards_the_statement
@@ -342,12 +361,6 @@ PASSED:
   ✓ test_data_scope::test_kebab_keys_are_read_back
   ✓ test_data_scope::test_other_hyphenated_names_stay_symbols
   ✓ test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts
-  ✓ test_data::test_node_data
-  ✓ test_data::test_node_data_clone
-  ✓ test_data::test_node_data_equality
-  ✓ test_data::test_node_data_metadata
-  ✓ test_data::test_node_data_type_mismatch
-  ✓ test_data::test_node_data_various_types
   ✓ test_decimal_list_elements::a_decimal_element_can_be_assigned
   ✓ test_decimal_list_elements::a_decimal_element_compares
   ✓ test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
@@ -395,8 +408,6 @@ PASSED:
   ✓ test_empty_list_count::a_one_element_list_still_counts_one
   ✓ test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
-  ✓ test_equality_never_chains::equality_compares_the_result_of_an_ordering
-  ✓ test_equality_never_chains::orderings_still_chain
   ✓ test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ test_eval_state::every_eval_shows_its_educate_once_note
@@ -530,11 +541,6 @@ PASSED:
   ✓ test_gc_struct::test_gc_object_index_access
   ✓ test_gc_struct::test_gc_struct_macro
   ✓ test_gc_struct::test_raw_person_struct
-  ✓ test_generic_types::test_angle_and_of_forms_are_the_same_type
-  ✓ test_generic_types::test_angle_brackets_after_a_name_are_not_a_variable_lookup
-  ✓ test_generic_types::test_comparisons_and_shifts_are_not_type_applications
-  ✓ test_generic_types::test_nested_type_applications
-  ✓ test_generic_types::test_type_of_a_literal_list_stays
   ✓ test_global_constant_words::global_with_every_constant_word
   ✓ test_global_declaration::test_compound_assignment_on_a_global
   ✓ test_global_declaration::test_global_without_initializer
@@ -571,10 +577,6 @@ PASSED:
   ✓ test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ test_if_value_kind::test_if_of_characters_joins_a_text
-  ✓ test_in_position::a_found_first_element_is_truthy
-  ✓ test_in_position::in_gives_the_one_based_position
-  ✓ test_in_position::maps_and_has_keep_their_truth_value
-  ✓ test_in_position::the_position_never_warns
   ✓ test_include::a_missing_include_lists_the_searched_paths
   ✓ test_include::a_nested_include_is_found_next_to_the_including_file
   ✓ test_include::include_splices_the_whole_file_and_runs_it
@@ -656,8 +658,6 @@ PASSED:
   ✓ test_law::test_law_stated
   ✓ test_law::test_law_tested_with_generated_inputs
   ✓ test_law::test_law_violation_reported_by_verify
-  ✓ test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
-  ✓ test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
   ✓ test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ test_library_unicode::reverse_works_on_text_by_code_points
@@ -696,9 +696,6 @@ PASSED:
   ✓ test_lists::test_iteration
   ✓ test_lists::test_root_list_strings
   ✓ test_lists::test_root_lists
-  ✓ test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
-  ✓ test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
-  ✓ test_logic_grouped_operands::the_logic_table_of_negations
   ✓ test_logical_calls::test_call_operand_is_evaluated_once
   ✓ test_logical_calls::test_call_operand_of_and_or
   ✓ test_logical_calls::test_node_operand_of_and_or
@@ -753,14 +750,19 @@ PASSED:
   ✓ test_meta::test_meta_field
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
+  ✓ test_method_words::test_chars_of_text_literal_in_assignment
   ✓ test_method_words::test_first_and_last
+  ✓ test_method_words::test_join
+  ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
   ✓ test_method_words::test_replace
   ✓ test_method_words::test_reverse
   ✓ test_method_words::test_sort
+  ✓ test_method_words::test_split
   ✓ test_method_words::test_sum
   ✓ test_method_words::test_unknown_method_word_is_an_error
+  ✓ test_method_words::test_upper_and_lower
   ✓ test_method_words::test_user_function_as_method_word
   ✓ test_min_max_lists::test_a_single_number_is_still_refused
   ✓ test_min_max_lists::test_extremum_of_a_list_literal
@@ -781,15 +783,8 @@ PASSED:
   ✓ test_multi_value::test_divmod_returns_quotient_and_remainder
   ✓ test_multi_value::test_int_divmod_returns_both_results
   ✓ test_multi_value::test_optimized_multi_value_division
-  ✓ test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
-  ✓ test_mutating_bang::a_method_with_bang_assigns_back
-  ✓ test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
-  ✓ test_mutating_bang::without_bang_the_value_is_unchanged
   ✓ test_name_subsection_order::name_subsections_ascend_in_compiled_programs
   ✓ test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
-  ✓ test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
-  ✓ test_negated_call::test_function_applied_to_a_negative_number
-  ✓ test_negated_call::test_variable_minus_number_stays_subtraction
   ✓ test_newline_precedence::newline_form_is_really_evaluated - should panic
   ✓ test_newline_precedence::test_fibonacci_auto_param_newline
   ✓ test_newline_precedence::test_fibonacci_auto_typed_newline
@@ -865,24 +860,6 @@ PASSED:
   ✓ test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ test_one_line_statements::separated_prints_still_run
   ✓ test_one_line_statements::two_prints_on_one_line_need_a_separator
-  ✓ test_operator_declarations::test_built_in_operators_are_untouched
-  ✓ test_operator_declarations::test_infix_operator
-  ✓ test_operator_declarations::test_infix_operator_declared_by_its_pattern
-  ✓ test_operator_declarations::test_operators_declared_later_are_known_to_the_whole_program
-  ✓ test_operator_declarations::test_precedence_declarations_are_refused
-  ✓ test_operator_declarations::test_prefix_operator
-  ✓ test_operator_declarations::test_suffix_operator
-  ✓ test_operators::test_add_boxed_list_item
-  ✓ test_operators::test_add_item_list
-  ✓ test_operators::test_add_list_item_explicit
-  ✓ test_operators::test_add_lists
-  ✓ test_operators::test_add_meta_on_right
-  ✓ test_operators::test_add_numbers
-  ✓ test_operators::test_add_text
-  ✓ test_operators::test_add_with_meta
-  ✓ test_operators::test_for_each
-  ✓ test_operators::test_key
-  ✓ test_operators::test_while_true_forever
   ✓ test_optimizer_exceptions::optimized_try_still_catches
   ✓ test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions
   ✓ test_optional_words::is_with_a_test_word
@@ -952,7 +929,6 @@ PASSED:
   ✓ test_parser::test_semicolon_groups
   ✓ test_parser::test_simple_separators
   ✓ test_parser::test_use
-  ✓ test_person_struct::test_person_struct_roundtrip
   ✓ test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ test_print_arguments::print_joins_its_arguments_with_a_space
@@ -996,12 +972,6 @@ PASSED:
   ✓ test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
-  ✓ test_records_classes::a_class_has_untyped_fields
-  ✓ test_records_classes::a_missing_required_field_is_an_error
-  ✓ test_records_classes::a_record_is_a_struct
-  ✓ test_records_classes::an_enum_names_its_cases_by_index
-  ✓ test_records_classes::an_optional_field_defaults_to_null
-  ✓ test_records_classes::record_stays_usable_as_a_variable_name
   ✓ test_records::test_optional_field_is_empty_and_settable
   ✓ test_records::test_optional_field_marks
   ✓ test_records::test_parameter_passed_a_text_by_recursion
@@ -1082,30 +1052,6 @@ PASSED:
   ✓ test_string::test_string_set_at
   ✓ test_string::test_string_substring
   ✓ test_string::test_string_substring_from
-  ✓ test_struct_field_of_constructor::a_field_in_arithmetic
-  ✓ test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
-  ✓ test_struct_field_of_constructor::a_field_of_a_constructor_call
-  ✓ test_struct_field_of_constructor::a_missing_field_is_an_error_value
-  ✓ test_struct_types::test_class_definition
-  ✓ test_struct_types::test_class_instance_explicit
-  ✓ test_struct_types::test_class_instance_magic_roundtrip
-  ✓ test_struct_types::test_class_instance_raw
-  ✓ test_struct_types::test_class_instance2
-  ✓ test_struct_types::test_codepoint
-  ✓ test_struct_types::test_debug_format
-  ✓ test_struct_types::test_magic_object_mismatch - should panic
-  ✓ test_struct_types::test_magic_object_roundtrip
-  ✓ test_struct_types::test_symbol
-  ✓ test_struct_types::test_text
-  ✓ test_structural_equality::a_float_equals_the_same_exact_number
-  ✓ test_structural_equality::a_switch_chooses_a_case_by_the_same_equality
-  ✓ test_structural_equality::a_text_never_equals_a_number
-  ✓ test_structural_equality::lists_compare_element_by_element
-  ✓ test_structural_equality::not_equal_is_the_negation
-  ✓ test_structural_equality::objects_compare_by_their_entries
-  ✓ test_structural_equality::struct_instances_compare_by_their_fields
-  ✓ test_structural_equality::the_entry_order_of_an_object_does_not_matter
-  ✓ test_structural_equality::variables_holding_structures_compare_by_value
   ✓ test_style_dont_care::an_explicit_function_style_still_hints
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -1196,28 +1142,7 @@ PASSED:
   ✓ test_top_level_block::test_function_body_block_yields_its_last_item
   ✓ test_top_level_block::test_top_level_newlines_yield_the_last_item
   ✓ test_top_level_block::test_top_level_semicolons_yield_the_last_item
-  ✓ test_traits::test_a_builtin_trait_cannot_be_redeclared
-  ✓ test_traits::test_a_claim_of_a_declared_trait_is_checked
-  ✓ test_traits::test_a_compare_with_mismatched_types_is_no_conformance
-  ✓ test_traits::test_a_declared_trait_dispatches_by_type
-  ✓ test_traits::test_a_type_without_the_operation_of_a_declared_trait
-  ✓ test_traits::test_a_user_type_orders_with_less_than
-  ✓ test_traits::test_a_user_type_overrides_equality_with_equals
-  ✓ test_traits::test_a_user_type_sorts_through_its_compare
-  ✓ test_traits::test_an_explicit_conformance_claim_needs_the_operation
-  ✓ test_traits::test_builtin_kinds_stay_comparable
-  ✓ test_traits::test_conformance_is_a_type_test
-  ✓ test_traits::test_conformance_to_a_declared_trait_is_a_type_test
-  ✓ test_traits::test_instances_are_equatable_by_their_fields
-  ✓ test_traits::test_min_and_max_of_a_user_type
-  ✓ test_traits::test_mixed_kinds_stay_not_comparable
-  ✓ test_traits::test_ordering_a_type_without_compare_is_a_compile_error
-  ✓ test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix
-  ✓ test_traits::test_trait_synonyms_declare_a_trait
-  ✓ test_traits::test_two_user_types_each_have_their_own_compare
   ✓ test_trap_messages::integer_modulo_by_zero_names_the_division
-  ✓ test_truthiness_of_objects::an_object_is_truthy
-  ✓ test_truthiness_of_objects::empty_values_are_falsy
   ✓ test_try_deep::caught_errors_leave_later_errors_loud
   ✓ test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ test_try_deep::try_catches_a_failed_cast
@@ -1248,37 +1173,6 @@ PASSED:
   ✓ test_tuple_returns::test_two_returned_values_destructure
   ✓ test_tuples::test_loop_over_list_with_global_tuple
   ✓ test_tuples::test_tuple_of_computed_items
-  ✓ test_type_name_matching::test_a_declared_class_types_its_noun
-  ✓ test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
-  ✓ test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
-  ✓ test_type_name_matching::test_lone_type_word_parameter_is_it
-  ✓ test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
-  ✓ test_type_name_matching::test_prepositions_separate_parameter_slots
-  ✓ test_type_name_matching::test_to_phrase_with_a_type_word
-  ✓ test_type_name_matching::test_type_then_name_parameter
-  ✓ test_type_name_matching::test_type_word_is_the_parameter_name
-  ✓ test_type_of_real_variable::a_variable_holding_pi_is_real
-  ✓ test_type_test_is_only::equals_with_a_type_word_does_not_type_test
-  ✓ test_type_test_is_only::equals_with_a_type_word_educates_toward_is
-  ✓ test_type_test_is_only::is_tests_types
-  ✓ test_type_tests::test_a_variable_on_the_right_stays_equality
-  ✓ test_type_tests::test_articles_are_optional
-  ✓ test_type_tests::test_as_declaration
-  ✓ test_type_tests::test_list_type_tests
-  ✓ test_type_tests::test_pi_is_real_and_a_number
-  ✓ test_type_tests::test_scalar_type_tests
-  ✓ test_type_tests::test_type_of_is_type
-  ✓ test_type_upgrading::test_float_operations
-  ✓ test_type_upgrading::test_float_plus_int_type_upgrading
-  ✓ test_type_upgrading::test_global_with_float
-  ✓ test_type_upgrading::test_global_with_reference
-  ✓ test_type_upgrading::test_int_plus_pi_type_upgrading
-  ✓ test_type_words::test_type_constructor_words
-  ✓ test_type_words::test_type_first_parameter
-  ✓ test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error
-  ✓ test_typed_arrays::test_typed_array_declaration_with_count_first
-  ✓ test_typed_arrays::test_typed_array_declaration_with_subscript
-  ✓ test_typed_arrays::test_typed_array_of_other_types
   ✓ test_typed_lists::test_appended_int_list_is_an_array
   ✓ test_typed_lists::test_float_array_elements_are_numbers
   ✓ test_typed_lists::test_float_list_is_a_float_array
@@ -1295,27 +1189,6 @@ PASSED:
   ✓ test_typed_returns::test_block_bodies_and_returns_convert_too
   ✓ test_typed_returns::test_return_type_after_the_parameters
   ✓ test_typed_returns::test_type_before_the_name_converts_the_result
-  ✓ test_types_scope::test_data_key_is_a_scope
-  ✓ test_types_scope::test_kebab_key_that_is_also_subtraction_warns
-  ✓ test_types_scope::test_plural_type_word_denotes_a_list
-  ✓ test_types_scope::test_type_of_list_names_its_element_type
-  ✓ test_types_scope::test_type_of_mixed_list_is_plain_list
-  ✓ test_types::test_auto_type
-  ✓ test_types::test_auto_type_nan
-  ✓ test_types::test_bad_type
-  ✓ test_types::test_cast_as
-  ✓ test_types::test_constructor_cast
-  ✓ test_types::test_deep_type
-  ✓ test_types::test_emit_cast
-  ✓ test_types::test_type_confusion
-  ✓ test_types::test_type_node
-  ✓ test_types::test_type_registry
-  ✓ test_types::test_type_registry_from_node
-  ✓ test_types::test_type_synonyms
-  ✓ test_types::test_types
-  ✓ test_types::test_types_simple
-  ✓ test_types::test_types_simple2
-  ✓ test_types::test_user_type_wasm_emission
   ✓ test_unbounded_int::test_big_division_and_remainder
   ✓ test_unbounded_int::test_big_int_to_float
   ✓ test_unbounded_int::test_big_literal_round_trip
@@ -1323,7 +1196,6 @@ PASSED:
   ✓ test_unbounded_int::test_factorial_and_fib_stay_exact
   ✓ test_unbounded_int::test_i64_opt_out_wraps
   ✓ test_unbounded_int::test_overflow_promotes_add_sub
-  ✓ test_unbounded_int::test_overflow_promotes_mul
   ✓ test_unbounded_int::test_overflow_promotes_neg_abs
   ✓ test_unbounded_int::test_overflow_promotes_pow
   ✓ test_unbounded_int::test_small_arithmetic_unchanged
@@ -1379,6 +1251,7 @@ PASSED:
   ✓ test_versions::version_is_a_soft_keyword
   ✓ test_versions::version_literals_have_two_dots_or_more
   ✓ test_versions::versions_compare_part_by_part
+  ✓ test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
@@ -1579,6 +1452,133 @@ PASSED:
   ✓ test_zero_fill::a_large_zero_list_has_its_size
   ✓ test_zero_fill::a_zero_list_is_still_a_list_of_zeros
   ✓ test_zero_fill::a_zero_list_of_nothing_is_empty
+  ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
+  ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
+  ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
+  ✓ types::test_array_types::test_count_times_type_is_a_typed_array
+  ✓ types::test_array_types::test_declaration_with_count_times_type
+  ✓ types::test_array_types::test_declared_typed_arrays_keep_working
+  ✓ types::test_array_types::test_plural_declarations_are_lists
+  ✓ types::test_array_types::test_typed_array_as_a_value
+  ✓ types::test_cast_bugs::a_cast_to_char_can_be_stored
+  ✓ types::test_cast_bugs::a_one_character_text_can_be_indexed
+  ✓ types::test_cast_bugs::a_runtime_value_as_string
+  ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
+  ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
+  ✓ types::test_constructor_vs_data::test_construction_checks_field_types
+  ✓ types::test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
+  ✓ types::test_constructor_vs_data::test_construction_is_not_data
+  ✓ types::test_constructor_vs_data::test_construction_needs_every_required_field
+  ✓ types::test_constructor_vs_data::test_construction_reads_its_fields
+  ✓ types::test_constructor_vs_data::test_construction_rejects_an_undeclared_field
+  ✓ types::test_constructor_vs_data::test_data_is_never_validated
+  ✓ types::test_data::test_node_data
+  ✓ types::test_data::test_node_data_clone
+  ✓ types::test_data::test_node_data_equality
+  ✓ types::test_data::test_node_data_metadata
+  ✓ types::test_data::test_node_data_type_mismatch
+  ✓ types::test_data::test_node_data_various_types
+  ✓ types::test_generic_types::test_angle_and_of_forms_are_the_same_type
+  ✓ types::test_generic_types::test_angle_brackets_after_a_name_are_not_a_variable_lookup
+  ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
+  ✓ types::test_generic_types::test_nested_type_applications
+  ✓ types::test_generic_types::test_type_of_a_literal_list_stays
+  ✓ types::test_person_struct::test_person_struct_roundtrip
+  ✓ types::test_records_classes::a_class_has_untyped_fields
+  ✓ types::test_records_classes::a_missing_required_field_is_an_error
+  ✓ types::test_records_classes::a_record_is_a_struct
+  ✓ types::test_records_classes::an_enum_names_its_cases_by_index
+  ✓ types::test_records_classes::an_optional_field_defaults_to_null
+  ✓ types::test_records_classes::record_stays_usable_as_a_variable_name
+  ✓ types::test_struct_field_of_constructor::a_field_in_arithmetic
+  ✓ types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
+  ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
+  ✓ types::test_struct_field_of_constructor::a_missing_field_is_an_error_value
+  ✓ types::test_struct_types::test_class_definition
+  ✓ types::test_struct_types::test_class_instance_explicit
+  ✓ types::test_struct_types::test_class_instance_magic_roundtrip
+  ✓ types::test_struct_types::test_class_instance_raw
+  ✓ types::test_struct_types::test_class_instance2
+  ✓ types::test_struct_types::test_codepoint
+  ✓ types::test_struct_types::test_debug_format
+  ✓ types::test_struct_types::test_magic_object_mismatch - should panic
+  ✓ types::test_struct_types::test_magic_object_roundtrip
+  ✓ types::test_struct_types::test_symbol
+  ✓ types::test_struct_types::test_text
+  ✓ types::test_traits::test_a_builtin_trait_cannot_be_redeclared
+  ✓ types::test_traits::test_a_claim_of_a_declared_trait_is_checked
+  ✓ types::test_traits::test_a_compare_with_mismatched_types_is_no_conformance
+  ✓ types::test_traits::test_a_declared_trait_dispatches_by_type
+  ✓ types::test_traits::test_a_type_without_the_operation_of_a_declared_trait
+  ✓ types::test_traits::test_a_user_type_orders_with_less_than
+  ✓ types::test_traits::test_a_user_type_overrides_equality_with_equals
+  ✓ types::test_traits::test_a_user_type_sorts_through_its_compare
+  ✓ types::test_traits::test_an_explicit_conformance_claim_needs_the_operation
+  ✓ types::test_traits::test_builtin_kinds_stay_comparable
+  ✓ types::test_traits::test_conformance_is_a_type_test
+  ✓ types::test_traits::test_conformance_to_a_declared_trait_is_a_type_test
+  ✓ types::test_traits::test_instances_are_equatable_by_their_fields
+  ✓ types::test_traits::test_min_and_max_of_a_user_type
+  ✓ types::test_traits::test_mixed_kinds_stay_not_comparable
+  ✓ types::test_traits::test_ordering_a_type_without_compare_is_a_compile_error
+  ✓ types::test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix
+  ✓ types::test_traits::test_trait_synonyms_declare_a_trait
+  ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
+  ✓ types::test_type_name_matching::test_a_declared_class_types_its_noun
+  ✓ types::test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
+  ✓ types::test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
+  ✓ types::test_type_name_matching::test_lone_type_word_parameter_is_it
+  ✓ types::test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
+  ✓ types::test_type_name_matching::test_prepositions_separate_parameter_slots
+  ✓ types::test_type_name_matching::test_to_phrase_with_a_type_word
+  ✓ types::test_type_name_matching::test_type_then_name_parameter
+  ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
+  ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
+  ✓ types::test_type_of::test_type_symbol
+  ✓ types::test_type_of::test_type_typed_variable
+  ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
+  ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
+  ✓ types::test_type_test_is_only::is_tests_types
+  ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
+  ✓ types::test_type_tests::test_articles_are_optional
+  ✓ types::test_type_tests::test_as_declaration
+  ✓ types::test_type_tests::test_list_type_tests
+  ✓ types::test_type_tests::test_pi_is_real_and_a_number
+  ✓ types::test_type_tests::test_scalar_type_tests
+  ✓ types::test_type_tests::test_type_of_is_type
+  ✓ types::test_type_upgrading::test_float_operations
+  ✓ types::test_type_upgrading::test_float_plus_int_type_upgrading
+  ✓ types::test_type_upgrading::test_global_with_float
+  ✓ types::test_type_upgrading::test_global_with_reference
+  ✓ types::test_type_upgrading::test_int_plus_pi_type_upgrading
+  ✓ types::test_type_words::test_type_constructor_words
+  ✓ types::test_type_words::test_type_first_parameter
+  ✓ types::test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error
+  ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
+  ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
+  ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_types_scope::test_data_key_is_a_scope
+  ✓ types::test_types_scope::test_kebab_key_that_is_also_subtraction_warns
+  ✓ types::test_types_scope::test_plural_type_word_denotes_a_list
+  ✓ types::test_types_scope::test_type_of_list_names_its_element_type
+  ✓ types::test_types_scope::test_type_of_mixed_list_is_plain_list
+  ✓ types::test_types::test_auto_type
+  ✓ types::test_types::test_auto_type_nan
+  ✓ types::test_types::test_bad_type
+  ✓ types::test_types::test_cast_as
+  ✓ types::test_types::test_constructor_cast
+  ✓ types::test_types::test_deep_type
+  ✓ types::test_types::test_emit_cast
+  ✓ types::test_types::test_type_confusion
+  ✓ types::test_types::test_type_node
+  ✓ types::test_types::test_type_registry
+  ✓ types::test_types::test_type_registry_from_node
+  ✓ types::test_types::test_type_synonyms
+  ✓ types::test_types::test_types
+  ✓ types::test_types::test_types_simple
+  ✓ types::test_types::test_types_simple2
+  ✓ types::test_types::test_user_type_wasm_emission
   ✓ wasm_optimizer_test::test_executable_tree_shaking
   ✓ wasm_optimizer_test::test_library_optimization
   ✓ wasm_optimizer_test::test_no_optimization
