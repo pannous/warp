@@ -23,6 +23,7 @@ let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
 let queued; // code waiting for the running evaluation to finish
 let typingTimer;
+let lastModule; // the bytes of the last module the compiler emitted, for the download button
 
 // ---- answers remembered in this browser ---------------------------------------------------------------------
 
@@ -58,6 +59,7 @@ function startWorker() {
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return;
 			if (data.type === "print") pending.printed.push(data);
+			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish({ ...data.report, printed: pending.printed, milliseconds: data.milliseconds });
 		};
 	});
@@ -163,6 +165,13 @@ async function show(code) {
 	showReport(await evaluate(code));
 }
 
+function downloadModule() {
+	if (!lastModule) return setStatus("no module yet: a constant result needs none");
+	const link = element("a", { href: URL.createObjectURL(new Blob([lastModule], { type: "application/wasm" })), download: "program.wasm" });
+	link.click();
+	URL.revokeObjectURL(link.href);
+}
+
 // ---- the editor ---------------------------------------------------------------------------------------------
 
 let editor;
@@ -196,6 +205,7 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runNow;
+	$("download").onclick = downloadModule;
 	fillExamples();
 	startWorker();
 	const requested = new URLSearchParams(location.search).get("example");
@@ -203,6 +213,6 @@ function initialize() {
 }
 
 // for the headless probe (probes/web_playground.sh): evaluate code as the page does and return the report
-window.playground = { evaluate, answer: (topic, form) => saveAnswers({ ...sessionAnswers, [topic]: form }), forgetAll: () => saveAnswers({}) };
+window.playground = { evaluate, lastModule: () => lastModule, answer: (topic, form) => saveAnswers({ ...sessionAnswers, [topic]: form }), forgetAll: () => saveAnswers({}) };
 
 initialize();

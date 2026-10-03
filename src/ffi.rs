@@ -106,6 +106,9 @@ pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
     }
 }
 
+/// C keywords that start a statement: a line holding one declares no function
+const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
+
 /// Extract function signature from a C declaration string
 /// e.g., "double sqrt(double x);" -> FfiHeaderSignature
 pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
@@ -147,6 +150,11 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     // Find function name (last word before parenthesis)
     let parts: Vec<&str> = before_paren.split_whitespace().collect();
     if parts.is_empty() {
+        return None;
+    }
+
+    // `return f(x);` in an inline function body of a header is a statement, not a declaration
+    if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
         return None;
     }
 
