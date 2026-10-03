@@ -113,6 +113,7 @@ impl WasmGcEmitter {
 				if s == "return" {
 					// Emit the return value and return instruction
 					self.emit_node_instructions(func, &items[1]);
+					self.emit_leave_tries(func, 0);
 					func.instruction(&Instruction::Return);
 					// Unreachable after return, push dummy value
 					func.instruction(&Instruction::Unreachable);

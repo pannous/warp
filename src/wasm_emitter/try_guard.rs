@@ -73,6 +73,15 @@ impl WasmGcEmitter {
 		func.instruction(&I::Unreachable);
 	}
 
+	/// Before a jump out of the frames from `target_frame` on (0 for `return`): the `try`s it leaves are over, so the depth
+	/// drops by their count, as their normal end would have done. Every exit path takes this, whatever its keyword.
+	pub(super) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
+		let frames = super::loop_control::open_frames(func);
+		let left = frames.get(target_frame..).unwrap_or_default().iter().filter(|is_try| **is_try).count();
+		let Some(catching) = self.error_catching.filter(|_| left > 0) else { return };
+		Self::emit_list(func, &[I::GlobalGet(catching.depth_global), I::I32Const(left as i32), I::I32Sub, I::GlobalSet(catching.depth_global)]);
+	}
+
 	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
 	/// The depth goes up for the statement and back down on both paths.
 	pub(super) fn emit_ran_without_error(&mut self, func: &mut Function, statement: &Node) {
