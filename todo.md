@@ -9,7 +9,7 @@
 - `use x from 1.10` / `use x >= 1.10` read 1.10 as the float 1.1 (only `version 1.10` and literals with two dots keep their text): write `from 1.10.0` or `from version 1.10`.
 - DONE: uniscript has no git tag v0.2.0 yet (only the stale v0.1.0): `use uniscript version 0.2.0` works through the default branch's declared version only. (released as v1.0.0 instead, tagged)
 
-- DONE: tests/test_method_words.rs test_library_words_refuse_what_they_cannot_do expects upper("é") to fail with "non ascii text", but the merged text-runtime branch (src/wasm_emitter/text_unicode.rs) now maps Latin/Greek/Cyrillic case, so upper("é") = "É". Decide: drop that expectation or keep the ASCII-only refusal. (2026-10-01 branch consolidation)
+- DONE: tests/functions/test_method_words.rs test_library_words_refuse_what_they_cannot_do expects upper("é") to fail with "non ascii text", but the merged text-runtime branch (src/wasm_emitter/text_unicode.rs) now maps Latin/Greek/Cyrillic case, so upper("é") = "É". Decide: drop that expectation or keep the ASCII-only refusal. (2026-10-01 branch consolidation)
 - DONE: A runtime ratio has no text form: `y=2.5; y as string`, `str(y)` and now `"x" + y` give "-9223372036854775807" (list_join only knows texts, ints, characters). (fix-sugar 2026-10-02)
 - DONE: `x=10; x = floor(x/2)` → WASM validation failure "expected i64, found f64": analyzer::infer_type takes floor's kind from the libm FFI signature (Float) while the builtin floor emits an Int. (fix-sugar 2026-10-02)
 - `count of []` parses as `count (of[])` (a subscript of `of`); `count ()` returns the symbol `count`. (fix-sugar 2026-10-02)

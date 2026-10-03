@@ -23,7 +23,7 @@ Left: #10 polish notation (no opinion), #13 web host (later), remaining ignored 
 ## Medium
 | id | task | status |
 |---|---|---|
-| B1 | tests/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
+| B1 | tests/functions/test_functions.rs:139/145/151 `:=` vs newline precedence | done f4b601c0 (already worked, newline tests added) |
 | B2 | tests/test_angle.rs:35 function application without parens precedence | done 872063f4 (already worked) |
 | B3 | tests/test_string.rs:221 statement sequences `'hello';(1 2 3 4);10` → 10 | done de18c3bb — heuristic rule, needs user confirmation (1;(2 3);4 → 4 vs wiki/list.md:103) |
 | A3 | tests/test_math.rs:99, :287 ignore "soon" (mixed-type variables, automatic casting) | done 0768b809 (ignores were stale) |
