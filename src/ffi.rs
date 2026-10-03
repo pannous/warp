@@ -51,6 +51,7 @@ impl FfiSignature {
 }
 
 /// FFI functions run in the program's one state, with the host functions and WASI
+#[cfg(feature = "native")]
 pub use crate::host::HostState as FfiState;
 
 // ============================================================================
