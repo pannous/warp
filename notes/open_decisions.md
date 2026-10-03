@@ -1,7 +1,61 @@
-# Open decisions for the user (TODO sweep 2026-09-29)
+# Open decisions for the user
 
-Each item blocks ignored tests or a finished-but-uncommitted change. Answer any subset; unanswered items stay parked.
+Only the Interviewer asks the user (notes/roles.md). Nothing here blocks: each question names the assumption the code
+already follows. Answers move to a Decided section with the date and the user's words.
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
+
+## Pending questions (ordered by impact; recommended option first)
+- P1 text * number: should `"ab"*2` repeat the text as in Python ("abab"), the way text + number was relaxed?
+  Options: Keep the type error with the repeat hint / Repeat with a hint / Ask (fallback Error).
+  Assumed: type error naming `(2 times [greeting]).join("")`. Asked by warp-35 (web-playground);
+  touches src/wasm_emitter/list_ops.rs emit_arithmetic_type_error, tests/test_print_type_error.rs.
+- P2 tuple returns: `return a, b` with destructuring `x, y = f()`, compiled to wasm multi-value (no list allocated)?
+  Options: Yes, Python-style syntax / Not now. Assumed: no new syntax; multi-value stays internal (big-int divmod).
+  Asked by warp-d7 and warp-5e (multi-value, merged 07beae19); notes/multi_value.md.
+- P3 closures next step: a typed Int->Int fast path (today every closure call boxes through Nodes)?
+  Options: Yes, as a follow-up branch / Not now. Assumed: nothing built yet. Asked by warp-5e (closures, merged).
+- P4 typed lists next step: Float arrays and whole-op Sum/Map ListOps (the GPU seam)?
+  Options: Yes, continue / Not now. Assumed: nothing built yet. Asked by warp-5e (typed-lists, merged).
+- P5 D9 fallback: when nobody can answer the `1+2 squared` Ask (tests, CI), error or take `1+(2 squared)`?
+  Options: Error / Warning taking `1+(2 squared)`. Assumed: Error. Asked by the D13/D9 implementer (#40).
+- P6 D1 detail: inside `sql`/`sh` templates, does `$x` stay a hole (bound parameter) rather than text interpolation?
+  Options: Templates keep `$` holes / Interpolate everywhere. Assumed: holes. From the D1 decision (open detail).
+- P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
+  Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
+- P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
+  Options: Fix the docs / Vendor for real. Assumed: unchanged. notes/code_quality.md.
+- P9 code quality 1: may the stale C++ feature flags go, with their `#[cfg]` branches in tests/test_wasm.rs, test_web.rs
+  (keeping the branch that runs today)? Options: Remove them / Keep. Assumed: kept. notes/code_quality.md.
+- P10 code quality 2: delete `smarty.rs` (with its asserts in tests/test_angle.rs) and tests/test_asts.rs (tests `syn`)?
+  Options: Delete both / Delete test_asts only / Keep both. Assumed: kept.
+- P11 code quality 4: keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
+  Options: Keep + add a roundtrip test / Delete. Assumed: kept as is.
+- P12 code quality 5: which GC reading API stays? Options: GcObject (docs guide) / gc_traits wrappers / Both.
+  Assumed: both.
+- P13 code quality 6: keep the hand-written libm table (`LIBM_UNARY`/`LIBM_BINARY`) or rely on header-driven FFI only?
+  Options: Keep the table / Generic FFI only. Assumed: kept.
+- P14 code quality 3: regroup tests/ into topic subdirectories (pure moves) and move `probe_*.rs` out of the suite?
+  Options: Move probes out only / Regroup and move probes / Leave as is. Assumed: as is.
+- P15 code quality 8: replace CLAUDE.md with a symlink to AGENTS.md (AGENTS.md already rewritten from §1)?
+  Options: Symlink to AGENTS.md / Keep both files. Assumed: both kept, CLAUDE.md untouched.
+- P16 code quality 9: root clutter (`goo`, `conversation.md`, `node.wat`, `test.wasp`, dangling `wasp`/`warp` links,
+  `build_debug.sh`, `add_ignore_to_failing_tests.sh`, `nextest.sh`). Options: Move to notes/OLD / Delete / Keep.
+  Assumed: kept.
+- P17 D10 return-type polymorphism (`render "hello" as pdf`, `docx example = render "x"`), parked 2026-10-03.
+  Options: Keep parked / `as` stays a cast only / Return-type dispatch, Ask when ambiguous. Assumed: `as` is a cast.
+- P18 #10 Polish notation for .wat/.wast (`(module a b)` → node `module` with children, test_wast), parked.
+  Options: Keep parked / ParserOptions mode. Assumed: test_wast stays ignored.
+- P19 #16 commented `"a".s() + 2` lines in test_string.rs, parked ("don't care").
+  Options: Leave them / Delete the commented lines. Assumed: left.
+Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
+uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
+#24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
+
+## User to-dos (not questions)
+- Branch `claude/shared-kind-constants` (only unmerged commit: the dropped cloud pilot report); the hook refuses, run
+  `git -C /Users/me/dev/angles/warp push origin --delete claude/shared-kind-constants`. From BOSS-cheeky-shannon.
+- Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
+  the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided by the user (2026-09-29) — implementation: notes/cloud_tasks.md
 - #1 yes: avoid panics everywhere, errors as values. #2 leave the trailers. #3 juxtaposition yes, spaced only if the unit exists.
@@ -180,19 +234,19 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
-14. `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
-14c. `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
+14. RESOLVED (near! in tests/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
+14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
-15. `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
+15. DECIDED 2026-09-30 (delete). `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?
 16. C4 `"a".s() + 2` commented lines in test_string.rs — parked (user: don't care).
 
 ## Housekeeping (blocked by the destructive-git hook)
-17. Delete duplicate test files `tests/test_footgun_application.rs`, `tests/test_footgun_list_index_bounds.rs` (approved; hook blocked).
-18. Remove scratch worktrees probes/review_wt, probes/float_trunc_wt, probes/wt_before, probes/stage_check,
+17. DONE. Delete duplicate test files `tests/test_footgun_application.rs`, `tests/test_footgun_list_index_bounds.rs` (approved; hook blocked).
+18. DONE. Remove scratch worktrees probes/review_wt, probes/float_trunc_wt, probes/wt_before, probes/stage_check,
     ../warp-semicolon-survey; delete probes/review_target, probes/head_check; agent helper scripts in probes/*.py.
 19. DECIDED 2026-10-03 (dropped). Old `stash@{0}: autostash` (2026-09-27, README.md + test_results.txt) — keep or drop?
-20. CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
+20. RESOLVED for AGENTS.md (CLAUDE.md: pending P15). CLAUDE.md / AGENTS.md describe `src/wit_emitter.rs`, which does not exist.
 
 ## New questions 2026-09-30 (supervisor warp-e0), none blocking
 Wiki survey: the 16 questions D1–D16 are in notes/wiki_features.md section 2 (D6 `|`/`&` as pipe, D7 lazy `:=` and
@@ -202,7 +256,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 22. DECIDED 2026-10-03 (see the top). `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
     (`i=5; i++ while i<3` never runs); `a = 2 if c` guards the whole assignment. Keep?
 23. DECIDED 2026-10-03 (warn). `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
-24. `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
+24. OBSOLETE (upto excludes the end, decided 2026-10-02). `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
 25. DECIDED 2026-10-03 (see the top: a space never indexes). `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
     Should a known prefix word followed by a space make `[…]` its argument?
 26. DECIDED 2026-10-03 (extend all). Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
@@ -212,7 +266,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 28. DECIDED 2026-10-02 (see the top: size of ø is 0). `xs=[]; xs.size` should be 0, but `[]` and `ø` parse to the same node, and tests/probe_footguns.rs:634
     (`fails_with("x=ø; x.size", "fix: if x {")`, test_null_needs_a_check) pins the null-check error. Change or remove
     that assertion line? The fix (a small arm in check_null_use) is ready; tests/test_empty_list_count.rs waits #[ignore]d.
-29. The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
+29. OBSOLETE (checkout now only behind origin). The main checkout /Users/me/dev/angles/warp is diverged: 1 local commit 6c6e9559 (a duplicate of 8bb31618, from
     warp-3f) and behind origin/main; `git merge origin/main` refuses because your staged notes/OLD/* files collide with
     files that came in from origin. Please commit or unstage them, then resolve (the local commit can be dropped).
 30. DECIDED 2026-10-03 (see the top: only `is` tests types). `is` and `==` are the same operator, so a type word on the right of `==` is now also a type test (`3 == int` → 1).
