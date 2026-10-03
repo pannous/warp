@@ -21,5 +21,5 @@ fn a_double_quoted_text_as_float_is_loud() {
 
 #[test]
 fn a_single_quoted_codepoint_still_converts() {
-	is!("'x' as int", 120);
+	is!("ord('x')", 120);
 }
