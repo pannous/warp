@@ -144,7 +144,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_strcmp
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
-  ✓ ffi::test_ffi::test_ffi_strlen
   ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
@@ -177,6 +176,7 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
@@ -440,7 +440,6 @@ PASSED:
   ✓ lists::test_unpacking::star_middle
   ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
-  ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
   ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
@@ -450,6 +449,7 @@ PASSED:
   ✓ lists::test_unpacking::unpack_list_literal
   ✓ lists::test_unpacking::unpack_list_variable
   ✓ lists::test_unpacking::unpack_parenthesized_tuple
+  ✓ lists::test_unpacking::unpack_text
   ✓ lists::test_unpacking::unpack_tuple_function
   ✓ lists::test_unpacking::unpack_tuple_values
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -963,11 +963,17 @@ PASSED:
   ✓ programs::test_algo_sorting::test_sorting
   ✓ programs::test_algo_sorting::test_sorting_idiomatic
   ✓ programs::test_all_samples::test_parse_all_samples
+  ✓ programs::test_calculator_fixes::test_else_on_the_next_line
+  ✓ programs::test_calculator_fixes::test_error_returns
+  ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
+  ✓ programs::test_calculator_fixes::test_run_time_math
+  ✓ programs::test_calculator_fixes::test_text_comparisons
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
+  ✓ programs::test_samples::test_calculator
   ✓ programs::test_samples::test_collatz
   ✓ programs::test_samples::test_comments
   ✓ programs::test_samples::test_factorial
@@ -1670,4 +1676,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1665 passed, 0 failed, 1665 total tested
+58 ignored, 1671 passed, 0 failed, 1671 total tested
