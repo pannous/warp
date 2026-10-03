@@ -333,11 +333,10 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
 
     let key = format!("{}|{}", original, canonical);
 
-    if mode == HintMode::Once {
-        if !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
+    if mode == HintMode::Once
+        && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
             return;
         }
-    }
 
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
@@ -894,9 +893,7 @@ mod tests {
 		assert_eq!(s.cast, CastStyle::AsOperator);
 
 		// Swap to constructor style
-		let mut new_style = Style::default();
-		new_style.cast = CastStyle::Constructor;
-		set_style(new_style);
+		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
 
 		let s = style();
 		assert_eq!(s.cast, CastStyle::Constructor);

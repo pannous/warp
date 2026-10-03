@@ -769,7 +769,7 @@ impl Dispatch {
 				return Some(error);
 			}
 			let comparison = witness_call(COMPARE, &type_name, vec![left.clone(), right.clone()]);
-			return Some(Node::Key(Box::new(comparison), op.clone(), Box::new(Node::int(0))));
+			return Some(Node::Key(Box::new(comparison), *op, Box::new(Node::int(0))));
 		}
 		if matches!(op, Op::Eq | Op::Ne) && self.has_witness(EQUALS, &type_name) {
 			let equal = witness_call(EQUALS, &type_name, vec![left.clone(), right.clone()]);

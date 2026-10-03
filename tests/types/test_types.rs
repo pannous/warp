@@ -14,7 +14,7 @@ use warp::{is, skip, Number};
 #[allow(non_camel_case_types)]
 // type Type = Node;
 #[allow(dead_code)]
-struct AST;
+struct Ast;
 #[allow(dead_code)]
 struct Generics {
 	kind: Node,

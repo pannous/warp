@@ -10,7 +10,7 @@ fn test_dijkstra_idiomatic() { is!("samples/dijkstra_idiomatic.wasp", 13245613);
 #[test]
 #[ignore = "probe"]
 fn probe_snippets() {
-	let mut files: Vec<_> = std::fs::read_dir("probes/algo/dijkstra").unwrap().flatten().map(|entry| entry.path()).filter(|path| path.extension().map_or(false, |ext| ext == "wasp")).collect();
+	let mut files: Vec<_> = std::fs::read_dir("probes/algo/dijkstra").unwrap().flatten().map(|entry| entry.path()).filter(|path| path.extension().is_some_and(|ext| ext == "wasp")).collect();
 	files.sort();
 	for file in files {
 		let path = file.to_str().unwrap().to_string();

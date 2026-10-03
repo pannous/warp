@@ -7,6 +7,9 @@ use crate::wasm_emitter::type_manager::TypeManager;
 use std::collections::HashMap;
 use wasm_encoder::*;
 
+/// An FFI import being emitted: module, name, a signature label, parameter and result types
+type FfiImport = (String, String, &'static str, Vec<ValType>, Vec<ValType>);
+
 /// Manages WASM imports: host functions, WASI functions, FFI functions
 pub struct ImportManager {
 	/// Import section for WASM module
@@ -125,7 +128,7 @@ impl ImportManager {
 	/// Emit FFI imports for all registered FFI functions
 	fn emit_ffi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Clone data to avoid borrow conflict
-		let mut imports: Vec<(String, String, &'static str, Vec<ValType>, Vec<ValType>)> = ctx
+		let mut imports: Vec<FfiImport> = ctx
 			.ffi_imports
 			.iter()
 			.map(|(name, sig)| {

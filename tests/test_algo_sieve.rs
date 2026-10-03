@@ -8,7 +8,7 @@ fn test_sieve() { is!("samples/sieve.wasp", 1083); }
 #[test]
 #[ignore = "probe"]
 fn probe_sieve_snippets() {
-    let mut paths: Vec<_> = std::fs::read_dir("probes/algo/sieve").unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().map_or(false, |x| x == "wasp")).collect();
+    let mut paths: Vec<_> = std::fs::read_dir("probes/algo/sieve").unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|x| x == "wasp")).collect();
     paths.sort();
     for path in paths {
         let file = path.to_str().unwrap().to_string();

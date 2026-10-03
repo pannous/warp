@@ -190,12 +190,11 @@ impl WasmGcEmitter {
 		if items.len() == 2 {
 			if let Node::Symbol(type_name) = items[0].drop_meta() {
 				let is_typed_decl = matches!(items[1].drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
-				if !is_typed_decl {
-					if type_word_kind(&type_name.to_lowercase()).is_some() {
+				if !is_typed_decl
+					&& type_word_kind(&type_name.to_lowercase()).is_some() {
 						self.emit_cast(func, &items[1], &items[0]);
 						return;
 					}
-				}
 			}
 		}
 

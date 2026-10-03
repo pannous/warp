@@ -1,4 +1,3 @@
-use warp::wasm_emitter::eval;
 use warp::is;
 
 #[test]
