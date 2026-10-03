@@ -892,9 +892,7 @@ mod tests {
 		assert_eq!(s.cast, CastStyle::AsOperator);
 
 		// Swap to constructor style
-		let mut new_style = Style::default();
-		new_style.cast = CastStyle::Constructor;
-		set_style(new_style);
+		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
 
 		let s = style();
 		assert_eq!(s.cast, CastStyle::Constructor);

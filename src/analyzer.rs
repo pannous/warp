@@ -99,10 +99,12 @@ fn is_update(node: &Node) -> bool {
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
-	} else if *op == Op::Add && crate::wasm_emitter::text_builtins::concatenates(left, right) {
-		Kind::Text // concatenation
-	} else if *op == Op::Add && [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
-		Kind::Text // a value held as a Node (a map value, an element of one) joins a text
+	} else if *op == Op::Add
+		// concatenation, or a value held as a Node (a map value, an element of one) joining a text
+		&& (crate::wasm_emitter::text_builtins::concatenates(left, right)
+			|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+	{
+		Kind::Text
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness")
 	} else if left == Kind::Float || right == Kind::Float {

@@ -15,6 +15,9 @@ pub struct ImportManager {
 	next_func_idx: u32,
 }
 
+/// An FFI import as emitted: (name, library module, import name, params, results)
+type FfiImport = (String, String, &'static str, Vec<ValType>, Vec<ValType>);
+
 impl Default for ImportManager {
 	fn default() -> Self {
 		Self::new()
@@ -124,7 +127,7 @@ impl ImportManager {
 	/// Emit FFI imports for all registered FFI functions
 	fn emit_ffi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Clone data to avoid borrow conflict
-		let mut imports: Vec<(String, String, &'static str, Vec<ValType>, Vec<ValType>)> = ctx
+		let mut imports: Vec<FfiImport> = ctx
 			.ffi_imports
 			.iter()
 			.map(|(name, sig)| {
