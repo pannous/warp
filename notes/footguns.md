@@ -495,7 +495,7 @@ in useful fragments, and Warp answers only there: never a guess, never a panic.
 `size` (function, `size of x`, `x.size`) counts elements, of a text its characters (graphemes), exactly like `count`. This replaces
 the earlier "size counts bytes" decision (wiki/Footguns.md is not part of this repository; the record is here). Bytes are counted
 only by an explicit unit: `byte count of x`, `number of bytes in x`, `#bytes in x`, `x.bytes` (8 per list element).
-Tests still pinning the old rule (not edited, supervisor decides): tests/probe_footguns.rs lines ~366, 370, 411; tests/test_todo.rs:103.
+Tests still pinning the old rule (not edited, supervisor decides): tests/probe_footguns.rs lines ~366, 370, 411; tests/sweeps/test_todo.rs:103.
 
 ## Work area "globals" (2026-10-02)
 - Fixed: a function changes a main-level variable declared `global`: `global n=0; def f(x){n+=1;x}; f(3); n` → 1, for

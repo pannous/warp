@@ -1,0 +1,10 @@
+mod test_algo_dijkstra;
+mod test_algo_levenshtein;
+mod test_algo_life;
+mod test_algo_queens;
+mod test_algo_sieve;
+mod test_algo_sorting;
+mod test_all_samples;
+mod test_kitchensink;
+mod test_samples;
+mod test_calculator_fixes;

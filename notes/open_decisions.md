@@ -110,7 +110,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
   just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
   `--offline` builds from the registry cache.
-- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/wasm/test_wasm.rs and
   tests/web/test_web.rs go, keeping the branch that runs today (approved test edit).
 - Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
   warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
@@ -292,7 +292,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
     object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
 14. RESOLVED (near! in tests/numbers/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
-14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
+14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/wasm/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?
 14e. DECIDED 2026-10-03 (alias of fetch). `download <url>` was never implemented (only `fetch`); add as an alias of fetch?
 15. DECIDED 2026-09-30 (delete). `test_paint_wasm`: `w` never assigned, `(x-c)` is a kebab name — edit or delete?

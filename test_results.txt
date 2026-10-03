@@ -73,7 +73,6 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
   ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
-  ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ control::test_try_deep::try_catches_a_failed_cast
   ✓ control::test_try_deep::try_catches_an_error_inside_a_called_function
   ✓ control::test_try_deep::try_catches_an_error_inside_an_expression
@@ -103,6 +102,61 @@ PASSED:
   ✓ ffi_parser::tests::test_parse_two_params
   ✓ ffi_parser::tests::test_parse_void_params
   ✓ ffi_parser::tests::test_raylib_functions
+  ✓ ffi::test_download::a_failed_download_is_an_error_value
+  ✓ ffi::test_download::download_fetches_like_fetch
+  ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
+  ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
+  ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
+  ✓ ffi::test_ffi::test_c_type_mapping
+  ✓ ffi::test_ffi::test_dynlib_import_emit
+  ✓ ffi::test_ffi::test_ffi_abs_from_c
+  ✓ ffi::test_ffi::test_ffi_atof
+  ✓ ffi::test_ffi::test_ffi_atoi
+  ✓ ffi::test_ffi::test_ffi_atol
+  ✓ ffi::test_ffi::test_ffi_ceil
+  ✓ ffi::test_ffi::test_ffi_combined
+  ✓ ffi::test_ffi::test_ffi_cos
+  ✓ ffi::test_ffi::test_ffi_cos_works
+  ✓ ffi::test_ffi::test_ffi_curl_discovery
+  ✓ ffi::test_ffi::test_ffi_fabs
+  ✓ ffi::test_ffi::test_ffi_fabs_from_m
+  ✓ ffi::test_ffi::test_ffi_floor
+  ✓ ffi::test_ffi::test_ffi_fmax
+  ✓ ffi::test_ffi::test_ffi_fmin
+  ✓ ffi::test_ffi::test_ffi_fmin_wasp_file
+  ✓ ffi::test_ffi::test_ffi_fmod
+  ✓ ffi::test_ffi::test_ffi_generic_discovery
+  ✓ ffi::test_ffi::test_ffi_header_parser
+  ✓ ffi::test_ffi::test_ffi_import_pattern
+  ✓ ffi::test_ffi::test_ffi_math_pipeline
+  ✓ ffi::test_ffi::test_ffi_nested_calls
+  ✓ ffi::test_ffi::test_ffi_png_discovery
+  ✓ ffi::test_ffi::test_ffi_rand
+  ✓ ffi::test_ffi::test_ffi_raylib_discovery
+  ✓ ffi::test_ffi::test_ffi_sin
+  ✓ ffi::test_ffi::test_ffi_sin_pi_half
+  ✓ ffi::test_ffi::test_ffi_sin_works
+  ✓ ffi::test_ffi::test_ffi_sqlite_discovery
+  ✓ ffi::test_ffi::test_ffi_sqrt_works
+  ✓ ffi::test_ffi::test_ffi_strcmp
+  ✓ ffi::test_ffi::test_ffi_string_comparison_logic
+  ✓ ffi::test_ffi::test_ffi_string_math_combined
+  ✓ ffi::test_ffi::test_ffi_strlen
+  ✓ ffi::test_ffi::test_ffi_strncmp
+  ✓ ffi::test_ffi::test_ffi_tan
+  ✓ ffi::test_ffi::test_ffi_trigonometry_combined
+  ✓ ffi::test_ffi::test_ffi_zlib_discovery
+  ✓ ffi::test_ffi::test_import_from_pattern_emit
+  ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
+  ✓ ffi::test_host_words::test_clock_and_sleep
+  ✓ ffi::test_host_words::test_random_stays_in_range
+  ✓ ffi::test_host::test_emit_host_imports
+  ✓ ffi::test_host::test_emitter_with_host_imports_valid
+  ✓ ffi::test_host::test_host_fetch_import
+  ✓ ffi::test_host::test_host_run_import
+  ✓ ffi::test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
+  ✓ ffi::test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ ffi::tests::test_extract_function_signature_multi_param
   ✓ ffi::tests::test_extract_function_signature_pointer
   ✓ ffi::tests::test_extract_function_signature_simple
@@ -355,6 +409,45 @@ PASSED:
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
+  ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
+  ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
+  ✓ modules::test_folder_scope::the_file_itself_wins_over_its_siblings
+  ✓ modules::test_header_search::a_header_comes_from_the_first_include_directory_holding_it
+  ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
+  ✓ modules::test_include::a_missing_include_lists_the_searched_paths
+  ✓ modules::test_include::a_nested_include_is_found_next_to_the_including_file
+  ✓ modules::test_include::include_splices_the_whole_file_and_runs_it
+  ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
+  ✓ modules::test_include::require_and_import_are_use
+  ✓ modules::test_include::use_imports_only_the_declarations
+  ✓ modules::test_module_cache::test_different_modules_not_cached
+  ✓ modules::test_module_cache::test_module_cache_reuse
+  ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
+  ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
+  ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
+  ✓ modules::test_package_pin::header_signatures_are_parsed_once
+  ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
+  ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
+  ✓ modules::test_package_tools::a_package_without_a_tool_says_so
+  ✓ modules::test_packages::a_package_is_fetched_once_into_packages
+  ✓ modules::test_packages::module_directory_is_where_the_module_lives
+  ✓ modules::test_packages::the_registry_names_repositories
+  ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_use_modules::test_module_statements_are_not_imported
+  ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
+  ✓ modules::test_use_modules::test_search_order_prefers_earlier_directory
+  ✓ modules::test_use_modules::test_use_imports_globals_and_functions
+  ✓ modules::test_use_modules::test_use_loads_module_from_samples
+  ✓ modules::test_use_modules::test_use_missing_module_is_an_error_value
+  ✓ modules::test_use_modules::test_use_twice_is_a_no_op
+  ✓ modules::test_use_modules::test_warp_extension_is_found
+  ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
+  ✓ modules::test_versions::tagged_version_literals
+  ✓ modules::test_versions::use_requires_a_version_of_a_package
+  ✓ modules::test_versions::version_is_a_soft_keyword
+  ✓ modules::test_versions::version_literals_have_two_dots_or_more
+  ✓ modules::test_versions::versions_compare_part_by_part
   ✓ node::node_values_test::test_values_empty
   ✓ node::node_values_test::test_values_key
   ✓ node::node_values_test::test_values_list
@@ -388,6 +481,7 @@ PASSED:
   ✓ node::test_normalization::test_cast_style_constructor
   ✓ node::test_normalization::test_conditional
   ✓ node::test_normalization::test_define_keyword
+  ✓ node::test_normalization::test_each_form_is_hinted_once_when_evaluated
   ✓ node::test_normalization::test_function_definition
   ✓ node::test_normalization::test_function_definition_def_style
   ✓ node::test_normalization::test_function_hint_quotes_the_body_form_actually_written
@@ -946,6 +1040,42 @@ PASSED:
   ✓ probe_footguns::test_while_loop_may_diverge
   ✓ probe_footguns::test_zero_string_is_truthy
   ✓ probe_footguns::test_zoned_time_records_its_rules_version
+  ✓ programs::test_algo_dijkstra::test_dijkstra
+  ✓ programs::test_algo_dijkstra::test_dijkstra_idiomatic
+  ✓ programs::test_algo_levenshtein::test_levenshtein
+  ✓ programs::test_algo_levenshtein::test_levenshtein_idiomatic
+  ✓ programs::test_algo_life::test_life
+  ✓ programs::test_algo_life::test_life_idiomatic
+  ✓ programs::test_algo_queens::test_queens
+  ✓ programs::test_algo_queens::test_queens_idiomatic
+  ✓ programs::test_algo_sieve::test_sieve
+  ✓ programs::test_algo_sieve::test_sieve_idiomatic
+  ✓ programs::test_algo_sorting::test_sorting
+  ✓ programs::test_algo_sorting::test_sorting_idiomatic
+  ✓ programs::test_all_samples::test_parse_all_samples
+  ✓ programs::test_kitchensink::test_kitchensink_all_node_types
+  ✓ programs::test_kitchensink::test_kitchensink_complex_tree
+  ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_samples::test_ackermann
+  ✓ programs::test_samples::test_binary_tree
+  ✓ programs::test_samples::test_collatz
+  ✓ programs::test_samples::test_comments
+  ✓ programs::test_samples::test_factorial
+  ✓ programs::test_samples::test_fibonacci
+  ✓ programs::test_samples::test_fizzbuzz
+  ✓ programs::test_samples::test_game_of_life
+  ✓ programs::test_samples::test_gcd
+  ✓ programs::test_samples::test_parse_all_samples
+  ✓ programs::test_samples::test_power
+  ✓ programs::test_samples::test_primes
+  ✓ programs::test_samples::test_quadratic
+  ✓ programs::test_samples::test_quicksort
+  ✓ programs::test_samples::test_raytracer
+  ✓ programs::test_samples::test_sin
+  ✓ programs::test_samples::test_sine
+  ✓ programs::test_samples::test_snake
+  ✓ programs::test_samples::test_sudoku
+  ✓ programs::test_samples::test_sum
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -993,117 +1123,47 @@ PASSED:
   ✓ scope::test_use_scopes::use_folder_in_inline_code_is_the_working_directory
   ✓ scope::test_use_scopes::use_package_sees_every_file_below_the_package_folder
   ✓ scope::test_use_scopes::use_project_sees_every_file_below_the_project_root
-  ✓ test_algo_dijkstra::test_dijkstra
-  ✓ test_algo_dijkstra::test_dijkstra_idiomatic
-  ✓ test_algo_levenshtein::test_levenshtein
-  ✓ test_algo_levenshtein::test_levenshtein_idiomatic
-  ✓ test_algo_life::test_life
-  ✓ test_algo_life::test_life_idiomatic
-  ✓ test_algo_queens::test_queens
-  ✓ test_algo_queens::test_queens_idiomatic
-  ✓ test_algo_sieve::test_sieve
-  ✓ test_algo_sieve::test_sieve_idiomatic
-  ✓ test_algo_sorting::test_sorting
-  ✓ test_algo_sorting::test_sorting_idiomatic
-  ✓ test_all_samples::test_parse_all_samples
+  ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
+  ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
+  ✓ sweeps::test_panic_sweep::test_float_function_result_in_exact_context_is_an_error
+  ✓ sweeps::test_panic_sweep::test_global_declaration_of_a_non_name_is_an_error
+  ✓ sweeps::test_panic_sweep::test_malformed_ternary_is_an_error
+  ✓ sweeps::test_panic_sweep::test_missing_argument_without_default_is_an_error
+  ✓ sweeps::test_panic_sweep::test_non_constant_range_bound_is_an_error
+  ✓ sweeps::test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error
+  ✓ sweeps::test_panic_sweep::test_update_of_a_non_variable_is_an_error
+  ✓ sweeps::test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body
+  ✓ sweeps::test_sweep_fixes::a_lone_false_is_zero
+  ✓ sweeps::test_sweep_fixes::do_runs_an_add_to_phrase
+  ✓ sweeps::test_todo::test_array_length
+  ✓ sweeps::test_todo::test_if_then_else
+  ✓ sweeps::test_todo::test_index_assign_in_loop
+  ✓ sweeps::test_todo::test_lambda_comparison
+  ✓ sweeps::test_todo::test_lambda_simple
+  ✓ sweeps::test_todo::test_lambda_with_multiply
+  ✓ sweeps::test_todo::test_param_reference
+  ✓ sweeps::test_todo::test_print_function
+  ✓ sweeps::test_todo::test_sqrt_arithmetic
+  ✓ sweeps::test_todo::test_type
+  ✓ sweeps::test_todo::test_type_annotated
+  ✓ sweeps::test_todo::test_type_equivalence
+  ✓ sweeps::test_todo::test_utf8_char_indexing
   ✓ test_c_style::test_c_style_definition
   ✓ test_c_style::test_if_assigning_a_float
   ✓ test_c_style::test_if_parenthesized_condition_then_statement
-  ✓ test_compile_only::compile_command_emits_the_same_struct_module_as_eval
-  ✓ test_compile_only::compile_command_writes_wasm_without_running
-  ✓ test_download::a_failed_download_is_an_error_value
-  ✓ test_download::download_fetches_like_fetch
-  ✓ test_emitter::test_compact_empty
-  ✓ test_emitter::test_compact_float
-  ✓ test_emitter::test_compact_int
-  ✓ test_emitter::test_optimizer_graph_generation
-  ✓ test_emitter::test_tools_available
-  ✓ test_ffi_import_group::a_group_of_three_names_is_imported
-  ✓ test_ffi_import_group::a_group_with_spaces_is_imported
-  ✓ test_ffi_warning_once::the_ffi_warning_is_printed_once
-  ✓ test_ffi::test_c_type_mapping
-  ✓ test_ffi::test_dynlib_import_emit
-  ✓ test_ffi::test_ffi_abs_from_c
-  ✓ test_ffi::test_ffi_atof
-  ✓ test_ffi::test_ffi_atoi
-  ✓ test_ffi::test_ffi_atol
-  ✓ test_ffi::test_ffi_ceil
-  ✓ test_ffi::test_ffi_combined
-  ✓ test_ffi::test_ffi_cos
-  ✓ test_ffi::test_ffi_cos_works
-  ✓ test_ffi::test_ffi_curl_discovery
-  ✓ test_ffi::test_ffi_fabs
-  ✓ test_ffi::test_ffi_fabs_from_m
-  ✓ test_ffi::test_ffi_floor
-  ✓ test_ffi::test_ffi_fmax
-  ✓ test_ffi::test_ffi_fmin
-  ✓ test_ffi::test_ffi_fmin_wasp_file
-  ✓ test_ffi::test_ffi_fmod
-  ✓ test_ffi::test_ffi_generic_discovery
-  ✓ test_ffi::test_ffi_header_parser
-  ✓ test_ffi::test_ffi_import_pattern
-  ✓ test_ffi::test_ffi_math_pipeline
-  ✓ test_ffi::test_ffi_nested_calls
-  ✓ test_ffi::test_ffi_png_discovery
-  ✓ test_ffi::test_ffi_rand
-  ✓ test_ffi::test_ffi_raylib_discovery
-  ✓ test_ffi::test_ffi_sin
-  ✓ test_ffi::test_ffi_sin_pi_half
-  ✓ test_ffi::test_ffi_sin_works
-  ✓ test_ffi::test_ffi_sqlite_discovery
-  ✓ test_ffi::test_ffi_sqrt_works
-  ✓ test_ffi::test_ffi_strcmp
-  ✓ test_ffi::test_ffi_string_comparison_logic
-  ✓ test_ffi::test_ffi_string_math_combined
-  ✓ test_ffi::test_ffi_strlen
-  ✓ test_ffi::test_ffi_strncmp
-  ✓ test_ffi::test_ffi_tan
-  ✓ test_ffi::test_ffi_trigonometry_combined
-  ✓ test_ffi::test_ffi_zlib_discovery
-  ✓ test_ffi::test_import_from_pattern_emit
-  ✓ test_ffi::test_import_from_pattern_parse
   ✓ test_float_fields::test_captured_variable_set_by_a_call
   ✓ test_float_fields::test_declared_float_field_in_arithmetic
   ✓ test_float_fields::test_float_conditionals
   ✓ test_float_fields::test_global_from_a_call
   ✓ test_float_fields::test_zero_argument_call_in_float_context
-  ✓ test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
-  ✓ test_folder_scope::inline_code_has_no_folder_scope
-  ✓ test_folder_scope::sibling_definitions_are_visible_without_use
-  ✓ test_folder_scope::the_file_itself_wins_over_its_siblings
-  ✓ test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
-  ✓ test_gc_struct::test_class_instance_raw
-  ✓ test_gc_struct::test_gc_object_index_access
-  ✓ test_gc_struct::test_gc_struct_macro
-  ✓ test_gc_struct::test_raw_person_struct
   ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
   ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
   ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
   ✓ test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
-  ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
-  ✓ test_header_search::only_sdl_names_read_the_sdl_headers
-  ✓ test_host_words::test_a_program_prints_and_uses_the_host
-  ✓ test_host_words::test_clock_and_sleep
-  ✓ test_host_words::test_random_stays_in_range
-  ✓ test_host::test_emit_host_imports
-  ✓ test_host::test_emitter_with_host_imports_valid
-  ✓ test_host::test_host_fetch_import
-  ✓ test_host::test_host_run_import
-  ✓ test_include::a_missing_include_lists_the_searched_paths
-  ✓ test_include::a_nested_include_is_found_next_to_the_including_file
-  ✓ test_include::include_splices_the_whole_file_and_runs_it
-  ✓ test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
-  ✓ test_include::require_and_import_are_use
-  ✓ test_include::use_imports_only_the_declarations
   ✓ test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
   ✓ test_it_shadow_warning::a_loop_it_still_shadows_the_function_it
   ✓ test_it_shadow_warning::a_loop_it_without_a_function_it_does_not_warn
-  ✓ test_kitchensink::test_kitchensink_all_node_types
-  ✓ test_kitchensink::test_kitchensink_complex_tree
-  ✓ test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
-  ✓ test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ test_like::a_known_other_type_teaches_like
   ✓ test_like::a_like_type_is_judged_by_its_uses
   ✓ test_like::a_missing_field_is_a_warning
@@ -1119,10 +1179,6 @@ PASSED:
   ✓ test_logical_calls::test_call_operand_is_evaluated_once
   ✓ test_logical_calls::test_call_operand_of_and_or
   ✓ test_logical_calls::test_node_operand_of_and_or
-  ✓ test_module_cache::test_different_modules_not_cached
-  ✓ test_module_cache::test_module_cache_reuse
-  ✓ test_name_subsection_order::name_subsections_ascend_in_compiled_programs
-  ✓ test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
   ✓ test_object_arguments::a_class_instance_is_passed_to_a_class_typed_parameter
   ✓ test_object_arguments::a_class_instance_is_passed_to_an_untyped_parameter
   ✓ test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
@@ -1130,34 +1186,6 @@ PASSED:
   ✓ test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
   ✓ test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
-  ✓ test_optimizer_exceptions::optimized_try_still_catches
-  ✓ test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions
-  ✓ test_package_pin::a_changed_clone_stands_in_for_the_pin
-  ✓ test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
-  ✓ test_package_pin::a_pinned_package_links_its_cached_version
-  ✓ test_package_pin::header_signatures_are_parsed_once
-  ✓ test_package_tools::a_package_tool_lives_in_the_package_build_directory
-  ✓ test_package_tools::a_package_tool_runs_in_the_package_directory
-  ✓ test_package_tools::a_package_without_a_tool_says_so
-  ✓ test_packages::a_package_is_fetched_once_into_packages
-  ✓ test_packages::module_directory_is_where_the_module_lives
-  ✓ test_packages::the_registry_names_repositories
-  ✓ test_packages::use_loads_the_module_of_a_package
-  ✓ test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
-  ✓ test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
-  ✓ test_panic_sweep::test_float_function_result_in_exact_context_is_an_error
-  ✓ test_panic_sweep::test_global_declaration_of_a_non_name_is_an_error
-  ✓ test_panic_sweep::test_malformed_ternary_is_an_error
-  ✓ test_panic_sweep::test_missing_argument_without_default_is_an_error
-  ✓ test_panic_sweep::test_non_constant_range_bound_is_an_error
-  ✓ test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error
-  ✓ test_panic_sweep::test_update_of_a_non_variable_is_an_error
-  ✓ test_read_bytes_plain_result::a_main_without_a_result_is_empty
-  ✓ test_read_bytes_plain_result::a_null_result_is_empty
-  ✓ test_read_bytes_plain_result::a_plain_f64_result_is_a_float
-  ✓ test_read_bytes_plain_result::a_plain_i32_result_is_an_int
-  ✓ test_read_bytes_plain_result::a_plain_i64_result_is_an_int
-  ✓ test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
   ✓ test_records::test_optional_field_is_empty_and_settable
   ✓ test_records::test_optional_field_marks
   ✓ test_records::test_parameter_passed_a_text_by_recursion
@@ -1170,49 +1198,13 @@ PASSED:
   ✓ test_return_type_dispatch::test_as_picks_the_overload
   ✓ test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
-  ✓ test_samples::test_ackermann
-  ✓ test_samples::test_binary_tree
-  ✓ test_samples::test_collatz
-  ✓ test_samples::test_comments
-  ✓ test_samples::test_factorial
-  ✓ test_samples::test_fibonacci
-  ✓ test_samples::test_fizzbuzz
-  ✓ test_samples::test_game_of_life
-  ✓ test_samples::test_gcd
-  ✓ test_samples::test_parse_all_samples
-  ✓ test_samples::test_power
-  ✓ test_samples::test_primes
-  ✓ test_samples::test_quadratic
-  ✓ test_samples::test_quicksort
-  ✓ test_samples::test_raytracer
-  ✓ test_samples::test_sin
-  ✓ test_samples::test_sine
-  ✓ test_samples::test_snake
-  ✓ test_samples::test_sudoku
-  ✓ test_samples::test_sum
   ✓ test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
   ✓ test_spaced_construction::test_spaced_construction_of_a_declared_type
   ✓ test_style_dont_care::an_explicit_function_style_still_hints
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
-  ✓ test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body
-  ✓ test_sweep_fixes::a_lone_false_is_zero
-  ✓ test_sweep_fixes::do_runs_an_add_to_phrase
   ✓ test_text_as_float::test_text_as_float
-  ✓ test_todo::test_array_length
-  ✓ test_todo::test_if_then_else
-  ✓ test_todo::test_index_assign_in_loop
-  ✓ test_todo::test_lambda_comparison
-  ✓ test_todo::test_lambda_simple
-  ✓ test_todo::test_lambda_with_multiply
-  ✓ test_todo::test_param_reference
-  ✓ test_todo::test_print_function
-  ✓ test_todo::test_sqrt_arithmetic
-  ✓ test_todo::test_type
-  ✓ test_todo::test_type_annotated
-  ✓ test_todo::test_type_equivalence
-  ✓ test_todo::test_utf8_char_indexing
   ✓ test_try_else_value::an_arrow_fallback_is_a_function_value
   ✓ test_try_else_value::try_else_takes_a_value_or_an_action
   ✓ test_tuples::test_loop_over_list_with_global_tuple
@@ -1224,88 +1216,13 @@ PASSED:
   ✓ test_typed_returns::test_block_bodies_and_returns_convert_too
   ✓ test_typed_returns::test_return_type_after_the_parameters
   ✓ test_typed_returns::test_type_before_the_name_converts_the_result
-  ✓ test_use_modules::test_module_statements_are_not_imported
-  ✓ test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
-  ✓ test_use_modules::test_search_order_prefers_earlier_directory
-  ✓ test_use_modules::test_use_imports_globals_and_functions
-  ✓ test_use_modules::test_use_loads_module_from_samples
-  ✓ test_use_modules::test_use_math_stays_builtin
-  ✓ test_use_modules::test_use_missing_module_is_an_error_value
-  ✓ test_use_modules::test_use_twice_is_a_no_op
-  ✓ test_use_modules::test_warp_extension_is_found
   ✓ test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ test_user_method_form::a_user_function_is_called_in_method_form
-  ✓ test_versions::an_older_version_comes_from_its_git_tag
-  ✓ test_versions::tagged_version_literals
-  ✓ test_versions::use_requires_a_version_of_a_package
-  ✓ test_versions::version_is_a_soft_keyword
-  ✓ test_versions::version_literals_have_two_dots_or_more
-  ✓ test_versions::versions_compare_part_by_part
   ✓ test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
   ✓ test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
-  ✓ test_wasm_emitter::test_emit_for_node_tree_shaking
-  ✓ test_wasm_emitter::test_emit_gc_types
-  ✓ test_wasm_emitter::test_function_usage_tracking
-  ✓ test_wasm_emitter::test_generate_wasm
-  ✓ test_wasm_emitter::test_node_kind_enum_abi
-  ✓ test_wasm_emitter::test_wasm_roundtrip
-  ✓ test_wasm_emitter::test_wasm_roundtrip_via_is
-  ✓ test_wasm_names_order::name_subsections_and_maps_are_in_order
-  ✓ test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept
-  ✓ test_wasm_reader::test_node_serialization_workflow_design
-  ✓ test_wasm_reader::test_wasm_gc_node_reading_concept
-  ✓ test_wasm::test_auto_smarty
-  ✓ test_wasm::test_comparison_math
-  ✓ test_wasm::test_comparison_primitives
-  ✓ test_wasm::test_const_return
-  ✓ test_wasm::test_dom
-  ✓ test_wasm::test_emit_basics
-  ✓ test_wasm::test_emitter
-  ✓ test_wasm::test_float_operators
-  ✓ test_wasm::test_for_loop_classic
-  ✓ test_wasm::test_globals
-  ✓ test_wasm::test_implicit_multiplication
-  ✓ test_wasm::test_is
-  ✓ test_wasm::test_logarithm
-  ✓ test_wasm::test_math_extra
-  ✓ test_wasm::test_math_library
-  ✓ test_wasm::test_math_operators
-  ✓ test_wasm::test_merge_wabt
-  ✓ test_wasm::test_named_data_sections
-  ✓ test_wasm::test_norm
-  ✓ test_wasm::test_norm2
-  ✓ test_wasm::test_object_properties_wasm
-  ✓ test_wasm::test_old_random_bugs
-  ✓ test_wasm::test_print
-  ✓ test_wasm::test_range
-  ✓ test_wasm::test_root
-  ✓ test_wasm::test_root_float
-  ✓ test_wasm::test_round_floor_ceiling
-  ✓ test_wasm::test_self_modifying
-  ✓ test_wasm::test_smart_return
-  ✓ test_wasm::test_smart_return_harder
-  ✓ test_wasm::test_square
-  ✓ test_wasm::test_square_precedence
-  ✓ test_wasm::test_string_concat_wasm
-  ✓ test_wasm::test_todo_browser
-  ✓ test_wasm::test_wasm_if
-  ✓ test_wasm::test_wasm_increment
-  ✓ test_wasm::test_wasm_logic
-  ✓ test_wasm::test_wasm_logic_combined
-  ✓ test_wasm::test_wasm_logic_negated
-  ✓ test_wasm::test_wasm_logic_on_objects
-  ✓ test_wasm::test_wasm_logic_primitives
-  ✓ test_wasm::test_wasm_logic_unary
-  ✓ test_wasm::test_wasm_logic_unary_variables
-  ✓ test_wasm::test_wasm_mutable_global
-  ✓ test_wasm::test_wasm_mutable_global2
-  ✓ test_wasm::test_wasm_typed_globals
-  ✓ test_wasm::test_wasm_variables0
-  ✓ test_wasm::test_wasm_while
-  ✓ test_wasm::test_wasm_while2
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
   ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
@@ -1399,10 +1316,6 @@ PASSED:
   ✓ test_welcoming_sugar::n_times_a_one_element_list_repeats_it
   ✓ test_welcoming_sugar::the_empty_list_counts_zero_and_grows
   ✓ test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
-  ✓ test_wit_types::wit_struct_is_a_plain_word
-  ✓ test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket
-  ✓ test_wit::test_timeout_protection
-  ✓ test_wit::test_wit_parse
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
@@ -1623,10 +1536,96 @@ PASSED:
   ✓ types::test_types::test_types_simple
   ✓ types::test_types::test_types_simple2
   ✓ types::test_types::test_user_type_wasm_emission
-  ✓ wasm_optimizer_test::test_executable_tree_shaking
-  ✓ wasm_optimizer_test::test_library_optimization
-  ✓ wasm_optimizer_test::test_no_optimization
-  ✓ wasm_optimizer_test::test_tools_availability
+  ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
+  ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
+  ✓ wasm::test_emitter::test_compact_empty
+  ✓ wasm::test_emitter::test_compact_float
+  ✓ wasm::test_emitter::test_compact_int
+  ✓ wasm::test_emitter::test_optimizer_graph_generation
+  ✓ wasm::test_emitter::test_tools_available
+  ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
+  ✓ wasm::test_gc_struct::test_class_instance_raw
+  ✓ wasm::test_gc_struct::test_gc_object_index_access
+  ✓ wasm::test_gc_struct::test_gc_struct_macro
+  ✓ wasm::test_gc_struct::test_raw_person_struct
+  ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs
+  ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
+  ✓ wasm::test_optimizer_exceptions::optimized_try_still_catches
+  ✓ wasm::test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions
+  ✓ wasm::test_read_bytes_plain_result::a_main_without_a_result_is_empty
+  ✓ wasm::test_read_bytes_plain_result::a_null_result_is_empty
+  ✓ wasm::test_read_bytes_plain_result::a_plain_f64_result_is_a_float
+  ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
+  ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
+  ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
+  ✓ wasm::test_wasm_emitter::test_emit_gc_types
+  ✓ wasm::test_wasm_emitter::test_function_usage_tracking
+  ✓ wasm::test_wasm_emitter::test_generate_wasm
+  ✓ wasm::test_wasm_emitter::test_node_kind_enum_abi
+  ✓ wasm::test_wasm_emitter::test_wasm_roundtrip
+  ✓ wasm::test_wasm_emitter::test_wasm_roundtrip_via_is
+  ✓ wasm::test_wasm_names_order::name_subsections_and_maps_are_in_order
+  ✓ wasm::test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept
+  ✓ wasm::test_wasm_reader::test_node_serialization_workflow_design
+  ✓ wasm::test_wasm_reader::test_wasm_gc_node_reading_concept
+  ✓ wasm::test_wasm::test_auto_smarty
+  ✓ wasm::test_wasm::test_comparison_math
+  ✓ wasm::test_wasm::test_comparison_primitives
+  ✓ wasm::test_wasm::test_const_return
+  ✓ wasm::test_wasm::test_dom
+  ✓ wasm::test_wasm::test_emit_basics
+  ✓ wasm::test_wasm::test_emitter
+  ✓ wasm::test_wasm::test_float_operators
+  ✓ wasm::test_wasm::test_for_loop_classic
+  ✓ wasm::test_wasm::test_globals
+  ✓ wasm::test_wasm::test_implicit_multiplication
+  ✓ wasm::test_wasm::test_is
+  ✓ wasm::test_wasm::test_logarithm
+  ✓ wasm::test_wasm::test_math_extra
+  ✓ wasm::test_wasm::test_math_library
+  ✓ wasm::test_wasm::test_math_operators
+  ✓ wasm::test_wasm::test_merge_wabt
+  ✓ wasm::test_wasm::test_named_data_sections
+  ✓ wasm::test_wasm::test_norm
+  ✓ wasm::test_wasm::test_norm2
+  ✓ wasm::test_wasm::test_object_properties_wasm
+  ✓ wasm::test_wasm::test_old_random_bugs
+  ✓ wasm::test_wasm::test_print
+  ✓ wasm::test_wasm::test_range
+  ✓ wasm::test_wasm::test_root
+  ✓ wasm::test_wasm::test_root_float
+  ✓ wasm::test_wasm::test_round_floor_ceiling
+  ✓ wasm::test_wasm::test_self_modifying
+  ✓ wasm::test_wasm::test_smart_return
+  ✓ wasm::test_wasm::test_smart_return_harder
+  ✓ wasm::test_wasm::test_square
+  ✓ wasm::test_wasm::test_square_precedence
+  ✓ wasm::test_wasm::test_string_concat_wasm
+  ✓ wasm::test_wasm::test_todo_browser
+  ✓ wasm::test_wasm::test_wasm_if
+  ✓ wasm::test_wasm::test_wasm_increment
+  ✓ wasm::test_wasm::test_wasm_logic
+  ✓ wasm::test_wasm::test_wasm_logic_combined
+  ✓ wasm::test_wasm::test_wasm_logic_negated
+  ✓ wasm::test_wasm::test_wasm_logic_on_objects
+  ✓ wasm::test_wasm::test_wasm_logic_primitives
+  ✓ wasm::test_wasm::test_wasm_logic_unary
+  ✓ wasm::test_wasm::test_wasm_logic_unary_variables
+  ✓ wasm::test_wasm::test_wasm_mutable_global
+  ✓ wasm::test_wasm::test_wasm_mutable_global2
+  ✓ wasm::test_wasm::test_wasm_typed_globals
+  ✓ wasm::test_wasm::test_wasm_variables0
+  ✓ wasm::test_wasm::test_wasm_while
+  ✓ wasm::test_wasm::test_wasm_while2
+  ✓ wasm::test_wit_types::wit_struct_is_a_plain_word
+  ✓ wasm::test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket
+  ✓ wasm::test_wit::test_timeout_protection
+  ✓ wasm::test_wit::test_wit_parse
+  ✓ wasm::wasm_optimizer_test::test_executable_tree_shaking
+  ✓ wasm::wasm_optimizer_test::test_library_optimization
+  ✓ wasm::wasm_optimizer_test::test_no_optimization
+  ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_uniscript::an_unknown_entity_is_an_error
   ✓ web::test_uniscript::block_types_style_their_operands
   ✓ web::test_uniscript::colors_and_geometry_are_suffix_controls
@@ -1671,4 +1670,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1666 passed, 0 failed, 1666 total tested
+58 ignored, 1665 passed, 0 failed, 1665 total tested
