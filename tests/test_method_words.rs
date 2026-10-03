@@ -5,7 +5,7 @@ use crate::common::fails_with;
 
 /// The printed result with double quotes, whichever quote the printer uses
 fn printed(code: &str) -> String {
-	eval(code).serialize().replace('\'', "'")
+	eval(code).serialize()
 }
 
 #[test]
