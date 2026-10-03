@@ -2517,6 +2517,7 @@ fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),
+		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
 		Node::List(entries, Bracket::Curly, _) if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => Some(Kind::List), // a map
 		_ => None,
 	}
