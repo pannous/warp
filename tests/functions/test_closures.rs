@@ -121,3 +121,10 @@ fn an_item_of_a_function_list_called_directly() {
 fn a_loop_variable_over_function_values_is_called() {
 	is!("fs=[x=>x*2, x=>x+1]; s=0; for f in fs { s+=f(1) }; s", 4);
 }
+
+#[test]
+fn a_function_value_out_of_try_or_a_block_is_called() {
+	is!("f = try 1 + [1 2]#5 else (e => e * 2); f(4)", 8);
+	is!("f = try (x=>x+1) else (e => e * 2); f(4)", 5);
+	is!("f = {x => x+1}; f(2)", 3);
+}
