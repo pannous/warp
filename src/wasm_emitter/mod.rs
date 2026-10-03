@@ -2,9 +2,9 @@
 
 mod big_int;
 pub(crate) mod exact;
-#[macro_use]
 mod constructors;
 mod equality;
+mod function_builder;
 mod config;
 mod ffi_emitter;
 mod import_manager;
@@ -88,7 +88,7 @@ use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
 use crate::normalize::hints as norm;
 use crate::operators::{is_function_keyword, op_to_code, Op};
-use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
 #[cfg(feature = "native")]
@@ -963,50 +963,38 @@ impl WasmGcEmitter {
 		let node_ref = self.node_ref(true);
 
 		// get_kind(node: ref $Node) -> i64
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
-		self.functions.function(func_type);
-		let mut func = Function::new(vec![]);
-		func.instruction(&Instruction::LocalGet(0));
-		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.type_manager.node_type,
-			field_index: 0,
+		self.exported_function("get_kind", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
+			func.instruction(&Instruction::LocalGet(0));
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: s.type_manager.node_type,
+				field_index: 0,
+			});
 		});
-		func.instruction(&Instruction::End);
-		self.code.function(&func);
-		let idx = self.register_func("get_kind");
-		self.exports.export("get_kind", ExportKind::Func, idx);
 
 		// get_int_value(node: ref $Node) -> i64
 		// Extract integer from Node's data field (i64box); a node that is no Int is the runtime error not_an_int,
 		// which a `try` catches, never a raw cast trap
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
-		self.functions.function(func_type);
-		let mut func = Function::new(vec![]);
-		Self::emit_list(&mut func, &[
-			Instruction::LocalGet(0),
-			Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
-			Instruction::I64Const(0xFF), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
-			Instruction::If(BlockType::Empty),
-		]);
-		self.emit_runtime_error(&mut func, "not_an_int");
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::LocalGet(0)); // Node
-		func.instruction(&Instruction::StructGet {
-			struct_type_index: self.type_manager.node_type,
-			field_index: 1, // data field
+		self.exported_function("get_int_value", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
+			Self::emit_list(func, &[
+				Instruction::LocalGet(0),
+				Instruction::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
+				Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
+				Instruction::If(BlockType::Empty),
+			]);
+			s.emit_runtime_error(func, "not_an_int");
+			func.instruction(&Instruction::End);
+			func.instruction(&Instruction::LocalGet(0)); // Node
+			func.instruction(&Instruction::StructGet {
+				struct_type_index: s.type_manager.node_type,
+				field_index: 1, // data field
+			});
+			s.emit_int_from_payload(func);
 		});
-		self.emit_int_from_payload(&mut func);
-		func.instruction(&Instruction::End);
-		self.code.function(&func);
-		let idx = self.register_func("get_int_value");
-		self.exports.export("get_int_value", ExportKind::Func, idx);
 
 		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
 		// so a host without GC field access (JavaScript) can read a result text from memory
 		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
-			self.runtime_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
+			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
 				let string = HeapType::Concrete(s.type_manager.string_type);
 				s.emit_field(f, 0, 1);
 				f.instruction(&Instruction::RefTestNonNull(string));
@@ -1016,7 +1004,6 @@ impl WasmGcEmitter {
 				f.instruction(&Instruction::I32Const(0));
 				f.instruction(&Instruction::End);
 			});
-			self.exports.export(name, ExportKind::Func, self.func_index(name));
 		}
 	}
 
@@ -1025,56 +1012,45 @@ impl WasmGcEmitter {
 		// i64_pow(base: i64, exp: i64) -> i64
 		// Computes base^exp using a loop
 		if self.should_emit_function("i64_pow") {
-			let func_type = self.type_manager.types().len();
-			self.type_manager.types_mut()
-				.ty()
-				.function(vec![ValType::I64, ValType::I64], vec![ValType::I64]);
-			self.functions.function(func_type);
+			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |s, func| {
+				// Locals: 0=base, 1=exp, 2=result
+				// result = 1
+				func.instruction(&Instruction::I64Const(1));
+				func.instruction(&Instruction::LocalSet(2));
 
-			// Locals: 0=base, 1=exp, 2=result
-			let mut func = Function::new(vec![(1, ValType::I64)]);
+				// block $done
+				func.instruction(&Instruction::Block(BlockType::Empty));
+				// loop $loop
+				func.instruction(&Instruction::Loop(BlockType::Empty));
 
-			// result = 1
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::LocalSet(2));
+				// br_if $done (i64.eqz (local.get $exp))
+				func.instruction(&Instruction::LocalGet(1)); // exp
+				func.instruction(&Instruction::I64Eqz);
+				func.instruction(&Instruction::BrIf(1)); // break to $done
 
-			// block $done
-			func.instruction(&Instruction::Block(BlockType::Empty));
-			// loop $loop
-			func.instruction(&Instruction::Loop(BlockType::Empty));
+				// result = result * base
+				func.instruction(&Instruction::LocalGet(2)); // result
+				func.instruction(&Instruction::LocalGet(0)); // base
+				func.instruction(&Instruction::I64Mul);
+				func.instruction(&Instruction::LocalSet(2));
 
-			// br_if $done (i64.eqz (local.get $exp))
-			func.instruction(&Instruction::LocalGet(1)); // exp
-			func.instruction(&Instruction::I64Eqz);
-			func.instruction(&Instruction::BrIf(1)); // break to $done
+				// exp = exp - 1
+				func.instruction(&Instruction::LocalGet(1)); // exp
+				func.instruction(&Instruction::I64Const(1));
+				func.instruction(&Instruction::I64Sub);
+				func.instruction(&Instruction::LocalSet(1));
 
-			// result = result * base
-			func.instruction(&Instruction::LocalGet(2)); // result
-			func.instruction(&Instruction::LocalGet(0)); // base
-			func.instruction(&Instruction::I64Mul);
-			func.instruction(&Instruction::LocalSet(2));
+				// br $loop
+				func.instruction(&Instruction::Br(0));
 
-			// exp = exp - 1
-			func.instruction(&Instruction::LocalGet(1)); // exp
-			func.instruction(&Instruction::I64Const(1));
-			func.instruction(&Instruction::I64Sub);
-			func.instruction(&Instruction::LocalSet(1));
+				// end loop
+				func.instruction(&Instruction::End);
+				// end block
+				func.instruction(&Instruction::End);
 
-			// br $loop
-			func.instruction(&Instruction::Br(0));
-
-			// end loop
-			func.instruction(&Instruction::End);
-			// end block
-			func.instruction(&Instruction::End);
-
-			// return result
-			func.instruction(&Instruction::LocalGet(2));
-			func.instruction(&Instruction::End);
-
-			self.code.function(&func);
-			let idx = self.register_func("i64_pow");
-			self.exports.export("i64_pow", ExportKind::Func, idx);
+				// return result
+				func.instruction(&Instruction::LocalGet(2));
+			});
 		}
 	}
 
