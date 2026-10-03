@@ -255,7 +255,7 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
 		}
 		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => split_trailing_block(right, empty_is_block)
-			.map(|(operand, block)| (Node::Key(left.clone(), op.clone(), Box::new(operand)), block)),
+			.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block)),
 		_ => None,
 	}
 }
@@ -360,7 +360,7 @@ const USER_INFIX_BP: (u8, u8) = (140, 141);
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit
 fn is_operator_glyph(glyph: &str) -> bool {
-	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && glyph.chars().any(|c| !c.is_ascii())
+	!glyph.is_empty() && glyph.chars().all(|c| !c.is_alphanumeric() && !c.is_whitespace()) && !glyph.is_ascii()
 }
 
 fn is_plain_name(word: &str) -> bool {
@@ -3454,7 +3454,7 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		_ => None,
 	}
 }
-// Tests moved to tests/test_parser.rs
+// Tests moved to tests/parser/test_parser.rs
 
 /// `f := …`, `f x := …`, `f(x) := …` define f
 fn defined_function_name(target: &Node) -> Option<String> {

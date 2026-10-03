@@ -6,7 +6,9 @@ use warp::wasp_parser::parse_file;
 fn test_timeout_protection() {
 	let do_test_timeout_protection = false;
 	if do_test_timeout_protection {
-		loop {} // Should be killed at .1s
+		loop {
+			std::thread::sleep(std::time::Duration::from_millis(1)); // Should be killed at .1s
+		}
 	}
 }
 

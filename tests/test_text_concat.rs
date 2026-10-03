@@ -1,10 +1,4 @@
 use warp::is;
-use warp::wasm_emitter::eval;
-
-fn fails_loudly(code: &str) {
-	let result = format!("{:?}", eval(code));
-	assert!(result.contains("Error"), "{code}: {result}");
-}
 
 #[test]
 fn texts_concatenate_with_plus() {

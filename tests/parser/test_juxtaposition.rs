@@ -48,7 +48,7 @@ fn test_undefined_symbol_is_the_normal_error() {
 #[test]
 fn test_data_mode_never_multiplies() {
 	assert!(!is_product(&parse_data("3x")));
-	assert!(!is_product(&parse_data("size: 3px").drop_meta()));
+	assert!(!is_product(parse_data("size: 3px").drop_meta()));
 }
 
 #[test]

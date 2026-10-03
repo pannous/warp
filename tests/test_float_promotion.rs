@@ -31,9 +31,9 @@ fn test_literal_float_operations_do_not_truncate() {
 
 #[test]
 fn test_fractional_exponent_uses_libm_pow() {
-	is!("f(x:float) := 2.0 ^ x; f(0.5)", 1.4142135623730951);
+	is!("f(x:float) := 2.0 ^ x; f(0.5)", std::f64::consts::SQRT_2);
 	is!("f(x:float) := x ^ 0.5; f(4.0)", 2.0);
-	is!("2 ^ 0.5", 1.4142135623730951);
+	is!("2 ^ 0.5", std::f64::consts::SQRT_2);
 	is!("2 ^ 3", 8);
 }
 
