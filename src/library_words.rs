@@ -91,7 +91,7 @@ const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
-const LIST_RESULT_WORDS: [&str; 4] = ["chars", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
+const LIST_RESULT_WORDS: [&str; 6] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
@@ -320,7 +320,8 @@ impl Lowering {
 			}
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
-		let is_prefix = *bracket == Bracket::None && *separator == Separator::Space && items.len() > 1;
+		// `(sort xs)` is `sort xs` in parentheses
+		let is_prefix = matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
 		if !is_call && !is_prefix {
 			return None;
 		}
