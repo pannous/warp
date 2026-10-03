@@ -3226,6 +3226,7 @@ impl WasmGcEmitter {
 		type_names.append(self.type_manager.f64_box_type, "f64box");
 		type_names.append(self.type_manager.node_type, "Node");
 		type_names.append(self.type_manager.int_array_type, "IntArray");
+		type_names.append(self.type_manager.int_list_type, "IntList");
 		// User-defined type names
 		for (name, idx) in &self.ctx.user_type_indices {
 			type_names.append(*idx, name);
@@ -3254,6 +3255,11 @@ impl WasmGcEmitter {
 		let mut f64box_fields = NameMap::new();
 		f64box_fields.append(0, "value");
 		type_field_names.append(self.type_manager.f64_box_type, &f64box_fields);
+
+		let mut int_list_fields = NameMap::new();
+		int_list_fields.append(0, "length");
+		int_list_fields.append(1, "items");
+		type_field_names.append(self.type_manager.int_list_type, &int_list_fields);
 
 		// User-defined type fields
 		for type_def in self.ctx.type_registry.types() {

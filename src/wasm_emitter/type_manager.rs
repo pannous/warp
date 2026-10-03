@@ -35,8 +35,11 @@ pub struct TypeManager {
 	/// $Ratio = (struct (field $num anyref) (field $den anyref)): exact non-integer, both Int payloads, see wasm_emitter/exact.rs
 	pub ratio_type: u32,
 
-	/// $IntArray = (array (mut i64)): a list of ints held as an array, see wasm_emitter/list_dispatch.rs
+	/// $IntArray = (array (mut i64)): the items of an $IntList, see wasm_emitter/list_dispatch.rs
 	pub int_array_type: u32,
+
+	/// $IntList = (struct (field $length (mut i32)) (field $items (mut (ref $IntArray)))): a growable list of ints
+	pub int_list_type: u32,
 
 	/// Next available type index
 	next_type_idx: u32,
@@ -68,6 +71,7 @@ impl TypeManager {
 			big_heap_type: 0,
 			ratio_type: 0,
 			int_array_type: 0,
+			int_list_type: 0,
 			next_type_idx: 0,
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
@@ -138,6 +142,13 @@ impl TypeManager {
 		self.emit_big_int_types();
 		self.types.ty().array(&Val(ValType::I64), true);
 		self.int_array_type = self.next_type_idx;
+		self.next_type_idx += 1;
+		let items = RefType { nullable: false, heap_type: HeapType::Concrete(self.int_array_type) };
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
+			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
+		]);
+		self.int_list_type = self.next_type_idx;
 		self.next_type_idx += 1;
 	}
 

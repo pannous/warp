@@ -114,3 +114,24 @@ fn test_int_expression_items_are_an_array() {
 	assert_eq!(printed("a=2; xs=[a, a+1, 7/7]; xs"), "[2 3 1]");
 	fails_with("xs=[3,1,4]; xs#-1", "index out of range");
 }
+
+#[test]
+fn test_appended_int_list_is_an_array() {
+	assert!(typed_array_operations("xs=[]; for i in 1..5 {xs.add(i*i)}; xs#3") > 0);
+	is!("xs=[]; for i in 1..5 {xs.add(i*i)}; xs#3", 9);
+	is!("xs=[]; for i in 1..5 {xs.add(i*i)}; sum xs", 30);
+	is!("xs=[7]; for i in 1..20 {xs.add(i)}; #xs", 20);
+	assert_eq!(printed("xs=[]; for i in 1..5 {xs.add(i)}; xs"), "[1 2 3 4]");
+	assert_eq!(printed("xs=[]; xs"), printed("[]"));
+	is!("xs=[1]; ys=xs; xs.add(2); #ys", 1);
+	is!("xs=[1]; ys=xs; ys.add(2); #xs", 1);
+}
+
+#[test]
+fn test_map_and_element_wise_over_int_arrays() {
+	assert!(typed_array_operations("xs=[1,2,3]; ys = xs.map(x => x*x); ys#3") > 0);
+	is!("xs=[1,2,3]; ys = xs.map(x => x*x); ys#3", 9);
+	assert_eq!(printed("xs=[1,2,3]; xs.map(x => x+1)"), "[2 3 4]");
+	assert_eq!(printed("xs=[1,2,3]; map xs {it*10}"), "[10 20 30]");
+	is!("xs=[1,2,3]; each xs {it*10}", 30);
+}
