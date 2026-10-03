@@ -2567,6 +2567,8 @@ impl WaspParser {
 				}
 				Ok(None) => {}
 			}
+			// a bare `$name` is text here but stays a hole for sql/sh templates (injection::parts), so it is not escaped
+			let bare_dollar_name = ch == '$' && (self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_');
 			let literal = if ch == '\\' {
 				self.advance();
 				let escaped = self.current_char();
@@ -2583,7 +2585,7 @@ impl WaspParser {
 			self.advance();
 			s.push(literal);
 			match literal {
-				'$' => template.push_str("$$"),
+				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
 		}
@@ -2599,7 +2601,8 @@ impl WaspParser {
 		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
 	}
 
-	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
+	/// `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$x`, `$ `).
+	/// User decision D1: "only the one with the curly braces must interpolate the other is text like dollar money".
 	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
 		let (line, column) = self.get_position();
 		let next = self.peek_char(1);
@@ -2609,13 +2612,6 @@ impl WaspParser {
 			set_hint_position(line, column);
 			norm::interpolation(&format!("${{{expression}}}"), &expression);
 			expression
-		} else if next.is_alphabetic() || next == '_' {
-			self.advance();
-			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-			self.advance_by(name.chars().count());
-			set_hint_position(line, column);
-			norm::interpolation(&format!("${name}"), &name);
-			name
 		} else {
 			return Ok(None);
 		};
