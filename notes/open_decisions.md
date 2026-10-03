@@ -42,6 +42,12 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   rule for unknown words (`photo`) and multi-word class names.
 - D4 constructor vs data: "Distinguish". `T{…}` with a known type constructs/validates, `k:{…}` is plain data, not equal.
 - D8 `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
+- D15 auto-imports: "Later", parked. D10 return-type polymorphism: "Park", parked.
+- #25 / #36 `first [10, 5]`, `reduce [7] …`: "if by subscript you mean index then we already have a rule that space
+  disabled index". So a space before `[` never indexes; reading these as an index is a bug against that rule:
+  `word [..]` passes the list as an argument, only glued `a[..]` indexes.
+- #22 loops: "N once, keep rest". `N times {…}` evaluates N once; trailing `i++ while c` stays a plain while (with a
+  hint); `a = 2 if c` keeps guarding the whole assignment.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
@@ -148,11 +154,11 @@ Wiki survey: the 16 questions D1–D16 are in notes/wiki_features.md section 2 (
 D16 overflow contradict Decided rules). Found while implementing:
 21. `type(2.0)` is `int` (a decimal with zero fraction normalizes to an integer), `type(1.5f)` float, `type(π)` real,
     but `x=π; type(x)` still float. OK? Add `rat` as an abbreviation of `rational`?
-22. `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
+22. DECIDED 2026-10-03 (see the top). `N times {…}` re-evaluates N each round (it reuses the for loop); trailing `while` is a plain while, not do-while
     (`i=5; i++ while i<3` never runs); `a = 2 if c` guards the whole assignment. Keep?
 23. `for 1..4 {x+=it}` binds `it`; inside a function with an implicit `it` parameter the loop shadows it. Keep?
 24. `upto` is a global infix word (= inclusive `to`), not only inside `for`. OK?
-25. `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
+25. DECIDED 2026-10-03 (see the top: a space never indexes). `first [10, 5]` parses as the subscript `first[10, 5]` (a space before `[` still subscripts); `first [10 5]` works.
     Should a known prefix word followed by a space make `[…]` its argument?
 26. Library words: upper/lower are ASCII only (error otherwise), sort ints only, reverse of a text is an error.
     Extend to Unicode / all comparable values? In-place `x.upper!` (wiki D2) not added.
@@ -178,7 +184,7 @@ D16 overflow contradict Decided rules). Found while implementing:
 35. `x=[1 2]; x as string` stays a loud error because tests/test_cast_to_string.rs (added today by a worker) pins it;
     a join-based "[1 2]" for int lists is ready, a general runtime serializer would be the real fix. Allow editing
     that assertion? Also `"x" as float` → 120 (character code, like `'A' as int` → 65): OK or loud?
-36. Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
+36. DECIDED 2026-10-03 (see 25). Parser: `reduce [7] (a b)->a+b` and `first [10, 5]` read `word [..]` as a subscript (see 25).
 37. First-class functions (row 22) are compile-time specialisation (`apply(double2, 3)` → a copy `apply__double2`),
     not a funcref table: functions chosen at run time and capturing lambdas remain loud errors. A table needs one
     uniform (boxed) signature. Enough for now?
