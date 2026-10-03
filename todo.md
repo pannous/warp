@@ -17,6 +17,8 @@ The supervisor should remove the DONE elements after a while.
 - `l=π; d=abs(l-3.14); d <= 1e-9*abs(l)` is "l is a float where an exact Int is expected"; inline (`abs(l-3.14) <= 1e-9*abs(l)`) works. (impl-surface 2026-10-03)
 - `double:=it*2; double 4` gives 4 and `4 doubled` stays data: `double` is a type word (f64), so a function named double is never called. (impl-ask 2026-10-03)
 - D13 asks only after a number literal (`1 -1`); `x -1`, `f(x) -1` keep subtracting (tests/test_negated_call.rs). Whether variables should ask too is open (warp-43, 2026-10-03). (impl-ask)
+- D13 asks only after a number literal (`1 -1`); `x -1`, `f(x) -1` keep subtracting (tests/operators/test_negated_call.rs). Whether variables should ask too is open (warp-43, 2026-10-03). (impl-ask)
+- DONE: `"" + (1+2)` gives "(1+2)" and `str(1+2)` gives "1+2": `as string` / `str` of a constant expression serializes its source instead of evaluating it (emit_cast "string" branch, `!mentions_variable`). Interpolation holes avoid it via text_form. (impl-text 2026-10-03)
 - `x=[1 2]; (sort x)#1` is the symbol `sort`: a spaced round group `(sort x)` stays data, so the braceless call inside parentheses does not run; `(x.sort)#1` works. (impl-text 2026-10-03)
 - `[2.5 -1.0 0.5]` is the two-item list `[1.5 0.5]`: the glued sign subtracts (D13 Ask, impl-ask). (impl-text 2026-10-03)
 - An int list `as string` joins at runtime to "[1 2]"; a list of texts joins unquoted ("[a b]", its literal prints `["a" "b"]`) and a nested list is "not a joinable item": the general runtime serializer is still open (#35). (impl-text 2026-10-03)

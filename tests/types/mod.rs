@@ -1,0 +1,22 @@
+mod test_array_types;
+mod test_cast_bugs;
+mod test_constructor_vs_data;
+mod test_data;
+mod test_generic_types;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_person_struct;
+mod test_records_classes;
+mod test_struct_field_of_constructor;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_struct_types;
+mod test_traits;
+mod test_type_of_real_variable;
+mod test_type_test_is_only;
+mod test_type_name_matching;
+mod test_type_of;
+mod test_type_tests;
+mod test_type_upgrading;
+mod test_type_words;
+mod test_typed_arrays;
+mod test_types_scope;
+mod test_types;
