@@ -43,11 +43,19 @@ pub struct Context {
     pub user_type_indices: HashMap<String, u32>,
     pub type_registry: TypeRegistry,
     pub user_globals: HashMap<String, (u32, Kind)>,
+    /// The program's `global` declarations with kind and type, which every function body sees
+    pub declared_globals: HashMap<String, crate::local::Local>,
     pub user_functions: HashMap<String, UserFunctionDef>,
     /// Per function: captured outer variable → (global holding its value at definition time, kind)
     pub captures: HashMap<String, Vec<(String, (u32, Kind))>>,
     /// Calls that disagree on the kind of an undeclared parameter, reported as type errors
     pub parameter_conflicts: Vec<String>,
+    /// Functions made into closures (closures.rs): (function, number of captured values leading its parameters)
+    pub closure_targets: Vec<(String, usize)>,
+    /// Field names looked up by a constant key (`p.x`, `p["x"]`): each has a runtime error `no_field_x` for the miss
+    pub missing_field_names: std::collections::BTreeSet<String>,
+    /// Subjects of a `switch` without default: each has a runtime error `no_case_<subject>` for the miss
+    pub missing_case_labels: std::collections::BTreeSet<String>,
 }
 
 impl Default for Context {
@@ -77,9 +85,13 @@ impl Context {
             user_type_indices: HashMap::new(),
             type_registry: TypeRegistry::new(),
             user_globals: HashMap::new(),
+            declared_globals: HashMap::new(),
             captures: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),
+            closure_targets: Vec::new(),
+            missing_field_names: Default::default(),
+            missing_case_labels: Default::default(),
         }
     }
 

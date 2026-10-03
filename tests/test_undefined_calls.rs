@@ -1,7 +1,6 @@
 //! `name(args)` written without a space is a call: unresolved in emitted code it is an error, in data it stays data.
 
-mod common;
-use common::fails_with;
+use crate::common::fails_with;
 use warp::wasm_emitter::eval;
 use warp::{is, parse_data};
 

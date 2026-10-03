@@ -1,0 +1,13 @@
+a = "kitten"
+b = "sitting"
+prev = []
+for j in 0...#b { prev.push(j) }
+for i in 1...#a {
+    curr = [i]
+    for j in 1...#b {
+        cost = a#i == b#j ? 0 : 1
+        curr.push(min(prev#(j + 1) + 1, curr#j + 1, prev#j + cost))
+    }
+    prev = curr
+}
+prev#(#b + 1)

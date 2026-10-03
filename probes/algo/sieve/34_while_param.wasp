@@ -1,0 +1,10 @@
+fun f(n) {
+  s = 0
+  k = 0
+  while k <= n {
+    s += k
+    k += 1
+  }
+  s
+}
+f(5)

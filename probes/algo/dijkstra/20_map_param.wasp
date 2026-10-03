@@ -1,0 +1,2 @@
+fun get(m, k) { return m[k] }
+get({"A": 7}, "A")

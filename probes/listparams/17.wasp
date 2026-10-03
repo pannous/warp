@@ -1,0 +1,1 @@
+fn get(xs:list<int>) { xs#2 }; get([0 4 0])

@@ -1,0 +1,1 @@
+fun f(xs) { xs[0] = 9; return xs[0] }; a=[1,2]; f(a)

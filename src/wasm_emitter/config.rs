@@ -13,6 +13,8 @@ pub struct EmitterConfig {
 	pub emit_wasi_imports: bool,
 	/// Emit FFI imports (libc, libm)
 	pub emit_ffi_imports: bool,
+	/// Export the reflection getters (reflection.rs) a host without GC field access needs: on for the browser build
+	pub emit_reflection: bool,
 }
 
 impl Default for EmitterConfig {
@@ -23,6 +25,7 @@ impl Default for EmitterConfig {
 			emit_host_imports: false,
 			emit_wasi_imports: false,
 			emit_ffi_imports: false,
+			emit_reflection: cfg!(not(feature = "native")),
 		}
 	}
 }

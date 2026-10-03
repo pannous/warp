@@ -1,0 +1,1 @@
+fun f(xs) { n = #xs; n }; fun mk() { return [1 2 3 4] }; f(mk())

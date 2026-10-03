@@ -6,17 +6,27 @@
 
 use std::time::Duration;
 
+/// The module's bump pointer for runtime texts; texts the host returns are allocated from it too, so they never overlap
+pub const TEXT_HEAP_EXPORT: &str = "text_heap";
+const PAGE_BITS: u32 = 16;
+
+/// Other spellings of the host words (user decision #14e: `download <url>` is `fetch <url>`)
+const HOST_ALIASES: [(&str, &str); 1] = [("download", "fetch")];
+
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 use crate::extensions::utils::download_within;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
+#[cfg(feature = "native")]
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
+#[cfg(feature = "native")]
 use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};
 
+#[cfg(feature = "native")]
 /// Memory allocator state for host functions
 pub struct HostState {
 	/// Next free offset in linear memory for string allocation
@@ -25,12 +35,14 @@ pub struct HostState {
 	pending_result: Option<Node>,
 }
 
+#[cfg(feature = "native")]
 impl Default for HostState {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
+#[cfg(feature = "native")]
 impl HostState {
 	pub fn new() -> Self {
 		HostState {
@@ -48,6 +60,7 @@ impl HostState {
 	}
 }
 
+#[cfg(feature = "native")]
 /// Read a string from WASM linear memory
 pub fn read_string_from_memory(memory: &Memory, store: &impl wasmtime::AsContext, ptr: u32, len: u32) -> Result<String> {
 	let mut buf = vec![0u8; len as usize];
@@ -56,27 +69,70 @@ pub fn read_string_from_memory(memory: &Memory, store: &impl wasmtime::AsContext
 }
 
 /// Write a string to WASM linear memory using Caller, returns (ptr, len)
-fn write_string_to_caller(
-	memory: &Memory,
-	caller: &mut Caller<'_, HostState>,
-	s: &str,
-) -> Result<(u32, u32)> {
-	let bytes = s.as_bytes();
-	let len = bytes.len() as u32;
-	let ptr = caller.data_mut().alloc(len);
+#[cfg(feature = "native")]
+fn write_string_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, s: &str) -> Result<(u32, u32)> {
+	write_bytes_to_caller(memory, caller, s.as_bytes())
+}
 
-	// Grow memory if needed
-	let pages_needed = ((ptr + len) as usize).div_ceil(65536);
+/// Copy bytes into the module's memory: from its text heap when it exports one (the same rule as its own
+/// emit_text_allocation: fresh pages past the current memory when the heap is unset or full), else from HostState
+#[cfg(feature = "native")]
+fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
+	let heap = match caller.get_export(TEXT_HEAP_EXPORT) {
+		Some(Extern::Global(global)) => Some(global),
+		_ => None,
+	};
+	let ptr = match &heap {
+		Some(global) => {
+			let top = global.get(&mut *caller).i32().unwrap_or(0) as u32;
+			let memory_end = (memory.size(&*caller) as u32) << PAGE_BITS;
+			if top == 0 || top + len > memory_end {
+				memory.grow(&mut *caller, ((len >> PAGE_BITS) + 1) as u64)?;
+				memory_end
+			} else {
+				top
+			}
+		}
+		None => caller.data_mut().alloc(len),
+	};
+	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
 	let current_pages = memory.size(&*caller) as usize;
 	if pages_needed > current_pages {
-		let grow = (pages_needed - current_pages) as u64;
-		memory.grow(&mut *caller, grow)?;
+		memory.grow(&mut *caller, (pages_needed - current_pages) as u64)?;
 	}
-
 	memory.write(&mut *caller, ptr as usize, bytes)?;
+	if let Some(global) = heap {
+		global.set(&mut *caller, Val::I32((ptr + len) as i32))?;
+	}
 	Ok((ptr, len))
 }
 
+#[cfg(feature = "native")]
+/// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
+fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+		trace!("host.read: no memory export");
+		return (0, 0);
+	};
+	let (bytes, failed) = match read_string_from_memory(&memory, &*caller, path_ptr as u32, path_len as u32) {
+		Ok(path) => match std::fs::read(&path) {
+			Ok(bytes) => (bytes, false),
+			Err(reason) => (format!("read {path} failed: {reason}").into_bytes(), true),
+		},
+		Err(e) => (format!("read failed: unreadable path: {e}").into_bytes(), true),
+	};
+	match write_bytes_to_caller(&memory, caller, &bytes) {
+		Ok((ptr, len)) if failed => (ptr as i32, -(len as i32)),
+		Ok((ptr, len)) => (ptr as i32, len as i32),
+		Err(e) => {
+			trace!("host.read: failed to write result: {}", e);
+			(0, 0)
+		}
+	}
+}
+
+#[cfg(feature = "native")]
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	let engine = gc_engine();
@@ -108,6 +164,7 @@ pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
 	Ok(content)
 }
 
+#[cfg(feature = "native")]
 /// Fetch the URL in WASM memory and write the result back: (ptr, len) of the body, (ptr, -len) of the failure reason
 fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout: Duration) -> (i32, i32) {
 	let memory = match caller.get_export("memory") {
@@ -175,6 +232,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	}
 }
 
+#[cfg(feature = "native")]
 /// Link host functions into a wasmtime Linker
 pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> Result<()> {
 	// host.fetch(url_ptr: i32, url_len: i32) -> (result_ptr: i32, result_len: i32)
@@ -195,6 +253,25 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 			fetch_into_memory(&mut caller, url_ptr, url_len, Duration::from_millis(timeout_ms.max(1) as u64))
 		},
 	)?;
+
+	// host.read(path_ptr: i32, path_len: i32) -> (result_ptr: i32, result_len: i32), the file's bytes
+	linker.func_wrap(
+		"host",
+		"read",
+		|mut caller: Caller<'_, HostState>, path_ptr: i32, path_len: i32| -> (i32, i32) {
+			read_into_memory(&mut caller, path_ptr, path_len)
+		},
+	)?;
+
+	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
+	linker.func_wrap("host", "warn", |mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
+		if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
+			match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
+				Ok(message) => crate::diagnostic::report_runtime_warning(&message),
+				Err(e) => trace!("host.warn: unreadable message: {e}"),
+			}
+		}
+	})?;
 
 	// host.run(wasm_ptr: i32, wasm_len: i32) -> i64
 	// Runs WASM bytes and returns result as an i64 (simplified for now)
@@ -259,6 +336,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	Ok(())
 }
 
+#[cfg(feature = "native")]
 /// Create a linker with host functions pre-linked
 pub fn create_host_linker(engine: &Engine) -> Result<Linker<HostState>> {
 	let mut linker = Linker::new(engine);
@@ -266,7 +344,7 @@ pub fn create_host_linker(engine: &Engine) -> Result<Linker<HostState>> {
 	Ok(linker)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod tests {
 	use super::*;
 
@@ -275,5 +353,36 @@ mod tests {
 		let mut state = HostState::new();
 		assert_eq!(state.alloc(10), 65536);
 		assert_eq!(state.alloc(5), 65552); // 65536 + 10, aligned to 8 = 65544? No, 65536+10=65546, aligned = 65552
+	}
+}
+
+/// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
+pub fn lower_aliases(node: Node) -> Node {
+	let mut defined = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(&node, &mut defined);
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, &node);
+	defined.extend(context.user_functions.into_keys());
+	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
+	if aliases.is_empty() {
+		return node;
+	}
+	renamed_heads(node, &aliases)
+}
+
+fn renamed_heads(node: Node, aliases: &[(&str, &str)]) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut items: Vec<Node> = items.into_iter().map(|item| renamed_heads(item, aliases)).collect();
+			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
+				if let Some((_, word)) = aliases.iter().find(|(alias, _)| alias == name) {
+					items[0] = Node::Symbol(word.to_string());
+				}
+			}
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(renamed_heads(*left, aliases)), op, Box::new(renamed_heads(*right, aliases))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_heads(*node, aliases)), data },
+		other => other,
 	}
 }

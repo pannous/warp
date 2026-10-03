@@ -307,7 +307,6 @@ fn test_norm() {
 }
 
 #[test]
-#[ignore]
 fn test_math_operators() {
 	//	is!(("42 2 *"), 84);
 	is!("- -3", 3);
@@ -346,7 +345,7 @@ fn test_math_operators() {
 	is!("i=3.71;.3+i", 4.01);
 	#[cfg(feature = "WASM")]
 	{
-		is!("i=3.70001;.3+i", 4.0000100000000005); // lol todo what?
+		is!("i=3.70001;.3+i", 4.00001); // lol todo what?
 	}
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -373,7 +372,7 @@ fn test_math_operators() {
 		is!(("3⁴"), 9 * 9);
 	);
 
-	is!("i=3.70001;.3+i", 4);
+	is!("i=3.70001;.3+i", 4.00001);
 	is!("i=3.7;.3+i", 4);
 }
 
@@ -387,7 +386,7 @@ fn test_math_operators_runtime() {
 	is!("√3^0", 1.0);
 	#[cfg(feature = "WASM")]
 	{
-		is!("√3^2", 2.9999999999999996); // bad sqrt!?
+		is!("√3^2", 3); // bad sqrt!?
 		is!("π**2", 9.869604401089358);
 	}
 	#[cfg(not(feature = "WASM"))]
@@ -523,7 +522,6 @@ fn test_comparison_primitives() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_primitives() {
 	skip!(
 	// todo: if emit returns Node:
@@ -541,13 +539,12 @@ fn test_wasm_logic_primitives() {
 
 	is!("nil", false);
 	is!("null", false);
-	is!("null", 0);
+	is!("null", Empty);
 	// is!("null",  nullptr);
 	is!("ø", false);
 	is!("nil", Empty);
 }
 #[test]
-#[ignore]
 fn test_wasm_variables0() {
 	//	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
 	is!("i=123;i", 123);
@@ -561,17 +558,17 @@ fn test_wasm_variables0() {
 	is!("i=0;i", 0);
 	is!("i:=true;i", true);
 	is!("i=true;i", true);
-	is!("i=123.4;i", 123); // main returning int
+	is!("i=123.4;i", 123.4); // main returning int
 	skip!(
 
 		is!("i=0.0;i", 0.0);
 		is!("i=ø;i", nullptr);
 		is!("i=123.4;i", 123.4); // main returning int
 	);
-	is!("8.33333333332248946124e-03", 0); // todo in wasm
+	is!("8.33333333332248946124e-03", 8.33333333332248946124e-03); // todo in wasm
 	#[cfg(feature = "WASM")]
 	{
-		is!("8.33333333332248946124e+01", 83.33333333322489);
+		is!("8.33333333332248946124e+01", 83.333_333_333_224_9);
 	}
 	#[cfg(not(feature = "WASM"))]
 	{
@@ -595,7 +592,6 @@ fn test_wasm_increment() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_unary_variables() {
 	is!("i=0.0; !i", true);
 	is!("i=false; !i", true);
@@ -626,7 +622,6 @@ fn test_self_modifying() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_unary() {
 	is!("not 0.0", true);
 	is!("not ø", true);
@@ -639,7 +634,6 @@ fn test_wasm_logic_unary() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_on_objects() {
 	is!("not 'a'", false);
 	is!("not {a:2}", false);
@@ -651,7 +645,7 @@ fn test_wasm_logic_on_objects() {
 	is!("not ()", true);
 	is!("not {}", true);
 	is!("not []", true);
-	is!("not ({[ø]})", true); // might skip :);
+	is!("not ({[ø]})", false); // might skip :);
 }
 
 #[test]
@@ -707,7 +701,6 @@ fn test_wasm_logic() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_logic_negated() {
 	is!("not true and !true", !true);
 	is!("not true and !false", !true);
@@ -944,14 +937,12 @@ fn test_wasm_runtime_extension() {
 }
 
 #[test]
-#[ignore]
 fn test_string_concat_wasm() {
 	is!("'Hello, ' + 'World!'", "Hello, World!");
 }
 
 
 #[test]
-#[ignore]
 fn test_object_properties_wasm() {
 	is!("x={a:3,b:4,c:{d:true}};x.a", 3);
 	is!("x={a:3,b:true};x.b", 1);
@@ -1314,7 +1305,6 @@ fn test_smart_return() {
 fn test_multi_value() {}
 
 #[test]
-#[ignore]
 fn test_is() {
 	// all these have been tested with is!
 	// before. now assert! that it works with runtime
@@ -1373,7 +1363,6 @@ fn test_logarithm2() {
 }
 
 #[test]
-#[ignore]
 fn test_for_loop_classic() {
 	is!("for(i=0;i<10;i++){puti i};i", 10);
 	is!("sum = 0; for(i=0;i<10;i++){sum+=i};sum", 45);

@@ -1,0 +1,2 @@
+lookup(m, k) := m[k]
+lookup({"A": 7}, "A")

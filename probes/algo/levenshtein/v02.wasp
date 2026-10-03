@@ -1,0 +1,9 @@
+def g(a, b) {
+    s = a
+    t = b
+    cost = s#1 == t#1 ? 0 : 1
+    cost
+}
+t = 0
+t += g("ab", "cd")
+t

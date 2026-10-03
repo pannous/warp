@@ -19,14 +19,14 @@ DARKGRAY = 0xFF505050
 InitWindow(800, 600, "Wasp Raylib - Simple Circle")
 
 // Draw a single frame
-#BeginDrawing()
-#ClearBackground(RAYWHITE)
-#DrawText("Wasp Raylib Demo", 280, 20, 30, DARKGRAY)
-#DrawCircle(400, 300, 80.0, MAROON)
-#EndDrawing()
+# BeginDrawing()
+# ClearBackground(RAYWHITE)
+# DrawText("Wasp Raylib Demo", 280, 20, 30, DARKGRAY)
+# DrawCircle(400, 300, 80.0, MAROON)
+# EndDrawing()
 
-#delay = 0                                                                                   
-#while(delay < 5000000000) {                                                                  
+# delay = 0                                                                                   
+# while(delay < 5000000000) {                                                                  
 #    delay++                                                                                 
-#}  
-#delay
+# }  
+# delay

@@ -1,0 +1,1 @@
+fun g() { var xs = []; xs.push(5); return xs[0] }; g() + g()

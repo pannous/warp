@@ -1,0 +1,1 @@
+s = 0; i = 0; while i < 3 do s += i; i += 1 end; s

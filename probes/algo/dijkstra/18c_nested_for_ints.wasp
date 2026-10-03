@@ -1,0 +1,4 @@
+edges = [[1, 4], [3, 2]]
+s = 0
+for e in edges { s = s + e[1] }
+s

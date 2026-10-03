@@ -6,6 +6,20 @@ pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "functio
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
 
+/// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
+/// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
+pub const GLYPH_OPERATORS: [(char, Op, &str); 15] = [
+	('∧', Op::And, "and"), ('⋀', Op::And, "and"),
+	('∨', Op::Or, "or"), ('⋁', Op::Or, "or"),
+	('⊻', Op::Xor, "xor"),
+	('≟', Op::Eq, "=="), ('≡', Op::Eq, "=="), ('﹦', Op::Eq, "=="),
+	('‐', Op::Sub, "-"), ('‑', Op::Sub, "-"), ('‒', Op::Sub, "-"), ('–', Op::Sub, "-"), ('—', Op::Sub, "-"), ('―', Op::Sub, "-"), ('−', Op::Sub, "-"),
+];
+
+pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
+	GLYPH_OPERATORS.iter().find(|(known, _, _)| *known == glyph).map(|(_, op, canonical)| (*op, *canonical))
+}
+
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
 }
@@ -32,6 +46,7 @@ pub enum Op {
 	// Structural operators (existing)
 	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
 	Dot,      // .   member access
+	SafeDot,  // ?.  member access that is ø when the receiver is ø
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
 	Assign,   // =   assignment
@@ -67,6 +82,7 @@ pub enum Op {
 	Ge,  // >=  ≥
 	Eq,  // ==
 	Ne,  // !=  ≠
+	Similar, // ≈  ~  circa  approximately: equal within the relative `tolerance` (default 1e-9)
 
 	// Logical operators
 	And, // and  &&  ∧
@@ -125,7 +141,7 @@ impl Op {
 			Op::Inc | Op::Dec => (195, 0),
 
 			// Member access (tightest infix)
-			Op::Dot => (180, 181),
+			Op::Dot | Op::SafeDot => (180, 181),
 			Op::Scope => (175, 176),
 			Op::Hash => (170, 171), // index operator #
 
@@ -154,7 +170,7 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne => (115, 116),
+			Op::Eq | Op::Ne | Op::Similar => (115, 116),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -203,6 +219,7 @@ impl Op {
 			// Structural
 			Op::Colon => ":",
 			Op::Dot => ".",
+			Op::SafeDot => "?.",
 			Op::Scope => "::",
 			Op::Define => ":=",
 			Op::Assign => "=",
@@ -239,6 +256,7 @@ impl Op {
 			Op::Ge => ">=",
 			Op::Eq => "==",
 			Op::Ne => "!=",
+			Op::Similar => "≈",
 
 			// Logical
 			Op::And => "and",

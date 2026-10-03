@@ -1,0 +1,5 @@
+x = 0
+alive = false
+n = 3
+if alive and (n == 2 or n == 3) { x = 1 } else if not alive and n == 3 { x = 2 } else { x = 3 }
+x

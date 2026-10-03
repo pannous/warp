@@ -1,0 +1,4 @@
+fun f(n) {
+  if n == 0 { return 0 } else if n == 1 { return 10 } else { return 20 }
+}
+f(0) + f(1) + f(2)

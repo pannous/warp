@@ -1,0 +1,1 @@
+fun f(xs) { r=[]; r.add(xs[0]); return count(r) }; f([5,6])

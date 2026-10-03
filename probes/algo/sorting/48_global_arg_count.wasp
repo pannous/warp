@@ -1,0 +1,1 @@
+fun f(xs) { return count(xs) }; nums=[1,2]; f(nums)

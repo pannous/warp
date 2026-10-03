@@ -1,0 +1,4 @@
+m = {A: 1, B: 2}
+s = ""
+for k in m { s = s + k }
+s

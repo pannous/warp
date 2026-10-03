@@ -1,0 +1,9 @@
+def g(n) {
+    prev = [0]
+    best = min(n, 3)
+    prev.push(best)
+    prev#2
+}
+t = 0
+t += g(5)
+t

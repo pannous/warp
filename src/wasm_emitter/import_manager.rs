@@ -88,6 +88,17 @@ impl ImportManager {
 			.import("host", "fetch_within", EntityType::Function(fetch_within_type_idx));
 		Self::register_import(ctx, "host_fetch_within");
 
+		// read: (path_ptr, path_len) -> (result_ptr, result_len), the file's bytes; a negative length marks a failure reason
+		self.imports
+			.import("host", "read", EntityType::Function(fetch_type_idx));
+		Self::register_import(ctx, "host_read");
+
+		// warn: (message_ptr, message_len) -> (), a runtime warning (diagnostic::report_runtime_warning)
+		let warn_type_idx = type_manager.add_function_type(vec![ValType::I32, ValType::I32], vec![]);
+		self.imports
+			.import("host", "warn", EntityType::Function(warn_type_idx));
+		Self::register_import(ctx, "host_warn");
+
 		// Import run from "host" module
 		self.imports
 			.import("host", "run", EntityType::Function(run_type_idx));

@@ -1,0 +1,9 @@
+prev = [0, 1, 2]
+for i in 1..3 {
+    curr = [i]
+    for j in 1..3 {
+        curr.push(prev[j] + 1)
+    }
+    prev = curr
+}
+prev[2]

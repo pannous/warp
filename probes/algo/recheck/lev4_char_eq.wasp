@@ -1,0 +1,1 @@
+fun f(a, b) { return a[0] == b[0] ? 0 : 1 }; f("ab", "ac")

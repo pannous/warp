@@ -1,6 +1,6 @@
 use warp::*;
 
-mod common;
+use crate::common;
 
 #[test]
 fn test_float_local_assignment_keeps_its_float_value() {

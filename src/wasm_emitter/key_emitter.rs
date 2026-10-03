@@ -38,6 +38,15 @@ impl WasmGcEmitter {
 			}
 		}
 
+		// text += more → text = text + more
+		if op.is_compound_assign() && op.base_op() == Op::Add {
+			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
+			if self.get_type(&concatenation) == crate::type_kinds::Kind::Text {
+				self.emit_key_node(func, left, &Op::Assign, &concatenation);
+				return;
+			}
+		}
+
 		// Skip user function definitions - they're already compiled
 		if *op == Op::Define {
 			if let Node::Symbol(name) = left.drop_meta() {
@@ -59,9 +68,23 @@ impl WasmGcEmitter {
 			&& matches!(left.drop_meta(), Node::Symbol(s) if {
 				self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
 			});
+		let is_ref_global_assign = (*op == Op::Assign || *op == Op::Define)
+			&& matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_none()
+				&& self.ctx.user_globals.get(s).is_some_and(|(_, kind)| kind.is_ref()));
 
+		if is_ref_global_assign {
+			if let Node::Symbol(name) = left.drop_meta() {
+				self.emit_global_store(func, name, right);
+			}
+			return;
+		}
 		if is_ref_assign {
 			if let Node::Symbol(name) = left.drop_meta() {
+				if self.emit_typed_list_store(func, name, right) {
+					func.instruction(&Instruction::Drop);
+					self.emit_typed_list_as_node(func, name);
+					return;
+				}
 				// Emit the right side as a Node reference
 				self.emit_node_instructions(func, right);
 				// Store in ref-type local
@@ -86,6 +109,8 @@ impl WasmGcEmitter {
 		if self.compares_structurally(op, left, right) {
 			self.emit_structural_equality(func, left, op, right);
 			self.emit_call(func, "new_int");
+		} else if self.orders_a_list(op, left, right) {
+			self.emit_unordered_list_error(func, left, op, right);
 		} else if op.is_logical() && !both_numeric {
 			self.emit_truthy_logical(func, left, op, right);
 		} else if op.is_arithmetic()
@@ -180,9 +205,9 @@ impl WasmGcEmitter {
 				}
 			}
 			Op::Not => {
-				// !x = x == 0
-				self.emit_numeric_value(func, right);
-				func.instruction(&Instruction::I64Eqz);
+				// not x = x is falsy: 0, ø and errors
+				self.emit_condition(func, right, Self::emit_numeric_value);
+				func.instruction(&Instruction::I32Eqz);
 				func.instruction(&Instruction::I64ExtendI32U);
 				self.emit_call(func, "new_int");
 			}
@@ -230,15 +255,20 @@ impl WasmGcEmitter {
 	fn emit_hash_op(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		// Check if prefix (count) or infix (index)
 		if matches!(left.drop_meta(), Node::Empty) {
-			// Prefix #x = count - emit the node and call node_count
-			self.emit_node_instructions(func, right);
-			self.emit_call(func, "node_count");
+			// Prefix #x = count
+			self.emit_list_count(func, right, "node_count");
 			// node_count returns i64, wrap in new_int
 			self.emit_call(func, "new_int");
 		} else {
 			// Infix x#y = indexing - dispatches to string_char_at or list_node_at at runtime, or looks up a key
 			self.emit_indexed_node(func, left, right);
 		}
+	}
+
+	/// The runtime counter behind the getter word in `x.size`, `x.count`, `x.bytes`
+	pub(super) fn counting_getter(&self, property: &Node) -> Option<&'static str> {
+		let Node::Symbol(word) = property.drop_meta() else { return None };
+		crate::analyzer::counting_method(word, &self.ctx)
 	}
 
 	/// Emit dot operator: method calls and property access
@@ -260,8 +290,7 @@ impl WasmGcEmitter {
 		if let Some(ref method) = method_name {
 			if let Some(counter) = crate::analyzer::counting_method(method, &self.ctx) {
 				// obj.count, obj.length: elements, or graphemes of a text; obj.bytes/chars/graphemes
-				self.emit_node_instructions(func, left);
-				self.emit_call(func, counter);
+				self.emit_list_count(func, left, counter);
 				self.emit_call(func, "new_int");
 				return;
 			}
@@ -275,7 +304,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
-	fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
+	pub(super) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
 		self.emit_node_instructions(func, left);
 		// For struct instances like Person{...}, emit block as list
 		let right_node = right.drop_meta();

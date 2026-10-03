@@ -18,6 +18,7 @@
 
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
+use crate::fixed_width::FixedWidth;
 use crate::node::Node;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
@@ -397,6 +398,46 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// The fixed width (`byte`, `int8` …) the variable `node` was declared with
+	pub(super) fn declared_fixed_width(&self, node: &Node) -> Option<&'static FixedWidth> {
+		let Node::Symbol(name) = node.drop_meta() else { return None };
+		let type_node = self.scope.lookup(name)?.type_node.as_ref()?;
+		crate::fixed_width::fixed_width(&type_node.name())
+	}
+
+	/// Stack [Int] → [Int] before storing to `target`: traps when the Int does not fit its declared fixed width
+	pub(super) fn emit_fits_declared(&mut self, func: &mut Function, target: &Node) {
+		let width = self.declared_fixed_width(target);
+		self.emit_fixed_width_check(func, width);
+	}
+
+	/// Stack [Int] → [Int], trapping in `overflow_of_<type>` when the Int leaves the range of `width`
+	pub(super) fn emit_fixed_width_check(&mut self, func: &mut Function, width: Option<&'static FixedWidth>) {
+		let Some(width) = width else { return };
+		let value = self.scratch(2);
+		func.instruction(&I::LocalSet(value));
+		let below = self.emit_bound_violation(func, value, Op::Lt, width.low);
+		let above = self.emit_bound_violation(func, value, Op::Gt, width.high);
+		if below && above {
+			func.instruction(&I::I32Or);
+		}
+		if below || above {
+			self.emit_fail_if(func, width.trap);
+		}
+		func.instruction(&I::LocalGet(value));
+	}
+
+	/// Push i32 `value op bound`; without the Int runtime every Int is a machine i64, so a bound beyond i64 holds trivially
+	fn emit_bound_violation(&mut self, func: &mut Function, value: u32, op: Op, bound: i128) -> bool {
+		if !self.int_runtime() && i64::try_from(bound).is_err() {
+			return false;
+		}
+		func.instruction(&I::LocalGet(value));
+		self.emit_int_literal(func, &BigInt::from(bound));
+		self.emit_int_compare(func, &op, None, Some((bound, bound)));
+		true
+	}
+
 	fn machine_compare(op: &Op) -> Instruction<'static> {
 		match op {
 			Op::Eq => I::I64Eq,
@@ -471,13 +512,7 @@ impl WasmGcEmitter {
 		self.int_heap_global = self.next_global_idx;
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
 		self.int_count_global = self.next_global_idx + 1;
-		let limbs = RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.limbs_type) };
-		self.globals.global(
-			GlobalType { val_type: Ref(limbs), mutable: true, shared: false },
-			&ConstExpr::ref_null(HeapType::Concrete(self.type_manager.limbs_type)),
-		);
-		self.int_remainder_global = self.next_global_idx + 2;
-		self.next_global_idx += 3;
+		self.next_global_idx += 2;
 	}
 
 	/// Push the anyref payload for the Int in `local`
@@ -540,24 +575,6 @@ impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════
 	// Runtime functions (emitted once, only when the program needs them)
 	// ═══════════════════════════════════════════════════════════════════════
-
-	pub(super) fn runtime_function(
-		&mut self,
-		name: &'static str,
-		params: Vec<ValType>,
-		results: Vec<ValType>,
-		locals: Vec<ValType>,
-		body: impl FnOnce(&Self, &mut Function),
-	) {
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params, results);
-		self.functions.function(func_type);
-		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
-		body(self, &mut func);
-		func.instruction(&I::End);
-		self.code.function(&func);
-		self.register_func(name);
-	}
 
 	pub(super) fn call(&self, func: &mut Function, name: &str) {
 		func.instruction(&I::Call(self.func_index(name)));
@@ -635,12 +652,6 @@ impl WasmGcEmitter {
 		func.instruction(&I::Br(0));
 		func.instruction(&I::End);
 		func.instruction(&I::End);
-	}
-
-	pub(super) fn emit_list(func: &mut Function, instructions: &[Instruction]) {
-		for instruction in instructions {
-			func.instruction(instruction);
-		}
 	}
 
 	pub(crate) fn emit_int_runtime(&mut self) {
@@ -769,10 +780,9 @@ impl WasmGcEmitter {
 			s.call(f, "big_trim");
 		});
 
-		// mag_divmod(a, b) -> quotient, remainder in its global; binary long division, b nonzero
+		// mag_divmod(a, b) -> (quotient, remainder) as two results; binary long division, b nonzero
 		// locals: quotient, remainder, bit, n, k, carry, v
-		let remainder_global = self.int_remainder_global;
-		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
+		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(2)]);
 			Self::emit_list(f, &[I::LocalGet(1), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(5), I::ArrayNewDefault(limbs_type), I::LocalSet(3)]);
 			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(4)]);
@@ -803,10 +813,9 @@ impl WasmGcEmitter {
 					I::ArraySet(limbs_type), I::End,
 				]);
 			});
-			f.instruction(&I::LocalGet(3));
-			s.call(f, "big_trim");
-			f.instruction(&I::GlobalSet(remainder_global));
 			f.instruction(&I::LocalGet(2));
+			s.call(f, "big_trim");
+			f.instruction(&I::LocalGet(3));
 			s.call(f, "big_trim");
 		});
 	}
@@ -899,28 +908,23 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Select, I::End]);
 		});
 
-		// big_divmod(a, b) -> quotient, or the remainder when `remainder`; truncated like i64.div_s / i64.rem_s
-		let remainder_global = self.int_remainder_global;
-		for (name, remainder) in [("big_quot", false), ("big_rem", true)] {
-			self.runtime_function(name, vec![big, big], vec![big], vec![limbs], |s, f| {
-				s.magnitude(f, 1);
-				Self::emit_list(f, &[I::ArrayLen, I::I32Eqz, I::If(BlockType::Empty), I::Unreachable, I::End]);
-				s.magnitude(f, 0);
-				s.magnitude(f, 1);
-				s.call(f, "mag_divmod");
-				if remainder {
-					f.instruction(&I::Drop);
-					s.negative(f, 0);
-					f.instruction(&I::GlobalGet(remainder_global));
-				} else {
-					f.instruction(&I::LocalSet(2));
-					s.negative(f, 0);
-					s.negative(f, 1);
-					Self::emit_list(f, &[I::I32Xor, I::LocalGet(2)]);
-				}
-				s.call(f, "big_new");
-			});
-		}
+		// big_divmod(a, b) -> (quotient, remainder), truncated like i64.div_s / i64.rem_s; locals: their magnitudes
+		let (quotient, remainder) = (2, 3);
+		self.runtime_function("big_divmod", vec![big, big], vec![big, big], vec![limbs, limbs], |s, f| {
+			s.magnitude(f, 1);
+			Self::emit_list(f, &[I::ArrayLen, I::I32Eqz, I::If(BlockType::Empty), I::Unreachable, I::End]);
+			s.magnitude(f, 0);
+			s.magnitude(f, 1);
+			s.call(f, "mag_divmod");
+			Self::emit_list(f, &[I::LocalSet(remainder), I::LocalSet(quotient)]);
+			s.negative(f, 0);
+			s.negative(f, 1);
+			Self::emit_list(f, &[I::I32Xor, I::LocalGet(quotient)]);
+			s.call(f, "big_new");
+			s.negative(f, 0);
+			f.instruction(&I::LocalGet(remainder));
+			s.call(f, "big_new");
+		});
 
 		// big_to_f64(a); locals: i, acc, magnitude
 		self.runtime_function("big_to_f64", vec![big], vec![ValType::F64], vec![ValType::I32, ValType::F64, limbs], |s, f| {
@@ -1094,12 +1098,21 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 		});
 
-		// int_quot_slow / int_rem_slow: truncated division
-		for (name, big_op) in [("int_quot_slow", "big_quot"), ("int_rem_slow", "big_rem")] {
-			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![], |s, f| {
-				unbox_both(s, f);
-				s.call(f, big_op);
-				s.call(f, "int_box");
+		// int_divmod_slow(a, b) -> (quotient, remainder): one long division yields both; locals: boxed remainder
+		self.runtime_function("int_divmod_slow", vec![i64t, i64t], vec![i64t, i64t], vec![big], |s, f| {
+			unbox_both(s, f);
+			s.call(f, "big_divmod");
+			f.instruction(&I::LocalSet(2));
+			s.call(f, "int_box");
+			f.instruction(&I::LocalGet(2));
+			s.call(f, "int_box");
+		});
+		// int_quot_slow / int_rem_slow: truncated division, the other result dropped; locals: remainder
+		for (name, keep_wanted) in [("int_quot_slow", &[I::Drop][..]), ("int_rem_slow", &[I::LocalSet(2), I::Drop, I::LocalGet(2)])] {
+			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+				s.call(f, "int_divmod_slow");
+				Self::emit_list(f, keep_wanted);
 			});
 		}
 

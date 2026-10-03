@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>warp playground</title>
+	<link rel="stylesheet" href="codemirror/codemirror.min.css">
+	<link rel="stylesheet" href="playground.css">
+	<script src="codemirror/codemirror.min.js"></script>
+	<script src="codemirror/codeeditor-simple-mode.js"></script>
+	<script src="codemirror-wasp-mode.js"></script>
+	<script src="examples.js"></script>
+	<script src="samples.js" onerror="window.SAMPLES = {}"></script>
+	<script src="playground.js" defer></script>
+</head>
+<body>
+<header>
+	<h1>🐝 warp <span>playground</span></h1>
+	<p class="tagline">wasp compiled to WebAssembly GC by the warp compiler, itself running as WebAssembly in your browser</p>
+	<a class="source" href="https://github.com/pannous/warp" target="_blank" rel="noopener">source</a>
+</header>
+<nav class="toolbar">
+	<label>example <select id="examples"></select></label>
+	<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
+	<label><input id="auto" type="checkbox" checked> run while typing</label>
+	<button id="download" title="the WebAssembly module of the last run">⤓ wasm</button>
+	<span id="status" class="status">loading the compiler…</span>
+</nav>
+<main>
+	<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
+	<section class="output-pane">
+		<div id="asks" class="asks" hidden></div>
+		<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
+		<pre id="printed" class="printed" hidden></pre>
+		<ul id="diagnostics" class="diagnostics"></ul>
+		<details id="answered" class="answered" hidden>
+			<summary>your answers</summary>
+			<ul id="answers"></ul>
+		</details>
+	</section>
+</main>
+</body>
+</html>

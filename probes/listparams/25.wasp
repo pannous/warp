@@ -1,0 +1,1 @@
+fun mk() { return [0 4 0] }; fun g(xs) { xs[1] }; g(mk())

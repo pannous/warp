@@ -1,0 +1,11 @@
+fun f(n) {
+  alive = false
+  if alive and n == 2 {
+    return 1
+  } else if not alive and n == 3 {
+    return 2
+  } else {
+    return 0
+  }
+}
+f(3)

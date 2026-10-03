@@ -1,0 +1,1 @@
+fun f(a) { var m = a.length; return m }; f("abc")

@@ -1,0 +1,1 @@
+fun f(n) { var prev = []; for j in 0...n { prev.push(j) }; return prev[n] }; f(3)

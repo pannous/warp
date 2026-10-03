@@ -1,0 +1,3 @@
+fn get(q, i) { return q#i }
+q = [0, 4, 0]
+get(q, 1)

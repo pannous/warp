@@ -1,0 +1,10 @@
+def g(a) {
+    s = a
+    p = []
+    for j in 1...(#s) { p.push(j) }
+    p#(#s)
+}
+t = 0
+t += g("abc")
+t += g("de")
+t

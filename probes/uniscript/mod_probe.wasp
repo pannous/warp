@@ -1,0 +1,9 @@
+def hash(t){
+  h=0
+  i=1
+  while i <= count t {
+    h = (h*31 + (t#i as int)) % 4294967296
+    i++
+  }
+  h
+}

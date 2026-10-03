@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>warp tests in the browser</title>
+	<link rel="stylesheet" href="playground.css">
+	<script src="tests.js" defer></script>
+</head>
+<body>
+<header>
+	<h1>🐝 warp <span>tests in the browser</span></h1>
+	<p class="tagline">the Rust test suite built for wasm32-wasip1 without the native feature, every test in a fresh instance</p>
+</header>
+<nav class="toolbar">
+	<span id="progress" class="status">loading the test binary…</span>
+</nav>
+<main class="single">
+	<section class="output-pane">
+		<ul id="failures" class="diagnostics"></ul>
+	</section>
+</main>
+</body>
+</html>

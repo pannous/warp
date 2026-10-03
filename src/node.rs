@@ -1,12 +1,11 @@
 #![allow(dead_code, unused_imports)]
 // type string = str; NO! ugly for a reason!
-extern crate regex;
 use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{CloneAny, Dada, DataType, LineInfo};
+#[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
-use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::any::Any;
@@ -16,11 +15,22 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::operators::{is_function_keyword, Op};
 // use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, Kind};
+use crate::type_kinds::{AstKind, Kind, KIND_MASK};
 use crate::wasp_parser::parse;
 
 /// Prefix of a `@name(value)` annotation key
-const ATTRIBUTE_MARK: char = '@';
+pub const ATTRIBUTE_MARK: char = '@';
+
+/// The name and value of a meta entry `@name:value`
+pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
+	match entry.drop_meta() {
+		Key(key, Op::Colon, value) => match key.drop_meta() {
+			Symbol(key) => key.strip_prefix(ATTRIBUTE_MARK).map(|name| (name, value.as_ref())),
+			_ => None,
+		},
+		_ => None,
+	}
+}
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
@@ -286,6 +296,7 @@ impl Node {
 	}
 
 	/// Convert compact 3-field WASM GC object to Node
+	#[cfg(feature = "native")]
 	/// Layout: kind (i64), data (ref null any), value (ref null $Node)
 	pub fn from_gc_object(obj: &GcObject) -> Node {
 		// Read the kind field (i64), lower 8 bits are the tag
@@ -293,7 +304,7 @@ impl Node {
 			Ok(k) => k,
 			Err(_) => return Empty, // Null ref becomes Empty
 		};
-		let tag = (kind & 0xFF) as u8;
+		let tag = (kind & KIND_MASK) as u8;
 
 		match tag {
 			t if t == Kind::Empty as u8 => Empty,
@@ -320,6 +331,11 @@ impl Node {
 					Err(e) => Text(format!("Error reading text: {}", e)),
 				}
 			}
+
+			t if t == Kind::Error as u8 => match obj.text() {
+				Ok(reason) => Node::Error(Box::new(Text(reason))),
+				Err(e) => Node::Error(Box::new(Text(format!("Error reading error: {}", e)))),
+			},
 
 			t if t == Kind::Codepoint as u8 => {
 				// data field contains i31ref with codepoint
@@ -387,6 +403,12 @@ impl Node {
 				})
 			}
 
+			// a closure reads as the name of its function
+			t if t == Kind::Function as u8 => match obj.value() {
+				Ok(name) => Node::from_gc_object(&name),
+				Err(_) => Symbol("function".to_string()),
+			},
+
 			t if t == Kind::TypeDef as u8 => {
 				// data = name node, value = body node
 				let name = match obj.data_as_node() {
@@ -405,6 +427,7 @@ impl Node {
 	}
 
 	/// Read a list from compact GC representation
+	#[cfg(feature = "native")]
 	fn read_list_from_gc(obj: &GcObject, bracket: Bracket, _kind: i64) -> Node {
 		let mut items = Vec::new();
 
@@ -774,9 +797,23 @@ impl Node {
 		}
 	}
 
-	/// The value of the attribute `@name`
+	/// The value of the attribute `@name`: an annotation `@name(value) x`, else the meta entry `@name:value` of the literal
 	pub fn attribute(&self, name: &str) -> Option<&Node> {
-		self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value)
+		let annotation = self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value);
+		annotation.or_else(|| self.meta_entries().find(|(entry_name, _)| *entry_name == name).map(|(_, value)| value))
+	}
+
+	/// The meta entries `@name:value` written inside this literal (`point{x:1 @source:"gps"}`), never fields
+	pub fn meta_entries(&self) -> impl Iterator<Item = (&str, &Node)> {
+		let items: &[Node] = match self.drop_meta() {
+			List(items, _, _) => items,
+			Key(_, Op::Colon | Op::None, value) => match value.drop_meta() {
+				List(items, _, _) => items,
+				single => std::slice::from_ref(single),
+			},
+			_ => &[],
+		};
+		items.iter().filter_map(meta_entry)
 	}
 
 	/// The value slot of attribute `@name`; a missing attribute is created around the innermost node,
@@ -951,7 +988,10 @@ impl Node {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
-			Text(t) => format!("'{}'", t),
+			Text(t) => {
+				let quote = crate::normalize::text_quote();
+				format!("{quote}{t}{quote}")
+			}
 			Char(c) => format!("'{}'", c),
 			List(nodes, bracket, separator) => {
 				let close = bracket.closing();
@@ -1826,6 +1866,7 @@ impl PartialEq<Node> for serde_json::Value {
 
 /// Trait for types that can be compared with Node::Data(GcObject)
 /// Used by wasm_struct! macro to enable `is!("code", struct_value)` comparisons
+#[cfg(feature = "native")]
 pub trait GcComparable {
 	/// Try to create Self from a GcObject
 	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self> where Self: Sized;
@@ -1833,6 +1874,7 @@ pub trait GcComparable {
 	fn gc_eq(&self, other: &Self) -> bool;
 }
 
+#[cfg(feature = "native")]
 impl Node {
 	/// Compare with a GcComparable type by extracting from Data variant
 	pub fn eq_gc<T: GcComparable + fmt::Debug>(&self, other: &T) -> bool {
@@ -1849,6 +1891,7 @@ impl Node {
 
 /// Blanket impl: Node can be compared with any GcComparable type
 /// This enables `assert_eq!(result, alice)` where alice is a wasm_struct! type
+#[cfg(feature = "native")]
 impl<T: GcComparable + fmt::Debug> PartialEq<T> for Node {
 	fn eq(&self, other: &T) -> bool {
 		self.eq_gc(other)

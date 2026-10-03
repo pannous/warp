@@ -1,0 +1,1 @@
+cells=[]; cells.push(0); cells.push(4); fun f(g,i){return g[i]}; f(cells,1)

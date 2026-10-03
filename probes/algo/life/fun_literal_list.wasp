@@ -1,0 +1,6 @@
+fun f(k) {
+  n = [k, k * 2]
+  return n
+}
+h = f(3)
+h[1]

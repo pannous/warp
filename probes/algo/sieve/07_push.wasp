@@ -1,0 +1,4 @@
+p = []
+p.push(3)
+p.push(4)
+p.length

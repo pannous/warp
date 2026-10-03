@@ -1,0 +1,4 @@
+grid = []
+for i in 0 to 9 { grid.push(0) }
+grid[3] = 1
+grid[3] + grid[2]

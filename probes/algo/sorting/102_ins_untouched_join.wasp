@@ -1,0 +1,1 @@
+ins(items) := { x = items[0]; items }; ins([3,1,2]).join(",")

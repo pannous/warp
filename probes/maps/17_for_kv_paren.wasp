@@ -1,0 +1,5 @@
+m = {A: 1, B: 2}
+s = ""
+n = 0
+for (k, v) in m { s = s + k; n = n + v }
+s == "AB" and n == 3

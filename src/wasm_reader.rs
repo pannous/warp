@@ -1,5 +1,5 @@
 use crate::node::Node;
-use crate::type_kinds::Kind;
+use crate::type_kinds::{Kind, KIND_MASK};
 use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
@@ -29,6 +29,8 @@ impl std::fmt::Debug for GcObject {
 pub const FIELD_KIND: usize = 0;
 pub const FIELD_DATA: usize = 1;
 pub const FIELD_VALUE: usize = 2;
+/// Exported functions a module may start with, in the order they are looked for
+const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
 
 /// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
 /// or an exact `$Ratio(numerator, denominator)` of two such payloads (wasm_emitter/exact.rs)
@@ -87,7 +89,7 @@ impl GcObject {
 
 	/// Get the base tag (lower 8 bits of kind)
 	pub fn tag(&self) -> Result<u8> {
-		Ok((self.kind()? & 0xFF) as u8)
+		Ok((self.kind()? & KIND_MASK) as u8)
 	}
 
 	/// Get the data field as a Val
@@ -247,32 +249,7 @@ impl FromVal for GcObject {
 
 /// Load a WASM module with GC support and return root GcObject
 pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
-	let engine = gc_engine();
-	let store = crate::util::fueled_store(&engine, ());
-	let store_rc = Rc::new(RefCell::new(store));
-
-	let wasm_bytes = std::fs::read(path)?;
-	let module = Module::new(&engine, wasm_bytes)?;
-
-	let linker = Linker::new(&engine);
-	let instance = {
-		let mut s = store_rc.borrow_mut();
-		linker.instantiate(&mut *s, &module)?
-	};
-
-	let mut results = vec![Val::I32(0)];
-	{
-		let mut s = store_rc.borrow_mut();
-		let names = ["main", "wasp_main", "warp_main", "_start"];
-		let main = names
-			.iter()
-			.find_map(|&n| instance.get_func(&mut *s, n))
-			.ok_or_else(|| anyhow!("No entry point: {:?}", names))?;
-
-		main.call(&mut *s, &[], &mut results)?;
-	}
-
-	Ok(GcObject::new(results[0], store_rc, instance))
+	read_bytes_gc(&std::fs::read(path)?)
 }
 
 /// Load WASM bytes and return Node (calls from_gc_object)
@@ -283,58 +260,52 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
 
 /// Load WASM bytes and return GcObject
 pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
+	let (result, store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
+	Ok(GcObject::new(result, Rc::new(RefCell::new(store)), instance))
+}
+
+/// Instantiates `bytes` with the imports `link` adds and calls its `main` (or `_start`): the result, the store and the instance
+fn run_main<S: 'static>(
+	bytes: &[u8],
+	state: S,
+	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
+) -> Result<(Val, Store<S>, Instance)> {
 	let engine = gc_engine();
-	let store = crate::util::fueled_store(&engine, ());
-	let store_rc = Rc::new(RefCell::new(store));
-
+	let mut store = crate::util::fueled_store(&engine, state);
 	let module = Module::new(&engine, bytes)?;
-
-	let linker = Linker::new(&engine);
-	let instance = {
-		let mut s = store_rc.borrow_mut();
-		linker.instantiate(&mut *s, &module)?
-	};
-
-	let main = {
-		let mut s = store_rc.borrow_mut();
-		instance
-			.get_func(&mut *s, "main")
-			.ok_or_else(|| anyhow!("No main function"))?
-	};
-
+	let mut linker = Linker::new(&engine);
+	link(&mut linker, &engine, &module)?;
+	let instance = linker.instantiate(&mut store, &module)?;
+	let main = ENTRY_POINTS
+		.iter()
+		.find_map(|name| instance.get_func(&mut store, name))
+		.ok_or_else(|| anyhow!("No entry point: {:?}", ENTRY_POINTS))?;
 	let mut results = vec![Val::I32(0)];
-	{
-		let mut s = store_rc.borrow_mut();
-		main.call(&mut *s, &[], &mut results)?;
-	}
-
-	Ok(GcObject::new(results[0], store_rc, instance))
+	let outcome = main.call(&mut store, &[], &mut results);
+	with_trap_detail(outcome, &mut store, &instance)?;
+	Ok((results[0], store, instance))
 }
 
 /// Load WASM bytes with host function support and return Node
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
 	use crate::host::{HostState, link_host_functions};
+	let (result, mut store, instance) = run_main(bytes, HostState::new(), |linker, engine, _| link_host_functions(linker, engine))?;
+	val_to_node(&result, &mut store, &instance)
+}
 
-	let engine = gc_engine();
-	let mut store: Store<HostState> = crate::util::fueled_store(&engine, HostState::new());
+pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
-	let module = Module::new(&engine, bytes)?;
-
-	// Create linker with host functions
-	let mut linker = Linker::new(&engine);
-	link_host_functions(&mut linker, &engine)?;
-
-	let instance = linker.instantiate(&mut store, &module)?;
-
-	let main = instance
-		.get_func(&mut store, "main")
-		.ok_or_else(|| anyhow!("No main function"))?;
-
-	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
-
-	val_to_node(&results[0], &mut store, &instance)
+/// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
+fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
+	outcome.map_err(|failure| {
+		let failure = anyhow::Error::from(failure);
+		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
+		match detail.filter(|value| !matches!(value, Val::AnyRef(None))).and_then(|value| val_to_node(&value, store, instance).ok()) {
+			Some(value) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", value.serialize())),
+			None => failure,
+		}
+	})
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
@@ -350,13 +321,27 @@ fn val_to_node<T>(result: &Val, mut store: &mut Store<T>, instance: &Instance) -
 					// Read Node struct: (kind: i64, data: anyref, value: ref null $Node)
 					let kind_val = structref.field(&mut store, FIELD_KIND)?;
 					let kind = kind_val.unwrap_i64();
-					let tag = (kind & 0xFF) as u8;
+					let tag = (kind & KIND_MASK) as u8;
 
 					match tag {
 						t if t == Kind::Empty as u8 => Ok(Node::Empty),
 						t if t == Kind::Int as u8 => {
 							let data_val = structref.field(&mut store, FIELD_DATA)?;
 							Ok(Node::Number(read_int_payload(&mut store, &data_val)?))
+						}
+						t if t == Kind::Float as u8 => {
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							let float_box = data_val.unwrap_anyref().and_then(|data| data.unwrap_struct(&store).ok());
+							let value = match float_box {
+								Some(float_box) => float_box.field(&mut store, 0)?.unwrap_f64(),
+								None => 0.0,
+							};
+							Ok(Node::Number(crate::extensions::numbers::Number::Float(value)))
+						}
+						t if t == Kind::Codepoint as u8 => {
+							let data_val = structref.field(&mut store, FIELD_DATA)?;
+							let code = data_val.unwrap_anyref().and_then(|data| data.as_i31(&store).ok().flatten()).map(|code| code.get_u32());
+							Ok(code.and_then(char::from_u32).map_or(Node::Empty, Node::Char))
 						}
 						// an Error from a host call (fetch) carries its reason as text
 						t if t == Kind::Text as u8 || t == Kind::Symbol as u8 || t == Kind::Error as u8 => {
@@ -447,88 +432,19 @@ impl WasiState {
 
 /// Load WASM bytes with WASI support (for fd_write, puts, etc.)
 pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
-	let engine = gc_engine();
-	let mut store: Store<WasiState> = crate::util::fueled_store(&engine, WasiState::new());
-
-	let module = Module::new(&engine, bytes)?;
-
-	let mut linker: Linker<WasiState> = Linker::new(&engine);
-	p1::add_to_linker_sync(&mut linker, |state: &mut WasiState| &mut state.ctx)?;
-
-	let instance = linker.instantiate(&mut store, &module)?;
-
-	let main = instance
-		.get_func(&mut store, "main")
-		.or_else(|| instance.get_func(&mut store, "_start"))
-		.ok_or_else(|| anyhow!("No main or _start function"))?;
-
-	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
-	val_to_node(&results[0], &mut store, &instance)
+	let (result, mut store, instance) = run_main(bytes, WasiState::new(), |linker, _, _| {
+		Ok(p1::add_to_linker_sync(linker, |state: &mut WasiState| &mut state.ctx)?)
+	})?;
+	val_to_node(&result, &mut store, &instance)
 }
 
 /// Load WASM bytes with FFI support (for native function imports)
-/// Uses inline reading to handle GC references with FFI state
 pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
 	use crate::ffi::{link_ffi_functions, link_module_libraries, FfiState};
-	use crate::extensions::numbers::Number;
-	use crate::type_kinds::Kind;
-
-	let engine = gc_engine();
-	let mut store: Store<FfiState> = crate::util::fueled_store(&engine, FfiState::new());
-
-	let module = Module::new(&engine, bytes)?;
-
-	// Create linker with FFI functions
-	let mut linker: Linker<FfiState> = Linker::new(&engine);
-	link_ffi_functions(&mut linker, &engine)?;
-
-	// Auto-link dynamic libraries discovered from module imports (raylib, SDL2, etc.)
-	link_module_libraries(&mut linker, &engine, &module)?;
-
-	let instance = linker.instantiate(&mut store, &module)?;
-
-	let main = instance
-		.get_func(&mut store, "main")
-		.ok_or_else(|| anyhow!("No main function"))?;
-
-	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)?;
-
-	// Read the GC struct fields directly
-	let result_val = results[0];
-	if let Some(anyref) = result_val.unwrap_anyref() {
-		if let Ok(structref) = anyref.unwrap_struct(&store) {
-			// Read kind field (i64)
-			let kind_val = structref.field(&mut store, FIELD_KIND)?;
-			let kind = kind_val.unwrap_i64();
-			let tag = (kind & 0xFF) as u8;
-
-			match tag {
-				t if t == Kind::Empty as u8 => return Ok(Node::Empty),
-				t if t == Kind::Int as u8 => {
-					let data_val = structref.field(&mut store, FIELD_DATA)?;
-					return Ok(Node::Number(read_int_payload(&mut store, &data_val)?));
-				}
-				t if t == Kind::Float as u8 => {
-					// data field contains boxed f64
-					let data_val = structref.field(&mut store, FIELD_DATA)?;
-					if let Some(data_any) = data_val.unwrap_anyref() {
-						if let Ok(box_ref) = data_any.unwrap_struct(&store) {
-							let inner = box_ref.field(&mut store, 0)?;
-							return Ok(Node::Number(Number::Float(inner.unwrap_f64())));
-						}
-					}
-					return Ok(Node::Number(Number::Float(0.0)));
-				}
-				_ => {
-					// For other types, return Empty for now (can be expanded)
-					return Ok(Node::Empty);
-				}
-			}
-		}
-	}
-
-	// If we couldn't read as GC struct, return Empty
-	Ok(Node::Empty)
+	// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
+	let (result, mut store, instance) = run_main(bytes, FfiState::new(), |linker, engine, module| {
+		link_ffi_functions(linker, engine)?;
+		link_module_libraries(linker, engine, module)
+	})?;
+	val_to_node(&result, &mut store, &instance)
 }

@@ -1,0 +1,1 @@
+fun f(a) { return a#2 }; s="abcd"; f(s)

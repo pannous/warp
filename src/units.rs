@@ -15,6 +15,7 @@ enum Dimension {
 	Length,
 	Mass,
 	Era,
+	Time,
 }
 
 #[derive(Debug, PartialEq)]
@@ -25,7 +26,10 @@ struct Unit {
 	factor: i64,
 }
 
-const UNITS: [Unit; 8] = [
+const UNITS: [Unit; 11] = [
+	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
+	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
+	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
 	Unit { name: "mm", dimension: Dimension::Length, factor: 1 },
 	Unit { name: "cm", dimension: Dimension::Length, factor: 10 },
 	Unit { name: "m", dimension: Dimension::Length, factor: 1_000 },
@@ -68,6 +72,20 @@ fn overflow(quantity: &Quantity) -> String {
 	format!("{quantity} overflows the integer range")
 }
 
+/// A quantity per unit of another dimension: `10 km / 2 h` is `5 km/h`
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rate {
+	amount: i64,
+	numerator: &'static Unit,
+	denominator: &'static Unit,
+}
+
+impl fmt::Display for Rate {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{} {}/{}", self.amount, self.numerator.name, self.denominator.name)
+	}
+}
+
 /// `1950 ± 50 cm`: the unit is absent for plain numbers
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tolerance {
@@ -105,6 +123,9 @@ pub fn describe(data: &Dada) -> Option<String> {
 	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
 		return Some(tolerance.to_string());
 	}
+	if let Some(rate) = data.downcast_ref::<Rate>() {
+		return Some(rate.to_string());
+	}
 	data.downcast_ref::<Range>().map(|range| range.to_string())
 }
 
@@ -112,6 +133,7 @@ pub fn describe(data: &Dada) -> Option<String> {
 enum Value {
 	Number(i64),
 	Quantity(Quantity),
+	Rate(Rate),
 	Tolerance(Tolerance),
 	Range(Range),
 }
@@ -136,6 +158,7 @@ pub fn answer(program: &Node) -> Option<Node> {
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
+		Ok(Value::Rate(rate)) => Some(Node::data(rate)),
 		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
 		Ok(Value::Range(range)) => Some(Node::data(range)),
 		Err(Stop::Error(message)) => Some(error(&message)),
@@ -195,6 +218,7 @@ fn negate(value: Value) -> Evaluated {
 	match value {
 		Value::Number(n) => Ok(Value::Number(-n)),
 		Value::Quantity(quantity) => Ok(Value::Quantity(Quantity { amount: -quantity.amount, ..quantity })),
+		Value::Rate(rate) => Ok(Value::Rate(Rate { amount: -rate.amount, ..rate })),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
 	}
 }
@@ -215,6 +239,8 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 			result.map(Value::Number).ok_or(Stop::Unsupported)
 		}
 		(Value::Quantity(a), Op::Add | Op::Sub, Value::Quantity(b)) => sum(a, op, b),
+		(Value::Quantity(a), Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge, Value::Quantity(b)) => compare(a, op, b),
+		(Value::Quantity(a), Op::Div, Value::Quantity(b)) => quotient(a, b),
 		(Value::Number(_), Op::Add, Value::Quantity(other)) | (Value::Quantity(other), Op::Add | Op::Sub, Value::Number(_)) => {
 			fail(format!("incompatible operands: a plain number and {}", other.unit.name))
 		}
@@ -233,9 +259,43 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 /// The finer of two units of one dimension: the canonical unit of a result
 fn finer_unit(a: &'static Unit, b: &'static Unit) -> Result<&'static Unit, Stop> {
 	if a.dimension != b.dimension {
-		return fail(format!("incompatible units: {} and {}", a.name, b.name));
+		return fail(format!("DimensionError: incompatible units: {} and {}", a.name, b.name));
 	}
 	Ok(if a.factor <= b.factor { a } else { b })
+}
+
+/// Comparison of two quantities in their finer unit: `3km == 3000m`, answered 1 or 0
+fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
+	let finer = finer_unit(left.unit, right.unit)?;
+	let (x, y) = (left.in_unit(finer).map_err(Stop::Error)?, right.in_unit(finer).map_err(Stop::Error)?);
+	let holds = match op {
+		Op::Eq => x == y,
+		Op::Ne => x != y,
+		Op::Lt => x < y,
+		Op::Gt => x > y,
+		Op::Le => x <= y,
+		_ => x >= y,
+	};
+	Ok(Value::Number(holds as i64))
+}
+
+/// `6 m / 2 m` is the number 3; `10 km / 2 h` is the rate 5 km/h. A result that is no whole number is not supported yet.
+fn quotient(dividend: Quantity, divisor: Quantity) -> Evaluated {
+	if divisor.amount == 0 {
+		return fail("division by zero");
+	}
+	if dividend.unit.dimension != divisor.unit.dimension {
+		if dividend.amount % divisor.amount != 0 {
+			return fail(format!("{dividend} / {divisor} is not a whole number of {}/{} yet", dividend.unit.name, divisor.unit.name));
+		}
+		return Ok(Value::Rate(Rate { amount: dividend.amount / divisor.amount, numerator: dividend.unit, denominator: divisor.unit }));
+	}
+	let finer = finer_unit(dividend.unit, divisor.unit)?;
+	let (x, y) = (dividend.in_unit(finer).map_err(Stop::Error)?, divisor.in_unit(finer).map_err(Stop::Error)?);
+	if y == 0 || x % y != 0 {
+		return fail(format!("{dividend} / {divisor} is not a whole number yet"));
+	}
+	Ok(Value::Number(x / y))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {

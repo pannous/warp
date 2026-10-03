@@ -1,0 +1,8 @@
+size = 3
+x = 0
+for r in 0..size {
+  for c in 0..size {
+    x += 1
+  }
+}
+x

@@ -1,0 +1,8 @@
+fun f(grid, r) {
+  live = 0
+  for dr in [0, 1] {
+    live += grid[dr]
+  }
+  return live
+}
+f([1, 1, 1], 1)

@@ -1,0 +1,64 @@
+# .github/workflows/pages.yml
+name: Playground
+
+# The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
+# the warp compiler built for wasm32-unknown-unknown without the native feature, the page and samples/*.wasp.
+# Deploys on a push to main that changes the compiler, the page or the samples, and by hand
+# (`gh workflow run Playground -R pannous/warp`).
+on:
+  push:
+    branches: [ main ]
+    paths: [ "src/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_OFFLINE: false
+  SITE_FILES: index.html playground.css playground.js worker.js host.js reader.js examples.js codemirror-wasp-mode.js codemirror warp.wasm samples.js
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-playground-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install wasm-opt
+      run: sudo apt-get install -y binaryen
+    - name: Build the compiler and samples.js
+      run: web/playground/build.sh
+    - name: Collect the site
+      run: |
+        mkdir _site
+        (cd web/playground && cp -r $SITE_FILES ../../_site/)
+        echo "warp.pannous.com" > _site/CNAME
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4

@@ -1,7 +1,7 @@
 // An unspaced number next to a symbol or `(` multiplies: `2x` is 2*x (wiki/number.md)
 use warp::*;
 
-mod common;
+use crate::common;
 
 fn is_product(node: &Node) -> bool {
 	matches!(node, Node::Key(_, Op::Mul, _))

@@ -8,7 +8,7 @@ fn test_type_number() {
 
 #[test]
 fn test_type_float() {
-	is!("type(3.14)", Node::Symbol("float".to_string()));
+	is!("type(3.14)", Node::Symbol("rational".to_string()));
 }
 
 #[test]

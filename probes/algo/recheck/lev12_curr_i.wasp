@@ -1,0 +1,1 @@
+fun f(i) { var curr = [i]; var x = curr[0] + 1; return x }; f(4)

@@ -1,0 +1,1 @@
+fn get(int[] xs) { xs#2 }; get([0 4 0])

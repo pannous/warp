@@ -1,0 +1,4 @@
+fn setit(q, i) { q[i] = 9; return 0 }
+q = [0, 0, 0]
+setit(q, 2)
+q[2]

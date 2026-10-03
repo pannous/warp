@@ -1,0 +1,17 @@
+fun binary_search(list, target) {
+    low = 0
+    high = list.length - 1
+    while low <= high {
+        mid = (low + high) / 2 as int
+        if list[mid] == target { return mid }
+        if list[mid] < target { low = mid + 1 } else { high = mid - 1 }
+    }
+    -1
+}
+
+fun mk() {
+  a = []
+  for k in 0...(4) { a.push(k * 2) }
+  a
+}
+binary_search(mk(), 6)

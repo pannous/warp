@@ -1,0 +1,5 @@
+def g(a) {
+    s = a
+    #s
+}
+g("abc") + g("de")

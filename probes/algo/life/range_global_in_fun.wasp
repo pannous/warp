@@ -1,0 +1,7 @@
+size = 3
+fun f(n) {
+  x = 0
+  for r in 0..size { x += n }
+  return x
+}
+f(2)

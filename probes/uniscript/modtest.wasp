@@ -1,0 +1,2 @@
+global table = read("data/uniscript/entities.idx")
+first(n) := byte_at(table, n)

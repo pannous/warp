@@ -1,0 +1,3 @@
+dist = {"A": 0}
+dist["B"] = 5
+dist["B"]

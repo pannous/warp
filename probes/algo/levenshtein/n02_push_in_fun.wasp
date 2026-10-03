@@ -1,0 +1,6 @@
+def f(n) {
+    p = []
+    for j in 0...(n) { p.push(j) }
+    p#(n + 1)
+}
+f(3)

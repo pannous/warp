@@ -10,9 +10,11 @@
 // 2. System header parsing for extended functions (SDL2, raylib, etc.)
 
 use anyhow::Result;
+#[cfg(feature = "native")]
 use libloading::Library;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+#[cfg(feature = "native")]
 use wasmtime::{Engine, FuncType, Linker, Val, ValType};
 
 /// libm f64 functions linked by link_ffi_functions, with their arity.
@@ -104,6 +106,11 @@ pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
     }
 }
 
+const SDL_PREFIX: &str = "SDL_";
+
+/// C keywords that start a statement: a line holding one declares no function
+const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
+
 /// Extract function signature from a C declaration string
 /// e.g., "double sqrt(double x);" -> FfiHeaderSignature
 pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
@@ -145,6 +152,11 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     // Find function name (last word before parenthesis)
     let parts: Vec<&str> = before_paren.split_whitespace().collect();
     if parts.is_empty() {
+        return None;
+    }
+
+    // `return f(x);` in an inline function body of a header is a statement, not a declaration
+    if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
         return None;
     }
 
@@ -294,9 +306,19 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
     signatures
 }
 
-/// Get FFI signatures by parsing header files for a library
-/// Falls back to hardcoded signatures if headers not found
-pub fn get_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
+/// Get FFI signatures by parsing header files for a library, once per process: every name the analyzer meets is looked up here
+pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, FfiSignature> {
+    static PARSED: std::sync::Mutex<Vec<(String, &'static HashMap<String, FfiSignature>)>> = std::sync::Mutex::new(Vec::new());
+    let mut parsed = PARSED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, signatures)) = parsed.iter().find(|(parsed_library, _)| parsed_library == library) {
+        return signatures;
+    }
+    let signatures: &'static HashMap<String, FfiSignature> = Box::leak(Box::new(parse_signatures_from_headers(library)));
+    parsed.push((library.to_string(), signatures));
+    signatures
+}
+
+fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
     let mut sigs = HashMap::new();
     let paths = get_library_header_paths(library);
 
@@ -337,7 +359,6 @@ extern "C" {
 
 	// libc functions
 	fn abs(x: i32) -> i32;
-	fn strlen(s: *const i8) -> usize;
 	fn atoi(s: *const i8) -> i32;
 	fn atol(s: *const i8) -> i64;
 	fn atof(s: *const i8) -> f64;
@@ -346,9 +367,18 @@ extern "C" {
 	fn rand() -> i32;
 }
 
-/// Get known FFI function signatures by parsing system header files
+/// libm functions linked under the import module "m"
+const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 11] = [("fabs", fabs), ("floor", floor), ("ceil", ceil), ("round", round), ("sqrt", sqrt), ("sin", sin), ("cos", cos), ("tan", tan), ("exp", exp), ("log", log), ("log10", log10)];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 4] = [("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow)];
+
+/// Get known FFI function signatures by parsing system header files, once per process
 /// Uses unified Kind/Signature types from ffi_parser module
-pub fn get_ffi_signatures() -> HashMap<String, FfiSignature> {
+pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
+    static PARSED: OnceLock<HashMap<String, FfiSignature>> = OnceLock::new();
+    PARSED.get_or_init(parse_ffi_signatures)
+}
+
+fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
     use crate::ffi_parser::get_all_signatures;
     use crate::function::kind_to_valtype;
 
@@ -494,7 +524,7 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     }
 
     // Try well-known libraries via header discovery
-    for lib in ["m", "c", "SDL2"] {
+    for &lib in implicit_header_libraries(name) {
         let header_sigs = get_signatures_from_headers(lib);
         if let Some(sig) = header_sigs.get(name).cloned() {
             return Some(sig);
@@ -502,6 +532,12 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     }
 
     None
+}
+
+/// The libraries whose headers an undeclared call `name(…)` is looked up in: libm and libc, SDL2 only for SDL_ names,
+/// so a program that never names SDL never reads its headers
+pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
+    if name.starts_with(SDL_PREFIX) { &["m", "c", "SDL2"] } else { &["m", "c"] }
 }
 
 /// Get FFI signature from a specific library's headers
@@ -519,132 +555,24 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 }
 
 /// Link FFI functions into a wasmtime linker
+#[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
     use wasmtime::ValType;
 
-    // libm: fmin(f64, f64) -> f64
-    let fmin_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmin", fmin_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmin(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fmax(f64, f64) -> f64
-    let fmax_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmax", fmax_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmax(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fabs(f64) -> f64
-    let fabs_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fabs", fabs_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { fabs(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: floor(f64) -> f64
-    let floor_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "floor", floor_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { floor(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: ceil(f64) -> f64
-    let ceil_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "ceil", ceil_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { ceil(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: round(f64) -> f64
-    let round_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "round", round_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { round(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: sqrt(f64) -> f64
-    let sqrt_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "sqrt", sqrt_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { sqrt(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: sin(f64) -> f64
-    let sin_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "sin", sin_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { sin(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: cos(f64) -> f64
-    let cos_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "cos", cos_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { cos(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: tan(f64) -> f64
-    let tan_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "tan", tan_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { tan(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: fmod(f64, f64) -> f64
-    let fmod_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "fmod", fmod_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { fmod(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: pow(f64, f64) -> f64
-    let pow_type = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-    linker.func_new("m", "pow", pow_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        let y = params[1].unwrap_f64();
-        results[0] = Val::F64(unsafe { pow(x, y) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: exp(f64) -> f64
-    let exp_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "exp", exp_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { exp(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: log(f64) -> f64
-    let log_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "log", log_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { log(x) }.to_bits());
-        Ok(())
-    })?;
-
-    // libm: log10(f64) -> f64
-    let log10_type = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-    linker.func_new("m", "log10", log10_type, |_caller, params, results| {
-        let x = params[0].unwrap_f64();
-        results[0] = Val::F64(unsafe { log10(x) }.to_bits());
-        Ok(())
-    })?;
+    for (name, function) in LIBM_UNARY {
+        let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
+        linker.func_new("m", name, unary, move |_caller, params, results| {
+            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64()) }.to_bits());
+            Ok(())
+        })?;
+    }
+    for (name, function) in LIBM_BINARY {
+        let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
+        linker.func_new("m", name, binary, move |_caller, params, results| {
+            results[0] = Val::F64(unsafe { function(params[0].unwrap_f64(), params[1].unwrap_f64()) }.to_bits());
+            Ok(())
+        })?;
+    }
 
     // libc: abs(i32) -> i32
     let abs_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
@@ -825,9 +753,11 @@ pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Res
 // ============================================================================
 
 /// Global cache of loaded dynamic libraries
+#[cfg(feature = "native")]
 static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>>> = OnceLock::new();
 
 /// Get or load a dynamic library
+#[cfg(feature = "native")]
 fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
     let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     let mut guard = cache.lock().ok()?;
@@ -849,6 +779,7 @@ fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
 }
 
 /// Get possible paths for a library
+#[cfg(feature = "native")]
 fn get_library_paths(lib_name: &str) -> Vec<String> {
     let mut paths = Vec::new();
 
@@ -872,6 +803,7 @@ fn get_library_paths(lib_name: &str) -> Vec<String> {
 }
 
 /// Normalized parameter type for signature matching
+#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum ParamType {
     I32,
@@ -882,6 +814,7 @@ enum ParamType {
 }
 
 /// Normalized return type for signature matching
+#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum RetType {
     Void,
@@ -893,6 +826,7 @@ enum RetType {
 }
 
 /// Map C type string to normalized ParamType
+#[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -909,6 +843,7 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
 }
 
 /// Map C type string to normalized RetType
+#[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -926,6 +861,7 @@ fn c_type_to_ret_type(c_type: &str) -> RetType {
 }
 
 /// Map C type string to wasmtime ValType
+#[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
     let t = c_type.trim();
     let t = t.strip_prefix("const ").unwrap_or(t).trim();
@@ -942,6 +878,7 @@ fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
 }
 
 /// Link all functions from a library discovered through header reflection
+#[cfg(feature = "native")]
 pub fn link_dynamic_library(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -977,6 +914,7 @@ pub fn link_dynamic_library(
 }
 
 /// Link a single function from a parsed header signature
+#[cfg(feature = "native")]
 fn link_single_function(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -1023,6 +961,7 @@ fn link_single_function(
 }
 
 /// Generate a signature key string for dispatch
+#[cfg(feature = "native")]
 fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
     let mut key = String::new();
     for p in params {
@@ -1047,6 +986,7 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
 }
 
 /// Create FFI wrapper with typed function pointer call
+#[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
 fn create_ffi_wrapper(
     linker: &mut Linker<FfiState>,
@@ -1232,6 +1172,7 @@ fn create_ffi_wrapper(
 
 /// Link all dynamic libraries required by a WASM module's imports
 /// Scans the module for import statements and links matching libraries via reflection
+#[cfg(feature = "native")]
 pub fn link_module_libraries(
     linker: &mut Linker<FfiState>,
     engine: &Engine,
@@ -1268,6 +1209,7 @@ pub fn link_module_libraries(
 }
 
 /// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
+#[cfg(feature = "native")]
 fn create_generic_ffi_wrapper(
     linker: &mut Linker<FfiState>,
     lib_name: &str,
@@ -1323,6 +1265,7 @@ fn create_generic_ffi_wrapper(
 }
 
 /// Get pointer into WASM linear memory
+#[cfg(feature = "native")]
 fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) -> *const u8 {
     if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
         unsafe { memory.data_ptr(&caller).add(offset) }
@@ -1333,6 +1276,7 @@ fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) ->
 
 /// Call native function with up to 8 arguments
 /// Uses platform calling convention (ARM64/x86_64)
+#[cfg(feature = "native")]
 #[inline(never)]
 unsafe fn call_native_function(func_ptr: usize, args: &[u64; 8], arg_count: usize) -> u64 {
     // Cast to function pointer type based on arg count

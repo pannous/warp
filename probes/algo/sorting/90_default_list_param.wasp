@@ -1,0 +1,1 @@
+fun f(xs = []) { return xs[0] }; nums=[1,2]; f(nums)

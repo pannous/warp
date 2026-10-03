@@ -7,14 +7,24 @@
 name = "warp"
 version = "0.1.1"
 edition = "2021"  # Cargo edition! NOT package edition!
+# One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[[bin]]
+name = "warp"
+path = "src/main.rs"
+required-features = ["native"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# disable all "never used" warnings
-[package.metadata.clippy]
-warn = false
-
 [features]
+# native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
+default = ["native"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:ureq", "dep:rustyline", "dep:libloading"]
 #test = [] superfluous, just use cargo test => #[cfg(test)]
 APPLE = []
 EMSCRIPTEN = []
@@ -45,13 +55,12 @@ ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 # can't exclude dependencies from test, only with features
 # https://crates.io/crates/syn Use syn to parse and manipulate Rust code.
 anyhow = "1.0"
-regex = "1.10.3"
+#regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
+#wasm-ast = { version = "0.1.0", features = ["full"] } # shitty vaporware
 #wast = "*"
-wat = "1.259"
 wasmparser = "0.259"
 wasm-encoder = "0.259"
 log = "0.4.29"
@@ -59,11 +68,10 @@ log = "0.4.29"
 num-bigint = { version = "0.4.8", features = ["serde"] }
 num-traits = "0.2"
 num-integer = "0.1"
-ureq = "3.1.4"
-once_cell = "1.21.3"
+ureq = { version = "3.1.4", optional = true }
 paste = "1.0"
-rustyline = "18"
-libloading = "0.9"  # Dynamic library loading for FFI (raylib, SDL2, etc.)
+rustyline = { version = "18", optional = true }
+libloading = { version = "0.9", optional = true }  # Dynamic library loading for FFI (raylib, SDL2, etc.)
 
 # syn and reqwest removed - treeshaking
 
@@ -76,8 +84,8 @@ libloading = "0.9"  # Dynamic library loading for FFI (raylib, SDL2, etc.)
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "wat"] }
-wasmtime-wasi = "49.0.1"
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "wat"], optional = true }
+wasmtime-wasi = { version = "49.0.1", optional = true }
 #wasmtime-runtime = "*" # Wasmtime runtime
 #wasmtime-wasi = "*" # WASI support for Wasmtime
 #wasmtime-wast = "*" # Wast support for Wasmtime
@@ -91,7 +99,7 @@ wasmtime-wasi = "49.0.1"
 
 #wasm-builder = "*" #Wasm builder is a utility for building a rust project as a Wasm binary
 
-parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
+#parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
 #Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
 # parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
 
@@ -99,6 +107,8 @@ parity-wasm = "*" # Low-level WebAssembly format library for serializing, deseri
 [dev-dependencies]
 # only compiled and included when running tests or examples
 syn = { version = "3", features = ["full", "extra-traits"] }
+once_cell = "1.21.3" # used by tests/test_utils.rs
+wat = "1.259" # tests build modules from WAT text; the compiler itself parses WAT through wasmtime's "wat" feature
 
 
 [profile.dev]

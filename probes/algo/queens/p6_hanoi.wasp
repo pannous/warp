@@ -1,0 +1,5 @@
+fn hanoi(n, from, to, via) {
+    if n == 0 { return 0 }
+    return hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
+}
+hanoi(10, "A", "C", "B")

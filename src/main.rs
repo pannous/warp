@@ -1,41 +1,6 @@
-#![allow(dead_code, unused_imports)]
-mod extensions;
-use extensions::lists::*;
-use extensions::numbers::*;
-use extensions::strings::*;
-use extensions::utils::*;
-pub mod node;
-pub mod context;
-pub mod wasm_emitter;
-pub mod wasm_reader;
-pub mod wasp_parser;
-pub mod type_kinds;
-pub mod gc_traits;
-pub mod analyzer;
-pub mod ast;
-pub mod meta;
-pub mod smarty;
-pub mod operators;
-pub mod host;
-pub mod ffi;
-pub mod ffi_parser;
-pub mod util;
-pub mod function;
-pub mod normalize;
-pub mod run;
-pub mod local;
-pub mod law;
-pub mod function_equality;
-pub mod effects;
-pub mod diagnostic;
-pub mod injection;
-pub mod time;
-pub mod real;
-pub mod units;
-pub mod for_loop;
-pub mod type_constructor;
-pub mod min_max;
-pub mod modules;
+#![cfg_attr(test, allow(unused))] // main() is not compiled under test
+use warp::{diagnostic, extensions, law, package_tools, run, util, wasm_emitter, wasp_parser};
+use warp::node;
 use std::env;
 use std::fs;
 use std::io::{self, Read, IsTerminal};
@@ -45,7 +10,13 @@ use extensions::numbers::Number;
 
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
+/// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
+const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Answers to the compiler's questions (Asks), remembered per project: one `topic = explicit form` per line
+const ANSWERS_FILE: &str = ".wasp-answers";
+/// Never ask, every ambiguity falls back to its warning or error (as in CI or a pipe)
+const NO_ASK_FLAG: &str = "--no-ask";
 
 fn node_to_i32(node: &Node) -> i32 {
     match node {
@@ -70,6 +41,19 @@ fn main() {
         }
         args.drain(flag..flag + 2);
     }
+
+    // `--strict`: warnings are errors (as `use strict` in the program)
+    if let Some(flag) = args.iter().position(|arg| arg == "--strict") {
+        diagnostic::set_warning_mode(diagnostic::WarningMode::Error);
+        args.remove(flag);
+    }
+
+    // Ambiguities are asked on the terminal unless nobody is there to answer
+    let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
+    if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
+        diagnostic::set_asker(Some(std::rc::Rc::new(diagnostic::TerminalAsker)));
+    }
+    diagnostic::use_answers_file(ANSWERS_FILE);
 
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
@@ -113,6 +97,19 @@ fn main() {
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+    } else if args[1] == TOOL_COMMAND && args.len() >= 3 {
+        let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
+        match package_tools::run_package_tool(&args[2], &arguments) {
+            Ok(run) => {
+                print!("{}", run.stdout);
+                eprint!("{}", run.stderr);
+                std::process::exit(run.status);
+            }
+            Err(failure) => {
+                eprintln!("{failure}");
+                std::process::exit(1);
+            }
+        }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = if file_exists(target) { load_file(target) } else { target.to_string() };
         println!("{}", wasp_parser::parse_data(&text).serialize());
@@ -132,8 +129,10 @@ fn main() {
             }
         }
     } else if arg_string.ends_with(".wasp") || arg_string.ends_with(".warp") {
-        let warp_code = load_file(&arg_string);
-        let result = eval(&warp_code);
+        if !file_exists(&arg_string) {
+            eprintln!("Error: Could not read file '{}'", arg_string);
+        }
+        let result = eval(&arg_string); // a file: its folder is in scope (D15)
         println!("{}", result.serialize());
         std::process::exit(node_to_i32(&result));
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
@@ -260,8 +259,10 @@ fn usage() {
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
     println!("  warp data <file>     Read untrusted data without evaluating it");
+    println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
+    println!("  --no-ask             Never ask about ambiguities: take their default with a warning (or fail)");
     println!("  warp compile <file|code>  Compile to <file>.wasm (out.wasm for inline code) without running");
     println!("  warp test            Run tests");
     println!("  warp docs            Open documentation");

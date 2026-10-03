@@ -1,0 +1,4 @@
+n = 4
+a = (n + 1) times [true]
+a[1] = false
+a.length * 10 + a[0] + a[1]

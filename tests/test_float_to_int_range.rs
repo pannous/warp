@@ -1,6 +1,6 @@
 use warp::*;
 
-mod common;
+use crate::common;
 
 #[test]
 fn test_rounding_functions_give_exact_ints() {

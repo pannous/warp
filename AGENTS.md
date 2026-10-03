@@ -14,7 +14,7 @@ The specification is not fully implemented yet
 - The project parses a custom syntax, builds a Node-based AST, and emits WebAssembly modules using:
 - WIT (WebAssembly Interface Types) definitions
 - WASM GC (Garbage Collection) bytecode
-- Multiple WASM runtime backends (wasmtime, wasmer, wasmedge)
+- wasmtime to run them (feature `native`; the browser build in web/playground runs them in JavaScript)
 
 ## Core Architecture
 
@@ -50,30 +50,24 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
+### Pipeline (`src/wasm_emitter/mod.rs`: `compile`, `eval`)
+
+parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
+`library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
+
 ### Emitters
 
-Two distinct code generation backends:
+0. **Text**: `Node::serialize` (`src/node.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+1. **WASM GC Emitter** (`src/wasm_emitter/`)
+    - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
+      functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
+    - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
+    - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
 
-0. **Generic Emitter** (`src/emitter.rs`)
-    - Textual emitter similar to json5
+### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi.rs`)
 
-1. **WASM GC Emitter** (`src/wasm_gc_emitter.rs`)
-    - Generates WASM GC bytecode using `wasm-encoder` crate
-    - Creates GC struct types for each Node variant with proper tagging
-    - Uses `NodeKind` enum for runtime type discrimination
-
-### WASM Runtime Support (`src/run/`)
-
-Multiple runtime backends for executing generated WASM:
-
-- `wasmtime_runner.rs` - Primary runtime
-- `wasmedge_runner.rs` - Alternative
-- `wasmer_runner.rs` - Alternative
-
-### Compiler Utilities (`src/compiler/`)
-
-- `wasm_reader.rs` - Reads WASM modules using wasmparser
-- `parity_wasm_reader.rs` - Alternative reader using parity-wasm
+- `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
+- `wasm_reader` and `gc_traits.rs` read the resulting GC objects back into Nodes
 
 ## Build and Test Commands
 
@@ -82,39 +76,35 @@ Multiple runtime backends for executing generated WASM:
 ```bash
 cargo build                    # Debug build
 cargo build --release          # Release build
-cargo build --offline          # Offline mode (uses vendored dependencies)
+cargo build --offline          # Offline mode (uses the local registry cache)
 ```
-
-The project uses vendored dependencies (see `vendor/`) to support offline builds. The `Cargo.toml` warns against online
-compilation delays.
 
 ### Testing
 
+Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
+- Workers run targeted tests only, through the machine-wide queue: `tests/queue.sh -- <filter>`. A hook blocks direct
+  `cargo test` / `cargo browser-test` runs.
+- Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
+  hand it "branch, tip, filters" and fix what it reports.
+
+The underlying cargo commands (what tests/queue.sh runs):
 ```bash
 cargo test                     # Run all tests
 cargo test <test_name>         # Run specific test by name
-cargo test --test <test_file>  # Run specific test file (without _test.rs suffix)
+cargo test --test tests <file_stem>::  # Run one test file: all tests/*.rs are modules of ONE test crate (tests/main.rs); add new files there as `mod x;`
 ```
 
 #### Important Test Files
 
-- `tests/node_test.rs` - Tests Node AST operations
-- `tests/wasp_parser_test.rs` - Tests parser functionality
-- `tests/wasm_gc_emitter_test.rs` - Tests WASM GC code generation
-- `tests/wasm_reader_test.rs` - Tests reading WASM GC objects (see guide below)
-
-### Running Examples
-
-```bash
-cargo run --example wasm_gc_generation
-cargo run --example wit_generation
-cargo run --example wasp_comments_demo
-```
+- `tests/test_node.rs` - Tests Node AST operations
+- `tests/test_parser.rs` - Tests parser functionality
+- `tests/test_wasm_emitter.rs` - Tests WASM GC code generation
+- `tests/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
 
 ## WASM GC Reading Patterns
 
-The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection. See
-`docs/wasm-gc-reading-guide.md` for:
+The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
+(`src/gc_traits.rs`, examples in `tests/test_wasm_reader.rs` and `tests/test_gc_struct.rs`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -128,13 +118,13 @@ Use WASM names excessively! Wasm provides custom sections for names, use ALL of 
 
 ### Offline Development
 
-The project is configured for **offline-first** development to avoid compilation delays. Dependencies are vendored and
-Cargo.toml has offline mode notes. Use `--offline` flag when building.
+The project is configured for **offline-first** development to avoid compilation delays: dependencies come from the
+local registry cache. Use `--offline` flag when building.
 
 ### Test File Locations
 
-Tests are in `tests/` directory (not `src/`). Each test file is named `*_test.rs` and tests a specific module or
-feature.
+Tests are in `tests/` directory (not `src/`). Each test file is named `test_*.rs`, tests a specific module or feature,
+and is a module of the one test crate `tests/main.rs`.
 
 ### Extension Utilities
 
@@ -154,8 +144,7 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 1. **Modify parser or emitter** - Edit files in `src/`
 2. **Add tests** - Create or update tests in `tests/`
 3. **Run tests** - `cargo test` to verify
-4. **Check examples** - Run examples to see output
-5. **Build offline** - Use `--offline` for reproducible builds
+4. **Build offline** - Use `--offline` for reproducible builds
 
 ## Serialization
 
@@ -216,7 +205,7 @@ is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run
 
 the is! macro triggers the following roundtrip: 
 is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
-via warp::wasm_gc_emitter::eval and emit_node_main and Node::from_gc_object
+via warp::wasm_emitter::eval and emit_node_main and Node::from_gc_object
 
 ### soon
 
@@ -230,7 +219,20 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 # Important
 Don't cargo clean unless absolutely necessary!
 
-Before and after each task run git status and ./test.sh to ensure we are in a clean state and all tests pass.
+The /probes/ folder is NOT a place to doublicate worktrees!
+One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
+(notes/roles.md), or work on the same branch for small changes 
+
+## Folders
+- `probes/` = hand-written probe sources only (.wasp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
+- `scratch/` = disposable, ignored: repo exports/copies, worktrees, cargo homes, private index files (`scratch/<topic>.index`), temp builds. Deletable any time.
+- `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
+- Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
+- `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
+
+Workers: before and after each task, run `git status` and the tests that cover your change:
+`tests/queue.sh -- <filter>`. Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
+your branch (notes/roles.md).
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back
 
@@ -240,6 +242,10 @@ git status before and after each task should show
 Your branch is up to date with 'origin/main'.
 nothing to commit
 
-use `cargo fix` after each commit and commit again
+use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commit again (`--lib --bins` keeps it out of tests/, `--allow-dirty` because cargo flags git-ignored non-.rs files as dirty)
 
 Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
+un-ignore everything once it passes 
+
+Add [profile.dev] debug = "line-tables-only" and incremental = false for probe builds!!
+Never create a local target/ or *_target dir. Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). Remove worktrees when done.

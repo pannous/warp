@@ -1,24 +1,24 @@
 // INCLUDE: ln ~/dev/script/rust/extensions.rs
 // mod extensions; // also exports the macros declared #[macro_export]
 // use crate::extensions::*; // crate for F12
-// use extensions::Numbers::*;
-// use extensions::Strings::*;
+// use extensions::strings::*;
+// use extensions::lists::*;
+// use extensions::numbers::*;
 
-use crate::node::Bracket;
-use crate::node::Separator;
-use crate::Number::Int;
 use crate::node::Node;
 use crate::wasp_parser::parse;
 
 pub mod lists;
 pub mod numbers;
-pub mod reals;
-pub mod strings; // ⚠️ reexport still needs explicit import:
+pub mod reals; // warp only
+pub mod strings;
 pub mod utils;
-// use extensions::Numbers::*;
 
-// #[allow(dead_code)]
-// mod extensions {}
+// Re-export all traits for convenience: `use extensions::*;`
+pub use lists::*;
+pub use numbers::*;
+pub use strings::*;
+pub use utils::*;
 
 // fucking s!("to_string")
 // better use "wtf".s() from extensions::strings

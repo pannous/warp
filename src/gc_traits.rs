@@ -1022,30 +1022,36 @@ pub fn register_gc_types_from_wasm(bytes: &[u8]) -> Result<u64> {
 /// WASM name resolver module for looking up field names from WASM metadata
 pub mod wasm_name_resolver {
     use super::*;
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
 	use wasmparser as wp;
 	use crate::gc_traits::wasm_name_resolver::ParsedAbstractHeapType::{Any, Array, Extern, Func, NoExtern, NoFunc, Struct};
 
-	static REGISTRY: Lazy<Mutex<FieldNameRegistry>> =
-        Lazy::new(|| Mutex::new(FieldNameRegistry::default()));
+	static REGISTRY: LazyLock<Mutex<FieldNameRegistry>> =
+        LazyLock::new(|| Mutex::new(FieldNameRegistry::default()));
+
+    /// The registry only caches parsed name sections, so a panic elsewhere while it was locked (a should_panic test,
+    /// say) leaves it usable; that panic already reported itself, and poisoning would fail every later lookup
+    fn registry() -> std::sync::MutexGuard<'static, FieldNameRegistry> {
+        REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 
     pub fn register_module(bytes: &[u8]) -> Result<u64> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.register_module(bytes)
     }
 
     pub fn lookup_field_index(struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.lookup(struct_type, field_name, module)
     }
 
     pub fn field_names(struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.field_names(struct_type, module)
     }
 
     pub fn type_name(struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
-        let mut registry = REGISTRY.lock().expect("registry lock poisoned");
+        let mut registry = registry();
         registry.type_name(struct_type, module)
     }
 
@@ -1141,9 +1147,10 @@ pub mod wasm_name_resolver {
 	#[derive(Clone)]
 	struct StructTypeKey(StructType);
 
+	/// The cache holds types of every engine (each run has its own), and StructType::eq panics across engines
 	impl PartialEq for StructTypeKey {
 		fn eq(&self, other: &Self) -> bool {
-			StructType::eq(&self.0, &other.0)
+			Engine::same(self.0.engine(), other.0.engine()) && StructType::eq(&self.0, &other.0)
 		}
 	}
 

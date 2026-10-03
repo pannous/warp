@@ -1,0 +1,6 @@
+fun f(n) {
+  a = []
+  (n + 1) times { a.push(true) }
+  a.length
+}
+f(4)

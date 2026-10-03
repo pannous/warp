@@ -1,0 +1,1 @@
+fun n(xs) { count(xs) }; fun f(xs) { n(xs) }; fun mk() { return [1 2 3 4] }; f(mk())

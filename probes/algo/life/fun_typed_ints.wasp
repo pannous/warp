@@ -1,0 +1,7 @@
+fun f(g:ints) {
+  n = []
+  for x in g { n.push(x * 2) }
+  return n
+}
+h = f([1, 2, 3])
+h[2]

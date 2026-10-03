@@ -6,10 +6,29 @@ out
 
 /Users/me/dev/angles/warp/vendor
 
-vendor
 .DS_Store
-probes/agent_logs/
 
-probes/bench_base_target/
+notes/session
 
-probes/footguns/inspiration/
+# probes/ holds hand-written probe sources only (tracked); see AGENTS.md "Folders"
+probes/**
+!probes/**/
+!probes/**/*.wasp
+!probes/**/*.md
+!probes/**/*.rs
+!probes/**/*.py
+!probes/**/*.sh
+!probes/**/*.lean
+!probes/**/*.html
+probes/**/target/
+probes/**/scratch/
+probes/*-export/
+probes/*-work/
+
+# disposable copies, worktrees, cargo homes, private index files, temp builds
+scratch/
+# kept but not committed: logs, test results, patches, dumps, benchmark data
+data/
+
+# packages fetched by `use <name>`, see packages.wasp
+/packages/
