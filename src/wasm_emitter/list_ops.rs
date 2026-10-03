@@ -546,11 +546,11 @@ pub fn runtime_error_message(name: &str) -> String {
 	}
 }
 
-pub const RUNTIME_ERRORS: [&str; 17] = [
+pub const RUNTIME_ERRORS: [&str; 19] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
-	"not_comparable",
+	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT,
 ];
 
 impl WasmGcEmitter {

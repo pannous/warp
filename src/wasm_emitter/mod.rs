@@ -1,6 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
+mod closures;
 pub(crate) mod exact;
 #[macro_use]
 mod constructors;
@@ -170,6 +171,7 @@ pub struct WasmGcEmitter {
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	closures: closures::ClosureTypes,
 }
 
 impl Default for WasmGcEmitter {
@@ -212,6 +214,7 @@ impl WasmGcEmitter {
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
 			compare_witness: None,
+			closures: closures::ClosureTypes::default(),
 		}
 	}
 
@@ -363,11 +366,17 @@ impl WasmGcEmitter {
 		for name in &func_names {
 			self.register_user_function_signature(name);
 		}
+		self.register_closure_entries();
 
 		// PASS 2: Compile all function bodies
 		for name in func_names {
-			self.compile_user_function_body(&name);
+			if self.is_closure_call(&name) {
+				self.compile_closure_call(&name);
+			} else {
+				self.compile_user_function_body(&name);
+			}
 		}
+		self.compile_closure_entries();
 	}
 
 	/// Register a user function's signature and assign it an index (PASS 1)
@@ -1193,6 +1202,10 @@ impl WasmGcEmitter {
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			return;
+		}
+		if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+			self.emit_closure_new(func, target, captured);
 			return;
 		}
 		let node = node.drop_meta();
@@ -3204,7 +3217,11 @@ impl WasmGcEmitter {
 			self.module.section(&self.globals);
 		}
 		self.module.section(&self.exports);
-		if let Some(elements) = self.witness_elements() {
+		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
+		let declared_functions: Vec<u32> = self.closures.declared_functions().into_iter().chain(self.witness_dispatcher()).collect();
+		if !declared_functions.is_empty() {
+			let mut elements = ElementSection::new();
+			elements.declared(Elements::Functions(declared_functions.into()));
 			self.module.section(&elements);
 		}
 		self.module.section(&self.code);
@@ -3284,11 +3301,13 @@ impl WasmGcEmitter {
 			.func_registry
 			.all()
 			.iter()
-			.map(|f| (f.name.as_str(), f.call_index as u32))
+			.map(|f| (f.name.clone(), f.call_index as u32))
+			.chain(self.ctx.user_functions.values().filter_map(|function| Some((function.name.clone(), function.func_index?))))
+			.chain(self.closures.entry_names().into_iter().map(|(index, name)| (name, index)))
 			.collect();
 		sorted.sort_by_key(|(_, idx)| *idx);
 		for (name, idx) in sorted {
-			func_names.append(idx, name);
+			func_names.append(idx, &name);
 		}
 		self.names.functions(&func_names);
 
@@ -3700,6 +3719,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let node = crate::analyzer::lower_list_times(node);
 	let node = crate::lambdas::lower(node);
 	let node = crate::function_values::lower(node);
+	let node = crate::closures::lower(node);
 	let node = crate::lambdas::lower_strict(node);
 	let node = crate::real::lower(node);
 	let node = crate::traits::lower_conformances(crate::type_constructor::lower(node));

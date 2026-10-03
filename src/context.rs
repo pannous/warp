@@ -50,6 +50,8 @@ pub struct Context {
     pub captures: HashMap<String, Vec<(String, (u32, Kind))>>,
     /// Calls that disagree on the kind of an undeclared parameter, reported as type errors
     pub parameter_conflicts: Vec<String>,
+    /// Functions made into closures (closures.rs): (function, number of captured values leading its parameters)
+    pub closure_targets: Vec<(String, usize)>,
     /// Field names looked up by a constant key (`p.x`, `p["x"]`): each has a runtime error `no_field_x` for the miss
     pub missing_field_names: std::collections::BTreeSet<String>,
     /// Subjects of a `switch` without default: each has a runtime error `no_case_<subject>` for the miss
@@ -87,6 +89,7 @@ impl Context {
             captures: HashMap::new(),
             user_functions: HashMap::new(),
             parameter_conflicts: Vec::new(),
+            closure_targets: Vec::new(),
             missing_field_names: Default::default(),
             missing_case_labels: Default::default(),
         }

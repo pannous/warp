@@ -405,6 +405,12 @@ impl Node {
 				})
 			}
 
+			// a closure reads as the name of its function
+			t if t == Kind::Function as u8 => match obj.value() {
+				Ok(name) => Node::from_gc_object(&name),
+				Err(_) => Symbol("function".to_string()),
+			},
+
 			t if t == Kind::TypeDef as u8 => {
 				// data = name node, value = body node
 				let name = match obj.data_as_node() {

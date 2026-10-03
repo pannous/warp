@@ -28,6 +28,7 @@ pub enum Kind {
 	Pointer = 13,  // FFI pointer (i64 handle)
 	Int32 = 14,    // explicit i32 (for FFI)
 	Float32 = 15,  // explicit f32 (for FFI)
+	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 }
 
 impl Kind {
@@ -99,6 +100,7 @@ impl std::fmt::Display for Kind {
 			Kind::Error => write!(f, "error"),
 			Kind::TypeDef => write!(f, "typedef"),
 			Kind::Pointer => write!(f, "pointer"),
+			Kind::Function => write!(f, "function"),
 		}
 	}
 }

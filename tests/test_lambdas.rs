@@ -46,8 +46,8 @@ fn test_map_as_a_method() {
 }
 
 #[test]
-fn test_a_lambda_that_cannot_be_inlined_is_a_loud_error() {
-	fails_with("apply(f, x):=x; apply(y=>y+1, 2)", "functions are not first-class values yet");
+fn test_a_lambda_that_cannot_be_inlined_is_a_closure_value() {
+	is!("apply(f, x):=x; apply(y=>y+1, 2)", 2);
 	fails_with("map [1 2 3] 5", "functions are not first-class values yet");
 }
 

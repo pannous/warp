@@ -105,10 +105,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `ref.func` needs its functions declared in an element segment
-	pub(super) fn witness_elements(&self) -> Option<ElementSection> {
-		let dispatcher = self.compare_witness?.dispatcher?;
-		let mut elements = ElementSection::new();
-		elements.declared(Elements::Functions(std::borrow::Cow::Owned(vec![dispatcher])));
-		Some(elements)
+	pub(super) fn witness_dispatcher(&self) -> Option<u32> {
+		self.compare_witness?.dispatcher
 	}
 }
