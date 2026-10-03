@@ -10,7 +10,9 @@ src: 88 files, 41 101 lines, 2 274 functions (82 over 50 lines, 35 over 100). te
 
 ## Status (2026-10-03, branch `code-quality`)
 
-Done, behaviour-preserving, full suite green:
+Done, behaviour-preserving (full suite, default features, green through the function builder; the rest checked by
+`cargo check --all-targets --all-features`, the CLI and targeted runs of test_ffi, test_float_promotion, test_wasi,
+test_host, test_wasm_reader, test_gc_struct; the Integrator's full run is the final check):
 - #1 main.rs uses the library (`use warp::…`), no second compile of every module.
 - #3 deleted `compiler/`, `run/wasmer_runner.rs`, `run/wasmedge_runner.rs`, `ast.rs`, `wasm_emitter/node_emitter.rs`,
   `extensions/_mod.rs`, `bin/test_op.rs`, the dead `run_wasm`, `test_func`, `register_import`, `ArithmeticWrap::None`;
@@ -20,7 +22,7 @@ Done, behaviour-preserving, full suite green:
 - #7 `KIND_BITS`, `KIND_MASK`, `CURLY/SQUARE_BRACKET_INFO`, `CURLY/SQUARE_LIST_KIND` in type_kinds.rs; `BYTE`, `WORD`
   in `wasm_emitter/layout.rs`; WASI stdout writes share `emit_stdout_write`.
 - #8 (part) `wasm_reader::run_main` serves plain, host, WASI and FFI runs; FFI and `.wat` results go through the
-  generic `val_to_node` (they returned Empty for texts and lists before); CLI `run`/`run_wat` failures are error
+  generic `val_to_node`, which learned Float (FFI returned Empty for texts and lists before); CLI `run`/`run_wat` failures are error
   nodes; `util::fetch` delegates to `download` instead of a second panicking ureq call.
 - #9 (part) the 15 libm bindings are a table (`LIBM_UNARY`, `LIBM_BINARY`); the two header parsers remain.
 - #14 AGENTS.md architecture/build/test sections match the tree (CLAUDE.md untouched, see question 8).
