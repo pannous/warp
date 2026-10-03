@@ -343,9 +343,6 @@ impl WasmGcEmitter {
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.push(ValType::I64);
-		// a list inside the joined list joins as its text "[1 2]" (decision #35's form), recursively
-		let list_join = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
-		let [open, close, space] = ["[", "]", " "].map(|text| self.allocate_string(text));
 		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
@@ -362,20 +359,6 @@ impl WasmGcEmitter {
 				s.emit_field(f, element, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
 				s.call(f, super::float_text::FLOAT_TEXT);
-				Self::emit_list(f, &[I::LocalSet(element), I::End]);
-				s.emit_field(f, element, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq, I::If(BlockType::Empty)]);
-				let push_text = |f: &mut Function, (address, length): (u32, u32)| {
-					Self::emit_list(f, &[I::I32Const(address as i32), I::I32Const(length as i32)]);
-					s.call(f, "new_text");
-				};
-				push_text(f, open);
-				f.instruction(&I::LocalGet(element));
-				push_text(f, space);
-				f.instruction(&I::Call(list_join));
-				s.call(f, super::text_builtins::TEXT_CONCAT);
-				push_text(f, close);
-				s.call(f, super::text_builtins::TEXT_CONCAT);
 				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
@@ -441,7 +424,6 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 			s.call(f, "new_text");
 		});
-		assert_eq!(self.func_index("list_join"), list_join, "recursive call index");
 	}
 
 	/// node_slice(x, start, end): the items start…end-1 of a list, or the characters of a text as a text. Indexes are 0-based

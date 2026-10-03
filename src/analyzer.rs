@@ -2384,8 +2384,9 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		other => other,
 	};
 	let last_kind = match (is_error(last), returned.first()) {
-		(true, Some(_)) if returned.contains(&Kind::Float) => Kind::Float,
-		(true, Some(first)) => *first,
+		(true, Some(_)) if returned.contains(&Kind::Float) && returned.iter().all(|kind| !kind.is_ref()) => Kind::Float,
+		(true, Some(first)) if returned.iter().all(|kind| kind == first) => *first,
+		(true, Some(_)) => Kind::Empty, // returns of different kinds: a Node of unknown kind
 		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
 		_ => match infer_type(last, &scope) {
 			Kind::Int if returned.contains(&Kind::Float) => Kind::Float,
@@ -2397,7 +2398,7 @@ fn infer_function_return_kind(params: &[Param], body: &Node, function_kinds: &Ha
 		[] => last_kind,
 		[Kind::Empty] => Kind::Empty,
 		[Kind::List] => Kind::List,
-		_ => Kind::Text,
+		_ => Kind::Empty, // Nodes of different kinds (a text here, a list there): known only at run time
 	}
 }
 
