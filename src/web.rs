@@ -22,12 +22,14 @@ struct PageAcknowledger {
 }
 
 impl Acknowledger for PageAcknowledger {
+	fn has_acknowledged(&self, topic: &str) -> bool {
+		self.acknowledged.contains(topic)
+	}
+
+	/// The page answers later, with its "got it" button
 	fn acknowledge(&self, topic: &str) -> bool {
-		let acknowledged = self.acknowledged.contains(topic);
-		if !acknowledged {
-			self.notes.borrow_mut().push(topic.to_string());
-		}
-		acknowledged
+		self.notes.borrow_mut().push(topic.to_string());
+		false
 	}
 }
 

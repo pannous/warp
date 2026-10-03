@@ -204,6 +204,12 @@ impl Ask {
 /// Who says "got it" to a warning or note so it is never shown again: the terminal in the CLI, the playground's
 /// buttons, a list in tests. Nobody (the default) means the warning simply shows
 pub trait Acknowledger {
+	/// Whether the user said "got it" to `topic` before this run (a host keeping its own list, like the playground)
+	fn has_acknowledged(&self, _topic: &str) -> bool {
+		false
+	}
+
+	/// Asked once per run after a warning or note of `topic` was shown: does the user say "got it" now?
 	fn acknowledge(&self, topic: &str) -> bool;
 }
 
@@ -278,7 +284,9 @@ pub fn begin_program() {
 }
 
 fn is_acknowledged(topic: &str) -> bool {
+	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
 	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(topic))
+		|| acknowledger.is_some_and(|acknowledger| acknowledger.has_acknowledged(topic))
 }
 
 fn remember_acknowledged(topic: &str) {

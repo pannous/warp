@@ -59,3 +59,14 @@ fn the_explicit_forms_say_it_without_a_warning() {
 	is!("x=0; for i in 1 ... 4 {x+=i}; x", 10);
 	assert_eq!(take_warnings(), vec![]);
 }
+
+#[test]
+fn a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show() {
+	use std::collections::HashSet;
+	let acknowledged: HashSet<String> = ["let", "upto"].iter().map(|topic| topic.to_string()).collect();
+	let report = warp::web::evaluate(&format!("let y = 1; {UPTO_LOOP}"), acknowledged);
+	assert_eq!(report["value"], "6");
+	assert_eq!(report["warnings"], serde_json::json!([]));
+	assert!(report["hints"].as_array().unwrap().iter().all(|hint| !hint["original"].as_str().unwrap().starts_with("let ")), "{report}");
+	assert_eq!(report["notes"], serde_json::json!([]));
+}
