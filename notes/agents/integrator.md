@@ -10,6 +10,8 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   result is not empty and tests/main.rs has no duplicate lines); any other conflict goes back to the worker.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
+- Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
+  `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
