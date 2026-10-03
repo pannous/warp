@@ -257,6 +257,7 @@ PASSED:
   ✓ functions::test_tuple_returns::test_tuple_function_returns_wasm_multi_value
   ✓ functions::test_tuple_returns::test_tuple_returns_inside_functions
   ✓ functions::test_tuple_returns::test_two_returned_values_destructure
+  ✓ functions::test_typed_signatures::several_typed_parameters
   ✓ functions::test_undefined_calls::test_declared_type_constructs
   ✓ functions::test_undefined_calls::test_paren_data_stays_data
   ✓ functions::test_undefined_calls::test_print_returns_its_value_without_a_capability_error
@@ -794,10 +795,24 @@ PASSED:
   ✓ parser::test_xml::test_xml_to_json
   ✓ parser::test_xml::test_xml_with_attributes
   ✓ probe_destructuring::probe_for_loop_unpacking
+  ✓ probe_destructuring::probe_list_target
+  ✓ probe_destructuring::probe_nested_unpacking
+  ✓ probe_destructuring::probe_parenthesized_target
+  ✓ probe_destructuring::probe_star_init
+  ✓ probe_destructuring::probe_star_middle
+  ✓ probe_destructuring::probe_star_rest_empty
+  ✓ probe_destructuring::probe_star_rest_from_list
+  ✓ probe_destructuring::probe_star_rest_from_tuple_function
+  ✓ probe_destructuring::probe_star_rest_from_values
   ✓ probe_destructuring::probe_swap
   ✓ probe_destructuring::probe_too_few_values_is_loud
   ✓ probe_destructuring::probe_too_many_values_is_loud
   ✓ probe_destructuring::probe_underscore_discards
+  ✓ probe_destructuring::probe_unpack_list_function
+  ✓ probe_destructuring::probe_unpack_list_literal
+  ✓ probe_destructuring::probe_unpack_list_variable
+  ✓ probe_destructuring::probe_unpack_parenthesized_tuple
+  ✓ probe_destructuring::probe_unpack_text
   ✓ probe_destructuring::probe_unpack_tuple_function
   ✓ probe_destructuring::probe_unpack_tuple_values
   ✓ probe_footguns::test_addition_is_associative_by_default
@@ -1505,6 +1520,8 @@ PASSED:
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_person_struct::test_person_struct_roundtrip
+  ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
+  ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records_classes::a_class_has_untyped_fields
   ✓ types::test_records_classes::a_missing_required_field_is_an_error
   ✓ types::test_records_classes::a_record_is_a_struct
@@ -1590,11 +1607,15 @@ PASSED:
   ✓ types::test_types::test_constructor_cast
   ✓ types::test_types::test_deep_type
   ✓ types::test_types::test_emit_cast
+  ✓ types::test_types::test_empty_typed_functions
+  ✓ types::test_types::test_polymorphism
+  ✓ types::test_types::test_polymorphism2
   ✓ types::test_types::test_type_confusion
   ✓ types::test_types::test_type_node
   ✓ types::test_types::test_type_registry
   ✓ types::test_types::test_type_registry_from_node
   ✓ types::test_types::test_type_synonyms
+  ✓ types::test_types::test_typed_functions
   ✓ types::test_types::test_types
   ✓ types::test_types::test_types_simple
   ✓ types::test_types::test_types_simple2
@@ -1647,4 +1668,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1642 passed, 0 failed, 1642 total tested
+58 ignored, 1663 passed, 0 failed, 1663 total tested
