@@ -13,6 +13,8 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
+  Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
+  moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
   merged ones).
