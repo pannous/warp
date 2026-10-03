@@ -508,17 +508,6 @@ pub fn runtime_error_message(name: &str) -> String {
 	}
 }
 
-/// The message of the runtime error function `name` as `try X else e => …` names it: like its uncaught trap (trap_error)
-pub fn caught_error_message(name: &str) -> String {
-	if let Some(label) = name.strip_prefix(crate::switch::NO_CASE_PREFIX) {
-		return format!("no case for {label}");
-	}
-	match name.strip_prefix(crate::fixed_width::OVERFLOW_PREFIX) {
-		Some(type_name) => crate::fixed_width::overflow_message(type_name),
-		None => runtime_error_message(name),
-	}
-}
-
 pub const RUNTIME_ERRORS: [&str; 19] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
@@ -595,19 +584,14 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// The runtime error functions, in the order of their error ids
-	pub(super) fn runtime_error_names(&self) -> Vec<&'static str> {
-		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
-		let no_case_errors = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str()));
-		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
-		RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).collect()
-	}
-
 	fn emit_runtime_errors(&mut self) {
+		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
+		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
+		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
 		if self.guards_errors {
 			self.declare_error_catching(); // the error functions throw while a `try` runs
 		}
-		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
+		for (error_id, name) in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).enumerate() {
 			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
