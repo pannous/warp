@@ -45,6 +45,7 @@ implemented in src/type_name_matching.rs (`parameter_slots`, used by the `to` ph
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
 
-Limits found: object values as function arguments do not work yet (`measure(photo{width:3})` with `p.width` inside:
-"undefined function: width"), so a class-typed parameter is checked only by its annotation; arguments are not
-type-checked against it.
+Object arguments (tests/test_object_arguments.rs): an untyped parameter reads fields of the object it gets
+(`measure(p) := p.width; measure({width:3})`), and an argument known at compile time not to be an instance of a
+class-typed parameter is an error (`keep 3`, `keep(page{…})` for `keep(p:photo)`: "keep needs a photo for parameter p,
+got 3 (an Int)"). An argument of unknown type, or a written map, is judged by the fields its uses read ("no field width").

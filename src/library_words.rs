@@ -12,7 +12,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::RAN_WITHOUT_ERROR;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
@@ -131,7 +131,7 @@ pub fn lower(node: Node) -> Node {
 	collect_assigned_objects(&node, &mut assigned_objects);
 	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
-	Lowering { context, shadowed, objects, instances, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), temporaries: Cell::new(0) }.expand(node)
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
@@ -149,7 +149,7 @@ fn is_field_lookup(node: &Node) -> bool {
 }
 
 /// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
-fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
+pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let single;
 	let items: &[Node] = match node.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
@@ -223,6 +223,8 @@ struct Lowering {
 	objects: HashMap<String, Node>,
 	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
 	instances: crate::traits::InstanceTypes,
+	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
+	parameters: RefCell<Vec<String>>,
 	temporaries: Cell<usize>,
 }
 
@@ -247,7 +249,8 @@ impl Lowering {
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
 			}
 			Node::Key(left, Op::Assign, right) => {
-				let (left, right) = (self.expand(*left), self.expand(*right));
+				let left = self.expand(*left);
+				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
 			}
 			Node::Key(left, Op::SafeDot, right) => {
@@ -255,10 +258,29 @@ impl Lowering {
 				self.safe_lookup(receiver, word)
 			}
 			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+			Node::Key(left, Op::Define, right) => {
+				let left = self.expand(*left);
+				let right = self.in_definition(&left, *right);
+				Node::Key(Box::new(left), Op::Define, Box::new(right))
+			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
+	}
+
+	/// The right side of `head = right` or `head := right`, with the untyped parameters of a definition head in scope
+	fn in_definition(&self, head: &Node, right: Node) -> Node {
+		let parameters = crate::traits::untyped_parameters(head);
+		let scope = self.parameters.borrow().len();
+		self.parameters.borrow_mut().extend(parameters);
+		let right = self.expand(right);
+		self.parameters.borrow_mut().truncate(scope);
+		right
+	}
+
+	fn is_parameter(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
 	}
 
 	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
@@ -403,7 +425,7 @@ impl Lowering {
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_append_method(name) || self.context.user_functions.contains_key(name);
-		let is_object = literal.is_some() || is_field_lookup(receiver);
+		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}

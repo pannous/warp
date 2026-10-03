@@ -2544,13 +2544,17 @@ fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 
 /// `a List`, `an Int`
 pub fn kind_with_article(kind: Kind) -> String {
-	let name = format!("{kind:?}");
-	let article = if name.starts_with(|first: char| "AEIOU".contains(first)) { "an" } else { "a" };
+	with_article(&format!("{kind:?}"))
+}
+
+/// `a photo`, `an Int`, `an image`
+pub fn with_article(name: &str) -> String {
+	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) { "an" } else { "a" };
 	format!("{article} {name}")
 }
 
 /// The kind a call argument certainly has, judged from the literal alone
-fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 	match argument.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => Some(infer_type(argument, &Scope::new())),
 		Node::Empty => Some(Kind::List),

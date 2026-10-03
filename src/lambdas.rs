@@ -14,7 +14,7 @@ use crate::operators::Op;
 use crate::wasp_parser::parse;
 use std::cell::Cell;
 
-const IMPLICIT_PARAMETER: &str = "it";
+pub const IMPLICIT_PARAMETER: &str = "it";
 const ON_WORD: &str = "on";
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
