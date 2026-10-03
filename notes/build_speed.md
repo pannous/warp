@@ -2,7 +2,7 @@
 
 ## One shared build (rule)
 All builds, including agents' scratch exports, go to the one target dir from `~/.cargo/config.toml`
-(`target-dir = "/Users/me/.cargo/shared-target"`). Never set `CARGO_TARGET_DIR` per agent or per export: in the
+(`target-dir = "/Users/me/.cargo/shared-target.noindex"`). Never set `CARGO_TARGET_DIR` per agent or per export: in the
 2026-10-02 fixer round 13 per-agent dirs (`/opt/cargo/warp-<topic>`) took 19–25 GB each (~280 GB) and each recompiled
 every dependency. The shared dir's cargo lock also queues concurrent builds, which keeps the CPU load down.
 Agents run targeted tests only (`CARGO_BUILD_JOBS=2 cargo --offline test --all-features --test tests <file_stem>:: -- --test-threads=2`);
@@ -32,3 +32,8 @@ relative paths, and because the lib is also a `cdylib` cargo names the rlib with
 copy overwrites and links the same file. A copy can report "Fresh warp" and run another checkout's code, both ways.
 Fix, verified: in each copy's Cargo.toml set a unique pre-release `version = "0.1.1-<topic>"` AND `crate-type = ["rlib"]`
 (never committed); the copy then links its own `libwarp-<hash>.rlib`, dependencies stay shared.
+
+## Spotlight (2026-10-03)
+The shared target dir is `~/.cargo/shared-target.noindex` (renamed from shared-target): the `.noindex` suffix keeps
+Spotlight's mdworker processes out of ~90 GB of build output (16 of them were busy during a full-suite run).
+Worker copies under probes/ are deleted once their branch is merged; keep one work copy per worker, no extra exports.
