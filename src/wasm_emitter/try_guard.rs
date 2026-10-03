@@ -39,7 +39,7 @@ impl WasmGcEmitter {
 		let tag_type = self.type_manager.types().len();
 		self.type_manager.types_mut().ty().function(vec![ValType::I32], vec![]);
 		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
-		let mut global = |emitter: &mut Self, name: &'static str| {
+		let global = |emitter: &mut Self, name: &'static str| {
 			emitter.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
 			emitter.extra_global_names.push((emitter.next_global_idx, name));
 			emitter.next_global_idx += 1;
