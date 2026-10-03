@@ -5,7 +5,18 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none pending) Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+- P22 known-type field mismatch: `p:photo = pic{width:3}` (pic a known other type, lacks height). Error that teaches
+  `pic like photo` (D4 "Strict" + the like philosophy) or a got-it warning, then duck typed?
+  Options: Error, teach `like` / Got-it warning (error under `use strict`). Assumed: warning (branch default; it
+  conflicts with the recorded decisions, so likely undone). Asked by warp-bc, branch claude/like-keyword 19f8b73f.
+  Asked once 2026-10-03, no answer (user away).
+- P23 type-word clash scope: does the clash error cover every type word incl. generic ones (`number := …`), or only
+  concrete types (int/float/double)? Options: Every type word / Concrete types only. Assumed: every type word.
+  Asked by warp-bc, branch claude/type-word-user-function.
+- P24 should the suffix form `4 doubled` and the number-dot form `4.square` call user functions?
+  Options: Yes, both (a letter after `4.` is never a decimal) / Suffix form only / Neither. Assumed: unsupported
+  (todo.md). Asked by warp-bc. Note: the suffix form is wiki syntax (D9 `1+2 squared`).
+Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
 #24 (upto decided exclusive 2026-10-02), #29 (checkout is only behind now), D5 detail (notes/matching.md accepted).
