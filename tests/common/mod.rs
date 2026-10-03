@@ -1,6 +1,27 @@
 use warp::wasm_emitter::eval;
 use warp::Node;
 
+/// Something a test needs that only some machines have (the Mac's C headers, sibling repositories, local files)
+pub struct Resource {
+	pub name: &'static str,
+	pub available: fn() -> bool,
+}
+
+/// macOS SDK headers declare libm plainly (`double sqrt(double);`); glibc's math.h hides them behind __MATHCALL macros
+pub const MACOS_C_HEADERS: Resource = Resource { name: "the macOS C headers (libm declared without glibc macros)", available: || cfg!(target_os = "macos") };
+
+/// `requires!(RESOURCE);` as the first line of a test: where the resource is missing the test ends here, saying so
+/// loudly on stderr (never silently); where it exists the test runs as before
+#[macro_export]
+macro_rules! requires {
+	($resource:expr) => {
+		if !($resource.available)() {
+			eprintln!("skipped: needs {} ({})", $resource.name, module_path!());
+			return;
+		}
+	};
+}
+
 pub fn fails_with(code: &str, needle: &str) {
 	match eval(code) {
 		Node::Error(message) => assert!(format!("{message}").contains(needle), "{message}"),
