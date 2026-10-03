@@ -69,3 +69,5 @@
 - `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03)
 - `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
 - analyzer::collect_assigned_names and library_words::collect_assigned_names are the same function twice. (closures 2026-10-03)
+- Several statements on one line separated only by spaces (`print a    print b`, playground example) parse as ONE flat space list [print a print b] and run silently to ø without printing anything; needs a rule (split before a statement keyword? an Ask? an error naming `;`). (fixer 2026-10-03)
+- `"ab"*2` / `greeting*2`: text * int is a type error (hint `(2 times ["ab"]).join("")` since print-type-error); `n times "ab"` fails with "`times` needs a body" while `3 times [1]` repeats. Rule proposed to the supervisor (repeat a non-numeric text with a hint, `"5"*3` stays an error). (fixer 2026-10-03)

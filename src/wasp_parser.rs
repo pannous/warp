@@ -52,6 +52,7 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
+const PRINT_WORD: &str = "print";
 const IN_KEYWORD: &str = "in";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
@@ -60,6 +61,17 @@ const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
+
+/// `print a, b`: the comma binds looser than the space, so the comma list [[print a], b] becomes the call print(a, b)
+fn print_call_with_several_arguments(items: Vec<Node>) -> Node {
+	match items[0].drop_meta() {
+		Node::List(head, Bracket::None, Separator::Space) if matches!(head[0].drop_meta(), Symbol(word) if word == PRINT_WORD) => {
+			let arguments = head.iter().chain(&items[1..]).cloned().collect();
+			Node::List(arguments, Bracket::Round, Separator::None)
+		}
+		_ => Node::List(items, Bracket::None, Separator::Colon),
+	}
+}
 
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
@@ -3267,6 +3279,8 @@ impl WaspParser {
 			// Only unwrap single items for implicit groupings (Bracket::None)
 			// Explicit brackets like {x} or [x] should preserve the wrapper
 			grouped_nodes[0].clone()
+		} else if split_sep == Separator::Colon && bracket == Bracket::None {
+			print_call_with_several_arguments(grouped_nodes)
 		} else {
 			Node::List(grouped_nodes, bracket, split_sep)
 		}

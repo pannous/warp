@@ -68,6 +68,15 @@ const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
 
 /// The condition and the then-branch of `if condition then branch`
+/// The call `join(list, separator)`: the items' text forms with the separator between them
+pub(super) fn join_call(list: Node, separator: &str) -> Node {
+	Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
+}
+
+pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
+	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
+}
+
 fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else { return None };
 	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else { return None };
@@ -2256,13 +2265,9 @@ impl WasmGcEmitter {
 	/// `x as string` for a variable: an Int, a Text or a character is the join of the one-element list;
 	/// anything else has no runtime text yet
 	fn emit_runtime_text_cast(&mut self, func: &mut Function, value: &Node) {
-		let join_call = |list: Node, separator: &str| {
-			Node::List(vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())], Bracket::Round, Separator::None)
-		};
-		let one_item_list = |item: Node| Node::List(vec![item], Bracket::Square, Separator::Space);
 		let kind = self.get_type(value);
 		let node = match kind {
-			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+			Kind::Int | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			Kind::List => {
 				let text = |text: &str| Box::new(Node::Text(text.to_string()));

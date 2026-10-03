@@ -243,9 +243,14 @@ fn compiled_output_path(target: &str) -> String {
 fn structure(node: &Node) -> String {
     match node.drop_meta() {
         Node::Key(left, op, right) => format!("({} {} {})", op, structure(left), structure(right)),
-        Node::List(items, bracket, _) => {
+        Node::List(items, bracket, separator) => {
             let inner: Vec<String> = items.iter().map(structure).collect();
-            format!("{}{}", bracket.opening(), inner.join(" "))
+            let joiner = match separator.to_char() {
+                Some(' ') | None => " ".to_string(),
+                Some('\n') => "⏎ ".to_string(),
+                Some(other) => format!("{other} "),
+            };
+            format!("{}{}{}", bracket.opening(), inner.join(&joiner), bracket.closing())
         }
         other => other.serialize(),
     }

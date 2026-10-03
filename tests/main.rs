@@ -143,6 +143,7 @@ mod test_parser;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_prefixed_declarations;
+mod test_print_arguments;
 mod test_print_type_error;
 mod test_property_access;
 mod test_property_assign;

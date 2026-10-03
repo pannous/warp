@@ -175,6 +175,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				if name == PRINT_CALL && items.len() == 2 {
 					return held_kind(&items[1], || infer_type(&items[1], scope)); // `print x` is worth x, `print "c"` a text
 				}
+				if name == PRINT_CALL && items.len() > 2 {
+					return Kind::Text; // `print a, b` is worth the joined text "a b"
+				}
 			}
 			// Check for function calls: (funcname args...) where first item is a symbol
 			if items.len() >= 2 {
