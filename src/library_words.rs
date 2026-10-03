@@ -30,7 +30,7 @@ const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 20] = [
+const SYNONYMS: [(&str, &[&str]); 21] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -48,6 +48,7 @@ const SYNONYMS: [(&str, &[&str]); 20] = [
 	(SLICE, &[]),
 	(COPY, &["clone"]),
 	("replace", &[]),
+	(ORD, &["ordinal", "codepoint"]),
 	(IS_DIGIT, &["isdigit"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
@@ -58,10 +59,12 @@ const SUM: &str = "sum";
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 15] = [
-	("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
+pub const RUNTIME_WORDS: [(&str, usize); 16] = [
+	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
 ];
+/// `ord(c)`, `ordinal(c)`, `codepoint(c)`: the code point of a character (`c as int` is only its digit)
+pub const ORD: &str = "ord";
 /// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
 pub const SLICE: &str = "slice";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end
