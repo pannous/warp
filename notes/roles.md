@@ -15,7 +15,26 @@ warp-integrator). Session names can change; ListAgents shows the current ones.
 
 ## Supervisor
 High-level only: talks to the user, turns decisions into tasks (notes/open_decisions.md, the board
-notes/impl_2026-10-03.md), spawns and assigns workers, relays questions, watches load. No merging, no test runs.
+notes/impl_2026-10-03.md), spawns and assigns workers, watches load. No merging, no test runs, no decision questions
+to the user (those go to the Interviewer).
+
+## Interviewer
+User 2026-10-03: "User decisions must never be blocking. Create a new role. Interviewer. That has the only right to
+ask me decision questions."
+- The only session that asks the user decision questions (multiple choice with a recommended option, AskUserQuestion).
+  Every other session sends its question to the Interviewer instead and never waits for the answer.
+- Keeps the queue: "## Pending questions" at the top of notes/open_decisions.md (question, options with the
+  recommendation first, the assumption already taken, who asked, which branch/test it touches).
+- Asks in batches of up to 4 when the user is there; records each answer verbatim in the Decided section with the
+  date; tells the asking session (and the Supervisor) the answer, so the assumption is kept or reverted.
+- Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
+
+## Never blocked by a decision
+A session that needs a decision: take the recommended option (the one most in line with notes/welcoming.md and the
+decided rules), mark it in code/notes as an assumption, keep working, and SendMessage the Interviewer the question.
+If the answer differs, the change is undone or redone as a normal small task. Edits to existing tests count as such a
+decision too: make the edit on the branch in its own commit (named in the message), so reverting it is one revert;
+the Integrator merges it and the Interviewer gets the question.
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
