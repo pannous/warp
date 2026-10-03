@@ -177,6 +177,7 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
@@ -440,6 +441,7 @@ PASSED:
   ✓ lists::test_unpacking::star_middle
   ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
+  ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
   ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
@@ -968,6 +970,9 @@ PASSED:
   ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
   ✓ programs::test_calculator_fixes::test_run_time_math
   ✓ programs::test_calculator_fixes::test_text_comparisons
+  ✓ programs::test_json_parser_fixes::test_field_of_a_call_result
+  ✓ programs::test_json_parser_fixes::test_mixed_returns_are_nodes
+  ✓ programs::test_json_parser_fixes::test_text_of_a_run_time_value
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
@@ -981,6 +986,8 @@ PASSED:
   ✓ programs::test_samples::test_fizzbuzz
   ✓ programs::test_samples::test_game_of_life
   ✓ programs::test_samples::test_gcd
+  ✓ programs::test_samples::test_json_parser
+  ✓ programs::test_samples::test_mandelbrot
   ✓ programs::test_samples::test_parse_all_samples
   ✓ programs::test_samples::test_power
   ✓ programs::test_samples::test_primes
@@ -1679,4 +1686,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1674 passed, 0 failed, 1674 total tested
+58 ignored, 1681 passed, 0 failed, 1681 total tested
