@@ -5,14 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P10 code quality 2: delete `smarty.rs` (with its asserts in tests/test_angle.rs) and tests/test_asts.rs (tests `syn`)?
-  Options: Delete both / Delete test_asts only / Keep both. Assumed: kept.
-- P11 code quality 4: keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
-  Options: Keep + add a roundtrip test / Delete. Assumed: kept as is.
-- P12 code quality 5: which GC reading API stays? Options: GcObject (docs guide) / gc_traits wrappers / Both.
-  Assumed: both.
-- P13 code quality 6: keep the hand-written libm table (`LIBM_UNARY`/`LIBM_BINARY`) or rely on header-driven FFI only?
-  Options: Keep the table / Generic FFI only. Assumed: kept.
 - P14 code quality 3: regroup tests/ into topic subdirectories (pure moves) and move `probe_*.rs` out of the suite?
   Options: Move probes out only / Regroup and move probes / Leave as is. Assumed: as is.
 - P15 code quality 8: replace CLAUDE.md with a symlink to AGENTS.md (AGENTS.md already rewritten from §1)?
@@ -60,6 +52,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
 
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- smarty.rs + tests/test_asts.rs (P10, code quality 2): "Delete both" (with smarty's asserts in tests/test_angle.rs).
+- Wisp format (P11, code quality 4): "Keep + add a roundtrip test".
+- GC reading API (P12, code quality 5): "GcObject". The gc_traits wrappers go.
+- libm table (P13, code quality 6): "Keep the table", then verbatim: "Mark the FFI deliberately S. examples and maybe
+  quickly try if it works without the hard coding". So `LIBM_UNARY`/`LIBM_BINARY` get a comment saying they are deliberate
+  examples of hand-linked FFI, and an experiment checks whether the header-driven FFI serves the same calls without
+  them (result decides whether they become example-only).
 - Type-word shadowing (P20, asked by warp-bc, branch claude/type-word-user-function): "Clash error". A user function
   named like a type word (`double := it*2`) is an error: "double is a type; rename your function". Reverts the
   shadow-with-warning default.
