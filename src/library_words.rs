@@ -508,6 +508,10 @@ impl Lowering {
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
 	fn method_call(&self, receiver: &Node, method: &Node) -> Option<Node> {
+		// `pair.0` is the first item of a tuple or list, counted from 0 like `pair[0]`
+		if let Node::Number(crate::extensions::numbers::Number::Int(_)) = method.drop_meta() {
+			return Some(crate::wasp_parser::subscript(receiver.clone(), method.clone()));
+		}
 		let (word_node, arguments) = match method.drop_meta() {
 			Node::Symbol(_) => (method, vec![]),
 			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => (&items[0], items[1..].to_vec()),
