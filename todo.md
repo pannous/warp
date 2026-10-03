@@ -60,3 +60,5 @@
 - Later, when machine load is low (user 2026-10-03): an agent fixes the red tests on main of pannous/russh (Rust, Semver, CodeQL on schedule: code scanning likely not enabled) and pannous/warpgate (Test); they mail nightly until then (notes/ci_policy.md).
 - `a//b` is rewritten to `(a - a%b)/b` (wasp_parser.rs floor_division): two big long divisions where one Euclidean divmod (`int_divmod_slow`) would do; needs an operator of its own (notes/multi_value.md). (multi-value 2026-10-03)
 - On Linux the FFI header parser finds no libm signatures: glibc's math.h declares them through __MATHCALL macros (bits/mathcalls.h), which ffi_parser does not expand. test_package_pin::header_signatures_are_parsed_once is gated `requires!(MACOS_C_HEADERS)` until it does. (r3-ci 2026-10-03)
+- typed-lists: bare `int[0]` (no assignment) is 'i' and `#(int[n])` is 1: only `x = int[N]` with a literal N is a zero fill, `int[n]` with a variable indexes the word "int"
+- typed-lists: `int_array_filled` wraps a count above 2^31 to i32 (zero_fill would loop that long); a typed list read before its first assignment traps on a null array instead of the Node path's behaviour

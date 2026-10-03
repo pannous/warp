@@ -269,6 +269,7 @@ impl WasmGcEmitter {
 		}
 
 		self.emit_with_at_functions();
+		self.emit_typed_list_runtime();
 		self.emit_list_concat();
 		self.emit_list_insert_at();
 	}
@@ -746,6 +747,9 @@ impl WasmGcEmitter {
 		if let Some(key) = self.dynamic_key(index) {
 			return self.emit_entry_assignment(func, target, &key, value, NODE_WITH_KEY);
 		}
+		if self.emit_typed_element_assignment(func, target, index, value) {
+			return;
+		}
 		let assigned = self.scratch(2);
 		self.emit_node_instructions(func, target);
 		self.emit_numeric_value(func, index);
@@ -1031,12 +1035,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
-	fn dynamic_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn dynamic_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		(self.get_type(key) == Kind::Empty && !matches!(key.drop_meta(), Node::Empty)).then(|| key.clone())
 	}
 
-	fn map_key(&self, index: &Node) -> Option<Node> {
+	pub(super) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::wasp_parser::subscript_key(index)?;
 		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
 		is_name.then(|| key.clone())
@@ -1084,12 +1088,7 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, &key);
 					self.emit_call(func, NODE_AT_KEY);
 				}
-				None => {
-					self.emit_integral_index_check(func, index);
-					self.emit_node_instructions(func, target);
-					self.emit_numeric_value(func, index);
-					self.emit_call(func, "node_index_at");
-				}
+				None => self.emit_list_element_node(func, target, index),
 			},
 		}
 	}

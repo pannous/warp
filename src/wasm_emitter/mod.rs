@@ -10,6 +10,7 @@ mod ffi_emitter;
 mod import_manager;
 mod key_emitter;
 mod list_emitter;
+mod list_dispatch;
 mod library_ops;
 mod text_unicode;
 mod list_ops;
@@ -167,6 +168,7 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
+	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 }
 
@@ -208,6 +210,7 @@ impl WasmGcEmitter {
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
 			loop_labels: Vec::new(),
+			typed_lists: HashMap::new(),
 			compare_witness: None,
 		}
 	}
@@ -409,6 +412,8 @@ impl WasmGcEmitter {
 
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
+		let typed_lists = self.find_typed_lists(&user_fn.body);
+		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -455,6 +460,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
 		self.restore_loop_labels(saved_loop_labels);
+		self.typed_lists = saved_typed_lists;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -1119,13 +1125,14 @@ impl WasmGcEmitter {
 	fn local_declarations(&self, skipped: usize) -> Vec<(u32, ValType)> {
 		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
 		sorted_locals.sort_by_key(|local| local.position);
-		sorted_locals.into_iter().skip(skipped).map(|local| (1, self.storage_type(local.kind))).collect()
+		sorted_locals.into_iter().skip(skipped).map(|local| (1, self.local_storage_type(&local.name, local.kind))).collect()
 	}
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
+		self.typed_lists = self.find_typed_lists(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
@@ -1224,6 +1231,9 @@ impl WasmGcEmitter {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => self.emit_type_error(func, format!("{s} needs {count} argument{}", if count == 1 { "" } else { "s" })),
 					}
+					return;
+				}
+				if self.emit_typed_list_as_node(func, s) {
 					return;
 				}
 				// Check if this is a local variable lookup
@@ -2603,6 +2613,11 @@ impl WasmGcEmitter {
 							self.emit_type_error(func, message);
 							return;
 						}
+						if self.emit_typed_list_store(func, name, right) {
+							func.instruction(&Instruction::Drop);
+							func.instruction(&Instruction::I64Const(0));
+							return;
+						}
 						if kind.is_ref() {
 							// a variable holding ø, a list or a text: the value lives in the local, a number is also the value of the assignment
 							self.emit_node_instructions(func, right);
@@ -2736,13 +2751,11 @@ impl WasmGcEmitter {
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
 			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
 				let counter = self.counting_getter(property).expect("guarded");
-				self.emit_node_instructions(func, counted);
-				self.emit_call(func, counter);
+				self.emit_list_count(func, counted, counter);
 			}
 			// Prefix # means count/length: #list returns element count
 			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
-				self.emit_node_instructions(func, right);
-				self.emit_call(func, "node_count");
+				self.emit_list_count(func, right, "node_count");
 			}
 			// Index operator: list#index (1-based)
 			Node::Key(list, Op::Hash, index) => {
@@ -2751,13 +2764,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, "get_int_value");
 					return;
 				}
-				self.emit_integral_index_check(func, index);
-				// Emit the list as a Node reference
-				self.emit_node_instructions(func, list);
-				// Emit the index
-				self.emit_numeric_value(func, index);
-				// Call list_at
-				self.emit_call(func, "list_at");
+				self.emit_list_element_number(func, list, index);
 			}
 			// Ternary operator: condition ? then_expr : else_expr
 			Node::Key(condition, Op::Question, then_else) => {
@@ -2782,7 +2789,9 @@ impl WasmGcEmitter {
 						return;
 					}
 				}
-				if let Some(local) = self.scope.lookup(name) {
+				if self.emit_typed_list_as_node(func, name) {
+					self.emit_call(func, "get_int_value");
+				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
@@ -3013,7 +3022,10 @@ impl WasmGcEmitter {
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
+				if self.emit_typed_list_as_node(func, name) {
+					self.emit_call(func, "get_int_value");
+					self.emit_int_to_f64(func, None);
+				} else if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&Instruction::LocalGet(local.position));
 					if local.kind.is_ref() {
 						self.emit_call(func, "get_int_value");
@@ -3217,6 +3229,8 @@ impl WasmGcEmitter {
 		type_names.append(self.type_manager.i64_box_type, "i64box");
 		type_names.append(self.type_manager.f64_box_type, "f64box");
 		type_names.append(self.type_manager.node_type, "Node");
+		type_names.append(self.type_manager.int_array_type, "IntArray");
+		type_names.append(self.type_manager.int_list_type, "IntList");
 		// User-defined type names
 		for (name, idx) in &self.ctx.user_type_indices {
 			type_names.append(*idx, name);
@@ -3245,6 +3259,11 @@ impl WasmGcEmitter {
 		let mut f64box_fields = NameMap::new();
 		f64box_fields.append(0, "value");
 		type_field_names.append(self.type_manager.f64_box_type, &f64box_fields);
+
+		let mut int_list_fields = NameMap::new();
+		int_list_fields.append(0, "length");
+		int_list_fields.append(1, "items");
+		type_field_names.append(self.type_manager.int_list_type, &int_list_fields);
 
 		// User-defined type fields
 		for type_def in self.ctx.type_registry.types() {

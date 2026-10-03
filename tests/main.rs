@@ -244,4 +244,5 @@ mod test_xml;
 mod test_zero_fill;
 mod wasm_optimizer_test;
 mod test_optimizer_exceptions;
+mod test_typed_lists;
 mod test_optimizer_extended_const;
