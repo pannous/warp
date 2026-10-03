@@ -154,3 +154,6 @@ fn test_json_parser() { is!("samples/json_parser.wasp", 125.0); }
 
 #[test] // the iteration counts of a 40x30 grid
 fn test_mandelbrot() { is!("samples/mandelbrot.wasp", 17748); }
+
+#[test] // the third employee, 9 squares + 2 evens, a tuple field
+fn test_data_structures() { is!("samples/data_structures.wasp", "Dave 11 20"); }

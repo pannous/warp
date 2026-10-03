@@ -38,3 +38,6 @@ evens = [x for x in numbers if x % 2 == 0]
 // Tuple-like pairs
 point = (x: 10, y: 20)
 range = (min: 0, max: 100)
+
+// everything at once: the third employee, how many squares and evens, a tuple field
+ceo_name + " " + str(count(squares) + count(evens)) + " " + str(point.y)
