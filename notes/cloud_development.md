@@ -28,8 +28,20 @@ showing the environment name in the row above the message box → Cloud → hove
 settings page or URL for it. The dialog holds the name, Network access (None / Trusted / Custom / Full), env vars
 (e.g. `BASH_MAX_TIMEOUT_MS=1800000`, since the suite takes ~9 min) and a setup script. A setup script that runs
 `git fetch origin vendor && git archive origin/vendor vendor | tar -x` and pre-builds would be cached if it finishes in
-~5 min. `/remote-env` in the CLI picks the default environment for `claude --cloud`. Until the network is Trusted, the
-`vendor` branch (notes/cloud_offline_build.md) is the build path. It works; pilot below.
+~5 min. `/remote-env` in the CLI picks the default environment for `claude --cloud`.
+
+**Environments in use (2026-10-03)**: the user edited the environment **"Microsoft"**: Custom network with
+`*.pannous.com`, `pannous.com`, `index.crates.io`, `crates.io`, … plus "Also include default list of common package managers".
+In a new session there, crates.io works (a crate download returns 200; only the bare root of static.crates.io gives 403).
+`cargo build --tests --config net.offline=false` takes 138 s without the vendor branch, and rustc is 1.97.0. In the user's words
+it "works much better than the default one". `claude --cloud` from this Mac lands there automatically. Environment changes
+apply to NEW sessions only: an open session keeps its old network rules. The user keeps two sessions open,
+**Cloud-Microsoft** and **Cloud-Default**. They are addressable with SendMessage by those names (one way; they cannot
+reply). Their transcripts can be read with `RemoteTrigger get_run_log <session_id>` (it works for any cloud session, not
+only routines). The `vendor` branch (notes/cloud_offline_build.md) remains the fallback for environments without
+crates.io. Its known gap, `miniz_oxide` for the package sub-builds, stays unfixed (supervisor decision 2026-10-03).
+Lean is disabled in the cloud (user decision 2026-10-03): `requires!(LEAN)` skips the Lean-proving tests when
+`CLAUDE_CODE_REMOTE=true`. The test gate hook and tests/queue.sh lock are Mac-local; cloud sessions are exempt (notes/roles.md).
 
 ## 2. Billing: what draws from where
 
