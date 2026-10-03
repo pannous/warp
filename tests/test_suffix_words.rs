@@ -41,3 +41,8 @@ fn the_answer_compiles_the_chosen_reading() {
 fn an_unknown_word_is_no_suffix_form() {
 	assert!(warp::wasm_emitter::eval("3 painted").serialize().contains("painted"));
 }
+
+#[test] // samples/sudoku.wasp: `solved = solve(c); return solved` read as `solve(return)`
+fn a_variable_is_no_suffix_form() {
+	is!("def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)", 3);
+}
