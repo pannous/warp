@@ -91,7 +91,8 @@ impl WasmGcEmitter {
 			let step = |x_op: I<'static>, exponent_step: i32| [I::LocalGet(x), I::F64Const(10.0.into()), x_op, I::LocalSet(x), I::LocalGet(exponent), I::I32Const(exponent_step), I::I32Add, I::LocalSet(exponent)];
 			while_true(f, &[I::LocalGet(x), I::F64Const(10.0.into()), I::F64Ge], &step(I::F64Div, 1));
 			while_true(f, &[I::LocalGet(x), I::F64Const(1.0.into()), I::F64Lt], &step(I::F64Mul, -1));
-			Self::emit_list(f, &[I::LocalGet(x), I::F64Const(MANTISSA_SCALE.into()), I::F64Mul, I::F64Nearest, I::I64TruncSatF64S, I::LocalTee(digits)]);
+			Self::emit_list(f, &[I::LocalGet(x), I::F64Const(MANTISSA_SCALE.into()), I::F64Mul, I::F64Nearest, I::I64TruncF64S, I::LocalTee(digits)]);
+			// the mantissa is in [1e14, 1e15], so the trapping truncation is safe (trunc_sat needs a feature wasm-opt lacks)
 			// 9.999…95 rounds up to 10^15: one digit more
 			Self::emit_list(f, &[I::I64Const(MANTISSA_OVERFLOW), I::I64GeS, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(digits), I::I64Const(10), I::I64DivS, I::LocalSet(digits)]);
