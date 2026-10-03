@@ -64,3 +64,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
   get a host import that asks the static server to run them, which defeats the point of the browser run.
+
+## Published: https://warp.pannous.com/ (user request 2026-10-03)
+- .github/workflows/pages.yml ("Playground") builds warp.wasm + samples.js with web/playground/build.sh on a push to
+  main touching src/, web/playground/, samples/ or the manifest (or `gh workflow run Playground -R pannous/warp`) and
+  deploys only the playground files plus CNAME to GitHub Pages. Repository Pages settings: build type workflow, custom
+  domain warp.pannous.com, HTTPS enforced. DNS: CNAME warp → pannous.github.io at the registrar (orderbox), added by the
+  user; *.pannous.com otherwise points to the pannous.com server.
+- The tests page is not published (it needs test_in_browser.py's endpoints and the 38 MB test binary).
+- C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
