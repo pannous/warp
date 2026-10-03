@@ -23,9 +23,9 @@ fn to_stays_a_range_and_a_variable_name() {
 }
 
 #[test]
-fn a_typed_phrase_parameter_is_a_loud_error() {
-	let result = format!("{:?}", eval("to square a number: a*a; square 3"));
-	assert!(result.contains("typed phrase parameters are not supported yet"), "{result}");
+fn a_typed_phrase_parameter_is_named_by_its_type() {
+	crate::common::fails_with("to square a number: a*a; square 3", "undefined variable: a");
+	is!("to square a number: number*number; square 3", 9);
 }
 
 #[test]
