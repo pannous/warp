@@ -7,6 +7,8 @@ const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: f
 const RUN_TIMEOUT_MS = 10000;
 const TYPING_DELAY_MS = 300;
 const DEFAULT_EXAMPLE = "welcome";
+const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
+const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -24,6 +26,7 @@ let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
 let queued; // code waiting for the running evaluation to finish
 let typingTimer;
+const debugBuild = new URLSearchParams(location.search).has(DEBUG_PARAMETER);
 let lastModule; // the bytes of the last module the compiler emitted, for the download button
 
 // ---- acknowledged topics, remembered in this browser ---------------------------------------------------------
@@ -60,7 +63,7 @@ function showAgain(topic) {
 // ---- the worker ---------------------------------------------------------------------------------------------
 
 function startWorker() {
-	worker = new Worker("worker.js");
+	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "ready") return resolve();
@@ -152,6 +155,15 @@ async function show(code) {
 	showReport(await evaluate(code));
 }
 
+// a link to the same page with the other compiler build
+function showBuildSwitch() {
+	const url = new URL(location.href);
+	if (debugBuild) url.searchParams.delete(DEBUG_PARAMETER);
+	else url.searchParams.set(DEBUG_PARAMETER, "");
+	Object.assign($("build"), { href: url.href, textContent: debugBuild ? "debug build ⇄ optimized" : "optimized build ⇄ debug",
+		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
+}
+
 function downloadModule() {
 	if (!lastModule) return setStatus("no module yet: a constant result needs none");
 	const link = element("a", { href: URL.createObjectURL(new Blob([lastModule], { type: "application/wasm" })), download: "program.wasm" });
@@ -193,6 +205,7 @@ function initialize() {
 	});
 	$("run").onclick = runNow;
 	$("download").onclick = downloadModule;
+	showBuildSwitch();
 	fillExamples();
 	startWorker();
 	const requested = new URLSearchParams(location.search).get("example");
