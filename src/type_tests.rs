@@ -31,6 +31,9 @@ fn canonical_spec_word(word: &str) -> &str {
 /// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: `number` covers every number, `real` the
 /// exact numbers and π, `rational` the whole numbers too (int is a special case of rational), `list of number` every list of numbers
 pub fn type_matches(actual: &str, spec: &str) -> bool {
+	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
+		return conforms;
+	}
 	if let Some(element) = spec.strip_prefix("list of ") {
 		return actual.strip_prefix("list of ").is_some_and(|actual_element| type_matches(actual_element, element));
 	}
@@ -67,6 +70,7 @@ fn type_spec(words: &[&str], shadowed: &HashSet<String>) -> Option<String> {
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
+			None if crate::traits::is_builtin_trait(word) => Some(word.to_string()),
 			None => type_word_kind(word).map(|_| canonical_spec_word(word).to_string()),
 		},
 		_ => None,

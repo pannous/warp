@@ -103,3 +103,12 @@ fn test_meta_stays_reachable() {
 	is!(&with_meta("p@s"), 30);
 	is!(&with_meta("p[\"@s\"]"), 30);
 }
+
+#[test]
+fn test_meta_entries_stay_behind_the_fields() {
+	is!("p = {x:1 @s:30 y:2}; p#2", eval("y:2"));
+	is!("p = {x:1 @s:30 y:2}; t=0; for k,v in p {t+=v}; t", 3);
+	is!("p = {x:1 @s:30}; p.z = 5; p#2", eval("z:5"));
+	is!("p = {@s:30}; p.z = 5; p#1", eval("z:5"));
+	is!("p = {x:1}; p.@s = 30; p.z = 5; #p.keys", 2);
+}

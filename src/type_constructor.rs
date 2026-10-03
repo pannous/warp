@@ -24,6 +24,14 @@ pub fn instance_parts(node: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
+/// Does the node carry the Instance mark: a construction, or the annotation of an instance parameter `p:person`
+pub fn instance_parts_marked(node: &Node) -> bool {
+	match node {
+		Node::Meta { node, data } => matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<Instance>().is_some()) || instance_parts_marked(node),
+		_ => false,
+	}
+}
+
 pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
