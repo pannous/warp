@@ -5,7 +5,7 @@
 
 use crate::node::Node;
 use crate::type_kinds::Kind;
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -33,9 +33,9 @@ const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 7] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 8] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text),
+	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -130,7 +130,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | IS_ERROR, _) => {
+			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -157,6 +157,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
 				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
 			}
+			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
 			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
 		}
 	}

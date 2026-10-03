@@ -11,6 +11,7 @@ use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
+use crate::wasm_emitter::RAN_WITHOUT_ERROR;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
@@ -500,7 +501,8 @@ impl Lowering {
 	}
 
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
-	/// division or modulo by zero directly under `try` are checked before they trap; a trap deeper inside X stays a trap.
+	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
+	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
 	fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
 		match guarded.drop_meta() {
@@ -516,7 +518,8 @@ impl Lowering {
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
 			_ => self.from_template(
-				&format!("(try_tmp_value={value}; if is_error(try_tmp_value) {{{fallback_placeholder}}} else {{try_tmp_value}})"),
+				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
+				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
 				&[(value, &guarded), (fallback_placeholder, &fallback)],
 			),
 		}
