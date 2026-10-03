@@ -956,7 +956,7 @@ fn test_fuel_budget_can_be_raised() {
 		other => panic!("expected out of fuel, got {other:?}"),
 	}
 	assert_eq!(eval(counting), 1000);
-	assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous");
+	const { assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous") };
 }
 
 fn effects(code: &str, function: &str) -> warp::effects::EffectSet {

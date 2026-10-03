@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use warp::modules::resolve_in;
 use warp::wasm_emitter::eval;
 use warp::wasp_parser::WaspParser;
@@ -14,7 +14,7 @@ fn module_directory(test: &str, modules: &[(&str, &str)]) -> PathBuf {
 	directory
 }
 
-fn resolved_text(source: &str, directory: &PathBuf) -> String {
+fn resolved_text(source: &str, directory: &Path) -> String {
 	let resolved = resolve_in(WaspParser::parse(source), &[directory.to_str().expect("utf8 path")]);
 	format!("{resolved:?}")
 }

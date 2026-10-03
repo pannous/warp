@@ -522,6 +522,8 @@ fn test_wasm_logic_primitives() {
 	is!("nil", Empty);
 }
 #[test]
+// the expected value mirrors the wasp source literal digit for digit
+#[allow(clippy::excessive_precision)]
 fn test_wasm_variables0() {
 	//	  (func $i (type 0) (result i32)  i32.const 123 return)  NO LOL
 	is!("i=123;i", 123);

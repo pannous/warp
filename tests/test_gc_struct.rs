@@ -1,9 +1,9 @@
-/// Experimental: Return raw GC structs instead of Node encoding
-/// This allows direct struct field access without Node wrapper overhead
-///
-/// Two approaches demonstrated:
-/// 1. WasmGcEmitter::emit_raw_struct - uses emitter for WASM generation
-/// 2. gc_struct! macro - ergonomic typed wrappers with index-based access
+//! Experimental: Return raw GC structs instead of Node encoding
+//! This allows direct struct field access without Node wrapper overhead
+//!
+//! Two approaches demonstrated:
+//! 1. WasmGcEmitter::emit_raw_struct - uses emitter for WASM generation
+//! 2. gc_struct! macro - ergonomic typed wrappers with index-based access
 
 use wasmtime::*;
 use anyhow::Result;
