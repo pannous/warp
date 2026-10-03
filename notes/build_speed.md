@@ -28,5 +28,7 @@ Not useful here: splitting crates is a large refactor for unclear gain; debug-in
 ## Pitfall: copies share one warp artifact (2026-10-03)
 Every copy of warp that builds into the shared target dir (worktrees, `git archive` exports, probes/*_export) maps to the
 same warp lib artifact: cargo's metadata hash ignores the path of a root package and the fingerprint compares mtimes of
-relative paths. A copy can report "Fresh warp" and run another checkout's code, both ways. Fix: give each copy a unique
-pre-release version in its Cargo.toml (`0.1.1-<topic>`, never committed); dependencies stay shared.
+relative paths, and because the lib is also a `cdylib` cargo names the rlib without a hash (`deps/libwarp.rlib`), so every
+copy overwrites and links the same file. A copy can report "Fresh warp" and run another checkout's code, both ways.
+Fix, verified: in each copy's Cargo.toml set a unique pre-release `version = "0.1.1-<topic>"` AND `crate-type = ["rlib"]`
+(never committed); the copy then links its own `libwarp-<hash>.rlib`, dependencies stay shared.
