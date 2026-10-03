@@ -50,6 +50,9 @@ const SYNONYMS: [(&str, &[&str]); 17] = [
 	("replace", &[]),
 ];
 const SUM: &str = "sum";
+/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
+/// a typed list sums its array, any other list runs the loop `sum` always lowered to
+pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 15] = [
@@ -494,6 +497,7 @@ impl Lowering {
 			return Diagnostic::at(head, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
+			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
@@ -563,6 +567,16 @@ impl Lowering {
 			substitute(program, &placeholder, argument)
 		})
 	}
+}
+
+/// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
+fn dispatched_sum(expanded: Node) -> Node {
+	let Node::List(mut items, bracket, separator) = expanded else { return expanded };
+	let [assignment, sum_loop] = items.as_mut_slice() else { return Node::List(items, bracket, separator) };
+	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else { return Node::List(items, bracket, separator) };
+	let list = temporary.as_ref().clone();
+	*sum_loop = Node::List(vec![Node::Symbol(LIST_SUM.to_string()), list, sum_loop.clone()], Bracket::Round, Separator::None);
+	Node::List(items, bracket, separator)
 }
 
 /// `first [1 2 3]` has one argument, `join [1 2] ","` two: a prefix call with more items than the word takes keeps the rest together

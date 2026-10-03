@@ -9,10 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 15] = [
+const BUILTIN_CALLS: [&str; 16] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM,
 ];
 
 const PRINT: &str = "print";
@@ -213,6 +213,9 @@ impl WasmGcEmitter {
 			return;
 		}
 
+		if let Some((list, sum_loop)) = super::list_dispatch::list_sum_call(items) {
+			return self.emit_list_sum(func, list, sum_loop, super::list_dispatch::Wanted::Node);
+		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::analyzer::ZERO_FILL_CALL {
 				self.emit_numeric_value(func, count);

@@ -160,6 +160,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
+				if name == crate::library_words::LIST_SUM && items.len() == 3 {
+					return infer_type(&items[2], scope); // the loop it dispatches around
+				}
 				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 					return infer_type(&items[1], scope); // `return x` is worth x
 				}

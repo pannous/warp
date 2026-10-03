@@ -165,3 +165,47 @@ fn test_float_array_elements_are_numbers() {
 	assert_eq!(eval("xs=[]; xs.add(1.5f); xs.add(2.5f); xs"), eval("[1.5f, 2.5f]"));
 	assert_eq!(eval("xs=[1.5f, 2.5f]; xs.map(x=>x*2)"), eval("[3.0f, 5.0f]"));
 }
+
+/// How many calls the module of `code` makes to the runtime function `name`
+fn calls_to(code: &str, name: &str) -> usize {
+	let bytes = compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
+	let mut index = None;
+	let mut calls = Vec::new();
+	for payload in Parser::new(0).parse_all(&bytes) {
+		match payload.expect("valid module") {
+			Payload::CustomSection(section) => {
+				if let wasmparser::KnownCustom::Name(names) = section.as_known() {
+					for subsection in names {
+						if let Ok(wasmparser::Name::Function(map)) = subsection {
+							index = map.into_iter().flatten().find(|naming| naming.name == name).map(|naming| naming.index).or(index);
+						}
+					}
+				}
+			}
+			Payload::CodeSectionEntry(body) => {
+				let mut reader = body.get_operators_reader().expect("operators");
+				while !reader.eof() {
+					if let Operator::Call { function_index } = reader.read().expect("operator") {
+						calls.push(function_index);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+	index.map_or(0, |index| calls.iter().filter(|called| **called == index).count())
+}
+
+#[test]
+fn test_sum_of_a_typed_list_is_one_operation() {
+	assert!(calls_to("xs=[1,2,3]; sum xs", "int_list_sum") > 0);
+	assert!(calls_to("xs=[1.5f,2.5f]; sum xs", "float_list_sum") > 0);
+	assert_eq!(calls_to("xs=[1,\"a\"]; sum xs", "int_list_sum"), 0);
+	is!("xs=[1,2,3]; sum xs", 6);
+	is!("xs=[]; sum xs", 0);
+	// leaving the fixnum range takes the exact loop
+	assert_eq!(eval("xs=[4611686018427387904, 4611686018427387904]; sum xs"), eval("9223372036854775808"));
+	assert_eq!(eval("xs=[1.5f,2.5f]; sum xs"), eval("4.0f"));
+	assert_eq!(eval("xs=[1.5f,2.5f]; y = sum xs; y * 2"), eval("8.0f"));
+	assert_eq!(printed("xs=[1,2,3]; [sum xs]"), "[6]");
+}

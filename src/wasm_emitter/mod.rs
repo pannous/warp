@@ -2542,6 +2542,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		}
 		if self.emit_loop_jump(func, node) {
 			return;
 		}
@@ -2902,6 +2905,9 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		}
 		if self.emit_loop_jump(func, node) {
 			return;
 		}

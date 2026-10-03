@@ -42,7 +42,21 @@ pub enum ListOp {
 	Store,
 	/// `xs` where a Node is needed
 	AsNode,
+	/// `sum xs`: `list_sum(xs, loop)`
+	Sum,
 }
+
+/// The representation an emission context wants a number in
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Wanted {
+	Int,
+	Float,
+	Node,
+}
+
+/// What the fast int sum returns when an element or the sum leaves the fixnum range: the exact loop takes over. It is a
+/// handle (big_int.rs), never a fixnum the fast path could have produced.
+const SUM_NOT_FIXNUM: i64 = i64::MIN;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ElementType {
@@ -58,17 +72,18 @@ struct ElementRuntime {
 	as_node: &'static str,
 	filled: &'static str,
 	push: &'static str,
+	sum: &'static str,
 	/// the constructor of one element's Node
 	new_node: &'static str,
 }
 
 const INT_RUNTIME: ElementRuntime = ElementRuntime {
 	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", as_node: "int_list_as_node", filled: "int_list_filled",
-	push: "int_list_push", new_node: "new_int",
+	push: "int_list_push", sum: "int_list_sum", new_node: "new_int",
 };
 const FLOAT_RUNTIME: ElementRuntime = ElementRuntime {
 	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", as_node: "float_list_as_node",
-	filled: "float_list_filled", push: "float_list_push", new_node: "new_float",
+	filled: "float_list_filled", push: "float_list_push", sum: "float_list_sum", new_node: "new_float",
 };
 
 impl ElementType {
@@ -123,6 +138,21 @@ enum Source {
 	Append(ElementType),
 	Variable(String),
 	Other,
+}
+
+/// The list and the loop of `list_sum(list, loop)`, what `sum xs` lowers to (library_words.rs)
+pub(super) fn list_sum_parts(node: &Node) -> Option<(&Node, &Node)> {
+	match node.drop_meta() {
+		Node::List(items, _, _) => list_sum_call(items),
+		_ => None,
+	}
+}
+
+pub(super) fn list_sum_call(items: &[Node]) -> Option<(&Node, &Node)> {
+	match items {
+		[call, list, sum_loop] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::library_words::LIST_SUM) => Some((list, sum_loop)),
+		_ => None,
+	}
 }
 
 /// The count and zero of `zero_fill(count, zero)`, what `x : 100 int` and `int[100]` lower to
@@ -465,6 +495,38 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// `list_sum(list, loop)` as `wanted`: a typed list sums its items in one runtime call (an int sum that leaves the
+	/// fixnum range runs the exact loop instead), any other list runs the loop
+	pub(super) fn emit_list_sum(&mut self, func: &mut Function, list: &Node, sum_loop: &Node, wanted: Wanted) {
+		match (self.list_backend(ListOp::Sum, list), wanted) {
+			(Backend::TypedArray(ElementType::Int), _) => {
+				let (slot, _) = self.typed_list(list).expect("typed backend");
+				let sum = self.scratch(0);
+				func.instruction(&I::LocalGet(slot));
+				self.emit_call(func, INT_RUNTIME.sum);
+				Self::emit_list(func, &[I::LocalTee(sum), I::I64Const(SUM_NOT_FIXNUM), I::I64Eq, I::If(BlockType::Result(ValType::I64))]);
+				self.emit_numeric_value(func, sum_loop);
+				Self::emit_list(func, &[I::Else, I::LocalGet(sum), I::End]);
+				match wanted {
+					Wanted::Int => {}
+					Wanted::Float => self.emit_int_to_f64(func, None),
+					Wanted::Node => self.emit_call(func, INT_RUNTIME.new_node),
+				}
+			}
+			(Backend::TypedArray(ElementType::Float), Wanted::Float | Wanted::Node) => {
+				let (slot, _) = self.typed_list(list).expect("typed backend");
+				func.instruction(&I::LocalGet(slot));
+				self.emit_call(func, FLOAT_RUNTIME.sum);
+				if wanted == Wanted::Node {
+					self.emit_call(func, FLOAT_RUNTIME.new_node);
+				}
+			}
+			(_, Wanted::Int) => self.emit_numeric_value(func, sum_loop),
+			(_, Wanted::Float) => self.emit_float_value(func, sum_loop),
+			(_, Wanted::Node) => self.emit_node_instructions(func, sum_loop),
+		}
+	}
+
 	/// The runtime functions of the typed-array backend, each only when the program calls it
 	pub(super) fn emit_typed_list_runtime(&mut self) {
 		for element in ElementType::ALL {
@@ -532,6 +594,30 @@ impl WasmGcEmitter {
 					I::LocalGet(0), items.clone(), I::LocalGet(0), length.clone(), I::LocalGet(1), I::ArraySet(array),
 					I::LocalGet(0), I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
 					I::LocalGet(0),
+				]);
+			});
+		}
+		// sum(list) -> element: left to right like the loop; an int sum gives SUM_NOT_FIXNUM when it leaves the fixnum range
+		if self.should_emit_function(runtime.sum) {
+			let (position, sum, item) = (1, 2, 3);
+			self.runtime_function(runtime.sum, vec![list_ref], vec![value], vec![ValType::I32, value, value], |_, f| {
+				let not_fixnum = |local| [I::LocalGet(local), I::I64Const(super::big_int::FIXNUM_OFFSET), I::I64Add, I::I64Const(0), I::I64LtS,
+					I::If(BlockType::Empty), I::I64Const(SUM_NOT_FIXNUM), I::Return, I::End];
+				Self::emit_list(f, &[
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(position), I::LocalGet(0), length.clone(), I::I32GeU, I::BrIf(1),
+					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array), I::LocalSet(item),
+				]);
+				if element == ElementType::Int {
+					Self::emit_list(f, &not_fixnum(item));
+					Self::emit_list(f, &[I::LocalGet(sum), I::LocalGet(item), I::I64Add, I::LocalSet(sum)]);
+					Self::emit_list(f, &not_fixnum(sum));
+				} else {
+					Self::emit_list(f, &[I::LocalGet(sum), I::LocalGet(item), I::F64Add, I::LocalSet(sum)]);
+				}
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position), I::Br(0),
+					I::End, I::End, I::LocalGet(sum),
 				]);
 			});
 		}
