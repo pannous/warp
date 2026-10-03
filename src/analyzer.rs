@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
+const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
 const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
 
 fn is_constant_keyword(node: &Node) -> bool {
@@ -159,6 +160,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				return Kind::List;
 			}
 			if let Node::Symbol(name) = items[0].drop_meta() {
+				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
+					return infer_type(&items[1], scope); // `return x` is worth x
+				}
 				if let Some(kind) = scope.function_kind(name) {
 					return kind;
 				}
