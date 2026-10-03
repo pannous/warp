@@ -84,11 +84,15 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
     await gets its own word `await job` (no `job!`).
   - D14 `in` warning: "Never warn". `3 in [1 2 3]` gives the position silently (the impl-sem warning goes).
   - D5 type-name matching rule (notes/matching.md): "Accept".
-  - D15 auto-imports: "Yes, folder scope". All .wasp files in the same folder are visible without `use`.
+  - D15 auto-imports: "Yes, folder scope" (REVISED the same day: opt-in `use folder/package/project`, see above).
   - Meta keys in iteration: "Skip @ keys". Iteration, keys, values and count ignore `@` entries.
   - #34 deep traps under `try`: "Do it now".
   - 14d test_comments2: user "what? 0.length() ???"; explained: the test parses two lines, `y=0` is one Key whose
     length is 0 (C++ counted the 3-item list `[y = 0]`). Correct for the current model, closed.
+- D15 REVISED (user to warp-b8, 2026-10-03): "revision of my previous decision create special keyword use folder and
+  use package and use Project to automatically include everything but not by default anymore". No automatic folder
+  scope; `use folder` (the program's folder), `use package` (below the nearest folder holding <name>.wasp),
+  `use project` (below the nearest .git), lazy per-name lookup, same conflict rules.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
 ## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form

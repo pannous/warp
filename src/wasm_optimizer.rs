@@ -1,7 +1,7 @@
 #![cfg(feature = "optimizer")]
 
-/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts)
-const BINARYEN_FEATURES: [&str; 3] = ["--enable-gc", "--enable-reference-types", "--enable-bulk-memory"];
+/// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts, exceptions for `try`)
+const BINARYEN_FEATURES: [&str; 4] = ["--enable-gc", "--enable-reference-types", "--enable-bulk-memory", "--enable-exception-handling"];
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;

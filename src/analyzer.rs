@@ -427,6 +427,8 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		}
 		// Assign creates variables only at top level (not inside structures)
 		Node::Key(left, Op::Assign, right) => {
+			// the variables the value binds come first, so its kind is known: `a = (t = 1 + 2; t)` makes a an Int
+			let inner_temporaries = collect_variables_inner(right, scope, false, in_structure);
 			if !skip_first_assign && !in_structure {
 				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
 				match left.drop_meta() {
@@ -456,7 +458,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					_ => {}
 				}
 			}
-			collect_variables_inner(right, scope, false, in_structure)
+			inner_temporaries
 		}
 		// Compound assignments don't create new variables
 		Node::Key(left, op, right) if op.is_compound_assign() => {

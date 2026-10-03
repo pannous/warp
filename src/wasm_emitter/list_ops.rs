@@ -583,10 +583,11 @@ impl WasmGcEmitter {
 		let no_case_errors = self.ctx.missing_case_labels.iter().map(|label| format!("{}{label}", crate::switch::NO_CASE_PREFIX));
 		let no_case_errors: Vec<&'static str> = no_case_errors.map(|name| &*Box::leak(name.into_boxed_str())).collect();
 		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
-		for name in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors) {
-			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
-				f.instruction(&Instruction::Unreachable);
-			});
+		if self.guards_errors {
+			self.declare_error_catching(); // the error functions throw while a `try` runs
+		}
+		for (error_id, name) in RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).enumerate() {
+			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
 
@@ -658,14 +659,6 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::LocalGet(current));
 		func.instruction(&Instruction::RefIsNull);
 		self.emit_fail_if(func, "index_out_of_range");
-		// a meta entry `@name:value` has no position: step over it
-		self.emit_field(func, current, 1);
-		self.call(func, super::equality::IS_META_ENTRY);
-		func.instruction(&Instruction::If(BlockType::Empty));
-		self.emit_field(func, current, 2);
-		func.instruction(&Instruction::LocalSet(current));
-		func.instruction(&Instruction::Br(1));
-		func.instruction(&Instruction::End);
 		Self::emit_index_compare(func, Instruction::I64LeS);
 		func.instruction(&Instruction::BrIf(1));
 		self.emit_field(func, current, 2);
@@ -675,6 +668,10 @@ impl WasmGcEmitter {
 		func.instruction(&Instruction::Br(0));
 		func.instruction(&Instruction::End);
 		func.instruction(&Instruction::End);
+		// meta entries `@name:value` sit behind every field (meta_entries.rs, field_with): arriving at one is past the end
+		self.emit_field(func, current, 1);
+		self.call(func, super::equality::IS_META_ENTRY);
+		self.emit_fail_if(func, "index_out_of_range");
 	}
 
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too

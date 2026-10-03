@@ -20,6 +20,8 @@ mod node_emitter;
 mod reflection;
 mod string_table;
 mod type_manager;
+mod try_guard;
+pub use try_guard::RAN_WITHOUT_ERROR;
 pub(crate) mod wasi_emitter;
 
 pub use big_int::{is_fixnum, INT_RUNTIME};
@@ -127,6 +129,10 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	memory: MemorySection,
 	globals: GlobalSection,
+	tags: TagSection,
+	guards_errors: bool, // the program has a `try` that catches runtime errors
+	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	extra_global_names: Vec<(u32, &'static str)>,
 
 	// Configuration
 	config: EmitterConfig,
@@ -176,6 +182,10 @@ impl WasmGcEmitter {
 			names: NameSection::new(),
 			memory: MemorySection::new(),
 			globals: GlobalSection::new(),
+			tags: TagSection::new(),
+			guards_errors: false,
+			error_catching: None,
+			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
 			import_manager: ImportManager::new(),
@@ -741,6 +751,7 @@ impl WasmGcEmitter {
 			Need::MathImport(_) => None,
 		}));
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -964,11 +975,20 @@ impl WasmGcEmitter {
 		self.exports.export("get_kind", ExportKind::Func, idx);
 
 		// get_int_value(node: ref $Node) -> i64
-		// Extract integer from Node's data field (i64box)
+		// Extract integer from Node's data field (i64box); a node that is no Int is the runtime error not_an_int,
+		// which a `try` catches, never a raw cast trap
 		let func_type = self.type_manager.types().len();
 		self.type_manager.types_mut().ty().function(vec![Ref(node_ref)], vec![ValType::I64]);
 		self.functions.function(func_type);
 		let mut func = Function::new(vec![]);
+		Self::emit_list(&mut func, &[
+			Instruction::LocalGet(0),
+			Instruction::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
+			Instruction::I64Const(0xFF), Instruction::I64And, Instruction::I64Const(Kind::Int as i64), Instruction::I64Ne,
+			Instruction::If(BlockType::Empty),
+		]);
+		self.emit_runtime_error(&mut func, "not_an_int");
+		func.instruction(&Instruction::End);
 		func.instruction(&Instruction::LocalGet(0)); // Node
 		func.instruction(&Instruction::StructGet {
 			struct_type_index: self.type_manager.node_type,
@@ -3134,6 +3154,7 @@ impl WasmGcEmitter {
 		let mut features = WasmFeatures::default();
 		features.set(WasmFeatures::REFERENCE_TYPES, true);
 		features.set(WasmFeatures::GC, true);
+		features.set(WasmFeatures::EXCEPTIONS, true);
 		let mut validator = Validator::new_with_features(features);
 		match validator.validate_all(bytes) {
 			Ok(_) => {
@@ -3158,6 +3179,9 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.functions);
 		self.module.section(&self.memory);
+		if !self.tags.is_empty() {
+			self.module.section(&self.tags);
+		}
 		if self.next_global_idx > 0 {
 			self.module.section(&self.globals);
 		}
@@ -3262,7 +3286,13 @@ impl WasmGcEmitter {
 					global_names.append(idx as u32, name);
 				}
 			}
+			for (idx, name) in &self.extra_global_names {
+				global_names.append(*idx, name);
+			}
 			self.names.globals(&global_names);
+		}
+		if let Some(tag_names) = self.error_tag_names() {
+			self.names.tags(&tag_names);
 		}
 	}
 

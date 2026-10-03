@@ -1,19 +1,54 @@
 # .github/workflows/rust.yml
 name: Rust CI
 
+# The tests do not run on every push to main (user decision 2026-10-03: the failure mails were noise). They run
+# nightly when main changed, by hand (`gh workflow run "Rust CI" -R pannous/warp [--ref <branch>]`), on a version tag
+# (v*), and on a push whose head commit message contains [ci]. claude/* branches (cloud agents) always run.
 on:
   push:
-    branches: [ main, master, "claude/*" ]
+    branches: [ main, "claude/*" ]
+    tags: [ "v*" ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
   LEAN_TOOLCHAIN: leanprover/lean4:v4.34.1
+  NIGHTLY_WINDOW: 25 hours ago
 
 jobs:
+  decide:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 50
+    - id: decide
+      env:
+        EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        run=false
+        case "$EVENT" in
+          workflow_dispatch|pull_request) run=true ;;
+          schedule) [ -n "$(git log --since="$NIGHTLY_WINDOW" --format=%h)" ] && run=true ;;
+          push)
+            case "$REF" in refs/heads/claude/*|refs/tags/*) run=true ;; esac
+            case "$MESSAGE" in *"[ci]"*) run=true ;; esac ;;
+        esac
+        echo "run=$run" >> "$GITHUB_OUTPUT"
+        echo "tests run: $run ($EVENT $REF)" >> "$GITHUB_STEP_SUMMARY"
+
   test:
+    needs: decide
+    if: needs.decide.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

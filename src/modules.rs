@@ -30,6 +30,11 @@ const REPLACED_DIRECTORY: &str = ".replaced";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
+/// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
+const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", Scope::Package), ("project", Scope::Project)];
+/// Folders a package or project scope never looks into, besides hidden ones and nested repositories
+const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
+const PROJECT_MARKER: &str = ".git";
 const DECLARATION_KEYWORDS: [&str; 5] = ["use", "import", "let", "var", "global"];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
@@ -45,10 +50,10 @@ pub fn resolve(program: Node) -> Node {
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let folder = file.as_deref().map(folder_of);
-	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone() };
+	let mut loader = Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory: folder.clone(), scope: None };
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
-	let resolved = loader.resolve(program).and_then(|program| match &file {
-		Some(file) => loader.with_folder_scope(program, file),
+	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
+		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	});
 	resolved.unwrap_or_else(|failure| failure)
@@ -59,7 +64,7 @@ thread_local! {
 	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
-/// Compile `body` as the program of `file`: every definition in the .wasp files of its folder is visible without `use`
+/// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
 	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
 	let result = body();
@@ -81,15 +86,70 @@ struct Sibling {
 	statements: Option<Vec<Node>>,
 }
 
-fn siblings_of(file: &Path) -> Vec<Sibling> {
-	let itself = file.canonicalize().ok();
-	let Ok(entries) = std::fs::read_dir(folder_of(file)) else { return vec![] };
-	let mut paths: Vec<PathBuf> = entries.filter_map(|entry| entry.ok().map(|entry| entry.path()))
-		.filter(|path| path.is_file() && path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known)))
-		.filter(|path| path.canonicalize().ok() != itself)
-		.collect();
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Scope {
+	/// the files of the program's folder
+	Folder,
+	/// every file below the package folder: the nearest folder holding `<folder name>.wasp`
+	Package,
+	/// every file below the project root: the nearest folder holding .git
+	Project,
+}
+
+fn scope_word(name: &str) -> Option<Scope> {
+	SCOPE_WORDS.iter().find(|(word, _)| *word == name).map(|(_, scope)| *scope)
+}
+
+/// The other module files of the scope around the program (the working directory for inline code)
+fn scope_files(scope: Scope, file: Option<&Path>) -> Result<Vec<Sibling>, Node> {
+	let folder = file.map(folder_of).unwrap_or_else(|| PathBuf::from("."));
+	let mut paths = Vec::new();
+	match scope {
+		Scope::Folder => collect_module_files(&folder, false, &mut paths),
+		Scope::Package => collect_module_files(&package_root(&folder)?, true, &mut paths),
+		Scope::Project => collect_module_files(&project_root(&folder)?, true, &mut paths),
+	}
+	let itself = file.and_then(|file| file.canonicalize().ok());
+	paths.retain(|path| path.canonicalize().ok() != itself);
 	paths.sort();
-	paths.into_iter().filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None })).collect()
+	Ok(paths.into_iter().filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None })).collect())
+}
+
+fn is_module_file(path: &Path) -> bool {
+	path.is_file() && path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
+}
+
+fn collect_module_files(directory: &Path, below: bool, paths: &mut Vec<PathBuf>) {
+	let Ok(entries) = std::fs::read_dir(directory) else { return };
+	for path in entries.filter_map(|entry| entry.ok().map(|entry| entry.path())) {
+		if is_module_file(&path) {
+			paths.push(path);
+		} else if below && path.is_dir() && is_scoped_directory(&path) {
+			collect_module_files(&path, below, paths);
+		}
+	}
+}
+
+/// Hidden folders, fetched packages, build output and nested repositories belong to no scope
+fn is_scoped_directory(directory: &Path) -> bool {
+	let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+	!name.starts_with('.') && !UNSCOPED_DIRECTORIES.contains(&name.as_str()) && !directory.join(PROJECT_MARKER).exists()
+}
+
+fn package_root(folder: &Path) -> Result<PathBuf, Node> {
+	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
+	let holds_its_module = |directory: &&Path| {
+		let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
+	};
+	absolute.ancestors().find(holds_its_module).map(Path::to_path_buf)
+		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.wasp", folder.display())))
+}
+
+fn project_root(folder: &Path) -> Result<PathBuf, Node> {
+	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
+	absolute.ancestors().find(|directory| directory.join(PROJECT_MARKER).exists()).map(Path::to_path_buf)
+		.ok_or_else(|| error(&format!("use project: no project root around {}: the project root holds {PROJECT_MARKER}", folder.display())))
 }
 
 impl Sibling {
@@ -129,6 +189,8 @@ struct Loader<'a> {
 	included: HashSet<PathBuf>,
 	/// the directory of the file being loaded; None for the program itself, which searches from the working directory
 	including_directory: Option<PathBuf>,
+	/// the widest `use folder|package|project` met
+	scope: Option<Scope>,
 }
 
 impl Loader<'_> {
@@ -159,6 +221,10 @@ impl Loader<'_> {
 	/// the `use` itself for a native library
 	fn import(&mut self, used: &Used, statement: &Node) -> Result<Vec<Node>, Node> {
 		let (import, name) = (used.import, used.name.as_str());
+		if let Some(scope) = scope_word(name).filter(|_| import == Import::Use && used.requirement.is_none()) {
+			self.scope = self.scope.max(Some(scope));
+			return Ok(vec![]);
+		}
 		if import == Import::Use && is_builtin_library(name) {
 			return Ok(vec![as_use(statement)]);
 		}
@@ -243,10 +309,11 @@ impl Loader<'_> {
 		candidates
 	}
 
-	/// D15 folder scope: a name the program uses but does not define comes from the one sibling file defining it,
-	/// together with what that definition uses in turn and the sibling's own `use`s; two siblings defining it is an error
-	fn with_folder_scope(&mut self, program: Node, file: &Path) -> Result<Node, Node> {
-		let mut siblings = siblings_of(file);
+	/// D15 `use folder|package|project`: a name the program uses but does not define comes from the one file of the scope
+	/// defining it, together with what that definition uses in turn and that file's own `use`s; two files defining it
+	/// differently is an error
+	fn with_scope(&mut self, program: Node, scope: Scope, file: Option<&Path>) -> Result<Node, Node> {
+		let mut siblings = scope_files(scope, file)?;
 		let mut own = statements(program.clone());
 		let mut known = HashSet::new();
 		bound_names(&program, &mut known);
@@ -270,7 +337,7 @@ impl Loader<'_> {
 				1 => providers.remove(0),
 				_ => {
 					let files: Vec<String> = providers.iter().map(|(index, _)| siblings[*index].path.display().to_string()).collect();
-					return Err(error(&format!("{name} is defined in more than one file of the folder: {}; rename one, or `use` the one you mean", files.join(" and "))));
+					return Err(error(&format!("{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean", files.join(" and "))));
 				}
 			};
 			if using_siblings.insert(index) {
