@@ -73,8 +73,6 @@ const NAND_SPELLINGS: [&str; 2] = ["nand", "¬&"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = "slice";
-/// Articles that start a typed verb phrase in `to square a number:`
-const PHRASE_ARTICLES: [&str; 3] = ["a", "an", "the"];
 const TIMES_WORD: &str = "times";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
@@ -263,6 +261,10 @@ pub struct WaspParser {
 	functions_with_parameters: std::collections::HashSet<String>,
 	/// Operators the program declares (`suffix operator ‼ := it*2`), longest glyph first, found by a pre-scan of the source
 	user_operators: Vec<UserOperator>,
+	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
+	declared_types: std::collections::HashSet<String>,
+	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
+	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -294,6 +296,17 @@ fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
+/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`)
+fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
+	words.windows(2)
+		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
+		.map(|pair| pair[1])
+		.filter(|name| is_plain_name(name))
+		.map(str::to_string)
+		.collect()
+}
+
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
@@ -310,6 +323,18 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	}
 	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
 	found
+}
+
+/// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
+/// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
+fn typed_parameter(arguments: Node) -> Node {
+	match arguments.drop_meta() {
+		Node::List(items, _, Separator::Space) if matches!(items.as_slice(), [type_word, name]
+			if matches!(type_word.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some()) && matches!(name.drop_meta(), Symbol(_))) => {
+			Node::Key(Box::new(items[1].clone()), Op::Colon, Box::new(items[0].clone()))
+		}
+		_ => arguments,
+	}
 }
 
 fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
@@ -333,8 +358,11 @@ impl WaspParser {
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
+		let declared_types = if options == ParserOptions::default() { scan_declared_types(&input) } else { Default::default() };
 		WaspParser {
 			user_operators,
+			declared_types,
+			phrase_definitions: Default::default(),
 			input,
 			chars,
 			pos: 0,
@@ -1165,8 +1193,8 @@ impl WaspParser {
 	}
 
 	/// `to name params: body`, after the word `to`: the function `name(params) := body`.
-	/// The body is the rest of the statement, a `{…}` block or an indented block. Plain parameter names only: an article
-	/// (`to square a number:`) starts a typed phrase, which is not supported yet. Anything else is no definition.
+	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
+	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
 	fn try_parse_to_definition(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
@@ -1189,21 +1217,42 @@ impl WaspParser {
 				}
 			}
 		}
-		let is_typed_phrase = parameters.windows(2).any(|pair| PHRASE_ARTICLES.contains(&pair[0].as_str()) && crate::analyzer::type_word_kind(&pair[1]).is_some());
-		if is_typed_phrase {
-			return Some(error("typed phrase parameters are not supported yet"));
-		}
 		self.advance(); // the colon
 		self.skip_spaces();
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
+		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
+		let declared_types = &self.declared_types;
+		let is_known_type = |word: &str| {
+			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
+		};
+		let parameters = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(parameters) => parameters,
+			Err(message) => return Some(error(&message)),
+		};
+		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
+			return Some(clash);
+		}
 		let head = if parameters.is_empty() {
 			Symbol(name)
 		} else {
 			self.functions_with_parameters.insert(name.clone());
-			Node::List([vec![Symbol(name)], parameters.into_iter().map(Symbol).collect()].concat(), Bracket::Round, Separator::None)
+			self.phrase_definitions.insert(name.clone(), parameters.clone());
+			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
 		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
+	fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
+		let earlier = self.phrase_definitions.get(name).filter(|earlier| earlier.len() == parameters.len())?;
+		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
+		let differing: Vec<(&Node, &Node)> = earlier.iter().zip(parameters).filter(|(before, now)| before != now).collect();
+		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
+			return None;
+		}
+		let classes: Vec<String> = differing.iter().flat_map(|(before, now)| [before.name(), now.name()]).map(|noun| format!("class {noun}")).collect();
+		Some(error(&format!("{name} is defined twice; declare {} to dispatch on them", classes.join(" and "))))
 	}
 
 	/// Move back to the end of the last thing before the whitespace run behind the cursor
@@ -1455,7 +1504,9 @@ impl WaspParser {
 		match ch {
 			'{' => {
 				let block = self.parse_bracketed('{');
-				Node::Key(Box::new(Symbol(symbol)), Op::Colon, Box::new(block))
+				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
 				let length = self.type_application_length().expect("guarded");
@@ -1492,7 +1543,7 @@ impl WaspParser {
 				} else {
 					// Function call: name(params) -> List([symbol, args...])
 					let mut items = vec![Symbol(symbol)];
-					match args_node {
+					match typed_parameter(args_node) {
 						Node::List(args, _, _) => items.extend(args),
 						Node::Empty => {}
 						other => items.push(other),

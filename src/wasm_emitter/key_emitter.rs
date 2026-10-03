@@ -301,7 +301,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
-	fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
+	pub(super) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
 		self.emit_node_instructions(func, left);
 		// For struct instances like Person{...}, emit block as list
 		let right_node = right.drop_meta();
