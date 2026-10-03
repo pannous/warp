@@ -18,6 +18,14 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
+- `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
+  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+- text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
+  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
+  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
 - D7 / #33 closures: "By value + educate". Blocks keep capturing by value (`x=1; inc:={x=x+1}; do inc; x` → 1); a block
   that assigns an outer variable gets a hint: use `global x` or return the value. The wiki's lazy `:=` examples get updated.

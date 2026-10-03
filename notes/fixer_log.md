@@ -46,3 +46,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - A package tool build without the wasm32-wasip1 standard library reports "missing rust target wasm32-wasip1; fix:
   rustup target add wasm32-wasip1" (package_tools.rs build_from_source, rustc's "target may not be installed" note),
   user decision relayed by BOSS 2026-10-03. Checked rustc's wording with an uninstalled target; no test edits.
+
+## 2026-10-03 fix-one-line-statements
+- `print a    print b` (a print word or print(…) call after the first print of a space list) is the error "two statements
+  on one line? separate them with `;` or a newline" (user decision). tests/test_one_line_statements.rs.
+- notes/open_decisions.md records this and the text * number decision (repeat + got-it warning, an assumption).
