@@ -5,23 +5,6 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P1 text * number: should `"ab"*2` repeat the text as in Python ("abab"), the way text + number was relaxed?
-  Options: Keep the type error with the repeat hint / Repeat with a hint / Ask (fallback Error).
-  Assumed: type error naming `(2 times [greeting]).join("")`. Asked by warp-35 (web-playground);
-  touches src/wasm_emitter/list_ops.rs emit_arithmetic_type_error, tests/test_print_type_error.rs.
-- P4 typed lists next step: Float arrays and whole-op Sum/Map ListOps (the GPU seam)?
-  Options: Yes, continue / Not now. Assumed: nothing built yet. Asked by warp-5e (typed-lists, merged).
-  User answered "?" in warp-5e's session (2026-10-03): unclear, ask again with one line of context.
-- P5 D9 fallback: when nobody can answer the `1+2 squared` Ask (tests, CI), error or take `1+(2 squared)`?
-  Options: Error / Warning taking `1+(2 squared)`. Assumed: Error. Asked by the D13/D9 implementer (#40).
-- P6 D1 detail: inside `sql`/`sh` templates, does `$x` stay a hole (bound parameter) rather than text interpolation?
-  Options: Templates keep `$` holes / Interpolate everywhere. Assumed: holes. From the D1 decision (open detail).
-- P7 code quality #10: split the `cdylib` (web playground) into its own small crate so the main crate is plain `rlib`?
-  Options: Separate web/ crate / Keep, worktrees patch crate-type. Assumed: keep, worktrees patch. notes/code_quality.md, notes/build_speed.md.
-- P8 code quality §7: no `vendor/` exists though Cargo.toml/AGENTS.md describe vendored offline builds.
-  Options: Fix the docs / Vendor for real. Assumed: unchanged. notes/code_quality.md.
-- P9 code quality 1: may the stale C++ feature flags go, with their `#[cfg]` branches in tests/test_wasm.rs, test_web.rs
-  (keeping the branch that runs today)? Options: Remove them / Keep. Assumed: kept. notes/code_quality.md.
 - P10 code quality 2: delete `smarty.rs` (with its asserts in tests/test_angle.rs) and tests/test_asts.rs (tests `syn`)?
   Options: Delete both / Delete test_asts only / Keep both. Assumed: kept.
 - P11 code quality 4: keep the Wisp format (wisp_parser.rs, 946 lines, no integration test, no user)?
@@ -68,7 +51,42 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - A while loop's value is its last body value. `pixels size` (property word after a name) works like `size of pixels`.
 - Both `list<int>` and `list of int` in code. Delete test_paint_wasm. Vendor refresh automated (free, only on Cargo.lock change).
 
+## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
+- `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
+  or a newline" (wasp_parser.rs grouped_list, tests/test_one_line_statements.rs).
+- text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
+  text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text). An
+  ASSUMPTION until the Interviewer (warp-54) confirms it. text * float and text * text stay type errors; `n times "ab"`
+  is the explicit repeat. This replaces "`"5"*3` stays a type error" from 2026-10-02.
+
 ## Decided 2026-10-03 (user, multiple choice; not implemented yet)
+- Type-word shadowing (P20, asked by warp-bc, branch claude/type-word-user-function): "Clash error". A user function
+  named like a type word (`double := it*2`) is an error: "double is a type; rename your function". Reverts the
+  shadow-with-warning default.
+- cdylib (P7, code quality 10), verbatim: "what is that it doesn't mean that didn't need that before can we gate it".
+  Answer: the cdylib is the browser-wasm output, and web/playground/build.sh already asks for it itself
+  (`cargo rustc --crate-type cdylib`), so it is already gated. Cargo.toml keeps only `rlib` (since 2024-02 it listed
+  `["cdylib", "rlib"]`); the per-worktree crate-type patch is no longer needed.
+- vendor/ (P8), verbatim: "currently we don't need it but maybe we want to run an off-line agent later again so let's
+  just note that it's currently deactivated". The docs (Cargo.toml, AGENTS.md) say vendoring is deactivated for now;
+  `--offline` builds from the registry cache.
+- Stale C++ feature flags (P9, code quality 1): "Remove them". The `#[cfg]` branches in tests/test_wasm.rs and
+  tests/test_web.rs go, keeping the branch that runs today (approved test edit).
+- Asks become got-it warnings (user to BOSS-cheeky-shannon, verbatim): "I really love the got it mechanism for the
+  warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever the user pics we
+  don't want context, sensitive execution, lol instead turn all the Ask into a warning with the got it feature plus an
+  extra feature for later as an intelligent intent to change the code." Assigned to warp-b8 (ask-to-warning).
+- Error-fallback Asks (`[x]*n`, `insert(0, 4)` order, `[1 2 3]+4`, bare `a=1 2 3`, `1+2 squared`): "Stay loud errors".
+  They name the explicit forms, no default reading is taken. Asked by warp-b8; its assumption stands.
+- Text * number (P1, asked by warp-35): first "actually, why not use the python app approach? Is it really a foot gun",
+  then "Python repeat". `"ab"*2` → "abab"; digit text `"5"*3` → "555" with a got-it warning that it is text, not 15.
+  Replaces the type error with the repeat hint (also the earlier "text * number: Always ask").
+- Typed lists follow-up (P4, asked by warp-5e): "Yes, continue". Float typed arrays, then whole-op Sum/Map ListOps.
+- D9 fallback (P5): "Error". An unanswered `1+2 squared` is an error naming both groupings (assumption stands).
+- D1 `$` (P6), verbatim: "sorry, I don't know what a hole means but only the one with the curly braces must interpolate
+  the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
+  Revises D1's "also `$x`": tests/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
+  `"\(expr)"` was not asked about and stays.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.

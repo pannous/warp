@@ -20,6 +20,8 @@ use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::{p1, FsPerms, I32Exit, WasiCtxBuilder};
 
 const WASI_TARGET: &str = "wasm32-wasip1";
+/// rustc's note when the standard library of a target is missing ("… the `wasm32-wasip1` target may not be installed")
+const MISSING_TARGET_SIGN: &str = "target may not be installed";
 const WASM_EXTENSION: &str = "wasm";
 const WASM_MAGIC: &[u8] = b"\0asm";
 /// `<name>@<version>` + this, next to the pinned clone in the package cache
@@ -145,7 +147,11 @@ fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path
 		.output()
 		.map_err(|failure| format!("package {name}: cargo: {failure}"))?;
 	if !output.status.success() {
-		return Err(format!("package {name}: building {} failed: {}", tool_file(name), String::from_utf8_lossy(&output.stderr).trim()));
+		let errors = String::from_utf8_lossy(&output.stderr);
+		if errors.contains(MISSING_TARGET_SIGN) {
+			return Err(format!("package {name}: missing rust target {WASI_TARGET}; fix: rustup target add {WASI_TARGET}"));
+		}
+		return Err(format!("package {name}: building {} failed: {}", tool_file(name), errors.trim()));
 	}
 	let built = target.join(WASI_TARGET).join("release").join(tool_file(name));
 	let bytes = std::fs::read(&built).map_err(|failure| format!("package {name}: {}: {failure}", built.display()))?;

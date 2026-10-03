@@ -25,7 +25,7 @@
 - `l=π; d=abs(l-3.14); d <= 1e-9*abs(l)` is "l is a float where an exact Int is expected"; inline (`abs(l-3.14) <= 1e-9*abs(l)`) works. (impl-surface 2026-10-03)
 - `double:=it*2; double 4` gives 4 and `4 doubled` stays data: `double` is a type word (f64), so a function named double is never called. (impl-ask 2026-10-03)
 - D13 asks only after a number literal (`1 -1`); `x -1`, `f(x) -1` keep subtracting (tests/test_negated_call.rs). Whether variables should ask too is open (warp-43, 2026-10-03). (impl-ask)
-- `"" + (1+2)` gives "(1+2)" and `str(1+2)` gives "1+2": `as string` / `str` of a constant expression serializes its source instead of evaluating it (emit_cast "string" branch, `!mentions_variable`). Interpolation holes avoid it via text_form. (impl-text 2026-10-03)
+- DONE: `"" + (1+2)` gives "(1+2)" and `str(1+2)` gives "1+2": `as string` / `str` of a constant expression serializes its source instead of evaluating it (emit_cast "string" branch, `!mentions_variable`). Interpolation holes avoid it via text_form. (impl-text 2026-10-03)
 - `x=[1 2]; (sort x)#1` is the symbol `sort`: a spaced round group `(sort x)` stays data, so the braceless call inside parentheses does not run; `(x.sort)#1` works. (impl-text 2026-10-03)
 - `[2.5 -1.0 0.5]` is the two-item list `[1.5 0.5]`: the glued sign subtracts (D13 Ask, impl-ask). (impl-text 2026-10-03)
 - An int list `as string` joins at runtime to "[1 2]"; a list of texts joins unquoted ("[a b]", its literal prints `["a" "b"]`) and a nested list is "not a joinable item": the general runtime serializer is still open (#35). (impl-text 2026-10-03)
@@ -53,7 +53,7 @@
 - The caught error id is kept in the global `caught_error` but nothing reads it yet: `try X else e => …` / naming the caught error is open. (r3-try 2026-10-03)
 - DONE: `x="a"; x as int` and `x="12"; x as int` are the runtime error "not an int" (was a raw cast trap); the literal `"a" as int` explains decision #35 at compile time, the variable form deserves the same message. (r3-try 2026-10-03) (fixer: "12" → 12, "a" → runtime error "invalid number", like the literal)
 - DONE: wasm-opt warns "out-of-order name subsection": emit_names writes the type/field name subsections before the function names; binaryen expects ascending subsection ids (module 0, function 1, local 2, …, global 7, field 10, tag 11). (optimizer 2026-10-03)
-- `wasm_reader::read_bytes` panics ("expected anyref", wasmtime values.rs) when `main` returns a plain i64 instead of a Node: it should be an error value or read the number, never a panic. (extconst 2026-10-03)
+- DONE: `wasm_reader::read_bytes` panics ("expected anyref", wasmtime values.rs) when `main` returns a plain i64 instead of a Node: it should be an error value or read the number, never a panic. (extconst 2026-10-03)
 - Traits (notes/traits.md): declared trait operations dispatch only statically; on a value whose type is unknown at compile time they need the one defining type or an annotation. A witness table per operation (like compare's in wasm_emitter/witness.rs) would dispatch them at run time. (impl-traits 2026-10-03)
 - Traits: default methods in a trait (`trait shape{area; describe(s) := …}`) are a loud error for now; Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open. (impl-traits 2026-10-03)
 - Static instance types (traits::InstanceTypes) are flow-insensitive per variable name: a variable assigned an instance and later something whose shape is unknown keeps the instance shape. (impl-traits 2026-10-03)
@@ -69,8 +69,15 @@
 - `fs#2(5)` parses as `fs#(2*(5))`; `(fs#2)(5)` and `for f in fs { f(1) }` are no closure calls yet. (closures 2026-10-03)
 - `double(x):=x*2; fs=[double, x=>x+1]` hints "prefer `x=>x+1 as double` over `double(x=>x+1)`": a user function named like a type word (`double`) is read as a cast by the hint pass. (closures 2026-10-03)
 - DONE: analyzer::collect_assigned_names and library_words::collect_assigned_names are the same function twice. (closures 2026-10-03)
-- Several statements on one line separated only by spaces (`print a    print b`, playground example) parse as ONE flat space list [print a print b] and run silently to ø without printing anything; needs a rule (split before a statement keyword? an Ask? an error naming `;`). (fixer 2026-10-03)
+- DONE: Several statements on one line separated only by spaces (`print a    print b`, playground example) parse as ONE flat space list [print a print b] and run silently to ø without printing anything; needs a rule (split before a statement keyword? an Ask? an error naming `;`). (fixer 2026-10-03) (now a loud error, user decision)
 - `"ab"*2` / `greeting*2`: text * int is a type error (hint `(2 times ["ab"]).join("")` since print-type-error); `n times "ab"` fails with "`times` needs a body" while `3 times [1]` repeats. Rule proposed to the supervisor (repeat a non-numeric text with a hint, `"5"*3` stays an error). (fixer 2026-10-03)
 - A one-character text in a variable (`x="5"; x as int`) is a codepoint, so it converts as a character, not through text_as_int; and text_as_int wraps silently above i64 (no big-int parse yet). (fixer 2026-10-03)
+<<<<<<< HEAD
 - `x, y = xs` with a list value is an error (only a tuple function call or as many values as names destructure); a run-time list destructuring would need the list length check. Tuple functions passed as function values (closures.rs adapters) are untested. (tuple-returns 2026-10-03)
 - The wiki repo has diverged branches: origin/master (GitHub's displayed default, string.md D1 commit) and origin/main (where most agents push, the trait/use/D15 commits). Pick one and merge the other. (tuple-returns 2026-10-03)
+||||||| 46360987
+=======
+- `"f" + sqrt(2)` gives "fø√(2)" and `sqrt(2) as string` serializes its source: an exact real (or a Float constant expression) still takes the source-text branch of emit_cast "string"; its value text (√2 or 1.414…) is undecided. (fixer 2026-10-03)
+- Later (user 2026-10-03, "an intelligent intent to change the code"): a "change code" action that rewrites an ambiguity's `written` text to the explicit form the user picks: playground button, IDE quick fix, maybe `warp fix`. The data is in every `diagnostic::Ask` (written, line/column, readings[].explicit_form). Design note in notes/welcoming.md "Later: change the code". (ask-to-warning)
+- The `.wasp-answers` file of earlier runs is no longer read; its `ack:` lines live on only if moved to `.wasp-acknowledged`. (ask-to-warning)
+>>>>>>> origin/main

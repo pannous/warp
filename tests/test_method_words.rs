@@ -114,3 +114,16 @@ fn test_library_words_refuse_what_they_cannot_do() {
 	fails_with("x=[1 2]; x.first(3)", "first takes 1 argument, got 2");
 	fails_with("join([1 2])", "join takes 2 arguments, got 1");
 }
+
+#[test]
+fn test_replace() {
+	assert_eq!(printed("\"53..7\".replace(\".\", \"0\")"), "\"53007\"");
+	assert_eq!(printed("s=\"a-b-c\"; s.replace(\"-\", \"+\")"), "\"a+b+c\"");
+	assert_eq!(printed("replace(\"aXbXc\", \"X\", \"\")"), "\"abc\"");
+	fails_with("replace(\"a\", \"b\")", "replace takes 3 arguments, got 2");
+}
+
+#[test]
+fn test_chars_of_text_literal_in_assignment() {
+	assert_eq!(printed("cs=\"abc\".chars(); cs#2"), "\"b\"");
+}

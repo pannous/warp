@@ -257,7 +257,7 @@ PASSED:
   ✓ test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
-  ✓ test_bare_list_assignment::the_answer_compiles_the_chosen_reading
+  ✓ test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ test_block_assigns_outer::the_declared_and_returned_forms_change_it
@@ -315,6 +315,7 @@ PASSED:
   ✓ test_compile_only::compile_command_writes_wasm_without_running
   ✓ test_condition_block::a_condition_still_ends_before_its_block
   ✓ test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
+  ✓ test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ test_constructor_vs_data::test_an_unknown_word_with_a_block_stays_data
   ✓ test_constructor_vs_data::test_construction_checks_field_types
   ✓ test_constructor_vs_data::test_construction_fills_defaults_and_leaves_optional_fields_out
@@ -391,7 +392,7 @@ PASSED:
   ✓ test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ test_equality_never_chains::orderings_still_chain
-  ✓ test_eval_state::an_answer_given_in_one_eval_is_not_remembered_by_the_next
+  ✓ test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ test_eval_state::every_eval_shows_its_educate_once_note
   ✓ test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads
@@ -537,6 +538,11 @@ PASSED:
   ✓ test_glyph_aliases::equality_glyphs_compare
   ✓ test_glyph_aliases::glyphs_inside_text_stay_text
   ✓ test_glyph_aliases::logic_glyphs_are_and_or
+  ✓ test_got_it_warnings::a_dangerous_ambiguity_stays_an_error_even_when_acknowledged
+  ✓ test_got_it_warnings::a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_show
+  ✓ test_got_it_warnings::an_ambiguity_takes_its_default_with_a_warning_naming_the_explicit_form
+  ✓ test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
+  ✓ test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ test_host::test_emit_host_imports
@@ -562,9 +568,9 @@ PASSED:
   ✓ test_inline_comments::test_hash_without_space_is_still_the_index_operator
   ✓ test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
   ✓ test_interpolation::an_unknown_name_in_a_hole_is_loud
+  ✓ test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
   ✓ test_interpolation::data_keeps_dollars_as_text
   ✓ test_interpolation::dollar_arguments_and_templates_keep_working
-  ✓ test_interpolation::dollar_holes_interpolate_too
   ✓ test_interpolation::holes_take_parameters_lists_and_exact_numbers
   ✓ test_interpolation::holes_take_text_results_of_library_words
   ✓ test_interpolation::single_quotes_stay_literal
@@ -648,7 +654,7 @@ PASSED:
   ✓ test_list_parameters::named_parameter_indexed_as_list
   ✓ test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
-  ✓ test_list_plus_number::the_answer_compiles_the_chosen_reading
+  ✓ test_list_plus_number::each_reading_has_its_explicit_form
   ✓ test_list_plus_number::the_explicit_forms_never_ask
   ✓ test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ test_lists::test_array_indices
@@ -701,10 +707,10 @@ PASSED:
   ✓ test_meta_attributes::test_counts_and_positions_skip_meta_entries
   ✓ test_meta_attributes::test_dot_at_reads_and_writes_meta
   ✓ test_meta_attributes::test_field_first_then_meta_fallback
+  ✓ test_meta_attributes::test_glued_at_reads_meta_in_code
   ✓ test_meta_attributes::test_iteration_skips_meta_entries
   ✓ test_meta_attributes::test_keys_values_entries_skip_meta_entries
   ✓ test_meta_attributes::test_meta_entries_stay_behind_the_fields
-  ✓ test_meta_attributes::test_meta_entries_survive_eval
   ✓ test_meta_attributes::test_meta_key_in_parsed_data
   ✓ test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
   ✓ test_meta_attributes::test_meta_stays_reachable
@@ -715,11 +721,13 @@ PASSED:
   ✓ test_meta::test_meta_field
   ✓ test_meta::test_parent
   ✓ test_meta::test_parent_context
+  ✓ test_method_words::test_chars_of_text_literal_in_assignment
   ✓ test_method_words::test_first_and_last
   ✓ test_method_words::test_join
   ✓ test_method_words::test_join_and_split_edge_cases
   ✓ test_method_words::test_known_words_and_data_stay_data
   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
+  ✓ test_method_words::test_replace
   ✓ test_method_words::test_reverse
   ✓ test_method_words::test_sort
   ✓ test_method_words::test_split
@@ -821,6 +829,8 @@ PASSED:
   ✓ test_number::test_number
   ✓ test_number::test_number_floats
   ✓ test_number::test_number_mix
+  ✓ test_one_line_statements::separated_prints_still_run
+  ✓ test_one_line_statements::two_prints_on_one_line_need_a_separator
   ✓ test_operator_declarations::test_built_in_operators_are_untouched
   ✓ test_operator_declarations::test_infix_operator
   ✓ test_operator_declarations::test_infix_operator_declared_by_its_pattern
@@ -946,6 +956,12 @@ PASSED:
   ✓ test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ test_rational_type::test_rational_and_rationals_are_type_words
   ✓ test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ test_read_bytes_plain_result::a_main_without_a_result_is_empty
+  ✓ test_read_bytes_plain_result::a_null_result_is_empty
+  ✓ test_read_bytes_plain_result::a_plain_f64_result_is_a_float
+  ✓ test_read_bytes_plain_result::a_plain_i32_result_is_an_int
+  ✓ test_read_bytes_plain_result::a_plain_i64_result_is_an_int
+  ✓ test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
   ✓ test_records_classes::a_class_has_untyped_fields
   ✓ test_records_classes::a_missing_required_field_is_an_error
   ✓ test_records_classes::a_record_is_a_struct
@@ -965,6 +981,7 @@ PASSED:
   ✓ test_samples::test_power
   ✓ test_samples::test_primes
   ✓ test_samples::test_quadratic
+  ✓ test_samples::test_sudoku
   ✓ test_samples::test_sum
   ✓ test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ test_semicolon_square::test_square_brackets_keep_all_semicolon_items
@@ -977,14 +994,15 @@ PASSED:
   ✓ test_shift_operators::test_shifts_of_big_exact_ints
   ✓ test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
+  ✓ test_signed_operand_list::each_reading_has_its_explicit_form
   ✓ test_signed_operand_list::spaced_or_glued_operators_stay_arithmetic
-  ✓ test_signed_operand_list::the_answer_compiles_the_chosen_reading
   ✓ test_signed_operand_list::under_strict_the_default_is_an_error
   ✓ test_size_count::test_bytes_need_explicit_unit
   ✓ test_size_count::test_size_is_element_count
   ✓ test_size_count::test_size_of_text_is_character_count
   ✓ test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ test_statement_terminators::semicolon_inside_a_line_still_groups
@@ -1038,9 +1056,10 @@ PASSED:
   ✓ test_style_dont_care::any_axis_can_stop_caring
   ✓ test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
   ✓ test_suffix_words::a_function_name_with_ed_is_its_suffix_form
+  ✓ test_suffix_words::a_variable_is_no_suffix_form
   ✓ test_suffix_words::an_ungrouped_mix_asks
   ✓ test_suffix_words::an_unknown_word_is_no_suffix_form
-  ✓ test_suffix_words::the_answer_compiles_the_chosen_reading
+  ✓ test_suffix_words::each_reading_has_its_explicit_form
   ✓ test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ test_superscript_signs::a_negative_superscript_is_a_reciprocal_power
   ✓ test_superscript_signs::a_negative_superscript_on_a_variable
@@ -1376,18 +1395,18 @@ PASSED:
   ✓ test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
-  ✓ test_web_playground::an_unanswered_ask_is_reported_with_its_readings_and_falls_back
+  ✓ test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
+  ✓ test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
   ✓ test_web_playground::evaluate_reports_the_value_the_cli_prints
-  ✓ test_web_playground::the_pages_answer_is_taken_and_hinted
   ✓ test_web::test_fetch
   ✓ test_web::test_html_wasp
   ✓ test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
-  ✓ test_welcoming_ask::an_answer_is_remembered_so_the_user_is_not_asked_twice
+  ✓ test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
   ✓ test_welcoming_ask::an_educating_note_shows_until_acknowledged
+  ✓ test_welcoming_ask::an_old_answers_line_never_picks_a_reading
   ✓ test_welcoming_ask::an_unanswered_ask_falls_back_to_its_default_or_its_error
   ✓ test_welcoming_ask::an_unanswered_error_ask_names_every_explicit_form
-  ✓ test_welcoming_ask::answers_persist_in_the_project_answers_file
   ✓ test_welcoming_ask::every_for_header_bound_minus_one_asks
   ✓ test_welcoming_ask::questions_quote_prefix_operators_as_written
   ✓ test_welcoming_ask::upto_asks_and_defaults_to_exclusive
@@ -1529,4 +1548,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1524 passed, 0 failed, 1524 total tested
+58 ignored, 1543 passed, 0 failed, 1543 total tested

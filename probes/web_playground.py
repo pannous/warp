@@ -80,17 +80,17 @@ def main():
 		print(f"{'ok  ' if ok else 'FAIL'} {code!r} → {report['value']}")
 		if not ok: failures.append(code)
 
-	# the Ask flow: unanswered it falls back to exclusive, answered inclusive by the page's button
+	# an ambiguity is a warning; "got it" silences its topic and never changes the value
 	browser("eval", "playground.forgetAll()")
-	browser("select", "#examples", "ask")
+	browser("select", "#examples", "ambiguity")
 	time.sleep(1.5)
-	before = browser("get", "text", "#value")
-	browser("click", ".ask .reading:not(.default)")
+	before = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
+	browser("click", ".note button")
 	time.sleep(1.5)
-	after = browser("get", "text", "#value")
-	asked = before == "6" and after == "10"
-	print(f"{'ok  ' if asked else 'FAIL'} Ask clicked: {before} → {after}")
-	if not asked: failures.append("ask")
+	after = (browser("get", "text", "#value"), "upto" in browser("get", "text", "#diagnostics"))
+	silenced = before == ("6", True) and after == ("6", False)
+	print(f"{'ok  ' if silenced else 'FAIL'} got it silences the upto warning: {before} → {after}")
+	if not silenced: failures.append("got it")
 	browser("eval", "playground.forgetAll()")
 
 	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".wasp"))

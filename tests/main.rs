@@ -39,6 +39,7 @@ mod test_comments;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compile_only;
 mod test_condition_block;
+mod test_constant_expression_text;
 mod test_constructor_vs_data;
 mod test_control_words;
 mod test_counting_units;
@@ -84,6 +85,7 @@ mod test_global_declaration;
 mod test_global_modifiers;
 mod test_globals;
 mod test_glyph_aliases;
+mod test_got_it_warnings;
 mod test_header_search;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
@@ -130,6 +132,7 @@ mod test_normalization;
 mod test_not_condition_block;
 mod test_number_glyphs;
 mod test_number;
+mod test_one_line_statements;
 mod test_operator_declarations;
 mod test_operators;
 mod test_optional_words;
@@ -260,3 +263,4 @@ mod wasm_optimizer_test;
 mod test_optimizer_exceptions;
 mod test_typed_lists;
 mod test_optimizer_extended_const;
+mod test_read_bytes_plain_result;
