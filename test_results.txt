@@ -457,6 +457,7 @@ PASSED:
   ✓ lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass
   ✓ lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear
   ✓ lists::test_node_lists::a_list_parameter_walked_by_a_for_loop_takes_the_array
+  ✓ lists::test_node_lists::a_loop_over_a_list_of_mixed_kinds_keeps_each_element
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
   ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
@@ -1779,4 +1780,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1774 passed, 0 failed, 1774 total tested
+53 ignored, 1775 passed, 0 failed, 1775 total tested

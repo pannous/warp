@@ -152,7 +152,7 @@ fn is_type_test_of_real(items: &[Node]) -> bool {
 fn type_name_before_lowering(argument: &Node) -> String {
 	match crate::analyzer::literal_number_type_word(argument) {
 		Some(word) => word.to_string(),
-		None => crate::analyzer::list_type_name(argument, &crate::analyzer::Scope::new()),
+		None => crate::analyzer::shown_list_type_name(argument, &crate::analyzer::Scope::new()),
 	}
 }
 

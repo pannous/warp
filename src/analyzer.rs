@@ -1169,6 +1169,12 @@ pub fn plural_element_type(word: &str) -> Option<&str> {
 	type_word_kind(singular).map(|_| singular)
 }
 
+/// The type name `type(x)` reports for a list: a list whose elements are held as Nodes is a plain `list`
+pub fn shown_list_type_name(list: &Node, scope: &Scope) -> String {
+	let type_name = list_type_name(list, scope);
+	if type_name == NODE_LIST_TYPE { LIST_WORD.to_string() } else { type_name }
+}
+
 /// The type name of a list: `list of int` when all items share a kind (or the variable is declared `ints`), else `list`
 pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 	const PLAIN: &str = "list";
@@ -1233,10 +1239,13 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
 			_ => PLAIN.to_string(),
 		},
-		Node::List(items, _, _) => {
+		Node::List(items, _, separator) => {
 			let words: Vec<String> = items.iter().map(|item| element_type_word(item, scope)).collect();
+			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
 			match common_type_word(&words) {
 				Some(word) => format!("{PLAIN} of {word}"),
+				// `[1 "a"]`: elements of different kinds, each held as its Node
+				None if !words.is_empty() && !is_block => NODE_LIST_TYPE.to_string(),
 				None => PLAIN.to_string(),
 			}
 		}

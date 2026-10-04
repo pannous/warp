@@ -320,7 +320,7 @@ impl WasmGcEmitter {
 		};
 		match (kind, crate::analyzer::literal_number_type_word(arg)) {
 			(_, Some(number_word)) => number_word.to_string(),
-			(crate::type_kinds::Kind::List, _) => crate::analyzer::list_type_name(arg, &self.scope),
+			(crate::type_kinds::Kind::List, _) => crate::analyzer::shown_list_type_name(arg, &self.scope),
 			_ => kind.to_string(),
 		}
 	}

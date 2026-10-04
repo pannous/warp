@@ -49,3 +49,10 @@ fn a_list_parameter_holds_whatever_elements_its_callers_pass() {
 	is!("f(xs) := xs#1; f([3 4]) + 1", 4);
 	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; total([1 2 3]) + total([0.5])", 6.5);
 }
+
+#[test]
+fn a_loop_over_a_list_of_mixed_kinds_keeps_each_element() {
+	is!("s=\"\"; for x in [1 \"a\"] { s+=x }; s", "1a");
+	is!("s=\"\"; xs=[1 \"a\"]; for x in xs { s+=x }; s", "1a");
+	is!("xs=[1 \"a\"]; xs#1 + 1", 2);
+}
