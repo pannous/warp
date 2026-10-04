@@ -1908,12 +1908,47 @@ fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &N
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
-	lower_declarations_among(node, &variables)
+	let mut names = Names { values: names_used_as_values(&node), variables };
+	names.values.extend(names.variables.iter().cloned());
+	lower_declarations_among(node, &names)
 }
 
-/// `variables` are the names the program assigns: `return count` returns the variable, it is no `return.count`
-fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
-	let lower = |node| lower_declarations_among(node, variables);
+/// The names of a program: `variables` it assigns (`return count` returns the variable, it is no `return.count`), and
+/// every word it uses as a value or binds (a parameter, a loop variable): `chars[i]` then indexes, `int[3]` makes zeros
+struct Names {
+	variables: HashSet<String>,
+	values: HashSet<String>,
+}
+
+/// Words that stand as values somewhere: not as the head of a call, a type annotation (`x:int`, `as int`) or the
+/// element type of `int[3]`
+fn names_used_as_values(program: &Node) -> HashSet<String> {
+	fn visit(node: &Node, names: &mut HashSet<String>) {
+		match node.drop_meta() {
+			Node::Symbol(name) => {
+				names.insert(name.clone());
+			}
+			Node::Key(left, Op::Colon | Op::As, _) => visit(left, names),
+			Node::Key(element, Op::Hash, index) if matches!(element.drop_meta(), Node::Symbol(_)) => visit(index, names),
+			Node::Key(left, _, right) => {
+				visit(left, names);
+				visit(right, names);
+			}
+			Node::List(items, _, _) => {
+				let called = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) && items.len() > 1;
+				items.iter().skip(called as usize).for_each(|item| visit(item, names))
+			}
+			_ => {}
+		}
+	}
+	let mut names = HashSet::new();
+	visit(program, &mut names);
+	names
+}
+
+fn lower_declarations_among(node: Node, names: &Names) -> Node {
+	let variables = &names.variables;
+	let lower = |node| lower_declarations_among(node, names);
 	let node = match crate::for_loop::lower(node) {
 		Ok(loop_as_while) => return lower(loop_as_while),
 		Err(node) => node,
@@ -2005,6 +2040,10 @@ fn lower_declarations_among(node: Node, variables: &HashSet<String>) -> Node {
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
 		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
+		// `int[n]`, `#(int[n])`: n zeros of the type, wherever it stands, unless the word is a variable (`chars[i]`)
+		Node::Key(element, Op::Hash, one_based) if zero_filled_subscript(&element, &one_based, &names.values).is_some() => {
+			zero_filled_subscript(&element, &one_based, &names.values).expect("guarded")
+		}
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if op.suffix_exponent().is_some() => {
 			let exponent = op.suffix_exponent().expect("guarded");
@@ -2303,6 +2342,19 @@ fn subscripted_array_type(type_node: &Node) -> Option<Node> {
 		},
 		_ => None,
 	}
+}
+
+/// `int[n]` parsed as the subscript `int#(n+1)`: the list of n zeros when the type word is no variable
+fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
+	let Node::Symbol(word) = element.drop_meta() else { return None };
+	if variables.contains(word) {
+		return None;
+	}
+	let count = match one_based.drop_meta() {
+		Node::Number(Number::Int(one_based)) => Node::int(one_based - 1),
+		other => crate::wasp_parser::subscript_key(other)?.clone(),
+	};
+	zero_list(count, word)
 }
 
 /// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
