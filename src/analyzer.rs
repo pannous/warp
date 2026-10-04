@@ -1278,8 +1278,8 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
-/// The temporaries of a computed range collected into a list (`xs·range`, `xs·item`)
-const RANGE_SUFFIX: &str = "·";
+/// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
+const TEMPORARY_SEPARATOR: &str = "·";
 /// Statements that name functions or modules instead of calling them
 const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 const LIST_OF_PREFIX: &str = "list of ";
@@ -2352,7 +2352,7 @@ fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
-	let removed = Node::Symbol(format!("{name}{RANGE_SUFFIX}removed"));
+	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
 	let value = call(crate::library_words::MAP_GET_OR, vec![map.clone(), key.clone(), Node::Empty]);
 	let without = call(crate::library_words::MAP_WITHOUT, vec![map.clone(), key.clone()]);
 	Some(Node::List(vec![
@@ -3522,7 +3522,7 @@ fn computed_range(target: &Node, range: &Node) -> Option<Node> {
 	if !matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) || range_elements(range).is_some() {
 		return None;
 	}
-	let symbol = |suffix: &str| Node::Symbol(format!("{name}{RANGE_SUFFIX}{suffix}"));
+	let symbol = |suffix: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{suffix}"));
 	let (items, item) = (symbol("range"), symbol("item"));
 	let appended = Node::Key(Box::new(items.clone()), Op::Add, Box::new(Node::List(vec![item.clone()], Bracket::Square, Separator::Space)));
 	let body = Node::List(vec![Node::Key(Box::new(items.clone()), Op::Assign, Box::new(appended))], Bracket::Curly, Separator::Semicolon);
