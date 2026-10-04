@@ -62,6 +62,15 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   functions too (needs global flags). `on set x {…}` (value = the new value) works the same way, and `after tested:` /
   `before test {…}` (a defined function, also named in the past tense) run after/before each later statement that
   calls it, once per statement even if it calls it twice. `during` is not implemented. Night 2026-10-04.
+- P39 Builtins `id` and `square` (C++ wasp's test runtime words): five ignored tests use them (test_comparison_id,
+  test_comparison_id_precedence, test_wasm_function_calls, test_wasm_stuff, test_squares); braceless user functions
+  already bind the same way (`f 3+4`). Should they be global library words (a user definition winning), given `square`
+  is also a shape type in the trait tests? Parked for the user. Night 2026-10-04.
+- P40 `size` of a typed array: test_array_constructor (ignored) wants `size(640000*int)` = 2560000 bytes, the passing
+  test_array_length says `size` is a synonym for count. Which is right (bytes as `byte_size`?)? Parked for the user.
+- P41 Juxtaposed print arguments: `print "x changed to " value` prints the parts joined without a separator ("x changed
+  to 3"), only when the first part is a text literal (`print first xs` stays a call); commas still join with a space.
+  Implemented default (wiki/signal.md example). Alternative: join with a space like the comma form. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

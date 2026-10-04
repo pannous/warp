@@ -23,8 +23,18 @@ const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 /// The value `print` writes: its one argument, or several joined by a space
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::wasp_parser::print_arguments_of(call, bracket).as_slice() {
-		[single] => single.clone(),
+		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
 		several => super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
+	}
+}
+
+/// `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined, without separator
+fn juxtaposed_text(argument: &Node) -> Option<Node> {
+	match argument.drop_meta() {
+		Node::List(parts, Bracket::None, Separator::Space) if matches!(parts.first().map(Node::drop_meta), Some(Node::Text(_))) => {
+			Some(super::joined_text(parts, ""))
+		}
+		_ => None,
 	}
 }
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
