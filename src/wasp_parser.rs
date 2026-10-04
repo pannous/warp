@@ -13,6 +13,10 @@ use std::fs::read_to_string;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
+/// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
+const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
+const BYTES_WORD: &str = "bytes";
+const IT_WORD: &str = "it";
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
@@ -143,6 +147,31 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	let body = one_expression(&[vec![*body], rest].concat());
 	items.push(Node::Key(parameters, op, Box::new(body)));
 	items
+}
+
+/// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
+/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
+fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
+	let Node::Symbol(word) = variable.drop_meta() else { return None };
+	let mentions = |name: &str| {
+		let mut found = false;
+		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
+		found
+	};
+	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
+		return None;
+	}
+	let call = |name: &str, arguments: Vec<Node>| Node::List([vec![Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+	let walked = if word == BYTES_WORD {
+		let offset = Symbol("byte·offset".to_string());
+		let count = Node::Key(Box::new(iterable.clone()), Op::Dot, Box::new(Symbol(BYTES_WORD.to_string())));
+		let offsets = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
+		let byte = Node::Key(Box::new(offset.clone()), Op::FatArrow, Box::new(call("byte_at", vec![iterable.clone(), offset])));
+		Node::Key(Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)), Op::Dot, Box::new(call("map", vec![byte])))
+	} else {
+		call("chars", vec![iterable.clone()])
+	};
+	Some((Symbol(IT_WORD.to_string()), walked))
 }
 
 fn is_unindexable_keyword(node: &Node) -> bool {
@@ -2328,6 +2357,10 @@ impl WaspParser {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
 			None => self.parse_atom(),
 		};
+		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
+		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
+			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
+		}
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
 	}
 

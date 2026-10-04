@@ -30,3 +30,4 @@ mod test_tasks;
 mod test_branch_assigned_variables;
 mod test_try_index_and_float;
 mod test_for_implicit_it;
+mod test_for_unit_words;

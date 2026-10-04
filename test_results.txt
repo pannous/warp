@@ -40,6 +40,7 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_value_kind::test_if_of_characters_joins_a_text
@@ -1821,4 +1822,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1816 passed, 0 failed, 1816 total tested
+52 ignored, 1817 passed, 0 failed, 1817 total tested
