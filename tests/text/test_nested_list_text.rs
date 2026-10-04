@@ -14,3 +14,11 @@ fn a_count_takes_the_indexed_element() {
 	is!("m = [[1 2 3] [4 5 6]]; #m#1", 3);
 	is!("xs = [1 2]; #xs + 1", 3);
 }
+
+#[test]
+fn an_index_is_an_atom_so_a_method_applies_to_the_element() {
+	is!("capitalize(w) := w#1.upper() + w[1:]; capitalize(\"hello\")", "Hello");
+	is!("xs = [{a:1} {a:2}]; xs#2.a", 2);
+	is!("m = [[1 2] [3 4]]; m#2#1", 3);
+	is!("p = {items: [5 6]}; p.items#2", 6);
+}

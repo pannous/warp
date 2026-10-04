@@ -143,7 +143,8 @@ impl Op {
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),
 			Op::Scope => (175, 176),
-			Op::Hash => (170, 171), // index operator #
+			// index operator #: its index is an atom, so `w#1.upper()` is `(w#1).upper()`
+			Op::Hash => (170, 182),
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
