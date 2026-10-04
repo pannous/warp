@@ -180,12 +180,7 @@ impl WasmGcEmitter {
 		// `(statements; x)`: the statements run, x is the value
 		if let Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) = value.drop_meta() {
 			if let Some((last, statements)) = items.split_last() {
-				for statement in statements {
-					if !self.emit_loop_jump(func, statement) {
-						self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-						func.instruction(&I::Drop);
-					}
-				}
+				self.emit_discarded_statements(func, statements);
 				return self.emit_list_abi_value(func, last);
 			}
 		}

@@ -566,6 +566,16 @@ impl WasmGcEmitter {
 
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
 	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
+	/// Statements run for their effects (a loop jump among them as the jump), their values dropped
+	pub(super) fn emit_discarded_statements(&mut self, func: &mut Function, statements: &[Node]) {
+		for statement in statements {
+			if !self.emit_loop_jump(func, statement) {
+				self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
+				func.instruction(&I::Drop);
+			}
+		}
+	}
+
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if self.emit_discarded_branches(func, item) {
 			return;
@@ -630,12 +640,7 @@ impl WasmGcEmitter {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
 		};
-		for statement in &statements {
-			if !self.emit_loop_jump(func, statement) {
-				self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-				func.instruction(&I::Drop);
-			}
-		}
+		self.emit_discarded_statements(func, &statements);
 	}
 
 	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update

@@ -424,6 +424,13 @@ impl WasmGcEmitter {
 
 	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
 	pub(super) fn emit_list_count(&mut self, func: &mut Function, target: &Node, counter: &'static str) {
+		// `(statements; xs)` (a lowered filter): the statements run, a typed list xs is counted without making its nodes
+		if let Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) = target.drop_meta() {
+			if let Some((last, statements)) = items.split_last().filter(|(last, _)| self.typed_list(last).is_some()) {
+				self.emit_discarded_statements(func, statements);
+				return self.emit_list_count(func, last, counter);
+			}
+		}
 		match (self.typed_list(target), counter) {
 			(Some((slot, list)), NODE_COUNT) => {
 				let (_, list_type) = self.typed_list_types(list.element);
@@ -534,12 +541,7 @@ impl WasmGcEmitter {
 				if let Some(temporary) = &moved {
 					self.moved_lists.push((name.to_string(), temporary.clone()));
 				}
-				for statement in statements {
-					if !self.emit_loop_jump(func, statement) {
-						self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-						func.instruction(&I::Drop);
-					}
-				}
+				self.emit_discarded_statements(func, statements);
 				let stored = self.emit_typed_list_store(func, name, last);
 				if moved.is_some() {
 					self.moved_lists.pop();
