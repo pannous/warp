@@ -183,8 +183,26 @@ fn is_update(op: &Op) -> bool {
 	op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
+/// `x = (t = x; …; t)`, an inlined call (inlining.rs) handing x back: the temporary t, which may share x's array; only
+/// the inliner's temporaries, which nothing else reads, and only when the block hands back the very variable it got
+fn moved_through(owner: &str, statements: &[Node], last: &Node) -> Option<String> {
+	let Node::Symbol(temporary) = last.drop_meta() else { return None };
+	if !crate::inlining::is_temporary(temporary) {
+		return None;
+	}
+	let given = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, value)
+		if matches!(target.drop_meta(), Node::Symbol(target) if target == temporary) && matches!(value.drop_meta(), Node::Symbol(source) if source == owner)));
+	given.then(|| temporary.clone())
+}
+
+/// `{a:1}`, `(1, 2)`, `(1 2)`, not the call `(f x)`
 fn is_tuple_or_object(value: &Node) -> bool {
-	matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, crate::node::Separator::Colon | crate::node::Separator::Space | crate::node::Separator::None))
+	use crate::node::Separator;
+	match value.drop_meta() {
+		Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, Separator::Colon) => true,
+		Node::List(items, Bracket::Round, Separator::Space | Separator::None) => !matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+		_ => false,
+	}
 }
 
 /// The list variables a program indexes (`xs#i`, `xs#i = v`) or counts (`#xs`), as a for loop over them does
@@ -270,6 +288,10 @@ impl WasmGcEmitter {
 	fn number_source_of(&self, target: &str, value: &Node) -> Source {
 		let literal = |items: &[Node]| self.items_element(items).map_or(Source::Other, Source::Literal);
 		match value.drop_meta() {
+			// `(a = …; b)`, an inlined call: worth its last value
+			Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) if !items.is_empty() => {
+				self.source_of(target, &items[items.len() - 1])
+			}
 			Node::Empty => Source::Empty,
 			Node::List(items, Bracket::Square, _) if items.is_empty() => Source::Empty,
 			Node::Key(list, Op::Add, appended) if matches!(list.drop_meta(), Node::Symbol(name) if name == target) => match appended.drop_meta() {
@@ -503,12 +525,34 @@ impl WasmGcEmitter {
 	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
 	pub(super) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
+		// `(statements; last)`: the statements run, the last value is stored
+		if let Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) = value.drop_meta() {
+			if let Some((last, statements)) = items.split_last() {
+				let moved = moved_through(name, statements, last);
+				if let Some(temporary) = &moved {
+					self.moved_lists.push((name.to_string(), temporary.clone()));
+				}
+				for statement in statements {
+					if !self.emit_loop_jump(func, statement) {
+						self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
+						func.instruction(&I::Drop);
+					}
+				}
+				let stored = self.emit_typed_list_store(func, name, last);
+				if moved.is_some() {
+					self.moved_lists.pop();
+				}
+				return stored;
+			}
+		}
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
 			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
 				let (source_slot, source_list) = self.typed_list(value).expect("guarded");
 				func.instruction(&I::LocalGet(source_slot));
-				if list.updated || source_list.updated {
+				let source_name = value.drop_meta().name();
+				let moved = self.moved_lists.iter().any(|(owner, temporary)| (owner == name && *temporary == source_name) || (temporary == name && *owner == source_name));
+				if (list.updated || source_list.updated) && !moved {
 					self.emit_call(func, runtime.copy);
 				}
 			}

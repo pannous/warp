@@ -183,6 +183,8 @@ pub struct WasmGcEmitter {
 	type_errors: Vec<String>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
+	moved_lists: Vec<(String, String)>,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 	closures: closures::ClosureTypes,
 }
@@ -229,6 +231,7 @@ impl WasmGcEmitter {
 			type_errors: Vec::new(),
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
+			moved_lists: Vec::new(),
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
 		}
@@ -3862,7 +3865,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
-	Ok(crate::analyzer::indexed_parameter_copies(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node))))
+	Ok(crate::analyzer::indexed_parameter_copies(crate::inlining::lower(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)))))
 }
 
 fn emit_module(node: &Node) -> Result<CompiledModule, Node> {

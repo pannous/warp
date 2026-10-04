@@ -29,3 +29,4 @@ mod test_user_method_form;
 mod test_parameter_overloads;
 mod test_runtime_kind_arithmetic;
 mod test_partial_application;
+mod test_inlining;

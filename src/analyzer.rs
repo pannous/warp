@@ -1923,7 +1923,7 @@ pub fn indexed_parameter_copies(node: Node) -> Node {
 			let mut body = indexed_parameter_copies(*body);
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
 			for parameter in items[1..].iter().filter_map(parameter_symbol) {
-				if indexes(&body, &parameter) && !assigned_names(&body).contains(parameter.as_str()) {
+				if indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
 					body = with_list_copy(body, &parameter);
 				}
 			}
@@ -1961,6 +1961,18 @@ fn indexes(body: &Node, name: &str) -> bool {
 		let by_key = matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Text(_) | Node::Char(_));
 		found |= !by_key && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	}));
+	found
+}
+
+/// Is the variable assigned a call's result inside a loop (`arr = swap(arr, i, j)`, a conversion per iteration)
+fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
+	let mut found = false;
+	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
+		part.visit(&mut |inner| if let Node::Key(target, Op::Assign, value) = inner {
+			let is_call = matches!(value.drop_meta(), Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+			found |= is_call && matches!(target.drop_meta(), Node::Symbol(target) if target == name);
+		});
+	});
 	found
 }
 
