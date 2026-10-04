@@ -36,6 +36,10 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
 - No other recently pushed pannous repo has workflows.
 
 ## Open
-- russh CodeQL fails also on its schedule (likely code scanning not enabled for a private repo) and russh Rust/Semver
-  were red on every push: the nightly runs will keep mailing until those are fixed.
-- warpgate Test was red on main and on dependabot PRs; PRs still run (policy keeps pull_request).
+- russh (fixed 2026-10-04, cecaa23): clippy on Linux (`speed_t` is u32 there: allow useless_conversion), the Windows job
+  builds the workspace without the unix-only rssh crate, russh 0.64.0 for the fork's breaking changes (semver check
+  against crates.io 0.63.3). Rust and Semver dispatched green. CodeQL Advanced is disabled on the fork: code scanning
+  needs GitHub Advanced Security on a private repo ("Code scanning is not enabled for this repository").
+- warpgate Test (fix c0a084ac, 2026-10-04): the autouse session fixture `report_generation` (tests/conftest.py) runs
+  `cargo llvm-cov run --all-features`, a full rebuild that exceeded pytest's 300 s timeout; the workflow now prebuilds
+  it before `run.sh`. Verify the dispatched run (pannous/warpgate actions); dependabot PRs still run.
