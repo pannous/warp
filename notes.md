@@ -31,3 +31,4 @@
 - The parser gives `c()` and `(c)` the same node; closures read a one-item round list of a function variable as a call.
 - `def f(x) {…}` stayed a `def` list until the emitter; declarations::keyword_definition now makes it `f(x) := …` first.
 - Programs that print and return a list read back as ø: val_to_node only knew atoms (now wasm_reader::node_of).
+- ~/.gitignore's `*_LOCAL*` matches case-insensitively on macOS: tests/control/test_branch_assigned_locals.rs was silently ignored (git add refused, mod.rs committed without it); renamed to …_variables.rs. Avoid "_locals" in tracked file names. (night 2026-10-04)

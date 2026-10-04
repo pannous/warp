@@ -1251,6 +1251,8 @@ const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
+const LIST_WORD: &str = "list";
+const LIST_OF_PREFIX: &str = "list of ";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 fn map_word(call: &Node) -> Option<&'static str> {
@@ -1838,10 +1840,15 @@ fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
 	extract_user_functions(&mut context, program);
 	let mut user_types = crate::type_kinds::TypeRegistry::new();
 	collect_all_types(&mut user_types, program);
+	let traits = crate::traits::Traits::of(program);
 	context.user_functions.values().flat_map(|function| &function.params).find_map(|param| {
 		let annotation = param.annotation.as_ref()?;
 		let type_name = annotation.name();
-		let known = annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some();
+		let is_known_name = |name: &str| type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name);
+		let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
+			Some(element) => is_known_name(element) || names_list_type(element),
+			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some(),
+		};
 		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
 	})
 }
@@ -3159,10 +3166,21 @@ fn extract_params(signature: &[Node], bracket: &Bracket) -> Vec<Param> {
 				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None, used_as: None });
 				items.next();
 			}
-			None => params.extend(extract_param(item)),
+			None => params.extend(extract_param(item).map(|param| with_list_annotation(param, &mut items))),
 		}
 	}
 	params
+}
+
+/// `xs: T list` (the parser leaves `list` as the next item) annotates xs as a `list of T`: T a type word, a declared
+/// type or a trait (`sort(xs: Comparable list)`)
+fn with_list_annotation<'a>(param: Param, items: &mut std::iter::Peekable<impl Iterator<Item = &'a Node>>) -> Param {
+	let Some(element) = param.annotation.as_ref().map(Node::name) else { return param };
+	if !matches!(items.peek().map(|next| next.drop_meta()), Some(Node::Symbol(word)) if word == LIST_WORD) {
+		return param;
+	}
+	items.next();
+	Param { annotation: Some(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))), ..param }
 }
 
 /// Extract parameter name, annotated kind and optional default value from a parameter node

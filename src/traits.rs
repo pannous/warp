@@ -22,6 +22,8 @@ const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
+/// The annotation `xs: T list` (analyzer::with_list_annotation)
+const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
 /// Static type names (`type(x)`) of the built-in kinds that `node_order` orders
@@ -122,6 +124,10 @@ impl Traits {
 		let mut traits = builtin_traits();
 		collect_declarations(node, &mut traits);
 		Traits(traits)
+	}
+
+	pub fn is_trait(&self, name: &str) -> bool {
+		self.named(name).is_some()
 	}
 
 	fn named(&self, name: &str) -> Option<&Trait> {
@@ -739,7 +745,9 @@ pub fn lower_dispatch(node: Node) -> Node {
 	}
 	let witnesses = defined_functions(&node);
 	let signatures = instance_signatures(&node, &types.registry);
-	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, likenesses, missing: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
+	let traits = Traits::of(&node);
+	let constraints = trait_constraints(&node, &traits);
+	let dispatch = Dispatch { traits, types, witnesses, signatures, constraints, likenesses, missing: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
 	let node = dispatch.expand(node);
 	let node = with_dispatchers(node, &dispatch.dispatched.into_inner());
 	dispatch.missing.into_inner().unwrap_or(node)
@@ -789,6 +797,8 @@ struct Dispatch {
 	witnesses: Vec<String>,
 	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
+	/// Per function, the positions of its parameters `xs: Comparable list` and the trait their elements need
+	constraints: HashMap<String, Vec<(usize, String)>>,
 	/// The `image like photo` declarations
 	likenesses: Vec<Likeness>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
@@ -881,6 +891,9 @@ impl Dispatch {
 	}
 
 	fn call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		if let Some(error) = self.unmet_constraint(items, bracket, separator) {
+			return Some(error);
+		}
 		if let Some(name) = call_name(items, bracket, separator) {
 			match (name, &items[1..]) {
 				(SORT_WORD, [list]) => {
@@ -914,6 +927,20 @@ impl Dispatch {
 			Some(items) => Some(self.operation_call(&items, bracket, separator).unwrap_or(Node::List(items, bracket.clone(), separator.clone()))),
 			None => self.operation_call(items, bracket, separator),
 		}
+	}
+
+	/// `smallest([dot(1)])` of `smallest(xs: Comparable list)`: the error when the elements' type lacks an operation of the trait
+	fn unmet_constraint(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let name = called_name(items, bracket, separator)?;
+		for (index, trait_name) in self.constraints.get(name)? {
+			let Some(argument) = items.get(index + 1) else { continue };
+			let Some(Shape::ListOf(type_name)) = self.types.shape(argument) else { continue };
+			let required = self.traits.named(trait_name)?;
+			if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) {
+				return self.fail(missing_conformance(&items[0], &type_name, required, operation, &format!("{name}({})", argument.serialize())));
+			}
+		}
+		None
 	}
 
 	/// The value given for a place of declared type T (a parameter, a typed variable): the value to use, or the error.
@@ -994,6 +1021,17 @@ fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, 
 	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| registry.get_by_name(type_name).is_some());
 	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
 	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
+}
+
+/// Every function's parameters annotated `list of <trait>` (`xs: Comparable list`): their positions and traits
+fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize, String)>> {
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, node);
+	let constraint = |param: &crate::context::Param| param.annotation.as_ref()?.name().strip_prefix(LIST_OF_PREFIX).filter(|element| traits.is_trait(element)).map(str::to_string);
+	context.user_functions.values().map(|function| {
+		let constrained = function.params.iter().enumerate().filter_map(|(index, param)| Some((index, constraint(param)?))).collect::<Vec<_>>();
+		(function.name.clone(), constrained)
+	}).filter(|(_, constrained)| !constrained.is_empty()).collect()
 }
 
 /// `(found = 0; at = 0; for item in xs { at = at + 1; if found == 0 and equals·T(item, x) != 0 { found = at } }; found)`:

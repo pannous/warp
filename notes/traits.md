@@ -76,11 +76,17 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 `x in xs` (position) and `xs.has(x)` of an instance whose type overrides `equals` search the list with `equals·T`
 (traits::position_by_equals, a loop lowered in lower_dispatch); without an override they compare structurally.
 
+## Generic constraints (2026-10-04)
+`smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
+leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
+holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
+have its witness (traits::unmet_constraint): `dot is not Comparable: smallest([dot{x:3}]) needs compare(a:dot, b:dot)`.
+Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` still parses as separate items.
+
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
 ## Later
 - Printable (`text(p:person)` for interpolation and `as text`), Iterable
-- generic constraints `sort(xs: Comparable list)`
 - `<` defined directly (`a:person < b:person := …`) and methods in the class body as sugar for the witnesses

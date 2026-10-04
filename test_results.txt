@@ -13,7 +13,7 @@ PASSED:
   ✓ control::test_blocks::test_indent_as_block
   ✓ control::test_blocks::test_matrix_comma_index
   ✓ control::test_blocks::test_matrix_order
-  ✓ control::test_branch_assigned_locals::a_text_assigned_in_both_branches_is_read_after_them
+  ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ control::test_control_words::bang_evaluates_a_block
@@ -1306,6 +1306,8 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
+  ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
   ✓ types::test_trait_default_methods::a_conforming_type_gets_the_default_method
   ✓ types::test_trait_default_methods::a_type_overrides_the_default_method
   ✓ types::test_trait_default_methods::a_type_with_the_required_operations_conforms
@@ -1777,4 +1779,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1772 passed, 0 failed, 1772 total tested
+53 ignored, 1774 passed, 0 failed, 1774 total tested

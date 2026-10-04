@@ -29,3 +29,4 @@ mod test_declaration_without_value;
 mod test_trait_default_methods;
 mod test_trait_runtime_dispatch;
 mod test_trait_equals_membership;
+mod test_trait_constraints;
