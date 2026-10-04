@@ -128,6 +128,12 @@ pub fn describe(data: &Dada) -> Option<String> {
 	if let Some(rate) = data.downcast_ref::<Rate>() {
 		return Some(rate.to_string());
 	}
+	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
+		return Some(duration.to_string());
+	}
+	if let Some(time) = data.downcast_ref::<crate::time::Time>() {
+		return Some(time.to_string());
+	}
 	data.downcast_ref::<Range>().map(|range| range.to_string())
 }
 

@@ -641,6 +641,7 @@ PASSED:
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ numbers::test_duration_text::a_duration_and_a_date_have_their_text
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -1816,4 +1817,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1811 passed, 0 failed, 1811 total tested
+52 ignored, 1812 passed, 0 failed, 1812 total tested

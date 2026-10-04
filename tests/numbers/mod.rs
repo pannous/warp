@@ -26,3 +26,4 @@ mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;
 mod test_log_base;
+mod test_duration_text;

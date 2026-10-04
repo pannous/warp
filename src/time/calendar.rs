@@ -135,6 +135,7 @@ pub const fn zone(name: &'static str, standard: i64, dst: Dst) -> Zone {
 }
 
 const HOUR: i64 = 3600;
+const MINUTE: i64 = 60;
 
 /// Embedded subset of the IANA database; a host import of the full database is future work
 pub static ZONES: &[Zone] = &[
@@ -767,14 +768,23 @@ impl fmt::Display for Time {
 
 impl fmt::Display for Duration {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let count = |amount: i128, unit: &str| if amount == 1 { format!("1 {unit}") } else { format!("{amount} {unit}s") };
 		let mut parts = vec![];
 		if self.months != 0 {
-			parts.push(format!("{} months", self.months));
+			parts.push(count(self.months as i128, "month"));
 		}
 		if self.days != 0 {
-			parts.push(format!("{} days", self.days));
+			parts.push(count(self.days as i128, "day"));
 		}
-		if self.nanos != 0 || parts.is_empty() {
+		// whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
+		if self.nanos % SECOND == 0 && self.nanos != 0 {
+			let (seconds, hour, minute) = (self.nanos / SECOND, HOUR as i128, MINUTE as i128);
+			for (amount, unit) in [(seconds / hour, "hour"), (seconds % hour / minute, "minute"), (seconds % minute, "second")] {
+				if amount != 0 {
+					parts.push(count(amount, unit));
+				}
+			}
+		} else if self.nanos != 0 || parts.is_empty() {
 			let seconds = self.nanos as f64 / SECOND as f64;
 			parts.push(format!("{seconds} seconds"));
 		}
