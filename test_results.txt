@@ -1170,6 +1170,7 @@ PASSED:
   ✓ text::test_character_comparison::test_non_digit_character_as_int_is_no_number
   ✓ text::test_character_comparison::test_one_character_text_as_int
   ✓ text::test_character_comparison::test_ord_is_the_code_point
+  ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
@@ -1812,4 +1813,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1807 passed, 0 failed, 1807 total tested
+53 ignored, 1808 passed, 0 failed, 1808 total tested

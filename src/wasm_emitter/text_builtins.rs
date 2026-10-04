@@ -21,6 +21,8 @@ const BYTE_SLICE: &str = "byte_slice";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
+/// `chr(n)`: the character of a code point, the inverse of `ord(c)`
+const CHR: &str = "chr";
 /// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
 const STARTS_WITH: &str = "starts_with";
 const ENDS_WITH: &str = "ends_with";
@@ -48,10 +50,10 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 11] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 12] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
-	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int),
+	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -205,6 +207,11 @@ impl WasmGcEmitter {
 			(TRIM, [text]) => {
 				self.emit_text_argument(func, text);
 				self.emit_call(func, TEXT_TRIM);
+			}
+			(CHR, [code]) => {
+				self.emit_numeric_value(func, code);
+				func.instruction(&I::I32WrapI64);
+				self.emit_call(func, "new_codepoint");
 			}
 			_ => unreachable!("text_builtin_kind admits {name} with {} arguments", arguments.len()),
 		}

@@ -23,3 +23,4 @@ mod test_text_plus_float_call;
 mod test_trim;
 mod test_text_search;
 mod test_nested_list_text;
+mod test_chr;
