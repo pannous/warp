@@ -24,6 +24,8 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Empty | Node::Text(_) | Node::List(_, Bracket::Square, _) => true,
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structured_value(&items[0]),
+			// a tuple `(y, 4)`: compared element by element, never as its last value
+			Node::List(_, Bracket::Round, Separator::Colon) => true,
 			// a call whose result is a text or a list: `lower(a) == lower(b)`
 			Node::List(_, Bracket::Round, Separator::None) => matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List),
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint

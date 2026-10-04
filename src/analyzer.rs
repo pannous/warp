@@ -324,8 +324,9 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 			}
 		}
 	}
-	// Function call with parentheses: a library word has its own result, any other call is assumed Int
-	if *bracket == Bracket::Round && items.len() >= 2 {
+	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
+	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
+	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
 		if let Node::Symbol(name) = items[0].drop_meta() {
 			if name == crate::library_words::SLICE || name == "reverse" {
 				// a slice or reversal of a text is a text, of anything else a list

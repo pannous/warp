@@ -71,6 +71,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P41 Juxtaposed print arguments: `print "x changed to " value` prints the parts joined without a separator ("x changed
   to 3"), only when the first part is a text literal (`print first xs` stays a call); commas still join with a space.
   Implemented default (wiki/signal.md example). Alternative: join with a space like the comma form. Night 2026-10-04.
+- P42 Comma against `==`: `(2 as float, 4.3 as int) == 2.0, 4` (ignored test_emit_cast_tuple) wants the right side
+  to be the tuple (2.0, 4); today the comma binds looser than `==`, so it is `((…) == 2.0), 4`. Tuples in parentheses
+  compare element by element now (`(…) == (2.0, 4)` → 1). Change the precedence (or only for a tuple on the left)?
+  Not changed. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
