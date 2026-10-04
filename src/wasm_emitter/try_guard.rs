@@ -2,8 +2,8 @@
 //! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `wasp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
 //! `ran_without_error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
-//! an error was thrown. The id of the caught error stays in the global `caught_error`, unread: the user decided against
-//! naming it (only `try X else Y`). A jump out of a `try` (return, break, continue) lowers the depth first
+//! an error was thrown. The id of the caught error is dropped: the user decided against naming it (only
+//! `try X else Y`). A jump out of a `try` (return, break, continue) lowers the depth first
 //! (`emit_leave_tries`).
 
 use super::WasmGcEmitter;
@@ -15,14 +15,12 @@ use Instruction as I;
 pub const RAN_WITHOUT_ERROR: &str = "ran_without_error";
 const ERROR_TAG_NAME: &str = "wasp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
-const CAUGHT_ERROR_GLOBAL: &str = "caught_error";
 
 /// The tag thrown by runtime errors and the globals that track running `try`s
 #[derive(Clone, Copy)]
 pub(super) struct ErrorCatching {
 	tag: u32,
 	depth_global: u32,
-	caught_global: u32,
 }
 
 /// Does the program contain a `try` that catches runtime errors (decided before the runtime functions are emitted)
@@ -33,7 +31,7 @@ pub(super) fn guards_errors(node: &Node) -> bool {
 }
 
 impl WasmGcEmitter {
-	/// Declare the tag `wasp_error(id: i32)` and the globals `try_depth` and `caught_error`, once
+	/// Declare the tag `wasp_error(id: i32)` and the global `try_depth`, once
 	pub(super) fn declare_error_catching(&mut self) -> ErrorCatching {
 		if let Some(catching) = self.error_catching {
 			return catching;
@@ -41,15 +39,11 @@ impl WasmGcEmitter {
 		let tag_type = self.type_manager.types().len();
 		self.type_manager.types_mut().ty().function(vec![ValType::I32], vec![]);
 		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
-		let global = |emitter: &mut Self, name: &'static str| {
-			emitter.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-			emitter.extra_global_names.push((emitter.next_global_idx, name));
-			emitter.next_global_idx += 1;
-			emitter.next_global_idx - 1
-		};
-		let depth_global = global(self, TRY_DEPTH_GLOBAL);
-		let caught_global = global(self, CAUGHT_ERROR_GLOBAL);
-		let catching = ErrorCatching { tag: 0, depth_global, caught_global };
+		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
+		self.extra_global_names.push((self.next_global_idx, TRY_DEPTH_GLOBAL));
+		let depth_global = self.next_global_idx;
+		self.next_global_idx += 1;
+		let catching = ErrorCatching { tag: 0, depth_global };
 		self.error_catching = Some(catching);
 		catching
 	}
@@ -107,7 +101,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::End); // try_table
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
-		func.instruction(&I::GlobalSet(catching.caught_global));
+		func.instruction(&I::Drop); // the error id
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(0), I::End]);
 	}
