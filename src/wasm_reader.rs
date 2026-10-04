@@ -424,7 +424,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
-		t if t == Kind::Block as u8 => list_of(node(&data), node(&child), Bracket::Curly),
+		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory),
 		t if t == Kind::List as u8 => {
 			let bracket = match high_byte {
 				0 => Bracket::Curly,
@@ -433,7 +433,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 				3 => Bracket::Less,
 				_ => Bracket::None,
 			};
-			list_of(node(&data), node(&child), bracket)
+			list_in(data, child, bracket, store, memory)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
@@ -449,16 +449,26 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 	}
 }
 
-/// A cons cell: the first item and the rest, itself a list or a last single item
-fn list_of(first: Node, rest: Node, bracket: crate::node::Bracket) -> Node {
+/// The items of a list of cons cells, walked in a loop (a long list must not take a stack frame per item): each cell's
+/// first item, then its rest, itself a cell of a list or block or a last single item
+fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
 	let mut items = Vec::new();
-	if first != Node::Empty {
-		items.push(first);
-	}
-	match rest {
-		Node::List(rest_items, _, _) => items.extend(rest_items),
-		Node::Empty => {}
-		other => items.push(other),
+	loop {
+		let item = node_in(&first, store, memory);
+		if item != Node::Empty {
+			items.push(item);
+		}
+		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { break };
+		let (Ok(kind), Ok(data), Ok(child)) = (cell.field(&mut *store, FIELD_KIND), cell.field(&mut *store, FIELD_DATA), cell.field(&mut *store, FIELD_VALUE)) else { break };
+		let tag = (kind.unwrap_i64() & KIND_MASK) as u8;
+		if tag != Kind::List as u8 && tag != Kind::Block as u8 {
+			match node_in(&rest, store, memory) {
+				Node::Empty => {}
+				last => items.push(last),
+			}
+			break;
+		}
+		(first, rest) = (data, child);
 	}
 	Node::List(items, bracket, crate::node::Separator::None)
 }
