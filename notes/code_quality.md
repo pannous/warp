@@ -40,6 +40,10 @@ wasm_emitter re-exports the entry points and keeps emit_module, the trap reading
 pure lowering passes live in src/lowering/ (the crate root re-exports them, so `crate::mutation` paths stay); the
 mixed modules (analyzer, modules, host, real, time, units) stay in src/.
 
+#11 (2026-10-04, part): emit_numeric_value 337 → 142 lines, emit_float_value 212 → 142, emit_cast one function per
+target type, emit_list_node 232 → 144, continue_expr 249 → 177 (SpecialInfix), emit_exact_functions, emit_text_builtins
+and emit_list_ops split into named sections. Still long: parse_symbol_with_suffix, infer_type, main.
+
 #16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
 Instruction::…` imports still spell the type.
 
