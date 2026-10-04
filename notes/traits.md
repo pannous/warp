@@ -72,6 +72,10 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
 body (`Operation::default`). `traits::with_default_methods` defines it, first parameter typed, for every type that defines
 the other operations (`area(s:square)`) but not this one; lower_conformances then makes it the witness `describe·square`.
 
+## Membership through equals (2026-10-04)
+`x in xs` (position) and `xs.has(x)` of an instance whose type overrides `equals` search the list with `equals·T`
+(traits::position_by_equals, a loop lowered in lower_dispatch); without an override they compare structurally.
+
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
@@ -79,5 +83,4 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 ## Later
 - Printable (`text(p:person)` for interpolation and `as text`), Iterable
 - generic constraints `sort(xs: Comparable list)`
-- `x in xs`, `xs.has(x)` through an `equals` override (they compare structurally at runtime now)
 - `<` defined directly (`a:person < b:person := …`) and methods in the class body as sugar for the witnesses

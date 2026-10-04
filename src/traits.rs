@@ -872,6 +872,16 @@ impl Dispatch {
 					let Some(Shape::ListOf(type_name)) = self.types.shape(list) else { return None };
 					return self.require(&items[0], &type_name, COMPARE, SORT_WORD);
 				}
+				// `x in xs` (its 1-based position), `xs.has(x)` of an instance whose type overrides equality: a search by its equals
+				(crate::library_words::COLLECTION_POSITION, [list, element]) => {
+					let type_name = self.instance_type(element)?;
+					return self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name));
+				}
+				(crate::library_words::COLLECTION_CONTAINS, [list, element]) => {
+					let type_name = self.instance_type(element)?;
+					let found = self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name))?;
+					return Some(Node::Key(Box::new(found), Op::Ne, Box::new(Node::int(0))));
+				}
 				(crate::type_tests::IS_TYPE, [subject, spec]) => {
 					let required = self.traits.named(&spec.drop_meta().name())?;
 					let type_name = self.instance_type(subject)?;
@@ -970,6 +980,25 @@ fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, 
 	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
 	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
 }
+
+/// `(found = 0; at = 0; for item in xs { at = at + 1; if found == 0 and equals·T(item, x) != 0 { found = at } }; found)`:
+/// the 1-based position of the first item equal to x, 0 when there is none
+fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
+	let symbol = |name: &str| Node::Symbol(name.to_string());
+	let (found, at, item) = (symbol(FOUND_VARIABLE), symbol(POSITION_VARIABLE), symbol(ITEM_VARIABLE));
+	let assign = |target: &Node, value: Node| Node::Key(Box::new(target.clone()), Op::Assign, Box::new(value));
+	let equal = Node::Key(Box::new(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()])), Op::Ne, Box::new(Node::int(0)));
+	let first = Node::Key(Box::new(found.clone()), Op::Eq, Box::new(Node::int(0)));
+	let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(Node::Key(Box::new(first), Op::And, Box::new(equal))));
+	let found_it = Node::Key(Box::new(condition), Op::Then, Box::new(Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None)));
+	let step = assign(&at, Node::Key(Box::new(at.clone()), Op::Add, Box::new(Node::int(1))));
+	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
+	let search = Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);
+	Node::List(vec![assign(&found, Node::int(0)), assign(&at, Node::int(0)), search, found], Bracket::Round, Separator::Semicolon)
+}
+const FOUND_VARIABLE: &str = "equals_found";
+const ITEM_VARIABLE: &str = "equals_item";
+const POSITION_VARIABLE: &str = "equals_position";
 
 fn witness_call(operation: &str, type_name: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(witness_name(operation, type_name))], arguments].concat(), Bracket::Round, Separator::None)
