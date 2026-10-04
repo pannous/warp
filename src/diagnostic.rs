@@ -29,6 +29,14 @@ impl Diagnostic {
 	}
 }
 
+/// Does a message end its description with a position ` at line:column`
+pub fn names_position(message: &str) -> bool {
+	let description = message.split("; fix: ").next().unwrap_or(message);
+	description.rsplit_once(" at ").is_some_and(|(_, place)| {
+		place.split_once(':').is_some_and(|(line, column)| !line.is_empty() && line.chars().all(|c| c.is_ascii_digit()) && column.chars().all(|c| c.is_ascii_digit()) && !column.is_empty())
+	})
+}
+
 /// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
 /// pass rebuilt keeps the positions of the parts it was built from
 fn position(node: &Node) -> Option<(usize, usize)> {

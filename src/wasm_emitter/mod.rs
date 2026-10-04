@@ -41,6 +41,10 @@ enum Need {
 	MathImport(&'static str),
 }
 
+/// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
+const UNKNOWN_POSITION: &str = " at 0:0";
+/// Between a diagnostic's message and its fix
+const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
 const OUTPUT_CALLS: [&str; 5] = ["print", "puts", "puti", "putl", "putf"];
 
@@ -182,6 +186,8 @@ pub struct WasmGcEmitter {
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	type_errors: Vec<String>,
+	/// The latest source position among the nodes being emitted (note_position)
+	source_position: Option<(usize, usize)>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
@@ -234,6 +240,7 @@ impl WasmGcEmitter {
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			type_errors: Vec::new(),
+			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
 			moved_lists: Vec::new(),
@@ -894,8 +901,32 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_type_error(&mut self, func: &mut Function, message: String) {
+		let message = self.located(message);
 		self.type_errors.push(message);
 		func.instruction(&Instruction::Unreachable);
+	}
+
+	/// The latest source position among the nodes being emitted: where an emitter error points
+	fn note_position(&mut self, node: &Node) {
+		if let Some(info) = node.get_lineinfo() {
+			self.source_position = Some((info.line_nr, info.column));
+		}
+	}
+
+	/// An emitter error at the source position of the statement being emitted, unless it names one already
+	fn located(&self, message: String) -> String {
+		let Some((line, column)) = self.source_position else { return message };
+		let at = format!(" at {line}:{column}");
+		if message.contains(UNKNOWN_POSITION) {
+			return message.replacen(UNKNOWN_POSITION, &at, 1);
+		}
+		if crate::diagnostic::names_position(&message) {
+			return message;
+		}
+		match message.split_once(FIX_SEPARATOR) {
+			Some((what, fix)) => format!("{what}{at}{FIX_SEPARATOR}{fix}"),
+			None => format!("{message}{at}"),
+		}
 	}
 
 	/// Does the node read a variable (key names and other symbols of a data literal are not variables)
@@ -1277,6 +1308,7 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
+		self.note_position(node);
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
@@ -2742,6 +2774,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		self.note_position(node);
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
 		}
@@ -3118,6 +3151,7 @@ impl WasmGcEmitter {
 	/// Emit the float value of a node onto the stack (as f64)
 	/// Integers are converted to f64 for type upgrading
 	fn emit_float_value(&mut self, func: &mut Function, node: &Node) {
+		self.note_position(node);
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
 		}
