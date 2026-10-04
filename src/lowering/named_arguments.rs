@@ -1,0 +1,215 @@
+//! Named arguments (user decision P37): `f(b=1, a=5)` and `f(b:1, a:5)` pass a by name, and a name that is no parameter
+//! but a free variable of the body sets it: `f y := y*y+v; f(y=2, v=3)` is 7, `fun={x*y}; fun(x:2 y:3)` is 6. Such a
+//! variable becomes an extra parameter of the function; a call that does not name it passes the variable of that name
+//! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
+//! argument stays an error.
+
+use crate::diagnostic::Diagnostic;
+use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
+use std::collections::HashMap;
+
+struct Function {
+	parameters: Vec<String>,
+	/// the default of each parameter `a=1`, if any
+	defaults: Vec<Option<Node>>,
+	/// free variables of the body some call names, appended as parameters in their order of first use in the body
+	extras: Vec<String>,
+}
+
+pub fn lower(node: Node) -> Node {
+	let mut functions = definitions(&node);
+	if functions.is_empty() {
+		return node;
+	}
+	let mut unknown = None;
+	collect_extras(&node, &mut functions, &mut unknown);
+	if let Some(error) = unknown {
+		return error;
+	}
+	if !functions.values().any(|function| !function.extras.is_empty()) && !has_named_call(&node, &functions) {
+		return node;
+	}
+	Rewrite { functions }.node(node)
+}
+
+/// `f(a, b) := body` and the block value `fun = {body}`, by name: their parameters
+fn definitions(node: &Node) -> HashMap<String, Function> {
+	let mut functions = HashMap::new();
+	node.visit(&mut |part| match part {
+		Node::Key(head, Op::Define | Op::Assign, _) => match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+				let parameters = items[1..].iter().map(parameter_name).collect();
+				let defaults = items[1..].iter().map(parameter_default).collect();
+				functions.insert(items[0].name(), Function { parameters, defaults, extras: vec![] });
+			}
+			_ => {}
+		},
+		_ => {}
+	});
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		if let (Node::Symbol(name), Node::List(_, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) {
+			functions.entry(name.clone()).or_insert(Function { parameters: vec![], defaults: vec![], extras: vec![] });
+		}
+	});
+	functions
+}
+
+/// `a`, `a:int`, `a=1`: the parameter's name
+fn parameter_name(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(name, _, _) => name.name(),
+		other => other.name(),
+	}
+}
+
+fn parameter_default(parameter: &Node) -> Option<Node> {
+	match parameter.drop_meta() {
+		Node::Key(_, Op::Assign, default) => Some(default.as_ref().clone()),
+		_ => None,
+	}
+}
+
+/// `b=1` or `b:1` in a call: the name and the value
+fn named_argument(argument: &Node) -> Option<(String, &Node)> {
+	match argument.drop_meta() {
+		Node::Key(name, Op::Assign | Op::Colon, value) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name.clone(), value)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn call_of<'a>(node: &'a Node, functions: &HashMap<String, Function>) -> Option<(String, &'a [Node])> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
+	functions.contains_key(name).then(|| (name.clone(), &items[1..]))
+}
+
+fn has_named_call(node: &Node, functions: &HashMap<String, Function>) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= call_of(part, functions).is_some_and(|(_, arguments)| arguments.iter().any(|a| named_argument(a).is_some())));
+	found
+}
+
+/// The bodies, by function name
+fn bodies(node: &Node) -> HashMap<String, Node> {
+	let mut bodies = HashMap::new();
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, body) = part {
+		match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) if !items.is_empty() => { bodies.insert(items[0].name(), body.as_ref().clone()); }
+			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => { bodies.insert(name.clone(), body.as_ref().clone()); }
+			_ => {}
+		}
+	});
+	bodies
+}
+
+/// Every named argument that is no parameter must be a free variable of the body: it becomes an extra parameter
+fn collect_extras(node: &Node, functions: &mut HashMap<String, Function>, unknown: &mut Option<Node>) {
+	let bodies = bodies(node);
+	let mut named: Vec<(String, String, Node)> = vec![];
+	node.visit(&mut |part| if let Some((name, arguments)) = call_of(part, functions) {
+		named.extend(arguments.iter().filter_map(named_argument).map(|(argument, _)| (name.clone(), argument, part.clone())));
+	});
+	for (name, argument, call) in named {
+		let function = functions.get_mut(&name).expect("a call of a known function");
+		if function.parameters.contains(&argument) || function.extras.contains(&argument) {
+			continue;
+		}
+		let used = bodies.get(&name).map(symbols_in_order).unwrap_or_default();
+		if !used.contains(&argument) {
+			unknown.get_or_insert_with(|| Diagnostic::at(&call, format!("{name} has no parameter {argument}")).into_error());
+			continue;
+		}
+		function.extras.push(argument);
+		function.extras.sort_by_key(|extra| used.iter().position(|symbol| symbol == extra));
+	}
+}
+
+fn symbols_in_order(body: &Node) -> Vec<String> {
+	let mut symbols = vec![];
+	body.visit(&mut |part| if let Node::Symbol(name) = part {
+		if !symbols.contains(name) {
+			symbols.push(name.clone());
+		}
+	});
+	symbols
+}
+
+struct Rewrite {
+	functions: HashMap<String, Function>,
+}
+
+/// `fun = {x*y}` called by name: `fun` is also a function keyword, so the function made of the block is `fun·block`
+const KEYWORD_FUNCTION_SUFFIX: &str = "·block";
+
+/// The name a function made of a block value is defined and called by
+fn callable_name(name: &str) -> String {
+	match crate::operators::is_function_keyword(name) {
+		true => format!("{name}{KEYWORD_FUNCTION_SUFFIX}"),
+		false => name.to_string(),
+	}
+}
+
+impl Rewrite {
+	fn node(&self, node: Node) -> Node {
+		match node {
+			Node::Key(head, op @ (Op::Define | Op::Assign), body) => self.definition(*head, op, *body),
+			Node::List(items, bracket, separator) => {
+				let items: Vec<Node> = items.into_iter().map(|item| self.node(item)).collect();
+				let list = Node::List(items, bracket, separator);
+				match call_of(&list, &self.functions) {
+					Some((name, arguments)) => self.call(&list, &name, arguments).unwrap_or_else(|error| error),
+					None => list,
+				}
+			}
+			Node::Key(left, op, right) => Node::Key(Box::new(self.node(*left)), op, Box::new(self.node(*right))),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)), data },
+			other => other,
+		}
+	}
+
+	/// The extras join the parameters; `fun = {body}` named in a call becomes `fun(extras) := body`
+	fn definition(&self, head: Node, op: Op, body: Node) -> Node {
+		let body = self.node(body);
+		match head.drop_meta() {
+			Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+				let extras = self.functions.get(&items[0].name()).map(|function| function.extras.clone()).unwrap_or_default();
+				let items = items.iter().cloned().chain(extras.into_iter().map(Node::Symbol)).collect();
+				Node::Key(Box::new(Node::List(items, Bracket::Round, separator.clone())), op, Box::new(body))
+			}
+			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => match self.functions.get(name) {
+				Some(function) if !function.extras.is_empty() => {
+					let items = std::iter::once(Node::Symbol(callable_name(name))).chain(function.extras.iter().cloned().map(Node::Symbol)).collect();
+					Node::Key(Box::new(Node::List(items, Bracket::Round, Separator::None)), Op::Define, Box::new(body))
+				}
+				_ => Node::Key(Box::new(head), op, Box::new(body)),
+			},
+			_ => Node::Key(Box::new(head), op, Box::new(body)),
+		}
+	}
+
+	/// The arguments in parameter order: positional ones fill the parameters not named, extras not named pass the
+	/// variable of their name
+	fn call(&self, call: &Node, name: &str, arguments: &[Node]) -> Result<Node, Node> {
+		let function = &self.functions[name];
+		if function.extras.is_empty() && !arguments.iter().any(|argument| named_argument(argument).is_some()) {
+			return Ok(call.clone());
+		}
+		let named: HashMap<String, &Node> = arguments.iter().filter_map(named_argument).collect();
+		let mut positional = arguments.iter().filter(|argument| named_argument(argument).is_none());
+		let callee = if function.parameters.is_empty() && !function.extras.is_empty() { callable_name(name) } else { name.to_string() };
+		let mut ordered = vec![Node::Symbol(callee)];
+		for (parameter, default) in function.parameters.iter().zip(&function.defaults) {
+			match named.get(parameter).copied().or_else(|| positional.next()).or(default.as_ref()) {
+				Some(value) => ordered.push(value.clone()),
+				None => return Err(Diagnostic::at(call, format!("{name} needs a value for parameter {parameter}")).into_error()),
+			}
+		}
+		ordered.extend(positional.cloned());
+		ordered.extend(function.extras.iter().map(|extra| named.get(extra).map_or_else(|| Node::Symbol(extra.clone()), |value| (*value).clone())));
+		Ok(Node::List(ordered, Bracket::Round, Separator::None))
+	}
+}

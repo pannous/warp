@@ -34,3 +34,4 @@ mod test_lambda_spaced_body;
 mod test_call_arity;
 mod test_definition_value;
 mod test_def_without_parameters;
+mod test_named_arguments;
