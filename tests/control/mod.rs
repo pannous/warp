@@ -33,3 +33,4 @@ mod test_for_implicit_it;
 mod test_for_unit_words;
 mod test_each_colon;
 mod test_variable_signals;
+mod test_welcome_forms;
