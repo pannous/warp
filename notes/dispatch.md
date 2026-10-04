@@ -31,6 +31,6 @@ dropped). Otherwise the first-declared overload is taken with the got-it warning
 topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: render "x" as pdf`.
 
 ## Lowering
-src/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
+src/lowering/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
 library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
 function from its body.

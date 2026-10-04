@@ -45,7 +45,7 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
   way: each operand evaluated once. Building it on `int_divmod_slow` directly would save the gcd of exact_div.
 
 ## Tuple returns (branch tuple-returns, user decision "yes")
-`return a, b` and `x, y = f()` (src/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/functions/test_tuple_returns.rs).
+`return a, b` and `x, y = f()` (src/lowering/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/functions/test_tuple_returns.rs).
 - Parsing: the comma binds loosest, so `f() := return 1, 2` arrives as `(f() := return 1), 2` and `x, y = f()` as
   `x, (y = f())`. tuples::lower (first lowering) regroups them into `return 1 2` and `$destructure (x, y) f()`.
   `{ return a, b }` in a block too; `{a, b=2}` stays data; a bare `a=1,2,3` is untouched and still asks (D12).

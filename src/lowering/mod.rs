@@ -1,0 +1,24 @@
+//! The lowering passes: each rewrites the program into forms the later passes and the emitter know (the order is
+//! `SOURCE_PASSES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
+
+pub mod ambiguous_forms;
+pub mod closures;
+pub mod comprehensions;
+pub mod declarations;
+pub mod for_loop;
+pub mod function_values;
+pub mod inlining;
+pub mod lambdas;
+pub mod library_words;
+pub mod meta_entries;
+pub mod min_max;
+pub mod mutation;
+pub mod overloads;
+pub mod phrase_words;
+pub mod switch;
+pub mod traits;
+pub mod tuples;
+pub mod type_constructor;
+pub mod type_name_matching;
+pub mod type_tests;
+pub mod versions;

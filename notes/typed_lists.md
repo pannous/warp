@@ -81,7 +81,7 @@ An `if` statement whose branch appends to a typed list runs its branches as stat
 emit_discarded_branches), else the branch value rebuilt the Node list on every append (filter was quadratic).
 5000 items (probes/night/bench_lists.sh): for loop 41 s → 0.6 s, filter 130 s → 0.5 s, index writes overflowed the
 stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function indexing its list parameter still walks it.
-- Small helpers are inlined (src/inlining.rs: not recursive, no free variables, no locals shared with the rest of the
+- Small helpers are inlined (src/lowering/inlining.rs: not recursive, no free variables, no locals shared with the rest of the
   program, ≤ 8 statements, one final return), so `arr = swap(arr, i, j)` updates the caller's array; `x = (t = x; …; t)`
   shares one array without copies (moved_lists). A list parameter indexed in a loop and not reassigned from a call there
   is copied into an array once (`arr·list = arr`). quicksort_partitioned of 1000: 32 s → 12.5 s; what remains is the

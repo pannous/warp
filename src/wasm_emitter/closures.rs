@@ -1,4 +1,4 @@
-//! Closures at run time (lowering in src/closures.rs, notes/closures.md):
+//! Closures at run time (lowering in src/lowering/closures.rs, notes/closures.md):
 //!   (type $Closure (struct (field $entry (ref func)) (field $captured (ref null $Node))))
 //!   (type $closure_entry_n (func (param $captured (ref null $Node)) (param (ref null $Node))×n (result (ref null $Node))))
 //! A closure value is a $Node of Kind::Function whose data is the $Closure and whose value is the function name as a Symbol.

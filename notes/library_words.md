@@ -1,6 +1,6 @@
 # Library words: `.word`, `word(x)`, `word x`
 
-`src/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
+`src/lowering/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
 runtime functions. A user function or a variable of the same name wins (the word is not lowered).
 
 | Word (aliases) | Args | How |
@@ -95,7 +95,7 @@ Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it ne
 
 # Type tests
 
-`src/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
+`src/lowering/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
 `3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
 name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
 real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).
@@ -105,7 +105,7 @@ Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
 
 # Lambdas (compile-time)
 
-`src/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
+`src/lowering/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
 `f = x=>x*x`, `f = (x y)->x+y`, `f = (x, y) => x+y`, and `f = {it*2}` (a block only when it uses `it`; `p={a:1}` stays an object) become
 the definition `f(x):=…` at that point, so variables are captured by value there (`n=10; f = x=>x+n; n=20; f 1` is 11). `{x*x}(x=5)` defines
 an anonymous function and calls it (`{x+y}(x=1 y=2)`). `map xs F`, `map(xs, F)`, `xs.map(F)`, `xs.map {it*it}` with F a block, a lambda or a defined function is the loop
@@ -126,7 +126,7 @@ application (write `it < k`).
 # First-class functions (compile-time)
 
 Choice: no funcref table. The emitter gives every user function its own signature (i64, f64 or node per parameter and result, by inferred
-kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/function_values.rs` specialises: a function
+kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/lowering/function_values.rs` specialises: a function
 that uses a parameter as a function (`f(x)`, `f x`, `map xs f`, or passing it on) is replaced by one copy per function it is called with,
 `apply(double, 3)` calls `apply__double(3)` with `double` in place of `f` (specialisations sit where the original definition was, so captures by value
 behave). What can be passed: a defined function, `&name` (the parser reads it as the name), an alias (`g = double`, assigned once), an

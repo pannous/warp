@@ -1,4 +1,4 @@
-//! Tuple returns as wasm multi-value (src/tuples.rs, notes/multi_value.md): a function with `return a, b` has one wasm
+//! Tuple returns as wasm multi-value (src/lowering/tuples.rs, notes/multi_value.md): a function with `return a, b` has one wasm
 //! result per value; `x, y = f()` stores them straight into x and y; any other call packs them into the list `[a b]`
 //! through the function's packer `f$list`, so everywhere else such a function is an ordinary List-returning one.
 

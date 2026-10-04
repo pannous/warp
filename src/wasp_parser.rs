@@ -1375,7 +1375,7 @@ impl WaspParser {
 				}
 			}
 			'"' | '\'' | '«' => self.parse_string(),
-			// `a, *rest = xs`: the starred name takes the items the other names leave (src/tuples.rs)
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs)
 			'*' if self.is_identifier_start(1) => {
 				self.advance();
 				match self.parse_symbol() {

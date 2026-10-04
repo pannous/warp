@@ -46,7 +46,7 @@ An operation called on a value whose type is unknown at compile time calls the o
 types define it, a generated dispatcher `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else
 area·square(x)` picks the witness at run time (traits::with_dispatchers; `instance_of` reads the instance's type name).
 
-## Lowering (src/traits.rs)
+## Lowering (src/lowering/traits.rs)
 - `lower_declarations` (before type_tests): `trait shape{…}` becomes ø carrying the `Trait` (Meta data), which later
   passes collect (`Traits::of`); `x is shape` becomes the type test `is_type(x, "shape")`.
 - `lower_conformances` (after type_constructor): a definition of a trait operation whose first parameter (every

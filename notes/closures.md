@@ -2,7 +2,7 @@
 
 Functions and lambdas are values: stored in variables and lists, passed, returned, called later. Capture stays BY VALUE
 (decision D7/#33): a closure copies the captured variables when it is made. Compile-time specialisation
-(src/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
+(src/lowering/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
 
 ```wasp
 make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)      # 7
@@ -19,7 +19,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
    known at compile time (a variable, a capturing lambda, a call), the call stays and the function gets a **generic
    version** beside its specialisations (`make_generic`); `f x` with a function parameter becomes `f(x)` there.
    A literal number or text where a function is expected stays the loud `functions are not first-class values yet`.
-3. `closures::lower` (src/closures.rs, new):
+3. `closures::lower` (src/lowering/closures.rs, new):
    - every remaining arrow lambda is **lifted** to `closure_lambda_n(captured…, params…) := body` (top level) and replaced
      by `closure_new(closure_lambda_n, captured…)`; captured = variables of the enclosing scopes the body reads, in order;
    - a function name where a value is expected (assignment value, list item, argument, function result, if/else

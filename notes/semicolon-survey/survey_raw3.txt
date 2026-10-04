@@ -1,0 +1,4 @@
+test test_root_list_strings ... FAILED
+test test_root_lists ... FAILED
+error: test failed, to rerun pass `--test test_lists`
+error: 1 target failed:

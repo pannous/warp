@@ -21,6 +21,9 @@ pub mod gc_traits;
 pub mod context;
 pub mod wasm_emitter;
 pub mod pipeline;
+/// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
+pub mod lowering;
+pub use lowering::{ambiguous_forms, closures, comprehensions, declarations, for_loop, function_values, inlining, lambdas, library_words, meta_entries, min_max, mutation, overloads, phrase_words, switch, traits, tuples, type_constructor, type_name_matching, type_tests, versions};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod wasm_optimizer;
@@ -43,32 +46,11 @@ pub mod diagnostic;
 pub mod time;
 pub mod real;
 pub mod units;
-pub mod for_loop;
-pub mod type_constructor;
-pub mod type_name_matching;
-pub mod meta_entries;
-pub mod function_values;
-pub mod lambdas;
-pub mod closures;
-pub mod library_words;
-pub mod type_tests;
-pub mod min_max;
-pub mod mutation;
-pub mod switch;
-pub mod phrase_words;
-pub mod comprehensions;
-pub mod declarations;
 pub mod fixed_width;
 pub mod modules;
 #[cfg(feature = "native")]
 pub mod package_tools;
-pub mod versions;
 pub mod web;
-pub mod ambiguous_forms;
-pub mod tuples;
-pub mod traits;
-pub mod overloads;
-pub mod inlining;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of wasp
