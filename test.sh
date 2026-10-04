@@ -26,9 +26,11 @@ cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --co
 sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
 
 # Count test results
-TOTAL_PASSED=$(grep -a -E "^test .* \.\.\. ok$" "$TEMP_FILE" | wc -l | tr -d ' ')
-TOTAL_FAILED=$(grep -a -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | wc -l | tr -d ' ')
-TOTAL_IGNORED=$(grep -a -E "^test .* \.\.\. ignored$" "$TEMP_FILE" | wc -l | tr -d ' ')
+# a test's own output (a wasm program writing to stdout) can glue onto its "test … ok" line: match the test anywhere
+results() { grep -a -o -E "test [A-Za-z0-9_:]+ \.\.\. $1$" "$TEMP_FILE"; }
+TOTAL_PASSED=$(results ok | wc -l | tr -d ' ')
+TOTAL_FAILED=$(results FAILED | wc -l | tr -d ' ')
+TOTAL_IGNORED=$(results ignored | wc -l | tr -d ' ')
 TOTAL=$((TOTAL_PASSED + TOTAL_FAILED + TOTAL_IGNORED))
 TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 
@@ -38,11 +40,11 @@ TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 	echo "=== Test Results ==="
 	echo ""
 	echo "PASSED:"
-	grep -a -E "^test .* \.\.\. ok$" "$TEMP_FILE" | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//' | sort
+	results ok | sed 's/test /  ✓ /' | sed 's/ \.\.\. ok$//' | sort
 
 	echo ""
 	echo "FAILED:"
-	grep -a -E "^test .* \.\.\. FAILED$" "$TEMP_FILE" | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | sort
+	results FAILED | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | sort
 
 	echo ""
 	echo "SUMMARY:"
