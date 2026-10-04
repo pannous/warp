@@ -2899,7 +2899,7 @@ fn negate_calls(node: Node, functions: &HashMap<String, UserFunctionDef>, bound:
 /// parameter of the enclosing function, a literal variable), its parameters the kinds of the literal arguments of the closure
 /// calls of its arity
 fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
-	let variable_kinds = literal_variable_kinds(program, ctx);
+	let variable_kinds = variable_kinds(program, ctx, true);
 	loop {
 		let mut inferred: Vec<(String, usize, Kind)> = vec![];
 		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
@@ -2964,17 +2964,29 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 /// The kinds of variables only ever assigned literals of one kind: `s="abcd"; f(s)` passes a Text.
 /// A parameter of the same name shadows the variable (wiki/Footguns.md "Parameter shadowing"), so it is not judged.
 fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<String, Kind> {
+	variable_kinds(program, ctx, false)
+}
+
+/// literal_variable_kinds where a value of unknown kind leaves the literal's kind standing: `s = 0.5 as float; s = g(s)`
+/// keeps s a Float, which types the closure g takes (infer_closure_parameters)
+fn variable_kinds(program: &Node, ctx: &Context, unknown_keeps_kind: bool) -> HashMap<String, Kind> {
 	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
-	for param in ctx.user_functions.values().flat_map(|function| &function.params) {
+	// a parameter of the same name shadows the variable; not for closures, whose captured parameters bear its name
+	for param in ctx.user_functions.values().flat_map(|function| &function.params).filter(|_| !unknown_keeps_kind) {
 		kinds.insert(param.name.clone(), None);
 	}
+	let mut literal: HashSet<String> = HashSet::new();
 	program.visit(&mut |node| {
 		let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
 		let Node::Symbol(name) = target.drop_meta() else { return };
 		let kind = argument_literal_kind(value);
+		if kind.is_none() && unknown_keeps_kind {
+			return;
+		}
+		literal.insert(name.clone());
 		kinds.entry(name.clone()).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
 	});
-	kinds.into_iter().filter_map(|(name, kind)| Some((name, kind?))).collect()
+	kinds.into_iter().filter(|(name, _)| !unknown_keeps_kind || literal.contains(name)).filter_map(|(name, kind)| Some((name, kind?))).collect()
 }
 
 /// An undeclared parameter takes the kind of its arguments when every call agrees, over the kind its use suggests

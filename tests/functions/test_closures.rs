@@ -141,3 +141,8 @@ fn closures_given_floats_take_floats() {
 	is!("fs=[x=>x*2.0, x=>x+0.5]; g = fs#1; g(1.5 as float)", 3.0);
 	is!("k=2.5 as float; f = (x => x*k); fs=[f]; h=fs#1; h(2.0 as float)", 5.0);
 }
+
+#[test]
+fn a_float_reassigned_from_its_closure_stays_a_float() {
+	is!("apply(g, n) := { s=0.5 as float; for i in 0..n { s = g(s) }; s }; k = 1.5 as float; apply(x => x*k, 3)", 1.6875);
+}

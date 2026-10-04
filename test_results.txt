@@ -205,6 +205,7 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float
   ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
   ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
   ✓ functions::test_closures::an_item_of_a_function_list_called_directly
@@ -1773,4 +1774,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1768 passed, 0 failed, 1768 total tested
+53 ignored, 1769 passed, 0 failed, 1769 total tested
