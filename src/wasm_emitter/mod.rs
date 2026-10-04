@@ -616,6 +616,11 @@ impl WasmGcEmitter {
 			return;
 		};
 
+		if args.len() > user_fn.params.len() {
+			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };
+			self.emit_type_error(func, format!("{} takes {}, got {}", user_fn.name, count(user_fn.params.len()), args.len()));
+			return;
+		}
 		// Emit arguments; a missing argument evaluates its default anew at every call
 		for (i, param) in user_fn.params.iter().enumerate() {
 			let Some(argument) = args.get(i).or(param.default.as_ref()) else {

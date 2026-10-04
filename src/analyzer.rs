@@ -1261,6 +1261,8 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
+/// Statements that name functions or modules instead of calling them
+const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 const LIST_OF_PREFIX: &str = "list of ";
 const OF_WORD: &str = "of";
 
@@ -1335,7 +1337,40 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_boolean_arithmetic(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_unassigned_declarations(program))
+		.or_else(|| check_call_arity(program))
 		.map(Diagnostic::into_error)
+}
+
+/// `sin(0, 5)`, `pow(2)`, `√(16, 2)`: a math function or a one-value operator given another number of values, which
+/// used to drop or invent values silently
+fn check_call_arity(program: &Node) -> Option<Diagnostic> {
+	let mut context = Context::new();
+	extract_user_functions(&mut context, program);
+	call_arity_error(program, &context)
+}
+
+fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnostic> {
+	let values = |count: usize| if count == 1 { "1 value".to_string() } else { format!("{count} values") };
+	match node {
+		Node::Meta { node, .. } => call_arity_error(node, context),
+		// `import (sin, floor) from 'm'` names functions, it calls none
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
+		Node::List(items, bracket, _) => {
+			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
+				let arity = crate::ffi::LIBM_F64_FUNCTIONS.iter().find(|(function, _)| function == name).map(|(_, arity)| *arity);
+				if let Some(arity) = arity.filter(|arity| !context.user_functions.contains_key(name) && items.len() - 1 != *arity) {
+					return Some(Diagnostic::at(node, format!("{name} takes {}, got {}", values(arity), items.len() - 1)));
+				}
+			}
+			items.iter().find_map(|item| call_arity_error(item, context))
+		}
+		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs), operand) if empty.is_nothing() => match operand.drop_meta() {
+			Node::List(items, Bracket::Round, Separator::Colon) if items.len() > 1 => Some(Diagnostic::at(node, format!("{op} takes 1 value, got {}", operand.serialize()))),
+			_ => call_arity_error(operand, context),
+		},
+		Node::Key(left, _, right) => call_arity_error(left, context).or_else(|| call_arity_error(right, context)),
+		_ => None,
+	}
 }
 
 /// `real x; x*x`: a variable declared without a value is read before anything is assigned to it
