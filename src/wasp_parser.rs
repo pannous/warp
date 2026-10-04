@@ -14,6 +14,8 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
+/// The schemes of a URL read as one text: `https://pannous.com`
+const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
 const IT_WORD: &str = "it";
@@ -1710,21 +1712,8 @@ impl WaspParser {
 			self.skip_spaces();
 		}
 
-		// Check for URL pattern: scheme://...
-		// Common schemes: http, https, ftp, file, data, ws, wss
-		if matches!(symbol.as_str(), "http" | "https" | "ftp" | "file" | "data" | "ws" | "wss")
-			&& self.current_char() == ':'
-			&& self.peek_char(1) == '/'
-			&& self.peek_char(2) == '/'
-		{
-			// Parse entire URL as a single token
-			let mut url = symbol;
-			// Consume :// and the rest of the URL
-			while !self.is_url_terminator(self.current_char()) {
-				url.push(self.current_char());
-				self.advance();
-			}
-			return Node::Text(url);
+		if self.url_follows(&symbol) {
+			return self.parse_url(symbol);
 		}
 
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode) {
@@ -1780,32 +1769,8 @@ impl WaspParser {
 		if self.options.wit_mode && self.current_char() == '<' {
 			return self.parse_type_application(symbol);
 		}
-		// `class:"btn"`, `type:email` (html attributes) are keys, no declarations
-		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
-		let start = self.pos.saturating_sub(symbol.chars().count());
-		let is_field = start > 0 && self.chars[start - 1] == '.'; // `x.class`
-		let is_key = is_key || is_field;
-		let declares_type = !is_key && (TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
-			|| (symbol == RECORD_WORD && self.name_and_block_follow())
-			|| (symbol == "type" && self.current_char() != '('));
-		if !self.options.wit_mode && declares_type {
-			self.skip_whitespace();
-			let type_name = match self.parse_symbol() {
-				Ok(s) => s,
-				Err(e) => return error(&e),
-			};
-			self.skip_whitespace();
-			let body = if self.current_char() == '{' {
-				let block = self.parse_bracketed('{');
-				// Transform field values from Symbol to Type nodes
-				Self::transform_fields_to_types(block)
-			} else {
-				Empty
-			};
-			return Node::Type {
-				name: Box::new(Symbol(type_name)),
-				body: Box::new(body),
-			};
+		if !self.options.wit_mode && self.declares_type(&symbol) {
+			return self.parse_type_declaration();
 		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
@@ -1817,8 +1782,48 @@ impl WaspParser {
 			return Node::Key(Box::new(Symbol(symbol)), Op::None, Box::new(block));
 		}
 
-		// Check for IMMEDIATE suffix blocks (no space allowed)
-		// This distinguishes List<int> (generic) from x < y (comparison)
+		self.parse_glued_suffix(symbol)
+	}
+
+	/// `http://…`, `file://…`: the scheme of a URL, the rest of which reads as one text
+	fn url_follows(&self, symbol: &str) -> bool {
+		URL_SCHEMES.contains(&symbol) && self.current_char() == ':' && self.peek_char(1) == '/' && self.peek_char(2) == '/'
+	}
+
+	fn parse_url(&mut self, scheme: String) -> Node {
+		let mut url = scheme;
+		while !self.is_url_terminator(self.current_char()) {
+			url.push(self.current_char());
+			self.advance();
+		}
+		Node::Text(url)
+	}
+
+	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
+	/// `x.class` and `type(x)` are no declarations
+	fn declares_type(&self, symbol: &str) -> bool {
+		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
+		let start = self.pos.saturating_sub(symbol.chars().count());
+		let is_field = start > 0 && self.chars[start - 1] == '.';
+		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
+			|| (symbol == RECORD_WORD && self.name_and_block_follow())
+			|| (symbol == "type" && self.current_char() != '('))
+	}
+
+	/// The name and the `{fields}` of a type declaration, after its keyword
+	fn parse_type_declaration(&mut self) -> Node {
+		self.skip_whitespace();
+		let type_name = match self.parse_symbol() {
+			Ok(name) => name,
+			Err(message) => return error(&message),
+		};
+		self.skip_whitespace();
+		let body = if self.current_char() == '{' { Self::transform_fields_to_types(self.parse_bracketed('{')) } else { Empty };
+		Node::Type { name: Box::new(Symbol(type_name)), body: Box::new(body) }
+	}
+
+	/// What is glued to a word: `name{…}`, `List<int>`, `p@unit`, `f(args)`, `f(params) {body}`; else the word itself
+	fn parse_glued_suffix(&mut self, symbol: String) -> Node {
 		let ch = self.current_char();
 		match ch {
 			'{' => {
