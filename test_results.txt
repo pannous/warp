@@ -1231,6 +1231,8 @@ PASSED:
   ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
+  ✓ text::test_print_lists::print_of_a_list_is_worth_the_list
+  ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
   ✓ text::test_put_runtime_values::putf_writes_a_float_variable
@@ -1340,6 +1342,8 @@ PASSED:
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_person_struct::test_person_struct_roundtrip
+  ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
+  ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records_classes::a_class_has_untyped_fields
@@ -1859,4 +1863,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-46 ignored, 1854 passed, 0 failed, 1854 total tested
+41 ignored, 1858 passed, 0 failed, 1858 total tested

@@ -32,3 +32,4 @@ mod test_trait_equals_membership;
 mod test_trait_constraints;
 mod test_instance_arguments;
 mod test_tuple_values;
+mod test_printable;

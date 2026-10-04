@@ -14,6 +14,7 @@ pub mod meta_entries;
 pub mod min_max;
 pub mod mutation;
 pub mod overloads;
+pub mod printable;
 pub mod phrase_words;
 pub mod switch;
 pub mod traits;

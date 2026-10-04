@@ -871,6 +871,9 @@ fn check_items(items: &[Node], positioned: &Node) {
             let is_call = match argument.drop_meta() {
                 // `int g(int x) {…}` defines g, `int(…)` would convert
                 Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [_, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) => false,
+                // `text(p:person)` heads the Printable operation of a declared type (P31)
+                Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [part] if matches!(part.drop_meta(), Node::Key(_, Op::Colon, _))) => false,
+                Node::Key(_, Op::Colon, _) => false,
                 Node::List(_, Bracket::Round, _) => true,
                 Node::Symbol(_) | Node::Key(_, Op::Assign | Op::Define, _) => false, // `int x` and `int x = 1` declare
                 _ => true,

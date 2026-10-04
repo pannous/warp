@@ -108,12 +108,12 @@ const SOURCE_PASSES: [fn(Node) -> Node; 15] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 18] = [
+const MEANING_PASSES: [fn(Node) -> Node; 19] = [
 	crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
 	crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::real::lower,
 	crate::type_constructor::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
 	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
-	crate::traits::lower_dispatch,
+	crate::printable::lower, crate::traits::lower_dispatch,
 ];
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
