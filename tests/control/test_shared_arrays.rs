@@ -13,3 +13,14 @@ fn a_shared_array_reads_writes_and_adds() {
 fn tasks_add_to_one_shared_array() {
 	is!("shared hits = int[1]; bump(h, n) := { for i in 1 to n { h#1 += 1 }; n }; a = go bump(hits, 1000); b = go bump(hits, 1000); await a + await b; hits#1", 2000);
 }
+
+#[test]
+fn a_shared_array_of_floats() {
+	is!("shared xs = float[2]; xs#1 += 1.5; xs#1 += 2.25; xs#1", 3.75);
+	is!("shared xs = float[2]; xs#2 = 0.5; xs#2 * 4", 2.0);
+}
+
+#[test]
+fn tasks_add_floats_to_one_shared_array() {
+	is!("shared total = float[1]; add(t, n) := { for i in 1 to n { t#1 += 0.5 }; n }; a = go add(total, 1000); b = go add(total, 1000); await a + await b; total#1", 1000.0);
+}

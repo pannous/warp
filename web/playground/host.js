@@ -144,6 +144,17 @@ function programImports(holder, hooks) {
 			shared_set: (id, index, value) => (Atomics.store(...sharedCell(holder.run, id, index), value), value),
 			shared_add: (id, index, value) => Atomics.add(...sharedCell(holder.run, id, index), value) + value,
 			shared_count: id => BigInt(sharedArray(holder.run, id).length),
+			// an array of floats: the cells hold the bits; an add swaps until no other task came between
+			shared_getf: (id, index) => floatOfBits(Atomics.load(...sharedCell(holder.run, id, index))),
+			shared_setf: (id, index, value) => (Atomics.store(...sharedCell(holder.run, id, index), bitsOfFloat(value)), value),
+			shared_addf: (id, index, value) => {
+				const [array, cell] = sharedCell(holder.run, id, index);
+				for (;;) {
+					const old = Atomics.load(array, cell);
+					const sum = floatOfBits(old) + value;
+					if (Atomics.compareExchange(array, cell, old, bitsOfFloat(sum)) === old) return sum;
+				}
+			},
 		},
 		wasi_snapshot_preview1: {
 			fd_write: (fd, vectors, count, written) => {
@@ -211,6 +222,10 @@ function prepareTaskPool(size = Math.min(4, self.navigator?.hardwareConcurrency 
 		worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
 	}
 }
+
+const floatBits = new DataView(new ArrayBuffer(8));
+const floatOfBits = bits => (floatBits.setBigInt64(0, bits), floatBits.getFloat64(0));
+const bitsOfFloat = number => (floatBits.setFloat64(0, number), floatBits.getBigInt64(0));
 
 function sharedArray(run, id) {
 	const array = run.shared[Number(id) - 1];

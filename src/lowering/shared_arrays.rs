@@ -1,25 +1,33 @@
 //! Shared arrays (user decision P33 step 6, P44): `shared xs = int[n]` makes n Ints every task of the run shares (held by
-//! the host: src/shared.rs natively, host.js in the browser); `go f(xs)` passes that same array, the one exception to
-//! copying. The array is an Int naming it; its uses become host words, atomic in the host:
-//! `xs#i` → `shared_get(xs, i)`, `xs#i = v` → `shared_set(xs, i, v)`, `xs#i += v` → `shared_add(xs, i, v)`,
-//! `#xs` / `count(xs)` → `shared_count(xs)`. A parameter given a shared array (by a call or a `go`) is shared too.
+//! the host: src/shared.rs natively, host.js in the browser), `shared xs = float[n]` n floats; `go f(xs)` passes that
+//! same array, the one exception to copying. The array is an Int naming it; its uses become host words, atomic in the
+//! host: `xs#i` → `shared_get(xs, i)`, `xs#i = v` → `shared_set(xs, i, v)`, `xs#i += v` → `shared_add(xs, i, v)`
+//! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`. A parameter given a shared array (by a call
+//! or a `go`) is shared too, of the same element type.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 const SHARED_WORD: &str = "shared";
-/// The host words (src/host.rs SHARED_WORDS)
+/// The host words (src/host.rs SHARED_WORDS, SHARED_FLOAT_WORDS)
 const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
-const SHARED_GET: &str = crate::host::SHARED_WORDS[1];
-const SHARED_SET: &str = crate::host::SHARED_WORDS[2];
-const SHARED_ADD: &str = crate::host::SHARED_WORDS[3];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
+const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
+
+/// The element type of a shared array: whether it holds floats (else Ints)
+type Floats = bool;
+
+/// The words of reading, writing and adding an element of a shared array of Ints or of floats
+fn element_words(floats: Floats) -> [&'static str; 3] {
+	let [_, get, set, add, _] = crate::host::SHARED_WORDS;
+	if floats { crate::host::SHARED_FLOAT_WORDS } else { [get, set, add] }
+}
 
 pub fn lower(node: Node) -> Node {
-	let mut declared = HashSet::new();
-	node.visit(&mut |part| if let Some((name, _)) = declaration(part) { declared.insert(name); });
+	let mut declared = HashMap::new();
+	node.visit(&mut |part| if let Some((name, _, floats)) = declaration(part) { declared.insert(name, floats); });
 	if declared.is_empty() {
 		return node;
 	}
@@ -28,8 +36,8 @@ pub fn lower(node: Node) -> Node {
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
 }
 
-/// `shared xs = int[n]`: the name and the count n
-fn declaration(node: &Node) -> Option<(String, Node)> {
+/// `shared xs = int[n]`, `shared xs = float[n]`: the name, the count n and whether it holds floats
+fn declaration(node: &Node) -> Option<(String, Node, Floats)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let [word, assignment] = items.as_slice() else { return None };
 	if !matches!(word.drop_meta(), Node::Symbol(w) if w == SHARED_WORD) {
@@ -37,8 +45,8 @@ fn declaration(node: &Node) -> Option<(String, Node)> {
 	}
 	let Node::Key(target, Op::Assign, value) = assignment.drop_meta() else { return None };
 	let Node::Symbol(name) = target.drop_meta() else { return None };
-	let Node::Key(_, Op::Hash, index) = value.drop_meta() else { return None };
-	Some((name.clone(), written_count(index)))
+	let Node::Key(element, Op::Hash, index) = value.drop_meta() else { return None };
+	Some((name.clone(), written_count(index), FLOAT_WORDS.contains(&element.name().as_str())))
 }
 
 /// `int[n]` arrives as the 1-based `int#(n+1)`: n back
@@ -66,9 +74,10 @@ fn definitions(node: &Node) -> HashMap<String, Vec<String>> {
 	functions
 }
 
-/// `f(xs)` or `go f(xs)` (lower_tasks' `task·go(f, xs)`) with a shared xs: f's parameter is shared, until nothing changes
-fn shared_parameters(node: &Node, functions: &HashMap<String, Vec<String>>, declared: &HashSet<String>) -> HashMap<String, HashSet<usize>> {
-	let mut shared: HashMap<String, HashSet<usize>> = HashMap::new();
+/// `f(xs)` or `go f(xs)` (lower_tasks' `task·go(f, xs)`) with a shared xs: f's parameter is shared, of xs's element
+/// type, until nothing changes
+fn shared_parameters(node: &Node, functions: &HashMap<String, Vec<String>>, declared: &HashMap<String, Floats>) -> HashMap<String, HashMap<usize, Floats>> {
+	let mut shared: HashMap<String, HashMap<usize, Floats>> = HashMap::new();
 	loop {
 		let mut changed = false;
 		node.visit(&mut |part| {
@@ -78,11 +87,13 @@ fn shared_parameters(node: &Node, functions: &HashMap<String, Vec<String>>, decl
 			}
 			for (index, argument) in arguments.iter().enumerate() {
 				let Node::Symbol(name) = argument.drop_meta() else { continue };
-				let is_shared = declared.contains(name) || functions.iter().any(|(function, parameters)| {
-					shared.get(function).is_some_and(|indexes| indexes.iter().any(|index| parameters.get(*index) == Some(name)))
-				});
-				if is_shared && shared.entry(callee.clone()).or_default().insert(index) {
-					changed = true;
+				let floats = declared.get(name).copied().or_else(|| functions.iter().find_map(|(function, parameters)| {
+					shared.get(function).and_then(|indexes| indexes.iter().find(|(index, _)| parameters.get(**index) == Some(name)).map(|(_, floats)| *floats))
+				}));
+				if let Some(floats) = floats {
+					if shared.entry(callee.clone()).or_default().insert(index, floats).is_none() {
+						changed = true;
+					}
 				}
 			}
 		});
@@ -107,26 +118,27 @@ fn builtin(word: &str, arguments: Vec<Node>) -> Node {
 }
 
 struct Rewrite<'a> {
-	declared: HashSet<String>,
+	declared: HashMap<String, Floats>,
 	functions: &'a HashMap<String, Vec<String>>,
-	shared_parameters: &'a HashMap<String, HashSet<usize>>,
+	shared_parameters: &'a HashMap<String, HashMap<usize, Floats>>,
 }
 
 impl Rewrite<'_> {
-	/// The shared names in a function's body: its shared parameters and the declared arrays it does not shadow
-	fn names(&self, function: Option<&str>) -> HashSet<String> {
+	/// The shared names in a function's body and their element types: its shared parameters and the declared arrays
+	/// it does not shadow
+	fn names(&self, function: Option<&str>) -> HashMap<String, Floats> {
 		let mut names = self.declared.clone();
 		if let Some(function) = function {
 			let parameters = &self.functions[function];
-			names.retain(|name| !parameters.contains(name));
+			names.retain(|name, _| !parameters.contains(name));
 			let indexes = self.shared_parameters.get(function).cloned().unwrap_or_default();
-			names.extend(indexes.iter().filter_map(|index| parameters.get(*index).cloned()));
+			names.extend(indexes.iter().filter_map(|(index, floats)| parameters.get(*index).map(|name| (name.clone(), *floats))));
 		}
 		names
 	}
 
 	fn node(&self, node: Node, function: Option<&str>) -> Node {
-		if let Some((name, count)) = declaration(&node) {
+		if let Some((name, count, _)) = declaration(&node) {
 			return Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(builtin(SHARED_NEW, vec![self.node(count, function)])));
 		}
 		match node {
@@ -138,27 +150,30 @@ impl Rewrite<'_> {
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
 				match (target.drop_meta(), op) {
-					(Node::Key(array, Op::Hash, index), Op::Assign) if self.is_shared(array, &names) => {
-						builtin(SHARED_SET, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), self.node(*value, function)])
+					(Node::Key(array, Op::Hash, index), Op::Assign) if let Some(floats) = shared(array, &names) => {
+						let [_, set, _] = element_words(floats);
+						builtin(set, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), self.node(*value, function)])
 					}
-					(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) if self.is_shared(array, &names) => {
+					(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) if let Some(floats) = shared(array, &names) => {
+						let [_, _, add] = element_words(floats);
 						let value = self.node(*value, function);
 						let added = if op == Op::SubAssign { Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(value)) } else { value };
-						builtin(SHARED_ADD, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), added])
+						builtin(add, vec![array.as_ref().clone(), self.node(index.as_ref().clone(), function), added])
 					}
-					(array, Op::Hash) if self.is_shared(array, &names) && !matches!(value.drop_meta(), Node::Empty) => {
-						builtin(SHARED_GET, vec![array.clone(), self.node(*value, function)])
+					(array, Op::Hash) if !matches!(value.drop_meta(), Node::Empty) && let Some(floats) = shared(array, &names) => {
+						let [get, _, _] = element_words(floats);
+						builtin(get, vec![array.clone(), self.node(*value, function)])
 					}
 					// `#xs`, `xs.count`
-					(Node::Empty, Op::Hash) if self.is_shared(&value, &names) => builtin(SHARED_COUNT, vec![*value]),
-					(array, Op::Dot) if self.is_shared(array, &names) && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(SHARED_COUNT, vec![array.clone()]),
+					(Node::Empty, Op::Hash) if shared(&value, &names).is_some() => builtin(SHARED_COUNT, vec![*value]),
+					(array, Op::Dot) if shared(array, &names).is_some() && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(SHARED_COUNT, vec![array.clone()]),
 					_ => Node::Key(Box::new(self.node(*target, function)), op, Box::new(self.node(*value, function))),
 				}
 			}
 			Node::List(items, bracket, separator) => {
 				let names = self.names(function);
 				match items.as_slice() {
-					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && self.is_shared(array, &names) => builtin(SHARED_COUNT, vec![array.clone()]),
+					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && shared(array, &names).is_some() => builtin(SHARED_COUNT, vec![array.clone()]),
 					_ => Node::List(items.into_iter().map(|item| self.node(item, function)).collect(), bracket, separator),
 				}
 			}
@@ -166,8 +181,12 @@ impl Rewrite<'_> {
 			other => other,
 		}
 	}
+}
 
-	fn is_shared(&self, node: &Node, names: &HashSet<String>) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if names.contains(name))
+/// The element type of a shared array named by `node`, if it is one
+fn shared(node: &Node, names: &HashMap<String, Floats>) -> Option<Floats> {
+	match node.drop_meta() {
+		Node::Symbol(name) => names.get(name).copied(),
+		_ => None,
 	}
 }

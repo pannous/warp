@@ -1,7 +1,7 @@
 //! Shared arrays natively (user decision P33 step 6, lowering/shared_arrays.rs): the host holds them for the whole run,
 //! every instance (the program and its tasks) reaches them through the host words, each cell an atomic Int.
 
-use crate::host::{HostState, HOST_LIBRARY, SHARED_WORDS};
+use crate::host::{HostState, HOST_LIBRARY, SHARED_FLOAT_WORDS, SHARED_WORDS};
 use anyhow::Result;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -15,7 +15,7 @@ pub struct SharedArrays {
 
 /// Does the module use shared arrays
 pub fn imports_shared(module: &Module) -> bool {
-	module.imports().any(|import| import.module() == HOST_LIBRARY && SHARED_WORDS.contains(&import.name()))
+	module.imports().any(|import| import.module() == HOST_LIBRARY && (SHARED_WORDS.contains(&import.name()) || SHARED_FLOAT_WORDS.contains(&import.name())))
 }
 
 impl SharedArrays {
@@ -60,6 +60,31 @@ impl SharedArrays {
 		})?;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, count, move |id: i64| -> wasmtime::Result<i64> { Ok(arrays.array(id)?.len() as i64) })?;
+		// an array of floats: the cells hold the bits; an add swaps until no other task came between
+		let [get_float, set_float, add_float] = SHARED_FLOAT_WORDS;
+		let arrays = self.clone();
+		linker.func_wrap(HOST_LIBRARY, get_float, move |id: i64, index: i64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			Ok(f64::from_bits(array[cell].load(Ordering::SeqCst) as u64))
+		})?;
+		let arrays = self.clone();
+		linker.func_wrap(HOST_LIBRARY, set_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			array[cell].store(value.to_bits() as i64, Ordering::SeqCst);
+			Ok(value)
+		})?;
+		let arrays = self.clone();
+		linker.func_wrap(HOST_LIBRARY, add_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			let mut old = array[cell].load(Ordering::SeqCst);
+			loop {
+				let sum = f64::from_bits(old as u64) + value;
+				match array[cell].compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
+					Ok(_) => return Ok(sum),
+					Err(current) => old = current,
+				}
+			}
+		})?;
 		Ok(())
 	}
 }
