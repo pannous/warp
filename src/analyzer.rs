@@ -1262,6 +1262,7 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
 const LIST_OF_PREFIX: &str = "list of ";
+const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 fn map_word(call: &Node) -> Option<&'static str> {
@@ -3163,7 +3164,12 @@ fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 /// The parameters after the function name in a signature list. Only a spaced signature `f int x` pairs a type word with
 /// the next name; in the call form `f(T, y)` every item is a parameter (the parser made `f(int x)` the item `x:int`)
 fn extract_params(signature: &[Node], bracket: &Bracket) -> Vec<Param> {
-	let mut items = signature.iter().skip(1).peekable();
+	// `f(xs: list of int, y)`: the comma groups `xs:list of int` as one spaced item
+	let flat: Vec<&Node> = signature.iter().skip(1).flat_map(|item| match item.drop_meta() {
+		Node::List(parts, _, Separator::Space | Separator::None) if matches!(parts.first().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, _))) => parts.iter().collect(),
+		_ => vec![item],
+	}).collect();
+	let mut items = flat.into_iter().peekable();
 	let mut params = vec![];
 	while let Some(item) = items.next() {
 		let type_first_name = match (item.drop_meta(), items.peek().map(|next| next.drop_meta())) {
@@ -3181,13 +3187,25 @@ fn extract_params(signature: &[Node], bracket: &Bracket) -> Vec<Param> {
 	params
 }
 
-/// `xs: T list` (the parser leaves `list` as the next item) annotates xs as a `list of T`: T a type word, a declared
-/// type or a trait (`sort(xs: Comparable list)`)
+/// `xs: T list` and `xs: list of T` (the parser leaves `list`, or `of T`, as the next items) annotate xs as a `list of T`:
+/// T a type word, a declared type or a trait (`sort(xs: Comparable list)`)
 fn with_list_annotation<'a>(param: Param, items: &mut std::iter::Peekable<impl Iterator<Item = &'a Node>>) -> Param {
-	let Some(element) = param.annotation.as_ref().map(Node::name) else { return param };
-	if !matches!(items.peek().map(|next| next.drop_meta()), Some(Node::Symbol(word)) if word == LIST_WORD) {
-		return param;
-	}
+	let Some(annotation) = param.annotation.as_ref().map(Node::name) else { return param };
+	let next_word = |items: &mut std::iter::Peekable<_>| match items.peek().map(|next: &&Node| next.drop_meta()) {
+		Some(Node::Symbol(word)) => Some(word.clone()),
+		_ => None,
+	};
+	let element = match next_word(items).as_deref() {
+		Some(LIST_WORD) => annotation,
+		Some(OF_WORD) if annotation == LIST_WORD => {
+			items.next();
+			match next_word(items) {
+				Some(element) => element,
+				None => return param,
+			}
+		}
+		_ => return param,
+	};
 	items.next();
 	Param { annotation: Some(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))), ..param }
 }

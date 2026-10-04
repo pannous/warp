@@ -1310,6 +1310,7 @@ PASSED:
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
+  ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
   ✓ types::test_trait_default_methods::a_conforming_type_gets_the_default_method
   ✓ types::test_trait_default_methods::a_type_overrides_the_default_method
@@ -1782,4 +1783,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1777 passed, 0 failed, 1777 total tested
+53 ignored, 1778 passed, 0 failed, 1778 total tested

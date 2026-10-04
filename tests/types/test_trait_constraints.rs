@@ -21,3 +21,11 @@ fn elements_that_do_not_conform_are_a_compile_error() {
 	fails_with(&format!("{SHAPES}total([dot(2)])"), "dot is not shape");
 	fails_with("f(xs: flaot list) := 1; f([1])", "unknown type list of flaot");
 }
+
+#[test]
+fn a_list_annotation_reads_both_ways() {
+	is!("f(xs: list of int, y) := xs#2 + y; f([3 4], 1)", 5);
+	is!("f(xs: int list, y) := xs#2 + y; f([3 4], 1)", 5);
+	is!(&format!("{AGES}least(xs: list of Comparable) := (sort xs)#1; least([age(3) age(1)]).n"), 1);
+	fails_with(&format!("{AGES}least(xs: list of Comparable) := (sort xs)#1; least([dot(3) dot(1)])"), "dot is not Comparable");
+}
