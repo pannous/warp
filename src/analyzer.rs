@@ -291,6 +291,11 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
 			return Kind::Symbol; // the type's name
 		}
+		// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
+		// parentheses
+		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
+			return Kind::Int;
+		}
 		if name == PRINT_CALL && items.len() >= 2 {
 			return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
 				[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
@@ -615,7 +620,8 @@ const CONCRETE_KINDS: [Kind; 6] = [Kind::Int, Kind::Float, Kind::Text, Kind::Cod
 
 fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let assigned = binding_kind(value, scope);
-	let Some(local) = scope.locals.get_mut(name).filter(|local| local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
+	// a parameter's representation comes from its calls (infer_parameters_from_calls), not from the body
+	let Some(local) = scope.locals.get_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	if CONCRETE_KINDS.contains(&local.kind) && CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned) {
 		local.kind = Kind::Empty;
