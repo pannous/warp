@@ -28,16 +28,23 @@ pub(super) struct ListAbi {
 	pub returns_list: bool,
 }
 
-/// `p·list = p`, the first use of a list parameter p in the body, and its only one
-fn list_parameters(function: &UserFunctionDef) -> Vec<bool> {
-	let Node::List(statements, Bracket::Curly, _) = function.body.drop_meta() else { return vec![false; function.params.len()] };
+/// The variable each list parameter p is copied into, `v = p`, its only use: `p·list = p` (analyzer
+/// indexed_parameter_copies) or a for loop's `items = p`
+fn list_parameters(function: &UserFunctionDef) -> Vec<Option<String>> {
 	function.params.iter().map(|param| {
-		let copy = format!("{}{LIST_COPY_SUFFIX}", param.name);
-		let copied = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, value)
-			if matches!(target.drop_meta(), Node::Symbol(name) if *name == copy) && matches!(value.drop_meta(), Node::Symbol(name) if *name == param.name)));
+		let mut copy = None;
 		let mut uses = 0;
-		function.body.visit(&mut |part| if matches!(part, Node::Symbol(name) if *name == param.name) { uses += 1 });
-		copied && uses == 1 && param.default.is_none() && param_kind(param) == Kind::List // a text keeps its letters
+		function.body.visit(&mut |part| match part {
+			Node::Symbol(name) if *name == param.name => uses += 1,
+			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Symbol(name) if *name == param.name) => {
+				if let Node::Symbol(target) = target.drop_meta() {
+					copy = Some(target.clone());
+				}
+			}
+			_ => {}
+		});
+		// a text keeps its letters
+		copy.filter(|_| uses == 1 && param.default.is_none() && param_kind(param) == Kind::List)
 	}).collect()
 }
 
@@ -51,12 +58,14 @@ fn results(body: &Node) -> Vec<&Node> {
 			}
 		}
 	});
-	if let Node::List(statements, Bracket::Curly, _) = body.drop_meta() {
-		if let Some(last) = statements.last() {
-			let returns = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == RETURN));
-			if !returns {
-				found.push(last);
-			}
+	let last = match body.drop_meta() {
+		Node::List(statements, Bracket::Curly, _) => statements.last(),
+		_ => Some(body), // `f(x) := (…; v)` is worth v (last_value)
+	};
+	if let Some(last) = last {
+		let returns = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == RETURN));
+		if !returns {
+			found.push(last);
 		}
 	}
 	found
@@ -91,11 +100,21 @@ impl WasmGcEmitter {
 		let mut abi: HashMap<String, ListAbi> = HashMap::new();
 		let mut list_results: HashMap<String, Vec<Node>> = HashMap::new();
 		for function in &functions {
-			let params = list_parameters(function);
+			let copies = list_parameters(function);
+			let mut params: Vec<bool> = copies.iter().map(Option::is_some).collect();
 			if !params.contains(&true) {
 				continue;
 			}
-			let typed = self.body_typed_lists(function, &params);
+			// a parameter whose copy is no array after all takes a Node
+			let mut typed = self.body_typed_lists(function, &params);
+			let arrays: Vec<bool> = copies.iter().map(|copy| copy.as_ref().is_some_and(|copy| typed.get(copy).is_some_and(|list| list.element == ElementType::Node))).collect();
+			if arrays != params {
+				params = arrays;
+				if !params.contains(&true) {
+					continue;
+				}
+				typed = self.body_typed_lists(function, &params);
+			}
 			// a result that is the array copy itself, held as a $NodeList; the calls among the results are judged below
 			let results: Vec<Node> = results(&function.body).into_iter().map(|result| last_value(result).clone()).collect();
 			let arrays = results.iter().all(|result| match result.drop_meta() {
@@ -174,6 +193,9 @@ impl WasmGcEmitter {
 			if self.typed_lists.get(name).is_some_and(|list| list.element == ElementType::Node) {
 				let slot = self.scope.lookup(name).expect("a typed list is a local").position;
 				func.instruction(&I::LocalGet(slot));
+				return;
+			}
+			if self.emit_typed_list_as_node_list(func, name) {
 				return;
 			}
 		}

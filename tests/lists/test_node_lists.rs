@@ -33,3 +33,11 @@ fn a_recursive_list_function_passes_its_array() {
 	is!(&format!("{quicksort}xs = [5 3 9 1 7]; ys = qs(xs, 0, 4); xs#1"), 5);
 	is!(&format!("{quicksort}xs = (0..500).map(x => (x * 499) % 500); ys = qs(xs, 0, 499); ys#1 + ys#500"), 499);
 }
+
+#[test]
+fn a_list_parameter_walked_by_a_for_loop_takes_the_array() {
+	let total = "total(xs) := { s=0; for x in xs { s+=x }; s }; ";
+	is!(&format!("{total}big=(0..20000).map(x=>x); t=0; for k in 0..3 {{ t += total(big) }}; t"), 599970000);
+	is!(&format!("{total}e=[]; f=[1.5,2]; f#1=0.5; total(e)+total(f)"), 2.5);
+	is!(&format!("{total}total([1 2 3]) + total((4 5))"), 15);
+}

@@ -72,6 +72,8 @@ struct ElementRuntime {
 	set: &'static str,
 	copy: &'static str,
 	as_node: &'static str,
+	/// as_node_list(list) -> $NodeList: the element nodes in an array, what a list parameter of the array convention takes
+	as_node_list: &'static str,
 	filled: &'static str,
 	push: &'static str,
 	sum: &'static str,
@@ -80,15 +82,15 @@ struct ElementRuntime {
 }
 
 const INT_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", as_node: "int_list_as_node", filled: "int_list_filled",
+	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", as_node: "int_list_as_node", as_node_list: "int_list_as_node_list", filled: "int_list_filled",
 	push: "int_list_push", sum: "int_list_sum", new_node: "new_int",
 };
 const FLOAT_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", as_node: "float_list_as_node",
+	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", as_node: "float_list_as_node", as_node_list: "float_list_as_node_list",
 	filled: "float_list_filled", push: "float_list_push", sum: "float_list_sum", new_node: "new_float",
 };
 const NODE_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "node_list_at", set: "node_list_set", copy: "node_list_copy", as_node: "node_list_as_node",
+	at: "node_list_at", set: "node_list_set", copy: "node_list_copy", as_node: "node_list_as_node", as_node_list: "",
 	filled: "node_list_filled", push: "node_list_push", sum: "", new_node: "",
 };
 /// node_list_of(node) -> $NodeList: the items of a Node list in an array, what a Node list variable starts from
@@ -875,6 +877,29 @@ impl WasmGcEmitter {
 				]);
 			});
 		}
+		// as_node_list(list) -> $NodeList: one node per element, no cons cells; ø the empty list
+		if self.should_emit_function(runtime.as_node_list) {
+			let (node_array, node_list) = self.typed_list_types(ElementType::Node);
+			let node_list_ref = Ref(self.typed_list_ref(ElementType::Node));
+			let node_array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
+			self.runtime_function(runtime.as_node_list, vec![list_ref], vec![node_list_ref], vec![ValType::I32, node_array_ref], |s, f| {
+				let (position, nodes) = (1, 2);
+				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
+					I::I32Const(0), I::I32Const(0), I::ArrayNewDefault(node_array), I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(node_list), I::Return, I::End]);
+				Self::emit_list(f, &[
+					I::LocalGet(0), length.clone(), I::ArrayNewDefault(node_array), I::LocalSet(nodes),
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(position), I::LocalGet(0), length.clone(), I::I32GeU, I::BrIf(1),
+					I::LocalGet(nodes), I::LocalGet(position), I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
+				]);
+				s.call(f, runtime.new_node);
+				Self::emit_list(f, &[
+					I::ArraySet(node_array),
+					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position), I::Br(0), I::End, I::End,
+					I::LocalGet(0), length.clone(), I::LocalGet(nodes), I::RefAsNonNull, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(node_list),
+				]);
+			});
+		}
 		// as_node(list) -> ref $Node: the square list of element nodes, built from the last element; ø when empty
 		if self.should_emit_function(runtime.as_node) {
 			let node = self.type_manager.node_type;
@@ -901,6 +926,17 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
 			});
 		}
+	}
+
+	/// Push a number list variable as a $NodeList; false for any other variable
+	pub(super) fn emit_typed_list_as_node_list(&mut self, func: &mut Function, name: &str) -> bool {
+		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
+		if list.element == ElementType::Node {
+			return false;
+		}
+		func.instruction(&I::LocalGet(slot));
+		self.emit_call(func, list.element.runtime().as_node_list);
+		true
 	}
 
 	/// In a runtime function (list, index, …): fail unless the 1-based index (local 1) is an integer within the list,
