@@ -27,6 +27,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (library_words method_call). Night session 2026-10-04.
 - P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
   are not required. Assumed: Python semantics. Night session 2026-10-04.
+- P31 Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
+  type word (P20 forbids it as a function name). Options: `show(p:person)` (Haskell) / `description(p:person)` (Swift)
+  / allow `text(p:person)` as the one exception. Not implemented yet (todo.md "Traits: Printable"). Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
