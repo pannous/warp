@@ -475,6 +475,14 @@ impl Lowering {
 		let is_call = call_name(items, bracket, separator).is_some();
 		// `(sort xs)` is `sort xs` in parentheses
 		let is_prefix = matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
+		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
+		// (a bare word that names no variable keeps the list data: `[first last]`)
+		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadowed.contains(name));
+		let is_element = *bracket == Bracket::Square && *separator == Separator::Space && items.len() == arity(word) + 1 && items[1..].iter().all(is_value);
+		if is_element && !is_call {
+			let element = self.call(word, &items[0], items[1..].to_vec(), false);
+			return Some(Node::List(vec![element], Bracket::Square, Separator::None));
+		}
 		if !is_call && !is_prefix {
 			return None;
 		}
@@ -724,7 +732,7 @@ impl Lowering {
 
 /// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
 fn dispatched_sum(expanded: Node) -> Node {
-	let Node::List(mut items, bracket, separator) = expanded else { return expanded };
+	let Node::List(mut items, bracket, separator) = expanded.drop_meta().clone() else { return expanded };
 	let [assignment, sum_loop] = items.as_mut_slice() else { return Node::List(items, bracket, separator) };
 	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else { return Node::List(items, bracket, separator) };
 	let list = temporary.as_ref().clone();

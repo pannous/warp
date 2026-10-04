@@ -115,6 +115,7 @@ PASSED:
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
+  ✓ ffi::test_ffi::test_a_lone_import_with_a_comment_is_empty
   ✓ ffi::test_ffi::test_a_program_of_imports_only_is_empty
   ✓ ffi::test_ffi::test_c_type_mapping
   ✓ ffi::test_ffi::test_dynlib_import_emit
@@ -469,6 +470,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
+  ✓ lists::test_typed_lists::test_sum_of_a_typed_list_is_one_operation
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
   ✓ lists::test_unpacking::for_loop_unpacking
   ✓ lists::test_unpacking::list_target
@@ -1758,4 +1760,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1753 passed, 0 failed, 1753 total tested
+53 ignored, 1755 passed, 0 failed, 1755 total tested
