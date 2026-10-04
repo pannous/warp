@@ -15,6 +15,8 @@ const TOOL_COMMAND: &str = "tool";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
 const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
+/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
+const OLD_ANSWERS_FILE: &str = ".wasp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 
@@ -53,6 +55,7 @@ fn main() {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
+    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
 
     // CGI mode detection

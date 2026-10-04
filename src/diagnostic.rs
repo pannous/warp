@@ -261,6 +261,22 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 }
 
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
+/// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
+/// them, so acknowledged notes stay quiet after the rename
+pub fn adopt_acknowledgements(old_file: &str, file: &str) {
+	let Ok(old) = std::fs::read_to_string(old_file) else { return };
+	let current = std::fs::read_to_string(file).unwrap_or_default();
+	let is_acknowledgement = |line: &&str| line.split_once(" = ").is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED);
+	let adopted: Vec<&str> = old.lines().filter(is_acknowledgement).filter(|line| !current.lines().any(|known| known.trim() == line.trim())).collect();
+	if adopted.is_empty() {
+		return;
+	}
+	let separator = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
+	if let Err(failure) = std::fs::write(file, format!("{current}{separator}{}\n", adopted.join("\n"))) {
+		eprintln!("could not adopt the acknowledgements of {old_file}: {failure}");
+	}
+}
+
 pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 	ACKNOWLEDGEMENTS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
 	load_acknowledgements();
