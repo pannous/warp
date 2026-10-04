@@ -633,3 +633,8 @@ fn test_ffi_text_arguments_known_at_run_time() {
 fn test_a_program_of_imports_only_is_empty() {
 	is!("import atof from \"c\"\nimport atoi from \"c\"", warp::Node::Empty);
 }
+
+#[test]
+fn test_a_lone_import_with_a_comment_is_empty() {
+	is!("import sqrt from \"m\"\n// a comment", warp::Node::Empty);
+}

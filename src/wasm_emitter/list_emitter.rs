@@ -104,6 +104,12 @@ impl WasmGcEmitter {
 			return;
 		}
 
+		// a lone import or use statement (the whole program) is worth ø
+		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "import" || word == "use") && items.len() >= 2 {
+			self.emit_call(func, "new_empty");
+			return;
+		}
+
 		// Check for fetch call: [Symbol("fetch"), url_node], optionally `… timeout SECONDS`
 		if self.config.emit_host_imports {
 			if let Some((url, timeout)) = crate::host::fetch_call(&Node::List(items.to_vec(), Bracket::None, Separator::Space)) {
