@@ -622,11 +622,16 @@ impl WasmGcEmitter {
 			return;
 		}
 		// Emit arguments; a missing argument evaluates its default anew at every call
+		// a default reads the parameters before it as the values given for them: `f(a, b = a * 2)`
+		let mut given: HashMap<String, Node> = HashMap::new();
 		for (i, param) in user_fn.params.iter().enumerate() {
-			let Some(argument) = args.get(i).or(param.default.as_ref()) else {
+			let defaulted = param.default.as_ref().map(|default| crate::law::substitute(default, &given));
+			let Some(argument) = args.get(i).or(defaulted.as_ref()).cloned() else {
 				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", user_fn.name, param.name));
 				return;
 			};
+			given.insert(param.name.clone(), argument.clone());
+			let argument = &argument;
 			if self.takes_list_abi(&user_fn.name, i) {
 				self.emit_list_abi_value(func, argument);
 				continue;

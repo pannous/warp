@@ -20,3 +20,10 @@ fn text_builtins_and_library_words_check_their_values_too() {
 	fails_with("byte_at(\"ab\")", "byte_at takes 2 values, got 1");
 	fails_with("x = 1\ny = upper(\"a\", \"b\")", "upper takes 1 argument, got 2 at 2:");
 }
+
+#[test]
+fn a_default_reads_the_parameters_before_it() {
+	is!("f(a, b = a * 2) := a + b; f(3)", 9);
+	is!("f(a, b = a * 2) := a + b; f(3, 1)", 4);
+	is!("g(x, y = x + 1, z = y * 2) := z; g(1)", 4);
+}
