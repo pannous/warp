@@ -299,17 +299,17 @@ impl TaskTable {
 		let callee = instance.get_func(&mut store, function).ok_or_else(|| anyhow!("no exported function {function}"))?;
 		let builders = Builders::of(&mut |export| instance.get_export(&mut store, export)).map_err(|failure| anyhow!("{failure}"))?;
 		let signature = callee.ty(&store);
-		let mut values = vec![];
-		for (parameter, argument) in signature.params().zip(arguments) {
-			values.push(match (parameter, argument) {
-				(ValType::I64, TaskValue::Int(n)) => Val::I64(*n),
-				(ValType::I64, TaskValue::Char(c)) => Val::I64(*c as i64), // a character held unboxed is its code point
-				(ValType::F64, TaskValue::Float(x)) => Val::F64(x.to_bits()),
-				(ValType::F64, TaskValue::Int(n)) => Val::F64((*n as f64).to_bits()),
-				(ValType::Ref(_), argument) => builders.build(argument, &mut store.as_context_mut())?,
-				(parameter, argument) => return Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
-			});
-		}
+		let values: Vec<Val> = match signature.params().next() {
+			// a wrapper of values (declarations::with_node_wrappers): the one argument list
+			Some(ValType::Ref(_)) if signature.params().len() == 1 && function.ends_with(crate::declarations::NODE_WRAPPER_SUFFIX) => {
+				vec![builders.build(&TaskValue::List(arguments.to_vec(), crate::wasm_emitter::bracket_info(&Bracket::Square)), &mut store.as_context_mut())?]
+			}
+			_ => signature.params().zip(arguments).map(|(parameter, argument)| match (parameter, argument) {
+				(ValType::I64, TaskValue::Int(n)) => Ok(Val::I64(*n)),
+				(ValType::Ref(_), argument) => builders.build(argument, &mut store.as_context_mut()),
+				(parameter, argument) => Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
+			}).collect::<Result<_>>()?,
+		};
 		let mut results: Vec<Val> = signature.results().map(|result| match result {
 			ValType::I64 => Val::I64(0),
 			ValType::F64 => Val::F64(0),

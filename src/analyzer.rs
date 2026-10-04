@@ -2944,24 +2944,28 @@ fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String,
 	changed
 }
 
-/// The user function a list calls and its arguments: `f(a, b)`, and a task start that runs f in another instance with
-/// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, `task_spawn_values("f", [a, b])` (resolve_tasks)
-fn called_function(items: &[Node]) -> Option<(String, Vec<&Node>)> {
-	let head = match items.first()?.drop_meta() {
-		Node::Symbol(name) => name.as_str(),
-		_ => return None,
-	};
-	let started = || match items.get(1).map(Node::drop_meta) {
+/// The user functions a list calls and their arguments: `f(a, b)`, and a task start that runs f in another instance with
+/// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, and `task_spawn_values("f·node", [a, b])`, which
+/// calls the wrapper f·node with the list and through it f with the items (resolve_tasks)
+fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
+	let Some(Node::Symbol(head)) = items.first().map(Node::drop_meta) else { return vec![] };
+	let started = match items.get(1).map(Node::drop_meta) {
 		Some(Node::Text(name) | Node::Symbol(name)) => Some(name.clone()),
 		_ => None,
 	};
-	match head {
-		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => Some((started()?, items[2..].iter().collect())),
-		crate::host::TASK_SPAWN_VALUES => match items.get(2).map(Node::drop_meta) {
-			Some(Node::List(arguments, _, _)) => Some((started()?, arguments.iter().collect())),
-			_ => None,
+	match head.as_str() {
+		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => started.map(|name| (name, items[2..].iter().collect())).into_iter().collect(),
+		crate::host::TASK_SPAWN_VALUES => match (started, items.get(2)) {
+			(Some(wrapper), Some(list)) => {
+				let mut calls = vec![(wrapper.clone(), vec![list])];
+				if let (Some(function), Node::List(arguments, _, _)) = (wrapper.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX), list.drop_meta()) {
+					calls.push((function.to_string(), arguments.iter().collect()));
+				}
+				calls
+			}
+			_ => vec![],
 		},
-		name => Some((name.to_string(), items[1..].iter().collect())),
+		name => vec![(name.to_string(), items[1..].iter().collect())],
 	}
 }
 
@@ -2972,7 +2976,7 @@ fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mu
 	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
-			if let Some((name, arguments)) = called_function(items) {
+			for (name, arguments) in called_functions(items) {
 				if let Some(function) = ctx.user_functions.get(&name) {
 					for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 						passed.entry((name.clone(), index)).or_default().insert(infer_type(argument, scope));
@@ -3140,13 +3144,14 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
 	program.visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
-		let Some((name, arguments)) = called_function(items) else { return };
-		let Some(function) = ctx.user_functions.get(&name) else { return };
-		for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
-			if let Some(kind) = argument_kind(argument) {
-				let kinds = argument_kinds.entry((name.clone(), index)).or_default();
-				if !kinds.contains(&kind) {
-					kinds.push(kind);
+		for (name, arguments) in called_functions(items) {
+			let Some(function) = ctx.user_functions.get(&name) else { continue };
+			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
+				if let Some(kind) = argument_kind(argument) {
+					let kinds = argument_kinds.entry((name.clone(), index)).or_default();
+					if !kinds.contains(&kind) {
+						kinds.push(kind);
+					}
 				}
 			}
 		}

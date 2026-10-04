@@ -377,10 +377,14 @@ impl TaskHandlers<'_> {
 	}
 }
 
-/// The suffix of the wrapper a task of values is started through: `total·node(a) := { r·node = total(a); r·node }`
-/// takes and gives plain Nodes, where total itself may take and give arrays (list_abi)
-const NODE_WRAPPER_SUFFIX: &str = "·node";
+/// The suffix of the wrapper a task of values is started through: `total·node(arguments·node) := { r·node =
+/// total(arguments·node#1); r·node }` takes the argument list and gives a plain value, where total itself may take and
+/// give arrays (list_abi)
+pub(crate) const NODE_WRAPPER_SUFFIX: &str = "·node";
 const WRAPPER_RESULT: &str = "r·node";
+/// The one parameter of the wrapper: the list of the arguments, as task_spawn_values carries it (the host passes one
+/// Node and needs no parameter types: a browser cannot read them)
+const WRAPPER_ARGUMENTS: &str = "arguments·node";
 
 /// The program with the wrappers of the started functions (name → parameter count) defined first
 fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
@@ -388,9 +392,10 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 		return node;
 	}
 	let mut items: Vec<Node> = wrapped.iter().map(|(function, count)| {
-		let parameters: Vec<Node> = (0..*count).map(|index| Node::Symbol(format!("p·{index}"))).collect();
-		let head = Node::List([vec![Node::Symbol(format!("{function}{NODE_WRAPPER_SUFFIX}"))], parameters.clone()].concat(), Bracket::Round, Separator::None);
-		let call = Node::List([vec![Node::Symbol(function.clone())], parameters].concat(), Bracket::Round, Separator::None);
+		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
+		let head = Node::List(vec![Node::Symbol(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments.clone()], Bracket::Round, Separator::None);
+		let argument = |index: usize| Node::Key(Box::new(arguments.clone()), Op::Hash, Box::new(Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1))));
+		let call = Node::List([vec![Node::Symbol(function.clone())], (0..*count).map(argument).collect()].concat(), Bracket::Round, Separator::None);
 		let result = Node::Symbol(WRAPPER_RESULT.to_string());
 		let body = Node::List(vec![Node::Key(Box::new(result.clone()), Op::Assign, Box::new(call)), result], Bracket::Curly, Separator::Semicolon);
 		Node::Key(Box::new(head), Op::Define, Box::new(body))
@@ -428,8 +433,13 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 						TaskPath::Ints => marker(TASK_SPAWN, [vec![Node::Text(function)], arguments].concat()),
 						TaskPath::Values(parameters) => {
 							let float = |argument: Node| Node::Key(Box::new(argument), Op::As, Box::new(Node::Symbol("float".to_string())));
+							// a character crosses as a one-character text, as a variable holds it
 							let arguments = arguments.into_iter().zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
-								.map(|(argument, kind)| if *kind == crate::type_kinds::Kind::Float { float(argument) } else { argument }).collect();
+								.map(|(argument, kind)| match argument.drop_meta() {
+									Node::Char(character) => Node::Text(character.to_string()),
+									_ if *kind == crate::type_kinds::Kind::Float => float(argument),
+									_ => argument,
+								}).collect();
 							// through the wrapper: whether f takes a list as an array is decided later (list_abi)
 							wrapped.borrow_mut().insert(function.clone(), parameters.len());
 							let started = format!("{function}{NODE_WRAPPER_SUFFIX}");
