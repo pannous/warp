@@ -516,6 +516,9 @@ pub fn runtime_error_message(name: &str) -> String {
 /// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
 
+/// map_without_cells(cells, key): what map_without builds the remaining cells with
+const MAP_WITHOUT_CELLS: &str = "map_without_cells";
+
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
@@ -1277,7 +1280,7 @@ const MAP_COLUMN_CELLS: &str = "map_column_cells";
 const ENTRY_PART: i32 = 0;
 const KEY_PART: i32 = 1;
 const VALUE_PART: i32 = 2;
-use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WORD_FUNCTIONS};
+use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WITHOUT, MAP_WORD_FUNCTIONS};
 
 impl WasmGcEmitter {
 	/// The key of `target[key]`: an index that is a symbol or a text (not a number) selects the entry of that name
@@ -1644,6 +1647,33 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "map_find");
 			Self::emit_list(f, &[I::BrOnNonNull(0), I::LocalGet(2), I::End]);
+		});
+		// map_without_cells(cells, key): the cells without the key's entry, the cells before it copied, the rest shared
+		let without_cells = next_index(self);
+		self.runtime_function(MAP_WITHOUT_CELLS, vec![nullable, node_ref], vec![nullable], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
+			s.call(f, "map_entry_has_key");
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_field(f, 0, 0);
+			s.emit_field(f, 0, 1);
+			s.emit_field(f, 0, 2);
+			Self::emit_list(f, &[I::LocalGet(1), I::Call(without_cells), I::StructNew(node)]);
+		});
+		// map_without(map, key): ø for the one entry `{a:1}` of the key, the map itself for another one, else its cells
+		// without the key's entry
+		self.runtime_function(MAP_WITHOUT, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+			is_entry(s, f, 0);
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "map_entry_has_key");
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref))]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End, I::Else, I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1), I::Call(without_cells), I::BrOnNonNull(0)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::End, I::End]);
 		});
 	}
 }

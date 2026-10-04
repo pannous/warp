@@ -25,19 +25,23 @@ pub const COLLECTION_CONTAINS: &str = "collection_contains";
 /// collection_position(xs, x): `x in xs`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
 pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
-pub const MAP_WORD_FUNCTIONS: [&str; 6] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR];
+/// map_without(map, key): the map without the key's entry, what `m.remove(k)` stores in m (analyzer removed_key)
+pub const MAP_WITHOUT: &str = "map_without";
+pub const MAP_WORD_FUNCTIONS: [&str; 7] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT];
 const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
 /// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
 const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 21] = [
+const SYNONYMS: [(&str, &[&str]); 22] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
 	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
 	(MAP_GET_OR, &["get"]),
+	// P35 default: `xs.index_of(x)` is the 1-based position, as `x in xs` (0 when absent)
+	(COLLECTION_POSITION, &["index_of"]),
 	("chars", &[]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
@@ -61,9 +65,10 @@ const SUM: &str = "sum";
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 16] = [
+pub const RUNTIME_WORDS: [(&str, usize); 17] = [
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
+	(MAP_WITHOUT, 2),
 ];
 /// `ord(c)`, `ordinal(c)`, `codepoint(c)`: the code point of a character (`c as int` is only its digit)
 pub const ORD: &str = "ord";
@@ -118,7 +123,7 @@ const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 3] = ["upper", "lower", "join"];
-const LIST_RESULT_WORDS: [&str; 6] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES];
+const LIST_RESULT_WORDS: [&str; 7] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;

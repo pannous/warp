@@ -477,6 +477,8 @@ PASSED:
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
+  ✓ lists::test_remove_and_index_of::index_of_is_the_one_based_position
+  ✓ lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable
   ✓ lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ lists::test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
   ✓ lists::test_signed_operand_list::each_reading_has_its_explicit_form
@@ -1813,4 +1815,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1808 passed, 0 failed, 1808 total tested
+53 ignored, 1810 passed, 0 failed, 1810 total tested

@@ -2199,6 +2199,7 @@ fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			Node::Key(list, Op::Assign, Box::new(appended))
 		}
 		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
+		Node::Key(map, Op::Dot, call) if removed_key(&map, &call).is_some() => lower(removed_key(&map, &call).expect("guarded")),
 		// `int[n]`, `#(int[n])`: n zeros of the type, wherever it stands, unless the word is a variable (`chars[i]`)
 		Node::Key(element, Op::Hash, one_based) if zero_filled_subscript(&element, &one_based, &names.values).is_some() => {
 			zero_filled_subscript(&element, &one_based, &names.values).expect("guarded")
@@ -2281,6 +2282,7 @@ fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 /// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 const POP_METHOD: &str = "pop";
+const REMOVE_METHOD: &str = "remove";
 const POP_TEMPORARY: &str = "pop_tmp";
 const INSERT_METHOD: &str = "insert";
 
@@ -2304,7 +2306,7 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
 pub fn is_list_mutating_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name) || name == POP_METHOD
+	APPEND_METHODS.contains(&name) || name == POP_METHOD || name == REMOVE_METHOD
 }
 
 /// The element of `x.add(v)` when x is a variable
@@ -2324,6 +2326,25 @@ fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 			"({POP_TEMPORARY} = {name}#count({name}); {name} = slice({name}, 0, count({name})-1); {POP_TEMPORARY})"))),
 		_ => None,
 	}
+}
+
+/// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop)
+fn removed_key(map: &Node, call: &Node) -> Option<Node> {
+	let Node::Symbol(name) = map.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [method, key] = items.as_slice() else { return None };
+	if !is_word(method, REMOVE_METHOD) {
+		return None;
+	}
+	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+	let removed = Node::Symbol(format!("{name}{RANGE_SUFFIX}removed"));
+	let value = call(crate::library_words::MAP_GET_OR, vec![map.clone(), key.clone(), Node::Empty]);
+	let without = call(crate::library_words::MAP_WITHOUT, vec![map.clone(), key.clone()]);
+	Some(Node::List(vec![
+		Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
+		Node::Key(Box::new(map.clone()), Op::Assign, Box::new(without)),
+		removed,
+	], Bracket::Round, Separator::Semicolon))
 }
 
 /// `xs.insert(a, b)` when xs is a variable. Wasp writes `insert(value, position)`, Python `insert(position, value)`:

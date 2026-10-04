@@ -25,3 +25,4 @@ mod test_fractional_count;
 mod test_node_lists;
 mod test_list_of_objects;
 mod test_dynamic_range;
+mod test_remove_and_index_of;

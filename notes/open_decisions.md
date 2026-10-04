@@ -39,9 +39,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P34 `d = {}; d[1] = "a"`: a number subscript of an empty `{}` indexes it as a list (index out of range) / keys it as a
   map like a text subscript does (Lua tables, JS objects). Assumed: list indexing (today's behaviour, a loud error).
   Night 2026-10-04.
-- P35 `m.remove(k)` on a map and `xs.index(x)` on a list are undefined: remove the key from the variable and give its
-  value (Python dict.pop) / give a new map; `index` 0-based (Python) / 1-based like `x in xs`. Assumed: not provided
-  until decided (undefined function). Night 2026-10-04.
+- P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
+  (Python dict.pop) / give a new map; `index_of` 0-based (Python) / 1-based like `x in xs` and `in` on texts.
+  Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
+  absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
+  (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
