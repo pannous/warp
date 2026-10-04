@@ -571,6 +571,15 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Statements whose last value is an exact number (`{i*10}`, `{puti(i)}`): none that `emit_discarded_statement`
+	/// keeps in another representation (a float, text or list update, a typed list store)
+	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
+		statements.last().is_some_and(|last| {
+			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
+				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref()
+		})
+	}
+
 	/// An `if` statement whose branches store a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers to): its
 	/// branches run as statements, so the stored list never becomes a Node; leaves a value for the caller to drop
 	fn emit_discarded_branches(&mut self, func: &mut Function, item: &Node) -> bool {

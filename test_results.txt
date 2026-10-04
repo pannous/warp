@@ -57,6 +57,9 @@ PASSED:
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
   ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
+  ✓ control::test_loop_value::a_counting_loop_gives_its_last_body_value
+  ✓ control::test_loop_value::a_walking_loop_gives_its_last_body_value
+  ✓ control::test_loop_value::a_while_loop_of_one_expression_gives_its_value
   ✓ control::test_loops_in_functions::a_multi_line_function_with_a_loop
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
@@ -110,13 +113,12 @@ PASSED:
   ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
   ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
   ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
   ✓ control::test_variable_signals::the_wiki_countdown
   ✓ control::test_variable_signals::whenever_runs_each_time_the_condition_holds
-  ✓ control::test_welcome_forms::loop_runs_until_break
-  ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
@@ -1500,13 +1502,16 @@ PASSED:
   ✓ wasm::test_wasm::test_emitter
   ✓ wasm::test_wasm::test_float_operators
   ✓ wasm::test_wasm::test_for_loop_classic
+  ✓ wasm::test_wasm::test_get_local
   ✓ wasm::test_wasm::test_globals
   ✓ wasm::test_wasm::test_implicit_multiplication
   ✓ wasm::test_wasm::test_is
+  ✓ wasm::test_wasm::test_lazy_evaluation
   ✓ wasm::test_wasm::test_logarithm
   ✓ wasm::test_wasm::test_math_extra
   ✓ wasm::test_wasm::test_math_library
   ✓ wasm::test_wasm::test_math_operators
+  ✓ wasm::test_wasm::test_math_operators_runtime
   ✓ wasm::test_wasm::test_merge_wabt
   ✓ wasm::test_wasm::test_named_data_sections
   ✓ wasm::test_wasm::test_norm
@@ -1525,6 +1530,7 @@ PASSED:
   ✓ wasm::test_wasm::test_square_precedence
   ✓ wasm::test_wasm::test_string_concat_wasm
   ✓ wasm::test_wasm::test_todo_browser
+  ✓ wasm::test_wasm::test_wasm_function_definiton
   ✓ wasm::test_wasm::test_wasm_if
   ✓ wasm::test_wasm::test_wasm_increment
   ✓ wasm::test_wasm::test_wasm_logic
@@ -1536,6 +1542,7 @@ PASSED:
   ✓ wasm::test_wasm::test_wasm_logic_unary_variables
   ✓ wasm::test_wasm::test_wasm_mutable_global
   ✓ wasm::test_wasm::test_wasm_mutable_global2
+  ✓ wasm::test_wasm::test_wasm_ternary
   ✓ wasm::test_wasm::test_wasm_typed_globals
   ✓ wasm::test_wasm::test_wasm_variables0
   ✓ wasm::test_wasm::test_wasm_while
@@ -1841,4 +1848,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1836 passed, 0 failed, 1836 total tested
+47 ignored, 1843 passed, 0 failed, 1843 total tested

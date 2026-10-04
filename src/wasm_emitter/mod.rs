@@ -2576,18 +2576,26 @@ impl WasmGcEmitter {
 
 		func.instruction(&I::I64Const(1));
 		func.instruction(&I::LocalSet(ran_local));
+		let (statements, step) = loop_control::split_step(body);
+		// the step of a `for` loop (its counter's increment) runs after a body ending in a number without becoming
+		// the loop's value
+		let step_apart = step.is_some() && matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items));
 		if loop_control::has_jump(body) {
-			let (statements, step) = loop_control::split_step(body);
 			func.instruction(&I::Block(BlockType::Empty));
 			self.enter_loop(break_frame, loop_control::open_control_frames(func));
 			self.emit_loop_body(func, &statements, result_local);
 			self.leave_loop();
 			func.instruction(&I::End);
-			if let Some(step) = step {
-				self.emit_loop_body(func, &step, result_local);
-			}
 		} else {
-			self.emit_loop_body(func, body, result_local);
+			self.emit_loop_body(func, if step_apart || step.is_none() { &statements } else { body }, result_local);
+		}
+		match &step {
+			Some(step) if step_apart => {
+				self.emit_block_value(func, step);
+				func.instruction(&I::Drop);
+			}
+			Some(step) if loop_control::has_jump(body) => self.emit_loop_body(func, step, result_local),
+			_ => {}
 		}
 		func.instruction(&I::Br(0));
 
@@ -2624,7 +2632,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
-		} else if self.get_type(body).is_ref() { // `while c { s += "a" }`: a text or list update, its value is not a number
+		} else if self.get_type(body).is_ref() && !self.ends_in_number(&statements) { // `while c { s += "a" }`: a text or list update, its value is not a number
 			self.emit_node_instructions(func, body);
 			func.instruction(&I::Drop);
 		} else {
