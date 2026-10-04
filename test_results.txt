@@ -13,6 +13,7 @@ PASSED:
   ✓ control::test_blocks::test_indent_as_block
   ✓ control::test_blocks::test_matrix_comma_index
   ✓ control::test_blocks::test_matrix_order
+  ✓ control::test_branch_assigned_locals::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
   ✓ control::test_condition_block::the_block_after_a_comparison_with_a_variable_is_the_body
   ✓ control::test_control_words::bang_evaluates_a_block
@@ -453,6 +454,7 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass
   ✓ lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear
   ✓ lists::test_node_lists::a_list_parameter_walked_by_a_for_loop_takes_the_array
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
@@ -1775,4 +1777,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1770 passed, 0 failed, 1770 total tested
+53 ignored, 1772 passed, 0 failed, 1772 total tested

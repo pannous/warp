@@ -1183,6 +1183,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				},
 				// `r = f()`: the list a function returns, its elements unknown until runtime
 				None if scope.binding(name).is_none() && scope.function_kind(name) == Some(Kind::List) => NODE_LIST_TYPE.to_string(),
+				// a list parameter of no declared element type: each caller may pass other elements
+				None if scope.binding(name).is_some_and(|local| local.is_param) => NODE_LIST_TYPE.to_string(),
 				None => PLAIN.to_string(),
 			}
 		}
@@ -2541,7 +2543,7 @@ fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashMap<S
 	let mut scope = Scope::with_function_kinds(function_kinds.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
-		scope.define(param.name.clone(), None, param_kind(param));
+		scope.define_param(param.name.clone(), param_kind(param));
 	}
 	collect_variables(body, &mut scope);
 	scope

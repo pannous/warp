@@ -475,6 +475,7 @@ impl WasmGcEmitter {
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 		let mut func = Function::new(locals);
+		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
 		// Captured variables read their definition-time globals
 		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
@@ -1188,6 +1189,25 @@ impl WasmGcEmitter {
 		self.emit_type_error(func, message);
 	}
 
+	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
+	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it
+	fn emit_node_local_defaults(&mut self, func: &mut Function, body: &Node, skipped: usize) {
+		let statements = match body.drop_meta() {
+			Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) => items.as_slice(),
+			_ => std::slice::from_ref(body),
+		};
+		let node_storage = Ref(self.node_ref(false));
+		let mut defaulted: Vec<u32> = self.scope.locals.values()
+			.filter(|local| local.position as usize >= skipped && self.local_storage_type(&local.name, local.kind) == node_storage)
+			.filter(|local| !first_mention_assigns(statements, &local.name))
+			.map(|local| local.position).collect();
+		defaulted.sort();
+		for slot in defaulted {
+			self.emit_call(func, "new_empty");
+			func.instruction(&Instruction::LocalSet(slot));
+		}
+	}
+
 	/// Declarations of the scope's locals in position order, skipping the first `skipped` (the parameters)
 	fn local_declarations(&self, skipped: usize) -> Vec<(u32, ValType)> {
 		let mut sorted_locals: Vec<_> = self.scope.locals.values().collect();
@@ -1225,6 +1245,7 @@ impl WasmGcEmitter {
 		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
 
 		let mut func = Function::new(locals);
+		self.emit_node_local_defaults(&mut func, node, 0);
 		self.emit_witness_installation(&mut func);
 		self.emit_node_instructions(&mut func, node);
 		func.instruction(&Instruction::End);
@@ -3916,6 +3937,20 @@ fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 }
 
 /// Leave the last module in `test.wasm` for inspection; a read-only directory must not fail the program
+/// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)
+fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
+	let mentions = |node: &Node| {
+		let mut found = false;
+		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
+		found
+	};
+	match statements.iter().find(|statement| mentions(statement)).map(Node::drop_meta) {
+		Some(Node::Key(target, Op::Assign | Op::Define, value)) => matches!(target.drop_meta(), Node::Symbol(word) if word == name) && !mentions(value),
+		Some(_) => false,
+		None => true,
+	}
+}
+
 fn write_debug_module(bytes: &[u8]) {
 	if let Err(failure) = std::fs::write("test.wasm", bytes) {
 		warn!("could not write test.wasm: {failure}");

@@ -41,3 +41,11 @@ fn a_list_parameter_walked_by_a_for_loop_takes_the_array() {
 	is!(&format!("{total}e=[]; f=[1.5,2]; f#1=0.5; total(e)+total(f)"), 2.5);
 	is!(&format!("{total}total([1 2 3]) + total((4 5))"), 15);
 }
+
+#[test]
+fn a_list_parameter_holds_whatever_elements_its_callers_pass() {
+	is!("total(xs) := { s=\"\"; for x in xs { s+=x }; s }; total([\"ab\" \"cd\"])", "abcd");
+	is!("f(xs) := xs#1; f([\"ab\" \"cd\"])", "ab");
+	is!("f(xs) := xs#1; f([3 4]) + 1", 4);
+	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; total([1 2 3]) + total([0.5])", 6.5);
+}
