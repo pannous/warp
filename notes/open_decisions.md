@@ -33,6 +33,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - P32 `print xs` of a list variable: allow it with the text `str(xs)` gives ("[1 2]", nested lists too) / keep the error
   "print of a List has no runtime text yet" that tests/welcoming/test_welcoming_print.rs pins. Recommended: allow
   (the text exists now); needs the edit of that pinned test. Night 2026-10-04.
+- P33 Real concurrency for `go`: tasks now finish where they start (one thread), so pause/stop handlers never run (a
+  warning). Options: keep it / wasm threads + shared memory natively and Web Workers in the browser / an event loop
+  with explicit yields (`await` points). Assumed: keep it. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

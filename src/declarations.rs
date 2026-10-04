@@ -10,6 +10,11 @@ const FIRST_CASE_INDEX: i64 = 0;
 const PLACEHOLDER: &str = "_";
 /// `go f(x)` starts a task, `await job` waits for it
 const TASK_WORDS: [&str; 2] = ["go", "await"];
+const ONCE_WORD: &str = "once";
+const ON_WORD: &str = "on";
+/// What a task signals when it is done, and the controls that would interrupt one
+const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
+const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
@@ -17,28 +22,150 @@ pub fn lower(node: Node) -> Node {
 
 /// `job = go f(x)` starts a task, `await job` waits for its value (wiki/async.md). A module runs on one thread, so a
 /// task runs to its end where it starts: `go` gives the value of its call, and `await` of a finished task (or of any
-/// value, which a task auto-casts to) is that value. A program defining its own `go` or `await` keeps them.
+/// value, which a task auto-casts to) is that value. Its signals follow: `once job finishes: …` (or `once the download
+/// finishes:` for `go download(url)`) runs at once, as the task is done; a handler of a pause or stop never runs and
+/// `stop job` has nothing left to stop: both warn. A program defining its own `go` or `await` keeps them.
 pub fn lower_tasks(node: Node) -> Node {
 	let mut defined = std::collections::HashSet::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
+	let mut tasks = std::collections::HashSet::new();
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, value) = part {
 		let name = match head.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
 		};
+		if let (Node::Symbol(variable), Node::List(items, _, _)) = (head.drop_meta(), value.drop_meta()) {
+			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) {
+				tasks.insert(variable.clone());
+			}
+		}
 		defined.extend(name);
 	});
 	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
 	if words.is_empty() {
 		return node;
 	}
-	lower_lists(node, |items| match items {
-		[word, rest @ ..] if !rest.is_empty() && matches!(word.drop_meta(), Node::Symbol(name) if words.contains(&name.as_str())) => Some(match rest {
-			[single] => single.clone(),
-			_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-		}),
+	// the functions a `go` starts: `once the download finishes` names the task by its function
+	node.visit(&mut |part| if let Node::List(items, _, _) = part {
+		if let [word, started, ..] = items.as_slice() {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == TASK_WORDS[0]) {
+				let function = match started.drop_meta() {
+					Node::List(call, _, _) => call.first().map(|name| name.drop_meta().name()),
+					other => Some(other.name()),
+				};
+				tasks.extend(function);
+			}
+		}
+	});
+	Tasks { words, tasks }.lower(node)
+}
+
+struct Tasks<'a> {
+	words: Vec<&'a str>,
+	/// task variables and the functions `go` starts
+	tasks: std::collections::HashSet<String>,
+}
+
+impl Tasks<'_> {
+	fn is_task(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.tasks.contains(name))
+	}
+
+	fn lower(&self, node: Node) -> Node {
+		match node {
+			Node::List(items, bracket, separator) => {
+				// a signal handler first, before its `download.stop` reads as a control
+				if let Some(handled) = self.signal_handler(&items) {
+					return self.lower(handled);
+				}
+				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
+				self.task_statement(&items).unwrap_or(Node::List(items, bracket, separator))
+			}
+			// `job.stop()`, `job.pause`
+			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {
+				never_happens(&subject, &format!("{} {} has nothing to stop: a task finishes where it starts", control_word(&word), subject.name()))
+			}
+			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left)), op, Box::new(self.lower(*right))),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
+			other => other,
+		}
+	}
+
+	fn task_statement(&self, items: &[Node]) -> Option<Node> {
+		match items {
+			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => Some(match rest {
+				[single] => single.clone(),
+				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+			}),
+			// `stop job`
+			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => {
+				Some(never_happens(subject, &format!("{} {} has nothing to stop: a task finishes where it starts", word(control), subject.name())))
+			}
+			_ => None,
+		}
+	}
+
+	fn signal_handler(&self, items: &[Node]) -> Option<Node> {
+		match items {
+			// `once job finishes: body`, `once the download finishes: body`
+			[once, subject @ .., handler] if word(once) == ONCE_WORD => {
+				let subject = subject.iter().find(|item| word(item) != "the")?;
+				let (event, body) = handler_parts(handler)?;
+				self.is_task(subject).then(|| self.handler(subject, &word(&event), &body))
+			}
+			// `on download.stop : body`
+			[on, handler] if word(on) == ON_WORD => {
+				let (signal, body) = handler_parts(handler)?;
+				let Node::Key(subject, Op::Dot, event) = signal.drop_meta() else { return None };
+				self.is_task(subject).then(|| self.handler(subject, &control_word(event), &body))
+			}
+			_ => None,
+		}
+	}
+
+	/// A finished task's handler runs now; one of a pause or stop never does
+	fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
+		if FINISH_EVENTS.contains(&event) {
+			return body.clone();
+		}
+		never_happens(subject, &format!("`{event}` of {} never happens: a task finishes where it starts, its handler never runs", subject.name()))
+	}
+}
+
+/// `event: body`; `event: x = 7` parses as `(event: x) = 7`
+fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
+	match handler.drop_meta() {
+		Node::Key(event, Op::Colon, body) => Some((event.drop_meta().clone(), body.as_ref().clone())),
+		Node::Key(head, op, value) => match head.drop_meta() {
+			Node::Key(event, Op::Colon, target) => Some((event.drop_meta().clone(), Node::Key(target.clone(), *op, value.clone()))),
+			_ => None,
+		},
 		_ => None,
-	})
+	}
+}
+
+fn word(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::Symbol(name) => name.clone(),
+		_ => String::new(),
+	}
+}
+
+/// The word of `stop`, `stop()`, `(stop)`
+fn control_word(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => items[0].drop_meta().name(),
+		other => other.name(),
+	}
+}
+
+/// A warning about task control that cannot happen on one thread, and the statement's value ø (an error under
+/// `use strict`)
+fn never_happens(located: &Node, message: &str) -> Node {
+	match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(located, message.to_string())]) {
+		Ok(()) => Node::Empty,
+		Err(error) => error,
+	}
 }
 
 /// C definitions, before any pass reads `real f(…)` as a conversion of a call; and keyword definitions
