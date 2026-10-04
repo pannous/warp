@@ -6,7 +6,9 @@ use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
-use crate::type_kinds::{CURLY_LIST_KIND, SQUARE_LIST_KIND};
+use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
+/// The bracket info in a list's kind, above its KIND_BITS
+const BRACKET_INFO_MASK: i64 = 0xff;
 use crate::wasm_emitter::layout::BYTE;
 
 const KEY_KIND: i64 = Kind::Key as i64;
@@ -351,7 +353,8 @@ impl WasmGcEmitter {
 	}
 
 	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them;
-	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]"
+	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
+	/// map), entries as "key:value" and symbols as their names
 	fn emit_list_join(&mut self) {
 		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
 			if self.should_emit_function(name) {
@@ -368,6 +371,7 @@ impl WasmGcEmitter {
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
+		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -386,21 +390,60 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
-				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]"
+				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
-					s.emit_field(f, element, 0);
-					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq, I::If(BlockType::Empty)]);
 					let [open, close, space] = texts;
+					let [open_map, close_map, colon] = map_texts;
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
 					};
+					let masked_kind_is = |f: &mut Function, kind: Kind| {
+						s.emit_field(f, element, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+					};
+					// a symbol (a map's key) as its name
+					is_kind(f, Kind::Symbol);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::LocalSet(element), I::End]);
+					// an entry key:value as list_text([key value], ":"), ø for a missing value
+					masked_kind_is(f, Kind::Key);
+					f.instruction(&I::If(BlockType::Empty));
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND)]);
+					s.emit_field(f, element, 2);
+					Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Result(node_ref))]);
+					s.call(f, "new_empty");
+					f.instruction(&I::Else);
+					s.emit_field(f, element, 2);
+					Self::emit_list(f, &[I::RefAsNonNull, I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
+					new_text(f, colon);
+					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
+					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
+					let is_map = |f: &mut Function| {
+						s.emit_field(f, element, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(BRACKET_INFO_MASK), I::I64And, I::I64Const(CURLY_BRACKET_INFO), I::I64Eq]);
+					};
+					masked_kind_is(f, Kind::List);
+					f.instruction(&I::If(BlockType::Empty));
+					is_map(f);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, open_map);
+					f.instruction(&I::Else);
 					new_text(f, open);
+					f.instruction(&I::End);
 					f.instruction(&I::LocalGet(element));
 					new_text(f, space);
 					f.instruction(&I::Call(own_index));
 					s.call(f, super::text_builtins::TEXT_CONCAT);
+					is_map(f);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					new_text(f, close_map);
+					f.instruction(&I::Else);
 					new_text(f, close);
+					f.instruction(&I::End);
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 					// a ø item reads as ø, as Node::serialize writes it

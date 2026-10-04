@@ -81,6 +81,9 @@ fn is_number(kind: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
+	if required.contains(super::library_ops::LIST_TEXT) {
+		required.insert("list_join"); // emitted together, with the same helpers
+	}
 	if required.contains(super::library_ops::NODE_SLICE) {
 		required.extend(["text_chars", "list_join", "list_reverse"]);
 	}

@@ -2773,32 +2773,17 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, &node);
 	}
 
-	/// The text of a Node of unknown kind: "[" + join(xs, " ") + "]" for a list, else join([x], ""); gives the local
-	/// still holding the node
+	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
+	/// a map, "a:1" for an entry, the text itself for a text; gives the local still holding the node
 	pub(super) fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) -> u32 {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
-		let node_ref = Ref(self.node_ref(false));
-		let text = |emitter: &mut Self, func: &mut Function, text: &str| {
-			let (pointer, length) = emitter.allocate_string(text);
-			Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-			emitter.emit_call(func, "new_text");
-		};
 		self.emit_node_instructions(func, value);
-		Self::emit_list(func, &[I::LocalTee(held), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: 0 }]);
-		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq]);
-		func.instruction(&I::If(BlockType::Result(node_ref)));
-		text(self, func, "[");
-		func.instruction(&I::LocalGet(held));
-		text(self, func, " ");
-		self.emit_call(func, library_ops::LIST_TEXT);
-		self.emit_call(func, text_builtins::TEXT_CONCAT);
-		text(self, func, "]");
-		self.emit_call(func, text_builtins::TEXT_CONCAT);
-		func.instruction(&I::Else);
+		func.instruction(&I::LocalSet(held));
 		Self::emit_list(func, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
-		text(self, func, "");
-		self.emit_call(func, "list_join");
-		func.instruction(&I::End);
+		let (pointer, length) = self.allocate_string("");
+		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, "new_text");
+		self.emit_call(func, library_ops::LIST_TEXT);
 		held
 	}
 
