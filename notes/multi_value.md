@@ -40,9 +40,9 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
   3 bytes smaller; it mainly removes a global and lets wasm-opt see the data flow.
 - The win comes from what a two-result division enables: `f//10` is `(f - f%10)/10`, and the exact division of a big
   integer used to run a gcd loop of big divisions before ratio_new; now it is one divmod. About -26 % on this program.
-- Next step (not done): `a//b` still costs two long divisions (`%`, then `/`), because the parser rewrites it to
-  `(a - a%b)/b` (wasp_parser.rs `floor_division`). A Euclidean `exact_floor_div` built on `int_divmod_slow` would make
-  it one; it needs the rewrite to become an operator of its own.
+- Done 2026-10-04 (night): `a//b` is the pseudo-call `floor_quotient(a, b)` (wasp_parser.rs `floor_division`), emitted
+  as `exact_euclid_div` (exact_div, then exact_floor; ceil for a negative divisor) or the f64 quotient rounded the same
+  way: each operand evaluated once. Building it on `int_divmod_slow` directly would save the gcd of exact_div.
 
 ## Tuple returns (branch tuple-returns, user decision "yes")
 `return a, b` and `x, y = f()` (src/tuples.rs lowers, src/wasm_emitter/tuple_emitter.rs emits; tests/functions/test_tuple_returns.rs).

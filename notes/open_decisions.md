@@ -224,8 +224,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
   test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
-- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, lowered to `(a - a%b)/b` (`%` is Euclidean: exact
-  for a positive divisor, `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment.
+- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, the Euclidean quotient that goes with `%`
+  (`floor_quotient(a, b)` since 2026-10-04, same results as the earlier `(a - a%b)/b`: floor for a positive divisor,
+  `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment, and one whose comment hides a
+  closing bracket (`(col // 3)`) is a parse error naming the `//` (no reinterpretation).
   `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
   division is exact, with the hint `n//2`.
 - Spaced `a // b` — USER DECISION 2026-10-03 (fix-floor-ask-3): "just make it a warning to the user that it's read
