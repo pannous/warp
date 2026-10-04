@@ -11,3 +11,8 @@ fn a_rebuilt_node_reports_the_position_of_its_parts() {
 fn an_error_found_while_emitting_names_its_statement() {
 	fails_with("s=0\nfor x in [\"a\" \"b\"] {\n  s+=x\n}\ns", "at 3:3");
 }
+
+#[test]
+fn an_unknown_method_names_its_line() {
+	fails_with("s = \"abc\"\nn = s.nope()", "undefined function: nope at 2:");
+}
