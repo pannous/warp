@@ -679,6 +679,7 @@ PASSED:
   ✓ numbers::test_law::test_law_stated
   ✓ numbers::test_law::test_law_tested_with_generated_inputs
   ✓ numbers::test_law::test_law_violation_reported_by_verify
+  ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_math::test_abs_alias
   ✓ numbers::test_math::test_absolute_value_arithmetic
   ✓ numbers::test_math::test_arithmetic
@@ -1799,4 +1800,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1794 passed, 0 failed, 1794 total tested
+53 ignored, 1795 passed, 0 failed, 1795 total tested

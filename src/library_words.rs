@@ -28,6 +28,8 @@ pub const MAP_GET_OR: &str = "map_get_or";
 pub const MAP_WORD_FUNCTIONS: [&str; 6] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR];
 const IN_WORD: &str = "in";
 const FOR_WORD: &str = "for";
+/// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
+const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 21] = [
@@ -461,6 +463,13 @@ impl Lowering {
 			Node::Symbol(name) => name,
 			_ => return None,
 		};
+		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument
+		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
+			if call_name(items, bracket, separator).is_some() {
+				let log_of = |argument: &Node| Node::List(vec![items[0].clone(), argument.clone()], Bracket::Round, Separator::None);
+				return Some(Node::Key(Box::new(log_of(value)), Op::Div, Box::new(log_of(base))));
+			}
+		}
 		let word = self.library_word_for(head, items.len() - 1)?;
 		if let [_, of, rest @ ..] = items {
 			if matches!(of.drop_meta(), Node::Symbol(word) if word == "of") && !rest.is_empty() {
