@@ -570,6 +570,8 @@ pub struct InstanceTypes {
 	/// The shapes user functions return, from their bodies: `make(t) := pdf(t)` returns a pdf
 	results: HashMap<String, Option<Shape>>,
 	registry: TypeRegistry,
+	/// The last inference round: a value whose shape is still unknown is unknown for good
+	final_round: bool,
 }
 
 /// Fixpoint rounds over the assignments: a variable can be assigned from another one defined later in the text
@@ -579,20 +581,22 @@ impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
 		let mut registry = TypeRegistry::new();
 		collect_all_types(&mut registry, node);
-		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry };
+		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry, final_round: false };
 		if types.registry.types().is_empty() {
 			return types;
 		}
-		for _ in 0..INFERENCE_ROUNDS {
+		for round in 1..=INFERENCE_ROUNDS {
 			let (mut variables, mut results) = (HashMap::new(), HashMap::new());
+			types.final_round = round == INFERENCE_ROUNDS;
 			types.collect(node, &mut variables, &mut results);
 			(types.variables, types.results) = (variables, results);
 		}
 		types
 	}
 
-	/// A value of an unknown shape adds nothing (it may be an instance the next round recognizes); a plain value or
-	/// another shape makes the variable shapeless (None)
+	/// A value of an unknown shape adds nothing (it may be an instance the next round recognizes) until the final round,
+	/// where it is unknown for good: like a plain value or another shape it makes the variable shapeless (None), so
+	/// `s = square(1); s = xs#2` dispatches at run time
 	fn bind(variables: &mut HashMap<String, Option<Shape>>, name: &str, shape: Option<Shape>, is_plain: bool) {
 		let agreed = match (variables.get(name), shape) {
 			(_, None) if is_plain => None,
@@ -609,7 +613,12 @@ impl InstanceTypes {
 			Node::Key(target, Op::Assign | Op::Define, value) => {
 				let is_plain = crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_));
 				match (target.drop_meta(), definition_head(target)) {
-					(Node::Symbol(name), _) => Self::bind(variables, name, self.shape(value), is_plain),
+					(Node::Symbol(name), _) => {
+						// `p = field_with(p, …)` (a field assignment) keeps the shape of p
+						let keeps_shape = is_field_update(name, value);
+						let unknown_for_good = self.final_round && !keeps_shape && self.shape(value).is_none();
+						Self::bind(variables, name, self.shape(value), is_plain || unknown_for_good)
+					}
 					// `d:docx = …` of a declared type
 					(Node::Key(name, Op::Colon, type_node), _) if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() => {
 						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
@@ -734,6 +743,12 @@ pub fn lower_dispatch(node: Node) -> Node {
 	let node = dispatch.expand(node);
 	let node = with_dispatchers(node, &dispatch.dispatched.into_inner());
 	dispatch.missing.into_inner().unwrap_or(node)
+}
+
+/// `p = field_with(p, "x", v)`: the update of a field of p, which keeps p an instance of its type
+fn is_field_update(name: &str, value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, object, ..]
+		if word.name() == crate::library_words::FIELD_WITH && matches!(object.drop_meta(), Node::Symbol(target) if target == name)))
 }
 
 /// `instance_of(x, "square")`: 1 when x is an instance of the declared type, else 0 (the emitter reads the type name of

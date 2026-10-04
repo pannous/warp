@@ -122,6 +122,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_atof
   ✓ ffi::test_ffi::test_ffi_atoi
   ✓ ffi::test_ffi::test_ffi_atol
+  ✓ ffi::test_ffi::test_ffi_ceil
   ✓ ffi::test_ffi::test_ffi_combined
   ✓ ffi::test_ffi::test_ffi_cos
   ✓ ffi::test_ffi::test_ffi_cos_works
@@ -457,6 +458,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
+  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -468,7 +470,6 @@ PASSED:
   ✓ lists::test_unpacking::parenthesized_target
   ✓ lists::test_unpacking::star_init
   ✓ lists::test_unpacking::star_middle
-  ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
   ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
@@ -1286,7 +1287,9 @@ PASSED:
   ✓ types::test_trait_default_methods::a_conforming_type_gets_the_default_method
   ✓ types::test_trait_default_methods::a_type_overrides_the_default_method
   ✓ types::test_trait_default_methods::a_type_with_the_required_operations_conforms
+  ✓ types::test_trait_equals_membership::membership_uses_the_equals_override
   ✓ types::test_trait_runtime_dispatch::a_loop_over_mixed_instances_dispatches_at_run_time
+  ✓ types::test_trait_runtime_dispatch::a_variable_reassigned_a_value_of_run_time_type_dispatches_at_run_time
   ✓ types::test_trait_runtime_dispatch::an_element_of_a_mixed_list_dispatches_at_run_time
   ✓ types::test_traits::test_a_builtin_trait_cannot_be_redeclared
   ✓ types::test_traits::test_a_claim_of_a_declared_trait_is_checked
@@ -1487,6 +1490,7 @@ PASSED:
   ✓ web::test_web_playground::evaluate_reports_the_value_the_cli_prints
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_wasp
+  ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
@@ -1751,4 +1755,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1746 passed, 0 failed, 1746 total tested
+58 ignored, 1750 passed, 0 failed, 1750 total tested

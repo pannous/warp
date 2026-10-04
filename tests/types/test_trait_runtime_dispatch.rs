@@ -14,3 +14,8 @@ fn an_element_of_a_mixed_list_dispatches_at_run_time() {
 	is!(&format!("{SHAPES}xs=[square(3), rect(2, 5)]; area(xs#2)"), 10);
 	is!(&format!("{SHAPES}xs=[square(3), rect(2, 5)]; area(xs#1)"), 9);
 }
+
+#[test]
+fn a_variable_reassigned_a_value_of_run_time_type_dispatches_at_run_time() {
+	is!(&format!("{SHAPES}xs=[square(3), rect(2, 5)]; s = square(1); s = xs#2; area(s)"), 10);
+}
