@@ -760,6 +760,8 @@ PASSED:
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
+  ✓ operators::test_compound_assignment::a_number_variable_refuses_a_text_in_a_loop_too
   ✓ operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ operators::test_equality_never_chains::orderings_still_chain
   ✓ operators::test_floor_quotient::floor_division_is_euclidean
@@ -1780,4 +1782,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1775 passed, 0 failed, 1775 total tested
+53 ignored, 1777 passed, 0 failed, 1777 total tested

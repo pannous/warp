@@ -1539,6 +1539,9 @@ impl WasmGcEmitter {
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			let base_op = op.base_op();
+			if !use_float && self.emit_compound_type_error(func, left, &base_op, right) {
+				return true;
+			}
 			// Get current value of x
 			func.instruction(&Instruction::LocalGet(local_pos));
 			// Emit y
@@ -1561,6 +1564,13 @@ impl WasmGcEmitter {
 			self.emit_malformed(func, left, "a variable to update");
 			true
 		}
+	}
+
+	/// `s += x` of a number s and a text x: the type error `s = s + x` is, never the text's code points added
+	fn emit_compound_type_error(&mut self, func: &mut Function, left: &Node, base_op: &Op, right: &Node) -> bool {
+		let kind = self.arithmetic_type(left, base_op, right);
+		let numeric_target = matches!(self.get_type(left), Kind::Int | Kind::Float);
+		numeric_target && matches!(kind, Kind::Error | Kind::Text) && self.emit_arithmetic_type_error(func, left, base_op, right, kind)
 	}
 
 	/// Stack [x, y] → [x op y] for `x op= y` on Ints; `/=` keeps an integer x an integer
@@ -2846,6 +2856,9 @@ impl WasmGcEmitter {
 					// Get local position first to avoid borrow issues
 					let Some(local_pos) = self.defined_local_position(func, name) else { return };
 					let base_op = op.base_op();
+					if self.emit_compound_type_error(func, left, &base_op, right) {
+						return;
+					}
 					// Get current value of x
 					func.instruction(&Instruction::LocalGet(local_pos));
 					// Emit y

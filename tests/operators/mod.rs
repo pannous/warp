@@ -14,3 +14,4 @@ mod test_logical_calls;
 mod test_like;
 mod test_floor_quotient;
 mod test_pipeline;
+mod test_compound_assignment;

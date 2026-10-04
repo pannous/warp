@@ -38,10 +38,10 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// text += more → text = text + more
+		// text += more → text = text + more, list += [x] → list = list + [x]
 		if op.is_compound_assign() && op.base_op() == Op::Add {
 			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
-			if self.get_type(&concatenation) == crate::type_kinds::Kind::Text {
+			if matches!(self.get_type(&concatenation), crate::type_kinds::Kind::Text | crate::type_kinds::Kind::List) {
 				self.emit_key_node(func, left, &Op::Assign, &concatenation);
 				return;
 			}
