@@ -730,9 +730,42 @@ pub fn lower_dispatch(node: Node) -> Node {
 	}
 	let witnesses = defined_functions(&node);
 	let signatures = instance_signatures(&node, &types.registry);
-	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, likenesses, missing: RefCell::new(None) };
+	let dispatch = Dispatch { traits: Traits::of(&node), types, witnesses, signatures, likenesses, missing: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
 	let node = dispatch.expand(node);
+	let node = with_dispatchers(node, &dispatch.dispatched.into_inner());
 	dispatch.missing.into_inner().unwrap_or(node)
+}
+
+/// `instance_of(x, "square")`: 1 when x is an instance of the declared type, else 0 (the emitter reads the type name of
+/// the instance at run time)
+pub const INSTANCE_OF: &str = "instance_of";
+const DISPATCH: &str = "dispatch";
+
+/// The program with a dispatcher per operation called on values of run-time type:
+/// `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else area·square(x)` (the last type unchecked)
+fn with_dispatchers(node: Node, dispatched: &std::collections::BTreeMap<(String, usize), Vec<String>>) -> Node {
+	if dispatched.is_empty() {
+		return node;
+	}
+	let mut items: Vec<Node> = dispatched.iter().map(|((operation, arity), types)| dispatcher(operation, *arity, types)).collect();
+	items.push(node);
+	Node::List(items, Bracket::None, Separator::Semicolon)
+}
+
+fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
+	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
+	let (last, checked) = types.split_last().expect("two or more types define the operation");
+	let call = |type_name: &str| witness_call(operation, type_name, parameters.clone());
+	let body = checked.iter().rev().fold(call(last), |otherwise, type_name| {
+		let test = Node::List(vec![Node::Symbol(INSTANCE_OF.to_string()), parameters[0].clone(), Node::Text(type_name.clone())], Bracket::Round, Separator::None);
+		let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(test));
+		let then = Node::Key(Box::new(condition), Op::Then, Box::new(call(type_name)));
+		Node::Key(Box::new(then), Op::Else, Box::new(otherwise))
+	});
+	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
+	let instance = Node::Key(Box::new(parameters[0].clone()), Op::Colon, Box::new(Node::meta(Node::Symbol(DISPATCH.to_string()), Node::data(Instance))));
+	let head = Node::List([vec![Node::Symbol(witness_name(operation, DISPATCH)), instance], parameters[1..].to_vec()].concat(), Bracket::Round, Separator::None);
+	Node::Key(Box::new(head), Op::Define, Box::new(body))
 }
 
 struct Dispatch {
@@ -745,6 +778,9 @@ struct Dispatch {
 	likenesses: Vec<Likeness>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
 	missing: RefCell<Option<Node>>,
+	/// Operations called on a value whose type is known only at run time: (operation, number of arguments) → the types
+	/// that define it, for a dispatcher `op·dispatch` (`dispatchers`)
+	dispatched: RefCell<std::collections::BTreeMap<(String, usize), Vec<String>>>,
 }
 
 impl Dispatch {
@@ -901,6 +937,12 @@ impl Dispatch {
 				let defining: Vec<&str> = self.witnesses.iter().filter_map(|witness| witness_type(witness, name)).collect();
 				match defining.as_slice() {
 					[type_name] => Some(witness_call(name, type_name, arguments)),
+					// several types define it: the dispatcher picks the witness of the value's type at run time
+					[_, _, ..] => {
+						let types = defining.iter().map(|type_name| type_name.to_string()).collect();
+						self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), types);
+						Some(witness_call(name, DISPATCH, arguments))
+					}
 					_ => {
 						let message = format!("which {name}: the type of {} is not known at compile time ({} define {name})", first.serialize(), defining.join(", "));
 						let fix = format!("give it a type, e.g. {}:{}", first.serialize(), defining.first().unwrap_or(&"T"));

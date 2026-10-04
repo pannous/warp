@@ -9,10 +9,10 @@ use wasm_encoder::*;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 16] = [
+const BUILTIN_CALLS: [&str; 17] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM,
+	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
 ];
 
 const PRINT: &str = "print";
@@ -197,6 +197,15 @@ impl WasmGcEmitter {
 			}
 		}
 
+		if let [word, instance, type_name] = items {
+			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
+				if name == crate::traits::INSTANCE_OF {
+					self.emit_instance_of(func, instance, type_name);
+					self.emit_call(func, "new_int");
+					return;
+				}
+			}
+		}
 		if let [word, dividend, divisor] = items {
 			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
@@ -411,6 +420,27 @@ impl WasmGcEmitter {
 		self.emit_float_value(func, arg);
 		func.instruction(&rounding);
 		self.emit_integral_float_as_int(func);
+	}
+
+	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T
+	pub(super) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, type_name: &str) {
+		let node_type = self.type_manager.node_type;
+		self.emit_node_instructions(func, instance);
+		let instance_local = self.node_scratch();
+		func.instruction(&Instruction::LocalSet(instance_local));
+		self.emit_field(func, instance_local, 0);
+		Self::emit_list(func, &[
+			Instruction::I64Const(crate::type_kinds::KIND_MASK), Instruction::I64And, Instruction::I64Const(crate::Kind::Key as i64), Instruction::I64Eq,
+			Instruction::If(BlockType::Result(ValType::I64)),
+		]);
+		self.emit_field(func, instance_local, 1);
+		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(node_type)));
+		let (pointer, length) = self.allocate_string(type_name);
+		Self::emit_list(func, &[Instruction::I32Const(pointer as i32), Instruction::I32Const(length as i32)]);
+		self.emit_call(func, "new_symbol");
+		self.emit_call(func, super::VALUES_EQUAL);
+		func.instruction(&Instruction::I64ExtendI32U);
+		Self::emit_list(func, &[Instruction::Else, Instruction::I64Const(0), Instruction::End]);
 	}
 
 	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient

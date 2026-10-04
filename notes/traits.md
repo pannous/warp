@@ -42,8 +42,9 @@ area(square(3))                      // 9: calls area·square
 square(1) is shape                   // false: perimeter is missing
 area(dot(1))                         // compile error: dot is not shape: area(dot(1)) needs area(x:dot); fix: define area(x:dot) := …
 ```
-An operation called on a value whose type is unknown at compile time calls the one type that defines it, else it is a
-compile error asking for a type annotation (no runtime dispatch for declared traits yet).
+An operation called on a value whose type is unknown at compile time calls the one type that defines it; when several
+types define it, a generated dispatcher `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else
+area·square(x)` picks the witness at run time (traits::with_dispatchers; `instance_of` reads the instance's type name).
 
 ## Lowering (src/traits.rs)
 - `lower_declarations` (before type_tests): `trait shape{…}` becomes ø carrying the `Trait` (Meta data), which later
@@ -76,7 +77,6 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
 ## Later
-- runtime dispatch of declared operations (a witness table per operation, like compare's)
 - Printable (`text(p:person)` for interpolation and `as text`), Iterable
 - generic constraints `sort(xs: Comparable list)`
 - `x in xs`, `xs.has(x)` through an `equals` override (they compare structurally at runtime now)

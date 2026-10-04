@@ -27,3 +27,4 @@ mod test_spaced_construction;
 mod test_type_word_user_function;
 mod test_declaration_without_value;
 mod test_trait_default_methods;
+mod test_trait_runtime_dispatch;

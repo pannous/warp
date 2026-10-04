@@ -1821,7 +1821,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The one nullable Node local of every function, after its int scratch locals
-	fn node_scratch(&self) -> u32 {
+	pub(super) fn node_scratch(&self) -> u32 {
 		self.int_scratch + big_int::INT_SCRATCH_LOCALS
 	}
 
@@ -3003,6 +3003,14 @@ impl WasmGcEmitter {
 
 	/// `floor(x)`, `count(list)`…: the builtin builds a node, its Int (raw i64 on the stack) is the number
 	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		if let [word, instance, type_name] = items {
+			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
+				if name == crate::traits::INSTANCE_OF {
+					self.emit_instance_of(func, instance, type_name);
+					return true;
+				}
+			}
+		}
 		if let [word, dividend, divisor] = items {
 			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
