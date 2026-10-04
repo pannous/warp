@@ -28,3 +28,10 @@ fn a_method_call_starting_the_next_line_continues_the_expression() {
 	warp::is!("x=[3 1 2]\nx\n  .sort", warp::ints(vec![1, 2, 3]));
 	warp::is!("a=1\n.5", 0.5);
 }
+
+#[test]
+fn then_and_else_branches_on_their_own_lines() {
+	warp::is!("if 1 == 0 then\n    \"ab\"\nelse\n    \"cd\"", "cd");
+	warp::is!("x = if 2 == 3 then\n    1\nelse if 2 == 2 then\n    2\nelse\n    3\nx", 2);
+	warp::is!("elsewhere = 3\nelsewhere", 3);
+}

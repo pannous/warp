@@ -73,3 +73,4 @@ The supervisor should remove the DONE elements after a while.
 - DONE: The pipeline `xs |> f(a)` (wiki/Purpose.md, samples/functions.wasp) was "Unexpected character |"; it is the call f(xs, a), also on continuation lines. (night 2026-10-04)
 - DONE: `def f(x) {…}` (and fun/function) was read by the emitter only: function values, closures, traits and overloads missed its parameters (`def app(f, x) { f(x) }` → undefined function f); keyword definitions are now `f(x) := {…}` from the start. `p in xs` inside a function marked p as a function parameter. (night 2026-10-04)
 - DONE: Partial application `add(1, _)` and calling a returned zero-argument closure `c = counter(5); c()` (samples/functions.wasp). (night 2026-10-04)
+- DONE: `if c then⏎ a⏎ else⏎ b` (branches on their own lines, samples/test_ffi_extended.wasp) was "undefined variable: else". (night 2026-10-04)

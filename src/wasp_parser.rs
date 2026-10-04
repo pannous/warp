@@ -794,6 +794,29 @@ impl WaspParser {
 		}
 	}
 
+	/// The identifier starting `offset` characters ahead
+	fn word_at(&self, offset: usize) -> String {
+		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
+	}
+
+	/// The identifier that ends right before the cursor and the blanks before it, on this line
+	fn word_before(&self) -> &str {
+		let line = &self.input_before_cursor();
+		let trimmed = line.trim_end_matches([' ', '\t', '\r']);
+		let start = trimmed.rfind(|c: char| !is_identifier_char(c)).map_or(0, |at| at + trimmed[at..].chars().next().map_or(1, char::len_utf8));
+		match &trimmed[start..] {
+			"then" => "then",
+			ELSE_KEYWORD => ELSE_KEYWORD,
+			_ => "",
+		}
+	}
+
+	/// The source line up to the cursor
+	fn input_before_cursor(&self) -> String {
+		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();
+		before.chars().rev().collect()
+	}
+
 	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line; or of the line break and
 	/// indentation before a method call that starts the next line (`numbers\n    .map(square)`, as in JS, Kotlin, Swift)
 	fn line_continuation_length(&self) -> Option<usize> {
@@ -804,7 +827,10 @@ impl WaspParser {
 			}
 			let starts_method = self.peek_char(length) == '.' && (self.peek_char(length + 1).is_alphabetic() || self.peek_char(length + 1) == '_');
 			let starts_pipeline = self.peek_char(length) == '|' && self.peek_char(length + 1) == '>';
-			return (starts_method || starts_pipeline).then_some(length);
+			// `if c then⏎ a⏎ else⏎ b`: a line ending in then/else, or one starting with else, continues the if
+			let starts_else = self.word_at(length) == ELSE_KEYWORD;
+			let ends_in_branch_word = matches!(self.word_before(), "then" | ELSE_KEYWORD);
+			return (starts_method || starts_pipeline || starts_else || ends_in_branch_word).then_some(length);
 		}
 		if self.current_char() != '\\' {
 			return None;
