@@ -59,7 +59,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   the condition reads, in the statements after the listener and their loop bodies; writes before it, in functions
   called later, or in an outer block are not seen, and the condition holding when the listener is declared does not
   fire it. Alternatives: hoist listeners to the top of their block (post-hoc registration), or watch writes in called
-  functions too (needs global flags). `on set x {…}`, `after tested:` and `before/during` are not implemented. Night
+  functions too (needs global flags). `on set x {…}` (value = the new value) works the same way; `after tested:` and
+  `before/during` are not implemented. Night
   2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math

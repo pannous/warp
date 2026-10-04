@@ -2,6 +2,7 @@
 //! after a change of a variable the condition reads, `whenever x>1 {…}` each time. A module runs on one thread, so the
 //! listener is its check after every later write of such a variable in the statements that follow it, loop bodies
 //! included: a write inside an expression (`while x-->0`) becomes `(x--; check; x+1)`, keeping the expression's value.
+//! `on set x {print value}` runs after every write of x; `value` (or `signal`, `event`) is the new value.
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -10,12 +11,17 @@ use std::collections::HashSet;
 
 const ONCE_WORD: &str = "once";
 const WHENEVER_WORD: &str = "whenever";
+const ON_WORD: &str = "on";
+const SET_WORD: &str = "set";
+/// The written value inside an `on set` listener
+const VALUE_WORDS: [&str; 3] = ["value", "signal", "event"];
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
 
 #[derive(Clone)]
 struct Listener {
-	condition: Node,
+	/// None for `on set`: every write
+	condition: Option<Node>,
 	body: Node,
 	/// the flag of a once listener, None for whenever
 	fired: Option<String>,
@@ -24,11 +30,12 @@ struct Listener {
 
 impl Listener {
 	fn check(&self) -> Node {
+		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
 		match &self.fired {
-			None => if_then(self.condition.clone(), block(vec![self.body.clone()])),
+			None => if_then(condition.clone(), block(vec![self.body.clone()])),
 			Some(fired) => {
 				let not_fired = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(fired.clone())));
-				let condition = Node::Key(Box::new(not_fired), Op::And, Box::new(self.condition.clone()));
+				let condition = Node::Key(Box::new(not_fired), Op::And, Box::new(condition.clone()));
 				if_then(condition, block(vec![assign(fired, Node::True), self.body.clone()]))
 			}
 		}
@@ -99,18 +106,17 @@ impl Signals {
 		out
 	}
 
-	/// `once x==5 {body}`, `whenever x>1 : body`
+	/// `once x==5 {body}`, `whenever x>1 : body`, `on set x {body}`
 	fn listener(&mut self, statement: &Node) -> Option<Listener> {
 		let Node::List(items, _, _) = statement.drop_meta() else { return None };
 		let keyword = word(items.first()?);
+		if keyword == ON_WORD && items.get(1).map(word).as_deref() == Some(SET_WORD) {
+			return self.set_listener(&items[2..]);
+		}
 		if keyword != ONCE_WORD && keyword != WHENEVER_WORD {
 			return None;
 		}
-		let (condition, body) = match &items[1..] {
-			[condition, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (condition.clone(), body.clone()),
-			[handler] => handler_parts(handler)?,
-			_ => return None,
-		};
+		let (condition, body) = subject_and_body(&items[1..])?;
 		let mut watched = HashSet::new();
 		condition.visit(&mut |part| if let Node::Symbol(name) = part { watched.insert(name.clone()); });
 		if watched.is_empty() {
@@ -121,7 +127,25 @@ impl Signals {
 			format!("{FIRED_PREFIX}{}", self.count - 1)
 		});
 		let body = self.lower(body, &[]);
-		Some(Listener { condition, body, fired, watched })
+		Some(Listener { condition: Some(condition), body, fired, watched })
+	}
+
+	/// `on set x {body}`: the body after every write of x, `value` in it is x
+	fn set_listener(&mut self, rest: &[Node]) -> Option<Listener> {
+		let (variable, body) = subject_and_body(rest)?;
+		let Node::Symbol(name) = variable.drop_meta() else { return None };
+		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), Node::Symbol(name.clone()))).collect();
+		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
+		Some(Listener { condition: None, body, fired: None, watched: HashSet::from([name.clone()]) })
+	}
+}
+
+/// `subject {body}` or `subject: body`
+fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
+	match rest {
+		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((subject.clone(), body.clone())),
+		[handler] => handler_parts(handler),
+		_ => None,
 	}
 }
 

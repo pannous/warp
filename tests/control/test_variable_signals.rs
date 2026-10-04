@@ -23,3 +23,9 @@ fn whenever_runs_each_time_the_condition_holds() {
 fn the_wiki_countdown() {
 	is!("x=10\nonce x==5 {print \"countdown halfway done\"}\nwhile x-->0 : print x\nx", -1);
 }
+
+#[test]
+fn on_set_runs_after_each_write_with_the_value() {
+	is!("x=10; total=0; on set x {total+=value}; x=3; x=4; total", 7);
+	is!("x=3; n=0; on set x : n+=1; while x-->0 : x; n", 4);
+}
