@@ -27,9 +27,10 @@ struct Unit {
 	factor: i64,
 }
 
-const UNITS: [Unit; 11] = [
+const UNITS: [Unit; 12] = [
 	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
 	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
+	Unit { name: "min", dimension: Dimension::Time, factor: 60_000 },
 	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
 	Unit { name: "mm", dimension: Dimension::Length, factor: 1 },
 	Unit { name: "cm", dimension: Dimension::Length, factor: 10 },
