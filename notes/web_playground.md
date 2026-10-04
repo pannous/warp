@@ -64,8 +64,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
   - threads: test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads; a directory walk below the project
     root: test_use_scopes::use_project_sees_every_file_below_the_project_root (2026-10-04: 1437 passed, 17 failed)
-- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, atoi, atof on C strings read up
-  to their zero byte; anything else of libc still throws "c.X is not available in the browser"
+- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, strncmp, atoi, atol, atof;
+  the shims follow src/ffi.rs signatures: i64 results (size_t, long) are BigInts, strcmp/strncmp get (pointer, length)
+  pairs, the others C strings read up to their zero byte (tests/ffi/test_libc_results.rs); anything else of libc still
+  throws "c.X is not available in the browser"
+- Samples: tests/programs/test_samples_run_cleanly.rs runs every sample but raylib/SDL in both; 2026-10-04 all 64 give
+  the same result natively and in the browser
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
   get a host import that asks the static server to run them, which defeats the point of the browser run.
 
