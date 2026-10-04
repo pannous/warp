@@ -47,15 +47,13 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Skip user function definitions - they're already compiled
-		if *op == Op::Define {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if self.ctx.user_functions.contains_key(name) {
-					// Function definitions don't produce a value
-					self.emit_closure_capture(func, name);
-					return;
-				}
-			}
+		// Skip user function definitions - they're already compiled; a definition's value is ø: `square := it*it` or
+		// `f(x) := x + 1` alone is a program of no value
+		let definition = Node::Key(Box::new(left.clone()), *op, Box::new(right.clone()));
+		if let Some(name) = self.defined_function_name(&definition).filter(|name| self.ctx.user_functions.contains_key(name)) {
+			self.emit_closure_capture(func, &name);
+			self.emit_call(func, "new_empty");
+			return;
 		}
 
 		// Route to emit_arithmetic for numeric operations

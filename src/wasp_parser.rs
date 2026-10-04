@@ -2811,6 +2811,7 @@ impl WaspParser {
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote
+				let s: String = s.nfc().collect(); // an escape (`e\u{301}`) may leave it unnormalized
 				if is_template {
 					return crate::interpolation::template_text(&template);
 				}
@@ -2856,6 +2857,10 @@ impl WaspParser {
 					'n' => '\n',
 					't' => '\t',
 					'r' => '\r',
+					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
+						Ok(c) => c,
+						Err(message) => return error(&message),
+					},
 					c => c,
 				}
 			} else {
@@ -2868,6 +2873,21 @@ impl WaspParser {
 				c => template.push(c),
 			}
 		}
+	}
+
+	/// `\u{e9}` after the backslash: the code point of the hex digits; the closing `}` is left for the caller to skip
+	fn unicode_escape(&mut self) -> Result<char, String> {
+		self.advance(); // skip `u`, now at `{`
+		let mut hex = String::new();
+		while self.peek_char(1).is_ascii_hexdigit() {
+			self.advance();
+			hex.push(self.current_char());
+		}
+		if self.peek_char(1) != '}' {
+			return Err(format!("\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"));
+		}
+		self.advance(); // now at `}`
+		u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).ok_or_else(|| format!("\\u{{{hex}}} is no unicode code point"))
 	}
 
 	/// The number type of a following `as int` / `as float` …
