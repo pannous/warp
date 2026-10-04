@@ -500,6 +500,8 @@ PASSED:
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
   ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
+  ✓ lists::test_number_keys::a_list_keeps_its_positions
+  ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
@@ -1863,4 +1865,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-41 ignored, 1858 passed, 0 failed, 1858 total tested
+41 ignored, 1860 passed, 0 failed, 1860 total tested

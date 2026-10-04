@@ -3832,6 +3832,11 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 }
 
 
+/// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
+/// reads it (number_keys.rs, P34)
+#[derive(Clone, Debug, PartialEq)]
+pub struct WrittenIndex(pub Number);
+
 /// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
 /// A slice `target[start:end]`, `target[start..end]`, `target[start...last]` is the call `slice(target, start, end)`.
 /// A negative index is an error that names the way to the last element: wasp never wraps around (Footguns.md).
@@ -3849,7 +3854,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 	}
 	let one = Node::Number(Number::Int(1));
 	let one_based = match index.drop_meta() {
-		Node::Number(n) => Node::Number(*n + Number::Int(1)),
+		Node::Number(n) => Node::meta(Node::Number(*n + Number::Int(1)), Node::data(WrittenIndex(*n))),
 		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
 	};
 	Node::Key(Box::new(target), Op::Hash, Box::new(one_based))

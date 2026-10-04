@@ -13,6 +13,7 @@ pub mod library_words;
 pub mod meta_entries;
 pub mod min_max;
 pub mod mutation;
+pub mod number_keys;
 pub mod overloads;
 pub mod printable;
 pub mod phrase_words;

@@ -28,3 +28,5 @@ mod test_dynamic_range;
 mod test_remove_and_index_of;
 mod test_find_any_all;
 mod test_set_past_the_end;
+mod test_number_keys;
+mod test_byte_size;

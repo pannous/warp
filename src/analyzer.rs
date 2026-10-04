@@ -33,6 +33,8 @@ fn is_declaration_keyword(node: &Node) -> bool {
 }
 
 const COUNTING_PROPERTIES: [&str; 5] = ["number", "count", "length", "size", "len"];
+/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
+const BYTE_SIZE: &str = "byte_size";
 /// The counting properties that are also functions: `number x` is the type conversion, not a count
 const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
 
@@ -3399,6 +3401,9 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 	if ctx.user_functions.contains_key(name) {
 		return None;
 	}
+	if name == BYTE_SIZE {
+		return Some("node_bytes");
+	}
 	(is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name)).then_some("node_count")
 }
 
@@ -3406,7 +3411,7 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		_ if is_counting_property(name) => Some("node_count"),
-		"bytes" => Some("node_bytes"),
+		"bytes" | BYTE_SIZE => Some("node_bytes"),
 		"chars" | "codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
