@@ -274,6 +274,7 @@ PASSED:
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
+  ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
   ✓ functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ functions::test_lambdas::test_assigned_lambda_is_a_function
   ✓ functions::test_lambdas::test_block_called_with_bindings
@@ -1793,4 +1794,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1788 passed, 0 failed, 1788 total tested
+53 ignored, 1789 passed, 0 failed, 1789 total tested

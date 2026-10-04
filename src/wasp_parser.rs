@@ -111,6 +111,7 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return Node::List(items, bracket, separator);
 	}
@@ -127,6 +128,21 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 		}
 		_ => Node::List(items, bracket, separator),
 	}
+}
+
+/// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
+/// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
+fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
+	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
+	let Some(arrow) = items.iter().position(is_arrow) else { return items };
+	if arrow + 1 == items.len() || items[arrow + 1..].iter().any(is_arrow) {
+		return items;
+	}
+	let rest = items.split_off(arrow + 1);
+	let Node::Key(parameters, op, body) = items.pop().expect("the arrow").drop_meta().clone() else { unreachable!("an arrow") };
+	let body = one_expression(&[vec![*body], rest].concat());
+	items.push(Node::Key(parameters, op, Box::new(body)));
+	items
 }
 
 fn is_unindexable_keyword(node: &Node) -> bool {
