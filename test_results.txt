@@ -1283,6 +1283,7 @@ PASSED:
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
+  ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
@@ -1792,4 +1793,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1787 passed, 0 failed, 1787 total tested
+53 ignored, 1788 passed, 0 failed, 1788 total tested

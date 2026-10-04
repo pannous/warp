@@ -3623,12 +3623,12 @@ impl WasmGcEmitter {
 			.fields
 			.iter()
 			.map(|f| {
-				let element_type = match f.type_name.as_str() {
-					"i64" | "Int" | "long" => Val(ValType::I64),
-					"i32" | "int" => Val(ValType::I32),
-					"f64" | "Float" | "double" => Val(ValType::F64),
-					"f32" | "float" => Val(ValType::F32),
-					"String" | "Text" | "string" => Val(Ref(string_ref)),
+				let element_type = match crate::type_kinds::field_storage(&f.type_name) {
+					crate::type_kinds::FieldStorage::I64 => Val(ValType::I64),
+					crate::type_kinds::FieldStorage::I32 => Val(ValType::I32),
+					crate::type_kinds::FieldStorage::F64 => Val(ValType::F64),
+					crate::type_kinds::FieldStorage::F32 => Val(ValType::F32),
+					crate::type_kinds::FieldStorage::Text => Val(Ref(string_ref)),
 					_ => Val(ValType::I64), // default
 				};
 				FieldType {
@@ -3798,8 +3798,18 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 
 /// Find a struct instantiation anywhere in the AST using TypeRegistry
 /// todo instead of recursing different types individually, we should have one central walker and delegate from there.
+/// The instance a program consists of: type definitions, then `TypeName:{field:value, ...}` as its value. An instance
+/// anywhere else (an argument `f(pt{…})`, a statement among others) is no such program: it runs the standard way
 fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
-	find_instantiation_recursive(registry, node)
+	let statements = match node.drop_meta() {
+		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.as_slice(),
+		_ => std::slice::from_ref(node),
+	};
+	let (last, before) = statements.split_last()?;
+	if !before.iter().all(|statement| matches!(statement.drop_meta(), Node::Type { .. } | Node::Empty)) {
+		return None;
+	}
+	find_instantiation_recursive(registry, last)
 }
 
 

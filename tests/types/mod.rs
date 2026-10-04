@@ -30,3 +30,4 @@ mod test_trait_default_methods;
 mod test_trait_runtime_dispatch;
 mod test_trait_equals_membership;
 mod test_trait_constraints;
+mod test_instance_arguments;

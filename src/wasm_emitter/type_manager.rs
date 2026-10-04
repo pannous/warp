@@ -243,34 +243,22 @@ impl TypeManager {
 
 	/// Convert a FieldDef to a WASM FieldType
 	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef) -> FieldType {
-		let element_type = match field.type_name.as_str() {
-			// Node-mode: map wasp types to WASM types
-			"Int" | "i64" | "long" => Val(ValType::I64),
-			"Float" | "f64" | "double" => Val(ValType::F64),
-			"i32" | "int" => Val(ValType::I32),
-			"f32" | "float" => Val(ValType::F32),
-			"Text" | "String" | "string" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.string_type),
-			})),
-			"Node" => Val(Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(self.node_type),
-			})),
-			// an untyped field (`class contact {name email?}`) holds any Node, ø included
-			other if other.trim_end_matches('?') == crate::type_kinds::UNTYPED_FIELD => Val(Ref(self.node_ref(true))),
-			// User-defined types
-			other => {
-				if let Some(&type_idx) = self.user_type_indices.get(other) {
-					Val(Ref(RefType {
-						nullable: true,
-						heap_type: HeapType::Concrete(type_idx),
-					}))
-				} else {
-					self.type_errors.push(format!("unknown type: {other} of field {}", field.name));
+		use crate::type_kinds::FieldStorage;
+		let reference = |heap_type| Val(Ref(RefType { nullable: true, heap_type }));
+		let element_type = match crate::type_kinds::field_storage(&field.type_name) {
+			FieldStorage::I64 => Val(ValType::I64),
+			FieldStorage::F64 => Val(ValType::F64),
+			FieldStorage::I32 => Val(ValType::I32),
+			FieldStorage::F32 => Val(ValType::F32),
+			FieldStorage::Text => reference(HeapType::Concrete(self.string_type)),
+			FieldStorage::Node => reference(HeapType::Concrete(self.node_type)),
+			FieldStorage::Named => match self.user_type_indices.get(&field.type_name) {
+				Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
+				None => {
+					self.type_errors.push(format!("unknown type: {} of field {}", field.type_name, field.name));
 					Val(Ref(self.node_ref(true)))
 				}
-			}
+			},
 		};
 
 		FieldType {
@@ -329,3 +317,4 @@ impl TypeManager {
 		&mut self.user_type_indices
 	}
 }
+
