@@ -152,13 +152,14 @@ pub fn lower(node: Node) -> Node {
 	extract_user_functions(&mut context, &node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_assigned_names(&node, &mut shadowed);
-	let mut assigned_objects = HashMap::new();
-	collect_assigned_objects(&node, &mut assigned_objects);
+	let mut assigned = AssignedObjects::default();
+	collect_assigned_objects(&node, &mut assigned);
 
-	let objects = assigned_objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
+	let plain = assigned.plain;
+	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
-	Lowering { context, shadowed, objects, instances, parameters: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -262,27 +263,46 @@ fn field_name(key: &Node) -> Option<String> {
 	}
 }
 
-/// Variables that are only ever assigned an object literal, with that literal; `None` for a variable assigned anything else too
-fn collect_assigned_objects(node: &Node, objects: &mut HashMap<String, Option<Node>>) {
+/// Variables that are only ever assigned an object literal, with that literal (`None` for a variable assigned anything
+/// else too), and the variables assigned a plain value (`plain`: a number, text or character, or a list of them)
+#[derive(Default)]
+struct AssignedObjects {
+	objects: HashMap<String, Option<Node>>,
+	plain: HashSet<String>,
+}
+
+fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {
+				if is_plain_literal(value) {
+					assigned.plain.insert(name.clone());
+				}
 				let copied = match value.drop_meta() {
-					Node::Symbol(other) => objects.get(other).cloned().flatten(), // `q=p` is the same object
+					Node::Symbol(other) => assigned.objects.get(other).cloned().flatten(), // `q=p` is the same object
 					_ => None,
 				};
 				let literal = copied.or_else(|| object_entries(value).map(|_| value.as_ref().clone()));
-				let both_objects = literal.is_some() && objects.get(name).is_none_or(|earlier| earlier.is_some());
-				objects.insert(name.clone(), if both_objects { literal } else { None });
+				let both_objects = literal.is_some() && assigned.objects.get(name).is_none_or(|earlier| earlier.is_some());
+				assigned.objects.insert(name.clone(), if both_objects { literal } else { None });
 			}
-			collect_assigned_objects(value, objects);
+			collect_assigned_objects(value, assigned);
 		}
 		Node::Key(left, _, right) => {
-			collect_assigned_objects(left, objects);
-			collect_assigned_objects(right, objects);
+			collect_assigned_objects(left, assigned);
+			collect_assigned_objects(right, assigned);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_objects(item, objects)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_objects(item, assigned)),
 		_ => {}
+	}
+}
+
+/// A number, text or character literal, or a list literal of them
+fn is_plain_literal(value: &Node) -> bool {
+	match value.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => true,
+		Node::List(items, Bracket::Square, _) => !items.is_empty() && items.iter().all(is_plain_literal),
+		_ => false,
 	}
 }
 
@@ -330,6 +350,8 @@ struct Lowering {
 	context: Context,
 	shadowed: HashSet<String>,
 	objects: HashMap<String, Node>,
+	/// Variables assigned plain values (AssignedObjects::plain)
+	plain: HashSet<String>,
 	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
@@ -584,6 +606,17 @@ impl Lowering {
 		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || is_call_result || self.instances.is_declared_field(name);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
+		}
+		// a variable of unknown value (`o` of `for o in people.filter(…)`), or an element of one (`xs[1]`), may hold an
+		// object: its field is looked up at run time
+		let variable = match receiver.drop_meta() {
+			Node::Key(list, Op::Hash, _) => list.drop_meta(),
+			other => other,
+		};
+		if let Node::Symbol(variable) = variable {
+			if !is_known && !has_arguments && !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable) {
+				return Some(field_lookup(receiver, name, word_node));
+			}
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));

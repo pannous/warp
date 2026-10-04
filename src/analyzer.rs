@@ -1196,6 +1196,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		}
 		// Grouping: `([1 2])` has the type of `[1 2]`, as in infer_type
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => list_type_name(&items[0], scope),
+		// a block `(out = ø; for …; out)` is worth its last value
+		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) if !items.is_empty() => list_type_name(&items[items.len() - 1], scope),
 		// `zero_fill(count, zero)`: a list of the zero's type
 		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == ZERO_FILL_CALL)) => {
 			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
