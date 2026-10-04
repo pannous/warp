@@ -1591,6 +1591,10 @@ impl WasmGcEmitter {
 		if self.emit_compound_index_assignment(func, left, op, right) {
 			return true;
 		}
+		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+			if use_float { self.emit_float_value(func, &assignment) } else { self.emit_numeric_value(func, &assignment) }
+			return true;
+		}
 		// x += y → x = x + y
 		if let Node::Symbol(name) = left.drop_meta() {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
@@ -1619,6 +1623,178 @@ impl WasmGcEmitter {
 		} else {
 			self.emit_malformed(func, left, "a variable to update");
 			true
+		}
+	}
+
+	/// `√x`, `-x`, `!x`, `‖x‖` where an Int is wanted
+	fn emit_numeric_prefix(&mut self, func: &mut Function, located: &Node, op: &Op, right: &Node) {
+		match op {
+			Op::Sqrt => {
+				self.emit_float_value(func, right);
+				func.instruction(&I::F64Sqrt);
+				self.emit_float_in_exact_context(func, &located.serialize());
+			}
+			Op::Neg => {
+				self.emit_numeric_value(func, right);
+				let range = self.int_range(right);
+				self.emit_int_neg(func, range);
+			}
+			Op::Not => {
+				// not x = x is falsy: 0, ø and errors
+				self.emit_condition(func, right, Self::emit_numeric_value);
+				func.instruction(&I::I32Eqz);
+				func.instruction(&I::I64ExtendI32U);
+			}
+			Op::Abs => {
+				self.emit_numeric_value(func, right);
+				let range = self.int_range(right);
+				self.emit_int_abs(func, range);
+			}
+			_ => self.emit_type_error(func, format!("`{op}` of an exact number is not supported yet")),
+		}
+	}
+
+	/// A variable where an Int is wanted: a local, a global or `$n` (the n-th parameter)
+	fn emit_numeric_symbol(&mut self, func: &mut Function, name: &str) {
+		// Handle $n parameter reference (e.g., $0 = first param)
+		if let Some(rest) = name.strip_prefix('$') {
+			if let Ok(idx) = rest.parse::<u32>() {
+				func.instruction(&I::LocalGet(idx));
+				return;
+			}
+		}
+		if self.emit_typed_list_as_node(func, name) {
+			self.emit_call(func, "get_int_value");
+		} else if let Some(local) = self.scope.lookup(name) {
+			func.instruction(&I::LocalGet(local.position));
+			if local.kind.is_ref() {
+				// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
+				self.emit_call(func, "get_int_value");
+			} else if local.kind.is_float() {
+				self.emit_float_in_exact_context(func, name);
+			}
+		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
+			func.instruction(&I::GlobalGet(idx));
+			if kind.is_float() {
+				self.emit_float_in_exact_context(func, name);
+			}
+		} else {
+			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// A list where an Int is wanted: a call (of a user, FFI or builtin function), `return v`, or statements
+	fn emit_numeric_list(&mut self, func: &mut Function, node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator) {
+		// Check for return statement: [Symbol("return"), value]
+		if items.len() == 2 {
+			if let Node::Symbol(keyword) = items[0].drop_meta() {
+				if keyword == "return" {
+					// Emit the return value, as the Node a Node-returning function gives back
+					self.emit_returned_value(func, &items[1]);
+					func.instruction(&I::Return);
+					// After return, emit unreachable to satisfy block types
+					func.instruction(&I::I64Const(0));
+					return;
+				}
+			}
+		}
+		// Integer conversion: int("5") + 3
+		if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if type_word_kind(s) == Some(Kind::Int)) {
+			self.emit_cast(func, &items[1], &items[0]);
+			self.emit_call(func, "get_int_value");
+			return;
+		}
+		// a call of a user or FFI function: `(f)` without arguments, `f(a, b…)`
+		if items.len() >= 2 || *bracket == Bracket::Round {
+			if let Node::Symbol(fn_name) = items[0].drop_meta() {
+				if self.ctx.user_functions.contains_key(fn_name) {
+					self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+					return;
+				}
+				// Check for FFI function call
+				if self.ctx.ffi_imports.contains_key(fn_name) {
+					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
+					return;
+				}
+			}
+		}
+		// Rounding and counting builtins build a node: its Int is the number
+		if self.emit_integer_builtin(func, items) || self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
+		}
+		// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
+		if self.is_output_call(node) {
+			self.emit_node_instructions(func, node);
+			self.emit_call(func, "get_int_value");
+			return;
+		}
+		// a library word gives a node too: `m.get(k, 0) + 1`, `xs.has(x) + 1`
+		if crate::analyzer::call_name(items, bracket, separator).is_some_and(crate::library_words::is_runtime_word) {
+			self.emit_node_instructions(func, node);
+			self.emit_call(func, "get_int_value");
+			return;
+		}
+		self.emit_statement_sequence(func, items, Self::emit_numeric_value);
+	}
+
+	/// `x = v` where an Int is wanted: the value stored and left on the stack (0 for a Node variable holding a non-number)
+	fn emit_numeric_assignment(&mut self, func: &mut Function, located: &Node, left: &Node, right: &Node) {
+		if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
+			self.emit_index_assignment(func, node_expr, index_expr, right);
+			return;
+		}
+		if let Node::Symbol(name) = left.drop_meta() {
+			if let Some((position, kind)) = self.scope.lookup(name).map(|local| (local.position, local.kind)) {
+				if kind.is_float() {
+					let message = format!("{} assigns a float where an exact Int is expected", located.serialize());
+					self.emit_type_error(func, message);
+					return;
+				}
+				if self.emit_typed_list_store(func, name, right) {
+					func.instruction(&I::Drop);
+					func.instruction(&I::I64Const(0));
+					return;
+				}
+				if kind.is_ref() {
+					// a variable holding ø, a list or a text: the value lives in the local, a number is also the value of the assignment
+					self.emit_node_instructions(func, right);
+					func.instruction(&I::LocalSet(position));
+					if self.get_type(right) == Kind::Int {
+						self.emit_numeric_value(func, left);
+					} else {
+						func.instruction(&I::I64Const(0));
+					}
+					return;
+				}
+				self.emit_value_of_kind(func, right, kind);
+				self.emit_fits_declared(func, left);
+				func.instruction(&I::LocalTee(position));
+			} else if let Some(kind) = self.emit_global_store(func, name, right) {
+				if kind.is_float() {
+					self.emit_float_in_exact_context(func, name);
+				}
+			} else {
+				self.emit_undefined_variable(func, name);
+			}
+		} else {
+			self.emit_malformed(func, left, "a variable to assign to");
+		}
+	}
+
+	/// `i++`, `i--` where an Int is wanted: the new value
+	fn emit_numeric_step(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+			self.emit_numeric_value(func, &assignment);
+			return;
+		}
+		if let Node::Symbol(name) = left.drop_meta() {
+			let Some(local_pos) = self.defined_local_position(func, name) else { return };
+			self.emit_int_step(func, local_pos, op);
+			self.emit_fits_declared(func, left);
+			// Store and return new value
+			func.instruction(&I::LocalTee(local_pos));
+		} else {
+			self.emit_malformed(func, left, "a variable to increment or decrement");
 		}
 	}
 
@@ -2845,91 +3021,12 @@ impl WasmGcEmitter {
 				func.instruction(&I::I64Const(*c as i64));
 			}
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
-			Node::Key(left, Op::Define | Op::Assign, right) => {
-				if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
-					self.emit_index_assignment(func, node_expr, index_expr, right);
-					return;
-				}
-				if let Node::Symbol(name) = left.drop_meta() {
-					if let Some((position, kind)) = self.scope.lookup(name).map(|local| (local.position, local.kind)) {
-						if kind.is_float() {
-							let message = format!("{} assigns a float where an exact Int is expected", located.serialize());
-							self.emit_type_error(func, message);
-							return;
-						}
-						if self.emit_typed_list_store(func, name, right) {
-							func.instruction(&I::Drop);
-							func.instruction(&I::I64Const(0));
-							return;
-						}
-						if kind.is_ref() {
-							// a variable holding ø, a list or a text: the value lives in the local, a number is also the value of the assignment
-							self.emit_node_instructions(func, right);
-							func.instruction(&I::LocalSet(position));
-							if self.get_type(right) == Kind::Int {
-								self.emit_numeric_value(func, left);
-							} else {
-								func.instruction(&I::I64Const(0));
-							}
-							return;
-						}
-						self.emit_value_of_kind(func, right, kind);
-						self.emit_fits_declared(func, left);
-						func.instruction(&I::LocalTee(position));
-					} else if let Some(kind) = self.emit_global_store(func, name, right) {
-						if kind.is_float() {
-							self.emit_float_in_exact_context(func, name);
-						}
-					} else {
-						self.emit_undefined_variable(func, name);
-					}
-				} else {
-					self.emit_malformed(func, left, "a variable to assign to");
-				}
-			}
+			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
 			// Increment/decrement: i++ or i--
-			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => {
-				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
-					self.emit_numeric_value(func, &assignment);
-					return;
-				}
-				if let Node::Symbol(name) = left.drop_meta() {
-					let Some(local_pos) = self.defined_local_position(func, name) else { return };
-					self.emit_int_step(func, local_pos, op);
-					self.emit_fits_declared(func, left);
-					// Store and return new value
-					func.instruction(&I::LocalTee(local_pos));
-				} else {
-					self.emit_malformed(func, left, "a variable to increment or decrement");
-				}
-			}
+			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
 			// Compound assignment: x += y → x = x + y
 			Node::Key(left, op, right) if op.is_compound_assign() => {
-				if self.emit_compound_index_assignment(func, left, op, right) {
-					return;
-				}
-				if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
-					self.emit_numeric_value(func, &assignment);
-					return;
-				}
-				if let Node::Symbol(name) = left.drop_meta() {
-					// Get local position first to avoid borrow issues
-					let Some(local_pos) = self.defined_local_position(func, name) else { return };
-					let base_op = op.base_op();
-					if self.emit_compound_type_error(func, left, &base_op, right) {
-						return;
-					}
-					// Get current value of x
-					func.instruction(&I::LocalGet(local_pos));
-					// Emit y
-					self.emit_numeric_value(func, right);
-					self.emit_int_compound_op(func, &base_op, right);
-					self.emit_fits_declared(func, left);
-					// Store result and leave on stack
-					func.instruction(&I::LocalTee(local_pos));
-				} else {
-					self.emit_malformed(func, left, "a variable to update");
-				}
+				self.emit_compound_assign(func, left, op, right, false);
 			}
 			// Arithmetic operators
 			Node::Key(left, op, right) if op.is_arithmetic() => {
@@ -2969,32 +3066,7 @@ impl WasmGcEmitter {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
-			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
-				match op {
-					Op::Sqrt => {
-						self.emit_float_value(func, right);
-						func.instruction(&I::F64Sqrt);
-						self.emit_float_in_exact_context(func, &located.serialize());
-					}
-					Op::Neg => {
-						self.emit_numeric_value(func, right);
-						let range = self.int_range(right);
-						self.emit_int_neg(func, range);
-					}
-					Op::Not => {
-						// not x = x is falsy: 0, ø and errors
-						self.emit_condition(func, right, Self::emit_numeric_value);
-						func.instruction(&I::I32Eqz);
-						func.instruction(&I::I64ExtendI32U);
-					}
-					Op::Abs => {
-						self.emit_numeric_value(func, right);
-						let range = self.int_range(right);
-						self.emit_int_abs(func, range);
-					}
-					_ => self.emit_type_error(func, format!("`{op}` of an exact number is not supported yet")),
-				}
-			}
+			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => self.emit_numeric_prefix(func, located, op, right),
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
 			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
 				let counter = self.counting_getter(property).expect("guarded");
@@ -3028,100 +3100,9 @@ impl WasmGcEmitter {
 				self.emit_if_then_else_numeric(func, &full_node, None);
 			}
 			// Variable lookup (local or global)
-			Node::Symbol(name) => {
-				// Handle $n parameter reference (e.g., $0 = first param)
-				if let Some(rest) = name.strip_prefix('$') {
-					if let Ok(idx) = rest.parse::<u32>() {
-						func.instruction(&I::LocalGet(idx));
-						return;
-					}
-				}
-				if self.emit_typed_list_as_node(func, name) {
-					self.emit_call(func, "get_int_value");
-				} else if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&I::LocalGet(local.position));
-					if local.kind.is_ref() {
-						// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
-						self.emit_call(func, "get_int_value");
-					} else if local.kind.is_float() {
-						self.emit_float_in_exact_context(func, name);
-					}
-				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
-					func.instruction(&I::GlobalGet(idx));
-					if kind.is_float() {
-						self.emit_float_in_exact_context(func, name);
-					}
-				} else {
-					self.emit_undefined_variable(func, name);
-				}
-			}
+			Node::Symbol(name) => self.emit_numeric_symbol(func, name),
 			// Statement sequence or function call
-			Node::List(items, bracket, separator) if !items.is_empty() => {
-				// Check for zero-argument function call: (funcname)
-				if items.len() == 1 && *bracket == Bracket::Round {
-					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.ctx.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_numeric(func, fn_name, &[]);
-							return;
-						}
-						// Check for zero-arg FFI function call
-						if self.ctx.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Int));
-							return;
-						}
-					}
-				}
-				// Check for return statement: [Symbol("return"), value]
-				if items.len() == 2 {
-					if let Node::Symbol(keyword) = items[0].drop_meta() {
-						if keyword == "return" {
-							// Emit the return value, as the Node a Node-returning function gives back
-							self.emit_returned_value(func, &items[1]);
-							func.instruction(&I::Return);
-							// After return, emit unreachable to satisfy block types
-							func.instruction(&I::I64Const(0));
-							return;
-						}
-					}
-				}
-				// Integer conversion: int("5") + 3
-				if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if type_word_kind(s) == Some(Kind::Int)) {
-					self.emit_cast(func, &items[1], &items[0]);
-					self.emit_call(func, "get_int_value");
-					return;
-				}
-				// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
-				if items.len() >= 2 {
-					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.ctx.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-							return;
-						}
-						// Check for FFI function call
-						if self.ctx.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
-							return;
-						}
-					}
-				}
-				// Rounding and counting builtins build a node: its Int is the number
-				if self.emit_integer_builtin(func, items) || self.reject_unresolved_call(func, items, bracket, separator) {
-					return;
-				}
-				// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
-				if self.is_output_call(node) {
-					self.emit_node_instructions(func, node);
-					self.emit_call(func, "get_int_value");
-					return;
-				}
-				// a library word gives a node too: `m.get(k, 0) + 1`, `xs.has(x) + 1`
-				if crate::analyzer::call_name(items, bracket, separator).is_some_and(crate::library_words::is_runtime_word) {
-					self.emit_node_instructions(func, node);
-					self.emit_call(func, "get_int_value");
-					return;
-				}
-				self.emit_statement_sequence(func, items, Self::emit_numeric_value);
-			}
+			Node::List(items, bracket, separator) if !items.is_empty() => self.emit_numeric_list(func, node, items, bracket, separator),
 			// While loop: emit loop and get numeric result
 			Node::Key(left, Op::Do, right) => {
 				self.emit_while_loop_value(func, left, right);
