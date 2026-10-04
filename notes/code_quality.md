@@ -44,6 +44,10 @@ mixed modules (analyzer, modules, host, real, time, units) stay in src/.
 target type, emit_list_node 232 → 144, continue_expr 249 → 177 (SpecialInfix), emit_exact_functions, emit_text_builtins
 and emit_list_ops split into named sections, parse_symbol_with_suffix 202 → 93, infer_type (infer_list_type), main → apply_flags + run_command.
 
+#19 (2026-10-04, part): the bignum runtimes (big_trim, mag_cmp/add/sub/mul/divmod, int_store, int_pow, int_box) name
+their local slots; calendar.rs names HOUR, MINUTE and the civil-day era constants at the top. Open: the Unicode range
+tables (strings.rs, text_unicode.rs) and the operator precedences are data tables, left as numbers.
+
 #16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
 Instruction::…` imports still spell the type.
 
