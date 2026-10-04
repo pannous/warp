@@ -5,10 +5,10 @@
 importScripts("reader.js", "host.js");
 self.postMessage("ready"); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 
-self.onmessage = ({ data: { module, name, ints, values, shared } }) => {
+self.onmessage = ({ data: { module, name, ints, values, shared, arrays } }) => {
 	let output = "";
 	const hooks = { print: text => { output += text; }, panicked: text => { output += text; } };
-	const record = runTask(module, hooks, [], name, ints, values);
+	const record = runTask(module, hooks, [], name, ints, values, arrays);
 	if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
 	const reply = utf8.encode(JSON.stringify({ ...record, value: taskTree(record.value), output }));
 	if (TASK_HEADER + reply.length > shared.byteLength) shared.grow(TASK_HEADER + reply.length);

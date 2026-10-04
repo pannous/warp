@@ -352,8 +352,13 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| {
 		link_imports(linker, engine, module, imports)?;
+		// the shared arrays of the run: the program's and every task's instance reach the same ones
+		let shared = crate::shared::imports_shared(module).then(|| std::sync::Arc::new(crate::shared::SharedArrays::default()));
+		if let Some(shared) = &shared {
+			shared.link_into(linker)?;
+		}
 		if crate::tasks::imports_tasks(module) {
-			tasks = Some(crate::tasks::link(linker, engine, module, imports)?);
+			tasks = Some(crate::tasks::link(linker, engine, module, imports, shared)?);
 		}
 		Ok(())
 	});

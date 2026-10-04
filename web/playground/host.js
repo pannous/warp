@@ -134,6 +134,16 @@ function programImports(holder, hooks) {
 			task_failure: id => buildValue(program(), textTree(finishedTask(holder.run, hooks, id).failure ?? "")),
 			task_status: id => taskStatus(holder.run, id),
 			task_control: (id, operation) => controlTask(holder.run, id, operation),
+			// shared arrays (src/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated
+			shared_new: length => {
+				const Buffer = self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer;
+				holder.run.shared.push(new BigInt64Array(new Buffer(8 * Math.max(0, Number(length)))));
+				return BigInt(holder.run.shared.length);
+			},
+			shared_get: (id, index) => Atomics.load(...sharedCell(holder.run, id, index)),
+			shared_set: (id, index, value) => (Atomics.store(...sharedCell(holder.run, id, index), value), value),
+			shared_add: (id, index, value) => Atomics.add(...sharedCell(holder.run, id, index), value) + value,
+			shared_count: id => BigInt(sharedArray(holder.run, id).length),
 		},
 		wasi_snapshot_preview1: {
 			fd_write: (fd, vectors, count, written) => {
@@ -202,6 +212,20 @@ function prepareTaskPool(size = Math.min(4, self.navigator?.hardwareConcurrency 
 	}
 }
 
+function sharedArray(run, id) {
+	const array = run.shared[Number(id) - 1];
+	if (!array) throw new WebAssembly.RuntimeError(`no shared array ${id}`);
+	return array;
+}
+
+// the array and the cell of a 1-based index; out of range is the runtime error natively too
+function sharedCell(run, id, index) {
+	const array = sharedArray(run, id);
+	const cell = Number(index) - 1;
+	if (!(cell >= 0 && cell < array.length)) throw new WebAssembly.RuntimeError("index out of range");
+	return [array, cell];
+}
+
 // a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
 // (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
@@ -211,17 +235,17 @@ function startTask(holder, hooks, name, ints, values) {
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
-		worker.postMessage({ module: run.module, name, ints, values, shared });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared });
 		run.tasks.set(id, { name, worker, shared });
 	} else {
-		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values));
+		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared));
 	}
 	return id;
 }
 
 // the task here: {value} (a number or a tree) or {failure}
-function runTask(module, hooks, warnings, name, ints, values) {
-	const taskHolder = { warnings, run: { module, tasks: new Map() } };
+function runTask(module, hooks, warnings, name, ints, values, arrays) {
+	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays } };
 	try {
 		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
@@ -318,7 +342,7 @@ function runProgram(bytes, hooks) {
 	let instance;
 	const holder = { warnings: [] }; // the runtime warnings go back to the compiler, which reports them (src/web.rs)
 	try {
-		holder.run = { module: new WebAssembly.Module(bytes), tasks: new Map() };
+		holder.run = { module: new WebAssembly.Module(bytes), tasks: new Map(), shared: [] };
 		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
 		holder.exports = instance.exports;
 	} catch (failure) {

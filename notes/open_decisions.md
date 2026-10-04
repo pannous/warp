@@ -79,6 +79,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   setting past the end is a loud, catchable `index out of range` error, as the existing tests have it
   (`x=(1 2 3);x#4=0`, test_footguns). An experimental growth (night 2026-10-04) was dropped before commit; the
   ignored tests expecting growth (test_array_creation) stay ignored.
+- P44 Shared arrays across tasks (user P33 step 6, notes/threads.md): `shared xs = int[n]` makes n Ints (zeros) in a
+  memory every task of the run shares; `xs#i` reads, `xs#i = v` writes, `xs#i += v` / `-=` add atomically (the value
+  is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
+  `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
+  alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

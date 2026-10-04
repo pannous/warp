@@ -190,12 +190,14 @@ pub struct TaskTable {
 	slots: Mutex<HashMap<i64, Slot>>,
 	controls: Mutex<HashMap<i64, Arc<TaskControl>>>,
 	next_id: AtomicI64,
+	/// the shared arrays of the run, linked into every task (shared.rs)
+	shared: Option<Arc<crate::shared::SharedArrays>>,
 }
 
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
-pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports) -> Result<Arc<TaskTable>> {
+pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
 	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1),
+		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared,
 	});
 	table.link_into(linker)?;
 	tick_while_running(Arc::downgrade(&table));
@@ -294,6 +296,9 @@ impl TaskTable {
 		store.set_epoch_deadline(1);
 		let mut linker = Linker::new(&self.engine);
 		crate::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports)?;
+		if let Some(shared) = &self.shared {
+			shared.link_into(&mut linker)?;
+		}
 		self.link_into(&mut linker)?;
 		let instance = linker.instantiate(&mut store, &self.module)?;
 		let callee = instance.get_func(&mut store, function).ok_or_else(|| anyhow!("no exported function {function}"))?;
