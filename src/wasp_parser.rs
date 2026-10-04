@@ -58,6 +58,9 @@ const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
+/// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
+const AWAIT_KEYWORD: &str = "await";
+const AWAIT_OPERAND_BP: u8 = 155;
 const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
@@ -1919,6 +1922,8 @@ impl WaspParser {
 			call
 		} else if let Some(statement) = self.try_parse_return() {
 			statement
+		} else if let Some(awaited) = self.try_parse_await() {
+			awaited
 		} else if let Some((op, chars)) = self.peek_prefix_operator() {
 			let (prefix_line, prefix_column) = self.get_position();
 			self.hint_operator(chars, true);
@@ -1939,6 +1944,25 @@ impl WaspParser {
 		};
 
 		self.continue_expr(lhs, min_bp)
+	}
+
+	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
+	/// `await(x)` (a call or a definition of a function `await`) and `await = …` stay as they are
+	fn try_parse_await(&mut self) -> Option<Node> {
+		if !self.matches_keyword(AWAIT_KEYWORD) {
+			return None;
+		}
+		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.advance_by(AWAIT_KEYWORD.len());
+		let called = self.current_char() == '(';
+		self.skip_spaces();
+		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
+		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			return None;
+		}
+		let operand = self.parse_expr(AWAIT_OPERAND_BP);
+		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
 	}
 
 	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`

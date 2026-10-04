@@ -35,3 +35,9 @@ fn a_task_of_other_values_runs_where_it_starts() {
 fn a_task_nobody_awaits_finishes_before_the_program_ends() {
 	assert!(crate::common::printed("f(x) := { sleep(200); puti(x); x }; go f(7); 1").starts_with('7'));
 }
+
+#[test]
+fn await_binds_its_task_inside_an_expression() {
+	is!(&format!("{SLEEPER}a = go f(1); b = go f(2); await a + await b"), 3);
+	is!(&format!("{SLEEPER}a = go f(5); x = await a * 2; x"), 10);
+}
