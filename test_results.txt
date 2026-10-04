@@ -212,6 +212,7 @@ PASSED:
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_call_arity::extra_or_missing_values_are_errors
+  ✓ functions::test_call_arity::text_builtins_and_library_words_check_their_values_too
   ✓ functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float
   ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
   ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
@@ -1801,4 +1802,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1796 passed, 0 failed, 1796 total tested
+53 ignored, 1797 passed, 0 failed, 1797 total tested

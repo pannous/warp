@@ -13,3 +13,10 @@ fn extra_or_missing_values_are_errors() {
 	is!("sin(x) := x * 2; sin(4)", 8);
 	is!("pow(2, 3)", 8);
 }
+
+#[test]
+fn text_builtins_and_library_words_check_their_values_too() {
+	fails_with("trim(\"a\", \"b\")", "trim takes 1 value, got 2");
+	fails_with("byte_at(\"ab\")", "byte_at takes 2 values, got 1");
+	fails_with("x = 1\ny = upper(\"a\", \"b\")", "upper takes 1 argument, got 2 at 2:");
+}

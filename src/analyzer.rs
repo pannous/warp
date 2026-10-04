@@ -1357,9 +1357,11 @@ fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnostic> {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
-				let arity = crate::ffi::LIBM_F64_FUNCTIONS.iter().find(|(function, _)| function == name).map(|(_, arity)| *arity);
-				if let Some(arity) = arity.filter(|arity| !context.user_functions.contains_key(name) && items.len() - 1 != *arity) {
-					return Some(Diagnostic::at(node, format!("{name} takes {}, got {}", values(arity), items.len() - 1)));
+				let libm = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(function, _)| function == name).map(|(_, arity)| *arity);
+				let arities: Vec<usize> = libm.chain(crate::wasm_emitter::text_builtins::text_builtin_arities(name)).collect();
+				let given = items.len() - 1;
+				if !arities.is_empty() && !context.user_functions.contains_key(name) && !arities.contains(&given) {
+					return Some(Diagnostic::at(node, format!("{name} takes {}, got {given}", values(arities[0]))));
 				}
 			}
 			items.iter().find_map(|item| call_arity_error(item, context))

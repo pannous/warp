@@ -58,6 +58,11 @@ pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
 	TEXT_BUILTINS.iter().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
 }
 
+/// The numbers of arguments a text builtin takes, empty for any other name
+pub fn text_builtin_arities(name: &str) -> Vec<usize> {
+	TEXT_BUILTINS.iter().filter(|(builtin, _, _)| *builtin == name).map(|(_, arity, _)| *arity).collect()
+}
+
 pub fn is_text_builtin(name: &str) -> bool {
 	TEXT_BUILTINS.iter().any(|(builtin, _, _)| *builtin == name)
 }

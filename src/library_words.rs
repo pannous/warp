@@ -670,7 +670,8 @@ impl Lowering {
 		}
 		if arguments.len() != wanted {
 			let plural = if wanted == 1 { "" } else { "s" };
-			return Diagnostic::at(head, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
+			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
+			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
