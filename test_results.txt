@@ -95,6 +95,8 @@ PASSED:
   ✓ control::test_try_exits_and_naming::break_out_of_a_try_restores_the_depth
   ✓ control::test_try_exits_and_naming::continue_out_of_a_try_restores_the_depth
   ✓ control::test_try_exits_and_naming::return_out_of_a_try_restores_the_depth
+  ✓ control::test_try_named_traps::a_missing_field_is_caught
+  ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
@@ -148,6 +150,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
   ✓ ffi::test_ffi::test_ffi_strlen
+  ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
@@ -184,7 +187,6 @@ PASSED:
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
-  ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
   ✓ functions::test_bare_function_name::test_bare_name_of_function_without_parameters_calls_it
@@ -321,6 +323,8 @@ PASSED:
   ✓ functions::test_return_type_dispatch::test_no_expected_type_takes_the_first_overload_with_a_warning
   ✓ functions::test_return_type_dispatch::test_the_result_type_can_be_inferred_from_the_body
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
+  ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
+  ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
   ✓ functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form
   ✓ functions::test_suffix_words::a_variable_is_no_suffix_form
@@ -446,7 +450,6 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
-  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -460,6 +463,7 @@ PASSED:
   ✓ lists::test_unpacking::star_middle
   ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
+  ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
   ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
@@ -1736,4 +1740,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1731 passed, 0 failed, 1731 total tested
+58 ignored, 1735 passed, 0 failed, 1735 total tested

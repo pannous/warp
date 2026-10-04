@@ -85,6 +85,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::TEXT_AS_INT) || required.contains(super::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");
 	}
+	if required.contains(super::list_ops::TEXT_AS_FLOAT) {
+		required.insert(super::list_ops::TEXT_AS_INT);
+		if required.contains(super::INT_RUNTIME) {
+			required.insert("exact_to_f64");
+		}
+	}
 	if required.contains(super::list_ops::TEXT_AS_INT) && required.contains(super::INT_RUNTIME) {
 		required.extend(["exact_mul", "exact_add", "exact_sub"]);
 	}

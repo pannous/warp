@@ -486,6 +486,8 @@ impl WasmGcEmitter {
 const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
 /// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
 const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
+/// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
+const NOT_A_NUMBER: &str = "not_a_number";
 
 /// The division in an index `n/2`, also behind the 0-based shift of `xs[n/2]` (`xs#(n/2 + 1)`)
 fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
@@ -514,12 +516,12 @@ pub fn runtime_error_message(name: &str) -> String {
 /// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
 
-pub const RUNTIME_ERRORS: [&str; 23] = [
+pub const RUNTIME_ERRORS: [&str; 24] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL,
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -594,12 +596,22 @@ impl WasmGcEmitter {
 	/// JSON map): Floats when either is a Float, else exact Ints; anything else is the runtime error not_an_int
 	pub(super) fn emit_node_arithmetic(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
-		let float_kind = crate::type_kinds::Kind::Float as i64;
+		let (int_kind, float_kind) = (crate::type_kinds::Kind::Int as i64, crate::type_kinds::Kind::Float as i64);
 		for (name, float_op, exact_op) in NODE_ARITHMETIC {
 			if !self.should_emit_function(name) {
 				continue;
 			}
-			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64], |s, f| {
+				let kind = 2;
+				// a text, a character or a list is no number here: "x" * 2 is no 240
+				for operand in [0, 1] {
+					s.emit_field(f, operand, 0);
+					Self::emit_list(f, &[
+						I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(int_kind), I::I64Ne,
+						I::LocalGet(kind), I::I64Const(float_kind), I::I64Ne, I::I32And,
+					]);
+					s.emit_fail_if(f, NOT_A_NUMBER);
+				}
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq]);
@@ -644,10 +656,12 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty)]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Return, I::End]);
+			// an exact number by its value (a ratio too), a digit character by its digit (text_as_int)
 			kind(f);
 			Self::emit_list(f, &[I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
-			s.call(f, "get_int_value");
-			Self::emit_list(f, &[I::F64ConvertI64S, I::Return, I::End]);
+			s.call(f, TEXT_AS_INT);
+			if s.int_runtime() { s.call(f, "exact_to_f64") } else { f.instruction(&I::F64ConvertI64S); }
+			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_text_bounds(f, pointer, end);
 			// a sign
 			Self::emit_list(f, &at_end);
@@ -819,6 +833,12 @@ impl WasmGcEmitter {
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range
 	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
+		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
+			self.emit_field(func, 0, 0);
+			Self::emit_list(func, &[Instruction::I64Const(KIND_MASK), Instruction::I64And, Instruction::I64Const(scalar as i64), Instruction::I64Eq]);
+			self.emit_fail_if(func, "not_a_list");
+		}
 		Self::emit_index_compare(func, Instruction::I64LtS);
 		self.emit_fail_if(func, "index_out_of_range");
 		func.instruction(&Instruction::LocalGet(0));
@@ -1312,10 +1332,10 @@ impl WasmGcEmitter {
 		let nullable_node_ref = Ref(self.node_ref(true));
 		let missing_fields: Vec<&'static str> =
 			self.ctx.missing_field_names.iter().map(|name| &*Box::leak(format!("{NO_FIELD_PREFIX}{name}").into_boxed_str())).collect();
+		// a missing field is a runtime error a `try` catches, thrown with the id of key_not_found
+		let key_not_found = RUNTIME_ERRORS.iter().position(|error| *error == "key_not_found").expect("a runtime error") as i32;
 		for name in missing_fields {
-			self.runtime_function(name, vec![], vec![], vec![], |_, f| {
-				f.instruction(&I::Unreachable);
-			});
+			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, key_not_found));
 		}
 		// map_find(map, key): the value of the first `key:value` entry whose key equals `key`, null when there is none or
 		// `map` is no list; a text key equals the symbol of the same letters, so `p["name"]` finds `name:"Joe"`
