@@ -68,8 +68,7 @@ The supervisor should remove the DONE elements after a while.
 - DONE: `2 h + 30 min` → "undefined variable: h" and `x=30 min; x` → 30: time units (time.rs durations) and units.rs quantities do not mix. (night 2026-10-04) (min is a time unit of units.rs (150 min); word durations of time.rs (`2 hours`) still do not mix with quantities; night 2026-10-04)
 - Traits: Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open (split off the default-methods entry, night 2026-10-04).
 - `try X else Y` now also catches indexing a number (not_a_list), a missing field (no_field_x), text in run-time-kind arithmetic (not_a_number); still raw: struct field casts elsewhere, null dereferences, stack overflow, out of fuel. (night 2026-10-04)
-- DONE: Method chains on continuation lines (`numbers
-    .map(square)`) were "Unexpected character ."; a line starting with `.word` now continues the expression (samples/functions.wasp). (night 2026-10-04)
+- DONE: Method chains on continuation lines (`numbers⏎    .map(square)`) were "Unexpected character ."; a line starting with `.word` now continues the expression (samples/functions.wasp). (night 2026-10-04)
 - DONE: The pipeline `xs |> f(a)` (wiki/Purpose.md, samples/functions.wasp) was "Unexpected character |"; it is the call f(xs, a), also on continuation lines. (night 2026-10-04)
 - DONE: `def f(x) {…}` (and fun/function) was read by the emitter only: function values, closures, traits and overloads missed its parameters (`def app(f, x) { f(x) }` → undefined function f); keyword definitions are now `f(x) := {…}` from the start. `p in xs` inside a function marked p as a function parameter. (night 2026-10-04)
 - DONE: Partial application `add(1, _)` and calling a returned zero-argument closure `c = counter(5); c()` (samples/functions.wasp). (night 2026-10-04)
