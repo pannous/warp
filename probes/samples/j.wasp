@@ -1,0 +1,88 @@
+// JSON Parser
+// Recursive descent parser for JSON
+// the parser state is global: functions change it (closures would capture copies)
+
+global input = ""
+global pos = 0
+
+def peek() := if pos < input.bytes then byte_slice(input, pos, pos + 1) else ""
+def advance() { pos = pos + 1; return byte_slice(input, pos - 1, pos) }
+def is_digit_text(c) := c != "" and c >= "0" and c <= "9"
+def skip_whitespace() {
+    while peek() == " " or peek() == "\t" or peek() == "\n" or peek() == "\r" { advance() }
+}
+
+def parse_value() {
+    skip_whitespace()
+    c = peek()
+    if c == "\"" { return parse_string() }
+    if c == "{" { return parse_object() }
+    if c == "[" { return parse_array() }
+    if c == "t" { pos = pos + 4; return true }
+    if c == "f" { pos = pos + 5; return false }
+    if c == "n" { pos = pos + 4; return ø }
+    if c == "-" or is_digit_text(c) { return parse_number() }
+    return error("Unexpected character: " + c)
+}
+
+def parse_string() {
+    advance()  // skip opening quote
+    result = ""
+    while peek() != "\"" {
+        c = advance()
+        if c == "\\" {
+            escaped = advance()
+            if escaped == "n" { c = "\n" }
+            else if escaped == "t" { c = "\t" }
+            else if escaped == "r" { c = "\r" }
+            else { c = escaped }
+        }
+        result = result + c
+    }
+    advance()  // skip closing quote
+    return result
+}
+
+def parse_number() {
+    start = pos
+    if peek() == "-" { advance() }
+    while is_digit_text(peek()) or peek() == "." { advance() }
+    return byte_slice(input, start, pos) as float
+}
+
+def parse_object() {
+    advance()  // skip {
+    obj = {}
+    skip_whitespace()
+    while peek() != "}" {
+        skip_whitespace()
+        key = parse_string()
+        skip_whitespace()
+        advance()  // skip :
+        obj[key] = parse_value()
+        skip_whitespace()
+        if peek() == "," { advance() }
+    }
+    advance()  // skip }
+    return obj
+}
+
+def parse_array() {
+    advance()  // skip [
+    arr = []
+    skip_whitespace()
+    while peek() != "]" {
+        arr.push(parse_value())
+        skip_whitespace()
+        if peek() == "," { advance() }
+    }
+    advance()  // skip ]
+    return arr
+}
+
+def parse_json(text) {
+    input = text
+    pos = 0
+    return parse_value()
+}
+

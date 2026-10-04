@@ -1054,6 +1054,7 @@ impl WaspParser {
 			('+', '-') if c3.is_whitespace() && self.prev_char().is_whitespace() => return Some((Op::PlusMinus, 2)),
 			('&', '&') => return Some((Op::And, 2)),
 			('|', '|') => return Some((Op::Or, 2)),
+			('|', '>') => return Some((Op::Pipe, 2)),
 			_ => {}
 		}
 		// Keywords (2-char)

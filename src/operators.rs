@@ -52,6 +52,7 @@ pub enum Op {
 	Assign,   // =   assignment
 	Arrow,    // ->  arrow/return type
 	FatArrow, // =>  fat arrow/lambda
+	Pipe,     // |>  pipeline: a |> f(b) is f(a, b) (welcome_forms.rs)
 
 	// Arithmetic operators
 	Add,  // +
@@ -196,6 +197,7 @@ impl Op {
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
 			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
 			Op::FatArrow => (70, 69), // right-assoc: a => b
+			Op::Pipe => (62, 63),     // left-assoc, looser than everything but assignment: xs |> map(f) |> sum
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
@@ -225,6 +227,7 @@ impl Op {
 			Op::Assign => "=",
 			Op::Arrow => "->",
 			Op::FatArrow => "=>",
+			Op::Pipe => "|>",
 
 			// Arithmetic
 			Op::Add => "+",
