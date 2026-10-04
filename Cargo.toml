@@ -6,7 +6,7 @@
 
 [package]
 name = "warp"
-version = "0.1.1"
+version = "0.1.1-fix-web-build"
 edition = "2021"  # Cargo edition! NOT package edition!
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
