@@ -2286,30 +2286,65 @@ impl WaspParser {
 		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
 	}
 
-	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of the statement
+	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of
+	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.skip_spaces();
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
-		let Some(variable) = variable.filter(|_| self.matches_keyword("in")) else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_header;
-			return None;
-		};
-		self.advance_by("in".len());
+		let named = variable.filter(|_| self.matches_keyword("in"));
+		if named.is_some() {
+			self.advance_by("in".len());
+		} else {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
+			self.skip_spaces();
+			if self.current_char() == '(' { // `for(i=0;i<n;i++)`
+				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+				return None;
+			}
+		}
 		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
 		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
-		let body = if let Some(word) = body_word { // `for i in 0..n: body`, `for i in 0..n do body`
-			self.advance_by(word.len());
-			let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
-			indented_block.unwrap_or_else(|| self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
-		} else {
-			self.parse_atom()
+		let Some(variable) = named else {
+			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
+			let Some(word) = body_word else {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+				return None;
+			};
+			let body = self.colon_body(word);
+			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
+			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
+		};
+		let body = match body_word {
+			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
+			None => self.parse_atom(),
 		};
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// The body after `:` or `do`: an indented block under a colon at the end of the line, else the rest of the line
+	fn colon_body(&mut self, word: &str) -> Node {
+		self.advance_by(word.len());
+		let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
+		indented_block.unwrap_or_else(|| self.rest_of_statement())
+	}
+
+	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
+	fn rest_of_statement(&mut self) -> Node {
+		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
+		loop {
+			while matches!(self.current_char(), ' ' | '\t') {
+				self.advance();
+			}
+			if !self.can_start_atom() {
+				return one_expression(&words);
+			}
+			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
+		}
 	}
 
 	fn finish_while_prefix(&mut self, rhs: Node) -> Node {

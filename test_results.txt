@@ -30,6 +30,8 @@ PASSED:
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
+  ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
+  ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_loop::test_for_classic_three_part_header
   ✓ control::test_for_loop::test_for_over_exclusive_range
   ✓ control::test_for_loop::test_for_over_inclusive_range
@@ -1794,4 +1796,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1789 passed, 0 failed, 1789 total tested
+53 ignored, 1791 passed, 0 failed, 1791 total tested
