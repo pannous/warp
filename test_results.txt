@@ -57,9 +57,6 @@ PASSED:
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
   ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
-  ✓ control::test_loop_value::a_counting_loop_gives_its_last_body_value
-  ✓ control::test_loop_value::a_walking_loop_gives_its_last_body_value
-  ✓ control::test_loop_value::a_while_loop_of_one_expression_gives_its_value
   ✓ control::test_loops_in_functions::a_multi_line_function_with_a_loop
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
@@ -113,14 +110,6 @@ PASSED:
   ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
-  ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
-  ✓ control::test_variable_signals::on_set_runs_after_each_write_with_the_value
-  ✓ control::test_variable_signals::once_never_runs_when_the_condition_never_holds
-  ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
-  ✓ control::test_variable_signals::the_wiki_countdown
-  ✓ control::test_variable_signals::whenever_runs_each_time_the_condition_holds
-  ✓ control::test_welcome_forms::loop_runs_until_break
-  ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
@@ -192,11 +181,6 @@ PASSED:
   ✓ ffi::test_host::test_emitter_with_host_imports_valid
   ✓ ffi::test_host::test_host_fetch_import
   ✓ ffi::test_host::test_host_run_import
-  ✓ ffi::test_libc_results::atol_returns_a_long
-  ✓ ffi::test_libc_results::strcmp_orders_texts
-  ✓ ffi::test_libc_results::strlen_inside_a_program
-  ✓ ffi::test_libc_results::strlen_returns_a_size
-  ✓ ffi::test_libc_results::strncmp_compares_a_prefix
   ✓ ffi::test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
   ✓ ffi::test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
   ✓ ffi::test_wasi::test_fd_write
@@ -261,7 +245,6 @@ PASSED:
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
-  ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -500,16 +483,12 @@ PASSED:
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
   ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
-  ✓ lists::test_number_keys::a_list_keeps_its_positions
-  ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_remove_and_index_of::a_stack_built_from_empty_pops
   ✓ lists::test_remove_and_index_of::index_of_is_the_one_based_position
   ✓ lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable
-  ✓ lists::test_set_past_the_end::setting_into_the_empty_list_is_an_index_error
-  ✓ lists::test_set_past_the_end::setting_past_the_end_is_catchable
   ✓ lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
   ✓ lists::test_signed_operand_list::an_unbracketed_assignment_of_the_list_asks_once_more
   ✓ lists::test_signed_operand_list::each_reading_has_its_explicit_form
@@ -1097,7 +1076,6 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
-  ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -1231,14 +1209,8 @@ PASSED:
   ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
   ✓ text::test_print_arguments::print_of_several_arguments_is_worth_the_printed_text
-  ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
-  ✓ text::test_print_juxtaposed::the_joined_text_is_written
-  ✓ text::test_print_lists::print_of_a_list_is_worth_the_list
-  ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_type_error::print_of_a_type_error_reports_that_error
   ✓ text::test_print_type_error::text_times_number_says_how_to_repeat_a_text
-  ✓ text::test_put_runtime_values::putf_writes_a_float_variable
-  ✓ text::test_put_runtime_values::puti_writes_a_loop_variable
   ✓ text::test_quote_output::test_codepoints_keep_single_quotes
   ✓ text::test_quote_output::test_evaluated_text_prints_with_the_canonical_quote
   ✓ text::test_quote_output::test_is_macro_round_trips_text
@@ -1344,8 +1316,6 @@ PASSED:
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_person_struct::test_person_struct_roundtrip
-  ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
-  ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records_classes::a_class_has_untyped_fields
@@ -1405,8 +1375,6 @@ PASSED:
   ✓ types::test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix
   ✓ types::test_traits::test_trait_synonyms_declare_a_trait
   ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
-  ✓ types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole
-  ✓ types::test_tuple_values::tuples_compare_element_by_element
   ✓ types::test_type_name_matching::test_a_declared_class_types_its_noun
   ✓ types::test_type_name_matching::test_a_multi_word_noun_is_named_and_typed_by_its_head
   ✓ types::test_type_name_matching::test_an_unknown_noun_is_an_untyped_name
@@ -1519,16 +1487,13 @@ PASSED:
   ✓ wasm::test_wasm::test_emitter
   ✓ wasm::test_wasm::test_float_operators
   ✓ wasm::test_wasm::test_for_loop_classic
-  ✓ wasm::test_wasm::test_get_local
   ✓ wasm::test_wasm::test_globals
   ✓ wasm::test_wasm::test_implicit_multiplication
   ✓ wasm::test_wasm::test_is
-  ✓ wasm::test_wasm::test_lazy_evaluation
   ✓ wasm::test_wasm::test_logarithm
   ✓ wasm::test_wasm::test_math_extra
   ✓ wasm::test_wasm::test_math_library
   ✓ wasm::test_wasm::test_math_operators
-  ✓ wasm::test_wasm::test_math_operators_runtime
   ✓ wasm::test_wasm::test_merge_wabt
   ✓ wasm::test_wasm::test_named_data_sections
   ✓ wasm::test_wasm::test_norm
@@ -1547,7 +1512,6 @@ PASSED:
   ✓ wasm::test_wasm::test_square_precedence
   ✓ wasm::test_wasm::test_string_concat_wasm
   ✓ wasm::test_wasm::test_todo_browser
-  ✓ wasm::test_wasm::test_wasm_function_definiton
   ✓ wasm::test_wasm::test_wasm_if
   ✓ wasm::test_wasm::test_wasm_increment
   ✓ wasm::test_wasm::test_wasm_logic
@@ -1559,7 +1523,6 @@ PASSED:
   ✓ wasm::test_wasm::test_wasm_logic_unary_variables
   ✓ wasm::test_wasm::test_wasm_mutable_global
   ✓ wasm::test_wasm::test_wasm_mutable_global2
-  ✓ wasm::test_wasm::test_wasm_ternary
   ✓ wasm::test_wasm::test_wasm_typed_globals
   ✓ wasm::test_wasm::test_wasm_variables0
   ✓ wasm::test_wasm::test_wasm_while
@@ -1865,4 +1828,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-41 ignored, 1860 passed, 0 failed, 1860 total tested
+52 ignored, 1823 passed, 0 failed, 1823 total tested
