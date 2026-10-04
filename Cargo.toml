@@ -5,7 +5,7 @@
 
 [package]
 name = "warp"
-version = "0.1.1"
+version = "0.1.1-playground-acknowledge"
 edition = "2021"  # Cargo edition! NOT package edition!
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
@@ -139,5 +139,5 @@ strip = true           # Strip symbols
 
 [lib]
 # to compile to wasm using `wasm-pack build` :
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 #https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/hello-world.html
