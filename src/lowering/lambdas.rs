@@ -50,6 +50,14 @@ const ITERATIONS: [Iteration; 8] = [
 pub(crate) struct Lambda {
 	pub(crate) params: Vec<String>,
 	pub(crate) body: Node,
+	/// The parameters as written when one of them declares a type (`(x:float)=>…`): the definition keeps them
+	pub(crate) typed: Vec<Node>,
+}
+
+impl Lambda {
+	fn new(params: Vec<String>, body: Node) -> Self {
+		Lambda { params, body, typed: vec![] }
+	}
 }
 
 /// Lower the lambdas and iteration words whose function is known; an iteration word over a parameter is left for the
@@ -88,7 +96,7 @@ fn operator_lambda(node: &Node) -> Option<Lambda> {
 	let Node::Symbol(text) = node.drop_meta() else { return None };
 	let (op, _) = OPERATOR_VALUES.iter().find(|(_, known)| known == text)?;
 	let [left, right] = OPERATOR_PARAMETERS.map(|name| Node::Symbol(name.to_string()));
-	Some(Lambda { params: OPERATOR_PARAMETERS.map(String::from).to_vec(), body: Node::Key(Box::new(left), *op, Box::new(right)) })
+	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), Node::Key(Box::new(left), *op, Box::new(right))))
 }
 
 /// `x +` at the end of an operand list is the item `x` and the operator `+`: an operator as a value has nothing after it
@@ -137,6 +145,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 			.iter()
 			.map(|item| match item.drop_meta() {
 				Node::Symbol(name) => Some(name.clone()),
+				Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name.name()), // `x:float`
 				_ => None,
 			})
 			.collect(),
@@ -150,7 +159,9 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 		Node::Key(left, Op::Arrow | Op::FatArrow, body) => {
 			let params = parameter_names(left)?;
 			let body = subtract_kebab_parameters(body.as_ref().clone(), &params);
-			Some(Lambda { params, body })
+			let written: Vec<Node> = match left.drop_meta() { Node::List(items, _, _) => items.clone(), other => vec![other.clone()] };
+			let typed = if written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))) { written } else { vec![] };
+			Some(Lambda { params, body, typed })
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
 		_ => None,
@@ -168,7 +179,7 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	};
 	let params = if mentions(&body, IMPLICIT_PARAMETER) { vec![IMPLICIT_PARAMETER.to_string()] } else { vec![] };
-	Some(Lambda { params, body })
+	Some(Lambda::new(params, body))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
@@ -178,7 +189,8 @@ pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 }
 
 fn definition(name: &str, lambda: Lambda) -> Node {
-	let head = Node::List([vec![Node::Symbol(name.to_string())], lambda.params.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None);
+	let parameters = if lambda.typed.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.typed };
+	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
 	Node::Key(Box::new(head), Op::Define, Box::new(lambda.body))
 }
 
@@ -211,7 +223,7 @@ impl Lowering {
 			Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && self.partial_application(&value).is_some() => {
 				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
 				let body = self.partial_application(&value).expect("guarded");
-				definition(name, Lambda { params: vec![PARTIAL_LIST.to_string()], body: self.expand(body) })
+				definition(name, Lambda::new(vec![PARTIAL_LIST.to_string()], self.expand(body)))
 			}
 			Node::Key(receiver, Op::Dot, method) if self.iteration_method(&method).is_some() => {
 				let (iteration, mut arguments) = self.iteration_method(&method).expect("guarded");
@@ -282,7 +294,7 @@ impl Lowering {
 			(lambda.params.clone(), entries.clone())
 		};
 		let name = self.fresh("lambda");
-		let defined = definition(&name, Lambda { params, body: lambda.body });
+		let defined = definition(&name, Lambda::new(params, lambda.body));
 		Some(Node::List(vec![defined, call(&name, values)], Bracket::Round, Separator::Semicolon))
 	}
 
