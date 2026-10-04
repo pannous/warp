@@ -204,6 +204,7 @@ PASSED:
   ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
   ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
   ✓ functions::test_closures::an_item_of_a_function_list_called_directly
+  ✓ functions::test_closures::closures_given_floats_take_floats
   ✓ functions::test_closures::closures_of_ints_are_called_without_boxes
   ✓ functions::test_closures::test_a_closure_prints_as_its_function
   ✓ functions::test_closures::test_a_lambda_without_parameters
@@ -1764,4 +1765,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1759 passed, 0 failed, 1759 total tested
+53 ignored, 1760 passed, 0 failed, 1760 total tested

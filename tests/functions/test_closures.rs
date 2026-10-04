@@ -135,3 +135,9 @@ fn closures_of_ints_are_called_without_boxes() {
 	is!("apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)", 300000);
 	is!("fs=[x=>x+1, x=>x*2.5]; fs#2(2)", 5);
 }
+
+#[test]
+fn closures_given_floats_take_floats() {
+	is!("fs=[x=>x*2.0, x=>x+0.5]; g = fs#1; g(1.5 as float)", 3.0);
+	is!("k=2.5 as float; f = (x => x*k); fs=[f]; h=fs#1; h(2.0 as float)", 5.0);
+}
