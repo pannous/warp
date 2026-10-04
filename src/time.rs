@@ -25,6 +25,8 @@ enum Value {
 	Bool(bool),
 	Text(String),
 	Symbol(String),
+	/// a duration in a unit, `2 hours in minutes` (units::duration_in)
+	Converted(Node),
 }
 
 type Scope = HashMap<String, Value>;
@@ -126,6 +128,7 @@ fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) ->
 fn place_in_zone(time: &Node, zone: &Node, scope: &mut Scope) -> Result<Value, String> {
 	let time = match evaluate(time, scope)? {
 		Value::Time(time) => time,
+		Value::Duration(duration) => return converted(&duration, zone),
 		other => return Err(format!("`in` places a time in a zone, got {}", other.kind())),
 	};
 	let zone = match evaluate(zone, scope)? {
@@ -276,7 +279,18 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Bool(a), Op::Or, Value::Bool(b)) => Ok(Value::Bool(a || b)),
 		(Value::Bool(a), Op::Eq, Value::Bool(b)) => Ok(Value::Bool(a == b)),
 		(Value::Bool(a), Op::Ne, Value::Bool(b)) => Ok(Value::Bool(a != b)),
+		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		(left, op, right) => Err(format!("cannot apply {op} to a {} and a {}", left.kind(), right.kind())),
+	}
+}
+
+/// `2 hours in minutes`, `90 minutes as hours`: the duration in a time unit (P36)
+fn converted(duration: &Duration, unit: &Node) -> Result<Value, String> {
+	let Node::Symbol(word) = unit.drop_meta() else { return Err(format!("{duration} converts to a time unit, got {}", unit.serialize())) };
+	match crate::units::duration_in(duration, word) {
+		Some(Node::Error(message)) => Err(message.to_string()),
+		Some(node) => Ok(Value::Converted(node)),
+		None => Err(format!("{duration} converts to a time unit like minutes, got {word}")),
 	}
 }
 
@@ -289,6 +303,7 @@ impl Value {
 			Value::Bool(_) => "boolean",
 			Value::Text(_) => "text",
 			Value::Symbol(_) => "symbol",
+			Value::Converted(_) => "quantity",
 		}
 	}
 
@@ -300,6 +315,7 @@ impl Value {
 			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
 			Value::Text(text) => Node::Text(text),
 			Value::Symbol(name) => Node::Symbol(name),
+			Value::Converted(node) => node,
 		}
 	}
 }

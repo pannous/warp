@@ -42,8 +42,25 @@ const UNITS: [Unit; 12] = [
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
+/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
+/// names, `2 minutes` stays a duration of the time module.
+const LONG_NAMES: [(&str, &str); 12] = [
+	("millisecond", "ms"), ("second", "s"), ("minute", "min"), ("hour", "h"),
+	("millimeter", "mm"), ("centimeter", "cm"), ("meter", "m"), ("metre", "m"), ("kilometer", "km"),
+	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"),
+];
+/// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
+const IN_WORD: &str = "in";
+
 fn unit_named(name: &str) -> Option<&'static Unit> {
 	UNITS.iter().find(|unit| unit.name == name)
+}
+
+/// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
+fn target_unit(node: &Node) -> Option<&'static Unit> {
+	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let singular = name.strip_suffix('s').unwrap_or(name);
+	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
 pub fn is_unit(name: &str) -> bool {
@@ -88,6 +105,20 @@ impl fmt::Display for Rate {
 	}
 }
 
+/// A converted quantity that is no whole number of its unit: `150 cm in m` is `3/2 m`, numerator and denominator coprime
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ratio {
+	numerator: i64,
+	denominator: i64,
+	unit: &'static Unit,
+}
+
+impl fmt::Display for Ratio {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}/{} {}", self.numerator, self.denominator, self.unit.name)
+	}
+}
+
 /// `1950 ± 50 cm`: the unit is absent for plain numbers
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tolerance {
@@ -128,6 +159,9 @@ pub fn describe(data: &Dada) -> Option<String> {
 	if let Some(rate) = data.downcast_ref::<Rate>() {
 		return Some(rate.to_string());
 	}
+	if let Some(ratio) = data.downcast_ref::<Ratio>() {
+		return Some(ratio.to_string());
+	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
 	}
@@ -141,6 +175,7 @@ pub fn describe(data: &Dada) -> Option<String> {
 enum Value {
 	Number(i64),
 	Quantity(Quantity),
+	Ratio(Ratio),
 	Rate(Rate),
 	Tolerance(Tolerance),
 	Range(Range),
@@ -167,6 +202,7 @@ pub fn answer(program: &Node) -> Option<Node> {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
 		Ok(Value::Rate(rate)) => Some(Node::data(rate)),
+		Ok(Value::Ratio(ratio)) => Some(Node::data(ratio)),
 		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
 		Ok(Value::Range(range)) => Some(Node::data(range)),
 		Err(Stop::Error(message)) => Some(error(&message)),
@@ -222,6 +258,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			Ok(value)
 		}
 		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
+		Node::Key(quantity, Op::As, unit) if target_unit(unit).is_some() => convert(evaluate_in(quantity, variables)?, target_unit(unit).expect("guarded")),
 		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
 			items.iter().try_fold(Value::Number(0), |_, item| evaluate_in(item, variables))
@@ -229,6 +266,9 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
 			[single] => evaluate_in(single, variables),
 			[count, unit] if is_unit_word(unit) => arithmetic(evaluate_in(count, variables)?, Op::Mul, evaluate_in(unit, variables)?),
+			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && target_unit(unit).is_some() => {
+				convert(evaluate_in(quantity, variables)?, target_unit(unit).expect("guarded"))
+			}
 			_ => Err(Stop::Unsupported),
 		},
 		_ => Err(Stop::Unsupported),
@@ -244,6 +284,7 @@ fn negate(value: Value) -> Evaluated {
 		Value::Number(n) => Ok(Value::Number(-n)),
 		Value::Quantity(quantity) => Ok(Value::Quantity(Quantity { amount: -quantity.amount, ..quantity })),
 		Value::Rate(rate) => Ok(Value::Rate(Rate { amount: -rate.amount, ..rate })),
+		Value::Ratio(ratio) => Ok(Value::Ratio(Ratio { numerator: -ratio.numerator, ..ratio })),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
 	}
 }
@@ -253,6 +294,7 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
+		(Value::Ratio(ratio), _, _) | (_, _, Value::Ratio(ratio)) => fail(format!("arithmetic on the converted quantity {ratio} is not supported yet: {op}")),
 		(left, Op::PlusMinus, right) => tolerance(left, right),
 		(Value::Number(from), Op::Sub, Value::Quantity(end)) => range(from, end),
 		(Value::Number(a), Op::Add | Op::Sub | Op::Mul, Value::Number(b)) => {
@@ -279,6 +321,52 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		}
 		_ => Err(Stop::Unsupported),
 	}
+}
+
+/// `100 cm in m` is `1 m`, `150 cm in m` is `3/2 m`; a unit of another dimension is the DimensionError
+fn convert(value: Value, target: &'static Unit) -> Evaluated {
+	let Value::Quantity(quantity) = value else { return Err(Stop::Unsupported) };
+	if quantity.unit.dimension != target.dimension {
+		return fail(format!("DimensionError: {quantity} cannot be converted to {}", target.name));
+	}
+	let scaled = quantity.amount.checked_mul(quantity.unit.factor).ok_or_else(|| Stop::Error(overflow(&quantity)))?;
+	let divisor = gcd(scaled, target.factor);
+	match target.factor / divisor {
+		1 => Ok(Value::Quantity(Quantity { amount: scaled / target.factor, unit: target })),
+		denominator => Ok(Value::Ratio(Ratio { numerator: scaled / divisor, denominator, unit: target })),
+	}
+}
+
+/// Milliseconds in a day, a duration's `days` counted at their nominal length
+const DAY_MILLISECONDS: i128 = 86_400_000;
+const NANOS_PER_MILLISECOND: i128 = 1_000_000;
+
+/// A duration of the time module in a time unit: `2 hours in minutes` is `120 min` (P36). None when the word names no
+/// time unit; an error for months (no fixed length) or a part of a millisecond
+pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<Node> {
+	let target = target_unit(&Node::Symbol(unit_word.to_string()))?;
+	if target.dimension != Dimension::Time {
+		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
+	}
+	if duration.months != 0 {
+		return Some(error(&format!("DimensionError: {duration} has no fixed length in {}", target.name)));
+	}
+	let nanos = duration.nanos + duration.days as i128 * DAY_MILLISECONDS * NANOS_PER_MILLISECOND;
+	if nanos % NANOS_PER_MILLISECOND != 0 {
+		return Some(error(&format!("{duration} is no whole number of milliseconds")));
+	}
+	let milliseconds = i64::try_from(nanos / NANOS_PER_MILLISECOND).ok()?;
+	let quantity = Quantity { amount: milliseconds, unit: unit_named("ms").expect("a unit") };
+	Some(match convert(Value::Quantity(quantity), target) {
+		Ok(Value::Quantity(quantity)) => Node::data(quantity),
+		Ok(Value::Ratio(ratio)) => Node::data(ratio),
+		Err(Stop::Error(message)) => error(&message),
+		_ => return None,
+	})
+}
+
+fn gcd(a: i64, b: i64) -> i64 {
+	if b == 0 { a.abs().max(1) } else { gcd(b, a % b) }
 }
 
 /// The finer of two units of one dimension: the canonical unit of a result
