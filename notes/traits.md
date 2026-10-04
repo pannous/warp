@@ -66,13 +66,17 @@ compile error asking for a type annotation (no runtime dispatch for declared tra
   needs their indices, while node_order is compiled before them; the global bridges the two. A type without a witness
   traps `not comparable`.
 
+## Default methods (2026-10-04)
+`trait shape{area; describe(s) := area(s) * 2}`: a requirement written as a definition is an operation with a default
+body (`Operation::default`). `traits::with_default_methods` defines it, first parameter typed, for every type that defines
+the other operations (`area(s:square)`) but not this one; lower_conformances then makes it the witness `describe·square`.
+
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
 ## Later
 - runtime dispatch of declared operations (a witness table per operation, like compare's)
-- default methods `trait shape{area; describe(s) := "area " + area(s)}` (now a loud error)
 - Printable (`text(p:person)` for interpolation and `as text`), Iterable
 - generic constraints `sort(xs: Comparable list)`
 - `x in xs`, `xs.has(x)` through an `equals` override (they compare structurally at runtime now)

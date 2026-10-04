@@ -693,7 +693,7 @@ pub fn operand_text(node: &Node) -> String {
     }
 }
 
-/// The node as its source spelled it where the parser lowered sugar: `floor_quotient(a, b)` is `a//b`
+/// The node as its source spelled it where a pass lowered sugar: `floor_quotient(a, b)` is `a//b`, `area·square` is `area`
 fn as_written(node: Node) -> Node {
     match node {
         Node::List(items, bracket, separator) => match items.as_slice() {
@@ -704,6 +704,8 @@ fn as_written(node: Node) -> Node {
         },
         Node::Key(left, op, right) => Node::Key(Box::new(as_written(*left)), op, Box::new(as_written(*right))),
         Node::Meta { node, data } => Node::Meta { node: Box::new(as_written(*node)), data },
+        // a witness `area·square` was written `area`
+        Node::Symbol(name) if name.contains('·') => Node::Symbol(name.split('·').next().unwrap_or_default().to_string()),
         other => other,
     }
 }

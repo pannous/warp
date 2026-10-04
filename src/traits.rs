@@ -61,6 +61,9 @@ pub struct Operation {
 	pub symmetric: bool,
 	/// What the operation returns, as the fix of a missing conformance explains it
 	pub contract: Option<&'static str>,
+	/// The body of a default method, `describe(s) := "area " + area(s)`: every conforming type that does not define the
+	/// operation gets it (`default_methods`)
+	pub default: Option<Node>,
 }
 
 impl Operation {
@@ -81,7 +84,7 @@ impl Operation {
 }
 
 fn builtin_traits() -> Vec<Trait> {
-	let binary = |name: &str, contract| Operation { name: name.to_string(), parameters: vec!["a".into(), "b".into()], symmetric: true, contract: Some(contract) };
+	let binary = |name: &str, contract| Operation { name: name.to_string(), parameters: vec!["a".into(), "b".into()], symmetric: true, contract: Some(contract), default: None };
 	vec![
 		Trait { name: COMPARABLE.to_string(), operations: vec![binary(COMPARE, "negative, 0 or positive")] },
 		Trait { name: EQUATABLE.to_string(), operations: vec![binary(EQUALS, "true when equal")] },
@@ -156,8 +159,49 @@ pub fn lower_declarations(node: Node) -> Node {
 	}
 	let mut declared = vec![];
 	collect_declarations(&node, &mut declared);
+	let node = with_default_methods(node, &declared);
 	let names: Vec<String> = declared.into_iter().map(|declared| declared.name).collect();
 	if names.is_empty() { node } else { with_conformance_tests(node, &names) }
+}
+
+/// The program with the default methods of its traits defined for every type that defines the other operations of the
+/// trait but not the default one: `describe(s:square) := "area " + area(s)`
+fn with_default_methods(node: Node, traits: &[Trait]) -> Node {
+	let mut defined: Vec<(String, String)> = vec![];
+	collect_typed_definitions(&node, &mut defined);
+	let mut definitions = vec![];
+	for declared in traits {
+		let types: Vec<&String> = defined.iter().map(|(_, type_name)| type_name).collect();
+		for type_name in types.into_iter().collect::<std::collections::BTreeSet<_>>() {
+			let defines = |operation: &Operation| defined.contains(&(operation.name.clone(), type_name.clone()));
+			let conforms = declared.operations.iter().filter(|operation| operation.default.is_none()).all(defines);
+			for operation in declared.operations.iter().filter(|operation| conforms && !defines(operation)) {
+				let Some(body) = &operation.default else { continue };
+				let parameters = operation.parameters.iter().enumerate().map(|(index, parameter)| match index {
+					0 => Node::Key(Box::new(Node::Symbol(parameter.clone())), Op::Colon, Box::new(Node::Symbol(type_name.clone()))),
+					_ => Node::Symbol(parameter.clone()),
+				});
+				let head = Node::List(std::iter::once(Node::Symbol(operation.name.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
+				definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body.clone())));
+			}
+		}
+	}
+	if definitions.is_empty() {
+		return node;
+	}
+	definitions.push(node);
+	Node::List(definitions, Bracket::None, Separator::Semicolon)
+}
+
+/// (operation, type) of every definition whose first parameter is typed: `area(s:square) := …` is (area, square)
+fn collect_typed_definitions(node: &Node, defined: &mut Vec<(String, String)>) {
+	node.visit(&mut |part| {
+		let Node::Key(head, Op::Define | Op::Assign, _) = part else { return };
+		let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return };
+		let [name, first, ..] = items.as_slice() else { return };
+		let (Node::Symbol(name), Node::Key(_, Op::Colon, type_node)) = (name.drop_meta(), first.drop_meta()) else { return };
+		defined.push((name.clone(), type_node.drop_meta().name()));
+	});
 }
 
 fn collect_declarations(node: &Node, traits: &mut Vec<Trait>) {
@@ -282,7 +326,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	let operations = requirements.iter().map(|requirement| operation(requirement).ok_or_else(|| {
+	let operations = requirements.iter().map(|requirement| operation(requirement).or_else(|| default_method(requirement)).ok_or_else(|| {
 		let message = format!("trait {name} takes operations like `area` or `area(s)`, got {}", requirement.serialize());
 		Diagnostic::at(requirement, message).fix("define the operation for each type that conforms, e.g. area(s:square) := …").into_error()
 	}));
@@ -302,7 +346,13 @@ fn operation(requirement: &Node) -> Option<Operation> {
 		}
 		_ => return None,
 	};
-	Some(Operation { name, parameters, symmetric: false, contract: None })
+	Some(Operation { name, parameters, symmetric: false, contract: None, default: None })
+}
+
+/// `describe(s) := body` inside a trait: the operation with its default body
+fn default_method(requirement: &Node) -> Option<Operation> {
+	let Node::Key(head, Op::Define | Op::Assign, body) = requirement.drop_meta() else { return None };
+	Some(Operation { default: Some(body.as_ref().clone()), ..operation(head)? })
 }
 
 /// `x is shape` for a declared trait is a type test, as `x is Comparable`
