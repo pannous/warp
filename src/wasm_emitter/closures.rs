@@ -77,8 +77,11 @@ impl WasmGcEmitter {
 		let index = self.type_manager.types().len();
 		let node = self.nullable_node();
 		if self.typed_entry(arity) {
-			let params = std::iter::once(node).chain(std::iter::repeat_n(ValType::I64, arity)).collect::<Vec<_>>();
-			self.type_manager.types_mut().ty().function(params, vec![ValType::I64]);
+			let helper = &self.ctx.user_functions[&crate::closures::closure_call_name(arity)];
+			let number = |kind: Kind| if kind.is_float() { ValType::F64 } else { ValType::I64 };
+			let params = std::iter::once(node).chain(helper.params[1..].iter().map(|param| number(param_kind(param)))).collect::<Vec<_>>();
+			let result = number(helper.return_kind);
+			self.type_manager.types_mut().ty().function(params, vec![result]);
 		} else {
 			self.type_manager.types_mut().ty().function(vec![node; arity + 1], vec![node]);
 		}
@@ -114,7 +117,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
 					func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
 				} else if typed {
-					func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 already
+					func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 or f64 already
 					continue;
 				} else {
 					func.instruction(&I::LocalGet((1 + index - captured) as u32));

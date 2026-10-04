@@ -410,26 +410,28 @@ pub fn closure_call_kind(name: &str, context: &Context, kinds: &HashMap<String, 
 	Some(if returned.all(|kind| kind == first) { first } else { Kind::Data })
 }
 
-/// The fast path of closure calls: when every closure of an arity takes Ints and returns an Int, its `closure_call_n`
-/// passes and returns i64 and the entries take them as they are, no Node box per argument and result
-/// (wasm_emitter/closures.rs `typed_entry`)
+/// The fast path of closure calls: when every closure of an arity has one signature of numbers (Ints and Floats, the
+/// same for all), its `closure_call_n` passes and returns them as i64 / f64 and the entries take them as they are, no
+/// Node box per argument and result (wasm_emitter/closures.rs `typed_entry`)
 pub fn type_closure_calls(context: &mut Context) {
 	let helpers: Vec<(String, usize)> = context.user_functions.keys().filter_map(|name| closure_call_arity(name).map(|arity| (name.clone(), arity))).collect();
 	for (name, arity) in helpers {
-		let targets: Vec<&UserFunctionDef> = targets_of_arity(context, arity).collect();
-		let all_ints = !targets.is_empty() && targets.iter().all(|function| {
+		let signatures: Vec<Vec<Kind>> = targets_of_arity(context, arity).map(|function| {
 			let captured = function.params.len() - arity;
-			function.return_kind == Kind::Int && function.params[captured..].iter().all(|param| crate::analyzer::param_kind(param) == Kind::Int)
-		});
-		if all_ints {
+			function.params[captured..].iter().map(crate::analyzer::param_kind).chain(std::iter::once(function.return_kind)).collect()
+		}).collect();
+		let Some(signature) = signatures.first().cloned() else { continue };
+		let numbers = signature.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float));
+		if numbers && signatures.iter().all(|other| *other == signature) {
 			let helper = context.user_functions.get_mut(&name).expect("a closure call helper");
-			helper.params.iter_mut().skip(1).for_each(|param| param.used_as = Some(Kind::Int));
-			helper.return_kind = Kind::Int;
+			helper.params.iter_mut().skip(1).zip(&signature).for_each(|(param, kind)| param.used_as = Some(*kind));
+			helper.return_kind = signature[arity];
 		}
 	}
 }
 
-/// Is `closure_call_n` on the fast path: its values are Ints (type_closure_calls)
+/// Is `closure_call_n` on the fast path: its values are numbers (type_closure_calls)
 pub fn is_typed_closure_call(function: &UserFunctionDef) -> bool {
-	closure_call_arity(&function.name).is_some() && function.params.len() > 1 && function.params[1..].iter().all(|param| param.used_as == Some(Kind::Int))
+	closure_call_arity(&function.name).is_some() && function.params.len() > 1
+		&& function.params[1..].iter().all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
 }
