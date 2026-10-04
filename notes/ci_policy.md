@@ -50,4 +50,8 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
   every 2 min, `timeout --signal=INT 80m` around pytest (an early end still prints failures), -rfE, per-test 180 s.
   Run 37181090813 lost the runner again during pytest ("The hosted runner lost communication", no log of the Run
   step survives that). 5f5bb7f9: the Tests job is a matrix of three shards (every third test file; shard 1 also runs
-  the Rust unit tests, the API SDK tests and SonarCloud), each on its own runner. Run 37186712652.
+  the Rust unit tests, the API SDK tests and SonarCloud), each on its own runner. Run 37186712652: green, 641 tests
+  (452 + 73 + 116), pytest 5–9 min per shard, peak memory 3.2/7.9 GB. 0bcb4aec/97d548bf: a Build job builds the UI,
+  the test SDK and target/debug/warpgate once (artifact warpgate-build: binary, tests/api_sdk, warpgate-web/dist,
+  which a debug build reads at run time through rust-embed), a Unit job runs the coverage unit tests and SonarCloud,
+  the shards only download, build the docker images and run pytest. Verify run 37190971836.
