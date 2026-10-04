@@ -1,0 +1,33 @@
+// Tasks on real threads: `go f(x)` runs f in a fresh instance of this program, natively on its own thread, in the
+// playground on a Worker. Values are copied in and out; `await` waits for a task, `try` catches its failure.
+
+work(ms) := { sleep(ms); ms }
+
+// three tasks of half a second each, at the same time
+started = clock()
+a = go work(500)
+b = go work(500)
+c = go work(500)
+total = await a + await b + await c
+print "three tasks of 500 ms took " (clock() - started) " ms"
+
+// texts and lists cross to a task and back
+shout(t) := t + "!"
+sum(xs) := { s = 0; for x in xs { s += x }; s }
+greeting = go shout("hello")
+numbers = go sum([1, 2, 3, 4])
+print await greeting
+print await numbers
+
+// a task that would spin forever, stopped
+spin(n) := { i = 0; while i < n { i += 1 }; i }
+endless = go spin(1000000000000)
+stop endless
+print try await endless else "stopped"
+
+// a failing task: its error is the error of await, caught here
+third(xs) := xs#3
+broken = go third([1, 2])
+print try await broken else "no third item"
+
+total
