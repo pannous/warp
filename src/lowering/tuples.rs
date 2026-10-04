@@ -30,6 +30,11 @@ pub fn lower(node: Node) -> Node {
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
+			if takes_more_values {
+				if let Err(error) = warn_tuple_comparison(&items) {
+					return error;
+				}
+			}
 			let lower_item = |(index, item): (usize, Node)| match item.drop_meta() {
 				Node::Key(left, Op::Assign, right) if index == 0 && takes_more_values && bracketed_targets(left).is_some() => {
 					Node::Key(left.clone(), Op::Assign, Box::new(lower(right.as_ref().clone())))
@@ -221,4 +226,23 @@ fn check_definition(node: &Node) -> Option<Node> {
 		other => returned_values(other).is_some(),
 	};
 	(!ends_with_return).then(|| error(&format!("{name} returns {arity} values, so it must end with `return` and {arity} values")))
+}
+
+/// `(a, b) == x, y` reads as `((a, b) == x), y`: the comma binds looser than `==` (user, P42 keeps that parse), so a tuple
+/// compared with the first of several comma values gets a strong warning naming the parenthesized comparison
+fn warn_tuple_comparison(items: &[Node]) -> Result<(), Node> {
+	let Some(first) = items.first() else { return Ok(()) };
+	let comparison = match first.drop_meta() {
+		Node::Key(_, Op::Assign, value) => value.as_ref(),
+		other => other,
+	};
+	let Node::Key(tuple, op @ (Op::Eq | Op::Ne), compared) = comparison.drop_meta() else { return Ok(()) };
+	if !matches!(tuple.drop_meta(), Node::List(parts, Bracket::Round, Separator::Colon) if parts.len() > 1) {
+		return Ok(());
+	}
+	let values: Vec<String> = std::iter::once(compared.as_ref()).chain(&items[1..]).map(Node::serialize).collect();
+	let message = format!(
+		"`{} {op} {}` compares the tuple with {} only, the comma binds looser than {op}: write `{} {op} ({})`",
+		tuple.serialize(), values.join(", "), compared.serialize(), tuple.serialize(), values.join(", "));
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(first, message)])
 }
