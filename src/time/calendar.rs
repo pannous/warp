@@ -6,6 +6,13 @@ use std::fmt;
 
 const SECOND: i128 = 1_000_000_000;
 const DAY_SECONDS: i64 = 86_400;
+const HOUR: i64 = 3600;
+const MINUTE: i64 = 60;
+/// Howard Hinnant's civil calendar arithmetic: a 400-year era has 146 097 days; day 0 of the shifted calendar (which
+/// starts in March of year 0) is 719 468 days before 1970-01-01
+const DAYS_PER_ERA: i64 = 146_097;
+const YEARS_PER_ERA: i64 = 400;
+const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -134,8 +141,6 @@ pub const fn zone(name: &'static str, standard: i64, dst: Dst) -> Zone {
 	Zone { name, standard, dst }
 }
 
-const HOUR: i64 = 3600;
-const MINUTE: i64 = 60;
 
 /// Embedded subset of the IANA database; a host import of the full database is future work
 pub static ZONES: &[Zone] = &[
@@ -203,17 +208,17 @@ pub fn days_in_month(year: i64, month: i64) -> i64 {
 /// Days since 1970-01-01 (Howard Hinnant's days_from_civil)
 pub fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 	let year = if month <= 2 { year - 1 } else { year };
-	let era = year.div_euclid(400);
-	let year_of_era = year - era * 400;
+	let era = year.div_euclid(YEARS_PER_ERA);
+	let year_of_era = year - era * YEARS_PER_ERA;
 	let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
 	let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-	era * 146_097 + day_of_era - 719_468
+	era * DAYS_PER_ERA + day_of_era - EPOCH_SHIFT
 }
 
 pub fn civil_from_days(days: i64) -> Date {
-	let days = days + 719_468;
-	let era = days.div_euclid(146_097);
-	let day_of_era = days - era * 146_097;
+	let days = days + EPOCH_SHIFT;
+	let era = days.div_euclid(DAYS_PER_ERA);
+	let day_of_era = days - era * DAYS_PER_ERA;
 	let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146_096) / 365;
 	let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
 	let shifted_month = (5 * day_of_year + 2) / 153;
@@ -298,12 +303,12 @@ impl Clock {
 	}
 
 	fn nanos_of_day(self) -> i128 {
-		(self.hour * 3600 + self.minute * 60 + self.second) as i128 * SECOND + self.nanos as i128
+		(self.hour * HOUR + self.minute * MINUTE + self.second) as i128 * SECOND + self.nanos as i128
 	}
 
 	fn from_nanos_of_day(nanos: i128) -> Clock {
 		let seconds = (nanos / SECOND) as i64;
-		Clock { hour: seconds / 3600, minute: seconds / 60 % 60, second: seconds % 60, nanos: (nanos % SECOND) as i64 }
+		Clock { hour: seconds / HOUR, minute: seconds / MINUTE % MINUTE, second: seconds % MINUTE, nanos: (nanos % SECOND) as i64 }
 	}
 }
 
@@ -401,7 +406,7 @@ impl Zoned {
 	pub fn plain(self) -> String {
 		let mut text = Time::Local(self.date, self.clock).to_string();
 		let (sign, offset) = if self.offset < 0 { ('-', -self.offset) } else { ('+', self.offset) };
-		text += &format!("{sign}{:02}:{:02}[{}]", offset / 3600, offset / 60 % 60, self.zone.name);
+		text += &format!("{sign}{:02}:{:02}[{}]", offset / HOUR, offset / MINUTE % MINUTE, self.zone.name);
 		text
 	}
 }
@@ -545,8 +550,8 @@ pub fn unit_named(word: &str) -> Option<Duration> {
 		"month" | "months" => Duration { months: 1, ..Duration::default() },
 		"week" | "weeks" => Duration { days: 7, ..Duration::default() },
 		"day" | "days" => Duration { days: 1, ..Duration::default() },
-		"hour" | "hours" => exact(3600),
-		"minute" | "minutes" => exact(60),
+		"hour" | "hours" => exact(HOUR as i128),
+		"minute" | "minutes" => exact(MINUTE as i128),
 		"second" | "seconds" => exact(1),
 		_ => return None,
 	})
@@ -597,8 +602,8 @@ impl Duration {
 		match name {
 			"months" => Ok(self.months),
 			"days" if self.months == 0 && self.nanos == 0 => Ok(self.days),
-			"hours" => exact(3600),
-			"minutes" => exact(60),
+			"hours" => exact(HOUR as i128),
+			"minutes" => exact(MINUTE as i128),
 			"seconds" => exact(1),
 			_ => Err(format!("duration has no field {name}")),
 		}
