@@ -1739,6 +1739,60 @@ impl WasmGcEmitter {
 		self.emit_statement_sequence(func, items, Self::emit_numeric_value);
 	}
 
+	/// A variable where an f64 is wanted: an Int converted
+	fn emit_float_symbol(&mut self, func: &mut Function, name: &str) {
+		if self.emit_typed_list_as_node(func, name) {
+			self.emit_call(func, "get_int_value");
+			self.emit_int_to_f64(func, None);
+		} else if let Some(local) = self.scope.lookup(name) {
+			func.instruction(&I::LocalGet(local.position));
+			if local.kind.is_ref() {
+				self.emit_call(func, "get_int_value");
+				self.emit_int_to_f64(func, None);
+			} else if !local.kind.is_float() {
+				self.emit_int_to_f64(func, None);
+			}
+		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
+			func.instruction(&I::GlobalGet(idx));
+			if !kind.is_float() {
+				self.emit_int_to_f64(func, None);
+			}
+		} else {
+			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// A list where an f64 is wanted: a call of an FFI or user function (`(f)` without arguments too), a builtin, or
+	/// statements whose last one gives the value
+	fn emit_float_list(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
+		if items.len() >= 2 || *bracket == Bracket::Round {
+			if let Node::Symbol(fn_name) = items[0].drop_meta() {
+				if self.ctx.ffi_imports.contains_key(fn_name) {
+					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
+					return;
+				}
+				if self.ctx.user_functions.contains_key(fn_name) {
+					self.emit_user_function_call_float(func, fn_name, &items[1..]);
+					return;
+				}
+			}
+		}
+		if self.emit_integer_builtin(func, items) {
+			self.emit_int_to_f64(func, None);
+			return;
+		}
+		if self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
+		}
+		// the statements run as numbers, the last one gives the f64
+		let (last, statements) = items.split_last().expect("a list of items");
+		for statement in statements {
+			self.emit_discarded_statement(func, statement, Self::emit_numeric_value);
+			func.instruction(&I::Drop);
+		}
+		self.emit_float_value(func, last);
+	}
+
 	/// `x = v` where an Int is wanted: the value stored and left on the stack (0 for a Node variable holding a non-number)
 	fn emit_numeric_assignment(&mut self, func: &mut Function, located: &Node, left: &Node, right: &Node) {
 		if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
@@ -3222,75 +3276,8 @@ impl WasmGcEmitter {
 				self.emit_int_to_f64(func, None);
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
-			Node::Symbol(name) => {
-				if self.emit_typed_list_as_node(func, name) {
-					self.emit_call(func, "get_int_value");
-					self.emit_int_to_f64(func, None);
-				} else if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&I::LocalGet(local.position));
-					if local.kind.is_ref() {
-						self.emit_call(func, "get_int_value");
-						self.emit_int_to_f64(func, None);
-					} else if !local.kind.is_float() {
-						self.emit_int_to_f64(func, None);
-					}
-				} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
-					func.instruction(&I::GlobalGet(idx));
-					if !kind.is_float() {
-						self.emit_int_to_f64(func, None);
-					}
-				} else {
-					self.emit_undefined_variable(func, name);
-				}
-			}
-			// Function calls and statement sequences
-			Node::List(items, bracket, separator) if !items.is_empty() => {
-				// Check for function call: [Symbol("funcname"), arg1, arg2, ...]
-				if items.len() >= 2 {
-					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						// Check for FFI function call
-						if self.ctx.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
-							return;
-						}
-						// Check for user function call
-						if self.ctx.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_float(func, fn_name, &items[1..]);
-							return;
-						}
-					}
-				}
-				// Check for zero-arg function call: (funcname)
-				if items.len() == 1 && *bracket == Bracket::Round {
-					if let Node::Symbol(fn_name) = items[0].drop_meta() {
-						if self.ctx.ffi_imports.contains_key(fn_name) {
-							self.emit_ffi_call(func, fn_name, &[], Some(Kind::Float));
-							return;
-						}
-						if self.ctx.user_functions.contains_key(fn_name) {
-							self.emit_user_function_call_float(func, fn_name, &[]);
-							return;
-						}
-					}
-				}
-				if self.emit_integer_builtin(func, items) {
-					self.emit_int_to_f64(func, None);
-					return;
-				}
-				if self.reject_unresolved_call(func, items, bracket, separator) {
-					return;
-				}
-				// Statement sequence: execute all, return last as float
-				for (i, item) in items.iter().enumerate() {
-					if i < items.len() - 1 {
-						self.emit_discarded_statement(func, item, Self::emit_numeric_value);
-						func.instruction(&I::Drop);
-					} else {
-						// Last item as float
-						self.emit_float_value(func, item);
-					}
-				}
-			}
+			Node::Symbol(name) => self.emit_float_symbol(func, name),
+			Node::List(items, bracket, separator) if !items.is_empty() => self.emit_float_list(func, items, bracket, separator),
 			// a loop: run it, its count as the value (a float function leaves it by `return`)
 			Node::Key(_, Op::Do, _) => {
 				self.emit_numeric_value(func, node);
