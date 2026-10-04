@@ -180,19 +180,23 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 pub fn lower_function_methods(node: Node) -> Node {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
-	let mut defined: HashSet<String> = context.user_functions.into_keys().collect();
+	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
+	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
 	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some();
-	function_methods_as_calls(node, &|name| is_builtin(name) && !defined.contains(name))
+	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
+	// are specialised (function_values.rs), which would otherwise see map(square)
+	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
+	function_methods_as_calls(node, &|name, arguments| (is_builtin(name) && !defined.contains(name)) || takes_receiver(name, arguments))
 }
 
-fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str) -> bool) -> Node {
+fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bool) -> Node {
 	let lowered = |node: Node| function_methods_as_calls(node, is_function);
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name)) => {
+				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1)) => {
 					Node::List([vec![items[0].clone(), receiver], items[1..].to_vec()].concat(), Bracket::Round, Separator::None)
 				}
 				_ => Node::Key(Box::new(receiver), Op::Dot, Box::new(method)),
