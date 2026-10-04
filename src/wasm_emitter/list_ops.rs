@@ -18,15 +18,25 @@ const TEXT_UNIT_USERS: [&str; 7] =
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
-		let node_ref = self.node_ref(false);
-		let node_ref_nullable = self.node_ref(true);
 		self.emit_runtime_errors();
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			self.emit_text_units();
 		}
+		self.emit_list_cell_access();
+		self.emit_node_counting();
+		self.emit_node_indexing();
+		self.emit_with_at_functions();
+		self.emit_typed_list_runtime();
+		self.emit_list_concat();
+		self.emit_list_insert_at();
+	}
 
+	/// list_at and list_node_at: the element of a cons list at a 1-based index
+	fn emit_list_cell_access(&mut self) {
+		let node_ref_nullable = self.node_ref(true);
+		let node_ref = self.node_ref(false);
 		// list_at(list: ref $Node, index: i64) -> i64
 		// Get the numeric value of the element at index (1-based)
 		// Traverses linked list: for index N, follow value pointer N-1 times, return data
@@ -73,7 +83,12 @@ impl WasmGcEmitter {
 				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
 			});
 		}
+	}
 
+	/// node_count and node_bytes
+	fn emit_node_counting(&mut self) {
+		let node_ref_nullable = self.node_ref(true);
+		let node_ref = self.node_ref(false);
 		// node_count(node: ref $Node) -> i64
 		// Count the number of elements in a list/block by traversing the value chain
 		if self.should_emit_function("node_count") {
@@ -165,7 +180,11 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64Const(8), I::I64Mul, I::End]);
 			});
 		}
+	}
 
+	/// string_char_at and node_index_at: the element of a text or a list at a 1-based index
+	fn emit_node_indexing(&mut self) {
+		let node_ref = self.node_ref(false);
 		// string_char_at(node: ref $Node, index: i64) -> ref $Node
 		// The character at index (1-based) of a Text/Symbol node as Codepoint node, decoding UTF-8
 		if self.should_emit_function("string_char_at") {
@@ -230,11 +249,6 @@ impl WasmGcEmitter {
 				func.instruction(&I::End); // end outer if
 			});
 		}
-
-		self.emit_with_at_functions();
-		self.emit_typed_list_runtime();
-		self.emit_list_concat();
-		self.emit_list_insert_at();
 	}
 
 	/// list_insert_at(list, position, value): copies the cells before the 0-based position, puts value there and shares
