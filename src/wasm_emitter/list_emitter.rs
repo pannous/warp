@@ -80,6 +80,83 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
+	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
+		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
+		if items.len() < 2 && *bracket != Bracket::Round {
+			return false;
+		}
+		if self.ctx.user_functions.contains_key(fn_name) {
+			self.emit_user_function_call(func, fn_name, &items[1..]);
+		} else if self.ctx.ffi_imports.contains_key(fn_name) {
+			self.emit_ffi_call(func, fn_name, &items[1..], None);
+		} else if items.len() >= 2 && super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+			self.emit_text_builtin(func, fn_name, &items[1..]);
+		} else {
+			return false;
+		}
+		true
+	}
+
+	/// `return value`: leaves the open tries and the function
+	fn emit_return_statement(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, value] = items else { return false };
+		if !matches!(word.drop_meta(), Node::Symbol(s) if s == "return") {
+			return false;
+		}
+		self.emit_returned_value(func, value);
+		self.emit_leave_tries(func, 0);
+		func.instruction(&I::Return);
+		func.instruction(&I::Unreachable); // nothing follows a return, the block type still wants a value
+		true
+	}
+
+	/// `n times "ab"`: the text repeated; anything but a text is refused
+	fn emit_text_times(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, count, repeated] = items else { return false };
+		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
+			return false;
+		}
+		match self.get_type(repeated) {
+			crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
+			kind => {
+				let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
+				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+			}
+		}
+		true
+	}
+
+	/// `print x` and the WASI calls puts, puti, putl, putf, fd_write; their i64 result is boxed like any value
+	fn emit_wasi_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
+		if items.len() < 2 || !self.config.emit_wasi_imports {
+			return false;
+		}
+		let Node::Symbol(word) = items[0].drop_meta() else { return false };
+		match word.as_str() {
+			PRINT => {
+				self.emit_print(func, &printed_value(items, bracket));
+				return true;
+			}
+			"puts" => {
+				self.emit_wasi_puts(func, &items[1]);
+				func.instruction(&I::I64ExtendI32S);
+			}
+			"puti" | "putl" => {
+				self.emit_wasi_puti(func, &items[1]);
+				self.emit_numeric_value(func, &items[1]);
+			}
+			"putf" => {
+				self.emit_wasi_putf(func, &items[1]);
+				func.instruction(&I::I64ExtendI32S);
+			}
+			"fd_write" if items.len() >= 5 => self.emit_wasi_fd_write_call(func, &items[1..]),
+			_ => return false,
+		}
+		self.emit_call(func, "new_int");
+		true
+	}
+
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
@@ -89,20 +166,9 @@ impl WasmGcEmitter {
 		}
 
 		if items.len() == 1 && *bracket != Bracket::Square {
-			// Check for zero-argument function call: (funcname)
-			if *bracket == Bracket::Round {
-				if let Node::Symbol(fn_name) = items[0].drop_meta() {
-					if self.ctx.user_functions.contains_key(fn_name) {
-						self.emit_user_function_call(func, fn_name, &[]);
-						return;
-					}
-					if self.ctx.ffi_imports.contains_key(fn_name) {
-						self.emit_ffi_call(func, fn_name, &[], None);
-						return;
-					}
-				}
+			if !self.emit_function_call(func, items, bracket) {
+				self.emit_node_instructions(func, &items[0]);
 			}
-			self.emit_node_instructions(func, &items[0]);
 			return;
 		}
 
@@ -120,68 +186,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Check for return statement: return value
-		if items.len() == 2 {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				if s == "return" {
-					self.emit_returned_value(func, &items[1]);
-					self.emit_leave_tries(func, 0);
-					func.instruction(&I::Return);
-					// Unreachable after return, push dummy value
-					func.instruction(&I::Unreachable);
-					return;
-				}
-			}
-		}
-
-		if let [word, count, repeated] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::TEXT_TIMES) {
-				match self.get_type(repeated) {
-					crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
-					kind => {
-						let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
-						self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
-					}
-				}
-				return;
-			}
-		}
-
-		if items.len() >= 2 && self.config.emit_wasi_imports && matches!(items[0].drop_meta(), Node::Symbol(name) if name == PRINT) {
-			self.emit_print(func, &printed_value(items, bracket));
+		if self.emit_return_statement(func, items) || self.emit_text_times(func, items) || self.emit_wasi_call(func, items, bracket) {
 			return;
-		}
-
-		// WASI calls: puts, puti, putl, putf, fd_write — their i64 result is boxed like any value
-		if items.len() >= 2 && self.config.emit_wasi_imports {
-			if let Node::Symbol(s) = items[0].drop_meta() {
-				let emitted = match s.as_str() {
-					"puts" => {
-						self.emit_wasi_puts(func, &items[1]);
-						func.instruction(&I::I64ExtendI32S);
-						true
-					}
-					"puti" | "putl" => {
-						self.emit_wasi_puti(func, &items[1]);
-						self.emit_numeric_value(func, &items[1]);
-						true
-					}
-					"putf" => {
-						self.emit_wasi_putf(func, &items[1]);
-						func.instruction(&I::I64ExtendI32S);
-						true
-					}
-					"fd_write" if items.len() >= 5 => {
-						self.emit_wasi_fd_write_call(func, &items[1..]);
-						true
-					}
-					_ => false,
-				};
-				if emitted {
-					self.emit_call(func, "new_int");
-					return;
-				}
-			}
 		}
 
 		// Check for introspection and math functions
@@ -232,23 +238,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Check for user function call: [Symbol("funcname"), arg1, arg2, ...]
-		if items.len() >= 2 {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call(func, fn_name, &items[1..]);
-					return;
-				}
-				// Check for FFI function call
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], None);
-					return;
-				}
-				if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
-					self.emit_text_builtin(func, fn_name, &items[1..]);
-					return;
-				}
-			}
+		if self.emit_function_call(func, items, bracket) {
+			return;
 		}
 
 		if self.emit_library_word_call(func, items, bracket, separator) || self.emit_type_test(func, items, bracket, separator) {
