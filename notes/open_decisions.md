@@ -54,6 +54,13 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   argument takes the variable of its name. Proposed default: named arguments `f(name=value)`/`f(name:value)` may set
   parameters and free variables of the body; a missing argument stays an error (implicit capture of a same-named
   variable is too surprising). Not implemented. Night 2026-10-04.
+- P38 Variable listeners (wiki/signal.md Todo: "shall event listeners be registrable post-hoc?"): `once x==5 {…}` and
+  `whenever cond {…}` are implemented (src/lowering/variable_signals.rs) as checks after each later write of a variable
+  the condition reads, in the statements after the listener and their loop bodies; writes before it, in functions
+  called later, or in an outer block are not seen, and the condition holding when the listener is declared does not
+  fire it. Alternatives: hoist listeners to the top of their block (post-hoc registration), or watch writes in called
+  functions too (needs global flags). `on set x {…}`, `after tested:` and `before/during` are not implemented. Night
+  2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
