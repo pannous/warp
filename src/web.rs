@@ -152,8 +152,8 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			Node::Char(data.get("i31").and_then(Value::as_u64).and_then(|code| char::from_u32(code as u32)).unwrap_or('\0'))
 		}
 		tag if tag == Kind::Key as i64 => Node::Key(Box::new(data_node()), crate::operators::code_to_op(info), Box::new(value_node())),
-		tag if tag == Kind::Block as i64 => list_node(data_node(), value, Bracket::Curly),
-		tag if tag == Kind::List as i64 => list_node(data_node(), value, bracket_of(info)),
+		tag if tag == Kind::Block as i64 => list_node(data.get("node").map(node_from_tree), value, Bracket::Curly),
+		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, bracket_of(info)),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
 			Node::Data(Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
@@ -174,9 +174,9 @@ fn bracket_of(info: i64) -> Bracket {
 	}
 }
 
-/// A cons cell: its first item, then the items of the rest
-fn list_node(first: Node, rest: Option<Node>, bracket: Bracket) -> Node {
-	let mut items: Vec<Node> = Some(first).into_iter().filter(|item| *item != Node::Empty).collect();
+/// A cons cell: its first item, then the items of the rest; no first item is the empty list's cell, a ø item is kept
+fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket) -> Node {
+	let mut items: Vec<Node> = first.into_iter().collect();
 	match rest {
 		Some(Node::List(rest_items, _, _)) => items.extend(rest_items),
 		Some(Node::Empty) | None => {}
