@@ -107,6 +107,10 @@ fn is_update(node: &Node) -> bool {
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
 	let runtime_kind = |kind: &Kind| matches!(kind, Kind::Data | Kind::Empty);
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || runtime_kind(kind);
+	// a value of run-time kind added to a list: node_add concatenates when it is a list too
+	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
+		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
+	}
 	if ![left, right].iter().any(runtime_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
@@ -398,8 +402,12 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 
 /// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
+	let kinds = [then_kind, else_kind];
 	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
 		Kind::Codepoint
+	} else if kinds.contains(&Kind::List) {
+		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
+		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
@@ -468,6 +476,13 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 		return temporaries;
 	}
 	match node {
+		// `c ? a : b`: both branches are code, never a tag `a:b` whose body holds attributes
+		Node::Key(condition, Op::Question, then_else) if matches!(then_else.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+			let Node::Key(then, _, otherwise) = then_else.drop_meta() else { unreachable!("guarded") };
+			collect_variables_inner(condition, scope, false, in_structure)
+				+ collect_variables_inner(then, scope, false, in_structure)
+				+ collect_variables_inner(otherwise, scope, false, in_structure)
+		}
 		// Global declarations: global:Key(name, =, value) - don't create local
 		// Tag structures: html:body - body is structure context (attributes, not variables)
 		Node::Key(left, Op::Colon, right) => {

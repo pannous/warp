@@ -15,3 +15,10 @@ fn a_list_grows_from_empty_by_adding_lists() {
 	is!("flatten(xs) := { out = []; for x in xs { out = out + x }; out }; flatten([[1 2] [3] [4 5]])", warp::ints(vec![1, 2, 3, 4, 5]));
 	is!("f(a, b) := a + b; f([1], [2])", warp::ints(vec![1, 2]));
 }
+
+#[test]
+fn a_recursive_list_function_in_a_ternary() {
+	is!("f(xs) := #xs <= 1 ? xs : xs.filter(x => x > 1); f([1 2 3])", warp::ints(vec![2, 3]));
+	is!("f(xs) := #xs <= 1 ? xs : f(xs[1:]) + [xs#1]; f([1 2 3])", warp::ints(vec![3, 2, 1]));
+	is!("qs(xs) := #xs <= 1 ? xs : qs(xs.filter(x => x < xs#1)) + xs.filter(x => x == xs#1) + qs(xs.filter(x => x > xs#1)); qs([3 1 4 1 5 9 2 6])", warp::ints(vec![1, 1, 2, 3, 4, 5, 6, 9]));
+}

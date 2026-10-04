@@ -408,6 +408,7 @@ PASSED:
   ✓ lists::test_decimal_list_elements::the_extremum_of_a_decimal_list
   ✓ lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists
   ✓ lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list
+  ✓ lists::test_dynamic_range::a_recursive_list_function_in_a_ternary
   ✓ lists::test_empty_list_argument::a_call_without_arguments_has_none
   ✓ lists::test_empty_list_argument::a_function_receives_the_empty_list
   ✓ lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item
@@ -1817,4 +1818,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1812 passed, 0 failed, 1812 total tested
+52 ignored, 1813 passed, 0 failed, 1813 total tested
