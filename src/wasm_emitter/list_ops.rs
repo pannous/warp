@@ -641,6 +641,19 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::BrOnNonNull(0)]);
 					s.call(f, "new_empty");
 					Self::emit_list(f, &[I::End, I::Return, I::End]);
+					// two texts (or characters): their concatenation, `await a + await b` of two text tasks
+					let is_text = |f: &mut Function, operand: u32| {
+						s.emit_field(f, operand, 0);
+						Self::emit_list(f, &[
+							I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Text as i64), I::I64Eq,
+							I::LocalGet(kind), I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::I32Or,
+						]);
+					};
+					is_text(f, 0);
+					is_text(f, 1);
+					Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {

@@ -28,3 +28,4 @@ mod test_unicode_escape;
 mod test_put_runtime_values;
 mod test_print_juxtaposed;
 mod test_print_lists;
+mod test_runtime_kind_texts;

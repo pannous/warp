@@ -107,7 +107,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::INT_RUNTIME);
 	}
 	if required.contains(super::list_ops::NODE_ADD) {
-		required.insert("list_concat"); // two lists added are concatenated
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF]); // two lists added are concatenated, two texts too
 	}
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
