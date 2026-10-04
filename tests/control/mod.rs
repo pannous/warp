@@ -39,3 +39,4 @@ mod test_threads;
 mod test_task_values;
 mod test_shared_arrays;
 mod test_braceless_output_calls;
+mod test_try_division;

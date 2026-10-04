@@ -755,8 +755,11 @@ impl Lowering {
 				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),
+			// the divisor checked first; any other error of the division (a text divided) is caught as below
 			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.instantiate_template(
-				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{{DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}})"),
+				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{\
+					try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}}); \
+					if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}}}})"),
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
 			_ => self.instantiate_template(

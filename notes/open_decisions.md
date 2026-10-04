@@ -89,6 +89,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   not mix (a list then an Int, a text then an Int; Int and Float still widen to Float) is held as a Node and computes
   by its run-time kind, as a variable first bound to ø is: `x = [1]` then `x = 5; x + 1` is 6, and a loop variable may
   reuse a list's name. Alternative: a compile error "x was a list, is given an Int: use another name". Night 2026-10-04.
+- P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
+  the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
+  holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
+  `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
+  `friend` only when one is declared. Not implemented. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
