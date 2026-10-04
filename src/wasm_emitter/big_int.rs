@@ -685,111 +685,117 @@ impl WasmGcEmitter {
 
 		// big_trim(m) -> m without leading zero limbs; locals: n, trimmed
 		self.runtime_function("big_trim", vec![limbs], vec![limbs], vec![ValType::I32, limbs], |_, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::LocalSet(1)]);
+			let (magnitude, n, trimmed) = (0, 1, 2);
+			Self::emit_list(f, &[I::LocalGet(magnitude), I::ArrayLen, I::LocalSet(n)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(1), I::I32Eqz, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1), I::I32Const(1), I::I32Sub, I::ArrayGet(limbs_type), I::BrIf(1)]);
-			Self::increment(f, 1, -1);
+			Self::emit_list(f, &[I::LocalGet(n), I::I32Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(magnitude), I::LocalGet(n), I::I32Const(1), I::I32Sub, I::ArrayGet(limbs_type), I::BrIf(1)]);
+			Self::increment(f, n, -1);
 			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(0), I::ArrayLen, I::I32Eq]);
-			Self::emit_list(f, &[I::If(BlockType::Result(limbs)), I::LocalGet(0), I::Else]);
-			Self::emit_list(f, &[I::LocalGet(1), I::ArrayNewDefault(limbs_type), I::LocalSet(2)]);
+			Self::emit_list(f, &[I::LocalGet(n), I::LocalGet(magnitude), I::ArrayLen, I::I32Eq]);
+			Self::emit_list(f, &[I::If(BlockType::Result(limbs)), I::LocalGet(magnitude), I::Else]);
+			Self::emit_list(f, &[I::LocalGet(n), I::ArrayNewDefault(limbs_type), I::LocalSet(trimmed)]);
 			Self::emit_list(f, &[
-				I::LocalGet(2), I::I32Const(0), I::LocalGet(0), I::I32Const(0), I::LocalGet(1),
+				I::LocalGet(trimmed), I::I32Const(0), I::LocalGet(magnitude), I::I32Const(0), I::LocalGet(n),
 				I::ArrayCopy { array_type_index_dst: limbs_type, array_type_index_src: limbs_type },
 			]);
-			Self::emit_list(f, &[I::LocalGet(2), I::End]);
+			Self::emit_list(f, &[I::LocalGet(trimmed), I::End]);
 		});
 
 		// mag_cmp(a, b) -> -1/0/1; locals: i, x, y
 		self.runtime_function("mag_cmp", vec![limbs, limbs], vec![ValType::I32], vec![ValType::I32, ValType::I64, ValType::I64], |s, f| {
+			let (a, b, i, x, y) = (0, 1, 2, 3, 4);
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::ArrayLen, I::LocalGet(1), I::ArrayLen,
-				I::LocalGet(0), I::ArrayLen, I::LocalGet(1), I::ArrayLen, I::I32GtU, I::Select, I::LocalSet(2),
+				I::LocalGet(a), I::ArrayLen, I::LocalGet(b), I::ArrayLen,
+				I::LocalGet(a), I::ArrayLen, I::LocalGet(b), I::ArrayLen, I::I32GtU, I::Select, I::LocalSet(i),
 			]);
-			Self::count_down(f, 2, |f| {
-				s.limb_or_zero(f, 0, I::LocalGet(2));
-				f.instruction(&I::LocalSet(3));
-				s.limb_or_zero(f, 1, I::LocalGet(2));
-				f.instruction(&I::LocalSet(4));
-				Self::emit_list(f, &[I::LocalGet(3), I::LocalGet(4), I::I64Ne, I::If(BlockType::Empty)]);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Const(-1), I::LocalGet(3), I::LocalGet(4), I::I64GtU, I::Select, I::Return, I::End]);
+			Self::count_down(f, i, |f| {
+				s.limb_or_zero(f, a, I::LocalGet(i));
+				f.instruction(&I::LocalSet(x));
+				s.limb_or_zero(f, b, I::LocalGet(i));
+				f.instruction(&I::LocalSet(y));
+				Self::emit_list(f, &[I::LocalGet(x), I::LocalGet(y), I::I64Ne, I::If(BlockType::Empty)]);
+				Self::emit_list(f, &[I::I32Const(1), I::I32Const(-1), I::LocalGet(x), I::LocalGet(y), I::I64GtU, I::Select, I::Return, I::End]);
 			});
 			f.instruction(&I::I32Const(0));
 		});
 
 		// mag_add(a, b); locals: n, sum, i, acc
 		self.runtime_function("mag_add", vec![limbs, limbs], vec![limbs], vec![ValType::I32, limbs, ValType::I32, ValType::I64], |s, f| {
+			let (a, b, n, sum, i, acc) = (0, 1, 2, 3, 4, 5);
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::ArrayLen, I::LocalGet(1), I::ArrayLen,
-				I::LocalGet(0), I::ArrayLen, I::LocalGet(1), I::ArrayLen, I::I32GtU, I::Select, I::LocalSet(2),
+				I::LocalGet(a), I::ArrayLen, I::LocalGet(b), I::ArrayLen,
+				I::LocalGet(a), I::ArrayLen, I::LocalGet(b), I::ArrayLen, I::I32GtU, I::Select, I::LocalSet(n),
 			]);
-			Self::emit_list(f, &[I::LocalGet(2), I::I32Const(1), I::I32Add, I::ArrayNewDefault(limbs_type), I::LocalSet(3)]);
-			Self::count_up(f, 4, 2, |f| {
-				s.limb_or_zero(f, 0, I::LocalGet(4));
-				s.limb_or_zero(f, 1, I::LocalGet(4));
-				Self::emit_list(f, &[I::I64Add, I::LocalGet(5), I::I64Add, I::LocalSet(5)]);
-				Self::emit_list(f, &[I::LocalGet(3), I::LocalGet(4), I::LocalGet(5), I::I32WrapI64]);
+			Self::emit_list(f, &[I::LocalGet(n), I::I32Const(1), I::I32Add, I::ArrayNewDefault(limbs_type), I::LocalSet(sum)]);
+			Self::count_up(f, i, n, |f| {
+				s.limb_or_zero(f, a, I::LocalGet(i));
+				s.limb_or_zero(f, b, I::LocalGet(i));
+				Self::emit_list(f, &[I::I64Add, I::LocalGet(acc), I::I64Add, I::LocalSet(acc)]);
+				Self::emit_list(f, &[I::LocalGet(sum), I::LocalGet(i), I::LocalGet(acc), I::I32WrapI64]);
 				s.limbs_set(f);
-				Self::emit_list(f, &[I::LocalGet(5), I::I64Const(32), I::I64ShrU, I::LocalSet(5)]);
+				Self::emit_list(f, &[I::LocalGet(acc), I::I64Const(32), I::I64ShrU, I::LocalSet(acc)]);
 			});
-			Self::emit_list(f, &[I::LocalGet(3), I::LocalGet(2), I::LocalGet(5), I::I32WrapI64]);
+			Self::emit_list(f, &[I::LocalGet(sum), I::LocalGet(n), I::LocalGet(acc), I::I32WrapI64]);
 			s.limbs_set(f);
-			f.instruction(&I::LocalGet(3));
+			f.instruction(&I::LocalGet(sum));
 			s.call(f, "big_trim");
 		});
 
 		// mag_sub_into(r, b): r -= b in place, requires r >= b; locals: n, i, acc, borrow
 		self.runtime_function("mag_sub_into", vec![limbs, limbs], vec![], vec![ValType::I32, ValType::I32, ValType::I64, ValType::I64], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::LocalSet(2)]);
-			Self::count_up(f, 3, 2, |f| {
-				s.limb_or_zero(f, 0, I::LocalGet(3));
-				s.limb_or_zero(f, 1, I::LocalGet(3));
-				Self::emit_list(f, &[I::I64Sub, I::LocalGet(5), I::I64Sub, I::LocalSet(4)]);
-				Self::emit_list(f, &[I::LocalGet(4), I::I64Const(0), I::I64LtS, I::I64ExtendI32U, I::LocalSet(5)]);
-				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(3), I::LocalGet(4), I::I32WrapI64]);
+			let (r, b, n, i, acc, borrow) = (0, 1, 2, 3, 4, 5);
+			Self::emit_list(f, &[I::LocalGet(r), I::ArrayLen, I::LocalSet(n)]);
+			Self::count_up(f, i, n, |f| {
+				s.limb_or_zero(f, r, I::LocalGet(i));
+				s.limb_or_zero(f, b, I::LocalGet(i));
+				Self::emit_list(f, &[I::I64Sub, I::LocalGet(borrow), I::I64Sub, I::LocalSet(acc)]);
+				Self::emit_list(f, &[I::LocalGet(acc), I::I64Const(0), I::I64LtS, I::I64ExtendI32U, I::LocalSet(borrow)]);
+				Self::emit_list(f, &[I::LocalGet(r), I::LocalGet(i), I::LocalGet(acc), I::I32WrapI64]);
 				s.limbs_set(f);
 			});
 		});
 
 		// mag_sub(a, b) -> a - b, requires a >= b; locals: copy
 		self.runtime_function("mag_sub", vec![limbs, limbs], vec![limbs], vec![limbs], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(2)]);
+			let (a, b, copy) = (0, 1, 2);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(copy)]);
 			Self::emit_list(f, &[
-				I::LocalGet(2), I::I32Const(0), I::LocalGet(0), I::I32Const(0), I::LocalGet(0), I::ArrayLen,
+				I::LocalGet(copy), I::I32Const(0), I::LocalGet(a), I::I32Const(0), I::LocalGet(a), I::ArrayLen,
 				I::ArrayCopy { array_type_index_dst: limbs_type, array_type_index_src: limbs_type },
 			]);
-			Self::emit_list(f, &[I::LocalGet(2), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(b)]);
 			s.call(f, "mag_sub_into");
-			f.instruction(&I::LocalGet(2));
+			f.instruction(&I::LocalGet(copy));
 			s.call(f, "big_trim");
 		});
 
 		// mag_mul(a, b) schoolbook; locals: la, lb, product, i, j, ai, carry
 		let i32s = ValType::I32;
 		self.runtime_function("mag_mul", vec![limbs, limbs], vec![limbs], vec![i32s, i32s, limbs, i32s, i32s, ValType::I64, ValType::I64], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::LocalSet(2), I::LocalGet(1), I::ArrayLen, I::LocalSet(3)]);
-			Self::emit_list(f, &[I::LocalGet(2), I::LocalGet(3), I::I32Add, I::ArrayNewDefault(limbs_type), I::LocalSet(4)]);
-			Self::count_up(f, 5, 2, |f| {
-				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(5)]);
+			let (a, b, la, lb, product, i, j, ai, carry) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::LocalSet(la), I::LocalGet(b), I::ArrayLen, I::LocalSet(lb)]);
+			Self::emit_list(f, &[I::LocalGet(la), I::LocalGet(lb), I::I32Add, I::ArrayNewDefault(limbs_type), I::LocalSet(product)]);
+			Self::count_up(f, i, la, |f| {
+				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(i)]);
 				s.limbs_get(f);
-				Self::emit_list(f, &[I::LocalSet(7), I::I64Const(0), I::LocalSet(8), I::I32Const(0), I::LocalSet(6)]);
-				Self::count_up(f, 6, 3, |f| {
+				Self::emit_list(f, &[I::LocalSet(ai), I::I64Const(0), I::LocalSet(carry), I::I32Const(0), I::LocalSet(j)]);
+				Self::count_up(f, j, lb, |f| {
 					// t = ai * b[j] + product[i+j] + carry  (< 2^64)
-					Self::emit_list(f, &[I::LocalGet(7), I::LocalGet(1), I::LocalGet(6)]);
+					Self::emit_list(f, &[I::LocalGet(ai), I::LocalGet(b), I::LocalGet(j)]);
 					s.limbs_get(f);
 					f.instruction(&I::I64Mul);
-					Self::emit_list(f, &[I::LocalGet(4), I::LocalGet(5), I::LocalGet(6), I::I32Add]);
+					Self::emit_list(f, &[I::LocalGet(product), I::LocalGet(i), I::LocalGet(j), I::I32Add]);
 					s.limbs_get(f);
-					Self::emit_list(f, &[I::I64Add, I::LocalGet(8), I::I64Add, I::LocalSet(8)]);
-					Self::emit_list(f, &[I::LocalGet(4), I::LocalGet(5), I::LocalGet(6), I::I32Add, I::LocalGet(8), I::I32WrapI64]);
+					Self::emit_list(f, &[I::I64Add, I::LocalGet(carry), I::I64Add, I::LocalSet(carry)]);
+					Self::emit_list(f, &[I::LocalGet(product), I::LocalGet(i), I::LocalGet(j), I::I32Add, I::LocalGet(carry), I::I32WrapI64]);
 					s.limbs_set(f);
-					Self::emit_list(f, &[I::LocalGet(8), I::I64Const(32), I::I64ShrU, I::LocalSet(8)]);
+					Self::emit_list(f, &[I::LocalGet(carry), I::I64Const(32), I::I64ShrU, I::LocalSet(carry)]);
 				});
-				Self::emit_list(f, &[I::LocalGet(4), I::LocalGet(5), I::LocalGet(3), I::I32Add, I::LocalGet(8), I::I32WrapI64]);
+				Self::emit_list(f, &[I::LocalGet(product), I::LocalGet(i), I::LocalGet(lb), I::I32Add, I::LocalGet(carry), I::I32WrapI64]);
 				s.limbs_set(f);
 			});
-			f.instruction(&I::LocalGet(4));
+			f.instruction(&I::LocalGet(product));
 			s.call(f, "big_trim");
 		});
 
