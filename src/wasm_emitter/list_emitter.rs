@@ -572,7 +572,7 @@ impl WasmGcEmitter {
 		}
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.get_type(item).is_float() {
+		} else if self.is_float_assignment(item) || self.is_float_call(item) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) {
 			self.emit_node_instructions(func, item);
@@ -581,12 +581,18 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A call giving a float (`shared_addf(xs, i, v)`)
+	fn is_float_call(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+			&& self.get_type(node).is_float()
+	}
+
 	/// Statements whose last value is an exact number (`{i*10}`, `{puti(i)}`): none that `emit_discarded_statement`
 	/// keeps in another representation (a float, text or list update, a typed list store), no float
 	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
 		statements.last().is_some_and(|last| {
 			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
-				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.get_type(last).is_float()
+				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_call(last)
 		})
 	}
 
