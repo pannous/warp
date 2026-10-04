@@ -309,9 +309,9 @@ impl WasmGcEmitter {
 			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),
 			_ => self.emit_node_instructions(func, left),
 		}
-		// For struct instances like Person{...}, emit block as list
+		// For struct instances like Person{...}, emit block as list; the value of an entry `a:{b:1}` stays a map
 		let right_node = right.drop_meta();
-		if let Node::List(items, Bracket::Curly, sep) = right_node {
+		if let (Node::List(items, Bracket::Curly, sep), false) = (right_node, *op == Op::Colon) {
 			// Convert curly block to square list, preserving inner ops
 			let list_node = Node::List(items.clone(), Bracket::Square, sep.clone());
 			self.emit_node_instructions(func, &list_node);

@@ -33,3 +33,4 @@ mod test_byte_size;
 mod test_long_list_result;
 mod test_empty_items;
 mod test_map_variables;
+mod test_nested_maps;
