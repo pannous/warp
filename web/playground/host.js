@@ -9,6 +9,8 @@ const STDERR = 2;
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
 /// C names of libm functions (ffi "m") that Math spells differently
+/// libc's RAND_MAX on glibc and macOS: rand() is 0…RAND_MAX
+const RAND_MAX = 2147483647;
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 
 const HTTP_NOT_FOUND = "HTTP status 404";
@@ -66,6 +68,18 @@ function hostResult(program, action, what) {
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
 	const text = (pointer, length) => readText(program(), pointer, length);
+	const cString = pointer => {
+		const bytes = new Uint8Array(program().memory.buffer);
+		let end = pointer;
+		while (bytes[end] !== 0 && end < bytes.length) end++;
+		return bytes.slice(pointer, end);
+	};
+	const compareBytes = (a, b) => {
+		for (let index = 0; index < Math.min(a.length, b.length); index++) {
+			if (a[index] !== b[index]) return a[index] - b[index];
+		}
+		return a.length - b.length;
+	};
 	const fetchUrl = (pointer, length, timeout) => {
 		const url = text(pointer, length);
 		return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
@@ -104,6 +118,17 @@ function programImports(holder, hooks) {
 			},
 		},
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
+		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
+		c: {
+			rand: () => Math.floor(Math.random() * RAND_MAX),
+			srand: () => {},
+			abs: Math.abs,
+			labs: value => value < 0n ? -value : value,
+			strlen: pointer => cString(pointer).length,
+			strcmp: (a, b) => Math.sign(compareBytes(cString(a), cString(b))),
+			atoi: pointer => Math.trunc(parseFloat(new TextDecoder().decode(cString(pointer)))) | 0,
+			atof: pointer => parseFloat(new TextDecoder().decode(cString(pointer))) || 0,
+		},
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };

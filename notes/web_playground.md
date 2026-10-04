@@ -62,6 +62,10 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   - std::env::temp_dir panics on WASI: test_use_modules (4)
   - lean: test_law::test_law_proved_by_lean, test_law_overflow_promotion_proved_by_lean
   - git clones / tags of packages: test_package_pin (4), test_packages::use_loads_the_module_of_a_package, test_versions (3)
+  - threads: test_eval_state::the_hint_mode_of_one_thread_is_not_another_threads; a directory walk below the project
+    root: test_use_scopes::use_project_sees_every_file_below_the_project_root (2026-10-04: 1437 passed, 17 failed)
+- libc in the browser (host.js `c`, 2026-10-04): rand, srand, abs, labs, strlen, strcmp, atoi, atof on C strings read up
+  to their zero byte; anything else of libc still throws "c.X is not available in the browser"
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
   get a host import that asks the static server to run them, which defeats the point of the browser run.
 
