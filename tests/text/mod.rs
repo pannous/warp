@@ -19,3 +19,4 @@ mod test_text_repeat;
 mod test_text_runtime;
 mod test_text_variable_assignment;
 mod test_text_as_float;
+mod test_text_plus_float_call;

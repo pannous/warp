@@ -2600,8 +2600,9 @@ impl WasmGcEmitter {
 					Node::Text(s) => {
 						self.emit_string_call(func, s, "new_text");
 					}
-					// data and names are their source text; an Int expression (`str(1+2)`) is the text of its value
-					_ if !self.mentions_variable(value) && self.get_type(value) != Kind::Int => {
+					// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
+					// text of its value
+					_ if !self.mentions_variable(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
 						let (ptr, len) = self.allocate_string(&value.serialize());
 						func.instruction(&I32Const(ptr as i32));
 						func.instruction(&I32Const(len as i32));

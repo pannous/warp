@@ -222,7 +222,6 @@ fn test_type_confusion() {
 
 
 #[test]
-#[ignore = "soon"]
 fn test_function_return_types() {
 	let _result = analyze(parse("def f(x):float := 42.0"));
 	let _result = analyze(parse("def f(x):int := 42"));
@@ -407,7 +406,6 @@ fn test_polymorphism2() {
 }
 
 #[test]
-#[ignore = "soon"] // TODO: requires complete type system
 fn test_polymorphism3() {
 	is!(
 		"fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",

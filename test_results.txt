@@ -1231,6 +1231,7 @@ PASSED:
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
   ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
   ✓ text::test_text_repeat::text_repeat_names_the_explicit_form
   ✓ text::test_text_repeat::text_times_float_or_text_stays_a_type_error
@@ -1395,8 +1396,10 @@ PASSED:
   ✓ types::test_types::test_deep_type
   ✓ types::test_types::test_emit_cast
   ✓ types::test_types::test_empty_typed_functions
+  ✓ types::test_types::test_function_return_types
   ✓ types::test_types::test_polymorphism
   ✓ types::test_types::test_polymorphism2
+  ✓ types::test_types::test_polymorphism3
   ✓ types::test_types::test_type_confusion
   ✓ types::test_types::test_type_node
   ✓ types::test_types::test_type_registry
@@ -1785,4 +1788,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1780 passed, 0 failed, 1780 total tested
+53 ignored, 1783 passed, 0 failed, 1783 total tested
