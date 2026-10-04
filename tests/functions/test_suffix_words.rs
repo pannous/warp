@@ -41,3 +41,18 @@ fn an_unknown_word_is_no_suffix_form() {
 fn a_variable_is_no_suffix_form() {
 	is!("def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)", 3);
 }
+
+#[test]
+fn library_suffix_words() {
+	warp::is!("3 squared", 9);
+	warp::is!("2 cubed", 8);
+	warp::is!("xs=[3 1 2]; xs sorted", warp::ints(vec![1, 2, 3]));
+	warp::is!("[1 2] reversed", warp::ints(vec![2, 1]));
+	warp::is!("x = 4; x squared + 1", 17);
+}
+
+#[test]
+fn a_user_function_or_variable_takes_the_suffix_word() {
+	warp::is!("square(x):=x*x*10; 3 squared", 90);
+	warp::is!("sorted = 3; sorted", 3);
+}

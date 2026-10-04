@@ -24,8 +24,19 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
 	let words = functions.iter().flat_map(|function| SUFFIX_WORD_ENDINGS.map(|ending| (format!("{function}{ending}"), function.clone())));
-	words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect()
+	let mut words: SuffixWords = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
+	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
+	for (word, function) in LIBRARY_SUFFIX_WORDS {
+		if !variables.contains(word) && !functions.contains(function.trim_start_matches(POWER_MARK)) {
+			words.entry(word.to_string()).or_insert(function.to_string());
+		}
+	}
+	words
 }
+
+/// Suffix words of library functions; a function marked `^` is the power of its number: `squared` is `^2`
+const LIBRARY_SUFFIX_WORDS: [(&str, &str); 4] = [("sorted", "sort"), ("reversed", "reverse"), ("squared", "^square"), ("cubed", "^cube")];
+const POWER_MARK: char = '^';
 
 /// suffix word → function
 type SuffixWords = HashMap<String, String>;
@@ -80,7 +91,13 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<String> {
 }
 
 fn call(function: &str, argument: Node) -> Node {
-	Node::List(vec![Node::Symbol(function.to_string()), argument], Bracket::Round, Separator::None)
+	match function.strip_prefix(POWER_MARK) {
+		Some(power) => {
+			let exponent = if power == "square" { 2 } else { 3 };
+			Node::Key(Box::new(argument), Op::Pow, Box::new(Node::int(exponent)))
+		}
+		None => Node::List(vec![Node::Symbol(function.to_string()), argument], Bracket::Round, Separator::None),
+	}
 }
 
 /// The leftmost operand of an infix chain, replaced: `squared+1` → `(2 squared)+1`
