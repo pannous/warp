@@ -5,6 +5,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::normalize::hints as norm;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
@@ -125,9 +126,9 @@ impl WasmGcEmitter {
 				if s == "return" {
 					self.emit_returned_value(func, &items[1]);
 					self.emit_leave_tries(func, 0);
-					func.instruction(&Instruction::Return);
+					func.instruction(&I::Return);
 					// Unreachable after return, push dummy value
-					func.instruction(&Instruction::Unreachable);
+					func.instruction(&I::Unreachable);
 					return;
 				}
 			}
@@ -157,7 +158,7 @@ impl WasmGcEmitter {
 				let emitted = match s.as_str() {
 					"puts" => {
 						self.emit_wasi_puts(func, &items[1]);
-						func.instruction(&Instruction::I64ExtendI32S);
+						func.instruction(&I::I64ExtendI32S);
 						true
 					}
 					"puti" | "putl" => {
@@ -167,7 +168,7 @@ impl WasmGcEmitter {
 					}
 					"putf" => {
 						self.emit_wasi_putf(func, &items[1]);
-						func.instruction(&Instruction::I64ExtendI32S);
+						func.instruction(&I::I64ExtendI32S);
 						true
 					}
 					"fd_write" if items.len() >= 5 => {
@@ -334,7 +335,7 @@ impl WasmGcEmitter {
 		let [_, subject, spec] = items else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
 		let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
-		func.instruction(&Instruction::I64Const(answer as i64));
+		func.instruction(&I::I64Const(answer as i64));
 		self.emit_call(func, "new_int");
 		true
 	}
@@ -366,13 +367,13 @@ impl WasmGcEmitter {
 			"type" => {
 				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(len as i32));
 				self.emit_call(func, "new_symbol");
 				true
 			}
 			"ceil" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Ceil);
+				self.emit_rounded_as_int(func, arg, I::F64Ceil);
 				true
 			}
 			// an exact number floors exactly, also beyond the f64 range
@@ -385,37 +386,37 @@ impl WasmGcEmitter {
 				true
 			}
 			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Floor);
+				self.emit_rounded_as_int(func, arg, I::F64Floor);
 				true
 			}
 			// round half up (JS Math.round, Excel for x ≥ 0): floor(x) + (x - floor(x) ≥ ½), x kept as bits in a scratch local
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				func.instruction(&Instruction::I64ReinterpretF64);
-				func.instruction(&Instruction::LocalTee(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::F64Floor);
-				func.instruction(&Instruction::LocalGet(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::LocalGet(bits));
-				func.instruction(&Instruction::F64ReinterpretI64);
-				func.instruction(&Instruction::F64Floor);
-				func.instruction(&Instruction::F64Sub);
-				func.instruction(&Instruction::F64Const(0.5f64.into()));
-				func.instruction(&Instruction::F64Ge);
-				func.instruction(&Instruction::F64ConvertI32U);
-				func.instruction(&Instruction::F64Add);
+				func.instruction(&I::I64ReinterpretF64);
+				func.instruction(&I::LocalTee(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::F64Floor);
+				func.instruction(&I::LocalGet(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::LocalGet(bits));
+				func.instruction(&I::F64ReinterpretI64);
+				func.instruction(&I::F64Floor);
+				func.instruction(&I::F64Sub);
+				func.instruction(&I::F64Const(0.5f64.into()));
+				func.instruction(&I::F64Ge);
+				func.instruction(&I::F64ConvertI32U);
+				func.instruction(&I::F64Add);
 				self.emit_integral_float_as_int(func);
 				true
 			}
 			// round = round half even (IEEE 754 default, Python 3, .NET): 2.5 → 2, 3.5 → 4
 			"round_half_even" => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Nearest);
+				self.emit_rounded_as_int(func, arg, I::F64Nearest);
 				true
 			}
 			"round" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, Instruction::F64Nearest);
+				self.emit_rounded_as_int(func, arg, I::F64Nearest);
 				true
 			}
 			_ => false,
@@ -434,20 +435,20 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, instance);
 		let instance_local = self.node_scratch();
-		func.instruction(&Instruction::LocalSet(instance_local));
+		func.instruction(&I::LocalSet(instance_local));
 		self.emit_field(func, instance_local, 0);
 		Self::emit_list(func, &[
-			Instruction::I64Const(crate::type_kinds::KIND_MASK), Instruction::I64And, Instruction::I64Const(crate::Kind::Key as i64), Instruction::I64Eq,
-			Instruction::If(BlockType::Result(ValType::I64)),
+			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::If(BlockType::Result(ValType::I64)),
 		]);
 		self.emit_field(func, instance_local, 1);
-		func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(node_type)));
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
 		let (pointer, length) = self.allocate_string(type_name);
-		Self::emit_list(func, &[Instruction::I32Const(pointer as i32), Instruction::I32Const(length as i32)]);
+		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::VALUES_EQUAL);
-		func.instruction(&Instruction::I64ExtendI32U);
-		Self::emit_list(func, &[Instruction::Else, Instruction::I64Const(0), Instruction::End]);
+		func.instruction(&I::I64ExtendI32U);
+		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End]);
 	}
 
 	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
@@ -462,17 +463,17 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		func.instruction(&Instruction::I64ReinterpretF64);
-		func.instruction(&Instruction::LocalTee(divisor_bits));
-		func.instruction(&Instruction::F64ReinterpretI64);
-		func.instruction(&Instruction::F64Div);
-		func.instruction(&Instruction::I64ReinterpretF64);
-		func.instruction(&Instruction::LocalSet(quotient));
+		func.instruction(&I::I64ReinterpretF64);
+		func.instruction(&I::LocalTee(divisor_bits));
+		func.instruction(&I::F64ReinterpretI64);
+		func.instruction(&I::F64Div);
+		func.instruction(&I::I64ReinterpretF64);
+		func.instruction(&I::LocalSet(quotient));
 		// a negative divisor rounds the quotient up, a positive one down
 		Self::emit_list(func, &[
-			Instruction::LocalGet(quotient), Instruction::F64ReinterpretI64, Instruction::F64Ceil,
-			Instruction::LocalGet(quotient), Instruction::F64ReinterpretI64, Instruction::F64Floor,
-			Instruction::LocalGet(divisor_bits), Instruction::I64Const(0), Instruction::I64LtS, Instruction::Select,
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Floor,
+			I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
 		]);
 		self.emit_truncating_cast(func);
 	}
@@ -513,7 +514,7 @@ impl WasmGcEmitter {
 				self.emit_undefined_variable(func, &name);
 			} else {
 				self.emit_discarded_statement(func, item, emit);
-				func.instruction(&Instruction::Drop);
+				func.instruction(&I::Drop);
 			}
 		}
 		// only definitions and imports: the sequence is worth ø
@@ -597,14 +598,14 @@ impl WasmGcEmitter {
 			return false;
 		}
 		self.emit_condition(func, condition, Self::emit_block_value);
-		func.instruction(&Instruction::If(BlockType::Empty));
+		func.instruction(&I::If(BlockType::Empty));
 		self.emit_branch_statements(func, then);
 		if let Some(otherwise) = otherwise {
-			func.instruction(&Instruction::Else);
+			func.instruction(&I::Else);
 			self.emit_branch_statements(func, otherwise);
 		}
-		func.instruction(&Instruction::End);
-		func.instruction(&Instruction::I64Const(0)); // the statement's value, dropped
+		func.instruction(&I::End);
+		func.instruction(&I::I64Const(0)); // the statement's value, dropped
 		true
 	}
 
@@ -616,7 +617,7 @@ impl WasmGcEmitter {
 		for statement in &statements {
 			if !self.emit_loop_jump(func, statement) {
 				self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-				func.instruction(&Instruction::Drop);
+				func.instruction(&I::Drop);
 			}
 		}
 	}

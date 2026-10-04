@@ -3,6 +3,7 @@
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::WasmGcEmitter;
 
@@ -31,7 +32,7 @@ impl WasmGcEmitter {
 					self.emit_fetch_call(func, &url, timeout);
 					// Store in ref-type local variable
 					if let Some(local) = self.scope.lookup(var_name) {
-						func.instruction(&Instruction::LocalTee(local.position));
+						func.instruction(&I::LocalTee(local.position));
 					}
 					return;
 				}
@@ -79,7 +80,7 @@ impl WasmGcEmitter {
 		if is_ref_assign {
 			if let Node::Symbol(name) = left.drop_meta() {
 				if self.emit_typed_list_store(func, name, right) {
-					func.instruction(&Instruction::Drop);
+					func.instruction(&I::Drop);
 					self.emit_typed_list_as_node(func, name);
 					return;
 				}
@@ -87,7 +88,7 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, right);
 				// Store in ref-type local
 				if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&Instruction::LocalTee(local.position));
+					func.instruction(&I::LocalTee(local.position));
 				}
 			}
 			return;
@@ -158,10 +159,10 @@ impl WasmGcEmitter {
 		if use_float {
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, left);
-			func.instruction(&Instruction::F64Mul);
+			func.instruction(&I::F64Mul);
 			if op == Op::Cube {
 				self.emit_float_value(func, left);
-				func.instruction(&Instruction::F64Mul);
+				func.instruction(&I::F64Mul);
 			}
 			self.emit_call(func, "new_float");
 		} else {
@@ -184,16 +185,16 @@ impl WasmGcEmitter {
 			Op::Sqrt => {
 				// √x = sqrt(x), returns float
 				self.emit_float_value(func, right);
-				func.instruction(&Instruction::F64Sqrt);
+				func.instruction(&I::F64Sqrt);
 				self.emit_call(func, "new_float");
 			}
 			Op::Neg => {
 				// -x = 0 - x
 				let use_float = self.get_type(right).is_float();
 				if use_float {
-					func.instruction(&Instruction::F64Const(0.0.into()));
+					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
-					func.instruction(&Instruction::F64Sub);
+					func.instruction(&I::F64Sub);
 					self.emit_call(func, "new_float");
 				} else {
 					self.emit_numeric_value(func, right);
@@ -205,8 +206,8 @@ impl WasmGcEmitter {
 			Op::Not => {
 				// not x = x is falsy: 0, ø and errors
 				self.emit_condition(func, right, Self::emit_numeric_value);
-				func.instruction(&Instruction::I32Eqz);
-				func.instruction(&Instruction::I64ExtendI32U);
+				func.instruction(&I::I32Eqz);
+				func.instruction(&I::I64ExtendI32U);
 				self.emit_call(func, "new_int");
 			}
 			Op::Abs => {
@@ -216,7 +217,7 @@ impl WasmGcEmitter {
 				// Fallback: emit as Key node
 				self.emit_node_instructions(func, &Node::Empty);
 				self.emit_node_instructions(func, right);
-				func.instruction(&Instruction::I64Const(crate::operators::op_to_code(op)));
+				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
 				self.emit_call(func, "new_key");
 			}
 		}
@@ -227,7 +228,7 @@ impl WasmGcEmitter {
 		let use_float = self.get_type(right).is_float();
 		if use_float {
 			self.emit_float_value(func, right);
-			func.instruction(&Instruction::F64Abs);
+			func.instruction(&I::F64Abs);
 			self.emit_call(func, "new_float");
 		} else {
 			self.emit_numeric_value(func, right);
@@ -297,7 +298,7 @@ impl WasmGcEmitter {
 		// Default: emit as Key node
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		func.instruction(&Instruction::I64Const(crate::operators::op_to_code(&Op::Dot)));
+		func.instruction(&I::I64Const(crate::operators::op_to_code(&Op::Dot)));
 		self.emit_call(func, "new_key");
 	}
 
@@ -318,7 +319,7 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, right_node);
 		}
 		// Preserve the op for roundtrip
-		func.instruction(&Instruction::I64Const(crate::operators::op_to_code(op)));
+		func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
 		self.emit_call(func, "new_key");
 	}
 }

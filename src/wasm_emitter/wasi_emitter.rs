@@ -3,6 +3,7 @@
 use crate::node::Node;
 use crate::type_kinds::Kind;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::WasmGcEmitter;
 use crate::type_kinds::SQUARE_LIST_KIND;
@@ -20,18 +21,18 @@ impl WasmGcEmitter {
 	/// Writes the text at (ptr, len) to stdout: the iovec {ptr, len} at address IOVEC_ADDRESS, then
 	/// `fd_write(STDOUT, iovs, 1, nwritten)`. Leaves fd_write's error code on the stack; false when fd_write is not imported.
 	fn emit_stdout_write(&self, func: &mut Function, str_ptr: u32, str_len: u32) -> bool {
-		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS));
-		func.instruction(&Instruction::I32Const(str_ptr as i32));
-		func.instruction(&Instruction::I32Store(WORD));
-		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS + 4));
-		func.instruction(&Instruction::I32Const(str_len as i32));
-		func.instruction(&Instruction::I32Store(WORD));
-		func.instruction(&Instruction::I32Const(STDOUT));
-		func.instruction(&Instruction::I32Const(IOVEC_ADDRESS));
-		func.instruction(&Instruction::I32Const(1));
-		func.instruction(&Instruction::I32Const(NWRITTEN_ADDRESS));
+		func.instruction(&I::I32Const(IOVEC_ADDRESS));
+		func.instruction(&I::I32Const(str_ptr as i32));
+		func.instruction(&I::I32Store(WORD));
+		func.instruction(&I::I32Const(IOVEC_ADDRESS + 4));
+		func.instruction(&I::I32Const(str_len as i32));
+		func.instruction(&I::I32Store(WORD));
+		func.instruction(&I::I32Const(STDOUT));
+		func.instruction(&I::I32Const(IOVEC_ADDRESS));
+		func.instruction(&I::I32Const(1));
+		func.instruction(&I::I32Const(NWRITTEN_ADDRESS));
 		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write") else { return false };
-		func.instruction(&Instruction::Call(fd_write.call_index as u32));
+		func.instruction(&I::Call(fd_write.call_index as u32));
 		true
 	}
 
@@ -84,7 +85,7 @@ impl WasmGcEmitter {
 			},
 		};
 		self.emit_wasi_puts(func, &Node::Text(format!("{text}{PRINT_TERMINATOR}")));
-		func.instruction(&Instruction::Drop);
+		func.instruction(&I::Drop);
 		match value.drop_meta() {
 			Node::Char(_) => self.emit_node_instructions(func, &Node::Text(text)), // a text, as analyzer::held_kind has it
 			_ => self.emit_node_instructions(func, value),
@@ -112,30 +113,30 @@ impl WasmGcEmitter {
 		self.runtime_function(PRINT_VALUE, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
 			let write = |f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
-				f.instruction(&Instruction::I32Const(0));
+				f.instruction(&I::I32Const(0));
 				push_address(f);
-				f.instruction(&Instruction::I32Store(WORD));
-				f.instruction(&Instruction::I32Const(4));
+				f.instruction(&I::I32Store(WORD));
+				f.instruction(&I::I32Const(4));
 				push_length(f);
-				f.instruction(&Instruction::I32Store(WORD));
+				f.instruction(&I::I32Store(WORD));
 				for argument in [STDOUT, 0, 1, 8] {
-					f.instruction(&Instruction::I32Const(argument));
+					f.instruction(&I::I32Const(argument));
 				}
-				f.instruction(&Instruction::Call(fd_write));
-				f.instruction(&Instruction::Drop);
+				f.instruction(&I::Call(fd_write));
+				f.instruction(&I::Drop);
 			};
-			f.instruction(&Instruction::I64Const(SQUARE_LIST_KIND));
-			f.instruction(&Instruction::LocalGet(value));
-			f.instruction(&Instruction::RefNull(HeapType::Concrete(node_type)));
-			f.instruction(&Instruction::StructNew(node_type));
-			f.instruction(&Instruction::I32Const(empty as i32));
-			f.instruction(&Instruction::I32Const(0));
+			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
+			f.instruction(&I::LocalGet(value));
+			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
+			f.instruction(&I::StructNew(node_type));
+			f.instruction(&I::I32Const(empty as i32));
+			f.instruction(&I::I32Const(0));
 			s.call(f, "new_text");
 			s.call(f, "list_join");
-			f.instruction(&Instruction::LocalSet(text));
+			f.instruction(&I::LocalSet(text));
 			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
-			write(f, &|f| { f.instruction(&Instruction::I32Const(newline.0 as i32)); }, &|f| { f.instruction(&Instruction::I32Const(newline.1 as i32)); });
-			f.instruction(&Instruction::LocalGet(value));
+			write(f, &|f| { f.instruction(&I::I32Const(newline.0 as i32)); }, &|f| { f.instruction(&I::I32Const(newline.1 as i32)); });
+			f.instruction(&I::LocalGet(value));
 		});
 	}
 
@@ -148,7 +149,7 @@ impl WasmGcEmitter {
 			let (str_ptr, str_len) = self.allocate_string(&s);
 
 			if self.emit_stdout_write(func, str_ptr, str_len) {
-				func.instruction(&Instruction::Drop);
+				func.instruction(&I::Drop);
 			}
 		}
 		// For runtime values, we'd need itoa - just drop for now
@@ -164,7 +165,7 @@ impl WasmGcEmitter {
 			self.emit_stdout_write(func, str_ptr, str_len);
 		} else {
 			// Return 0 for non-constant
-			func.instruction(&Instruction::I32Const(0));
+			func.instruction(&I::I32Const(0));
 		}
 	}
 
@@ -191,16 +192,16 @@ impl WasmGcEmitter {
 			// Use puts mechanism: set up iovec from string
 			self.emit_wasi_puts(func, &args[1]);
 			// fd_write already called by emit_wasi_puts, just extend to i64
-			func.instruction(&Instruction::I64ExtendI32S);
+			func.instruction(&I::I64ExtendI32S);
 		} else {
 			// Raw numeric mode
 			for arg in args.iter().take(4) {
 				self.emit_numeric_value(func, arg);
-				func.instruction(&Instruction::I32WrapI64);
+				func.instruction(&I::I32WrapI64);
 			}
 			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
-				func.instruction(&Instruction::Call(f.call_index as u32));
-				func.instruction(&Instruction::I64ExtendI32S);
+				func.instruction(&I::Call(f.call_index as u32));
+				func.instruction(&I::I64ExtendI32S);
 			}
 		}
 	}

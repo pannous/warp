@@ -40,6 +40,9 @@ wasm_emitter re-exports the entry points and keeps emit_module, the trap reading
 pure lowering passes live in src/lowering/ (the crate root re-exports them, so `crate::mutation` paths stay); the
 mixed modules (analyzer, modules, host, real, time, units) stay in src/.
 
+#16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
+Instruction::…` imports still spell the type.
+
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,
 wasp_parser.rs), #12, #13, #15–#20, smarty.rs and test_asts.rs, the extensions/ dead traits (extensions.rs says it is

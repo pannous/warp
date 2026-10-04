@@ -2,6 +2,7 @@
 
 use super::WasmGcEmitter;
 use wasm_encoder::*;
+use Instruction as I;
 
 impl WasmGcEmitter {
 	/// Declares and emits the function `name`; `body` writes the instructions, the closing `end` is added here
@@ -18,7 +19,7 @@ impl WasmGcEmitter {
 		self.functions.function(func_type);
 		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
 		body(self, &mut func);
-		func.instruction(&Instruction::End);
+		func.instruction(&I::End);
 		self.code.function(&func);
 		self.register_func(name)
 	}

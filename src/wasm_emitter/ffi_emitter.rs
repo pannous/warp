@@ -3,6 +3,7 @@
 use crate::node::Node;
 use crate::type_kinds::Kind;
 use wasm_encoder::*;
+use Instruction as I;
 
 use super::WasmGcEmitter;
 
@@ -29,13 +30,13 @@ impl WasmGcEmitter {
 				param_idx += 2;
 			} else if arg_idx < args.len() {
 				self.emit_numeric_value(func, &args[arg_idx]);
-				func.instruction(&Instruction::I32WrapI64);
-				func.instruction(&Instruction::I32Const(0));
+				func.instruction(&I::I32WrapI64);
+				func.instruction(&I::I32Const(0));
 				arg_idx += 1;
 				param_idx += 2;
 			} else {
-				func.instruction(&Instruction::I32Const(0));
-				func.instruction(&Instruction::I32Const(0));
+				func.instruction(&I::I32Const(0));
+				func.instruction(&I::I32Const(0));
 				param_idx += 2;
 			}
 		}
@@ -58,7 +59,7 @@ impl WasmGcEmitter {
 			ValType::F64 => self.emit_float_value(func, arg),
 			ValType::F32 => {
 				self.emit_float_value(func, arg);
-				func.instruction(&Instruction::F32DemoteF64);
+				func.instruction(&I::F32DemoteF64);
 			}
 			ValType::I64 => self.emit_numeric_value(func, arg),
 			ValType::I32 => {
@@ -66,7 +67,7 @@ impl WasmGcEmitter {
 					self.emit_string_ptr_only(func, arg);
 				} else {
 					self.emit_numeric_value(func, arg);
-					func.instruction(&Instruction::I32WrapI64);
+					func.instruction(&I::I32WrapI64);
 				}
 			}
 			_ => self.emit_numeric_value(func, arg),
@@ -76,10 +77,10 @@ impl WasmGcEmitter {
 	/// Emit default value for missing FFI argument
 	fn emit_ffi_default(&mut self, func: &mut Function, param_type: &ValType) {
 		match param_type {
-			ValType::F64 => func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))),
-			ValType::F32 => func.instruction(&Instruction::F32Const(Ieee32::new(0.0f32.to_bits()))),
-			ValType::I64 => func.instruction(&Instruction::I64Const(0)),
-			_ => func.instruction(&Instruction::I32Const(0)),
+			ValType::F64 => func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))),
+			ValType::F32 => func.instruction(&I::F32Const(Ieee32::new(0.0f32.to_bits()))),
+			ValType::I64 => func.instruction(&I::I64Const(0)),
+			_ => func.instruction(&I::I32Const(0)),
 		};
 	}
 
@@ -92,30 +93,30 @@ impl WasmGcEmitter {
 				None => self.emit_call(func, "new_empty"),
 				Some(ValType::F64) => self.emit_call(func, "new_float"),
 				Some(ValType::F32) => {
-					func.instruction(&Instruction::F64PromoteF32);
+					func.instruction(&I::F64PromoteF32);
 					self.emit_call(func, "new_float");
 				}
 				Some(ValType::I64) => self.emit_call(func, "new_int"),
 				Some(ValType::I32) => {
-					func.instruction(&Instruction::I64ExtendI32S);
+					func.instruction(&I::I64ExtendI32S);
 					self.emit_call(func, "new_int");
 				}
 				_ => self.emit_call(func, "new_int"),
 			},
 			Some(Kind::Float) => match result_type {
-				None => { func.instruction(&Instruction::F64Const(Ieee64::new(0.0f64.to_bits()))); }
-				Some(ValType::F32) => { func.instruction(&Instruction::F64PromoteF32); }
-				Some(ValType::I64) => { func.instruction(&Instruction::F64ConvertI64S); }
+				None => { func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))); }
+				Some(ValType::F32) => { func.instruction(&I::F64PromoteF32); }
+				Some(ValType::I64) => { func.instruction(&I::F64ConvertI64S); }
 				Some(ValType::I32) => {
-					func.instruction(&Instruction::I64ExtendI32S);
-					func.instruction(&Instruction::F64ConvertI64S);
+					func.instruction(&I::I64ExtendI32S);
+					func.instruction(&I::F64ConvertI64S);
 				}
 				_ => {} // F64 already correct
 			},
 			Some(_) => match result_type { // Int or other → i64
-				None => { func.instruction(&Instruction::I64Const(0)); }
+				None => { func.instruction(&I::I64Const(0)); }
 				Some(ValType::F64 | ValType::F32) => self.emit_float_in_exact_context(func, sig.name),
-				Some(ValType::I32) => { func.instruction(&Instruction::I64ExtendI32S); }
+				Some(ValType::I32) => { func.instruction(&I::I64ExtendI32S); }
 				_ => {} // I64 already correct
 			},
 		}
@@ -129,7 +130,7 @@ impl WasmGcEmitter {
 		};
 		self.emit_ffi_args(func, fn_name, args, &sig);
 		if let Some(idx) = self.ffi_func_index(fn_name) {
-			func.instruction(&Instruction::Call(idx));
+			func.instruction(&I::Call(idx));
 		}
 		self.emit_ffi_result(func, &sig, ctx);
 	}
@@ -153,7 +154,7 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, node);
 		self.emit_call(func, super::text_builtins::TEXT_OF);
 		let text = self.node_scratch();
-		func.instruction(&Instruction::LocalSet(text));
+		func.instruction(&I::LocalSet(text));
 		text
 	}
 
@@ -168,38 +169,38 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Char(c) => {
 				let (ptr, len) = self.allocate_string(&c.to_string());
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(len as i32));
 			}
 			Node::Text(s) => {
 				let (ptr, len) = self.allocate_string(s);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(len as i32));
 			}
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					if local.data_pointer > 0 {
-						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
-						func.instruction(&Instruction::I32Const(local.data_length as i32));
+						func.instruction(&I::I32Const(local.data_pointer as i32));
+						func.instruction(&I::I32Const(local.data_length as i32));
 					} else {
 						// Fallback: use symbol name
 						let (ptr, len) = self.allocate_string(name);
-						func.instruction(&Instruction::I32Const(ptr as i32));
-						func.instruction(&Instruction::I32Const(len as i32));
+						func.instruction(&I::I32Const(ptr as i32));
+						func.instruction(&I::I32Const(len as i32));
 					}
 				} else {
 					// Unknown symbol - use name as string
 					let (ptr, len) = self.allocate_string(name);
-					func.instruction(&Instruction::I32Const(ptr as i32));
-					func.instruction(&Instruction::I32Const(len as i32));
+					func.instruction(&I::I32Const(ptr as i32));
+					func.instruction(&I::I32Const(len as i32));
 				}
 			}
 			_ => {
 				// For other nodes, try to get a string representation
 				let s = node.to_string();
 				let (ptr, len) = self.allocate_string(&s);
-				func.instruction(&Instruction::I32Const(ptr as i32));
-				func.instruction(&Instruction::I32Const(len as i32));
+				func.instruction(&I::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(len as i32));
 			}
 		}
 	}
@@ -214,29 +215,29 @@ impl WasmGcEmitter {
 		match node.drop_meta() {
 			Node::Char(c) => {
 				let (ptr, _) = self.allocate_string(&format!("{c}\0"));
-				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(ptr as i32));
 			}
 			Node::Text(s) => {
 				// Add null terminator for C string
 				let c_str = format!("{}\0", s);
 				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(ptr as i32));
 			}
 			Node::Symbol(name) => {
 				if let Some(local) = self.scope.lookup(name) {
 					if local.data_pointer > 0 {
-						func.instruction(&Instruction::I32Const(local.data_pointer as i32));
+						func.instruction(&I::I32Const(local.data_pointer as i32));
 					} else {
 						// Fallback: use symbol name with null terminator
 						let c_str = format!("{}\0", name);
 						let (ptr, _) = self.allocate_string(&c_str);
-						func.instruction(&Instruction::I32Const(ptr as i32));
+						func.instruction(&I::I32Const(ptr as i32));
 					}
 				} else {
 					// Unknown symbol - use name as string
 					let c_str = format!("{}\0", name);
 					let (ptr, _) = self.allocate_string(&c_str);
-					func.instruction(&Instruction::I32Const(ptr as i32));
+					func.instruction(&I::I32Const(ptr as i32));
 				}
 			}
 			_ => {
@@ -244,7 +245,7 @@ impl WasmGcEmitter {
 				let s = node.to_string();
 				let c_str = format!("{}\0", s);
 				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&I::I32Const(ptr as i32));
 			}
 		}
 	}
