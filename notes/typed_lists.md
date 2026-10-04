@@ -90,4 +90,6 @@ stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function inde
   through its copy `p·list = p` takes p as a `$NodeList` (the callee copies it with one array.copy, values stay values);
   a function whose every result is such an array or a call of another such function returns the `$NodeList`. Callers
   convert only where a Node is needed. quicksort_partitioned of 1000: 12.5 s → 0.9 s. Not for closure targets, tuple
-  functions or text parameters.
+  functions or text parameters. Any single copy `v = p` counts when v is a Node list (a for loop's `x·items = p`), and a
+  caller's Int/Float list passes through `int_list_as_node_list` (one node per element, no cons cells): 20 sums of a
+  20000-element list 5.3 s → 2.5 s (debug build).
