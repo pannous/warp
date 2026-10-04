@@ -37,3 +37,4 @@ mod test_def_without_parameters;
 mod test_named_arguments;
 mod test_spaced_assign_definition;
 mod test_typed_lambda;
+mod test_picked_calls;
