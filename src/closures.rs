@@ -114,6 +114,17 @@ pub fn lower(program: Node) -> Node {
 	extract_user_functions(&mut context, &program);
 	let mut variables = HashSet::new();
 	collect_assigned_names(&program, &mut variables);
+	// a loop variable (`for n in xs`, what `xs.map(n => …)` lowers to) is captured by value like any variable
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			if let [keyword, variable, in_word, _, _] = items.as_slice() {
+				let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+				if let (true, Node::Symbol(name)) = (is_word(keyword, FOR_WORD) && is_word(in_word, IN_WORD), variable.drop_meta()) {
+					variables.insert(name.clone());
+				}
+			}
+		}
+	});
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new() };
 	values.settle(&context, &program);
@@ -164,6 +175,18 @@ impl FunctionValues {
 		}
 	}
 
+	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
+	/// `xs.map(n => (x => x + n))` builds), or a block that ends in one
+	fn is_function_list(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
+			Node::Symbol(name) => self.lists.contains(name),
+			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
+			block @ Node::List(..) if !std::ptr::eq(tail(block), block) => self.is_function_list(tail(block)),
+			_ => false,
+		}
+	}
+
 	/// `for f in fs {…}` over a list of function values: f holds one
 	fn loop_variable_over_functions<'a>(&self, node: &'a Node) -> Option<&'a str> {
 		let Node::List(items, _, _) = node else { return None };
@@ -183,6 +206,16 @@ impl FunctionValues {
 				if let Some(variable) = self.loop_variable_over_functions(node) {
 					variables.insert(variable.to_string());
 				}
+				// `out.add(f)`, what `xs.map(n => (x => x + n))` builds: out holds functions
+				if let Node::Key(list, Op::Dot, call) = node {
+					if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
+						if let [method, value] = items.as_slice() {
+							if APPEND_METHODS.contains(&method.drop_meta().name().as_str()) && self.is_function_value(value) {
+								lists.insert(name.clone());
+							}
+						}
+					}
+				}
 				let Node::Key(target, Op::Assign | Op::Define, value) = node else { return };
 				let Node::Symbol(name) = target.drop_meta() else { return };
 				if self.functions.contains(name) {
@@ -191,7 +224,7 @@ impl FunctionValues {
 				if self.is_function_value(value) {
 					variables.insert(name.clone());
 				}
-				if matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.iter().any(|item| self.is_function_value(item))) {
+				if self.is_function_list(value) {
 					lists.insert(name.clone());
 				}
 			});
@@ -204,6 +237,9 @@ impl FunctionValues {
 		}
 	}
 }
+
+/// Methods that append one value to a list variable (analyzer APPEND_METHODS)
+const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
 /// The parameter names of a definition `name(params) := body`, or `it` for `name := body` with `it`
 fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec<String>> {

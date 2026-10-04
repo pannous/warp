@@ -235,7 +235,9 @@ impl Lowering {
 					items
 				};
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
-				self.immediate_call(&items).or_else(|| self.iteration_call(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
+				// in a list literal `[(x => x + 1) (x => x + 2)]` the functions are elements, never one applied to the next
+				let immediate = if bracket == Bracket::Square { None } else { self.immediate_call(&items) };
+				immediate.or_else(|| self.iteration_call(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
