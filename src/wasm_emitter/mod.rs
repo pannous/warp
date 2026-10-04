@@ -1687,6 +1687,10 @@ impl WasmGcEmitter {
 
 	/// A list where an Int is wanted: a call (of a user, FFI or builtin function), `return v`, or statements
 	fn emit_numeric_list(&mut self, func: &mut Function, node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator) {
+		if self.emit_task_check(func, items) {
+			func.instruction(&I::I64Const(0));
+			return;
+		}
 		// Check for return statement: [Symbol("return"), value]
 		if items.len() == 2 {
 			if let Node::Symbol(keyword) = items[0].drop_meta() {

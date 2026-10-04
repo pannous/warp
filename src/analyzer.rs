@@ -77,7 +77,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
 		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return"].contains(&s.as_str()))
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK].contains(&s.as_str()))
 		}
 		_ => false,
 	}

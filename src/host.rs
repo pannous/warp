@@ -30,21 +30,28 @@ pub const TASK_CONTROL: &str = "task_control";
 /// task_await_value(id) → the result, both carried as Nodes
 pub const TASK_SPAWN_VALUES: &str = "task_spawn_values";
 pub const TASK_AWAIT_VALUE: &str = "task_await_value";
+/// `await job` checks first (declarations::resolve_tasks): task_join(id) joins the task and is 1 when it failed,
+/// task_failure(id) is the failure's text, raised from wasm so that `try` catches it
+pub const TASK_JOIN: &str = "task_join";
+pub const TASK_FAILURE: &str = "task_failure";
+/// The marker `task·check(task_join(job), task_failure(job))` the emitter raises a failed task's error from
+pub const TASK_CHECK: &str = "task·check";
 /// The operations of `task_control(id, op)`: `stop job` / `cancel job`, `pause job`, `resume job`
 pub const TASK_STOP: i64 = 1;
 pub const TASK_PAUSE: i64 = 2;
 pub const TASK_RESUME: i64 = 3;
 /// The Int arguments task_spawn carries; a function of more runs where it is started
 pub const MAX_TASK_ARGUMENTS: usize = 4;
-pub const HOST_WORDS: [&str; 9] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE];
+pub const HOST_WORDS: [&str; 11] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 9] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 11] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
-		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node])]
+		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
+		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node])]
 }
 
 /// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets

@@ -265,4 +265,21 @@ impl WasmGcEmitter {
 			}
 		}
 	}
+
+	/// `task·check(task_join(job), task_failure(job))` (resolve_tasks): when the joined task failed, its message becomes
+	/// the trap detail of a `returned_error`, which `try` catches and the runner reports as that message. True when
+	/// `items` is that check (it leaves nothing on the stack)
+	pub(super) fn emit_task_check(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, joined, failure] = items else { return false };
+		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::host::TASK_CHECK) {
+			return false;
+		}
+		self.emit_numeric_value(func, joined);
+		func.instruction(&I::I32WrapI64);
+		func.instruction(&I::If(BlockType::Empty));
+		self.emit_trap_detail(func, failure);
+		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
+		func.instruction(&I::End);
+		true
+	}
 }

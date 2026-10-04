@@ -5,7 +5,7 @@
 //! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
 //! `task_await_value(id)` for numbers, texts and characters, and `task_control(id, op)` for stop, pause and resume.
 
-use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STOP, TEXT_HEAP_EXPORT};
+use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STOP, TEXT_HEAP_EXPORT};
 use crate::node::{Bracket, Node};
 use crate::wasm_reader::Imports;
 use anyhow::{anyhow, Result};
@@ -20,7 +20,7 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 5] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE];
+const TASK_WORDS: [&str; 7] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE];
 /// The exported constructors a value is rebuilt with in an instance
 const CONSTRUCTORS: [&str; 8] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list"];
 
@@ -253,6 +253,15 @@ impl TaskTable {
 			let value = value_awaiter.await_task(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let built = builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?;
+			Ok(built.unwrap_anyref().copied())
+		})?;
+		let joiner = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_JOIN, move |id: i64| -> i64 { joiner.await_task(id).is_err() as i64 })?;
+		let reporter = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_FAILURE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			let message = reporter.await_task(id).err().unwrap_or_default();
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let built = builders.build(&TaskValue::Text(message), &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
 		let controller = self.clone();

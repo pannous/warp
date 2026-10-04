@@ -246,6 +246,14 @@ pub fn resolve_tasks(node: Node) -> Node {
 	resolved(node, &path)
 }
 
+/// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
+/// `try` catches, before the result is read
+fn checked_await(await_word: &str, job: &Node) -> Node {
+	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
+	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
+	Node::List(vec![check, marker(await_word, vec![job.clone()])], Bracket::None, Separator::Semicolon)
+}
+
 fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath) -> Node {
 	use crate::host::{TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_SPAWN, TASK_SPAWN_VALUES};
 	match node {
@@ -267,8 +275,8 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath) -> Node {
 					}
 				}
 				TASK_VALUE => match path(&word(&items[2])) {
-					TaskPath::Ints => marker(TASK_AWAIT, vec![items[1].clone()]),
-					TaskPath::Values(_) => marker(TASK_AWAIT_VALUE, vec![items[1].clone()]),
+					TaskPath::Ints => checked_await(TASK_AWAIT, &items[1]),
+					TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1]),
 					TaskPath::Inline => items[1].clone(),
 				},
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {

@@ -170,7 +170,7 @@ impl WasmGcEmitter {
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
 	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
-		if items.is_empty() {
+		if items.is_empty() || self.emit_task_check(func, items) {
 			self.emit_call(func, "new_empty");
 			return;
 		}

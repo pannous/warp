@@ -77,3 +77,10 @@ fn an_exact_number_beyond_the_fixnums_cannot_cross_yet() {
 fn a_task_of_a_list_parameter_runs_where_it_starts() {
 	is!("k(xs) := count(xs); job = go k([1,2,3]); await job", 3);
 }
+
+#[test]
+fn try_catches_the_failure_of_a_task() {
+	is!("f(i) := [1,2,3]#i; job = go f(5); try await job else -1", -1);
+	is!(&format!("{SPINNER}job = go spin(100000000000); stop job; try await job else -1"), -1);
+	is!("g(t) := t + \"!\"; job = go g(\"a\"); try await job else \"failed\"", "a!");
+}
