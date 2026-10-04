@@ -996,7 +996,9 @@ impl WasmGcEmitter {
 	fn derive_imports_from_effects(&mut self, node: &Node) {
 		use crate::effects::{Capability, EffectReport};
 		let effects = EffectReport::of(node);
-		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name));
+		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
+		let polls = effects.calls_external(crate::host::TASK_CONTROL);
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");
@@ -2584,6 +2586,10 @@ impl WasmGcEmitter {
 		func.instruction(&I::Block(BlockType::Empty));
 		let break_frame = loop_control::open_control_frames(func);
 		func.instruction(&I::Loop(BlockType::Empty));
+		// a program that controls tasks: a task paused in the browser waits here (host task_poll)
+		if let Some(poll) = self.ffi_func_index(crate::host::TASK_POLL) {
+			func.instruction(&I::Call(poll));
+		}
 
 		self.emit_condition(func, condition, Self::emit_block_value);
 		func.instruction(&I::I32Eqz);

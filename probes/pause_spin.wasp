@@ -1,0 +1,1 @@
+spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(30000000); pause job; sleep(1500); stop job; await job

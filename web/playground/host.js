@@ -134,6 +134,12 @@ function programImports(holder, hooks) {
 			task_failure: id => buildValue(program(), textTree(finishedTask(holder.run, hooks, id).failure ?? "")),
 			task_status: id => taskStatus(holder.run, id),
 			task_control: (id, operation) => controlTask(holder.run, id, operation),
+			// where a loop starts: a task paused from its starting program waits (its control word, set by controlTask)
+			task_poll: () => {
+				const control = holder.control;
+				if (!control) return;
+				while (Atomics.load(control, 0) === CONTROL_PAUSED) Atomics.wait(control, 0, CONTROL_PAUSED);
+			},
 			// shared arrays (src/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated
 			shared_new: length => {
 				const Buffer = self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer;
@@ -202,6 +208,11 @@ const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPE
 const TASK_FAILED = 2n;
 const TASK_STOPPED_CODE = 3n;
 const TASK_STOP = 1n;
+const TASK_PAUSE = 2n; // src/host.rs TASK_PAUSE, TASK_RESUME, TASK_PAUSED
+const TASK_RESUME = 3n;
+const TASK_PAUSED = 4n;
+const CONTROL_RUNNING = 0; // a task Worker's control word
+const CONTROL_PAUSED = 1;
 const KIND_MASK = 0xFFn;
 const decode = bytes => utf8Decoder.decode(bytes);
 
@@ -251,8 +262,9 @@ function startTask(holder, hooks, name, ints, values) {
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured });
-		run.tasks.set(id, { name, worker, shared });
+		const control = new Int32Array(new SharedArrayBuffer(4));
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control });
+		run.tasks.set(id, { name, worker, shared, control });
 	} else {
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured));
 	}
@@ -260,8 +272,8 @@ function startTask(holder, hooks, name, ints, values) {
 }
 
 // the task here: {value} (a number or a tree) or {failure}
-function runTask(module, hooks, warnings, name, ints, values, arrays, captured = []) {
-	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays } };
+function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null) {
+	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays }, control };
 	try {
 		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
@@ -298,16 +310,21 @@ function joinTasks(run, hooks) {
 // running, finished or failed, without waiting (src/host.rs task status codes)
 function taskStatus(run, id) {
 	const task = run.tasks.get(id);
-	if (task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0) return 0n;
+	if (task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0) return Atomics.load(task.control, 0) === CONTROL_PAUSED ? TASK_PAUSED : 0n;
 	const record = task.worker ? JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, new Int32Array(task.shared, 0, 2)[1]).slice())) : task;
 	if (!record.failure) return TASK_FINISHED;
 	return record.failure.endsWith(TASK_STOPPED) ? TASK_STOPPED_CODE : TASK_FAILED;
 }
 
-// `stop job` ends a Worker (pause and resume need checks in the program the browser cannot make yet)
+// `stop job` ends a Worker; `pause job` / `resume job` set its control word, which the task reads where a loop starts
 function controlTask(run, id, operation) {
 	const task = run.tasks.get(id);
-	if (!task.worker || operation !== TASK_STOP || Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0) return 0n;
+	if (!task.worker || Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0) return 0n;
+	if (operation === TASK_PAUSE || operation === TASK_RESUME) {
+		Atomics.store(task.control, 0, operation === TASK_PAUSE ? CONTROL_PAUSED : CONTROL_RUNNING);
+		Atomics.notify(task.control, 0);
+		return 1n;
+	}
 	task.worker.terminate();
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;

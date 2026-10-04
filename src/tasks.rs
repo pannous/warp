@@ -20,7 +20,7 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 8] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS];
+const TASK_WORDS: [&str; 9] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL];
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
@@ -324,6 +324,7 @@ impl TaskTable {
 			let built = builders.build(&TaskValue::Text(message), &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
+		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_POLL, || {})?; // natively the epoch checks pause a task
 		let observer = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_STATUS, move |id: i64| -> i64 { observer.status(id) })?;
 		let controller = self.clone();

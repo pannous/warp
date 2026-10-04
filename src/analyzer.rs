@@ -3885,6 +3885,10 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
+					// a program that controls tasks polls at its loops, where a paused task waits (browser)
+					if name == crate::host::TASK_CONTROL {
+						add_ffi_import(ctx, crate::host::TASK_POLL, crate::host::HOST_LIBRARY);
+					}
 				}
 			}
 			items.iter().for_each(|item| extract_host_words(ctx, item));
