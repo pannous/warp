@@ -1595,6 +1595,15 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
 				answer(f, s, 0);
 				f.instruction(&I::End);
+				// a text holds a text: its 1-based byte position (in), or 1 (contains)
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(wanted)]);
+				s.call(f, super::text_builtins::TEXT_OF);
+				s.call(f, super::text_builtins::TEXT_FIND);
+				if !positional {
+					Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::I64ExtendI32U]);
+				}
+				s.call(f, "new_int");
+				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
 				s.emit_fail_if(f, "not_a_list");
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);

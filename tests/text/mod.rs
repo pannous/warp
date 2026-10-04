@@ -21,3 +21,4 @@ mod test_text_variable_assignment;
 mod test_text_as_float;
 mod test_text_plus_float_call;
 mod test_trim;
+mod test_text_search;

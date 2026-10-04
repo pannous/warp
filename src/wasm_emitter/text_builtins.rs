@@ -21,6 +21,15 @@ const BYTE_SLICE: &str = "byte_slice";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
+/// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
+const STARTS_WITH: &str = "starts_with";
+const ENDS_WITH: &str = "ends_with";
+const TEXT_STARTS_WITH: &str = "text_starts_with";
+const TEXT_ENDS_WITH: &str = "text_ends_with";
+/// text_matches_at(text, part, offset) -> i32: 1 when the bytes of part are those of text at the byte offset
+const TEXT_MATCHES_AT: &str = "text_matches_at";
+/// text_find(text, part) -> i64: the 1-based byte position of part in text, 0 when absent (`"b" in "abc"`, contains)
+pub const TEXT_FIND: &str = "text_find";
 /// The bytes trim drops: space, tab, line feed, carriage return
 const WHITESPACE_BYTES: [i32; 4] = [b' ' as i32, b'\t' as i32, b'\n' as i32, b'\r' as i32];
 const READ: &str = "read";
@@ -39,9 +48,10 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 9] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 11] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
+	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -107,6 +117,13 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_sort") {
 		required.insert(super::library_ops::NODE_ORDER);
 	}
+	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
+		required.insert(TEXT_MATCHES_AT);
+	}
+	// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
+	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
+		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
+	}
 	if required.contains(super::wasi_emitter::PRINT_VALUE) {
 		required.insert("list_join");
 	}
@@ -166,7 +183,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR, _) => {
+			(BYTE_AT | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -206,6 +223,11 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
+			(STARTS_WITH | ENDS_WITH, [text, part]) => {
+				self.emit_text_argument(func, text);
+				self.emit_text_argument(func, part);
+				self.emit_call(func, if name == STARTS_WITH { TEXT_STARTS_WITH } else { TEXT_ENDS_WITH });
+			}
 			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
 		}
 	}
@@ -296,6 +318,64 @@ impl WasmGcEmitter {
 				s.emit_text_field(f, 0, 0);
 				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
 			});
+		}
+
+		// text_matches_at(text, part, offset): part's bytes at the offset of text, within its bounds
+		if self.should_emit_function(TEXT_MATCHES_AT) {
+			self.runtime_function(TEXT_MATCHES_AT, vec![node_ref, node_ref, ValType::I32], vec![ValType::I32], vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32], |s, f| {
+				let (offset, text_address, part_address, part_length, index) = (2, 3, 4, 5, 6);
+				s.emit_text_field(f, 0, 0);
+				f.instruction(&I::LocalSet(text_address));
+				s.emit_text_field(f, 1, 0);
+				f.instruction(&I::LocalSet(part_address));
+				s.emit_text_field(f, 1, 1);
+				f.instruction(&I::LocalSet(part_length));
+				// out of bounds: no match
+				Self::emit_list(f, &[I::LocalGet(offset), I::I32Const(0), I::I32LtS, I::LocalGet(offset), I::LocalGet(part_length), I::I32Add]);
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I32GtU, I::I32Or, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End]);
+				Self::emit_list(f, &[
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(index), I::LocalGet(part_length), I::I32GeU, I::BrIf(1),
+					I::LocalGet(text_address), I::LocalGet(offset), I::I32Add, I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
+					I::LocalGet(part_address), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
+					I::I32Ne, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End,
+					I::LocalGet(index), I::I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End,
+					I::I32Const(1),
+				]);
+			});
+		}
+		// text_find(text, part): the first offset where part matches, 1-based; 0 when it never does
+		if self.should_emit_function(TEXT_FIND) {
+			self.runtime_function(TEXT_FIND, vec![node_ref, node_ref], vec![long], vec![ValType::I32], |s, f| {
+				let offset = 2;
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(offset)]);
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I32GtU, I::BrIf(1), I::LocalGet(0), I::LocalGet(1), I::LocalGet(offset)]);
+				s.call(f, TEXT_MATCHES_AT);
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty), I::LocalGet(offset), I::I32Const(1), I::I32Add, I::I64ExtendI32U, I::Return, I::End,
+					I::LocalGet(offset), I::I32Const(1), I::I32Add, I::LocalSet(offset), I::Br(0), I::End, I::End,
+					I::I64Const(0),
+				]);
+			});
+		}
+		// text_starts_with(text, part) / text_ends_with(text, part): 1 when part matches at the start / at the end
+		for (name, at_end) in [(TEXT_STARTS_WITH, false), (TEXT_ENDS_WITH, true)] {
+			if self.should_emit_function(name) {
+				self.runtime_function(name, vec![node_ref, node_ref], vec![long], vec![], |s, f| {
+					Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+					if at_end {
+						s.emit_text_field(f, 0, 1);
+						s.emit_text_field(f, 1, 1);
+						f.instruction(&I::I32Sub);
+					} else {
+						f.instruction(&I::I32Const(0));
+					}
+					s.call(f, TEXT_MATCHES_AT);
+					f.instruction(&I::I64ExtendI32U);
+				});
+			}
 		}
 
 		// text_trim(text): the bytes between the whitespace at either end, sharing the memory of text

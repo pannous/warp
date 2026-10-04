@@ -1244,6 +1244,8 @@ PASSED:
   ✓ text::test_text_runtime::reverse_of_a_text_is_by_characters
   ✓ text::test_text_runtime::the_characters_of_a_runtime_text
   ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
+  ✓ text::test_text_search::a_text_contains_a_text
+  ✓ text::test_text_search::a_text_starts_and_ends_with_a_text
   ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
   ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
@@ -1796,4 +1798,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1791 passed, 0 failed, 1791 total tested
+53 ignored, 1793 passed, 0 failed, 1793 total tested
