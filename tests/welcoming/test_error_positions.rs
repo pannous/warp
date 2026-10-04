@@ -16,3 +16,10 @@ fn an_error_found_while_emitting_names_its_statement() {
 fn an_unknown_method_names_its_line() {
 	fails_with("s = \"abc\"\nn = s.nope()", "undefined function: nope at 2:");
 }
+
+#[test]
+fn an_unclosed_group_names_where_it_opened() {
+	fails_with("x = 1\ny = [1 2", "`]` is missing: the group opened at 2:5");
+	fails_with("(1 + 2", "`)` is missing");
+	fails_with("{a: 1", "`}` is missing");
+}

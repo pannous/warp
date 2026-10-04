@@ -376,6 +376,8 @@ pub struct WaspParser {
 	equals_compares: bool,
 	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
 	in_for_header: bool,
+	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
+	group_start: (usize, usize),
 	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
 	stops_at_else: bool,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
@@ -545,6 +547,7 @@ impl WaspParser {
 			options,
 			equals_compares: false,
 			in_for_header: false,
+			group_start: (0, 0),
 			stops_at_else: false,
 			signed_list_element: None,
 			stops_at_end: false,
@@ -3252,6 +3255,8 @@ impl WaspParser {
 			'<' => ('>', Bracket::Round),
 			_ => panic!("Invalid bracket: {}", open),
 		};
+		let start = self.get_position();
+		let outer_start = std::mem::replace(&mut self.group_start, start);
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
 		// `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
@@ -3259,6 +3264,7 @@ impl WaspParser {
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
 		let list = self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
 		self.in_for_header = outer_header;
+		self.group_start = outer_start;
 		list
 	}
 
@@ -3456,6 +3462,10 @@ impl WaspParser {
 				None => self.end_of_input() || self.at_block_close(),
 			};
 			if at_end {
+				if let Some(closer) = close.filter(|_| ch == '\0') {
+					let (line, column) = self.group_start;
+					return error(&format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"));
+				}
 				if close.is_some() {
 					self.advance(); // consume closing bracket
 				}
