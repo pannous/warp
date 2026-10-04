@@ -15,3 +15,15 @@ fn definition_forms_agree() {
 	is!("fib(n:int) = n + 1; fib(3)", 4);
 	is!("fib := it + 1; fib(3)", 4);
 }
+
+#[test]
+fn a_def_function_calls_its_function_parameter() {
+	warp::is!("def app(f, x) { return f(x) }; app(y => y+1, 2)", 3);
+	warp::is!("def app(f, x) { f(x) }; g(y):=y*3; app(g, 2)", 6);
+}
+
+#[test]
+fn a_parameter_tested_for_membership_is_no_function() {
+	warp::is!("snake=[1]; f(p) := not (p in snake); f(3)", 1);
+	warp::is!("snake=[(1,2)]; def is_free(position) { return not (position in snake) }; is_free((1,2))", 0);
+}

@@ -71,3 +71,4 @@ The supervisor should remove the DONE elements after a while.
 - DONE: Method chains on continuation lines (`numbers
     .map(square)`) were "Unexpected character ."; a line starting with `.word` now continues the expression (samples/functions.wasp). (night 2026-10-04)
 - DONE: The pipeline `xs |> f(a)` (wiki/Purpose.md, samples/functions.wasp) was "Unexpected character |"; it is the call f(xs, a), also on continuation lines. (night 2026-10-04)
+- DONE: `def f(x) {…}` (and fun/function) was read by the emitter only: function values, closures, traits and overloads missed its parameters (`def app(f, x) { f(x) }` → undefined function f); keyword definitions are now `f(x) := {…}` from the start. `p in xs` inside a function marked p as a function parameter. (night 2026-10-04)

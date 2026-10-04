@@ -15,6 +15,8 @@ use std::collections::{HashMap, HashSet};
 const SPECIALISATION_SEPARATOR: &str = "__";
 /// Words whose last argument is a function
 const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
+/// Words between two values that make a spaced list no call of its first item: `p in xs`
+const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
 /// A user function `name(params) := body` as found in the program
 #[derive(Clone)]
@@ -84,7 +86,9 @@ fn collect_function_uses(node: &Node, names: &[String], higher_order: &HashMap<S
 				// f(x), f x
 				if let Some(name) = is_param(head) {
 					let is_call = (*bracket == Bracket::Round && *separator == Separator::None) || (*bracket == Bracket::None && *separator == Separator::Space);
-					if !arguments.is_empty() && is_call {
+					// `p in xs`, `p is int`: a word joining two values, no call of p
+					let infix = matches!(arguments.first().map(Node::drop_meta), Some(Node::Symbol(word)) if INFIX_WORDS.contains(&word.as_str()));
+					if !arguments.is_empty() && is_call && !infix {
 						used.insert(name);
 					}
 				}
