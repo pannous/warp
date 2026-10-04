@@ -83,12 +83,15 @@ function programImports(holder, hooks) {
 		while (bytes[end] !== 0 && end < bytes.length) end++;
 		return bytes.slice(pointer, end);
 	};
+	const bytes = (pointer, length) => new Uint8Array(program().memory.buffer).slice(pointer, pointer + length);
+	// C's comparison: the difference of the first differing bytes, a text's end counting as byte 0
 	const compareBytes = (a, b) => {
-		for (let index = 0; index < Math.min(a.length, b.length); index++) {
-			if (a[index] !== b[index]) return a[index] - b[index];
+		for (let index = 0; index < Math.max(a.length, b.length); index++) {
+			if (a[index] !== b[index]) return (a[index] ?? 0) - (b[index] ?? 0);
 		}
-		return a.length - b.length;
+		return 0;
 	};
+	const cNumber = pointer => parseFloat(new TextDecoder().decode(cString(pointer)));
 	const fetchUrl = (pointer, length, timeout) => {
 		const url = text(pointer, length);
 		return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
@@ -139,10 +142,16 @@ function programImports(holder, hooks) {
 			srand: () => {},
 			abs: Math.abs,
 			labs: value => value < 0n ? -value : value,
-			strlen: pointer => cString(pointer).length,
-			strcmp: (a, b) => Math.sign(compareBytes(cString(a), cString(b))),
-			atoi: pointer => Math.trunc(parseFloat(new TextDecoder().decode(cString(pointer)))) | 0,
-			atof: pointer => parseFloat(new TextDecoder().decode(cString(pointer))) || 0,
+			// size_t and long are i64: BigInt; texts come as (pointer, length) pairs (src/ffi.rs signatures)
+			strlen: pointer => BigInt(cString(pointer).length),
+			strcmp: (a, aLength, b, bLength) => compareBytes(bytes(a, aLength), bytes(b, bLength)),
+			strncmp: (a, aLength, b, bLength, count) => {
+				const prefix = Number(count);
+				return compareBytes(bytes(a, Math.min(aLength, prefix)), bytes(b, Math.min(bLength, prefix)));
+			},
+			atoi: pointer => Math.trunc(cNumber(pointer)) | 0,
+			atol: pointer => BigInt(Math.trunc(cNumber(pointer)) || 0),
+			atof: pointer => cNumber(pointer) || 0,
 		},
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it

@@ -9,3 +9,4 @@ mod test_host_words;
 mod test_libm_linking;
 mod test_wasi;
 mod test_glibc_math_header;
+mod test_libc_results;
