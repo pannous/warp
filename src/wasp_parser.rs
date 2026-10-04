@@ -174,6 +174,35 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	Some((Symbol(IT_WORD.to_string()), walked))
 }
 
+/// The infix operators continue_expr reads apart from the operator table
+enum SpecialInfix {
+	/// `a mod b`, `a rem b`
+	Keyword(Op),
+	/// `7//2`, `7 div 2`, `x//=2`
+	FloorDivision { compound: bool },
+	/// `xs |> f(a)`
+	Pipeline,
+	/// `xs .+ 4`
+	ElementWise(Op),
+	/// `x in xs`
+	Membership,
+}
+
+impl SpecialInfix {
+	fn applied(self, lhs: Node, operand: Node) -> Node {
+		match self {
+			SpecialInfix::Keyword(op) => Node::Key(Box::new(lhs), op, Box::new(operand)),
+			SpecialInfix::FloorDivision { compound } => {
+				let quotient = floor_division(lhs.clone(), operand);
+				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
+			}
+			SpecialInfix::Pipeline => piped(lhs, operand),
+			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			SpecialInfix::Membership => Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), operand], Bracket::None, Separator::Space),
+		}
+	}
+}
+
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
 }
@@ -1928,6 +1957,50 @@ impl WaspParser {
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
+	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
+	fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
+		// `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
+		for (word, op) in [("mod", Op::Mod), ("rem", Op::Rem)] {
+			if self.matches_keyword(word) {
+				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
+			}
+		}
+		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
+		// `div{…}` and `div {…}` are the html tag, and data never computes
+		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
+		if word_division || self.at_floor_division() {
+			let compound = !word_division && self.peek_char(2) == '=';
+			let op = if compound { Op::Assign } else { Op::Div };
+			return Some((SpecialInfix::FloorDivision { compound }, if compound || word_division { 3 } else { 2 }, op.binding_power()));
+		}
+		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
+		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
+		if self.current_char() == '|' && self.peek_char(1) == '>' {
+			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
+		}
+		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+		if let Some(op) = self.element_wise_operator() {
+			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));
+		}
+		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
+		// a unit word stays in the flat counting phrase: `number of chars in t`
+		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
+		if self.matches_keyword(IN_KEYWORD) && !counts_units {
+			return Some((SpecialInfix::Membership, IN_KEYWORD.len(), Op::Eq.binding_power()));
+		}
+		None
+	}
+
+	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
+	fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
+		if left < min_bp {
+			return None;
+		}
+		self.advance_by(width);
+		self.skip_whitespace();
+		Some(self.parse_expr(right))
+	}
+
 	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
 	fn continue_expr(&mut self, mut lhs: Node, min_bp: u8) -> Node {
 		const ARGUMENT_BP: u8 = 140; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
@@ -1963,80 +2036,10 @@ impl WaspParser {
 				continue;
 			}
 
-			// Step 3a: `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-			let keyword_op = if self.matches_keyword("mod") { Some(Op::Mod) } else if self.matches_keyword("rem") { Some(Op::Rem) } else { None };
-			if let Some(op) = keyword_op {
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(3);
-				self.skip_whitespace();
-				let divisor = self.parse_expr(r_bp);
-				lhs = Node::Key(Box::new(lhs), op, Box::new(divisor));
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3b: Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`
-			// `7 div 2` divides; `div{…}` and `div {…}` are the html tag, and data never computes
-			let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
-			if word_division || self.at_floor_division() {
-				let compound = !word_division && self.peek_char(2) == '=';
-				let op = if compound { Op::Assign } else { Op::Div };
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(if compound || word_division { 3 } else { 2 });
-				self.skip_whitespace();
-				let divisor = self.parse_expr(r_bp);
-				let quotient = floor_division(lhs.clone(), divisor);
-				lhs = if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient };
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3c: the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below
-			// arithmetic and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-			if self.current_char() == '|' && self.peek_char(1) == '>' {
-				if PIPELINE_BINDING_POWER.0 < min_bp {
-					break;
-				}
-				self.advance_by(2);
-				self.skip_whitespace();
-				let stage = self.parse_expr(PIPELINE_BINDING_POWER.1);
-				lhs = piped(lhs, stage);
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3d: element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
-			if let Some(op) = self.element_wise_operator() {
-				let (l_bp, r_bp) = op.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(2);
-				self.skip_whitespace();
-				let operand = self.parse_expr(r_bp);
-				lhs = crate::analyzer::element_wise(lhs, op, operand);
-				previous_comparand = None;
-				continue;
-			}
-
-			// Step 3c: membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`
-			// a unit word stays in the flat counting phrase: `number of chars in t`
-			let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-			if self.matches_keyword(IN_KEYWORD) && !counts_units {
-				let (l_bp, r_bp) = Op::Eq.binding_power();
-				if l_bp < min_bp {
-					break;
-				}
-				self.advance_by(IN_KEYWORD.len());
-				self.skip_whitespace();
-				let collection = self.parse_expr(r_bp);
-				lhs = Node::List(vec![lhs, Symbol(IN_KEYWORD.to_string()), collection], Bracket::None, Separator::Space);
+			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
+			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
+				let Some(operand) = self.special_operand(width, binding, min_bp) else { break };
+				lhs = infix.applied(lhs, operand);
 				previous_comparand = None;
 				continue;
 			}
