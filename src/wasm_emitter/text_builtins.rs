@@ -134,7 +134,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
 	}
-	if required.contains(super::wasi_emitter::PRINT_VALUE) {
+	if required.contains(super::wasi_emitter::PRINT_VALUE) || required.contains(super::wasi_emitter::PUT_VALUE) {
 		required.insert("list_join");
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both

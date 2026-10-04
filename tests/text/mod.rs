@@ -25,3 +25,5 @@ mod test_text_search;
 mod test_nested_list_text;
 mod test_chr;
 mod test_unicode_escape;
+mod test_put_runtime_values;
+mod test_print_juxtaposed;

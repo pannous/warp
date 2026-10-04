@@ -56,3 +56,10 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 	});
 	format!("http://{address}/data")
 }
+
+/// What the warp binary writes to stdout running `code` (no questions asked)
+#[cfg(feature = "native")]
+pub fn printed(code: &str) -> String {
+	let output = std::process::Command::new(env!("CARGO_BIN_EXE_warp")).args(["--no-ask", code]).output().expect("warp runs");
+	String::from_utf8_lossy(&output.stdout).to_string()
+}

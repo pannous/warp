@@ -12,6 +12,8 @@ use crate::wasm_emitter::layout::WORD;
 const PRINT_TERMINATOR: &str = "\n";
 /// print_value(x): writes the text form of x (as `x as string` has it) and a newline, yields x
 pub const PRINT_VALUE: &str = "print_value";
+/// put_value(x): writes the text form of x without a newline (puti, putl, putf of a run-time value), yields x
+pub const PUT_VALUE: &str = "put_value";
 const STDOUT: i32 = 1;
 /// Scratch memory of the stdout writes: the iovec {buf_ptr, buf_len} at 0, fd_write's byte count at 8
 const IOVEC_ADDRESS: i32 = 0;
@@ -100,17 +102,22 @@ impl WasmGcEmitter {
 		self.type_errors.len() > known
 	}
 
-	/// print_value(x): the text of x by list_join of the one-element list [x]; locals: text
+	/// print_value(x) and put_value(x): the text of x by list_join of the one-element list [x]; locals: text
 	pub(super) fn emit_print_value(&mut self) {
+		self.emit_value_writer(PRINT_VALUE, true);
+		self.emit_value_writer(PUT_VALUE, false);
+	}
+
+	fn emit_value_writer(&mut self, name: &'static str, ends_line: bool) {
 		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write").map(|f| f.call_index as u32) else { return };
-		if !self.should_emit_function(PRINT_VALUE) {
+		if !self.should_emit_function(name) {
 			return;
 		}
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let (empty, _) = self.allocate_string("");
 		let newline = self.allocate_string(PRINT_TERMINATOR);
-		self.runtime_function(PRINT_VALUE, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
 			let write = |f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
 				f.instruction(&I::I32Const(0));
@@ -135,24 +142,29 @@ impl WasmGcEmitter {
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
 			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
-			write(f, &|f| { f.instruction(&I::I32Const(newline.0 as i32)); }, &|f| { f.instruction(&I::I32Const(newline.1 as i32)); });
+			if ends_line {
+				write(f, &|f| { f.instruction(&I::I32Const(newline.0 as i32)); }, &|f| { f.instruction(&I::I32Const(newline.1 as i32)); });
+			}
 			f.instruction(&I::LocalGet(value));
 		});
 	}
 
-	/// Emit WASI puti: write integer to stdout
-	/// Converts integer to string and writes via fd_write
+	/// Emit WASI puti: write an integer to stdout, without a newline; a run-time value through put_value
 	pub(super) fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
-		// For compile-time constants, we can pre-compute the string
 		if let Node::Number(n) = arg.drop_meta() {
-			let s = format!("{}", n); // Number implements Display
-			let (str_ptr, str_len) = self.allocate_string(&s);
-
+			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
 				func.instruction(&I::Drop);
 			}
+		} else {
+			self.emit_put_value(func, arg);
 		}
-		// For runtime values, we'd need itoa - just drop for now
+	}
+
+	fn emit_put_value(&mut self, func: &mut Function, value: &Node) {
+		self.emit_node_instructions(func, value);
+		self.emit_call(func, PUT_VALUE);
+		func.instruction(&I::Drop);
 	}
 
 	/// Emit WASI putf: write float to stdout
@@ -164,8 +176,8 @@ impl WasmGcEmitter {
 
 			self.emit_stdout_write(func, str_ptr, str_len);
 		} else {
-			// Return 0 for non-constant
-			func.instruction(&I::I32Const(0));
+			self.emit_put_value(func, arg);
+			func.instruction(&I::I32Const(0)); // fd_write's success code, like the constant write
 		}
 	}
 
