@@ -802,39 +802,40 @@ impl WasmGcEmitter {
 		// mag_divmod(a, b) -> (quotient, remainder) as two results; binary long division, b nonzero
 		// locals: quotient, remainder, bit, n, k, carry, v
 		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(2)]);
-			Self::emit_list(f, &[I::LocalGet(1), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(5), I::ArrayNewDefault(limbs_type), I::LocalSet(3)]);
-			Self::emit_list(f, &[I::LocalGet(0), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(4)]);
-			Self::count_down(f, 4, |f| {
+			let (a, b, quotient, remainder, bit, n, k, carry, v) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(quotient)]);
+			Self::emit_list(f, &[I::LocalGet(b), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(n), I::ArrayNewDefault(limbs_type), I::LocalSet(remainder)]);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(bit)]);
+			Self::count_down(f, bit, |f| {
 				// carry = bit `bit` of a
 				Self::emit_list(f, &[
-					I::LocalGet(0), I::LocalGet(4), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
-					I::LocalGet(4), I::I32Const(31), I::I32And, I::I32ShrU, I::I32Const(1), I::I32And, I::LocalSet(7),
+					I::LocalGet(a), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
+					I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32ShrU, I::I32Const(1), I::I32And, I::LocalSet(carry),
 				]);
 				// remainder = remainder << 1 | carry
-				Self::emit_list(f, &[I::I32Const(0), I::LocalSet(6)]);
-				Self::count_up(f, 6, 5, |f| {
-					Self::emit_list(f, &[I::LocalGet(3), I::LocalGet(6), I::ArrayGet(limbs_type), I::LocalSet(8)]);
+				Self::emit_list(f, &[I::I32Const(0), I::LocalSet(k)]);
+				Self::count_up(f, k, n, |f| {
+					Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(k), I::ArrayGet(limbs_type), I::LocalSet(v)]);
 					Self::emit_list(f, &[
-						I::LocalGet(3), I::LocalGet(6), I::LocalGet(8), I::I32Const(1), I::I32Shl, I::LocalGet(7), I::I32Or,
+						I::LocalGet(remainder), I::LocalGet(k), I::LocalGet(v), I::I32Const(1), I::I32Shl, I::LocalGet(carry), I::I32Or,
 						I::ArraySet(limbs_type),
 					]);
-					Self::emit_list(f, &[I::LocalGet(8), I::I32Const(31), I::I32ShrU, I::LocalSet(7)]);
+					Self::emit_list(f, &[I::LocalGet(v), I::I32Const(31), I::I32ShrU, I::LocalSet(carry)]);
 				});
-				Self::emit_list(f, &[I::LocalGet(3), I::LocalGet(1)]);
+				Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(b)]);
 				s.call(f, "mag_cmp");
-				Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(3), I::LocalGet(1)]);
+				Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(remainder), I::LocalGet(b)]);
 				s.call(f, "mag_sub_into");
 				Self::emit_list(f, &[
-					I::LocalGet(2), I::LocalGet(4), I::I32Const(5), I::I32ShrU,
-					I::LocalGet(2), I::LocalGet(4), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
-					I::I32Const(1), I::LocalGet(4), I::I32Const(31), I::I32And, I::I32Shl, I::I32Or,
+					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU,
+					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
+					I::I32Const(1), I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32Shl, I::I32Or,
 					I::ArraySet(limbs_type), I::End,
 				]);
 			});
-			f.instruction(&I::LocalGet(2));
+			f.instruction(&I::LocalGet(quotient));
 			s.call(f, "big_trim");
-			f.instruction(&I::LocalGet(3));
+			f.instruction(&I::LocalGet(remainder));
 			s.call(f, "big_trim");
 		});
 	}
@@ -982,46 +983,48 @@ impl WasmGcEmitter {
 		// int_store(b) -> new handle for a $BigInt or $Ratio; locals: heap, grown
 		let any = Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() });
 		self.runtime_function("int_store", vec![any], vec![ValType::I64], vec![heap, heap], |_, f| {
-			Self::emit_list(f, &[I::GlobalGet(heap_global), I::LocalTee(1), I::RefIsNull]);
+			let (stored, heap, grown) = (0, 1, 2);
+			Self::emit_list(f, &[I::GlobalGet(heap_global), I::LocalTee(heap), I::RefIsNull]);
 			Self::emit_list(f, &[
 				I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else,
-				I::GlobalGet(count_global), I::LocalGet(1), I::ArrayLen, I::I32GeU, I::End,
+				I::GlobalGet(count_global), I::LocalGet(heap), I::ArrayLen, I::I32GeU, I::End,
 			]);
 			f.instruction(&I::If(BlockType::Empty));
 			Self::emit_list(f, &[
-				I::LocalGet(1), I::RefIsNull, I::If(BlockType::Result(ValType::I32)), I::I32Const(INITIAL_HEAP_SIZE), I::Else,
-				I::LocalGet(1), I::ArrayLen, I::I32Const(1), I::I32Shl, I::End,
-				I::ArrayNewDefault(heap_type), I::LocalSet(2),
+				I::LocalGet(heap), I::RefIsNull, I::If(BlockType::Result(ValType::I32)), I::I32Const(INITIAL_HEAP_SIZE), I::Else,
+				I::LocalGet(heap), I::ArrayLen, I::I32Const(1), I::I32Shl, I::End,
+				I::ArrayNewDefault(heap_type), I::LocalSet(grown),
 			]);
 			Self::emit_list(f, &[
-				I::LocalGet(1), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
-				I::LocalGet(2), I::I32Const(0), I::LocalGet(1), I::I32Const(0), I::GlobalGet(count_global),
+				I::LocalGet(heap), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
+				I::LocalGet(grown), I::I32Const(0), I::LocalGet(heap), I::I32Const(0), I::GlobalGet(count_global),
 				I::ArrayCopy { array_type_index_dst: heap_type, array_type_index_src: heap_type }, I::End,
 			]);
-			Self::emit_list(f, &[I::LocalGet(2), I::GlobalSet(heap_global), I::LocalGet(2), I::LocalSet(1), I::End]);
-			Self::emit_list(f, &[I::LocalGet(1), I::GlobalGet(count_global), I::LocalGet(0), I::ArraySet(heap_type)]);
+			Self::emit_list(f, &[I::LocalGet(grown), I::GlobalSet(heap_global), I::LocalGet(grown), I::LocalSet(heap), I::End]);
+			Self::emit_list(f, &[I::LocalGet(heap), I::GlobalGet(count_global), I::LocalGet(stored), I::ArraySet(heap_type)]);
 			Self::emit_list(f, &[I::GlobalGet(count_global), I::I64ExtendI32U, I::I64Const(HANDLE_BASE), I::I64Add]);
 			Self::emit_list(f, &[I::GlobalGet(count_global), I::I32Const(1), I::I32Add, I::GlobalSet(count_global)]);
 		});
 
 		// int_box(b) -> fixnum when it fits, else a handle; locals: magnitude, value
 		self.runtime_function("int_box", vec![big], vec![ValType::I64], vec![limbs, ValType::I64], |s, f| {
+			let (big, magnitude, value) = (0, 1, 2);
 			s.magnitude(f, 0);
-			Self::emit_list(f, &[I::LocalTee(1), I::ArrayLen, I::I32Const(2), I::I32LeU, I::If(BlockType::Empty)]);
-			s.limb_or_zero(f, 1, I::I32Const(0));
-			s.limb_or_zero(f, 1, I::I32Const(1));
-			Self::emit_list(f, &[I::I64Const(32), I::I64Shl, I::I64Or, I::LocalSet(2)]);
+			Self::emit_list(f, &[I::LocalTee(magnitude), I::ArrayLen, I::I32Const(2), I::I32LeU, I::If(BlockType::Empty)]);
+			s.limb_or_zero(f, magnitude, I::I32Const(0));
+			s.limb_or_zero(f, magnitude, I::I32Const(1));
+			Self::emit_list(f, &[I::I64Const(32), I::I64Shl, I::I64Or, I::LocalSet(value)]);
 			s.negative(f, 0);
 			Self::emit_list(f, &[
 				I::If(BlockType::Empty),
-				I::LocalGet(2), I::I64Const(-(FIXNUM_MIN as i64)), I::I64LeU,
-				I::If(BlockType::Empty), I::I64Const(0), I::LocalGet(2), I::I64Sub, I::Return, I::End,
+				I::LocalGet(value), I::I64Const(-(FIXNUM_MIN as i64)), I::I64LeU,
+				I::If(BlockType::Empty), I::I64Const(0), I::LocalGet(value), I::I64Sub, I::Return, I::End,
 				I::Else,
-				I::LocalGet(2), I::I64Const(FIXNUM_MAX as i64), I::I64LeU,
-				I::If(BlockType::Empty), I::LocalGet(2), I::Return, I::End,
+				I::LocalGet(value), I::I64Const(FIXNUM_MAX as i64), I::I64LeU,
+				I::If(BlockType::Empty), I::LocalGet(value), I::Return, I::End,
 				I::End, I::End,
 			]);
-			f.instruction(&I::LocalGet(0));
+			f.instruction(&I::LocalGet(big));
 			s.call(f, "int_store");
 		});
 
@@ -1171,18 +1174,19 @@ impl WasmGcEmitter {
 
 		// int_pow(base, exponent) by squaring; negative or huge exponents trap; locals: result
 		self.runtime_function("int_pow", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty), I::Unreachable, I::End]);
+			let (base, exponent, result) = (0, 1, 2);
+			Self::emit_list(f, &[I::LocalGet(exponent), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty), I::Unreachable, I::End]);
 			s.emit_fixnum_test(f, &[1]);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Unreachable, I::End]);
-			Self::emit_list(f, &[I::I64Const(1), I::LocalSet(2), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(1), I::I64And, I::I32WrapI64, I::If(BlockType::Empty), I::LocalGet(2), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::I64Const(1), I::LocalSet(result), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(exponent), I::I64Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(exponent), I::I64Const(1), I::I64And, I::I32WrapI64, I::If(BlockType::Empty), I::LocalGet(result), I::LocalGet(base)]);
 			s.call(f, "int_mul");
-			Self::emit_list(f, &[I::LocalSet(2), I::End]);
-			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(1), I::I64ShrS, I::LocalTee(1), I::I64Eqz, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::LocalSet(result), I::End]);
+			Self::emit_list(f, &[I::LocalGet(exponent), I::I64Const(1), I::I64ShrS, I::LocalTee(exponent), I::I64Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(base), I::LocalGet(base)]);
 			s.call(f, "int_mul");
-			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End, I::LocalGet(2)]);
+			Self::emit_list(f, &[I::LocalSet(base), I::Br(0), I::End, I::End, I::LocalGet(result)]);
 		});
 
 		// int_from_payload(data) -> Int for the data field of an Int node
