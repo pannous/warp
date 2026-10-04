@@ -28,3 +28,4 @@ mod test_block_statements;
 mod test_try_named_traps;
 mod test_tasks;
 mod test_branch_assigned_variables;
+mod test_try_index_and_float;

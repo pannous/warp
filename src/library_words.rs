@@ -678,6 +678,11 @@ impl Lowering {
 		program
 	}
 
+	/// A list or text written in place (`[1 2]#3`, `"ab"#5`): `count` of it cannot fail
+	fn is_known_list(&self, list: &Node) -> bool {
+		matches!(list.drop_meta(), Node::List(_, Bracket::Square, _) | Node::Text(_))
+	}
+
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
 	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
 	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
@@ -687,7 +692,9 @@ impl Lowering {
 			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
 				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
 			}
-			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) => self.instantiate_template(
+			// a list written in place: the index is checked before it happens; any other value
+			// may be no list at all (`n#1`, `xs#2#1`), which the exception path catches as not_a_list
+			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) && self.is_known_list(list) => self.instantiate_template(
 				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),

@@ -2228,6 +2228,13 @@ impl WasmGcEmitter {
 			func.instruction(&Instruction::RefAsNonNull);
 			return;
 		}
+		// a float branch (`if c then {x} else {0}` of a float x): both branches as floats, the value its Float node
+		let is_float_valued = |emitter: &Self, value: &Node| crate::analyzer::branch_kind(value, &emitter.scope) == Kind::Float;
+		if is_float_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_float_valued(self, value)) {
+			self.emit_if_then_else_raw(func, left, else_expr, ValType::F64, Self::emit_float_value);
+			self.emit_call(func, "new_float");
+			return;
+		}
 
 		// Evaluate condition and convert to i32 for if instruction
 		self.emit_condition(func, condition, Self::emit_block_value);
