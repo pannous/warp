@@ -1840,8 +1840,9 @@ fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Opt
 			}
 			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
 		}
-		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`)
-		Node::Key(list, Op::Dot, call) if updates_list(list, call) && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
+		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`), nor popping a
+		// stack built in a loop (`st=[]; for t in ts { if … { st.pop() } else { st.add(t) } }`)
+		Node::Key(list, Op::Dot, call) if (updates_list(list, call) || popped_list(list, call).is_some()) && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
 			let found = check_null_use(call, nullable);
 			nullable.remove(&list.name()); // no longer empty
 			found
