@@ -96,7 +96,6 @@ fn test_globals() {
 }
 
 #[test]
-#[ignore]
 fn test_get_local() {
 	is!("add1 x:=it+1;add1 3", 4);
 	skip!(
@@ -106,7 +105,6 @@ fn test_get_local() {
 }
 
 #[test]
-#[ignore]
 fn test_wasm_function_definiton() {
 	//	eq!("add1 x:=x+1;add1 3",  4);
 	is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
@@ -138,7 +136,6 @@ fn test_wasm_function_definiton() {
 	);
 }
 #[test]
-#[ignore]
 fn test_wasm_ternary() {
 	is!("2>1?3:4", 3);
 	is!("1>0?3:4", 3);
@@ -153,7 +150,6 @@ fn test_wasm_ternary() {
 	);
 }
 #[test]
-#[ignore]
 fn test_lazy_evaluation() {
 	//	if lazy_operators.has(op) and … !numeric? …
 	//	if op==or emitIf(not lhs,then:rhs);
@@ -363,7 +359,6 @@ fn test_math_operators() {
 }
 
 #[test]
-#[ignore]
 fn test_math_operators_runtime() {
 	is!("3^2", 9);
 	is!("3^1", 3);
