@@ -9,6 +9,9 @@ use wasmtime::{Config, Engine, Store};
 pub const DEFAULT_FUEL: u64 = 10_000_000_000;
 /// Environment variable that overrides `DEFAULT_FUEL`
 pub const FUEL_VARIABLE: &str = "WARP_FUEL";
+/// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
+/// frame of a deep recursion) at each of its many small growths
+const GC_HEAP_INITIAL_BYTES: u64 = 64 << 20;
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
@@ -42,6 +45,7 @@ pub fn deterministic_config() -> Config {
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
 	config.cranelift_nan_canonicalization(true);
+	config.gc_heap_initial_size(GC_HEAP_INITIAL_BYTES);
 	config
 }
 
