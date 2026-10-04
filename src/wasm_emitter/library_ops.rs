@@ -16,6 +16,8 @@ const DECIMAL_BASE: i64 = 10;
 const ZERO_DIGIT: i32 = b'0' as i32;
 const MINUS_SIGN: i32 = b'-' as i32;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+/// The text of a ø item in the text of a list (`str([1, ø])` is "[1 ø]")
+const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
 pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
@@ -366,6 +368,7 @@ impl WasmGcEmitter {
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
+		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -399,6 +402,12 @@ impl WasmGcEmitter {
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					new_text(f, close);
 					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+					// a ø item reads as ø, as Node::serialize writes it
+					is_kind(f, Kind::Empty);
+					f.instruction(&I::If(BlockType::Empty));
+					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
+					s.call(f, "new_text");
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				is_kind(f, Kind::Float);

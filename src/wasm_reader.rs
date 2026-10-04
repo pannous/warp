@@ -455,13 +455,13 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 }
 
 /// The items of a list of cons cells, walked in a loop (a long list must not take a stack frame per item): each cell's
-/// first item, then its rest, itself a cell of a list or block or a last single item
+/// first item, then its rest, itself a cell of a list or block or a last single item; ø items stay
 fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
 	let mut items = Vec::new();
 	loop {
-		let item = node_in(&first, store, memory);
-		if item != Node::Empty {
-			items.push(item);
+		// a null first item is the empty list's cell; a ø element is a node of kind Empty, kept
+		if first.unwrap_anyref().is_some() {
+			items.push(node_in(&first, store, memory));
 		}
 		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { break };
 		let (Ok(kind), Ok(data), Ok(child)) = (cell.field(&mut *store, FIELD_KIND), cell.field(&mut *store, FIELD_DATA), cell.field(&mut *store, FIELD_VALUE)) else { break };
