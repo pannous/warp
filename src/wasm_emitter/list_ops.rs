@@ -1409,11 +1409,27 @@ impl WasmGcEmitter {
 			s.emit_field(f, name, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(name), I::RefAsNonNull, I::End]);
 		});
-		self.runtime_function("map_entry_has_key", vec![node_ref, node_ref], vec![ValType::I32], vec![], |s, f| {
+		self.runtime_function("map_entry_has_key", vec![node_ref, node_ref], vec![ValType::I32], vec![nullable_node_ref], |s, f| {
+			let (key, entry_key) = (1, 2);
+			let is_name = |f: &mut Function, local: u32| {
+				for kind in [Kind::Text, Kind::Symbol] {
+					s.emit_field(f, local, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+				}
+				f.instruction(&I::I32Or);
+			};
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Result(ValType::I32))]);
 			s.emit_field(f, 0, 1);
-			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(entry_key)]);
+			// two names (texts or symbols) compare their letters, without making the symbols
+			is_name(f, entry_key);
+			is_name(f, key);
+			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
+			s.emit_field(f, entry_key, 1);
+			s.emit_field(f, key, 1);
+			s.call(f, VALUES_EQUAL);
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(entry_key), I::RefAsNonNull]);
 			s.call(f, MAP_KEY_NAME);
 			f.instruction(&I::LocalGet(1));
 			s.call(f, MAP_KEY_NAME);
