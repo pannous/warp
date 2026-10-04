@@ -131,7 +131,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_fabs_from_m
   ✓ ffi::test_ffi::test_ffi_floor
   ✓ ffi::test_ffi::test_ffi_fmax
-  ✓ ffi::test_ffi::test_ffi_fmin
   ✓ ffi::test_ffi::test_ffi_fmin_wasp_file
   ✓ ffi::test_ffi::test_ffi_fmod
   ✓ ffi::test_ffi::test_ffi_generic_discovery
@@ -334,10 +333,12 @@ PASSED:
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
   ✓ functions::test_suffix_words::a_function_name_with_ed_is_its_suffix_form
+  ✓ functions::test_suffix_words::a_user_function_or_variable_takes_the_suffix_word
   ✓ functions::test_suffix_words::a_variable_is_no_suffix_form
   ✓ functions::test_suffix_words::an_ungrouped_mix_asks
   ✓ functions::test_suffix_words::an_unknown_word_is_no_suffix_form
   ✓ functions::test_suffix_words::each_reading_has_its_explicit_form
+  ✓ functions::test_suffix_words::library_suffix_words
   ✓ functions::test_to_definition::a_typed_phrase_parameter_is_named_by_its_type
   ✓ functions::test_to_definition::nand_is_not_and
   ✓ functions::test_to_definition::to_defines_a_function_with_a_body_to_the_end_of_the_statement
@@ -458,7 +459,6 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
-  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -470,6 +470,7 @@ PASSED:
   ✓ lists::test_unpacking::parenthesized_target
   ✓ lists::test_unpacking::star_init
   ✓ lists::test_unpacking::star_middle
+  ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
   ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
@@ -1755,4 +1756,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1750 passed, 0 failed, 1750 total tested
+58 ignored, 1751 passed, 0 failed, 1751 total tested
