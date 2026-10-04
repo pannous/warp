@@ -54,4 +54,6 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
   (452 + 73 + 116), pytest 5–9 min per shard, peak memory 3.2/7.9 GB. 0bcb4aec/97d548bf: a Build job builds the UI,
   the test SDK and target/debug/warpgate once (artifact warpgate-build: binary, tests/api_sdk, warpgate-web/dist,
   which a debug build reads at run time through rust-embed), a Unit job runs the coverage unit tests and SonarCloud,
-  the shards only download, build the docker images and run pytest. Verify run 37190971836.
+  the shards only download, build the docker images and run pytest. The artifact needs include-hidden-files: the UI
+  manifest is warpgate-web/dist/.vite/manifest.json (d70f02c7). Run 37192266038: all green in 22 minutes (Build 8,
+  Unit 17, shards 10–14), against about 90 minutes on one runner before.
