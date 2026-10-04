@@ -41,6 +41,8 @@ enum Need {
 	MathImport(&'static str),
 }
 
+/// The texts `as bool` reads as false
+const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
 /// wasmtime's words for an integer division or remainder by zero
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
@@ -2733,213 +2735,13 @@ impl WasmGcEmitter {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
 			}
-			"int" | "integer" | "i32" | "i64" | "long" => {
-				// Cast to integer
-				match value {
-					// Compile-time: float literal to int
-					Node::Number(Number::Float(f)) => {
-						func.instruction(&I::I64Const(*f as i64));
-						self.emit_call(func, "new_int");
-					}
-					Node::Text(s) => self.emit_text_cast(func, s, target_type),
-					// a character is a one-character text: its digit, else invalid_number; its code point is ord(c)
-					Node::Char(c) => self.emit_text_cast(func, &c.to_string(), target_type),
-					// Runtime: float expression to int
-					_ if self.get_type(value).is_float() => {
-						self.emit_float_value(func, value);
-						self.emit_truncating_cast(func);
-						self.emit_call(func, "new_int");
-					}
-					// Runtime: a text, or a value known only at run time (a list element), parses its digits
-					_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
-						self.emit_node_instructions(func, value);
-						self.emit_call(func, list_ops::TEXT_AS_INT);
-						self.emit_call(func, "new_int");
-					}
-					// Already int or coercible; a ratio is truncated
-					_ => {
-						self.emit_numeric_value(func, value);
-						if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
-							self.emit_call(func, "exact_trunc");
-						}
-						self.emit_call(func, "new_int");
-					}
-				}
-			}
-			"exact" => match value {
-				Node::Text(s) => self.emit_text_cast(func, s, target_type),
-				Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
-				_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
-				_ => {
-					// already exact: decimal literals are ratios (exact.rs)
-					self.emit_numeric_value(func, value);
-					self.emit_call(func, "new_int");
-				}
-			},
-			"float" | "f32" => {
-				// Cast to float
-				match value {
-					Node::Text(s) => self.emit_text_cast(func, s, target_type),
-					// Compile-time: char literal to float (parse digit)
-					Node::Char(c) => {
-						let f: f64 = c.to_string().parse().unwrap_or(*c as i64 as f64);
-						func.instruction(&I::F64Const(f.into()));
-						self.emit_call(func, "new_float");
-					}
-					// Compile-time: int literal to float
-					Node::Number(Number::Int(n)) => {
-						func.instruction(&I::F64Const((*n as f64).into()));
-						self.emit_call(func, "new_float");
-					}
-					// Runtime: a text, or a value known only at run time, parses its digits
-					_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
-						self.emit_node_instructions(func, value);
-						self.emit_call(func, list_ops::TEXT_AS_FLOAT);
-						self.emit_call(func, "new_float");
-					}
-					// Runtime: emit as float
-					_ => {
-						self.emit_float_value(func, value);
-						self.emit_call(func, "new_float");
-					}
-				}
-			}
-			"string" | "str" | "text" => {
-				// Cast to string
-				match value {
-					// Compile-time: number literal to string
-					Node::Number(n) => {
-						let s = n.to_string();
-						let (ptr, len) = self.allocate_string(&s);
-						func.instruction(&I32Const(ptr as i32));
-						func.instruction(&I32Const(len as i32));
-						self.emit_call(func, "new_text");
-					}
-					// Compile-time: char to string
-					Node::Char(c) => {
-						let s = c.to_string();
-						let (ptr, len) = self.allocate_string(&s);
-						func.instruction(&I32Const(ptr as i32));
-						func.instruction(&I32Const(len as i32));
-						self.emit_call(func, "new_text");
-					}
-					// Already a string - use the string table
-					Node::Text(s) => {
-						self.emit_string_call(func, s, "new_text");
-					}
-					// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
-					// text of its value
-					_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
-						let (ptr, len) = self.allocate_string(&value.serialize());
-						func.instruction(&I32Const(ptr as i32));
-						func.instruction(&I32Const(len as i32));
-						self.emit_call(func, "new_text");
-					}
-					_ => self.emit_runtime_text_cast(func, value),
-				}
-			}
-			"char" | "character" => {
-				// Cast to char: int to char (digit representation)
-				// new_codepoint expects i32
-				match value {
-					Node::Number(Number::Int(n)) => {
-						// Convert digit to char: 2 → '2'
-						let c = if *n >= 0 && *n <= 9 {
-							char::from_digit(*n as u32, 10).unwrap_or('?')
-						} else {
-							char::from_u32(*n as u32).unwrap_or('?')
-						};
-						func.instruction(&I32Const(c as i32));
-						self.emit_call(func, "new_codepoint");
-					}
-					Node::Char(c) => {
-						func.instruction(&I32Const(*c as i32));
-						self.emit_call(func, "new_codepoint");
-					}
-					_ => {
-						self.emit_numeric_value(func, value);
-						func.instruction(&I::I32WrapI64);
-						self.emit_call(func, "new_codepoint");
-					}
-				}
-			}
-			"bool" | "boolean" => {
-				// Cast to bool
-				match value {
-					// Compile-time: string to bool
-					Node::Text(s) => {
-						let b = !matches!(
-							s.to_lowercase().as_str(),
-							"" | "0" | "false" | "no" | "ø" | "nil" | "null" | "none"
-						);
-						func.instruction(&I::I64Const(if b { 1 } else { 0 }));
-						self.emit_call(func, "new_int");
-					}
-					Node::Char(c) => {
-						let b = !matches!(*c, '0' | 'ø');
-						func.instruction(&I::I64Const(if b { 1 } else { 0 }));
-						self.emit_call(func, "new_int");
-					}
-					Node::Number(Number::Int(n)) => {
-						let b = *n != 0;
-						func.instruction(&I::I64Const(if b { 1 } else { 0 }));
-						self.emit_call(func, "new_int");
-					}
-					Node::Number(Number::Float(f)) => {
-						let b = *f != 0.0;
-						func.instruction(&I::I64Const(if b { 1 } else { 0 }));
-						self.emit_call(func, "new_int");
-					}
-					Node::True => {
-						func.instruction(&I::I64Const(1));
-						self.emit_call(func, "new_int");
-					}
-					Node::False => {
-						func.instruction(&I::I64Const(0));
-						self.emit_call(func, "new_int");
-					}
-					_ => {
-						// Runtime: non-zero/non-empty is truthy
-						self.emit_numeric_value(func, value);
-						func.instruction(&I::I64Eqz);
-						func.instruction(&I::I64ExtendI32U);
-						func.instruction(&I::I64Const(1));
-						func.instruction(&I::I64Xor);
-						self.emit_call(func, "new_int");
-					}
-				}
-			}
-			"number" | "num" => {
-				// Cast to number: auto-detect int or float
-				match value {
-					Node::Text(s) => {
-						// Try parsing as int first, then float
-						if let Ok(n) = s.parse::<i64>() {
-							func.instruction(&I::I64Const(n));
-							self.emit_call(func, "new_int");
-						} else if let Ok(f) = s.parse::<f64>() {
-							func.instruction(&I::F64Const(f.into()));
-							self.emit_call(func, "new_float");
-						} else {
-							func.instruction(&I::I64Const(0));
-							self.emit_call(func, "new_int");
-						}
-					}
-					Node::Char(c) => {
-						if let Some(n) = c.to_digit(10) {
-							func.instruction(&I::I64Const(n as i64));
-							self.emit_call(func, "new_int");
-						} else {
-							func.instruction(&I::I64Const(*c as i64));
-							self.emit_call(func, "new_int");
-						}
-					}
-					_ => {
-						// Already numeric
-						self.emit_node_instructions(func, value);
-					}
-				}
-			}
+			"int" | "integer" | "i32" | "i64" | "long" => self.emit_cast_to_int(func, value, target_type),
+			"exact" => self.emit_cast_to_exact(func, value, target_type),
+			"float" | "f32" => self.emit_cast_to_float(func, value, target_type),
+			"string" | "str" | "text" => self.emit_cast_to_text(func, value),
+			"char" | "character" => self.emit_cast_to_char(func, value),
+			"bool" | "boolean" => self.emit_cast_to_bool(func, value),
+			"number" | "num" => self.emit_cast_to_number(func, value),
 			_ => {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
@@ -2947,6 +2749,148 @@ impl WasmGcEmitter {
 				func.instruction(&I::I64Const(op_to_code(&Op::As)));
 				self.emit_call(func, "new_key");
 			}
+		}
+	}
+
+	/// An Int node of a value known at compile time
+	fn emit_int_node(&mut self, func: &mut Function, value: i64) {
+		func.instruction(&I::I64Const(value));
+		self.emit_call(func, "new_int");
+	}
+
+	fn emit_float_node(&mut self, func: &mut Function, value: f64) {
+		func.instruction(&I::F64Const(value.into()));
+		self.emit_call(func, "new_float");
+	}
+
+	/// `x as int`: a float truncated, a text parsed, a ratio truncated
+	fn emit_cast_to_int(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		match value {
+			Node::Number(Number::Float(f)) => self.emit_int_node(func, *f as i64),
+			Node::Text(s) => self.emit_text_cast(func, s, target_type),
+			// a character is a one-character text: its digit, else invalid_number; its code point is ord(c)
+			Node::Char(c) => self.emit_text_cast(func, &c.to_string(), target_type),
+			_ if self.get_type(value).is_float() => {
+				self.emit_float_value(func, value);
+				self.emit_truncating_cast(func);
+				self.emit_call(func, "new_int");
+			}
+			// a text, or a value known only at run time (a list element), parses its digits
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, list_ops::TEXT_AS_INT);
+				self.emit_call(func, "new_int");
+			}
+			// Already int or coercible; a ratio is truncated
+			_ => {
+				self.emit_numeric_value(func, value);
+				if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+					self.emit_call(func, "exact_trunc");
+				}
+				self.emit_call(func, "new_int");
+			}
+		}
+	}
+
+	/// `x as exact`: decimal literals are ratios already (exact.rs), a float becomes the ratio it is
+	fn emit_cast_to_exact(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		match value {
+			Node::Text(s) => self.emit_text_cast(func, s, target_type),
+			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
+			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
+			_ => {
+				self.emit_numeric_value(func, value);
+				self.emit_call(func, "new_int");
+			}
+		}
+	}
+
+	/// `x as float`
+	fn emit_cast_to_float(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		match value {
+			Node::Text(s) => self.emit_text_cast(func, s, target_type),
+			Node::Char(c) => self.emit_float_node(func, c.to_string().parse().unwrap_or(*c as i64 as f64)),
+			Node::Number(Number::Int(n)) => self.emit_float_node(func, *n as f64),
+			// a text, or a value known only at run time, parses its digits
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, "new_float");
+			}
+			_ => {
+				self.emit_float_value(func, value);
+				self.emit_call(func, "new_float");
+			}
+		}
+	}
+
+	/// `x as text`, `str(x)`
+	fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
+		match value {
+			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
+			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
+			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
+			// text of its value
+			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
+				self.emit_string_call(func, &value.serialize(), "new_text");
+			}
+			_ => self.emit_runtime_text_cast(func, value),
+		}
+	}
+
+	/// `x as char`: a digit 0…9 is its character, another number its code point
+	fn emit_cast_to_char(&mut self, func: &mut Function, value: &Node) {
+		match value {
+			Node::Number(Number::Int(n)) => {
+				let c = if (0..=9).contains(n) { char::from_digit(*n as u32, 10) } else { char::from_u32(*n as u32) };
+				func.instruction(&I32Const(c.unwrap_or('?') as i32));
+			}
+			Node::Char(c) => {
+				func.instruction(&I32Const(*c as i32));
+			}
+			_ => {
+				self.emit_numeric_value(func, value);
+				func.instruction(&I::I32WrapI64);
+			}
+		}
+		self.emit_call(func, "new_codepoint");
+	}
+
+	/// `x as bool`: a literal's truth known at compile time, else non-zero is true
+	fn emit_cast_to_bool(&mut self, func: &mut Function, value: &Node) {
+		let literal_truth = match value {
+			Node::Text(s) => Some(!FALSY_TEXTS.contains(&s.to_lowercase().as_str())),
+			Node::Char(c) => Some(!matches!(*c, '0' | 'ø')),
+			Node::Number(Number::Int(n)) => Some(*n != 0),
+			Node::Number(Number::Float(f)) => Some(*f != 0.0),
+			Node::True => Some(true),
+			Node::False => Some(false),
+			_ => None,
+		};
+		match literal_truth {
+			Some(truth) => self.emit_int_node(func, truth as i64),
+			None => {
+				self.emit_numeric_value(func, value);
+				func.instruction(&I::I64Eqz);
+				func.instruction(&I::I64ExtendI32U);
+				func.instruction(&I::I64Const(1));
+				func.instruction(&I::I64Xor);
+				self.emit_call(func, "new_int");
+			}
+		}
+	}
+
+	/// `x as number`: a text parses as an Int, else as a float (0 when neither), a character is its digit or code point
+	fn emit_cast_to_number(&mut self, func: &mut Function, value: &Node) {
+		match value {
+			Node::Text(s) => match (s.parse::<i64>(), s.parse::<f64>()) {
+				(Ok(n), _) => self.emit_int_node(func, n),
+				(_, Ok(f)) => self.emit_float_node(func, f),
+				_ => self.emit_int_node(func, 0),
+			},
+			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
+			_ => self.emit_node_instructions(func, value),
 		}
 	}
 
