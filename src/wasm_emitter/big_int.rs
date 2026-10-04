@@ -205,17 +205,30 @@ impl WasmGcEmitter {
 				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64Mul], "exact_mul");
 			}
 			Op::Mod => {
+				self.emit_nonzero_divisor(func, b, right);
 				let unproven = self.unproven(&[(a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
 				self.emit_fast_or_slow(func, &euclidean_remainder(a, b, r), "exact_mod");
 			}
 			Op::Rem => {
+				self.emit_nonzero_divisor(func, b, right);
 				let unproven = self.unproven(&[(a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
 				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64RemS], "exact_rem");
 			}
 			_ => unreachable!("not an Int operator: {:?}", op),
 		}
+	}
+
+	/// `a % 0` fails with the named error divide_by_zero (try catches it), never the engine's divide trap; skipped when the
+	/// divisor's range excludes 0
+	fn emit_nonzero_divisor(&mut self, func: &mut Function, divisor: u32, range: IntRange) {
+		if range.is_some_and(|(low, high)| low > 0 || high < 0) {
+			return;
+		}
+		func.instruction(&I::LocalGet(divisor));
+		func.instruction(&I::I64Eqz);
+		self.emit_fail_if(func, super::list_ops::DIVIDE_BY_ZERO);
 	}
 
 	fn emit_scratch_call(&mut self, func: &mut Function, name: &'static str) {

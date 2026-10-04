@@ -41,6 +41,8 @@ enum Need {
 	MathImport(&'static str),
 }
 
+/// wasmtime's words for an integer division or remainder by zero
+const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
 const UNKNOWN_POSITION: &str = " at 0:0";
 /// Between a diagnostic's message and its fix
@@ -4135,6 +4137,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.flatten().map(|detail| detail.trim_matches('"').to_string());
 	let runtime_error = returned_error.or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
-	let message = runtime_error.or(exact_trap).unwrap_or(trap);
+	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one
+	let divide_trap = trap.ends_with(ENGINE_DIVIDE_BY_ZERO).then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));
+	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
 	crate::node::error(&message)
 }

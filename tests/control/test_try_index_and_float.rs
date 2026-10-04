@@ -16,3 +16,10 @@ fn a_float_value_passes_through_try_and_if() {
 	is!("try 1.5 as float else 0", 1.5);
 	is!("f(c) := { x = 1.5 as float; if c then {x} else {0} }; f(1)", 1.5);
 }
+
+#[test]
+fn modulo_by_zero_is_a_named_error_try_catches() {
+	is!("f(n) := 10 % n; try f(0) else 7", 7);
+	is!("f(n) := 10 % n; f(3)", 1);
+	is!("10 % 0", warp::error("divide by zero"));
+}
