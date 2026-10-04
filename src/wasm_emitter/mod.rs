@@ -941,6 +941,17 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Does the node call a function of the program (`str(f(1))` is the text of f's result, not of the call)
+	fn mentions_call(&self, node: &Node) -> bool {
+		let mut found = false;
+		node.visit(&mut |part| {
+			if let Node::List(items, _, _) = part {
+				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name));
+			}
+		});
+		found
+	}
+
 	/// Does the node read a variable (key names and other symbols of a data literal are not variables)
 	fn mentions_variable(&self, node: &Node) -> bool {
 		let mut found = false;
@@ -2479,13 +2490,8 @@ impl WasmGcEmitter {
 		let node = match kind {
 			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => joined_text(std::slice::from_ref(value), ""),
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
-			Kind::List => {
-				let text = |text: &str| Box::new(Node::Text(text.to_string()));
-				let items = Node::Key(Box::new(join_call(value.clone(), " ")), Op::Add, text("]"));
-				Node::Key(text("["), Op::Add, Box::new(items))
-			}
-			// a value known only at run time (an element, a parsed value): a list is "[1 2]" as above, anything else joins
-			Kind::Empty => {
+			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals
+			Kind::List | Kind::Empty => {
 				self.emit_dynamic_text(func, value);
 				return;
 			}
@@ -2513,7 +2519,7 @@ impl WasmGcEmitter {
 		text(self, func, "[");
 		func.instruction(&Instruction::LocalGet(held));
 		text(self, func, " ");
-		self.emit_call(func, "list_join");
+		self.emit_call(func, library_ops::LIST_TEXT);
 		self.emit_call(func, text_builtins::TEXT_CONCAT);
 		text(self, func, "]");
 		self.emit_call(func, text_builtins::TEXT_CONCAT);
@@ -2646,7 +2652,7 @@ impl WasmGcEmitter {
 					}
 					// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 					// text of its value
-					_ if !self.mentions_variable(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
+					_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
 						let (ptr, len) = self.allocate_string(&value.serialize());
 						func.instruction(&I32Const(ptr as i32));
 						func.instruction(&I32Const(len as i32));

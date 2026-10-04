@@ -37,6 +37,9 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 16] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+pub const LIST_JOIN: &str = "list_join";
+/// list_text(list, separator): list_join that also takes nested lists, for the text of a list (`str(xs)`)
+pub const LIST_TEXT: &str = "list_text";
 /// codepoint_of(node) -> Int node: the code point of a character, the runtime error not_a_character for anything else
 pub const CODEPOINT_OF: &str = "codepoint_of";
 pub const NODE_ORDER: &str = "node_order";
@@ -344,23 +347,31 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them
+	/// list_join(list, separator): the items (texts, ints, ASCII characters) as one text with the separator between them;
+	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]"
 	fn emit_list_join(&mut self) {
-		if !self.should_emit_function("list_join") {
-			return;
+		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
+			if self.should_emit_function(name) {
+				self.emit_joining(name, nested);
+			}
 		}
+	}
+
+	fn emit_joining(&mut self, name: &'static str, nested: bool) {
 		self.emit_text_heap_global();
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
+		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
+		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.push(ValType::I64);
-		self.runtime_function("list_join", vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
+		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number) = (4, 5, 6, 7, 8);
 			let is_kind = |f: &mut Function, kind: Kind| {
@@ -371,6 +382,24 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]"
+				if nested {
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq, I::If(BlockType::Empty)]);
+					let [open, close, space] = texts;
+					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
+						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
+						s.call(f, "new_text");
+					};
+					new_text(f, open);
+					f.instruction(&I::LocalGet(element));
+					new_text(f, space);
+					f.instruction(&I::Call(own_index));
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					new_text(f, close);
+					s.call(f, super::text_builtins::TEXT_CONCAT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				is_kind(f, Kind::Float);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_field(f, element, 1);

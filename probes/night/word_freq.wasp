@@ -1,0 +1,7 @@
+text = "the quick brown fox jumps over the lazy dog the fox"
+counts = {}
+for word in text.split(" ") {
+  counts[word] = counts.get(word, 0) + 1
+}
+top = counts.keys().filter(w => counts[w] > 1)
+"repeated: " + top.join(",") + " the=" + str(counts["the"])

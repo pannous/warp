@@ -2166,6 +2166,8 @@ impl WaspParser {
 		match op {
 			Op::Inc | Op::Dec => self.parse_expr(left_bp),
 			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
+			// `#m#1` counts `m#1`: indexing a count is never meant
+			Op::Hash => self.parse_expr(left_bp - 1),
 			_ => self.parse_expr(right_bp),
 		}
 	}
