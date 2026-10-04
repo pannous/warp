@@ -2805,7 +2805,7 @@ impl WaspParser {
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
-				return error("Unterminated string");
+				return error(&format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{quote}`"));
 			}
 			if ch == quote {
 				self.advance(); // skip closing quote

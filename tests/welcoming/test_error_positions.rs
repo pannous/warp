@@ -23,3 +23,8 @@ fn an_unclosed_group_names_where_it_opened() {
 	fails_with("(1 + 2", "`)` is missing");
 	fails_with("{a: 1", "`}` is missing");
 }
+
+#[test]
+fn an_unterminated_text_names_where_it_opened() {
+	fails_with("x = 1\ny = \"abc", "the text opened at 2:5");
+}

@@ -1543,7 +1543,9 @@ PASSED:
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
+  ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
+  ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
   ✓ welcoming::test_footguns::test_addition_is_associative_by_default
   ✓ welcoming::test_footguns::test_and_or_ternary_is_linted
   ✓ welcoming::test_footguns::test_append_method_rebinds_the_list
@@ -1805,4 +1807,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1800 passed, 0 failed, 1800 total tested
+53 ignored, 1802 passed, 0 failed, 1802 total tested
