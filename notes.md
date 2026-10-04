@@ -36,3 +36,17 @@
 - macOS ~/.gitignore `*_LOCAL*` is case-insensitive: a tracked file named `…_locals.rs` is silently ignored by `git add`.
 - A debug warpgate build serves its UI through rust-embed from warpgate-web/dist at run time: a CI job that only downloads the binary must also get dist (test_gzip "Manifest not found").
 - Tried: one shared wasmtime Engine (LazyLock) instead of one per run: no measurable test speedup (lists:: 15 s either way), reverted. The per-test cost is the debug-build Cranelift compile of each module, not engine setup. (night 2026-10-04)
+
+## Night 2026-10-04 (threads and more), raw finds
+- wasmtime 49: GC and the threads proposal (shared memory + atomics) compile in one module (needs the cargo feature
+  `threads` and Config::shared_memory), but an imported memory takes index 0 ahead of the module's own: every memory
+  instruction of the emitter assumes 0, so shared arrays went through host words instead.
+- Browser: a Worker created while its creator's thread is blocked (a running wasm program) never starts; tasks need a
+  pool made while idle (emscripten's PTHREAD_POOL_SIZE for the same reason). Atomics.wait works in workers only.
+- V8 names wasm frames `module.function (wasm://…)` in error stacks.
+- Exact ratios and big integers travel inside an instance as i64 handles into its own memory: never pass them raw to
+  another instance (null reference trap).
+- A run-time function that calls another must be emitted after it (indices are given at emission): push before set,
+  text_concat before node arithmetic.
+- node_in read lists recursively (stack overflow at ~100k items); now a loop.
+- A Pratt-parser hook like try_parse_return is the cheap way to give a keyword unary-minus binding (`await`).
