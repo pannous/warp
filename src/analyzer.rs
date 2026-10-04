@@ -3101,7 +3101,7 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 
 /// The kinds of variables only ever assigned literals of one kind: `s="abcd"; f(s)` passes a Text.
 /// A parameter of the same name shadows the variable (wiki/Footguns.md "Parameter shadowing"), so it is not judged.
-fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<String, Kind> {
+pub(crate) fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<String, Kind> {
 	variable_kinds(program, ctx, false)
 }
 

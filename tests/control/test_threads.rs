@@ -84,3 +84,12 @@ fn try_catches_the_failure_of_a_task() {
 	is!(&format!("{SPINNER}job = go spin(100000000000); stop job; try await job else -1"), -1);
 	is!("g(t) := t + \"!\"; job = go g(\"a\"); try await job else \"failed\"", "a!");
 }
+
+#[test]
+fn lists_cross_to_a_task() {
+	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; job = go total([1,2,3]); await job", 6);
+	is!("sum2(xs) := { s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; job = go sum2([1,2,3]); await job", 6);
+	is!("dbl(xs) := xs.map(x => x*2); job = go dbl([1,2]); await job", warp::ints(vec![2, 4]));
+	is!("f(xs, n) := xs#1 * n; job = go f([3,4], 2); await job", 6);
+	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a = go total(big); b = go total(big); await a + await b", 399980000);
+}
