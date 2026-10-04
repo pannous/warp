@@ -22,12 +22,18 @@ const SLEEP: &str = "sleep";
 const RANDOM: &str = "random";
 const RANDOM_BELOW: &str = "random_below";
 const CLOCK: &str = "clock";
-pub const HOST_WORDS: [&str; 4] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK];
+/// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
+pub const TASK_SPAWN: &str = "task_spawn";
+pub const TASK_AWAIT: &str = "task_await";
+/// The Int arguments task_spawn carries; a function of more runs where it is started
+pub const MAX_TASK_ARGUMENTS: usize = 4;
+pub const HOST_WORDS: [&str; 6] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 4] {
-	use wasm_encoder::ValType::{F64, I64};
-	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64])]
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 6] {
+	use wasm_encoder::ValType::{F64, I32, I64};
+	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64])]
 }
 
 /// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets

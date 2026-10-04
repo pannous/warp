@@ -323,25 +323,40 @@ pub struct Imports {
 	pub ffi: bool,
 }
 
-/// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once
-pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
+/// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link)
+pub fn link_imports(linker: &mut Linker<crate::host::HostState>, engine: &wasmtime::Engine, module: &Module, imports: Imports) -> Result<()> {
 	use crate::host::{HostState, link_host_functions};
 	use crate::ffi::{link_ffi_functions, link_module_libraries};
-	let (result, mut store, instance) = run_main(bytes, HostState::new(), |linker, engine, module| {
-		// the host words (sleep, random, clock) are imported like C functions from the host module
-		if imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY) {
-			link_host_functions(linker, engine)?;
-		}
-		if imports.wasi {
-			p1::add_to_linker_sync(linker, |state: &mut HostState| &mut state.wasi)?;
-		}
-		if imports.ffi {
-			// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
-			link_ffi_functions(linker, engine)?;
-			link_module_libraries(linker, engine, module)?;
+	// the host words (sleep, random, clock) are imported like C functions from the host module
+	if imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY) {
+		link_host_functions(linker, engine)?;
+	}
+	if imports.wasi {
+		p1::add_to_linker_sync(linker, |state: &mut HostState| &mut state.wasi)?;
+	}
+	if imports.ffi {
+		// FFI functions plus the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
+		link_ffi_functions(linker, engine)?;
+		link_module_libraries(linker, engine, module)?;
+	}
+	Ok(())
+}
+
+/// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once.
+/// A program that starts tasks (`go f(x)`) gets the task words; the tasks nobody awaited finish before the result.
+pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
+	let mut tasks = None;
+	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| {
+		link_imports(linker, engine, module, imports)?;
+		if crate::tasks::imports_tasks(module) {
+			tasks = Some(crate::tasks::link(linker, engine, module, imports)?);
 		}
 		Ok(())
-	})?;
+	});
+	if let Some(tasks) = tasks {
+		tasks.join_all();
+	}
+	let (result, mut store, instance) = outcome?;
 	val_to_node(&result, &mut store, &instance)
 }
 

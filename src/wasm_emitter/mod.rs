@@ -3819,6 +3819,9 @@ pub(crate) fn write_debug_module(bytes: &[u8]) {
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
 #[cfg(feature = "native")]
 pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
+	if let Some(task) = failure.chain().find_map(|cause| cause.downcast_ref::<crate::tasks::TaskFailure>()) {
+		return crate::node::error(&task.0);
+	}
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),

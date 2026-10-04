@@ -19,6 +19,9 @@ const ON_WORD: &str = "on";
 /// What a task signals when it is done, and the controls that would interrupt one
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
+/// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
+const TASK_GO: &str = "task·go";
+const TASK_VALUE: &str = "task·value";
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
@@ -31,7 +34,9 @@ pub fn lower(node: Node) -> Node {
 /// `stop job` has nothing left to stop: both warn. A program defining its own `go` or `await` keeps them.
 pub fn lower_tasks(node: Node) -> Node {
 	let mut defined = std::collections::HashSet::new();
+	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
+	let mut started = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, value) = part {
 		let name = match head.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
@@ -41,7 +46,13 @@ pub fn lower_tasks(node: Node) -> Node {
 		if let (Node::Symbol(variable), Node::List(items, _, _)) = (head.drop_meta(), value.drop_meta()) {
 			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) {
 				tasks.insert(variable.clone());
+				if let Some((function, _)) = started_call(&items[1..]) {
+					started.insert(variable.clone(), function);
+				}
 			}
+		}
+		if matches!(head.drop_meta(), Node::List(..)) {
+			functions.extend(name.clone());
 		}
 		defined.extend(name);
 	});
@@ -61,22 +72,59 @@ pub fn lower_tasks(node: Node) -> Node {
 			}
 		}
 	});
-	Tasks { words, tasks }.lower(node)
+	started.retain(|_, function| functions.contains(function));
+	Tasks { words, tasks, started, functions }.lower(node)
+}
+
+/// `f(a, b)` or `f a b` after `go`: the function and its arguments
+fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
+	match rest {
+		[call] => match call.drop_meta() {
+			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some((items[0].name(), items[1..].to_vec())),
+			Node::List(items, Bracket::None, Separator::Space) => started_call(items),
+			_ => None,
+		},
+		[function, arguments @ ..] if matches!(function.drop_meta(), Node::Symbol(_)) => Some((function.name(), arguments.to_vec())),
+		_ => None,
+	}
+}
+
+fn marker(word: &str, parts: Vec<Node>) -> Node {
+	Node::List([vec![Node::Symbol(word.to_string())], parts].concat(), Bracket::Round, Separator::None)
 }
 
 struct Tasks<'a> {
 	words: Vec<&'a str>,
 	/// task variables and the functions `go` starts
 	tasks: std::collections::HashSet<String>,
+	/// task variable → the user function its `go` started
+	started: std::collections::HashMap<String, String>,
+	/// the program's functions
+	functions: std::collections::HashSet<String>,
 }
 
 impl Tasks<'_> {
 	fn is_task(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if self.tasks.contains(name))
+		match node.drop_meta() {
+			Node::Symbol(name) => self.tasks.contains(name),
+			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => self.is_task(&items[1]),
+			_ => false,
+		}
+	}
+
+	/// A read of a task variable: its value once the task is done (`await job`, `job + 1`)
+	fn value_of(&self, variable: &str) -> Option<Node> {
+		let function = self.started.get(variable)?;
+		Some(marker(TASK_VALUE, vec![Node::Symbol(variable.to_string()), Node::Symbol(function.clone())]))
 	}
 
 	fn lower(&self, node: Node) -> Node {
 		match node {
+			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
+			// `job = go f(x)`: the variable holds the task
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.started.contains_key(name)) => {
+				Node::Key(target, op, Box::new(self.lower(*value)))
+			}
 			Node::List(items, bracket, separator) => {
 				// a signal handler first, before its `download.stop` reads as a control
 				if let Some(handled) = self.signal_handler(&items) {
@@ -97,6 +145,11 @@ impl Tasks<'_> {
 
 	fn task_statement(&self, items: &[Node]) -> Option<Node> {
 		match items {
+			// `go f(x)` of a user function: a task, on a thread when resolve_tasks finds f runs there
+			[head, rest @ ..] if word(head) == TASK_WORDS[0] && self.words.contains(&TASK_WORDS[0]) && started_call(rest).is_some_and(|(f, _)| self.functions.contains(&f)) => {
+				let (function, arguments) = started_call(rest).expect("guarded");
+				Some(marker(TASK_GO, [vec![Node::Symbol(function)], arguments].concat()))
+			}
 			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => Some(match rest {
 				[single] => single.clone(),
 				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
@@ -127,12 +180,60 @@ impl Tasks<'_> {
 		}
 	}
 
-	/// A finished task's handler runs now; one of a pause or stop never does
+	/// A finished task's handler runs once the task is done (it waits for a task on a thread); one of a pause or stop
+	/// never runs
 	fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
 		if FINISH_EVENTS.contains(&event) {
-			return body.clone();
+			return match self.value_of(&subject.name()) {
+				Some(value) => Node::List(vec![value, body.clone()], Bracket::Curly, Separator::Semicolon),
+				None => body.clone(),
+			};
 		}
 		never_happens(subject, &format!("`{event}` of {} never happens: a task finishes where it starts, its handler never runs", subject.name()))
+	}
+}
+
+/// `task·go(f, args)` and `task·value(job, f)` (lower_tasks): a function of at most four Ints that gives an Int runs on
+/// its own thread through the host words task_spawn / task_await (tasks.rs, natively); any other runs where it starts,
+/// as a plain call, and its task variable is its value
+pub fn resolve_tasks(node: Node) -> Node {
+	let mut has_task = false;
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE)));
+	if !has_task {
+		return node;
+	}
+	let mut context = crate::context::Context::new();
+	crate::analyzer::extract_user_functions(&mut context, &node);
+	let threaded = |function: &str| cfg!(feature = "native") && context.user_functions.get(function).is_some_and(|definition| {
+		definition.return_kind == crate::type_kinds::Kind::Int && definition.tuple_kinds.is_empty()
+			&& definition.params.len() <= crate::host::MAX_TASK_ARGUMENTS
+			&& definition.params.iter().all(|parameter| crate::analyzer::param_kind(parameter) == crate::type_kinds::Kind::Int)
+	});
+	resolved(node, &threaded)
+}
+
+fn resolved(node: Node, threaded: &dyn Fn(&str) -> bool) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, threaded)).collect();
+			match word(items.first().unwrap_or(&Node::Empty)).as_str() {
+				TASK_GO => {
+					let function = word(&items[1]);
+					match threaded(&function) {
+						true => marker(crate::host::TASK_SPAWN, [vec![Node::Text(function)], items[2..].to_vec()].concat()),
+						false => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
+					}
+				}
+				TASK_VALUE => match threaded(&word(&items[2])) {
+					true => marker(crate::host::TASK_AWAIT, vec![items[1].clone()]),
+					false => items[1].clone(),
+				},
+				_ => Node::List(items, bracket, separator),
+			}
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(resolved(*left, threaded)), op, Box::new(resolved(*right, threaded))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, threaded)), data },
+		other => other,
 	}
 }
 

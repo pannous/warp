@@ -35,3 +35,4 @@ mod test_each_colon;
 mod test_variable_signals;
 mod test_welcome_forms;
 mod test_loop_value;
+mod test_threads;
