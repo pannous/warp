@@ -131,6 +131,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_fabs_from_m
   ✓ ffi::test_ffi::test_ffi_floor
   ✓ ffi::test_ffi::test_ffi_fmax
+  ✓ ffi::test_ffi::test_ffi_fmin
   ✓ ffi::test_ffi::test_ffi_fmin_wasp_file
   ✓ ffi::test_ffi::test_ffi_fmod
   ✓ ffi::test_ffi::test_ffi_generic_discovery
@@ -168,6 +169,10 @@ PASSED:
   ✓ ffi::test_host::test_host_run_import
   ✓ ffi::test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
   ✓ ffi::test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
+  ✓ ffi::test_wasi::test_fd_write
+  ✓ ffi::test_wasi::test_fd_write_raw
+  ✓ ffi::test_wasi::test_wasi_putf
+  ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::tests::test_extract_function_signature_multi_param
   ✓ ffi::tests::test_extract_function_signature_pointer
   ✓ ffi::tests::test_extract_function_signature_simple
@@ -459,6 +464,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
+  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -546,10 +552,6 @@ PASSED:
   ✓ node::test_node_operators::test_node_sub_basic
   ✓ node::test_node_operators::test_node_sub_booleans
   ✓ node::test_node_operators::test_operations_with_primitives_mixed
-  ✓ node::test_node_operators::test_type_mismatch_add - should panic
-  ✓ node::test_node_operators::test_type_mismatch_div - should panic
-  ✓ node::test_node_operators::test_type_mismatch_mul - should panic
-  ✓ node::test_node_operators::test_type_mismatch_sub - should panic
   ✓ node::test_node_todo::todo_is_a_loud_error_naming_the_missing_feature
   ✓ node::test_node::test_mark_as_map
   ✓ node::test_node::test_remove
@@ -897,7 +899,6 @@ PASSED:
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
   ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
-  ✓ parser::test_newline_precedence::newline_form_is_really_evaluated - should panic
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
   ✓ parser::test_newline_precedence::test_fibonacci_auto_typed_newline
   ✓ parser::test_newline_precedence::test_fibonacci_typed_newline
@@ -967,6 +968,7 @@ PASSED:
   ✓ parser::test_symbol_hyphen::test_decrement_inside_a_loop_body
   ✓ parser::test_symbol_hyphen::test_hyphen_between_words_stays_kebab_case
   ✓ parser::test_symbol_hyphen::test_trailing_decrement_is_not_part_of_the_name
+  ✓ parser::test_wasp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_wasp_format::test_empty_structures
   ✓ parser::test_wasp_format::test_function_syntax
   ✓ parser::test_wasp_format::test_list_operations
@@ -1114,6 +1116,7 @@ PASSED:
   ✓ sweeps::test_todo::test_lambda_comparison
   ✓ sweeps::test_todo::test_lambda_simple
   ✓ sweeps::test_todo::test_lambda_with_multiply
+  ✓ sweeps::test_todo::test_list_index_after_puts
   ✓ sweeps::test_todo::test_param_reference
   ✓ sweeps::test_todo::test_print_function
   ✓ sweeps::test_todo::test_sqrt_arithmetic
@@ -1281,7 +1284,6 @@ PASSED:
   ✓ types::test_struct_types::test_class_instance2
   ✓ types::test_struct_types::test_codepoint
   ✓ types::test_struct_types::test_debug_format
-  ✓ types::test_struct_types::test_magic_object_mismatch - should panic
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
@@ -1756,4 +1758,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1751 passed, 0 failed, 1751 total tested
+53 ignored, 1753 passed, 0 failed, 1753 total tested
