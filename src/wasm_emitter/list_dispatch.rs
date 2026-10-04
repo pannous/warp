@@ -343,7 +343,8 @@ impl WasmGcEmitter {
 				match agreed_element(&sources[&name], &typed) {
 					Ok(Some(element)) if !takes_assignments(&name, element) => { typed.remove(&name); changed = true; }
 					Err(()) => { typed.remove(&name); changed = true; }
-					Ok(Some(element)) if typed[&name].is_none() => { typed.insert(name, Some(element)); changed = true; }
+					// a source that turned into Nodes (its variable left the typed lists) widens an int list to Nodes
+					Ok(Some(element)) if typed[&name] != Some(element) => { typed.insert(name, Some(element)); changed = true; }
 					Ok(_) => {}
 				}
 			}
@@ -504,7 +505,7 @@ impl WasmGcEmitter {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
-			Node::Symbol(_) if self.typed_list(value).is_some() => {
+			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
 				let (source_slot, source_list) = self.typed_list(value).expect("guarded");
 				func.instruction(&I::LocalGet(source_slot));
 				if list.updated || source_list.updated {

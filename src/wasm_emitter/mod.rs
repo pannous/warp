@@ -3862,7 +3862,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
-	Ok(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)))
+	Ok(crate::analyzer::indexed_parameter_copies(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node))))
 }
 
 fn emit_module(node: &Node) -> Result<CompiledModule, Node> {

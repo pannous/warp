@@ -19,3 +19,9 @@ fn a_node_list_keeps_its_elements_and_values() {
 	is!("a=(1 2);b=(3 4);c=a+b;#c", 4);
 	is!("a=[1,2,3,4]; b=a[:1] + a[2:]; count(b)*10 + b#2", 33);
 }
+
+#[test]
+fn a_list_parameter_indexed_in_a_loop_is_linear() {
+	is!("def g(xs){ s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; g((0..3000).map(x=>x))", 4498500);
+	is!("def swap(arr, i, j) { temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; return arr }; swap([1 2 3], 0, 2)", ints(vec![3, 2, 1]));
+}

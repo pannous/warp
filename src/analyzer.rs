@@ -1913,6 +1913,81 @@ pub fn lower_declarations(node: Node) -> Node {
 	lower_declarations_among(node, &names)
 }
 
+/// A function that indexes or counts a list parameter (`def swap(arr, i, j) { … arr[i] … }`) works on a local copy of it,
+/// `arr·list = arr`, which the emitter holds as an array (list_dispatch.rs `$NodeList`): one conversion per call
+/// instead of a walk per index
+pub fn indexed_parameter_copies(node: Node) -> Node {
+	match node {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+			let mut body = indexed_parameter_copies(*body);
+			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
+			for parameter in items[1..].iter().filter_map(parameter_symbol) {
+				if indexes(&body, &parameter) && !assigned_names(&body).contains(parameter.as_str()) {
+					body = with_list_copy(body, &parameter);
+				}
+			}
+			Node::Key(head, op, Box::new(body))
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(indexed_parameter_copies(*left)), op, Box::new(indexed_parameter_copies(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(indexed_parameter_copies).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(indexed_parameter_copies(*node)), data },
+		other => other,
+	}
+}
+
+const LIST_COPY_SUFFIX: &str = "·list";
+
+fn parameter_symbol(parameter: &Node) -> Option<String> {
+	match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, Op::Colon, _) => match name.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
+/// than a conversion
+fn indexes(body: &Node, name: &str) -> bool {
+	let mut found = false;
+	let mut loops = vec![];
+	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part { loops.push(part) });
+	loops.into_iter().for_each(|body| body.visit(&mut |part| {
+		let Node::Key(list, Op::Hash, index) = part else { return };
+		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
+		let by_key = matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Text(_) | Node::Char(_));
+		found |= !by_key && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	}));
+	found
+}
+
+/// `name·list = name` first, then the body with every `name` read as the copy
+fn with_list_copy(body: Node, name: &str) -> Node {
+	let copy = format!("{name}{LIST_COPY_SUFFIX}");
+	let renamed = rename_symbol(body, name, &copy);
+	let start = Node::Key(Box::new(Node::Symbol(copy)), Op::Assign, Box::new(Node::Symbol(name.to_string())));
+	match renamed {
+		Node::List(items, Bracket::Curly, separator) => Node::List(std::iter::once(start).chain(items).collect(), Bracket::Curly, match separator {
+			Separator::Semicolon | Separator::Newline => separator,
+			_ => Separator::Semicolon,
+		}),
+		other => Node::List(vec![start, other], Bracket::Curly, Separator::Semicolon),
+	}
+}
+
+fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
+	match node {
+		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
+		Node::Key(left, op, right) => Node::Key(Box::new(rename_symbol(*left, from, to)), op, Box::new(rename_symbol(*right, from, to))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| rename_symbol(item, from, to)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_symbol(*node, from, to)), data },
+		other => other,
+	}
+}
+
 /// The names of a program: `variables` it assigns (`return count` returns the variable, it is no `return.count`), and
 /// every word it uses as a value or binds (a parameter, a loop variable): `chars[i]` then indexes, `int[3]` makes zeros
 struct Names {
