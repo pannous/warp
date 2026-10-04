@@ -584,7 +584,7 @@ fn split_at_colon(node: &Node) -> Option<(Node, Node)> {
 /// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
 /// the braceless call that ends the body)
 fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
-	let definition = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(target, Op::Define, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
+	let definition = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(target, Op::Define | Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
 	let (words, rest) = items.split_at(definition);
 	let (name, parameters) = words.split_first()?;
 	let is_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !is_function_keyword(word));
@@ -592,7 +592,11 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 		return None;
 	}
 	let (definition, extra) = rest.split_first()?;
-	let Node::Key(last, _, body) = definition.drop_meta() else { return None };
+	let Node::Key(last, op, body) = definition.drop_meta() else { return None };
+	// with `=` only a recursive definition (wiki/Home.md `fibonacci number = … fibonacci …`): `print x = 5` stays
+	if *op == Op::Assign && !crate::wasp_parser::mentions(body, &name.name()) {
+		return None;
+	}
 	let words: Vec<Node> = parameters.iter().map(|parameter| parameter.drop_meta().clone()).chain(std::iter::once(last.drop_meta().clone())).collect();
 	Some((name.drop_meta().clone(), typed_words(words), applied_to_last(body.as_ref().clone(), extra)))
 }
