@@ -27,3 +27,4 @@ mod test_chr;
 mod test_unicode_escape;
 mod test_put_runtime_values;
 mod test_print_juxtaposed;
+mod test_print_lists;

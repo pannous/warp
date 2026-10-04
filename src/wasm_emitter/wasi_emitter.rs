@@ -73,6 +73,13 @@ impl WasmGcEmitter {
 			Node::Text(text) => text.clone(),
 			Node::Char(character) => character.to_string(),
 			_ => match self.get_type(value) {
+				// a list prints the text `str(xs)` gives, nested lists in brackets (user, P32); print gives the list
+				Kind::List => {
+					let held = self.emit_dynamic_text(func, value);
+					self.emit_call(func, PRINT_VALUE);
+					Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);
+					return;
+				}
 				Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint | Kind::Empty => {
 					self.emit_node_instructions(func, value);
 					self.emit_call(func, PRINT_VALUE);

@@ -2744,8 +2744,9 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, &node);
 	}
 
-	/// The text of a Node of unknown kind: "[" + join(xs, " ") + "]" for a list, else join([x], "")
-	fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) {
+	/// The text of a Node of unknown kind: "[" + join(xs, " ") + "]" for a list, else join([x], ""); gives the local
+	/// still holding the node
+	pub(super) fn emit_dynamic_text(&mut self, func: &mut Function, value: &Node) -> u32 {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		let node_ref = Ref(self.node_ref(false));
 		let text = |emitter: &mut Self, func: &mut Function, text: &str| {
@@ -2769,6 +2770,7 @@ impl WasmGcEmitter {
 		text(self, func, "");
 		self.emit_call(func, "list_join");
 		func.instruction(&I::End);
+		held
 	}
 
 	/// Emit type cast: value as type

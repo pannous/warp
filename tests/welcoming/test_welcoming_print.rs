@@ -13,7 +13,7 @@ fn test_print_runtime_values() {
 	is!("print(\"c\")", "c");
 	is!("y=print(\"c\"); y", "c");
 	is!("y=print(5); y+1", 6);
-	common::fails_with("xs=[1,2]; print(xs)", "print of a List has no runtime text yet");
+	is!("xs=[1,2]; print(xs)", ints(vec![1, 2])); // a list prints its str(xs) text (user, P32)
 }
 
 #[test]
