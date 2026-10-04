@@ -1,0 +1,8 @@
+def print_tree(tree, prefix, is_left) {
+    if tree == ø { return }
+    print prefix + (is_left ? "├── " : "└── ") + tree.value
+    new_prefix = prefix + (is_left ? "│   " : "    ")
+    print_tree(tree.left, new_prefix, true)
+    print_tree(tree.right, new_prefix, false)
+}
+

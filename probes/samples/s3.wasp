@@ -1,0 +1,19 @@
+global snake = [(10, 7), (9, 7)]
+global direction = (1, 0)
+global food = (15, 7)
+def is_free(position) {
+    x = position#1
+    return x >= 0 and not (position in snake)
+}
+def steer() {
+    head = snake#1
+    for option in [direction, (0, 1)] {
+        if is_free((head#1 + option#1, head#2 + option#2)) {
+            direction = option
+            return direction
+        }
+    }
+    return direction
+}
+steer(); steer()
+0
