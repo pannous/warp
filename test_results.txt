@@ -66,6 +66,8 @@ PASSED:
   ✓ control::test_switch_no_case_value::no_case_shows_the_runtime_value
   ✓ control::test_switch_value::a_parenthesized_switch_takes_part_in_arithmetic
   ✓ control::test_switch_value::a_switch_can_be_bound
+  ✓ control::test_tasks::a_program_may_define_its_own_go
+  ✓ control::test_tasks::await_gives_the_value_of_a_task
   ✓ control::test_times_count_once::a_trailing_if_guards_the_whole_assignment
   ✓ control::test_times_count_once::times_evaluates_its_count_once
   ✓ control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
@@ -1769,4 +1771,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1764 passed, 0 failed, 1764 total tested
+53 ignored, 1766 passed, 0 failed, 1766 total tested

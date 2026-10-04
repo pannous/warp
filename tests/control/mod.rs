@@ -26,3 +26,4 @@ mod test_while_value;
 mod test_try_else_value;
 mod test_block_statements;
 mod test_try_named_traps;
+mod test_tasks;

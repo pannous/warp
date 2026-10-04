@@ -8,9 +8,37 @@ const ENUM_WORD: &str = "enum";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
 const PLACEHOLDER: &str = "_";
+/// `go f(x)` starts a task, `await job` waits for it
+const TASK_WORDS: [&str; 2] = ["go", "await"];
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
+}
+
+/// `job = go f(x)` starts a task, `await job` waits for its value (wiki/async.md). A module runs on one thread, so a
+/// task runs to its end where it starts: `go` gives the value of its call, and `await` of a finished task (or of any
+/// value, which a task auto-casts to) is that value. A program defining its own `go` or `await` keeps them.
+pub fn lower_tasks(node: Node) -> Node {
+	let mut defined = std::collections::HashSet::new();
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
+		let name = match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		};
+		defined.extend(name);
+	});
+	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
+	if words.is_empty() {
+		return node;
+	}
+	lower_lists(node, |items| match items {
+		[word, rest @ ..] if !rest.is_empty() && matches!(word.drop_meta(), Node::Symbol(name) if words.contains(&name.as_str())) => Some(match rest {
+			[single] => single.clone(),
+			_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+		}),
+		_ => None,
+	})
 }
 
 /// C definitions, before any pass reads `real f(…)` as a conversion of a call; and keyword definitions
