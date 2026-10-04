@@ -71,3 +71,13 @@ Node implementation is never removed: it is the fallback for any list the analys
   (decimals are exact rationals), so ints came first.
 - Typed parameters and return values (a function taking `xs: ints`) would avoid the Node conversion at calls.
 - `sort` of a typed list could sort the i64 array in place for fixnums (ratios/big ints need the exact comparison).
+
+## Node lists (2026-10-04)
+`ElementType::Node`: a list variable of any elements is a `$NodeList` (length, `(array (mut (ref null $Node)))`, the
+kind of the list node it stands for, so tuples keep their brackets) when the program indexes or counts it (`xs#i`,
+`#xs`, which every for loop does). It starts from a literal, ø, appends, or `node_list_of` (one pass over a Node
+list: a call's result, a parameter, another list variable); every other use reads it as a Node (`node_list_as_node`).
+An `if` statement whose branch appends to a typed list runs its branches as statements (list_emitter
+emit_discarded_branches), else the branch value rebuilt the Node list on every append (filter was quadratic).
+5000 items (probes/night/bench_lists.sh): for loop 41 s → 0.6 s, filter 130 s → 0.5 s, index writes overflowed the
+stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function indexing its list parameter still walks it.

@@ -1,0 +1,51 @@
+// Quicksort implementation
+// Classic divide-and-conquer sorting
+
+def quicksort(arr) {
+    if arr.length <= 1 { return arr }
+
+    pivot = arr[arr.length//2]
+    left = arr.filter(x => x < pivot)
+    middle = arr.filter(x => x == pivot)
+    right = arr.filter(x => x > pivot)
+
+    return quicksort(left) + middle + quicksort(right)
+}
+
+// Partitioning version (Lomuto); lists are values, so it returns the sorted list instead of sorting in place
+def quicksort_partitioned(arr, lo, hi) {
+    if lo >= hi { return arr }
+
+    pivot = arr[hi]
+    i = lo
+    for j in lo..hi {
+        if arr[j] < pivot {
+            arr = swap(arr, i, j)
+            i = i + 1
+        }
+    }
+    arr = swap(arr, i, hi)
+
+    arr = quicksort_partitioned(arr, lo, i - 1)
+    return quicksort_partitioned(arr, i + 1, hi)
+}
+
+def swap(arr, i, j) {
+    temp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = temp
+    return arr
+}
+
+// Test
+numbers = [64, 34, 25, 12, 22, 11, 90, 42, 15, 77]
+print "Original: " + str(numbers)
+print "Sorted:   " + str(quicksort(numbers))
+
+// Benchmark
+large = (0..1000).map(_ => random(1000)) // lists are linked cells: a[i] walks i of them, so keep it small
+start = clock()
+sorted = quicksort_partitioned(large, 0, large.length - 1)
+elapsed = clock() - start
+print "Sorted 1000 elements in " + elapsed + "ms"
+quicksort_partitioned(numbers, 0, numbers.length - 1) == quicksort(numbers)

@@ -564,6 +564,9 @@ impl WasmGcEmitter {
 	/// A statement whose value is dropped keeps its own representation instead of being forced into an exact Int:
 	/// an assignment to a float variable its f64, a text or list update (`s += "a"` in a loop body) its Node
 	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
+		if self.emit_discarded_branches(func, item) {
+			return;
+		}
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) {
@@ -572,6 +575,48 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
+		}
+	}
+
+	/// An `if` statement whose branches store a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers to): its
+	/// branches run as statements, so the stored list never becomes a Node; leaves a value for the caller to drop
+	fn emit_discarded_branches(&mut self, func: &mut Function, item: &Node) -> bool {
+		let (if_then, otherwise) = match item.drop_meta() {
+			Node::Key(if_then, Op::Else, otherwise) => (if_then.as_ref(), Some(otherwise.as_ref())),
+			other => (other, None),
+		};
+		let Node::Key(condition, Op::Then, then) = if_then.drop_meta() else { return false };
+		let Node::Key(_, Op::If, condition) = condition.drop_meta() else { return false };
+		let stores_typed_list = |branch: &Node| {
+			let mut found = false;
+			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some());
+			found
+		};
+		if !stores_typed_list(then) && !otherwise.is_some_and(stores_typed_list) {
+			return false;
+		}
+		self.emit_condition(func, condition, Self::emit_block_value);
+		func.instruction(&Instruction::If(BlockType::Empty));
+		self.emit_branch_statements(func, then);
+		if let Some(otherwise) = otherwise {
+			func.instruction(&Instruction::Else);
+			self.emit_branch_statements(func, otherwise);
+		}
+		func.instruction(&Instruction::End);
+		func.instruction(&Instruction::I64Const(0)); // the statement's value, dropped
+		true
+	}
+
+	fn emit_branch_statements(&mut self, func: &mut Function, branch: &Node) {
+		let statements = match branch.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.clone(),
+			other => vec![other.clone()],
+		};
+		for statement in &statements {
+			if !self.emit_loop_jump(func, statement) {
+				self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
+				func.instruction(&Instruction::Drop);
+			}
 		}
 	}
 

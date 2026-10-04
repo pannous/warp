@@ -22,3 +22,4 @@ mod test_tuples;
 mod test_pop;
 mod test_numbered_fields;
 mod test_fractional_count;
+mod test_node_lists;

@@ -443,6 +443,8 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
+  ✓ lists::test_node_lists::loops_over_a_list_are_linear
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
@@ -1760,4 +1762,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1755 passed, 0 failed, 1755 total tested
+53 ignored, 1757 passed, 0 failed, 1757 total tested

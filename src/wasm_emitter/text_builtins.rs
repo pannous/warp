@@ -78,6 +78,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
+	if required.contains("node_list_of") {
+		required.insert("node_list_push");
+	}
 	if required.contains("exact_euclid_div") {
 		required.insert(super::INT_RUNTIME);
 	}

@@ -45,6 +45,11 @@ pub struct TypeManager {
 	pub float_array_type: u32,
 	pub float_list_type: u32,
 
+	/// $NodeArray = (array (mut (ref null $Node))), the items of a $NodeList: a list variable of any elements held as an
+	/// array (list_dispatch.rs); $NodeList also keeps the kind of the list it stands for (its brackets)
+	pub node_array_type: u32,
+	pub node_list_type: u32,
+
 	/// Next available type index
 	next_type_idx: u32,
 
@@ -78,6 +83,8 @@ impl TypeManager {
 			int_list_type: 0,
 			float_array_type: 0,
 			float_list_type: 0,
+			node_array_type: 0,
+			node_list_type: 0,
 			next_type_idx: 0,
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
@@ -148,6 +155,22 @@ impl TypeManager {
 		self.emit_big_int_types();
 		(self.int_array_type, self.int_list_type) = self.emit_typed_list_types(ValType::I64);
 		(self.float_array_type, self.float_list_type) = self.emit_typed_list_types(ValType::F64);
+		self.emit_node_list_types();
+	}
+
+	/// $NodeArray and $NodeList = (struct (field $length (mut i32)) (field $items (mut (ref $NodeArray))) (field $kind (mut i64)))
+	fn emit_node_list_types(&mut self) {
+		let element = Ref(self.node_ref(true));
+		self.types.ty().array(&Val(element), true);
+		let array = self.next_type_idx;
+		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
+			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
+			FieldType { element_type: Val(ValType::I64), mutable: true }, // kind of the list node, with its brackets
+		]);
+		self.next_type_idx += 2;
+		(self.node_array_type, self.node_list_type) = (array, array + 1);
 	}
 
 	/// The array of `element`s and the growable list holding it: (struct (field $length (mut i32)) (field $items (mut (ref $array))))
