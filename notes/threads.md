@@ -58,6 +58,12 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   `task f: task stopped`, but not yet catchable with `try`: a host function cannot throw the `wasp_error` tag, so the
   wasm side would have to check a failure flag after task_await and call a runtime error function.
 
+- Step 3 done (2026-10-04): numbers, texts, characters, lists and keys of them cross (tasks::TaskValue, rebuilt in
+  each instance through its exported constructors new_int … new_list; read back with wasm_reader::node_in). Floats
+  passed to a float parameter are converted at the start (`x as float`), as a call converts them. Still inline: list
+  parameters (the list ABI passes arrays, not Nodes), function values; exact numbers beyond the fixnums (ratios, big
+  integers) are a clear error, being handles into the memory of their instance.
+
 ## Steps (each its own commit with tests)
 1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
    typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total
