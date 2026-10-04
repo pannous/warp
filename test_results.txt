@@ -406,6 +406,8 @@ PASSED:
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
   ✓ lists::test_decimal_list_elements::a_loop_walks_decimal_elements
   ✓ lists::test_decimal_list_elements::the_extremum_of_a_decimal_list
+  ✓ lists::test_dynamic_range::a_list_grows_from_empty_by_adding_lists
+  ✓ lists::test_dynamic_range::a_range_with_variable_bounds_is_a_list
   ✓ lists::test_empty_list_argument::a_call_without_arguments_has_none
   ✓ lists::test_empty_list_argument::a_function_receives_the_empty_list
   ✓ lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item
@@ -1188,6 +1190,7 @@ PASSED:
   ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
+  ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_is_worth_its_result
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
@@ -1809,4 +1812,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1804 passed, 0 failed, 1804 total tested
+53 ignored, 1807 passed, 0 failed, 1807 total tested

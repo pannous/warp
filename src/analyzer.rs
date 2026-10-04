@@ -1263,6 +1263,8 @@ const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 const NODE_LIST_TYPE: &str = "list of node";
 const LIST_WORD: &str = "list";
+/// The temporaries of a computed range collected into a list (`xs·range`, `xs·item`)
+const RANGE_SUFFIX: &str = "·";
 /// Statements that name functions or modules instead of calling them
 const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 const LIST_OF_PREFIX: &str = "list of ";
@@ -1789,7 +1791,15 @@ fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Opt
 	};
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
-			let found = check_null_use(value, nullable);
+			// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
+			let builds_list = matches!(value.drop_meta(), Node::Key(left, Op::Add, _) if left.drop_meta() == target.drop_meta()
+				&& nullable.get(&target.name()) == Some(&Unchecked::Null));
+			let found = if builds_list {
+				let Node::Key(_, _, right) = value.drop_meta() else { unreachable!("guarded") };
+				check_null_use(right, nullable)
+			} else {
+				check_null_use(value, nullable)
+			};
 			let target = match target.drop_meta() {
 				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø
 				other => other,
@@ -2139,6 +2149,10 @@ fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		// `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header
 		Node::Key(target, Op::Assign, value) if range_elements(&value).is_some() => {
 			Node::Key(target, Op::Assign, Box::new(range_elements(&value).expect("guarded")))
+		}
+		// `xs = a..b` of computed bounds: the list a loop over the range collects
+		Node::Key(target, Op::Assign, value) if computed_range(&target, &value).is_some() => {
+			lower(Node::Key(target.clone(), Op::Assign, Box::new(computed_range(&target, &value).expect("guarded"))))
 		}
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
@@ -3464,6 +3478,21 @@ fn range_elements(range: &Node) -> Option<Node> {
 	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta()) else { return None };
 	let last = if *op == Op::To { *end } else { end - 1 };
 	(start <= &last).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
+}
+
+/// `xs = a..b` of computed bounds: `(xs·range = ø; for xs·item in a..b { xs·range = xs·range + [xs·item] }; xs·range)`
+fn computed_range(target: &Node, range: &Node) -> Option<Node> {
+	let Node::Symbol(name) = target.drop_meta() else { return None };
+	if !matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) || range_elements(range).is_some() {
+		return None;
+	}
+	let symbol = |suffix: &str| Node::Symbol(format!("{name}{RANGE_SUFFIX}{suffix}"));
+	let (items, item) = (symbol("range"), symbol("item"));
+	let appended = Node::Key(Box::new(items.clone()), Op::Add, Box::new(Node::List(vec![item.clone()], Bracket::Square, Separator::Space)));
+	let body = Node::List(vec![Node::Key(Box::new(items.clone()), Op::Assign, Box::new(appended))], Bracket::Curly, Separator::Semicolon);
+	let walk = Node::List(vec![Node::Symbol("for".into()), item, Node::Symbol("in".into()), range.clone(), body], Bracket::None, Separator::Space);
+	let start = Node::Key(Box::new(items.clone()), Op::Assign, Box::new(Node::Empty));
+	Some(Node::List(vec![start, walk, items], Bracket::Round, Separator::Semicolon))
 }
 
 fn require_counter(ctx: &mut Context, counter: &'static str) {

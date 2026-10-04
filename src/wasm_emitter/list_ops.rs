@@ -530,8 +530,9 @@ pub const RUNTIME_ERRORS: [&str; 25] = [
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
 /// Arithmetic on two Nodes of run-time kind: (function, its f64 instruction, the exact Int function)
+pub const NODE_ADD: &str = "node_add";
 pub const NODE_ARITHMETIC: [(&str, Instruction<'static>, &str); 4] = [
-	("node_add", Instruction::F64Add, "exact_add"),
+	(NODE_ADD, Instruction::F64Add, "exact_add"),
 	("node_sub", Instruction::F64Sub, "exact_sub"),
 	("node_mul", Instruction::F64Mul, "exact_mul"),
 	("node_div", Instruction::F64Div, "exact_div"),
@@ -606,6 +607,24 @@ impl WasmGcEmitter {
 			}
 			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64], |s, f| {
 				let kind = 2;
+				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
+				if name == NODE_ADD {
+					let is_list = |f: &mut Function, operand: u32| {
+						s.emit_field(f, operand, 0);
+						Self::emit_list(f, &[
+							I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::List as i64), I::I64Eq,
+							I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Eq, I::I32Or,
+							I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or,
+						]);
+					};
+					is_list(f, 0);
+					is_list(f, 1);
+					Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::Block(BlockType::Result(node_ref)), I::LocalGet(0), I::LocalGet(1)]);
+					s.call(f, "list_concat");
+					Self::emit_list(f, &[I::BrOnNonNull(0)]);
+					s.call(f, "new_empty");
+					Self::emit_list(f, &[I::End, I::Return, I::End]);
+				}
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);
