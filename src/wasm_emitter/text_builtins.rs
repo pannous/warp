@@ -14,6 +14,8 @@ use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
+/// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
+pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
 const READ: &str = "read";
@@ -107,7 +109,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -297,6 +299,26 @@ impl WasmGcEmitter {
 					I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
 				]);
 				s.call(f, "new_text");
+			});
+		}
+
+		// c_string(text): the address of a zero-terminated copy of the text (or character) for a C function's char*
+		if self.should_emit_function(C_STRING) {
+			self.emit_text_heap_global();
+			self.runtime_function(C_STRING, vec![node_ref], vec![int], vec![int, int], |s, f| {
+				let (length, address) = (1, 2);
+				f.instruction(&I::LocalGet(0));
+				s.call(f, TEXT_OF);
+				f.instruction(&I::LocalSet(0));
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I32Const(1), I::I32Add, I::LocalSet(length)]);
+				s.emit_text_allocation(f, length, address);
+				f.instruction(&I::LocalGet(address));
+				s.emit_text_field(f, 0, 0);
+				s.emit_text_field(f, 0, 1);
+				f.instruction(&I::MemoryCopy { src_mem: 0, dst_mem: 0 });
+				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(length), I::I32Add, I::I32Const(1), I::I32Sub, I::I32Const(0), I::I32Store8(BYTE)]);
+				f.instruction(&I::LocalGet(address));
 			});
 		}
 

@@ -620,3 +620,16 @@ fn test_ffi_nested_calls() {
 	// sin(π/2) = 1, fabs(1) = 1
 	is!("import fabs from 'm'\nimport sin from 'm'\nfabs(sin(1.5707963267948966))", 1.0);
 }
+
+#[test]
+fn test_ffi_text_arguments_known_at_run_time() {
+	is!("import atoi from \"c\"; q = atoi(\"3\"); q", 3);
+	is!("import atoi from \"c\"; xs=[\"12\" \"30\"]; atoi(xs#1) + atoi(xs#2)", 42);
+	is!("import strcmp from \"c\"; names = [\"charlie\", \"alice\"]; strcmp(names#1, names#2) > 0", 1);
+	is!("import strlen from \"c\"; xs=[\"hello\"]; strlen(xs#1)", 5);
+}
+
+#[test]
+fn test_a_program_of_imports_only_is_empty() {
+	is!("import atof from \"c\"\nimport atoi from \"c\"", Node::Empty);
+}

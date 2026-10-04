@@ -509,6 +509,10 @@ impl WasmGcEmitter {
 				func.instruction(&Instruction::Drop);
 			}
 		}
+		// only definitions and imports: the sequence is worth ø
+		if last_statement.is_none() {
+			emit(self, func, &Node::Empty);
+		}
 	}
 
 	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;

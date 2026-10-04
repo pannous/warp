@@ -137,21 +137,40 @@ impl WasmGcEmitter {
 	/// Check if a node argument should be treated as a string
 	pub(super) fn is_string_arg(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			Node::Text(_) => true,
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					local.data_pointer > 0 // Has string data stored
-				} else {
-					false
-				}
-			}
-			_ => false,
+			Node::Text(_) | Node::Char(_) => true,
+			Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.data_pointer > 0) => true,
+			_ => self.is_runtime_text(node),
 		}
+	}
+
+	/// A text (or one-character text) whose letters exist only at run time: a list element, a text variable
+	fn is_runtime_text(&self, node: &Node) -> bool {
+		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_)) && matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
+	}
+
+	/// The text node of a run-time text in the node scratch local, as a Text (a character becomes one)
+	fn emit_runtime_text_node(&mut self, func: &mut Function, node: &Node) -> u32 {
+		self.emit_node_instructions(func, node);
+		self.emit_call(func, super::text_builtins::TEXT_OF);
+		let text = self.node_scratch();
+		func.instruction(&Instruction::LocalSet(text));
+		text
 	}
 
 	/// Emit string pointer and length for FFI calls
 	pub(super) fn emit_string_ptr_len(&mut self, func: &mut Function, node: &Node) {
+		if self.is_runtime_text(node) {
+			let text = self.emit_runtime_text_node(func, node);
+			self.emit_text_field(func, text, 0);
+			self.emit_text_field(func, text, 1);
+			return;
+		}
 		match node.drop_meta() {
+			Node::Char(c) => {
+				let (ptr, len) = self.allocate_string(&c.to_string());
+				func.instruction(&Instruction::I32Const(ptr as i32));
+				func.instruction(&Instruction::I32Const(len as i32));
+			}
 			Node::Text(s) => {
 				let (ptr, len) = self.allocate_string(s);
 				func.instruction(&Instruction::I32Const(ptr as i32));
@@ -187,7 +206,16 @@ impl WasmGcEmitter {
 
 	/// Emit only string pointer for C-style FFI calls (null-terminated strings)
 	pub(super) fn emit_string_ptr_only(&mut self, func: &mut Function, node: &Node) {
+		if self.is_runtime_text(node) {
+			self.emit_node_instructions(func, node);
+			self.emit_call(func, super::text_builtins::C_STRING);
+			return;
+		}
 		match node.drop_meta() {
+			Node::Char(c) => {
+				let (ptr, _) = self.allocate_string(&format!("{c}\0"));
+				func.instruction(&Instruction::I32Const(ptr as i32));
+			}
 			Node::Text(s) => {
 				// Add null terminator for C string
 				let c_str = format!("{}\0", s);
