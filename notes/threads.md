@@ -78,6 +78,11 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   The test server sends COOP/COEP; the playground gets them from coi-serviceworker.js (one reload). Measured: two
   one-second tasks take 1.0 s in the playground. Pause/resume in the browser: not yet (no epoch checks there).
 
+- Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/shared_arrays.rs): host words shared_new/get/set/add/
+  count over arrays the host holds for the run (src/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
+  SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
+  the module's own, and every memory instruction assumes 0; the host call per access is the price.
+
 ## Steps (each its own commit with tests)
 1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
    typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total
