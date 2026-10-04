@@ -820,6 +820,13 @@ impl WaspParser {
 		}
 	}
 
+	/// Is the keyword at the cursor followed (after blanks) by `{`: `div {…}` is a tag, not the operator
+	fn word_opens_block(&self, word: &str) -> bool {
+		let after = word.chars().count();
+		let gap = (after..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		self.peek_char(after + gap) == '{'
+	}
+
 	/// The identifier starting `offset` characters ahead
 	fn word_at(&self, offset: usize) -> String {
 		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
@@ -1696,9 +1703,14 @@ impl WaspParser {
 		if self.options.wit_mode && self.current_char() == '<' {
 			return self.parse_type_application(symbol);
 		}
-		let declares_type = TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
+		// `class:"btn"`, `type:email` (html attributes) are keys, no declarations
+		let is_key = self.current_char() == ':' && self.peek_char(1) != '=';
+		let start = self.pos.saturating_sub(symbol.chars().count());
+		let is_field = start > 0 && self.chars[start - 1] == '.'; // `x.class`
+		let is_key = is_key || is_field;
+		let declares_type = !is_key && (TYPE_DECLARATION_WORDS.contains(&symbol.as_str())
 			|| (symbol == RECORD_WORD && self.name_and_block_follow())
-			|| (symbol == "type" && self.current_char() != '(');
+			|| (symbol == "type" && self.current_char() != '('));
 		if !self.options.wit_mode && declares_type {
 			self.skip_whitespace();
 			let type_name = match self.parse_symbol() {
@@ -1919,7 +1931,8 @@ impl WaspParser {
 			}
 
 			// Step 3b: Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`
-			let word_division = self.matches_keyword("div");
+			// `7 div 2` divides; `div{…}` and `div {…}` are the html tag, and data never computes
+			let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
 			if word_division || self.at_floor_division() {
 				let compound = !word_division && self.peek_char(2) == '=';
 				let op = if compound { Op::Assign } else { Op::Div };

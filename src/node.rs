@@ -916,6 +916,8 @@ impl Node {
 		let List(items, Bracket::Curly, _) = self.drop_meta() else { return None };
 		let mut seen = std::collections::HashSet::new();
 		items.iter().filter_map(|item| match item.drop_meta() {
+			// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
+			Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
 			Key(key, Op::Colon, _) => match key.drop_meta() {
 				Symbol(name) | Text(name) => Some(name.clone()),
 				_ => None,
