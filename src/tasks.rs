@@ -5,7 +5,7 @@
 //! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
 //! `task_await_value(id)` for numbers, texts and characters, and `task_control(id, op)` for stop, pause and resume.
 
-use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STOP, TEXT_HEAP_EXPORT};
+use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT};
 use crate::node::{Bracket, Node};
 use crate::wasm_reader::Imports;
 use anyhow::{anyhow, Result};
@@ -20,7 +20,9 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 7] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE];
+const TASK_WORDS: [&str; 8] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS];
+/// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
+const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
 const CONSTRUCTORS: [&str; 8] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list"];
 
@@ -152,7 +154,7 @@ impl TaskControl {
 			state = self.changed.wait(state).expect("task control");
 		}
 		match *state {
-			Control::Stop => Err(wasmtime::Error::new(TaskFailure("task stopped".to_string()))),
+			Control::Stop => Err(wasmtime::Error::new(TaskFailure(STOPPED.to_string()))),
 			_ => Ok(UpdateDeadline::Continue(1)),
 		}
 	}
@@ -264,6 +266,8 @@ impl TaskTable {
 			let built = builders.build(&TaskValue::Text(message), &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
 		})?;
+		let observer = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_STATUS, move |id: i64| -> i64 { observer.status(id) })?;
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
 		let awaiter = self.clone();
@@ -327,6 +331,22 @@ impl TaskTable {
 			_ => Control::Run,
 		});
 		1
+	}
+
+	/// Where the task is, without waiting for it: running, finished, failed, stopped or paused (host TASK_* codes)
+	fn status(&self, id: i64) -> i64 {
+		let finished = matches!(self.slots.lock().expect("task table").get(&id), Some(Slot::Running(handle)) if handle.is_finished());
+		if finished {
+			let _ = self.await_task(id); // joins it: the result is there
+		}
+		let paused = self.controls.lock().expect("task controls").get(&id).is_some_and(|control| *control.state.lock().expect("task control") == Control::Pause);
+		match self.slots.lock().expect("task table").get(&id) {
+			Some(Slot::Done(Ok(_))) => crate::host::TASK_FINISHED,
+			Some(Slot::Done(Err(message))) if message.ends_with(STOPPED) => crate::host::TASK_STOPPED,
+			Some(Slot::Done(Err(_))) => crate::host::TASK_FAILED,
+			_ if paused => crate::host::TASK_PAUSED,
+			_ => 0,
+		}
 	}
 
 	/// The result of the task: joins it the first time, then remembers it

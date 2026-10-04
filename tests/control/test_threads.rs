@@ -93,3 +93,17 @@ fn lists_cross_to_a_task() {
 	is!("f(xs, n) := xs#1 * n; job = go f([3,4], 2); await job", 6);
 	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a = go total(big); b = go total(big); await a + await b", 399980000);
 }
+
+#[test]
+fn a_finish_handler_runs_after_the_statement_that_saw_the_task_finish() {
+	is!(&format!("{SLEEPER}job = go f(300); x = 0; once job finishes: x = 7; sleep(600); x"), 7);
+	// not finished yet when y is set; the end of the block waits for the task and runs the handler
+	is!(&format!("{SLEEPER}job = go f(1000); x = 0; once job finishes: x = 7; y = x; y"), 0);
+	is!(&format!("{SLEEPER}job = go f(200); x = 0; once job finishes: x = 7; z = 1; x"), 7);
+	is!(&format!("{SLEEPER}job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 {{ sleep(100) }}; done"), 1);
+}
+
+#[test]
+fn a_stop_handler_runs_once_the_task_stopped() {
+	is!(&format!("{SPINNER}job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300); stopped"), 1);
+}

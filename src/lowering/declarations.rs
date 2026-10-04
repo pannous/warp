@@ -24,6 +24,11 @@ pub(crate) const TASK_GO: &str = "task·go";
 const TASK_VALUE: &str = "task·value";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
 const TASK_CONTROL_MARK: &str = "task·control";
+/// `once job finishes: body`, `on job.stop: body` of a task that may run on a thread: `task·on(job, f, event, body)`
+const TASK_ON: &str = "task·on";
+const FINISH_EVENT: &str = "finishes";
+/// `handled·0`: whether the first task handler ran
+const HANDLED_PREFIX: &str = "handled·";
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
@@ -142,7 +147,9 @@ impl Tasks<'_> {
 			Node::List(items, bracket, separator) => {
 				// a signal handler first, before its `download.stop` reads as a control
 				if let Some(handled) = self.signal_handler(&items) {
-					return self.lower(handled);
+					// a task·on marker holds the task variable itself, its body is lowered already
+					let is_task_handler = matches!(&handled, Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
+					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				self.task_statement(&items).unwrap_or(Node::List(items, bracket, separator))
@@ -195,6 +202,10 @@ impl Tasks<'_> {
 	/// A finished task's handler runs once the task is done (it waits for a task on a thread); one of a pause or stop
 	/// never runs
 	fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
+		if let Some(function) = self.started.get(&subject.name()) {
+			let event = if FINISH_EVENTS.contains(&event) { FINISH_EVENT } else { event };
+			return marker(TASK_ON, vec![Node::Symbol(subject.name()), Node::Symbol(function.clone()), Node::Symbol(event.to_string()), self.lower(body.clone())]);
+		}
 		if FINISH_EVENTS.contains(&event) {
 			return match self.value_of(&subject.name()) {
 				Some(value) => Node::List(vec![value, body.clone()], Bracket::Curly, Separator::Semicolon),
@@ -245,6 +256,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 			&& int_starts.get(function).copied().unwrap_or(false);
 		if ints { TaskPath::Ints } else { TaskPath::Values(parameters) }
 	};
+	let node = TaskHandlers { path: &path, count: std::cell::Cell::new(0) }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
 	let node = resolved(node, &path, &wrapped);
 	with_node_wrappers(node, &wrapped.into_inner())
@@ -271,6 +283,98 @@ fn int_starts(node: &Node, literal_kinds: &std::collections::HashMap<String, cra
 		}
 	});
 	starts
+}
+
+/// A handler of a task on a thread: after every later statement of its block (loop bodies too) it runs once the task's
+/// status shows its event; a final check at the block's end waits for the task (a stopped or finished one)
+#[derive(Clone)]
+struct TaskHandler {
+	job: Node,
+	status: i64,
+	body: Node,
+	flag: String,
+}
+
+impl TaskHandler {
+	fn check(&self) -> Node {
+		use crate::variable_signals::{assign, block, if_then};
+		let not_handled = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(self.flag.clone())));
+		let status = Node::Key(Box::new(marker(crate::host::TASK_STATUS, vec![self.job.clone()])), Op::Eq, Box::new(Node::Number(crate::extensions::numbers::Number::Int(self.status))));
+		let condition = Node::Key(Box::new(not_handled), Op::And, Box::new(status));
+		if_then(condition, block(vec![assign(&self.flag, Node::True), self.body.clone()]))
+	}
+
+	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
+	fn final_check(&self) -> Option<Node> {
+		(self.status != crate::host::TASK_PAUSED).then(|| {
+			crate::variable_signals::block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
+		})
+	}
+}
+
+struct TaskHandlers<'a> {
+	path: &'a dyn Fn(&str) -> TaskPath,
+	count: std::cell::Cell<usize>,
+}
+
+impl TaskHandlers<'_> {
+	fn lower(&self, node: Node, active: &[TaskHandler]) -> Node {
+		match node {
+			Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
+				Node::List(self.statements(items, active), bracket, separator)
+			}
+			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.lower(item, active)).collect(), bracket, separator),
+			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left, active)), op, Box::new(self.lower(*right, active))),
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node, active)), data },
+			other => other,
+		}
+	}
+
+	/// The checks follow each statement; the last statement keeps the block's value, so the checks of the block (and
+	/// the final ones) come before it
+	fn statements(&self, items: Vec<Node>, outer: &[TaskHandler]) -> Vec<Node> {
+		let (mut active, mut own, mut out) = (outer.to_vec(), vec![], vec![]);
+		let count = items.len();
+		for (index, item) in items.into_iter().enumerate() {
+			let is_handler = matches!(item.drop_meta(), Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
+			if !is_handler {
+				let lowered = self.lower(item, &active);
+				if index + 1 == count {
+					out.extend(active.iter().map(TaskHandler::check));
+					out.extend(own.iter().filter_map(TaskHandler::final_check));
+					own.clear();
+					out.push(lowered);
+				} else {
+					out.push(lowered);
+					out.extend(active.iter().map(TaskHandler::check));
+				}
+				continue;
+			}
+			let Node::List(parts, _, _) = item.drop_meta() else { unreachable!("a handler is a list") };
+			let (job, function, event, body) = (parts[1].clone(), word(&parts[2]), word(&parts[3]), self.lower(parts[4].clone(), &[]));
+			if (self.path)(&function) == TaskPath::Inline {
+				// the task finished where it started: a finish handler runs now, one of a stop or pause never
+				out.push(match event.as_str() {
+					FINISH_EVENT => body,
+					_ => never_happens(&job, &format!("`{event}` of {} never happens: a task finishes where it starts, its handler never runs", job.name())),
+				});
+				continue;
+			}
+			let status = match event.as_str() {
+				FINISH_EVENT => crate::host::TASK_FINISHED,
+				"pause" | "pauses" | "paused" => crate::host::TASK_PAUSED,
+				_ => crate::host::TASK_STOPPED, // stop, cancel
+			};
+			let flag = format!("{HANDLED_PREFIX}{}", self.count.get());
+			self.count.set(self.count.get() + 1);
+			out.push(crate::variable_signals::assign(&flag, Node::False));
+			let handler = TaskHandler { job, status, body, flag };
+			active.push(handler.clone());
+			own.push(handler);
+		}
+		out.extend(own.iter().filter_map(TaskHandler::final_check));
+		out
+	}
 }
 
 /// The suffix of the wrapper a task of values is started through: `total·node(a) := { r·node = total(a); r·node }`

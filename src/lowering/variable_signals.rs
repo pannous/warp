@@ -248,7 +248,7 @@ fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	}
 }
 
-fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
+pub(crate) fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 	*bracket == Bracket::Curly || matches!(separator, Separator::Semicolon | Separator::Newline)
 }
 
@@ -287,15 +287,15 @@ fn value_after_write(write: &Node) -> Node {
 	Node::Key(target.clone(), undo, Box::new(crate::node::int(1)))
 }
 
-fn if_then(condition: Node, body: Node) -> Node {
+pub(crate) fn if_then(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition));
 	Node::Key(Box::new(head), Op::Then, Box::new(body))
 }
 
-fn block(statements: Vec<Node>) -> Node {
+pub(crate) fn block(statements: Vec<Node>) -> Node {
 	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
-fn assign(name: &str, value: Node) -> Node {
+pub(crate) fn assign(name: &str, value: Node) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
 }
