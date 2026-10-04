@@ -50,6 +50,14 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   keeps today's behaviour (the task runs where it starts) and says so once.
 - Stop: `worker.terminate()`. Pause: a flag in shared memory checked at the poll points.
 
+## Status
+- Step 1 done (2026-10-04, 487dd2f1): functions of up to four Ints that give an Int; declarations::lower_tasks marks,
+  declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
+- Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
+  importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
+  `task f: task stopped`, but not yet catchable with `try`: a host function cannot throw the `wasp_error` tag, so the
+  wasm side would have to check a failure flag after task_await and call a runtime error function.
+
 ## Steps (each its own commit with tests)
 1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
    typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total
