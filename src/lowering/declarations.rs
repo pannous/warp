@@ -232,10 +232,11 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 7] = {
 	[Int, Float, Text, Codepoint, Symbol, Empty, List]
 };
 
-/// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). Natively a function runs on
-/// its own thread (tasks.rs): one of at most four Ints that gives an Int through task_spawn / task_await, one of
-/// numbers, texts and characters through task_spawn_values / task_await_value. Any other runs where it starts, as a
-/// plain call, and its task variable is its value
+/// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). A function runs in a fresh
+/// instance, natively on its own thread (tasks.rs), in the browser through host.js: one of at most four surely-Int
+/// arguments that gives an Int through task_spawn / task_await, one of numbers, texts, characters and lists through
+/// task_spawn_values / task_await_value. Any other runs where it starts, as a plain call, and its task variable is its
+/// value
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
@@ -247,7 +248,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 	crate::analyzer::extract_user_functions(&mut context, &node);
 	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));
 	let path = |function: &str| {
-		let Some(definition) = context.user_functions.get(function).filter(|_| cfg!(feature = "native")) else { return TaskPath::Inline };
+		let Some(definition) = context.user_functions.get(function) else { return TaskPath::Inline };
 		let parameters: Vec<Kind> = definition.params.iter().map(crate::analyzer::param_kind).collect();
 		if !definition.tuple_kinds.is_empty() || !CROSSING_KINDS.contains(&definition.return_kind) || !parameters.iter().all(|kind| CROSSING_KINDS.contains(kind)) {
 			return TaskPath::Inline;

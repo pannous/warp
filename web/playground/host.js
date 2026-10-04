@@ -120,6 +120,20 @@ function programImports(holder, hooks) {
 			random: () => Math.random(),
 			random_below: bound => bound > 0n ? BigInt(Math.floor(Math.random() * Number(bound))) : 0n,
 			clock: () => BigInt(Date.now()),
+			// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
+			// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
+			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
+			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readNode(program(), values)),
+			task_await: id => {
+				const task = holder.run.tasks.get(id);
+				if (task.failure) throw new Error(task.failure);
+				return task.value;
+			},
+			task_await_value: id => buildValue(program(), taskTree(holder.run.tasks.get(id).value)),
+			task_join: id => holder.run.tasks.get(id).failure ? 1n : 0n,
+			task_failure: id => buildValue(program(), textTree(holder.run.tasks.get(id).failure ?? "")),
+			task_status: id => holder.run.tasks.get(id).failure ? TASK_FAILED : TASK_FINISHED,
+			task_control: () => 0n, // the task finished where it started: nothing to stop, pause or resume
 		},
 		wasi_snapshot_preview1: {
 			fd_write: (fd, vectors, count, written) => {
@@ -163,12 +177,78 @@ function programImports(holder, hooks) {
 	});
 }
 
+const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED
+const TASK_FAILED = 2n;
+const KIND_MASK = 0xFFn;
+const decode = bytes => utf8Decoder.decode(bytes);
+
+// a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run): the Int arguments
+// as they are, or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node; its result or failure
+function startTask(holder, hooks, name, ints, values) {
+	const run = holder.run;
+	const id = BigInt(run.tasks.size + 1);
+	const taskHolder = { warnings: holder.warnings, run };
+	try {
+		const instance = new WebAssembly.Instance(run.module, programImports(taskHolder, hooks));
+		taskHolder.exports = instance.exports;
+		const callee = instance.exports[name];
+		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
+		run.tasks.set(id, { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result });
+	} catch (trap) {
+		run.tasks.set(id, { failure: `task ${name}: ${trapMessage(trap, name)}` });
+	}
+	return id;
+}
+
+// the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out
+// of range", as src/wasm_emitter list_ops runtime_error_message has it), else the engine's words
+function trapMessage(trap, callee) {
+	// V8 names a wasm frame `module.function (wasm://…)`
+	const names = [...String(trap.stack ?? "").matchAll(/at (?:\w+\.)?([a-z]+(?:_[a-z]+)+) \(wasm/g)].map(match => match[1]);
+	const runtime = names.find(name => name !== callee);
+	return runtime ? runtime.replaceAll("_", " ") : String(trap.message ?? trap);
+}
+
+const textTree = text => ({ kind: "3", data: { text }, chain: [] });
+
+// a task's result as a tree: a number of a function of numbers, else the tree already read
+function taskTree(value) {
+	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
+	if (typeof value === "number") return { kind: KIND_FLOAT, data: { float: value }, chain: [] };
+	return value ?? { kind: "0", data: null, chain: [] };
+}
+
+// the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
+// constructors; a list from its cons cells, the first item in data, the next cells in the chain
+function buildValue(module, tree) {
+	const kind = BigInt(tree.kind);
+	const payload = tree.data ?? {};
+	switch (Number(kind & KIND_MASK)) {
+		case 0: return module.new_empty();
+		case 1:
+			if (payload.int === undefined) throw new Error("an exact number beyond the fixnum range cannot cross to another task yet");
+			return module.new_int(BigInt(payload.int));
+		case 2: return module.new_float(Number(payload.float));
+		case 3: case 5: {
+			const [pointer, length] = writeBytes(module, utf8.encode(payload.text));
+			return Number(kind & KIND_MASK) === 3 ? module.new_text(pointer, length) : module.new_symbol(pointer, length);
+		}
+		case 4: return module.new_codepoint(payload.i31);
+		case 7: case 8: {
+			const items = [payload.node, ...tree.chain.map(cell => cell.data?.node)].filter(Boolean);
+			return items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, kind >> 8n), null) ?? module.new_empty();
+		}
+		default: throw new Error(`a value of kind ${kind & KIND_MASK} cannot cross to another task yet`);
+	}
+}
+
 // run a compiled program: the outcome src/web.rs run_outcome reads
 function runProgram(bytes, hooks) {
 	let instance;
 	const holder = { warnings: [] }; // the runtime warnings go back to the compiler, which reports them (src/web.rs)
 	try {
-		instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), programImports(holder, hooks));
+		holder.run = { module: new WebAssembly.Module(bytes), tasks: new Map() };
+		instance = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks));
 		holder.exports = instance.exports;
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };
