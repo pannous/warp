@@ -964,6 +964,16 @@ impl WasmGcEmitter {
 		func.instruction(&I::GlobalSet(heap));
 	}
 
+	/// Grow the memory, when needed, until `length` more bytes fit after the heap global (new pages come at the end)
+	pub(super) fn emit_memory_room(&self, func: &mut Function, heap: u32, length: u32) {
+		const PAGE_BITS: i32 = 16;
+		Self::emit_list(func, &[I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl, I::I32GtU, I::If(BlockType::Empty)]);
+		Self::emit_list(func, &[I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl, I::I32Sub]);
+		Self::emit_list(func, &[I32Const(PAGE_BITS), I::I32ShrU, I32Const(1), I::I32Add, I::MemoryGrow(0), I32Const(-1), I::I32Eq]);
+		self.emit_fail_if(func, "out_of_memory");
+		func.instruction(&I::End);
+	}
+
 	pub(super) fn emit_is_text(&self, func: &mut Function) {
 		for kind in [Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);

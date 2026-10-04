@@ -526,13 +526,32 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalTee(left_length));
 				s.emit_text_field(f, 1, 1);
 				Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
-				s.emit_text_allocation(f, length, copy);
 				let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+				let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
+				// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
+				// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
+				// bytes) already follows left: nothing to copy
+				s.emit_text_field(f, 0, 0);
+				Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
+				s.emit_text_field(f, 1, 0);
+				Self::emit_list(f, &[I::I32Eq]);
+				s.emit_text_field(f, 1, 0);
+				Self::emit_list(f, &[I::LocalGet(right_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::I32And, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
+				f.instruction(&I::If(BlockType::Empty));
+				f.instruction(&I::Else);
+				Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(left_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_memory_room(f, heap, right_length);
+				f.instruction(&I::GlobalGet(heap));
+				s.emit_text_field(f, 1, 0);
+				Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes.clone(), I::GlobalGet(heap), I::LocalGet(right_length), I::I32Add, I::GlobalSet(heap)]);
+				f.instruction(&I::Else);
+				s.emit_text_allocation(f, length, copy);
 				f.instruction(&I::LocalGet(copy));
 				s.emit_text_field(f, 0, 0);
 				Self::emit_list(f, &[I::LocalGet(left_length), copy_bytes.clone(), I::LocalGet(copy), I::LocalGet(left_length), I::I32Add]);
 				s.emit_text_field(f, 1, 0);
-				Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes, I::LocalGet(copy), I::LocalGet(length)]);
+				Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes, I::End, I::End, I::LocalGet(copy), I::LocalGet(length)]);
 				s.call(f, "new_text");
 			});
 		}
