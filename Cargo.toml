@@ -109,6 +109,10 @@ debug = true           # IDE needs debug symbols for breakpoints
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
+# tests run the programs on wasmtime too: its GC at full speed (two million map entries took 40 s unoptimized)
+[profile.dev.package.wasmtime]
+opt-level = 3
+
 [profile.test]
 inherits = "dev"       # Use dev profile for tests
 
@@ -134,6 +138,11 @@ lto = true             # Full LTO for maximum treeshaking
 codegen-units = 1      # Single codegen unit for best optimization
 panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
+
+# the native runtime runs the programs: its GC and libcalls at full speed (a size-optimized wasmtime ran a GC-heavy
+# map program 2.5× slower than the wasmtime CLI); the web build has no wasmtime, so its size is untouched
+[profile.release.package.wasmtime]
+opt-level = 3
 
 [lib]
 # Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).

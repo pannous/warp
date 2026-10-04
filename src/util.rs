@@ -11,7 +11,7 @@ pub const DEFAULT_FUEL: u64 = 10_000_000_000;
 pub const FUEL_VARIABLE: &str = "WARP_FUEL";
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
 /// frame of a deep recursion) at each of its many small growths
-const GC_HEAP_INITIAL_BYTES: u64 = 64 << 20;
+const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
