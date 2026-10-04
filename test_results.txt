@@ -424,6 +424,7 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_index_assignment::test_index_assign_25_elements
@@ -1827,4 +1828,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1822 passed, 0 failed, 1822 total tested
+52 ignored, 1823 passed, 0 failed, 1823 total tested
