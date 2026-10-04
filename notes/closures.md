@@ -56,8 +56,9 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   unbox the result to the helper's return kind.
 
 ## Open
-- **Typed fast path**: when every closure a call can reach shares one signature (e.g. Int -> Int), call_ref a typed entry
-  without boxing. Today everything boxes through Nodes (correct, slower).
+- Typed fast path (2026-10-04): when every closure of an arity takes Ints and returns an Int, `closure_call_n` passes and
+  returns i64 and the entries take them unboxed (closures::type_closure_calls, wasm_emitter/closures.rs typed_entry):
+  300000 calls 3 s → 0.3 s. Other signatures (floats, Nodes, mixed) still box.
 - **Per-site result kinds**: the result kind of `closure_call_n` is joined over ALL closures of arity n in the program;
   mixing e.g. an Int closure and a Function-returning closure of the same arity makes every call return Data (any
   Node), which works for printing and `+` on the final Int but not every use. A flow analysis of which targets a

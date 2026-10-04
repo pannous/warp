@@ -128,3 +128,10 @@ fn a_function_value_out_of_try_or_a_block_is_called() {
 	is!("f = try (x=>x+1) else (e => e * 2); f(4)", 5);
 	is!("f = {x => x+1}; f(2)", 3);
 }
+
+#[test]
+fn closures_of_ints_are_called_without_boxes() {
+	// 300000 calls through a closure parameter: seconds when every call boxed its argument and result
+	is!("apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)", 300000);
+	is!("fs=[x=>x+1, x=>x*2.5]; fs#2(2)", 5);
+}

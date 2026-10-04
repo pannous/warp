@@ -2784,6 +2784,7 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 		}
 		refine_return_kinds(ctx, &globals);
 	}
+	crate::closures::type_closure_calls(ctx);
 }
 
 /// A parameter that the calls pass one kind other than Int takes that kind: `mul(v, 1.0 / length(v))` with length

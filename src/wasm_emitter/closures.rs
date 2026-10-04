@@ -65,13 +65,23 @@ impl WasmGcEmitter {
 		index
 	}
 
+	/// Do the closures of `arity` take and return Ints (closures::type_closure_calls): their entries skip the Node boxes
+	fn typed_entry(&self, arity: usize) -> bool {
+		self.ctx.user_functions.get(&crate::closures::closure_call_name(arity)).is_some_and(crate::closures::is_typed_closure_call)
+	}
+
 	fn entry_type(&mut self, arity: usize) -> u32 {
 		if let Some(entry) = self.closures.entries.get(&arity) {
 			return *entry;
 		}
 		let index = self.type_manager.types().len();
 		let node = self.nullable_node();
-		self.type_manager.types_mut().ty().function(vec![node; arity + 1], vec![node]);
+		if self.typed_entry(arity) {
+			let params = std::iter::once(node).chain(std::iter::repeat_n(ValType::I64, arity)).collect::<Vec<_>>();
+			self.type_manager.types_mut().ty().function(params, vec![ValType::I64]);
+		} else {
+			self.type_manager.types_mut().ty().function(vec![node; arity + 1], vec![node]);
+		}
 		self.closures.entries.insert(arity, index);
 		index
 	}
@@ -92,6 +102,7 @@ impl WasmGcEmitter {
 	pub(super) fn compile_closure_entries(&mut self) {
 		for (target, _, captured, arity) in self.closures.entry_functions.clone() {
 			let function = self.ctx.user_functions[&target].clone();
+			let typed = self.typed_entry(arity);
 			let mut func = Function::new(vec![]);
 			for (index, param) in function.params.iter().enumerate() {
 				if index < captured {
@@ -102,6 +113,9 @@ impl WasmGcEmitter {
 					}
 					func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
 					func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+				} else if typed {
+					func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 already
+					continue;
 				} else {
 					func.instruction(&I::LocalGet((1 + index - captured) as u32));
 					func.instruction(&I::RefAsNonNull);
@@ -109,7 +123,7 @@ impl WasmGcEmitter {
 				self.emit_node_as_kind(&mut func, param_kind(param));
 			}
 			self.emit_call_user_function(&mut func, &function);
-			if !function.return_kind.is_ref() {
+			if !function.return_kind.is_ref() && !typed {
 				self.emit_primitive_as_node(&mut func, function.return_kind);
 			}
 			func.instruction(&I::End);
@@ -181,8 +195,10 @@ impl WasmGcEmitter {
 		func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(entry)));
 		func.instruction(&I::CallRef(entry));
-		func.instruction(&I::RefAsNonNull);
-		self.emit_node_as_kind(&mut func, function.return_kind);
+		if !self.typed_entry(arity) {
+			func.instruction(&I::RefAsNonNull);
+			self.emit_node_as_kind(&mut func, function.return_kind);
+		}
 		func.instruction(&I::End);
 		self.code.function(&func);
 		let index = function.func_index.expect("registered in pass 1");
