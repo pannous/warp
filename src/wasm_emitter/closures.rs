@@ -19,6 +19,10 @@ use StorageType::Val;
 use ValType::Ref;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
+/// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
+/// the module (a task, src/tasks.rs): its target's name and its captured values; the entry is found again by name
+pub const CLOSURE_REBUILD: &str = "closure_rebuild";
+pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
 pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
 pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
@@ -35,6 +39,8 @@ pub(super) struct ClosureTypes {
 	entries: HashMap<usize, u32>,
 	/// Target function → (entry function index, captured count, arity)
 	entry_functions: Vec<(String, u32, usize, usize)>,
+	/// closure_rebuild and closure_captured, for a program that starts tasks
+	carriers: Option<(u32, u32)>,
 }
 
 impl ClosureTypes {
@@ -44,7 +50,8 @@ impl ClosureTypes {
 	}
 
 	pub(super) fn entry_names(&self) -> Vec<(u32, String)> {
-		self.entry_functions.iter().map(|(target, index, _, _)| (*index, format!("{ENTRY_PREFIX}{target}"))).collect()
+		let carriers = self.carriers.into_iter().flat_map(|(rebuild, captured)| [(rebuild, CLOSURE_REBUILD.to_string()), (captured, CLOSURE_CAPTURED.to_string())]);
+		self.entry_functions.iter().map(|(target, index, _, _)| (*index, format!("{ENTRY_PREFIX}{target}"))).chain(carriers).collect()
 	}
 }
 
@@ -99,6 +106,53 @@ impl WasmGcEmitter {
 			self.closures.entry_functions.push((target, self.next_func_idx, captured, arity));
 			self.next_func_idx += 1;
 		}
+		// a program that starts tasks may pass closures to them: the carriers, exported
+		let starts_tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES);
+		if starts_tasks && !self.closures.entry_functions.is_empty() {
+			let node = self.nullable_node();
+			let (rebuild_type, captured_type) = (self.type_manager.types().len(), self.type_manager.types().len() + 1);
+			self.type_manager.types_mut().ty().function(vec![node, node], vec![node]);
+			self.type_manager.types_mut().ty().function(vec![node], vec![node]);
+			let (rebuild, captured) = (self.next_func_idx, self.next_func_idx + 1);
+			self.functions.function(rebuild_type);
+			self.functions.function(captured_type);
+			self.next_func_idx += 2;
+			self.exports.export(CLOSURE_REBUILD, ExportKind::Func, rebuild);
+			self.exports.export(CLOSURE_CAPTURED, ExportKind::Func, captured);
+			self.closures.carriers = Some((rebuild, captured));
+		}
+	}
+
+	/// closure_rebuild(name, captured): the closure of the target of that name with those captured values, ø for none;
+	/// closure_captured(f): the captured values of a closure (its entry stays in the instance)
+	fn compile_closure_carriers(&mut self) {
+		if self.closures.carriers.is_none() {
+			return;
+		}
+		let closure = self.closure_type();
+		let node_type = self.type_manager.node_type;
+		let mut rebuild = Function::new(vec![]);
+		for (target, entry, _, _) in self.closures.entry_functions.clone() {
+			rebuild.instruction(&I::LocalGet(0));
+			self.emit_string_call(&mut rebuild, &target, "new_symbol");
+			self.emit_call(&mut rebuild, super::equality::VALUES_EQUAL);
+			rebuild.instruction(&I::If(BlockType::Empty));
+			self.emit_kind(&mut rebuild, Kind::Function);
+			for instruction in [I::RefFunc(entry), I::LocalGet(1), I::StructNew(closure), I::LocalGet(0), I::StructNew(node_type), I::Return, I::End] {
+				rebuild.instruction(&instruction);
+			}
+		}
+		self.emit_call(&mut rebuild, "new_empty");
+		rebuild.instruction(&I::End);
+		self.code.function(&rebuild);
+		let mut captured = Function::new(vec![]);
+		for instruction in [
+			I::LocalGet(0), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
+			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD }, I::End,
+		] {
+			captured.instruction(&instruction);
+		}
+		self.code.function(&captured);
 	}
 
 	/// Pass 2: the entry bodies, in the order of their registration
@@ -133,6 +187,7 @@ impl WasmGcEmitter {
 			self.code.function(&func);
 			debug_assert!(arity + captured == function.params.len());
 		}
+		self.compile_closure_carriers();
 	}
 
 	fn emit_call_user_function(&mut self, func: &mut Function, function: &UserFunctionDef) {

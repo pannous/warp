@@ -107,3 +107,11 @@ fn a_finish_handler_runs_after_the_statement_that_saw_the_task_finish() {
 fn a_stop_handler_runs_once_the_task_stopped() {
 	is!(&format!("{SPINNER}job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300); stopped"), 1);
 }
+
+#[test]
+fn function_values_cross_to_a_task() {
+	is!("inc = x => x + 1; apply(g, v) := g(v); job = go apply(inc, 3); await job", 4);
+	is!("k = 10; add = x => x + k; apply(g, v) := g(v); job = go apply(add, 5); await job", 15);
+	is!("twice(f, v) := f(f(v)); job = go twice(x => x * 3, 2); await job", 18);
+	is!("mapit(f, xs) := xs.map(f); job = go mapit(x => x + 1, [1, 2]); await job", warp::ints(vec![2, 3]));
+}

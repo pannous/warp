@@ -123,7 +123,7 @@ function programImports(holder, hooks) {
 			// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
 			// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
 			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
-			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readNode(program(), values)),
+			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readTaskValue(program(), values)),
 			task_await: id => {
 				const task = finishedTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
@@ -232,23 +232,26 @@ function sharedCell(run, id, index) {
 function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
+	const captured = capturedValues(holder.exports, run.module);
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured });
 		run.tasks.set(id, { name, worker, shared });
 	} else {
-		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared));
+		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured));
 	}
 	return id;
 }
 
 // the task here: {value} (a number or a tree) or {failure}
-function runTask(module, hooks, warnings, name, ints, values, arrays) {
+function runTask(module, hooks, warnings, name, ints, values, arrays, captured = []) {
 	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays } };
 	try {
 		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
+		// what the spawning instance's closures captured, as it had it
+		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree) : value.raw;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
 		joinTasks(taskHolder.run, hooks);
@@ -305,6 +308,36 @@ function trapMessage(trap, callee) {
 }
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
+const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
+const KIND_LIST = 8n;
+const CAPTURE_PREFIX = "capture·"; // src/wasm_emitter CAPTURE_EXPORT_PREFIX
+
+// a value of the program for a task: a closure as its target's name and captured values ({closure, captured}, rebuilt
+// by the module's closure_rebuild), a list item by item, anything else as reader.js reads it
+function readTaskValue(module, node) {
+	if (node === null) return { kind: "0", data: null, chain: [] };
+	const kind = BigInt(module.get_kind(node));
+	if ((kind & KIND_MASK) === KIND_FUNCTION) {
+		const captured = module.closure_captured(node);
+		return { closure: readNode(module, module.reflect_value(node)).data.text, captured: captured === null ? null : readTaskValue(module, captured) };
+	}
+	if ((kind & KIND_MASK) !== KIND_LIST) return readNode(module, node);
+	const items = [];
+	for (let cell = node; cell !== null; cell = module.reflect_value(cell)) {
+		const item = module.reflect_data(cell);
+		if (item !== null) items.push(readTaskValue(module, item));
+	}
+	return { kind: String(kind), data: null, chain: [], items };
+}
+
+// the capture globals of the program's closures (src/tasks.rs captured): their values now, for the task's instance
+function capturedValues(exports, module) {
+	const names = WebAssembly.Module.exports(module).map(entry => entry.name).filter(name => name.startsWith(CAPTURE_PREFIX));
+	return names.map(name => {
+		const value = exports[name].value;
+		return [name, typeof value === "object" && value !== null ? { tree: readTaskValue(exports, value) } : { raw: value }];
+	});
+}
 
 // a task's result as a tree: a number of a function of numbers, else the tree already read
 function taskTree(value) {
@@ -316,6 +349,11 @@ function taskTree(value) {
 // the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
 // constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
+	if (tree.closure !== undefined) {
+		const name = buildValue(module, { kind: "5", data: { text: tree.closure }, chain: [] });
+		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));
+	}
+	if (tree.items) return tree.items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, BigInt(tree.kind) >> 8n), null) ?? module.new_empty();
 	const kind = BigInt(tree.kind);
 	const payload = tree.data ?? {};
 	switch (Number(kind & KIND_MASK)) {

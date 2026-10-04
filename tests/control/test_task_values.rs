@@ -27,3 +27,10 @@ fn two_tasks_overlap() {
 	is!("f(ms) := { sleep(ms); ms }; a = go f(1000); b = go f(1000); a + b", 2000);
 	assert!(started.elapsed() < OVERLAPPING_LIMIT, "two one-second tasks took {:?}", started.elapsed());
 }
+
+#[test]
+fn a_function_value_crosses_to_a_task() {
+	is!("inc = x => x + 1; apply(g, v) := g(v); job = go apply(inc, 3); await job", 4);
+	is!("k = 10; add = x => x + k; apply(g, v) := g(v); job = go apply(add, 5); await job", 15);
+	is!("mapit(f, xs) := xs.map(f); job = go mapit(x => x + 1, [1, 2]); await job", warp::ints(vec![2, 3]));
+}

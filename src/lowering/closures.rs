@@ -100,10 +100,11 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 	crate::diagnostic::Diagnostic::at(value, message).into_error()
 }
 
-/// A function value that a call cannot be specialised for: a variable, a lambda, a call that may return a function
+/// A function value that a call cannot be specialised for: a variable, a lambda, a call that may return a function, an
+/// element of a list (`fs#1`, the arguments of a task's wrapper)
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(_) => true,
+		Node::Symbol(_) | Node::Key(_, Op::Hash, _) => true,
 		Node::List(items, Bracket::Round, Separator::None) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		other => arrow_lambda(other).is_some(),
 	}

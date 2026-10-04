@@ -225,11 +225,11 @@ enum TaskPath {
 	Inline,
 }
 
-/// The kinds a value of a task may have to cross between instances (tasks::TaskValue); a list parameter takes another
-/// convention (list_abi), a function value cannot leave its instance
-const CROSSING_KINDS: [crate::type_kinds::Kind; 7] = {
+/// The kinds a value of a task may have to cross between instances (tasks::TaskValue); a function value crosses as its
+/// target's name and captured values (closure_rebuild)
+const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 	use crate::type_kinds::Kind::*;
-	[Int, Float, Text, Codepoint, Symbol, Empty, List]
+	[Int, Float, Text, Codepoint, Symbol, Empty, List, Function]
 };
 
 /// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). A function runs in a fresh

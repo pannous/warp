@@ -2,6 +2,7 @@
 
 mod big_int;
 mod closures;
+pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
 mod constructors;
 mod equality;
@@ -50,6 +51,8 @@ const UNKNOWN_POSITION: &str = " at 0:0";
 /// Between a diagnostic's message and its fix
 const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
+/// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
+pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
 const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
@@ -370,9 +373,15 @@ impl WasmGcEmitter {
 				.into_iter()
 				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
 				.collect();
-			let captures = captured.into_iter()
+			let captures: Vec<(String, (u32, Kind))> = captured.into_iter()
 				.map(|(name, kind)| (name, (self.declare_mutable_global(kind), kind)))
 				.collect();
+			// a task's instance gets the values the spawning instance captured (src/tasks.rs copies these globals)
+			if self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN) {
+				for (name, (global, _)) in &captures {
+					self.exports.export(&format!("{CAPTURE_EXPORT_PREFIX}{}·{name}", function.name), ExportKind::Global, *global);
+				}
+			}
 			self.ctx.captures.insert(function.name, captures);
 		}
 	}

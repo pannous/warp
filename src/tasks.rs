@@ -24,7 +24,13 @@ const TASK_WORDS: [&str; 8] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
-const CONSTRUCTORS: [&str; 8] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list"];
+const CONSTRUCTORS: [&str; 9] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list",
+	crate::wasm_emitter::CLOSURE_REBUILD];
+/// The node fields (CLAUDE.md "Serialization") and the closure's captured values (wasm_emitter/closures.rs)
+const KIND_FIELD: usize = 0;
+const DATA_FIELD: usize = 1;
+const VALUE_FIELD: usize = 2;
+const CAPTURED_FIELD: usize = 1;
 
 /// A value crossing between threads: what a task takes and gives, free of any instance (a Node may hold data that
 /// cannot leave its thread)
@@ -40,6 +46,8 @@ pub enum TaskValue {
 	List(Vec<TaskValue>, i64),
 	/// left, the operator's code, right
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
+	/// a function value: its target's name and its captured values, rebuilt by the module's closure_rebuild
+	Closure(String, Box<TaskValue>),
 }
 
 impl TaskValue {
@@ -120,6 +128,44 @@ impl Builders {
 				let first = self.build(item, store)?;
 				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
 			}),
+			TaskValue::Closure(name, captured) => {
+				let name = self.build(&TaskValue::Symbol(name.clone()), store)?;
+				let captured = match captured.as_ref() {
+					TaskValue::Empty => Val::AnyRef(None),
+					values => self.build(values, store)?,
+				};
+				self.call(crate::wasm_emitter::CLOSURE_REBUILD, &[name, captured], store)
+			}
+		}
+	}
+
+	/// A value of the instance, a function value with its captured values, a list item by item (cells walked)
+	fn read_value(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
+		let Some(node) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { return self.read(value, store) };
+		let kind = node.field(&mut *store, KIND_FIELD)?.unwrap_i64();
+		match (kind & crate::type_kinds::KIND_MASK) as u8 {
+			tag if tag == crate::type_kinds::Kind::Function as u8 => {
+				let name = crate::wasm_reader::node_in(&node.field(&mut *store, VALUE_FIELD)?, store, self.memory).name();
+				let closure = node.field(&mut *store, DATA_FIELD)?;
+				let captured = match closure.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
+					Some(closure) => self.read_value(&closure.field(&mut *store, CAPTURED_FIELD)?, store)?,
+					None => TaskValue::Empty,
+				};
+				Ok(TaskValue::Closure(name, Box::new(captured)))
+			}
+			tag if tag == crate::type_kinds::Kind::List as u8 => {
+				let (mut items, mut cell) = (vec![], Some(node));
+				while let Some(current) = cell {
+					let first = current.field(&mut *store, DATA_FIELD)?;
+					if first.unwrap_anyref().is_some() {
+						items.push(self.read_value(&first, store)?);
+					}
+					let rest = current.field(&mut *store, VALUE_FIELD)?;
+					cell = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok());
+				}
+				Ok(TaskValue::List(items, (kind >> 8) & 0xFF))
+			}
+			_ => self.read(value, store),
 		}
 	}
 
@@ -176,6 +222,14 @@ impl std::fmt::Display for TaskFailure {
 }
 
 impl std::error::Error for TaskFailure {}
+
+/// The value of a capture global (`capture·f·x`), carried from the spawning instance to the task's
+#[derive(Clone, Debug)]
+enum Captured {
+	Int(i64),
+	Float(u64),
+	Value(TaskValue),
+}
 
 enum Slot {
 	Running(JoinHandle<Result<TaskValue, String>>),
@@ -238,19 +292,21 @@ impl TaskTable {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let arguments: [i64; MAX_TASK_ARGUMENTS] = [a0, a1, a2, a3];
 			let arguments = arguments.iter().map(|argument| exact(*argument)).collect::<Result<Vec<_>, _>>().map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
-			Ok(spawner.spawn(name, arguments))
+			let captured = spawner.captured(&mut caller).map_err(host_error)?;
+			Ok(spawner.spawn(name, arguments, captured))
 		})?;
 		let value_spawner = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN_VALUES, move |mut caller: Caller<'_, HostState>, name: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let task_failure = |failure: anyhow::Error| wasmtime::Error::new(TaskFailure(format!("task {name}: {failure}")));
-			let arguments = match builders.read(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(task_failure)? {
+			let arguments = match builders.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(task_failure)? {
 				TaskValue::List(items, _) => items,
 				TaskValue::Empty => vec![],
 				single => vec![single],
 			};
-			Ok(value_spawner.spawn(name, arguments))
+			let captured = value_spawner.captured(&mut caller).map_err(host_error)?;
+			Ok(value_spawner.spawn(name, arguments, captured))
 		})?;
 		let value_awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT_VALUE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
@@ -279,18 +335,38 @@ impl TaskTable {
 		Ok(())
 	}
 
-	fn spawn(self: &Arc<Self>, function: String, arguments: Vec<TaskValue>) -> i64 {
+	/// The capture globals of the spawning instance, as their values now
+	fn captured(&self, caller: &mut Caller<'_, HostState>) -> Result<Vec<(String, Captured)>> {
+		let names: Vec<String> = self.module.exports().map(|export| export.name().to_string()).filter(|name| name.starts_with(crate::wasm_emitter::CAPTURE_EXPORT_PREFIX)).collect();
+		if names.is_empty() {
+			return Ok(vec![]);
+		}
+		let builders = Builders::of(&mut |export| caller.get_export(export))?;
+		let mut captured = vec![];
+		for name in names {
+			let Some(global) = caller.get_export(&name).and_then(|export| export.into_global()) else { continue };
+			let value = match global.get(&mut *caller) {
+				Val::I64(n) => Captured::Int(n),
+				Val::F64(bits) => Captured::Float(bits),
+				reference => Captured::Value(builders.read_value(&reference, &mut caller.as_context_mut())?),
+			};
+			captured.push((name, value));
+		}
+		Ok(captured)
+	}
+
+	fn spawn(self: &Arc<Self>, function: String, arguments: Vec<TaskValue>, captured: Vec<(String, Captured)>) -> i64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let table = self.clone();
-		let handle = std::thread::spawn(move || table.run(&function, &arguments, control).map_err(|failure| format!("task {function}: {}", failure_message(failure))));
+		let handle = std::thread::spawn(move || table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {function}: {}", failure_message(failure))));
 		self.slots.lock().expect("task table").insert(id, Slot::Running(handle));
 		id
 	}
 
 	/// f(arguments) in a fresh instance of the module, with the same imports as the program
-	fn run(self: &Arc<Self>, function: &str, arguments: &[TaskValue], control: Arc<TaskControl>) -> Result<TaskValue> {
+	fn run(self: &Arc<Self>, function: &str, arguments: &[TaskValue], captured: &[(String, Captured)], control: Arc<TaskControl>) -> Result<TaskValue> {
 		let mut store = crate::util::fueled_store(&self.engine, HostState::new());
 		store.epoch_deadline_callback(move |_| control.checkpoint());
 		store.set_epoch_deadline(1);
@@ -303,6 +379,16 @@ impl TaskTable {
 		let instance = linker.instantiate(&mut store, &self.module)?;
 		let callee = instance.get_func(&mut store, function).ok_or_else(|| anyhow!("no exported function {function}"))?;
 		let builders = Builders::of(&mut |export| instance.get_export(&mut store, export)).map_err(|failure| anyhow!("{failure}"))?;
+		// what the spawning instance's closures captured, as it had it
+		for (name, value) in captured {
+			let Some(global) = instance.get_global(&mut store, name) else { continue };
+			let value = match value {
+				Captured::Int(n) => Val::I64(*n),
+				Captured::Float(bits) => Val::F64(*bits),
+				Captured::Value(value) => builders.build(value, &mut store.as_context_mut())?,
+			};
+			global.set(&mut store, value)?;
+		}
 		let signature = callee.ty(&store);
 		let values: Vec<Val> = match signature.params().next() {
 			// a wrapper of values (declarations::with_node_wrappers): the one argument list
