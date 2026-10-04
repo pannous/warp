@@ -111,11 +111,15 @@ impl WasmGcEmitter {
 	}
 
 	pub(crate) fn emit_exact_functions(&mut self) {
-		let (i64t, i32t, f64t) = (ValType::I64, ValType::I32, ValType::F64);
-		let ratio = self.type_manager.ratio_type;
-		let ratio_ref = self.ratio_ref();
+		self.emit_exact_integers();
+		self.emit_exact_ratios();
+		self.emit_exact_operations();
+	}
 
-		// ── integer helpers with inline fast paths ──
+	/// The Int helpers with inline fast paths: add, sub, quot, rem, gcd
+	fn emit_exact_integers(&mut self) {
+		let i64t = ValType::I64;
+
 		for (name, machine, slow) in [("int_add", I::I64Add, "int_add_slow"), ("int_sub", I::I64Sub, "int_sub_slow")] {
 			// locals: result
 			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
@@ -153,8 +157,14 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(2), I::LocalGet(1), I::LocalSet(0), I::LocalGet(2), I::LocalSet(1), I::Br(0), I::End, I::End]);
 			f.instruction(&I::LocalGet(0));
 		});
+	}
 
-		// ── ratios ──
+	/// The ratios: is_ratio, numerator, denominator, ratio_new, exact_div
+	fn emit_exact_ratios(&mut self) {
+		let (i64t, i32t) = (ValType::I64, ValType::I32);
+		let ratio = self.type_manager.ratio_type;
+		let ratio_ref = self.ratio_ref();
+
 		self.runtime_function("is_ratio", vec![i64t], vec![i32t], vec![], |s, f| {
 			s.emit_fixnum_test(f, &[0]);
 			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(0), I::Else]);
@@ -239,8 +249,12 @@ impl WasmGcEmitter {
 			ratio_of_both(f);
 			Self::emit_list(f, &[I::End, I::End, I::End]);
 		});
+	}
 
-		// ── dispatch from the Int slow paths ──
+	/// The exact operations the Int slow paths dispatch to: add, sub, compare, trunc, rem, mod, floor, pow, shifts
+	fn emit_exact_operations(&mut self) {
+		let (i64t, i32t, f64t) = (ValType::I64, ValType::I32, ValType::F64);
+
 		for (name, combine, integer_op) in [("exact_add", "int_add", "int_add_slow"), ("exact_sub", "int_sub", "int_sub_slow")] {
 			self.exact_dispatch(name, i64t, |s, f| {
 				s.cross_product(f, 0, 1);
