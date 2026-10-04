@@ -42,7 +42,7 @@ mixed modules (analyzer, modules, host, real, time, units) stay in src/.
 
 #11 (2026-10-04, part): emit_numeric_value 337 → 142 lines, emit_float_value 212 → 142, emit_cast one function per
 target type, emit_list_node 232 → 144, continue_expr 249 → 177 (SpecialInfix), emit_exact_functions, emit_text_builtins
-and emit_list_ops split into named sections. Still long: parse_symbol_with_suffix, infer_type, main.
+and emit_list_ops split into named sections, parse_symbol_with_suffix 202 → 93, infer_type (infer_list_type), main → apply_flags + run_command.
 
 #16 (2026-10-04): every wasm_emitter file writes instructions as `I::X` (`use Instruction as I`); only `use
 Instruction::…` imports still spell the type.

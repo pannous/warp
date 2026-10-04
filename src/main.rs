@@ -31,7 +31,13 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
-    let _executable_path = &args[0];
+    apply_flags(&mut args);
+    run_command(&args);
+}
+
+/// `--fuel <steps>`, `--strict`, `--no-ask` take effect and leave the arguments; the answers file is read
+#[cfg(not(test))]
+fn apply_flags(args: &mut Vec<String>) {
     // `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
     if let Some(flag) = args.iter().position(|arg| arg == "--fuel") {
         match args.get(flag + 1).and_then(|steps| steps.replace('_', "").parse::<u64>().ok()) {
@@ -57,7 +63,11 @@ fn main() {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
 
+/// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
+#[cfg(not(test))]
+fn run_command(args: &[String]) {
     // CGI mode detection
     if env::var("SERVER_SOFTWARE").is_ok() {
         println!("Content-Type: text/plain\n");
@@ -87,7 +97,7 @@ fn main() {
     if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
         println!("warp compiled without webview");
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
-        let code = if file_exists(target) { load_file(target) } else { target.to_string() };
+        let code = source_of(target);
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
@@ -105,12 +115,12 @@ fn main() {
             }
         }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
-        let text = if file_exists(target) { load_file(target) } else { target.to_string() };
+        let text = source_of(target);
         println!("{}", wasp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         // DONE: don't run, just compile and save binary
         let target = extract_after(&arg_string, " ");
-        let code = if file_exists(&target) { load_file(&target) } else { target.clone() };
+        let code = source_of(&target);
         match wasm_emitter::compile(&code) {
             Ok(module) => {
                 let output_path = compiled_output_path(&target);
@@ -126,24 +136,18 @@ fn main() {
         if !file_exists(&arg_string) {
             eprintln!("Error: Could not read file '{}'", arg_string);
         }
-        let result = eval(&arg_string); // a file: its folder is in scope (D15)
-        println!("{}", result.serialize());
-        std::process::exit(node_to_i32(&result));
+        print_and_exit(eval(&arg_string)); // a file: its folder is in scope (D15)
     } else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
         // Compile WAT/WAST text format to WASM binary, then execute
         let wat_code = load_file(&arg_string);
-        let result = run::wasmtime_runner::run_wat(&wat_code);
-        println!("{}", result.serialize());
-        std::process::exit(node_to_i32(&result));
+        print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
     } else if arg_string.ends_with(".wasm") {
         if args.len() >= 3 {
             {
                 todo!("linking files needs compilation with WABT_MERGE");
             }
         } else {
-            let result = run::wasmtime_runner::run(&arg_string);
-            println!("{}", result.serialize());
-            std::process::exit(node_to_i32(&result));
+            print_and_exit(run::wasmtime_runner::run(&arg_string));
         }
     } else if arg_string == "test" || arg_string == "tests" {
         {
@@ -180,7 +184,7 @@ fn main() {
         // CGI/server mode
         println!("Content-Type: text/plain\n");
         let prog = arg_string.strip_prefix("server ").or(arg_string.strip_prefix("serv ")).unwrap_or("");
-        let prog = if file_exists(prog) { load_file(prog) } else { prog.to_string() };
+        let prog = source_of(prog);
         if !prog.is_empty() {
             let result = eval(&prog);
             println!("{}", result.serialize());
@@ -201,6 +205,17 @@ fn main() {
         let result = eval(&arg_string);
         println!("» {}", result.serialize());
     }
+}
+
+/// The program's value printed, its Int the exit status
+fn print_and_exit(result: Node) -> ! {
+    println!("{}", result.serialize());
+    std::process::exit(node_to_i32(&result));
+}
+
+/// The text of the file `target` names, else `target` itself as code
+fn source_of(target: &str) -> String {
+    if file_exists(target) { load_file(target) } else { target.to_string() }
 }
 
 /// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
