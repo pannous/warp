@@ -119,6 +119,8 @@ PASSED:
   ✓ control::test_variable_signals::once_runs_the_first_time_the_condition_holds
   ✓ control::test_variable_signals::the_wiki_countdown
   ✓ control::test_variable_signals::whenever_runs_each_time_the_condition_holds
+  ✓ control::test_welcome_forms::loop_runs_until_break
+  ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
@@ -1849,4 +1851,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-47 ignored, 1844 passed, 0 failed, 1844 total tested
+47 ignored, 1846 passed, 0 failed, 1846 total tested
