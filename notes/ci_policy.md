@@ -48,4 +48,6 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
   failures (mysql CLI missing on the runner: mysql/target_credential_encryption/db_migrations/admin_approval_protocols;
   vnc ×4; web_ssh hung 14 min, then exit 143 before pytest's summary). 3758040a/6551bc0a: mysql-client, a resource line
   every 2 min, `timeout --signal=INT 80m` around pytest (an early end still prints failures), -rfE, per-test 180 s.
-  Next run 37181090813: fix the remaining failures by cluster.
+  Run 37181090813 lost the runner again during pytest ("The hosted runner lost communication", no log of the Run
+  step survives that). 5f5bb7f9: the Tests job is a matrix of three shards (every third test file; shard 1 also runs
+  the Rust unit tests, the API SDK tests and SonarCloud), each on its own runner. Run 37186712652.
