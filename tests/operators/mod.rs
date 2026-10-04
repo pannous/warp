@@ -13,3 +13,4 @@ mod test_truthiness_of_objects;
 mod test_logical_calls;
 mod test_like;
 mod test_floor_quotient;
+mod test_pipeline;

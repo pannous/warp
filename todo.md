@@ -70,3 +70,4 @@ The supervisor should remove the DONE elements after a while.
 - `try X else Y` now also catches indexing a number (not_a_list), a missing field (no_field_x), text in run-time-kind arithmetic (not_a_number); still raw: struct field casts elsewhere, null dereferences, stack overflow, out of fuel. (night 2026-10-04)
 - DONE: Method chains on continuation lines (`numbers
     .map(square)`) were "Unexpected character ."; a line starting with `.word` now continues the expression (samples/functions.wasp). (night 2026-10-04)
+- DONE: The pipeline `xs |> f(a)` (wiki/Purpose.md, samples/functions.wasp) was "Unexpected character |"; it is the call f(xs, a), also on continuation lines. (night 2026-10-04)

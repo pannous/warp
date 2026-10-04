@@ -237,6 +237,21 @@ fn is_identifier_char(c: char) -> bool {
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
 
+/// `|>` binds below range and arithmetic, above `as` and comparisons
+const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
+
+/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`
+fn piped(value: Node, stage: Node) -> Node {
+	match stage.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
+			let mut items = items.clone();
+			items.insert(1, value);
+			Node::List(items, Bracket::Round, Separator::None)
+		}
+		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
+	}
+}
+
 fn floor_division(dividend: Node, divisor: Node) -> Node {
 	Node::List(vec![Symbol(FLOOR_QUOTIENT.to_string()), dividend, divisor], Bracket::Round, Separator::None)
 }
@@ -788,7 +803,8 @@ impl WaspParser {
 				length += 1;
 			}
 			let starts_method = self.peek_char(length) == '.' && (self.peek_char(length + 1).is_alphabetic() || self.peek_char(length + 1) == '_');
-			return starts_method.then_some(length);
+			let starts_pipeline = self.peek_char(length) == '|' && self.peek_char(length + 1) == '>';
+			return (starts_method || starts_pipeline).then_some(length);
 		}
 		if self.current_char() != '\\' {
 			return None;
@@ -1864,6 +1880,20 @@ impl WaspParser {
 				let divisor = self.parse_expr(r_bp);
 				let quotient = floor_division(lhs.clone(), divisor);
 				lhs = if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient };
+				previous_comparand = None;
+				continue;
+			}
+
+			// Step 3c: the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below
+			// arithmetic and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
+			if self.current_char() == '|' && self.peek_char(1) == '>' {
+				if PIPELINE_BINDING_POWER.0 < min_bp {
+					break;
+				}
+				self.advance_by(2);
+				self.skip_whitespace();
+				let stage = self.parse_expr(PIPELINE_BINDING_POWER.1);
+				lhs = piped(lhs, stage);
 				previous_comparand = None;
 				continue;
 			}
