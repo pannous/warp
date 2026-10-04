@@ -1,0 +1,2 @@
+use mathlib
+square(4) + 1
