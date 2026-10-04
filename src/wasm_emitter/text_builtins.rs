@@ -321,8 +321,15 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_text_builtins(&mut self) {
+		self.emit_text_bytes_runtime();
+		self.emit_text_search_runtime();
+		self.emit_text_values_runtime();
+	}
+
+	/// byte_at and byte_slice: a text read by its bytes
+	fn emit_text_bytes_runtime(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
-		let (int, long) = (ValType::I32, ValType::I64);
+		let long = ValType::I64;
 
 		// byte_at(text, offset): the byte at the 0-based offset, 0…255
 		if self.should_emit_function(BYTE_AT) {
@@ -335,6 +342,28 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
 			});
 		}
+
+		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
+		if self.should_emit_function(BYTE_SLICE) {
+			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], vec![], |s, f| {
+				Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
+				s.emit_fail_if(f, "index_out_of_range");
+				s.emit_text_field(f, 0, 0);
+				Self::emit_list(f, &[
+					I::LocalGet(1), I::I32WrapI64, I::I32Add,
+					I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
+				]);
+				s.call(f, "new_text");
+			});
+		}
+	}
+
+	/// A text searched or trimmed: text_matches_at, text_find, starts_with, ends_with, text_trim
+	fn emit_text_search_runtime(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let long = ValType::I64;
 
 		// text_matches_at(text, part, offset): part's bytes at the offset of text, within its bounds
 		if self.should_emit_function(TEXT_MATCHES_AT) {
@@ -424,22 +453,12 @@ impl WasmGcEmitter {
 				s.call(f, "new_text");
 			});
 		}
+	}
 
-		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
-		if self.should_emit_function(BYTE_SLICE) {
-			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], vec![], |s, f| {
-				Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
-				s.emit_text_field(f, 0, 1);
-				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
-				s.emit_fail_if(f, "index_out_of_range");
-				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[
-					I::LocalGet(1), I::I32WrapI64, I::I32Add,
-					I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
-				]);
-				s.call(f, "new_text");
-			});
-		}
+	/// c_string, error_of, warn_text, text_concat and read_text
+	fn emit_text_values_runtime(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let (int, long) = (ValType::I32, ValType::I64);
 
 		// c_string(text): the address of a zero-terminated copy of the text (or character) for a C function's char*
 		if self.should_emit_function(C_STRING) {
