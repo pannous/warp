@@ -18,6 +18,7 @@ pub mod number_keys;
 pub mod overloads;
 pub mod printable;
 pub mod phrase_words;
+pub mod result_word;
 pub mod shared_arrays;
 pub mod switch;
 pub mod traits;
