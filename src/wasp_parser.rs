@@ -414,8 +414,10 @@ fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
-/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`)
+/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`),
+/// outside comments and texts (`// the type end` declares nothing)
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	let source = code_only(source);
 	let words: Vec<&str> = source.split(|c: char| !is_identifier_char(c) && c != '(').flat_map(|word| word.split_inclusive('(')).filter(|word| !word.is_empty()).collect();
 	words.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
@@ -423,6 +425,30 @@ fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 		.filter(|name| is_plain_name(name))
 		.map(str::to_string)
 		.collect()
+}
+
+/// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
+fn code_only(source: &str) -> String {
+	let chars: Vec<char> = source.chars().collect();
+	let mut code = String::with_capacity(source.len());
+	let mut at = 0;
+	while at < chars.len() {
+		let (c, next) = (chars[at], chars.get(at + 1).copied());
+		let skip_until = |from: usize, end: &[char]| (from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len());
+		let after = match (c, next) {
+			('/', Some('/')) if at == 0 || chars[at - 1] != ':' => (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len()),
+			('/', Some('*')) => skip_until(at + 2, &['*', '/']),
+			('"' | '\'', _) => skip_until(at + 1, &[c]),
+			_ => {
+				code.push(c);
+				at += 1;
+				continue;
+			}
+		};
+		code.push(' ');
+		at = after.max(at + 1);
+	}
+	code
 }
 
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
