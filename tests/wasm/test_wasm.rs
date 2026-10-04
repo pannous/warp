@@ -159,7 +159,7 @@ fn test_lazy_evaluation() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "user: no id/square builtins"]
 fn test_wasm_function_calls() {
 	// todo put square puti putf back here when it works!!
 	skip!(
@@ -397,7 +397,7 @@ fn test_comparison_math() {
 	//    is!(("3*13==14*3"), False);
 }
 #[test]
-#[ignore]
+#[ignore = "user: no id/square builtins"]
 fn test_comparison_id() {
 	// may be evaluated by compiler!
 	is!("id(3*42 )> id 2*3", 1);
@@ -432,7 +432,7 @@ fn test_comparison_id() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "user: no id/square builtins"]
 fn test_comparison_id_precedence() {
 	// may be evaluated by compiler!
 	skip!(
@@ -754,7 +754,7 @@ fn test_square_precedence() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "user: no id/square builtins"]
 fn test_squares() {
 	// occasionally breaks in browser! even though right code is emitted HOW??
 	is!("square 3", 9);
@@ -961,7 +961,7 @@ pub fn assert_throws(_p0: &str) {
 
 // random stuff todo: put in proper tests
 #[test]
-#[ignore]
+#[ignore = "user: no id/square builtins"]
 fn test_wasm_stuff() {
 	//	is!("grows := it * 2 ; grows(4)", 8);
 	is!("-42", -42);

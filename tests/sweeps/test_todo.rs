@@ -99,7 +99,7 @@ fn test_array_length() {
 
 
 #[test]
-#[ignore = "typed array constructor not yet implemented"]
+#[ignore = "user: size = count, byte_size gives bytes (P40)"]
 fn test_array_constructor() {
 	is!("i=0;w=800;h=800;pixels=640000*int;size(pixels) ", 800 * 800 * 4); // byte count
 	is!("i=0;w=800;h=800;pixels=640000*int;length(pixels) ", 800 * 800); // element count

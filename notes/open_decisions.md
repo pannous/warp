@@ -27,16 +27,16 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   (library_words method_call). Night session 2026-10-04.
 - P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
   are not required. Assumed: Python semantics. Night session 2026-10-04.
-- P31 Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
+- P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
   type word (P20 forbids it as a function name). Options: `show(p:person)` (Haskell) / `description(p:person)` (Swift)
   / allow `text(p:person)` as the one exception. Not implemented yet (todo.md "Traits: Printable"). Night 2026-10-04.
-- P32 `print xs` of a list variable: allow it with the text `str(xs)` gives ("[1 2]", nested lists too) / keep the error
+- P32 DECIDED (user, 2026-10-04): `print xs` of a list prints the str(xs) text; the pinned test in tests/welcoming/test_welcoming_print.rs may change for it. `print xs` of a list variable: allow it with the text `str(xs)` gives ("[1 2]", nested lists too) / keep the error
   "print of a List has no runtime text yet" that tests/welcoming/test_welcoming_print.rs pins. Recommended: allow
   (the text exists now); needs the edit of that pinned test. Night 2026-10-04.
-- P33 Real concurrency for `go`: tasks now finish where they start (one thread), so pause/stop handlers never run (a
+- P33 DECIDED (user, 2026-10-04): REAL threads for `go` (WASM threads with shared memory natively, Web Workers in the browser); last, as a big project: notes/threads.md first. Real concurrency for `go`: tasks now finish where they start (one thread), so pause/stop handlers never run (a
   warning). Options: keep it / wasm threads + shared memory natively and Web Workers in the browser / an event loop
   with explicit yields (`await` points). Assumed: keep it. Night 2026-10-04.
-- P34 `d = {}; d[1] = "a"`: a number subscript of an empty `{}` indexes it as a list (index out of range) / keys it as a
+- P34 DECIDED (user, 2026-10-04): a number subscript on an empty `{}` keys it as a map (`d={}; d[1]="a"` → {1:"a"}). `d = {}; d[1] = "a"`: a number subscript of an empty `{}` indexes it as a list (index out of range) / keys it as a
   map like a text subscript does (Lua tables, JS objects). Assumed: list indexing (today's behaviour, a loud error).
   Night 2026-10-04.
 - P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
@@ -44,17 +44,17 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
   absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
   (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
-- P36 Unit conversion: `100 cm in m`, `2 h in minutes`, `3 km as m` are undefined today (`in` places a time in a zone,
+- P36 DECIDED (user, 2026-10-04): implement unit conversion as proposed below. Unit conversion: `100 cm in m`, `2 h in minutes`, `3 km as m` are undefined today (`in` places a time in a zone,
   `as` casts to a type). Proposed default: `quantity in unit` and `quantity as unit` give the quantity in that unit of
   the same dimension, exact when it divides (`100 cm in m` → `1 m`), else a ratio (`150 cm in m` → `3/2 m`); the unit
   words take their long names too (minute(s), hour(s), meter(s)); a unit of another dimension is the DimensionError.
   Not implemented (not in the wiki). Night 2026-10-04.
-- P37 Gap filling (wiki/gap-filling.md, binding.md, inventions.md): `f y := y*y+v; f(y=2, v=3)` → 7, `fun={x*y};
+- P37 DECIDED (user, 2026-10-04): named arguments f(name=value)/f(name:value) set parameters and free variables of the body; no implicit capture of same-named variables, a missing argument stays an error. Gap filling (wiki/gap-filling.md, binding.md, inventions.md): `f y := y*y+v; f(y=2, v=3)` → 7, `fun={x*y};
   fun(x:2 y:3)` → 6, `x=7; f(x):=x*x; f()` → 49: named arguments bind a function's free variables, and a missing
   argument takes the variable of its name. Proposed default: named arguments `f(name=value)`/`f(name:value)` may set
   parameters and free variables of the body; a missing argument stays an error (implicit capture of a same-named
   variable is too surprising). Not implemented. Night 2026-10-04.
-- P38 Variable listeners (wiki/signal.md Todo: "shall event listeners be registrable post-hoc?"): `once x==5 {…}` and
+- P38 DECIDED (user, 2026-10-04): keep the current default. Variable listeners (wiki/signal.md Todo: "shall event listeners be registrable post-hoc?"): `once x==5 {…}` and
   `whenever cond {…}` are implemented (src/lowering/variable_signals.rs) as checks after each later write of a variable
   the condition reads, in the statements after the listener and their loop bodies; writes before it, in functions
   called later, or in an outer block are not seen, and the condition holding when the listener is declared does not
@@ -62,16 +62,16 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   functions too (needs global flags). `on set x {…}` (value = the new value) works the same way, and `after tested:` /
   `before test {…}` (a defined function, also named in the past tense) run after/before each later statement that
   calls it, once per statement even if it calls it twice. `during` is not implemented. Night 2026-10-04.
-- P39 Builtins `id` and `square` (C++ wasp's test runtime words): five ignored tests use them (test_comparison_id,
+- P39 DECIDED (user, 2026-10-04): neither `id` nor `square` becomes a builtin; the 5 tests stay ignored ("user: no id/square builtins"). Builtins `id` and `square` (C++ wasp's test runtime words): five ignored tests use them (test_comparison_id,
   test_comparison_id_precedence, test_wasm_function_calls, test_wasm_stuff, test_squares); braceless user functions
   already bind the same way (`f 3+4`). Should they be global library words (a user definition winning), given `square`
   is also a shape type in the trait tests? Parked for the user. Night 2026-10-04.
-- P40 `size` of a typed array: test_array_constructor (ignored) wants `size(640000*int)` = 2560000 bytes, the passing
+- P40 DECIDED (user, 2026-10-04): size = count; `byte_size` gives bytes; test_array_constructor stays ignored (P40). `size` of a typed array: test_array_constructor (ignored) wants `size(640000*int)` = 2560000 bytes, the passing
   test_array_length says `size` is a synonym for count. Which is right (bytes as `byte_size`?)? Parked for the user.
-- P41 Juxtaposed print arguments: `print "x changed to " value` prints the parts joined without a separator ("x changed
+- P41 DECIDED (user, 2026-10-04): no separator, as implemented. Juxtaposed print arguments: `print "x changed to " value` prints the parts joined without a separator ("x changed
   to 3"), only when the first part is a text literal (`print first xs` stays a call); commas still join with a space.
   Implemented default (wiki/signal.md example). Alternative: join with a space like the comma form. Night 2026-10-04.
-- P42 Comma against `==`: `(2 as float, 4.3 as int) == 2.0, 4` (ignored test_emit_cast_tuple) wants the right side
+- P42 DECIDED (user, 2026-10-04): keep the parse (comma looser than ==) and warn strongly when a tuple is compared to a bare comma expression `(…) == 2.0, 4`, suggesting parentheses. Comma against `==`: `(2 as float, 4.3 as int) == 2.0, 4` (ignored test_emit_cast_tuple) wants the right side
   to be the tuple (2.0, 4); today the comma binds looser than `==`, so it is `((…) == 2.0), 4`. Tuples in parentheses
   compare element by element now (`(…) == (2.0, 4)` → 1). Change the precedence (or only for a tuple on the left)?
   Not changed. Night 2026-10-04.
