@@ -50,7 +50,9 @@ const UNKNOWN_POSITION: &str = " at 0:0";
 /// Between a diagnostic's message and its fix
 const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
-const OUTPUT_CALLS: [&str; 5] = ["print", "puts", "puti", "putl", "putf"];
+/// The WASI output words besides print: each gives an Int (analyzer)
+pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
+const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
 pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::wasp_parser::FLOOR_QUOTIENT];
