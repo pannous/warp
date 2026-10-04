@@ -259,6 +259,7 @@ PASSED:
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
+  ✓ functions::test_def_without_parameters::a_def_without_parameters_is_a_function
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -1848,4 +1849,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-47 ignored, 1843 passed, 0 failed, 1843 total tested
+47 ignored, 1844 passed, 0 failed, 1844 total tested
