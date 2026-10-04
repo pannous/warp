@@ -137,7 +137,7 @@ impl Tasks<'_> {
 }
 
 /// `event: body`; `event: x = 7` parses as `(event: x) = 7`
-fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
+pub(crate) fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 	match handler.drop_meta() {
 		Node::Key(event, Op::Colon, body) => Some((event.drop_meta().clone(), body.as_ref().clone())),
 		Node::Key(head, op, value) => match head.drop_meta() {
@@ -148,7 +148,7 @@ fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 	}
 }
 
-fn word(node: &Node) -> String {
+pub(crate) fn word(node: &Node) -> String {
 	match node.drop_meta() {
 		Node::Symbol(name) => name.clone(),
 		_ => String::new(),
