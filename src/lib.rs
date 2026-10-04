@@ -20,6 +20,7 @@ pub mod type_kinds;
 pub mod gc_traits;
 pub mod context;
 pub mod wasm_emitter;
+pub mod pipeline;
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod wasm_optimizer;

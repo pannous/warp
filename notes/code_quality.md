@@ -34,8 +34,10 @@ tests/wasm/test_wasm.rs and tests/test_web.rs are gone (the default-build branch
 smarty.rs (user decision 2026-10-03): deleted with its asserts (`test_smart_types` in tests/numbers/test_angle.rs) and
 tests/test_asts.rs, the only user of the `syn` dev-dependency, which is gone too.
 
-#4 (part, 2026-10-04): lower_for_emission runs two ordered pass tables (`SOURCE_PASSES`, `MEANING_PASSES` in
-wasm_emitter/mod.rs) instead of an 11-deep nested call; the move to src/pipeline.rs is still open.
+#4 (2026-10-04): lower_for_emission runs two ordered pass tables (`SOURCE_PASSES`, `MEANING_PASSES`) instead of an
+11-deep nested call, and the driver (eval, compile, lower, the pass tables, run_module) lives in src/pipeline.rs;
+wasm_emitter re-exports the entry points and keeps emit_module, the trap reading and the raw-struct module. Moving the
+flat pass files into src/lowering/ is still open.
 
 Left, because they need a decision, edit tests, or would collide with the sessions editing the same files now:
 #4/#5/#10 moves and splits (every open branch touches mod.rs, analyzer.rs,

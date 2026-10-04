@@ -50,7 +50,7 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
-### Pipeline (`src/wasm_emitter/mod.rs`: `compile`, `eval`)
+### Pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
 `library_words.rs`, `switch.rs`, plus `analyzer.rs`) → analysis and diagnostics → WASM GC emitter → run.
