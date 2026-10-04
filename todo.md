@@ -68,3 +68,5 @@ The supervisor should remove the DONE elements after a while.
 - DONE: `2 h + 30 min` → "undefined variable: h" and `x=30 min; x` → 30: time units (time.rs durations) and units.rs quantities do not mix. (night 2026-10-04) (min is a time unit of units.rs (150 min); word durations of time.rs (`2 hours`) still do not mix with quantities; night 2026-10-04)
 - Traits: Printable/Iterable, generic constraints `sort(xs: Comparable list)` and `x in xs` through an `equals` override are open (split off the default-methods entry, night 2026-10-04).
 - `try X else Y` now also catches indexing a number (not_a_list), a missing field (no_field_x), text in run-time-kind arithmetic (not_a_number); still raw: struct field casts elsewhere, null dereferences, stack overflow, out of fuel. (night 2026-10-04)
+- DONE: Method chains on continuation lines (`numbers
+    .map(square)`) were "Unexpected character ."; a line starting with `.word` now continues the expression (samples/functions.wasp). (night 2026-10-04)

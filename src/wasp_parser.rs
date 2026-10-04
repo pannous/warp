@@ -779,8 +779,17 @@ impl WaspParser {
 		}
 	}
 
-	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line
+	/// Length of `\` plus trailing blanks and the newline, when the backslash ends its line; or of the line break and
+	/// indentation before a method call that starts the next line (`numbers\n    .map(square)`, as in JS, Kotlin, Swift)
 	fn line_continuation_length(&self) -> Option<usize> {
+		if matches!(self.current_char(), '\n' | '\r') && !self.options.data_mode {
+			let mut length = 1;
+			while matches!(self.peek_char(length), ' ' | '\t' | '\r' | '\n') {
+				length += 1;
+			}
+			let starts_method = self.peek_char(length) == '.' && (self.peek_char(length + 1).is_alphabetic() || self.peek_char(length + 1) == '_');
+			return starts_method.then_some(length);
+		}
 		if self.current_char() != '\\' {
 			return None;
 		}
