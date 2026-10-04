@@ -43,3 +43,9 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
 - warpgate Test (fix c0a084ac, 2026-10-04): the autouse session fixture `report_generation` (tests/conftest.py) runs
   `cargo llvm-cov run --all-features`, a full rebuild that exceeded pytest's 300 s timeout; the workflow now prebuilds
   it before `run.sh`. Verify the dispatched run (pannous/warpgate actions); dependabot PRs still run.
+- warpgate Test, later 2026-10-04: two runs lost the runner with coverage-instrumented binaries; integration tests now
+  run on a plain `cargo build --all-features` (7fb2e47f). Run 37176521946 then completed the whole suite with ~15 real
+  failures (mysql CLI missing on the runner: mysql/target_credential_encryption/db_migrations/admin_approval_protocols;
+  vnc ×4; web_ssh hung 14 min, then exit 143 before pytest's summary). 3758040a/6551bc0a: mysql-client, a resource line
+  every 2 min, `timeout --signal=INT 80m` around pytest (an early end still prints failures), -rfE, per-test 180 s.
+  Next run 37181090813: fix the remaining failures by cluster.
