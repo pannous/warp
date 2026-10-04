@@ -22,6 +22,7 @@ pub fn lower(node: Node) -> Node {
 	if functions.is_empty() {
 		return node;
 	}
+	DECLARED_TYPES.with(|types| *types.borrow_mut() = declared_types(&node));
 	let mut unknown = None;
 	collect_extras(&node, &mut functions, &mut unknown);
 	if let Some(error) = unknown {
@@ -70,10 +71,31 @@ fn parameter_default(parameter: &Node) -> Option<Node> {
 	}
 }
 
-/// `b=1` or `b:1` in a call: the name and the value
+thread_local! {
+	/// The program's declared types, while this pass runs: `pic{width:5}` constructs and `s:shape` declares, neither
+	/// names an argument
+	static DECLARED_TYPES: std::cell::RefCell<std::collections::HashSet<String>> = Default::default();
+}
+
+fn declared_types(node: &Node) -> std::collections::HashSet<String> {
+	let mut types = std::collections::HashSet::new();
+	node.visit(&mut |part| if let Node::Type { name, .. } = part { types.insert(name.name()); });
+	types
+}
+
+fn is_type(name: &str) -> bool {
+	crate::analyzer::type_word_kind(name).is_some() || DECLARED_TYPES.with(|types| types.borrow().contains(name))
+}
+
+/// `b=1` or `b:1` in a call: the name and the value. Not `pic:{…}` (an instance) nor `s:shape` (a parameter
+/// declaration in a signature)
 fn named_argument(argument: &Node) -> Option<(String, &Node)> {
 	match argument.drop_meta() {
-		Node::Key(name, Op::Assign | Op::Colon, value) => match name.drop_meta() {
+		Node::Key(name, op @ (Op::Assign | Op::Colon), value) => match name.drop_meta() {
+			Node::Symbol(_) if *op == Op::Colon && is_type(&name.name()) => None,
+			Node::Symbol(_) if *op == Op::Colon && matches!(value.drop_meta(), Node::Symbol(type_name) if is_type(type_name)) => None,
+			// `pic{width:5}` (parsed as `pic:{…}`) is an ad-hoc instance: a named object argument is written `opts={…}`
+			Node::Symbol(_) if *op == Op::Colon && matches!(value.drop_meta(), Node::List(_, crate::node::Bracket::Curly, _)) => None,
 			Node::Symbol(name) => Some((name.clone(), value)),
 			_ => None,
 		},
