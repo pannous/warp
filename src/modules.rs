@@ -246,7 +246,7 @@ impl Loader<'_> {
 	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data.
 	/// A required version the default branch does not declare comes from the matching git tag.
 	fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
-		let mut directory = fetch_package(name).map_err(|failure| error(&failure))?;
+		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
 		if let Some(requirement) = requirement {
 			let declared = package_module(&directory, name).and_then(|path| module_version(&path));
 			if !declared.is_some_and(|version| requirement.allows(&version)) {
@@ -267,7 +267,7 @@ impl Loader<'_> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let source = std::fs::read_to_string(&path).map_err(|failure| error(&format!("module not readable: {name}: {failure}")))?;
+		let source = module_source(&path).map_err(|failure| error(&format!("module not readable: {name}: {failure}")))?;
 		let module = WaspParser::parse(&source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
@@ -287,7 +287,7 @@ impl Loader<'_> {
 	/// The file of a module: every search directory below the directory of the including file, then below the working
 	/// directory; a name that already ends in an extension is tried as written
 	fn find(&self, name: &str) -> Option<PathBuf> {
-		self.candidates(name).into_iter().find(|path| path.is_file())
+		self.candidates(name).into_iter().find(|path| module_exists(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -572,12 +572,42 @@ fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<P
 }
 
 fn package_module(directory: &Path, name: &str) -> Option<PathBuf> {
-	MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| path.is_file())
+	MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| module_exists(path))
+}
+
+/// The text of a module file: from the file system, or in the browser fetched through the page (relative to the served
+/// repository, or a package's URL)
+fn module_source(path: &Path) -> Result<String, String> {
+	#[cfg(feature = "native")]
+	return std::fs::read_to_string(path).map_err(|failure| failure.to_string());
+	#[cfg(not(feature = "native"))]
+	return crate::web::fetch_text(&path.to_string_lossy()).ok_or_else(|| "not found".to_string());
+}
+
+fn module_exists(path: &Path) -> bool {
+	#[cfg(feature = "native")]
+	return path.is_file();
+	#[cfg(not(feature = "native"))]
+	return module_source(path).is_ok();
+}
+
+/// Where a registered package's files are: its fetched clone, or in the browser the raw files of its repository at the
+/// pinned tag (GitHub serves them to any page) or default branch
+fn package_directory(name: &str) -> Result<PathBuf, String> {
+	#[cfg(feature = "native")]
+	return fetch_package(name);
+	#[cfg(not(feature = "native"))]
+	{
+		let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+		let repository = package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
+		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
+		Ok(PathBuf::from(format!("{repository}/{reference}")))
+	}
 }
 
 /// The version a module file declares with a top level `version 1.2.3`
 fn module_version(path: &Path) -> Option<Version> {
-	let source = std::fs::read_to_string(path).ok()?;
+	let source = module_source(path).ok()?;
 	declared_version(&statements(WaspParser::parse(&source)))
 }
 

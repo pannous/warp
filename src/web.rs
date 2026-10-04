@@ -226,7 +226,36 @@ mod page {
 		pub fn now_ms() -> f64;
 		/// A panic message of the compiler, shown instead of a bare `unreachable`
 		pub fn panicked(message: *const u8, length: usize);
+		/// Fetch a text (a path of the served repository or a URL) and keep it; its length in bytes, -1 when missing
+		pub fn fetch(url: *const u8, length: usize) -> isize;
+		/// Copy the kept fetched text to `into`
+		pub fn take_fetched(into: *mut u8);
 	}
+}
+
+/// Without the page (a build without `native` outside wasm): the file itself
+#[cfg(not(any(target_arch = "wasm32", feature = "native")))]
+pub fn fetch_text(address: &str) -> Option<String> {
+	std::fs::read_to_string(address).ok()
+}
+
+/// A text the page fetches for the compiler (module files, packages), remembered per address: `None` when missing
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn fetch_text(address: &str) -> Option<String> {
+	thread_local! {
+		static FETCHED: RefCell<std::collections::HashMap<String, Option<String>>> = RefCell::new(std::collections::HashMap::new());
+	}
+	if let Some(known) = FETCHED.with(|fetched| fetched.borrow().get(address).cloned()) {
+		return known;
+	}
+	let length = unsafe { page::fetch(address.as_ptr(), address.len()) };
+	let text = (length >= 0).then(|| {
+		let mut bytes = vec![0u8; length as usize];
+		unsafe { page::take_fetched(bytes.as_mut_ptr()) };
+		String::from_utf8_lossy(&bytes).into_owned()
+	});
+	FETCHED.with(|fetched| fetched.borrow_mut().insert(address.to_string(), text.clone()));
+	text
 }
 
 /// Run a compiled module in the embedding host and read its outcome

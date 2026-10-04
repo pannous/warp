@@ -77,3 +77,10 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   user; *.pannous.com otherwise points to the pannous.com server.
 - The tests page is not published (it needs test_in_browser.py's endpoints and the 38 MB test binary).
 - C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
+
+## Modules and packages in the browser (2026-10-04)
+The compiler reads module files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `fetch_text`,
+cached per address), a path of the served repository or a URL. A registered package (packages.wasp) is read from its
+GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
+`use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
+are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent).

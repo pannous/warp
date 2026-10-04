@@ -52,6 +52,15 @@ function readFile(path) {
 	}
 }
 
+// the bytes of a file of the served repository or of a URL, failing in the words of the native read
+function readBytes(path) {
+	try {
+		return getSync(/^https?:/.test(path) ? path : FILE_ROOT + path, 0, true);
+	} catch (failure) {
+		throw failure.message === HTTP_NOT_FOUND ? new Error(FILE_NOT_FOUND) : failure;
+	}
+}
+
 // the body of a host call as (pointer, length), or (pointer, -length) of the failure reason, like src/host.rs
 function hostResult(program, action, what) {
 	try {
@@ -88,9 +97,15 @@ function programImports(holder, hooks) {
 		host: {
 			fetch: (pointer, length) => fetchUrl(pointer, length),
 			fetch_within: (pointer, length, milliseconds) => fetchUrl(pointer, length, Number(milliseconds)),
+			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched
 			read: (pointer, length) => {
 				const path = text(pointer, length);
-				return hostResult(program(), () => readFile(path), `read ${path}`);
+				try {
+					return writeBytes(program(), readBytes(path));
+				} catch (reason) {
+					const [failed, failedLength] = writeBytes(program(), utf8.encode(`read ${path} failed: ${reason.message ?? reason}`));
+					return [failed, -failedLength];
+				}
 			},
 			warn: (pointer, length) => holder.warnings.push(text(pointer, length)),
 			run: () => -1n,
@@ -162,6 +177,7 @@ function runProgram(bytes, hooks) {
 // the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation)
 function warpHost(memory, hooks) {
 	let pendingOutcome; // the JSON a run left for warp_host.take
+	let pendingFetched; // the text a fetch left for warp_host.take_fetched
 	return {
 		run: (pointer, length) => {
 			const bytes = new Uint8Array(memory().buffer, pointer, length).slice();
@@ -172,5 +188,16 @@ function warpHost(memory, hooks) {
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
 		now_ms: () => Date.now(),
 		panicked: (pointer, length) => hooks.panicked(utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length))),
+		// a module file or package source for the compiler: a path of the served repository, or a URL
+		fetch: (pointer, length) => {
+			const address = utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));
+			try {
+				pendingFetched = utf8.encode(/^https?:/.test(address) ? getSync(address) : readFile(address.replace(/^\.\//, "")));
+				return pendingFetched.length;
+			} catch {
+				return -1;
+			}
+		},
+		take_fetched: into => new Uint8Array(memory().buffer, into, pendingFetched.length).set(pendingFetched),
 	};
 }

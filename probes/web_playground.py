@@ -19,6 +19,9 @@ CHECKS = {
 	"xs=[1 2]; xs#5": 'Error("index out of range")',
 	"2^100": "1267650600228229401496703205376",
 	"1/3": "1/3",
+	# packages and module files come through the page (warp_host.fetch, host.read of a URL)
+	'use uniscript; uniscript("<:alpha>")': '"α"',
+	"include tests/fixtures/counter; counter": "11",
 }
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
