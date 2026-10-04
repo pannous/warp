@@ -450,6 +450,7 @@ PASSED:
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
   ✓ lists::test_node_lists::a_list_parameter_indexed_in_a_loop_is_linear
   ✓ lists::test_node_lists::a_node_list_keeps_its_elements_and_values
+  ✓ lists::test_node_lists::a_recursive_list_function_passes_its_array
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_pop::pop_gives_the_last_item
@@ -1768,4 +1769,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1763 passed, 0 failed, 1763 total tested
+53 ignored, 1764 passed, 0 failed, 1764 total tested

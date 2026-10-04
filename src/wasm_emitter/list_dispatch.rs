@@ -574,6 +574,10 @@ impl WasmGcEmitter {
 			Node::List(items, Bracket::Square, _) if self.number_source_of(name, value).is_literal() || items.is_empty() => {
 				self.emit_typed_list_of(func, items, list.element)
 			}
+			// a call of a function giving back its array: that array, no conversion (list_abi.rs)
+			_ if list.element == ElementType::Node && super::list_abi::called_function(value).is_some_and(|callee| self.returns_list_abi(callee)) => {
+				self.emit_list_abi_value(func, value);
+			}
 			// a Node list (a call's result, a list parameter): its items once into the array
 			_ if list.element == ElementType::Node => {
 				self.emit_node_instructions(func, value);

@@ -660,7 +660,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Function definitions and imports: compiled ahead, no runtime value
-	fn is_definition(&self, item: &Node) -> bool {
+	pub(super) fn is_definition(&self, item: &Node) -> bool {
 		self.defined_function_name(item).is_some() || match item.drop_meta() {
 			Node::List(list_items, _, _) if list_items.len() >= 2 => {
 				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || s == "use" || s == "import")

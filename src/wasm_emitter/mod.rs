@@ -17,6 +17,7 @@ mod list_dispatch;
 mod library_ops;
 mod text_unicode;
 pub(crate) mod list_ops;
+mod list_abi;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
@@ -185,6 +186,10 @@ pub struct WasmGcEmitter {
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
+	/// The array calling convention of the user functions that have one (list_abi.rs)
+	list_abi: HashMap<String, list_abi::ListAbi>,
+	/// The function being compiled returns a $NodeList
+	returns_list: bool,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 	closures: closures::ClosureTypes,
 }
@@ -232,6 +237,8 @@ impl WasmGcEmitter {
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
 			moved_lists: Vec::new(),
+			list_abi: HashMap::new(),
+			returns_list: false,
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
 		}
@@ -372,6 +379,7 @@ impl WasmGcEmitter {
 		// Clone the function names to avoid borrow issues
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
 
+		self.list_abi = self.find_list_abi();
 		// PASS 1: Register all function signatures and indices
 		// This allows forward references (e.g., is_prime can call check before check is compiled)
 		for name in &func_names {
@@ -397,8 +405,12 @@ impl WasmGcEmitter {
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
 		let func_type_idx = self.type_manager.types().len();
-		let param_types: Vec<ValType> = user_fn.params.iter().map(|param| self.storage_type(param_kind(param))).collect();
-		let result_types = if !user_fn.tuple_kinds.is_empty() {
+		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
+			.map(|(index, param)| if self.takes_list_abi(name, index) { self.node_list_type() } else { self.storage_type(param_kind(param)) })
+			.collect();
+		let result_types = if self.returns_list_abi(name) {
+			vec![self.node_list_type()]
+		} else if !user_fn.tuple_kinds.is_empty() {
 			self.tuple_result_types(&user_fn.tuple_kinds)
 		} else if returns_node {
 			vec![Ref(self.node_ref(false))]
@@ -431,13 +443,18 @@ impl WasmGcEmitter {
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.ctx.declared_globals.clone();
-		for param in user_fn.params.iter() {
-			self.scope.define_param(param.name.clone(), param_kind(param));
+		for (index, param) in user_fn.params.iter().enumerate() {
+			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
+			self.scope.define_param(param.name.clone(), kind);
 		}
 
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
-		let typed_lists = self.find_typed_lists(&user_fn.body);
+		let mut typed_lists = self.find_typed_lists(&user_fn.body);
+		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
+			let _ = index;
+			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
+		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
@@ -448,6 +465,8 @@ impl WasmGcEmitter {
 		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
 		let saved_returns_node = std::mem::replace(&mut self.returns_node, returns_node);
 		let saved_returns_float = std::mem::replace(&mut self.returns_float, user_fn.return_kind.is_float());
+		let returns_list = self.returns_list_abi(name);
+		let saved_returns_list = std::mem::replace(&mut self.returns_list, returns_list);
 		let saved_loop_labels = self.take_loop_labels();
 		let mut locals = self.local_declarations(num_params as usize);
 		if temp_locals > 0 {
@@ -465,7 +484,9 @@ impl WasmGcEmitter {
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
 		// Compile the function body - use node instructions for Node-returning functions
-		if !user_fn.tuple_kinds.is_empty() {
+		if self.returns_list {
+			self.emit_list_abi_body(&mut func, &user_fn.body);
+		} else if !user_fn.tuple_kinds.is_empty() {
 			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
 			self.emit_node_instructions(&mut func, &user_fn.body);
 			func.instruction(&Instruction::Drop);
@@ -497,6 +518,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = saved_temp_local;
 		self.returns_node = saved_returns_node;
 		self.returns_float = saved_returns_float;
+		self.returns_list = saved_returns_list;
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
 
@@ -516,7 +538,9 @@ impl WasmGcEmitter {
 		// Emit arguments and call
 		self.emit_user_function_call_inner(func, &user_fn, args);
 
-		if user_fn.return_kind.is_float() {
+		if self.returns_list_abi(fn_name) {
+			self.emit_call(func, "node_list_as_node");
+		} else if user_fn.return_kind.is_float() {
 			self.emit_call(func, "new_float");
 		} else if !returns_node {
 			self.emit_call(func, "new_int");
@@ -557,6 +581,9 @@ impl WasmGcEmitter {
 		// Emit arguments and call
 		self.emit_user_function_call_inner(func, &user_fn, args);
 
+		if self.returns_list_abi(fn_name) {
+			self.emit_call(func, "node_list_as_node");
+		}
 		if user_fn.return_kind.is_float() {
 			self.emit_float_in_exact_context(func, fn_name);
 		} else if returns_node {
@@ -585,6 +612,10 @@ impl WasmGcEmitter {
 				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", user_fn.name, param.name));
 				return;
 			};
+			if self.takes_list_abi(&user_fn.name, i) {
+				self.emit_list_abi_value(func, argument);
+				continue;
+			}
 			let expected = param_kind(param);
 			let given = self.get_type(argument);
 			// a declared list (`xs:list`, `xs:ints`) refuses a number or text loudly (wiki/Footguns.md "Type annotations not enforced loudly")
@@ -1811,7 +1842,9 @@ impl WasmGcEmitter {
 	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error("…")` from a
 	/// function of numbers fails the run with the message, it cannot give back an Error value
 	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
-		if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
+		if self.returns_list {
+			self.emit_list_abi_value(func, value);
+		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
 			self.emit_trap_detail(func, message);
 			self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
 		} else if self.returns_node {

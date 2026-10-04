@@ -86,3 +86,8 @@ stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function inde
   shares one array without copies (moved_lists). A list parameter indexed in a loop and not reassigned from a call there
   is copied into an array once (`arr·list = arr`). quicksort_partitioned of 1000: 32 s → 12.5 s; what remains is the
   Node conversion per recursive call (a $NodeList ABI for parameters and results would remove it).
+- Array calling convention (src/wasm_emitter/list_abi.rs, 2026-10-04): a function whose list parameter p is used only
+  through its copy `p·list = p` takes p as a `$NodeList` (the callee copies it with one array.copy, values stay values);
+  a function whose every result is such an array or a call of another such function returns the `$NodeList`. Callers
+  convert only where a Node is needed. quicksort_partitioned of 1000: 12.5 s → 0.9 s. Not for closure targets, tuple
+  functions or text parameters.
