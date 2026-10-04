@@ -59,6 +59,16 @@ pub fn fetch(url: &str) -> String {
 	crate::extensions::utils::download(url)
 }
 
+/// The engine of a program that starts tasks (tasks.rs): gc_engine's settings plus epoch interruption, the check
+/// points where a task stops or pauses
+#[cfg(feature = "native")]
+pub fn task_engine() -> Engine {
+	let mut config = deterministic_config();
+	config.consume_fuel(true);
+	config.epoch_interruption(true);
+	Engine::new(&config).expect("Failed to create WASM engine")
+}
+
 /// Create a WASM engine with GC, function references, canonical NaNs and fuel metering.
 /// This is the standard configuration for all wasp WASM operations; create its stores with `fueled_store`.
 #[cfg(feature = "native")]

@@ -25,15 +25,20 @@ const CLOCK: &str = "clock";
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
+pub const TASK_CONTROL: &str = "task_control";
+/// The operations of `task_control(id, op)`: `stop job` / `cancel job`, `pause job`, `resume job`
+pub const TASK_STOP: i64 = 1;
+pub const TASK_PAUSE: i64 = 2;
+pub const TASK_RESUME: i64 = 3;
 /// The Int arguments task_spawn carries; a function of more runs where it is started
 pub const MAX_TASK_ARGUMENTS: usize = 4;
-pub const HOST_WORDS: [&str; 6] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT];
+pub const HOST_WORDS: [&str; 7] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 6] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 7] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
-		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64])]
+		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64])]
 }
 
 /// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets

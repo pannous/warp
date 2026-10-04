@@ -22,6 +22,8 @@ const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
 const TASK_GO: &str = "task·go";
 const TASK_VALUE: &str = "task·value";
+/// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
+const TASK_CONTROL_MARK: &str = "task·control";
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
@@ -112,6 +114,18 @@ impl Tasks<'_> {
 		}
 	}
 
+	/// `stop job`: a control of a task that may run on a thread, else the warning that a finished task has nothing to stop
+	fn control(&self, subject: &Node, control: &str) -> Node {
+		let variable = match subject.drop_meta() {
+			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => word(&items[1]),
+			other => other.name(),
+		};
+		match self.started.get(&variable) {
+			Some(function) => marker(TASK_CONTROL_MARK, vec![Node::Symbol(variable), Node::Symbol(function.clone()), Node::Symbol(control.to_string())]),
+			None => nothing_to_stop(&Node::Symbol(variable), control),
+		}
+	}
+
 	/// A read of a task variable: its value once the task is done (`await job`, `job + 1`)
 	fn value_of(&self, variable: &str) -> Option<Node> {
 		let function = self.started.get(variable)?;
@@ -135,7 +149,7 @@ impl Tasks<'_> {
 			}
 			// `job.stop()`, `job.pause`
 			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {
-				never_happens(&subject, &format!("{} {} has nothing to stop: a task finishes where it starts", control_word(&word), subject.name()))
+				self.control(&subject, &control_word(&word))
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left)), op, Box::new(self.lower(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
@@ -155,9 +169,7 @@ impl Tasks<'_> {
 				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
 			}),
 			// `stop job`
-			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => {
-				Some(never_happens(subject, &format!("{} {} has nothing to stop: a task finishes where it starts", word(control), subject.name())))
-			}
+			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => Some(self.control(subject, &word(control))),
 			_ => None,
 		}
 	}
@@ -198,7 +210,7 @@ impl Tasks<'_> {
 /// as a plain call, and its task variable is its value
 pub fn resolve_tasks(node: Node) -> Node {
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK)));
 	if !has_task {
 		return node;
 	}
@@ -227,6 +239,10 @@ fn resolved(node: Node, threaded: &dyn Fn(&str) -> bool) -> Node {
 				TASK_VALUE => match threaded(&word(&items[2])) {
 					true => marker(crate::host::TASK_AWAIT, vec![items[1].clone()]),
 					false => items[1].clone(),
+				},
+				TASK_CONTROL_MARK => match threaded(&word(&items[2])) {
+					true => marker(crate::host::TASK_CONTROL, vec![items[1].clone(), Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3]))))]),
+					false => nothing_to_stop(&items[1], &word(&items[3])),
 				},
 				_ => Node::List(items, bracket, separator),
 			}
@@ -261,6 +277,19 @@ fn control_word(node: &Node) -> String {
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => items[0].drop_meta().name(),
 		other => other.name(),
+	}
+}
+
+fn nothing_to_stop(subject: &Node, control: &str) -> Node {
+	never_happens(subject, &format!("{control} {} has nothing to stop: a task finishes where it starts", subject.name()))
+}
+
+/// The task_control operation of a control word
+fn control_operation(control: &str) -> i64 {
+	match control {
+		"pause" => crate::host::TASK_PAUSE,
+		"resume" => crate::host::TASK_RESUME,
+		_ => crate::host::TASK_STOP, // stop, cancel
 	}
 }
 

@@ -288,8 +288,12 @@ fn run_main<S: 'static>(
 	state: S,
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
-	let engine = gc_engine();
+	let starts_tasks = crate::tasks::imports_tasks_in(bytes);
+	let engine = if starts_tasks { crate::util::task_engine() } else { gc_engine() };
 	let mut store = crate::util::fueled_store(&engine, state);
+	if starts_tasks {
+		store.set_epoch_deadline(crate::tasks::MAIN_EPOCH_DEADLINE);
+	}
 	let module = Module::new(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
