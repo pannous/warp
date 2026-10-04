@@ -631,5 +631,5 @@ fn test_ffi_text_arguments_known_at_run_time() {
 
 #[test]
 fn test_a_program_of_imports_only_is_empty() {
-	is!("import atof from \"c\"\nimport atoi from \"c\"", Node::Empty);
+	is!("import atof from \"c\"\nimport atoi from \"c\"", warp::Node::Empty);
 }
