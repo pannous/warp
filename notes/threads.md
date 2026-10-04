@@ -64,6 +64,20 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   parameters (the list ABI passes arrays, not Nodes), function values; exact numbers beyond the fixnums (ratios, big
   integers) are a clear error, being handles into the memory of their instance.
 
+- Catchable (2026-10-04): `await` is `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task
+  raises its message from wasm as a `returned_error` with trap detail, which `try` catches.
+- Lists (2026-10-04): a task of values starts through `f·node(arguments·node)` (declarations::with_node_wrappers): one
+  argument list, so neither host needs parameter types, and the emitter converts into f's own convention (arrays);
+  the Int words carry only surely-Int arguments (literals, variables assigned Int literals).
+- Step 4 done (2026-10-04): `once job finishes: …` / `on job.stop: …` of a task on a thread: a check after every later
+  statement of the block (task_status), the handler runs once; the block's end waits for the task (before its last
+  statement, which keeps the block's value).
+- Step 5 done (2026-10-04): host.js runs tasks on a pool of Workers (task-worker.js) made while the program's worker is
+  idle (a Worker starts only once its creator returns to the event loop), results as JSON in a growable
+  SharedArrayBuffer awaited with Atomics.wait; without cross-origin isolation a task runs at once in a fresh instance.
+  The test server sends COOP/COEP; the playground gets them from coi-serviceworker.js (one reload). Measured: two
+  one-second tasks take 1.0 s in the playground. Pause/resume in the browser: not yet (no epoch checks there).
+
 ## Steps (each its own commit with tests)
 1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
    typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total

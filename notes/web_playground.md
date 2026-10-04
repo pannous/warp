@@ -73,6 +73,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
   get a host import that asks the static server to run them, which defeats the point of the browser run.
 
+## Tasks on Workers (2026-10-04, notes/threads.md step 5)
+- host.js startTask: a task runs on a Worker of a pool (task-worker.js) when the page is cross-origin isolated, else at
+  once in a fresh instance. The pool is made by worker.js / test-worker.js at start (prepareTaskPool): a Worker made
+  while a program runs would never start. test_in_browser.py sends COOP/COEP; index.html registers
+  coi-serviceworker.js, which adds them on GitHub Pages (one reload, guarded by sessionStorage "isolating").
+
 ## Published: https://warp.pannous.com/ (user request 2026-10-03)
 - .github/workflows/pages.yml ("Playground") builds warp.wasm + samples.js with web/playground/build.sh on a push to
   main touching src/, web/playground/, samples/ or the manifest (or `gh workflow run Playground -R pannous/warp`) and
