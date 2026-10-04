@@ -540,6 +540,7 @@ fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first_assign: bo
 					Node::Symbol(name) => {
 						type_list_by_first_append(name, right, scope);
 						widen_to_float(scope, name, right);
+						widen_to_node(scope, name, right);
 					}
 					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 					Node::Key(var_name, Op::Colon, type_node) => {
@@ -604,6 +605,21 @@ fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 		if float_value {
 			local.kind = Kind::Float;
 		}
+	}
+}
+
+/// The kinds a variable may hold whose values are told apart only by representation; a variable given values of two
+/// of them that do not mix (a list, then an Int; a text, then an Int) is held as a Node of run-time kind (P45). Int
+/// and Float widen to Float instead (widen_to_float), a text and a character are both texts.
+const CONCRETE_KINDS: [Kind; 6] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List, Kind::Symbol];
+
+fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
+	let assigned = binding_kind(value, scope);
+	let Some(local) = scope.locals.get_mut(name).filter(|local| local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
+	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
+	if CONCRETE_KINDS.contains(&local.kind) && CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned) {
+		local.kind = Kind::Empty;
+		local.type_node = None;
 	}
 }
 

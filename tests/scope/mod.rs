@@ -10,3 +10,4 @@ mod test_globals;
 mod test_prefixed_declarations;
 mod test_undefined_variable;
 mod test_use_scopes;
+mod test_variable_kind_change;

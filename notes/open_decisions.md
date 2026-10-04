@@ -84,6 +84,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
   `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
   alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
+- P45 A variable given values of two kinds: `x = 5; x = [1]; x` was 1 (the variable kept its first kind) and
+  `x = "a"; x = 5; x + 1` an internal cast failure. Implemented default: a variable given values of two kinds that do
+  not mix (a list then an Int, a text then an Int; Int and Float still widen to Float) is held as a Node and computes
+  by its run-time kind, as a variable first bound to ø is: `x = [1]` then `x = 5; x + 1` is 6, and a loop variable may
+  reuse a list's name. Alternative: a compile error "x was a list, is given an Int: use another name". Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
