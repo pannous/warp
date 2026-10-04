@@ -27,4 +27,4 @@ mod test_try_else_value;
 mod test_block_statements;
 mod test_try_named_traps;
 mod test_tasks;
-mod test_branch_assigned_locals;
+mod test_branch_assigned_variables;
