@@ -3800,12 +3800,34 @@ pub struct CompiledModule {
 	needs_ffi: bool,
 }
 
+/// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
+/// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
+const SOURCE_PASSES: [fn(Node) -> Node; 11] = [
+	crate::declarations::lower_c_functions, crate::comprehensions::lower, crate::library_words::lower_function_methods,
+	crate::tuples::lower, crate::mutation::lower, crate::host::lower_aliases, crate::modules::resolve,
+	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
+	crate::analyzer::lower_negated_calls,
+];
+
+/// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
+const MEANING_PASSES: [fn(Node) -> Node; 18] = [
+	crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
+	crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::real::lower,
+	crate::type_constructor::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
+	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
+	crate::traits::lower_dispatch,
+];
+
+fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
+	passes.iter().fold(node, |node, pass| pass(node))
+}
+
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, Capability, EffectReport};
 
-	let node = crate::analyzer::lower_negated_calls(crate::versions::lower_versions(crate::meta_entries::lower(crate::type_name_matching::lower(crate::modules::resolve(crate::host::lower_aliases(crate::mutation::lower(crate::tuples::lower(crate::library_words::lower_function_methods(crate::comprehensions::lower(crate::declarations::lower_c_functions(node)))))))))));
+	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -3823,20 +3845,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = crate::type_tests::lower(crate::traits::lower_declarations(node));
-	let node = crate::ambiguous_forms::lower(node);
-	let node = crate::analyzer::lower_list_times(node);
-	let node = crate::lambdas::lower(node);
-	let node = crate::function_values::lower(node);
-	let node = crate::closures::lower(node);
-	let node = crate::lambdas::lower_strict(node);
-	let node = crate::real::lower(node);
-	let node = crate::traits::lower_conformances(crate::overloads::lower(crate::type_constructor::lower(node)));
-	let node = crate::min_max::lower(node);
-	let node = crate::declarations::lower(node);
-	let node = crate::switch::lower(node);
-	let node = crate::phrase_words::lower(node);
-	let node = crate::traits::lower_dispatch(crate::library_words::lower(node));
+	let node = run_passes(node, &MEANING_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
