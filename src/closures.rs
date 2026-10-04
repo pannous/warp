@@ -131,6 +131,8 @@ fn tail(body: &Node) -> &Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) if !items.is_empty() => tail(&items[items.len() - 1]),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 => tail(&items[0]),
+		// `return value`
+		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return")) => tail(&items[1]),
 		other => other,
 	}
 }

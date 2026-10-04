@@ -6,6 +6,8 @@ use crate::operators::Op;
 
 const ENUM_WORD: &str = "enum";
 const FIRST_CASE_INDEX: i64 = 0;
+/// The argument left out of a partial application: `add(1, _)`
+const PLACEHOLDER: &str = "_";
 
 pub fn lower(node: Node) -> Node {
 	lower_lists(node, enum_object)
@@ -14,7 +16,30 @@ pub fn lower(node: Node) -> Node {
 /// C definitions, before any pass reads `real f(…)` as a conversion of a call; and keyword definitions
 /// (`def f(x) {…}`, `fun`, `function`) as `f(x) := {…}`, so every pass reads one definition form
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(node, |items| c_function(items).or_else(|| keyword_definition(items)))
+	lower_lists(node, |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
+}
+
+/// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
+fn partial_application(items: &[Node]) -> Option<Node> {
+	let [Node::Symbol(_), arguments @ ..] = items else { return None };
+	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
+	if !arguments.iter().any(is_placeholder) {
+		return None;
+	}
+	let mut parameters = vec![];
+	let arguments = arguments.iter().map(|argument| match is_placeholder(argument) {
+		true => {
+			parameters.push(Node::Symbol(format!("partial_{}", parameters.len() + 1)));
+			parameters.last().expect("pushed").clone()
+		}
+		false => argument.clone(),
+	});
+	let call = Node::List(std::iter::once(items[0].clone()).chain(arguments).collect(), Bracket::Round, Separator::None);
+	let head = match parameters.as_slice() {
+		[single] => single.clone(),
+		_ => Node::List(parameters, Bracket::Round, Separator::Colon),
+	};
+	Some(Node::Key(Box::new(head), Op::FatArrow, Box::new(call)))
 }
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
