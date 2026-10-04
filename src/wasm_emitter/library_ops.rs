@@ -90,7 +90,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap unless the node in local `local` has kind `expected`
-	fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
+	pub(super) fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(func, &[I::I64Const(expected as i64), I::I64Ne]);
 		self.emit_fail_if(func, error);

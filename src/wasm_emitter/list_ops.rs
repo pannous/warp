@@ -992,6 +992,10 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
 	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+		if let (Some(slot), Some(key)) = (self.typed_map(target), self.map_key(index)) {
+			self.emit_typed_map_set(func, slot, &key, value);
+			return self.emit_assigned_entry_value(func, target, &key, value);
+		}
 		if let Some(key) = self.map_key(index) {
 			return self.emit_entry_assignment(func, target, &key, value, crate::library_words::FIELD_WITH);
 		}
@@ -1033,6 +1037,11 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, value);
 		self.emit_call(func, setter);
 		self.emit_store_updated(func, target);
+		self.emit_assigned_entry_value(func, target, key, value);
+	}
+
+	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
+	fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;
@@ -1351,6 +1360,18 @@ impl WasmGcEmitter {
 
 	/// Push the Node at `target#index`: the entry value for a key, else the element at the 1-based position
 	pub(super) fn emit_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
+		// a map held as a hash table answers when it can; the generic lookup on its Node gives the rest and the errors
+		if let (Some(slot), Some(key)) = (self.typed_map(target), self.map_key(index)) {
+			func.instruction(&I::Block(BlockType::Result(Ref(self.node_ref(false)))));
+			self.emit_typed_map_lookup(func, slot, &key);
+			self.emit_generic_indexed_node(func, target, index);
+			func.instruction(&I::End);
+			return;
+		}
+		self.emit_generic_indexed_node(func, target, index);
+	}
+
+	fn emit_generic_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		match self.map_key(index) {
 			Some(key) => match crate::analyzer::constant_field_name(&key) {
 				// the value of the entry, else of the meta entry `@name`, or the runtime error naming the missing field

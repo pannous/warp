@@ -96,6 +96,11 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::NODE_WITH_KEY) {
 		required.extend(["node_with_at", crate::library_words::FIELD_WITH]);
 	}
+	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get
+	if super::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {
+		required.extend(super::map_backend::NODE_MAP_FUNCTIONS);
+		required.insert("map_get");
+	}
 	// maps compare keys by name: map_key_name reads a character key as its text
 	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);

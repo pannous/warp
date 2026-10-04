@@ -50,6 +50,10 @@ pub struct TypeManager {
 	pub node_array_type: u32,
 	pub node_list_type: u32,
 
+	/// $NodeMap = (struct (field $count (mut i32)) (field $keys (mut (ref $NodeArray))) (field $values (mut (ref $NodeArray)))
+	/// (field $slots (mut (ref $Limbs)))): a map variable held as a hash table (map_backend.rs)
+	pub node_map_type: u32,
+
 	/// Next available type index
 	next_type_idx: u32,
 
@@ -85,6 +89,7 @@ impl TypeManager {
 			float_list_type: 0,
 			node_array_type: 0,
 			node_list_type: 0,
+			node_map_type: 0,
 			next_type_idx: 0,
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
@@ -156,6 +161,19 @@ impl TypeManager {
 		(self.int_array_type, self.int_list_type) = self.emit_typed_list_types(ValType::I64);
 		(self.float_array_type, self.float_list_type) = self.emit_typed_list_types(ValType::F64);
 		self.emit_node_list_types();
+		self.emit_node_map_type();
+	}
+
+	fn emit_node_map_type(&mut self) {
+		let reference = |index: u32| Val(Ref(RefType { nullable: false, heap_type: HeapType::Concrete(index) }));
+		self.types.ty().struct_(vec![
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // count
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // keys, capacity = their length
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // values
+			FieldType { element_type: reference(self.limbs_type), mutable: true }, // slots: entry index or -1
+		]);
+		self.node_map_type = self.next_type_idx;
+		self.next_type_idx += 1;
 	}
 
 	/// $NodeArray and $NodeList = (struct (field $length (mut i32)) (field $items (mut (ref $NodeArray))) (field $kind (mut i64)))

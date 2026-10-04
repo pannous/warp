@@ -416,6 +416,9 @@ impl WasmGcEmitter {
 
 	/// How the local of a variable is stored: a typed list as its list struct, anything else by its kind
 	pub(super) fn local_storage_type(&self, name: &str, kind: Kind) -> ValType {
+		if self.typed_maps.contains(name) {
+			return Ref(self.node_map_ref());
+		}
 		match self.typed_lists.get(name) {
 			Some(list) => Ref(self.typed_list_ref(list.element)),
 			None => self.storage_type(kind),
@@ -430,6 +433,9 @@ impl WasmGcEmitter {
 				self.emit_discarded_statements(func, statements);
 				return self.emit_list_count(func, last, counter);
 			}
+		}
+		if let (Some(slot), NODE_COUNT) = (self.typed_map(target), counter) {
+			return self.emit_typed_map_count(func, slot);
 		}
 		match (self.typed_list(target), counter) {
 			(Some((slot, list)), NODE_COUNT) => {
@@ -533,6 +539,10 @@ impl WasmGcEmitter {
 
 	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
 	pub(super) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
+		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
+			self.emit_typed_map_store(func, slot); // find_typed_maps admits only `{}`
+			return true;
+		}
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
 		// `(statements; last)`: the statements run, the last value is stored
 		if let Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) = value.drop_meta() {
@@ -611,11 +621,15 @@ impl WasmGcEmitter {
 	pub(super) fn typed_list_store(&self, statement: &Node) -> Option<(String, Node)> {
 		let Node::Key(target, Op::Assign | Op::Define, value) = statement.drop_meta() else { return None };
 		let Node::Symbol(name) = target.drop_meta() else { return None };
-		self.typed_lists.contains_key(name).then(|| (name.clone(), value.as_ref().clone()))
+		(self.typed_lists.contains_key(name) || self.typed_maps.contains(name)).then(|| (name.clone(), value.as_ref().clone()))
 	}
 
 	/// Push a typed list variable as the Node list it stands for; false for any other variable
 	pub(super) fn emit_typed_list_as_node(&mut self, func: &mut Function, name: &str) -> bool {
+		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
+			self.emit_typed_map_as_node(func, slot);
+			return true;
+		}
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
 		func.instruction(&I::LocalGet(slot));
 		self.emit_call(func, list.element.runtime().as_node);

@@ -19,6 +19,7 @@ mod library_ops;
 mod text_unicode;
 pub(crate) mod list_ops;
 mod list_abi;
+mod map_backend;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;
@@ -200,6 +201,7 @@ pub struct WasmGcEmitter {
 	source_position: Option<(usize, usize)>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
@@ -253,6 +255,7 @@ impl WasmGcEmitter {
 			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
+			typed_maps: std::collections::HashSet::new(),
 			moved_lists: Vec::new(),
 			list_abi: HashMap::new(),
 			returns_list: false,
@@ -479,6 +482,8 @@ impl WasmGcEmitter {
 			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
+		let typed_maps = self.find_typed_maps(&user_fn.body);
+		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -545,6 +550,7 @@ impl WasmGcEmitter {
 		self.returns_list = saved_returns_list;
 		self.restore_loop_labels(saved_loop_labels);
 		self.typed_lists = saved_typed_lists;
+		self.typed_maps = saved_typed_maps;
 
 		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
@@ -1120,6 +1126,7 @@ impl WasmGcEmitter {
 		self.emit_text_builtins();
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value and text_concat, which it calls
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
+		self.emit_node_map_runtime();
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 	}
 
@@ -1290,6 +1297,7 @@ impl WasmGcEmitter {
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.find_typed_lists(node);
+		self.typed_maps = self.find_typed_maps(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
