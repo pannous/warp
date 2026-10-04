@@ -18,6 +18,11 @@ pub const TEXT_OF: &str = "text_of";
 pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
+/// `trim(text)`: the text without the whitespace at either end, sharing its memory
+const TRIM: &str = "trim";
+const TEXT_TRIM: &str = "text_trim";
+/// The bytes trim drops: space, tab, line feed, carriage return
+const WHITESPACE_BYTES: [i32; 4] = [b' ' as i32, b'\t' as i32, b'\n' as i32, b'\r' as i32];
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
@@ -34,9 +39,9 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 8] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 9] = [
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int),
+	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -112,7 +117,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
 		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -170,6 +175,10 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, start);
 				self.emit_numeric_value(func, end);
 				self.emit_call(func, BYTE_SLICE);
+			}
+			(TRIM, [text]) => {
+				self.emit_text_argument(func, text);
+				self.emit_call(func, TEXT_TRIM);
 			}
 			_ => unreachable!("text_builtin_kind admits {name} with {} arguments", arguments.len()),
 		}
@@ -286,6 +295,37 @@ impl WasmGcEmitter {
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_text_field(f, 0, 0);
 				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+			});
+		}
+
+		// text_trim(text): the bytes between the whitespace at either end, sharing the memory of text
+		if self.should_emit_function(TEXT_TRIM) {
+			self.runtime_function(TEXT_TRIM, vec![node_ref], vec![node_ref], vec![ValType::I32, ValType::I32, ValType::I32], |s, f| {
+				let (address, start, end) = (1, 2, 3);
+				s.emit_text_field(f, 0, 0);
+				f.instruction(&I::LocalSet(address));
+				s.emit_text_field(f, 0, 1);
+				f.instruction(&I::LocalSet(end));
+				let is_whitespace = |f: &mut Function, offset: Vec<I<'static>>| {
+					for (index, byte) in WHITESPACE_BYTES.iter().enumerate() {
+						Self::emit_list(f, &[I::LocalGet(address)]);
+						Self::emit_list(f, &offset);
+						Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::I32Const(*byte), I::I32Eq]);
+						if index > 0 {
+							f.instruction(&I::I32Or);
+						}
+					}
+				};
+				// leading: start moves right while it is before end and at whitespace
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+				is_whitespace(f, vec![I::LocalGet(start)]);
+				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
+				// trailing: end moves left while the byte before it is whitespace
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
+				is_whitespace(f, vec![I::LocalGet(end), I::I32Const(1), I::I32Sub]);
+				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
+				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
+				s.call(f, "new_text");
 			});
 		}
 

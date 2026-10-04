@@ -1243,6 +1243,7 @@ PASSED:
   ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
   ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
   ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
+  ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -1791,4 +1792,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1786 passed, 0 failed, 1786 total tested
+53 ignored, 1787 passed, 0 failed, 1787 total tested

@@ -565,6 +565,11 @@ impl Lowering {
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));
 		}
+		// `s.trim()`, `s.byte_at(2)`: a text builtin with the receiver as first argument
+		if is_called && crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments.len() + 1).is_some() {
+			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
+			return Some(Node::List(call, Bracket::Round, Separator::None));
+		}
 		let is_known = counting_method(name, &self.context).is_some() || is_list_mutating_method(name) || self.context.user_functions.contains_key(name);
 		let is_call_result = matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
 		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || is_call_result || self.instances.is_declared_field(name);
