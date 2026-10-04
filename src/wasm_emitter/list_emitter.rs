@@ -197,6 +197,14 @@ impl WasmGcEmitter {
 			}
 		}
 
+		if let [word, dividend, divisor] = items {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+				self.emit_floor_quotient(func, dividend, divisor);
+				self.emit_call(func, "new_int");
+				return;
+			}
+		}
+
 		// Check for range function: range start end
 		if items.len() == 3 {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
@@ -351,6 +359,15 @@ impl WasmGcEmitter {
 				self.emit_rounded_as_int(func, arg, Instruction::F64Ceil);
 				true
 			}
+			// an exact number floors exactly, also beyond the f64 range
+			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(arg) == crate::Kind::Int => {
+				self.emit_numeric_value(func, arg);
+				if self.int_runtime() {
+					self.emit_call(func, "exact_floor");
+				}
+				self.emit_call(func, "new_int");
+				true
+			}
 			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) => {
 				self.emit_rounded_as_int(func, arg, Instruction::F64Floor);
 				true
@@ -394,6 +411,33 @@ impl WasmGcEmitter {
 		self.emit_float_value(func, arg);
 		func.instruction(&rounding);
 		self.emit_integral_float_as_int(func);
+	}
+
+	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
+	pub(super) fn emit_floor_quotient(&mut self, func: &mut Function, dividend: &Node, divisor: &Node) {
+		let floats = self.get_type(dividend).is_float() || self.get_type(divisor).is_float();
+		if !floats {
+			self.emit_numeric_value(func, dividend);
+			self.emit_numeric_value(func, divisor);
+			self.emit_call(func, "exact_euclid_div");
+			return;
+		}
+		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
+		self.emit_float_value(func, dividend);
+		self.emit_float_value(func, divisor);
+		func.instruction(&Instruction::I64ReinterpretF64);
+		func.instruction(&Instruction::LocalTee(divisor_bits));
+		func.instruction(&Instruction::F64ReinterpretI64);
+		func.instruction(&Instruction::F64Div);
+		func.instruction(&Instruction::I64ReinterpretF64);
+		func.instruction(&Instruction::LocalSet(quotient));
+		// a negative divisor rounds the quotient up, a positive one down
+		Self::emit_list(func, &[
+			Instruction::LocalGet(quotient), Instruction::F64ReinterpretI64, Instruction::F64Ceil,
+			Instruction::LocalGet(quotient), Instruction::F64ReinterpretI64, Instruction::F64Floor,
+			Instruction::LocalGet(divisor_bits), Instruction::I64Const(0), Instruction::I64LtS, Instruction::Select,
+		]);
+		self.emit_truncating_cast(func);
 	}
 
 	/// An integral f64 on the stack → exact Int node

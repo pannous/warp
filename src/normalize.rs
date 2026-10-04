@@ -689,7 +689,22 @@ pub fn operand_text(node: &Node) -> String {
             };
             format!("{left}{op}{gap}{}", operand_text(right))
         }
-        other => other.serialize(),
+        other => as_written(other.clone()).serialize(),
+    }
+}
+
+/// The node as its source spelled it where the parser lowered sugar: `floor_quotient(a, b)` is `a//b`
+fn as_written(node: Node) -> Node {
+    match node {
+        Node::List(items, bracket, separator) => match items.as_slice() {
+            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) => {
+                Node::Symbol(format!("{}//{}", operand_text(dividend), operand_text(divisor)))
+            }
+            _ => Node::List(items.into_iter().map(as_written).collect(), bracket, separator),
+        },
+        Node::Key(left, op, right) => Node::Key(Box::new(as_written(*left)), op, Box::new(as_written(*right))),
+        Node::Meta { node, data } => Node::Meta { node: Box::new(as_written(*node)), data },
+        other => other,
     }
 }
 

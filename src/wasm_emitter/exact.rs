@@ -358,6 +358,36 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Else, I::LocalGet(2), I::End]);
 		});
 
+		// exact_floor(x): the largest integer ≤ x, exact also beyond the f64 range (`floor(10^30/3)`, `a//b`)
+		self.runtime_function("exact_floor", vec![i64t], vec![i64t], vec![], |s, f| {
+			f.instruction(&I::LocalGet(0));
+			s.call(f, "is_ratio");
+			Self::emit_list(f, &[I::If(BlockType::Result(i64t)), I::LocalGet(0)]);
+			s.call(f, "exact_trunc");
+			Self::emit_list(f, &[I::LocalGet(0), I::I64Const(0)]);
+			s.call(f, "exact_cmp");
+			// a negative ratio truncates up: one less
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::I64ExtendI32U]);
+			s.call(f, "exact_sub");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
+		});
+
+		// exact_euclid_div(a, b): the quotient of a // b that goes with a % b: floor(a/b) for b > 0, ceil(a/b) =
+		// -floor(-a/b) for b < 0
+		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0)]);
+			s.call(f, "exact_cmp");
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)), I::I64Const(0), I::I64Const(0), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_div");
+			s.call(f, "exact_sub");
+			s.call(f, "exact_floor");
+			s.call(f, "exact_sub");
+			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "exact_div");
+			s.call(f, "exact_floor");
+			f.instruction(&I::End);
+		});
+
 		// x /= y: an integer x stays an integer, the Euclidean quotient (x - x % y) / y matching %; a ratio x divides exactly
 		self.runtime_function("exact_div_assign", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
 			f.instruction(&I::LocalGet(0));

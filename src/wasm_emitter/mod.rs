@@ -44,7 +44,7 @@ enum Need {
 const OUTPUT_CALLS: [&str; 5] = ["print", "puts", "puti", "putl", "putf"];
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 5] = ["ceil", "floor", "round", "round_half_up", "round_half_even"];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::wasp_parser::FLOOR_QUOTIENT];
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
@@ -3003,6 +3003,12 @@ impl WasmGcEmitter {
 
 	/// `floor(x)`, `count(list)`…: the builtin builds a node, its Int (raw i64 on the stack) is the number
 	fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		if let [word, dividend, divisor] = items {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+				self.emit_floor_quotient(func, dividend, divisor);
+				return true;
+			}
+		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
 			if text_builtins::text_builtin_kind(fn_name, arguments.len()) == Some(Kind::Int) {
 				self.emit_integer_text_builtin(func, fn_name, arguments);

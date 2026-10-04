@@ -232,11 +232,13 @@ fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_'
 }
 
-/// `a // b` (Python) as `(a - a % b) / b`: `%` is Euclidean, so this is floor(a/b) for a positive divisor
+/// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
+/// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
+/// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
+pub const FLOOR_QUOTIENT: &str = "floor_quotient";
+
 fn floor_division(dividend: Node, divisor: Node) -> Node {
-	let remainder = Node::Key(Box::new(dividend.clone()), Op::Mod, Box::new(divisor.clone()));
-	let multiple = Node::Key(Box::new(dividend), Op::Sub, Box::new(remainder));
-	Node::Key(Box::new(multiple), Op::Div, Box::new(divisor))
+	Node::List(vec![Symbol(FLOOR_QUOTIENT.to_string()), dividend, divisor], Bracket::Round, Separator::None)
 }
 
 /// Read and parse a WASP file
@@ -2515,13 +2517,9 @@ impl WaspParser {
 			return None;
 		}
 		self.advance(); // skip ']'
-		// `int[n]`: n zeros of the type, whatever n is and wherever it stands
-		if let (Node::Symbol(type_word), [count], false) = (lhs.drop_meta(), indices.as_slice(), self.options.data_mode) {
-			if let Some(zeros) = crate::analyzer::zero_list(count.clone(), type_word).filter(|_| slice_bounds(count).is_none()) {
-				return Some(zeros);
-			}
-		}
-		if slice_bounds(&indices[0]).is_none() {
+		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
+		let names_a_type = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
+		if slice_bounds(&indices[0]).is_none() && !names_a_type {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(&crate::normalize::operand_text(lhs), &crate::normalize::operand_text(&indices[0]), true);
 		}

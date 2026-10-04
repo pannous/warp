@@ -154,6 +154,8 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm
+  ✓ ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
@@ -180,7 +182,6 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
-  ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
@@ -455,10 +456,10 @@ PASSED:
   ✓ lists::test_unpacking::list_target
   ✓ lists::test_unpacking::nested_unpacking
   ✓ lists::test_unpacking::parenthesized_target
+  ✓ lists::test_unpacking::star_init
   ✓ lists::test_unpacking::star_middle
   ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
-  ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
   ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
@@ -725,6 +726,10 @@ PASSED:
   ✓ operators::test_add_to::add_to_takes_an_expression
   ✓ operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ operators::test_equality_never_chains::orderings_still_chain
+  ✓ operators::test_floor_quotient::floor_division_is_euclidean
+  ✓ operators::test_floor_quotient::floor_division_warns_nothing_about_percent
+  ✓ operators::test_floor_quotient::floor_of_an_exact_number_beyond_f64
+  ✓ operators::test_floor_quotient::the_dividend_is_evaluated_once
   ✓ operators::test_in_position::a_found_first_element_is_truthy
   ✓ operators::test_in_position::in_gives_the_one_based_position
   ✓ operators::test_in_position::maps_and_has_keep_their_truth_value
@@ -1316,6 +1321,9 @@ PASSED:
   ✓ types::test_type_word_user_function::the_type_word_still_casts_without_a_definition
   ✓ types::test_type_words::test_type_constructor_words
   ✓ types::test_type_words::test_type_first_parameter
+  ✓ types::test_typed_arrays::a_type_word_subscript_is_a_zero_filled_list_anywhere
+  ✓ types::test_typed_arrays::a_typed_list_beyond_an_array_index_is_out_of_memory
+  ✓ types::test_typed_arrays::a_typed_list_read_before_its_assignment_is_empty
   ✓ types::test_typed_arrays::test_typed_array_assignment_past_the_end_is_an_error
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
@@ -1722,4 +1730,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1717 passed, 0 failed, 1717 total tested
+58 ignored, 1725 passed, 0 failed, 1725 total tested
