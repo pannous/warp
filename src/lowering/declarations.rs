@@ -20,7 +20,7 @@ const ON_WORD: &str = "on";
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
-const TASK_GO: &str = "task·go";
+pub(crate) const TASK_GO: &str = "task·go";
 const TASK_VALUE: &str = "task·value";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
 const TASK_CONTROL_MARK: &str = "task·control";
@@ -205,10 +205,28 @@ impl Tasks<'_> {
 	}
 }
 
-/// `task·go(f, args)` and `task·value(job, f)` (lower_tasks): a function of at most four Ints that gives an Int runs on
-/// its own thread through the host words task_spawn / task_await (tasks.rs, natively); any other runs where it starts,
-/// as a plain call, and its task variable is its value
+/// How a started function runs: on a thread with Int words, on a thread with value words, or where it starts
+#[derive(Clone, PartialEq)]
+enum TaskPath {
+	Ints,
+	/// with the kinds of the parameters: a Float parameter gets its argument converted, as a call does
+	Values(Vec<crate::type_kinds::Kind>),
+	Inline,
+}
+
+/// The kinds a value of a task may have to cross between instances (tasks::TaskValue); a list parameter takes another
+/// convention (list_abi), a function value cannot leave its instance
+const CROSSING_KINDS: [crate::type_kinds::Kind; 6] = {
+	use crate::type_kinds::Kind::*;
+	[Int, Float, Text, Codepoint, Symbol, Empty]
+};
+
+/// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). Natively a function runs on
+/// its own thread (tasks.rs): one of at most four Ints that gives an Int through task_spawn / task_await, one of
+/// numbers, texts and characters through task_spawn_values / task_await_value. Any other runs where it starts, as a
+/// plain call, and its task variable is its value
 pub fn resolve_tasks(node: Node) -> Node {
+	use crate::type_kinds::Kind;
 	let mut has_task = false;
 	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(word(items.first().unwrap_or(&Node::Empty)).as_str(), TASK_GO | TASK_VALUE | TASK_CONTROL_MARK)));
 	if !has_task {
@@ -216,39 +234,52 @@ pub fn resolve_tasks(node: Node) -> Node {
 	}
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
-	let threaded = |function: &str| cfg!(feature = "native") && context.user_functions.get(function).is_some_and(|definition| {
-		definition.return_kind == crate::type_kinds::Kind::Int && definition.tuple_kinds.is_empty()
-			&& definition.params.len() <= crate::host::MAX_TASK_ARGUMENTS
-			&& definition.params.iter().all(|parameter| crate::analyzer::param_kind(parameter) == crate::type_kinds::Kind::Int)
-	});
-	resolved(node, &threaded)
+	let path = |function: &str| {
+		let Some(definition) = context.user_functions.get(function).filter(|_| cfg!(feature = "native")) else { return TaskPath::Inline };
+		let parameters: Vec<Kind> = definition.params.iter().map(crate::analyzer::param_kind).collect();
+		if !definition.tuple_kinds.is_empty() || !CROSSING_KINDS.contains(&definition.return_kind) || !parameters.iter().all(|kind| CROSSING_KINDS.contains(kind)) {
+			return TaskPath::Inline;
+		}
+		let ints = definition.return_kind == Kind::Int && parameters.len() <= crate::host::MAX_TASK_ARGUMENTS && parameters.iter().all(|kind| *kind == Kind::Int);
+		if ints { TaskPath::Ints } else { TaskPath::Values(parameters) }
+	};
+	resolved(node, &path)
 }
 
-fn resolved(node: Node, threaded: &dyn Fn(&str) -> bool) -> Node {
+fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath) -> Node {
+	use crate::host::{TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_SPAWN, TASK_SPAWN_VALUES};
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, threaded)).collect();
+			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, path)).collect();
 			match word(items.first().unwrap_or(&Node::Empty)).as_str() {
 				TASK_GO => {
 					let function = word(&items[1]);
-					match threaded(&function) {
-						true => marker(crate::host::TASK_SPAWN, [vec![Node::Text(function)], items[2..].to_vec()].concat()),
-						false => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
+					let arguments = items[2..].to_vec();
+					match path(&function) {
+						TaskPath::Ints => marker(TASK_SPAWN, [vec![Node::Text(function)], arguments].concat()),
+						TaskPath::Values(parameters) => {
+							let float = |argument: Node| Node::Key(Box::new(argument), Op::As, Box::new(Node::Symbol("float".to_string())));
+							let arguments = arguments.into_iter().zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
+								.map(|(argument, kind)| if *kind == crate::type_kinds::Kind::Float { float(argument) } else { argument }).collect();
+							marker(TASK_SPAWN_VALUES, vec![Node::Text(function), Node::List(arguments, Bracket::Square, Separator::Colon)])
+						}
+						TaskPath::Inline => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
 					}
 				}
-				TASK_VALUE => match threaded(&word(&items[2])) {
-					true => marker(crate::host::TASK_AWAIT, vec![items[1].clone()]),
-					false => items[1].clone(),
+				TASK_VALUE => match path(&word(&items[2])) {
+					TaskPath::Ints => marker(TASK_AWAIT, vec![items[1].clone()]),
+					TaskPath::Values(_) => marker(TASK_AWAIT_VALUE, vec![items[1].clone()]),
+					TaskPath::Inline => items[1].clone(),
 				},
-				TASK_CONTROL_MARK => match threaded(&word(&items[2])) {
-					true => marker(crate::host::TASK_CONTROL, vec![items[1].clone(), Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3]))))]),
-					false => nothing_to_stop(&items[1], &word(&items[3])),
+				TASK_CONTROL_MARK => match path(&word(&items[2])) {
+					TaskPath::Inline => nothing_to_stop(&items[1], &word(&items[3])),
+					_ => marker(TASK_CONTROL, vec![items[1].clone(), Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3]))))]),
 				},
 				_ => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(resolved(*left, threaded)), op, Box::new(resolved(*right, threaded))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, threaded)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(resolved(*left, path)), op, Box::new(resolved(*right, path))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, path)), data },
 		other => other,
 	}
 }

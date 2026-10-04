@@ -392,6 +392,15 @@ fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Instance) -> Re
 /// The Node a GC `$Node` struct encodes (layout in CLAUDE.md "Serialization"); null is Empty. Generic over the store
 /// state, so runs with WASI or host imports read lists and keys like plain runs do.
 pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &Instance) -> Node {
+	match instance.get_memory(&mut *store, "memory") {
+		Some(memory) => node_in(value, store, memory),
+		None => Node::Empty,
+	}
+}
+
+/// The Node a GC `$Node` struct encodes, its texts read from `memory`: also from a host function, which has the memory
+/// of its caller but no Instance (tasks.rs)
+pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
 	use crate::node::Bracket;
 	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { return Node::Empty };
 	let mut field = |index: usize| structref.field(&mut *store, index);
@@ -399,7 +408,7 @@ pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &In
 	let kind = kind.unwrap_i64();
 	let tag = (kind & KIND_MASK) as u8;
 	let high_byte = (kind >> 8) & 0xFF;
-	let mut node = |val: &Val| node_of(val, store, instance);
+	let mut node = |val: &Val| node_in(val, store, memory);
 	match tag {
 		t if t == Kind::Empty as u8 => Node::Empty,
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
@@ -411,9 +420,9 @@ pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &In
 			let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok()).map(|code| code.get_u32());
 			Node::Char(code.and_then(char::from_u32).unwrap_or('\0'))
 		}
-		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, instance)),
-		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, instance)),
-		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, instance)))),
+		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, memory)),
+		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
+		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
 		t if t == Kind::Block as u8 => list_of(node(&data), node(&child), Bracket::Curly),
 		t if t == Kind::List as u8 => {
@@ -427,7 +436,7 @@ pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &In
 			list_of(node(&data), node(&child), bracket)
 		}
 		t if t == Kind::Data as u8 => {
-			let type_name = text_of(store, &data, instance);
+			let type_name = text_of(store, &data, memory);
 			Node::Data(crate::meta::Dada { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: crate::meta::DataType::Other })
 		}
 		// a closure reads as the name of its function
@@ -460,12 +469,11 @@ fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 }
 
 /// The letters of a `$String(ptr, len)` in linear memory
-fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, instance: &Instance) -> String {
+fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: wasmtime::Memory) -> String {
 	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
 		let string = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
 		let ptr = string.field(&mut *store, 0).ok()?.unwrap_i32() as usize;
 		let len = string.field(&mut *store, 1).ok()?.unwrap_i32() as usize;
-		let memory = instance.get_memory(&mut *store, "memory")?;
 		let bytes = memory.data(&*store).get(ptr..ptr + len)?;
 		String::from_utf8(bytes.to_vec()).ok()
 	};

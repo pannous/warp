@@ -26,19 +26,25 @@ const CLOCK: &str = "clock";
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
 pub const TASK_CONTROL: &str = "task_control";
+/// `go f(x)` of a function of numbers, texts or characters: task_spawn_values(name, [arguments]) → task id,
+/// task_await_value(id) → the result, both carried as Nodes
+pub const TASK_SPAWN_VALUES: &str = "task_spawn_values";
+pub const TASK_AWAIT_VALUE: &str = "task_await_value";
 /// The operations of `task_control(id, op)`: `stop job` / `cancel job`, `pause job`, `resume job`
 pub const TASK_STOP: i64 = 1;
 pub const TASK_PAUSE: i64 = 2;
 pub const TASK_RESUME: i64 = 3;
 /// The Int arguments task_spawn carries; a function of more runs where it is started
 pub const MAX_TASK_ARGUMENTS: usize = 4;
-pub const HOST_WORDS: [&str; 7] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL];
+pub const HOST_WORDS: [&str; 9] = [SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 7] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 9] {
 	use wasm_encoder::ValType::{F64, I32, I64};
+	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
-		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64])]
+		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
+		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node])]
 }
 
 /// xorshift64*, seeded from the clock once per process: random enough for games and samples, not for secrets
@@ -72,7 +78,7 @@ use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use log::trace;
 #[cfg(feature = "native")]
-use wasmtime::{Caller, Engine, Extern, Linker, Memory, Module, Val};
+use wasmtime::{AsContextMut, Caller, Engine, Extern, Linker, Memory, Module, Val};
 
 #[cfg(feature = "native")]
 /// The state of a running program, one for all its imports: host functions, WASI and FFI share one linker, so a program
@@ -127,32 +133,39 @@ fn write_string_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, s
 /// emit_text_allocation: fresh pages past the current memory when the heap is unset or full), else from HostState
 #[cfg(feature = "native")]
 fn write_bytes_to_caller(memory: &Memory, caller: &mut Caller<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
-	let len = bytes.len() as u32;
 	let heap = match caller.get_export(TEXT_HEAP_EXPORT) {
 		Some(Extern::Global(global)) => Some(global),
 		_ => None,
 	};
+	write_bytes(memory, heap, &mut caller.as_context_mut(), bytes)
+}
+
+/// Copy bytes into a module's memory at its text heap `heap` (or from HostState without one): from a host function
+/// (its caller) or into an instance the host made (a task, tasks.rs)
+#[cfg(feature = "native")]
+pub fn write_bytes(memory: &Memory, heap: Option<wasmtime::Global>, store: &mut wasmtime::StoreContextMut<'_, HostState>, bytes: &[u8]) -> Result<(u32, u32)> {
+	let len = bytes.len() as u32;
 	let ptr = match &heap {
 		Some(global) => {
-			let top = global.get(&mut *caller).i32().unwrap_or(0) as u32;
-			let memory_end = (memory.size(&*caller) as u32) << PAGE_BITS;
+			let top = global.get(&mut *store).i32().unwrap_or(0) as u32;
+			let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
 			if top == 0 || top + len > memory_end {
-				memory.grow(&mut *caller, ((len >> PAGE_BITS) + 1) as u64)?;
+				memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
 				memory_end
 			} else {
 				top
 			}
 		}
-		None => caller.data_mut().alloc(len),
+		None => store.data_mut().alloc(len),
 	};
 	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
-	let current_pages = memory.size(&*caller) as usize;
+	let current_pages = memory.size(&*store) as usize;
 	if pages_needed > current_pages {
-		memory.grow(&mut *caller, (pages_needed - current_pages) as u64)?;
+		memory.grow(&mut *store, (pages_needed - current_pages) as u64)?;
 	}
-	memory.write(&mut *caller, ptr as usize, bytes)?;
+	memory.write(&mut *store, ptr as usize, bytes)?;
 	if let Some(global) = heap {
-		global.set(&mut *caller, Val::I32((ptr + len) as i32))?;
+		global.set(&mut *store, Val::I32((ptr + len) as i32))?;
 	}
 	Ok((ptr, len))
 }

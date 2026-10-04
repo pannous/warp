@@ -58,3 +58,22 @@ fn a_paused_task_waits_for_resume() {
 	// held by the pause, the task is still there to stop after it would have finished
 	crate::common::fails_with(&format!("{SPINNER}job = go spin(30000000); pause job; sleep(1500); stop job; await job"), "task stopped");
 }
+
+#[test]
+fn texts_floats_characters_and_lists_cross_to_a_task() {
+	is!("g(t) := t + \"!\"; job = go g(\"a\"); await job", "a!");
+	is!("g(t) := t + \"!\"; a = go g(\"x\"); b = go g(\"y\"); await a + await b", "x!y!");
+	is!("p(t, n) := t * n; job = go p(\"ab\", 3); await job", "ababab");
+	is!("h(x:float) := x / 2; job = go h(3); await job", 1.5);
+	is!("q(t) := [t, t]; job = go q(2); await job", warp::ints(vec![2, 2]));
+}
+
+#[test]
+fn an_exact_number_beyond_the_fixnums_cannot_cross_yet() {
+	crate::common::fails_with("m(t) := t + 1; job = go m(2.5); await job", "cannot cross to another task yet");
+}
+
+#[test]
+fn a_task_of_a_list_parameter_runs_where_it_starts() {
+	is!("k(xs) := count(xs); job = go k([1,2,3]); await job", 3);
+}

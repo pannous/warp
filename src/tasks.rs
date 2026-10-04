@@ -1,9 +1,12 @@
-//! Real threads for `go` (user decision P33, notes/threads.md step 1): `go f(x)` of a function taking and giving Ints runs
-//! f in a new instance of the same module on its own thread; `await job` joins it. Values are copied: the Int arguments
-//! go in, the Int result comes out; the task's instance sees the module's initial variables, never the caller's.
-//! The program calls the host words `task_spawn(name, a0, a1, a2, a3)` and `task_await(id)` (declarations::resolve_tasks).
+//! Real threads for `go` (user decision P33, notes/threads.md): `go f(x)` runs f in a new instance of the same module on
+//! its own thread; `await job` joins it. Values are copied: the arguments go in, the result comes out (a TaskValue
+//! between the threads, rebuilt in each instance through its exported constructors); the task's instance sees the
+//! module's initial variables, never the caller's. The program calls the host words (declarations::resolve_tasks):
+//! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
+//! `task_await_value(id)` for numbers, texts and characters, and `task_control(id, op)` for stop, pause and resume.
 
-use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_CONTROL, TASK_PAUSE, TASK_SPAWN, TASK_STOP};
+use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STOP, TEXT_HEAP_EXPORT};
+use crate::node::{Bracket, Node};
 use crate::wasm_reader::Imports;
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -11,13 +14,122 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use wasmtime::{Caller, Engine, Linker, Module, UpdateDeadline, Val};
+use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, Rooted, StoreContextMut, UpdateDeadline, Val, ValType};
 
 /// How often the engine's epoch ticks while tasks run: a stop or pause takes effect within about this long
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 3] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL];
+const TASK_WORDS: [&str; 5] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE];
+/// The exported constructors a value is rebuilt with in an instance
+const CONSTRUCTORS: [&str; 8] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list"];
+
+/// A value crossing between threads: what a task takes and gives, free of any instance (a Node may hold data that
+/// cannot leave its thread)
+#[derive(Clone, Debug)]
+pub enum TaskValue {
+	Empty,
+	Int(i64),
+	Float(f64),
+	Char(char),
+	Text(String),
+	Symbol(String),
+	/// the items and the bracket's code (wasm_emitter::bracket_info)
+	List(Vec<TaskValue>, i64),
+	/// left, the operator's code, right
+	Key(Box<TaskValue>, i64, Box<TaskValue>),
+}
+
+impl TaskValue {
+	fn of(node: &Node) -> Result<TaskValue> {
+		use crate::extensions::numbers::Number;
+		Ok(match node.drop_meta() {
+			Node::Empty => TaskValue::Empty,
+			Node::Number(Number::Int(n)) => TaskValue::Int(*n),
+			Node::Number(Number::Float(x)) => TaskValue::Float(*x),
+			Node::Char(c) => TaskValue::Char(*c),
+			Node::Text(text) => TaskValue::Text(text.clone()),
+			Node::Symbol(name) => TaskValue::Symbol(name.clone()),
+			Node::List(items, bracket, _) => TaskValue::List(items.iter().map(TaskValue::of).collect::<Result<_>>()?, crate::wasm_emitter::bracket_info(bracket)),
+			Node::Key(left, op, right) => TaskValue::Key(Box::new(TaskValue::of(left)?), crate::operators::op_to_code(op), Box::new(TaskValue::of(right)?)),
+			other => return Err(anyhow!("{} cannot cross to another task yet", other.serialize())),
+		})
+	}
+
+	fn int(&self) -> Result<i64, String> {
+		match self {
+			TaskValue::Int(n) => Ok(*n),
+			other => Err(format!("the task gave {other:?}, not an Int")),
+		}
+	}
+}
+
+/// An Int of an instance as a TaskValue: a fixnum crosses as it is, a larger exact number (a big integer, a ratio) is a
+/// handle into the memory of its instance and cannot cross yet
+fn exact(n: i64) -> Result<TaskValue, String> {
+	match crate::wasm_emitter::is_fixnum(n) {
+		true => Ok(TaskValue::Int(n)),
+		false => Err("an exact number beyond the fixnum range (a ratio, a big integer) cannot cross to another task yet".to_string()),
+	}
+}
+
+/// The constructors, memory and text heap of one instance: what a TaskValue is rebuilt with
+struct Builders {
+	functions: HashMap<&'static str, Func>,
+	memory: Memory,
+	heap: Option<Global>,
+}
+
+impl Builders {
+	fn of(lookup: &mut dyn FnMut(&str) -> Option<wasmtime::Extern>) -> Result<Builders> {
+		let mut functions = HashMap::new();
+		for name in CONSTRUCTORS {
+			if let Some(function) = lookup(name).and_then(|export| export.into_func()) {
+				functions.insert(name, function);
+			}
+		}
+		let memory = lookup("memory").and_then(|export| export.into_memory()).ok_or_else(|| anyhow!("no memory export"))?;
+		Ok(Builders { functions, memory, heap: lookup(TEXT_HEAP_EXPORT).and_then(|export| export.into_global()) })
+	}
+
+	fn call(&self, name: &str, arguments: &[Val], store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
+		let function = self.functions.get(name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
+		let mut result = [Val::AnyRef(None)];
+		function.call(&mut *store, arguments, &mut result)?;
+		Ok(result[0])
+	}
+
+	fn build(&self, value: &TaskValue, store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
+		match value {
+			TaskValue::Empty => self.call("new_empty", &[], store),
+			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
+			TaskValue::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
+			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
+			TaskValue::Text(text) | TaskValue::Symbol(text) => {
+				let (pointer, length) = crate::host::write_bytes(&self.memory, self.heap, store, text.as_bytes())?;
+				let constructor = if matches!(value, TaskValue::Text(_)) { "new_text" } else { "new_symbol" };
+				self.call(constructor, &[Val::I32(pointer as i32), Val::I32(length as i32)], store)
+			}
+			TaskValue::Key(left, op, right) => {
+				let (left, right) = (self.build(left, store)?, self.build(right, store)?);
+				self.call("new_key", &[left, right, Val::I64(*op)], store)
+			}
+			TaskValue::List(items, bracket) => items.iter().rev().try_fold(Val::AnyRef(None), |rest, item| {
+				let first = self.build(item, store)?;
+				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
+			}),
+		}
+	}
+
+	fn read(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
+		match value {
+			Val::I64(n) => exact(*n).map_err(|message| anyhow!(message)),
+			Val::F64(bits) => Ok(TaskValue::Float(f64::from_bits(*bits))),
+			Val::AnyRef(_) => TaskValue::of(&crate::wasm_reader::node_in(value, store, self.memory)),
+			other => Err(anyhow!("a task gave {other:?}")),
+		}
+	}
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Control {
@@ -64,8 +176,8 @@ impl std::fmt::Display for TaskFailure {
 impl std::error::Error for TaskFailure {}
 
 enum Slot {
-	Running(JoinHandle<Result<i64, String>>),
-	Done(Result<i64, String>),
+	Running(JoinHandle<Result<TaskValue, String>>),
+	Done(Result<TaskValue, String>),
 }
 
 /// The tasks of one program run, shared by every instance it starts
@@ -119,19 +231,40 @@ impl TaskTable {
 	fn link_into(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let spawner = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN, move |mut caller: Caller<'_, HostState>, name: i32, a0: i64, a1: i64, a2: i64, a3: i64| -> wasmtime::Result<i64> {
-			let name = c_string(&mut caller, name).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?;
-			Ok(spawner.spawn(name, [a0, a1, a2, a3]))
+			let name = c_string(&mut caller, name).map_err(host_error)?;
+			let arguments: [i64; MAX_TASK_ARGUMENTS] = [a0, a1, a2, a3];
+			let arguments = arguments.iter().map(|argument| exact(*argument)).collect::<Result<Vec<_>, _>>().map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			Ok(spawner.spawn(name, arguments))
+		})?;
+		let value_spawner = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN_VALUES, move |mut caller: Caller<'_, HostState>, name: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
+			let name = c_string(&mut caller, name).map_err(host_error)?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let task_failure = |failure: anyhow::Error| wasmtime::Error::new(TaskFailure(format!("task {name}: {failure}")));
+			let arguments = match builders.read(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(task_failure)? {
+				TaskValue::List(items, _) => items,
+				TaskValue::Empty => vec![],
+				single => vec![single],
+			};
+			Ok(value_spawner.spawn(name, arguments))
+		})?;
+		let value_awaiter = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT_VALUE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			let value = value_awaiter.await_task(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+			let built = builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?;
+			Ok(built.unwrap_anyref().copied())
 		})?;
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 { controller.control(id, operation) })?;
 		let awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |id: i64| -> wasmtime::Result<i64> {
-			awaiter.await_task(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))
+			awaiter.await_task(id).and_then(|value| value.int()).map_err(|message| wasmtime::Error::new(TaskFailure(message)))
 		})?;
 		Ok(())
 	}
 
-	fn spawn(self: &Arc<Self>, function: String, arguments: [i64; MAX_TASK_ARGUMENTS]) -> i64 {
+	fn spawn(self: &Arc<Self>, function: String, arguments: Vec<TaskValue>) -> i64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
@@ -142,7 +275,7 @@ impl TaskTable {
 	}
 
 	/// f(arguments) in a fresh instance of the module, with the same imports as the program
-	fn run(self: &Arc<Self>, function: &str, arguments: &[i64], control: Arc<TaskControl>) -> Result<i64> {
+	fn run(self: &Arc<Self>, function: &str, arguments: &[TaskValue], control: Arc<TaskControl>) -> Result<TaskValue> {
 		let mut store = crate::util::fueled_store(&self.engine, HostState::new());
 		store.epoch_deadline_callback(move |_| control.checkpoint());
 		store.set_epoch_deadline(1);
@@ -151,13 +284,28 @@ impl TaskTable {
 		self.link_into(&mut linker)?;
 		let instance = linker.instantiate(&mut store, &self.module)?;
 		let callee = instance.get_func(&mut store, function).ok_or_else(|| anyhow!("no exported function {function}"))?;
-		let parameters = callee.ty(&store).params().len();
-		let values: Vec<Val> = arguments.iter().take(parameters).map(|argument| Val::I64(*argument)).collect();
-		let mut results = vec![Val::I64(0)];
+		let builders = Builders::of(&mut |export| instance.get_export(&mut store, export)).map_err(|failure| anyhow!("{failure}"))?;
+		let signature = callee.ty(&store);
+		let mut values = vec![];
+		for (parameter, argument) in signature.params().zip(arguments) {
+			values.push(match (parameter, argument) {
+				(ValType::I64, TaskValue::Int(n)) => Val::I64(*n),
+				(ValType::I64, TaskValue::Char(c)) => Val::I64(*c as i64), // a character held unboxed is its code point
+				(ValType::F64, TaskValue::Float(x)) => Val::F64(x.to_bits()),
+				(ValType::F64, TaskValue::Int(n)) => Val::F64((*n as f64).to_bits()),
+				(ValType::Ref(_), argument) => builders.build(argument, &mut store.as_context_mut())?,
+				(parameter, argument) => return Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
+			});
+		}
+		let mut results: Vec<Val> = signature.results().map(|result| match result {
+			ValType::I64 => Val::I64(0),
+			ValType::F64 => Val::F64(0),
+			_ => Val::AnyRef(None),
+		}).collect();
 		callee.call(&mut store, &values, &mut results)?;
-		match results[0] {
-			Val::I64(result) => Ok(result),
-			ref other => Err(anyhow!("{function} gave {other:?}, not an Int")),
+		match results.first() {
+			Some(result) => builders.read(result, &mut store.as_context_mut()),
+			None => Ok(TaskValue::Empty),
 		}
 	}
 
@@ -173,7 +321,7 @@ impl TaskTable {
 	}
 
 	/// The result of the task: joins it the first time, then remembers it
-	fn await_task(&self, id: i64) -> Result<i64, String> {
+	fn await_task(&self, id: i64) -> Result<TaskValue, String> {
 		let slot = self.slots.lock().expect("task table").remove(&id).ok_or_else(|| format!("no task {id}"))?;
 		let result = match slot {
 			Slot::Running(handle) => handle.join().unwrap_or_else(|_| Err("the task panicked".to_string())),
@@ -190,6 +338,10 @@ impl TaskTable {
 			let _ = self.await_task(id);
 		}
 	}
+}
+
+fn host_error(failure: anyhow::Error) -> wasmtime::Error {
+	wasmtime::Error::msg(failure.to_string())
 }
 
 /// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)

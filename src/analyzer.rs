@@ -310,6 +310,7 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 					if !sig.results.is_empty() {
 						return match sig.results[0] {
 							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+							wasm_encoder::ValType::Ref(_) => Kind::Empty, // a Node: task_await_value
 							_ => Kind::Int,
 						};
 					}
@@ -349,6 +350,7 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 					if !sig.results.is_empty() {
 						return match sig.results[0] {
 							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+							wasm_encoder::ValType::Ref(_) => Kind::Empty, // a Node: task_await_value
 							_ => Kind::Int,
 						};
 					}
@@ -2942,6 +2944,27 @@ fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String,
 	changed
 }
 
+/// The user function a list calls and its arguments: `f(a, b)`, and a task start that runs f in another instance with
+/// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, `task_spawn_values("f", [a, b])` (resolve_tasks)
+fn called_function(items: &[Node]) -> Option<(String, Vec<&Node>)> {
+	let head = match items.first()?.drop_meta() {
+		Node::Symbol(name) => name.as_str(),
+		_ => return None,
+	};
+	let started = || match items.get(1).map(Node::drop_meta) {
+		Some(Node::Text(name) | Node::Symbol(name)) => Some(name.clone()),
+		_ => None,
+	};
+	match head {
+		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => Some((started()?, items[2..].iter().collect())),
+		crate::host::TASK_SPAWN_VALUES => match items.get(2).map(Node::drop_meta) {
+			Some(Node::List(arguments, _, _)) => Some((started()?, arguments.iter().collect())),
+			_ => None,
+		},
+		name => Some((name.to_string(), items[1..].iter().collect())),
+	}
+}
+
 /// The kinds each call in `node` passes each parameter of a user function, not looking into nested definitions
 fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mut HashMap<(String, usize), HashSet<Kind>>) {
 	if function_definition_body(node).is_some() {
@@ -2949,9 +2972,9 @@ fn collect_argument_kinds(node: &Node, scope: &Scope, ctx: &Context, passed: &mu
 	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
-			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if let Some(function) = ctx.user_functions.get(name) {
-					for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
+			if let Some((name, arguments)) = called_function(items) {
+				if let Some(function) = ctx.user_functions.get(&name) {
+					for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 						passed.entry((name.clone(), index)).or_default().insert(infer_type(argument, scope));
 					}
 				}
@@ -3117,9 +3140,9 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
 	program.visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
-		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
-		let Some(function) = ctx.user_functions.get(name) else { return };
-		for (index, argument) in items[1..].iter().enumerate().take(function.params.len()) {
+		let Some((name, arguments)) = called_function(items) else { return };
+		let Some(function) = ctx.user_functions.get(&name) else { return };
+		for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 			if let Some(kind) = argument_kind(argument) {
 				let kinds = argument_kinds.entry((name.clone(), index)).or_default();
 				if !kinds.contains(&kind) {

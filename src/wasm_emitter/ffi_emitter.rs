@@ -62,6 +62,8 @@ impl WasmGcEmitter {
 				func.instruction(&I::F32DemoteF64);
 			}
 			ValType::I64 => self.emit_numeric_value(func, arg),
+			// a host word taking a value (task_spawn_values): the Node
+			ValType::Ref(_) => self.emit_node_instructions(func, arg),
 			ValType::I32 => {
 				if self.is_string_arg(arg) {
 					self.emit_string_ptr_only(func, arg);
@@ -80,6 +82,7 @@ impl WasmGcEmitter {
 			ValType::F64 => func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))),
 			ValType::F32 => func.instruction(&I::F32Const(Ieee32::new(0.0f32.to_bits()))),
 			ValType::I64 => func.instruction(&I::I64Const(0)),
+			ValType::Ref(_) => func.instruction(&I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any })),
 			_ => func.instruction(&I::I32Const(0)),
 		};
 	}
@@ -88,6 +91,19 @@ impl WasmGcEmitter {
 	/// None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
 	pub(super) fn emit_ffi_result(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature, ctx: Option<Kind>) {
 		let result_type = sig.results.first().copied();
+		// a host word giving a value (task_await_value): the Node it built, its number where one is wanted
+		if matches!(result_type, Some(ValType::Ref(_))) {
+			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+			match ctx {
+				None => {}
+				Some(Kind::Float) => {
+					self.emit_call(func, "get_int_value");
+					func.instruction(&I::F64ConvertI64S);
+				}
+				Some(_) => self.emit_call(func, "get_int_value"),
+			}
+			return;
+		}
 		match ctx {
 			None => match result_type {
 				None => self.emit_call(func, "new_empty"),

@@ -1100,12 +1100,12 @@ impl WasmGcEmitter {
 		self.emit_getters();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
-		self.emit_node_arithmetic(); // after text_as_float and get_int_value, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
+		self.emit_node_arithmetic(); // after text_as_float, get_int_value and text_concat, which it calls
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 	}
@@ -3322,14 +3322,7 @@ impl WasmGcEmitter {
 
 	/// Emit a list as linked cons cells
 	fn emit_list_structure(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) {
-		let bracket_info = match bracket {
-			Bracket::Curly => 0i64,
-			Bracket::Square => 1,
-			Bracket::Round => 2,
-			Bracket::Less => 3,
-			Bracket::Other(_, _) => 4,
-			Bracket::None => 5,
-		};
+		let bracket_info = bracket_info(bracket);
 
 		// Emit first item
 		self.emit_node_instructions(func, &items[0]);
@@ -3805,6 +3798,18 @@ fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
 		Some(Node::Key(target, Op::Assign | Op::Define, value)) => matches!(target.drop_meta(), Node::Symbol(word) if word == name) && !mentions(value),
 		Some(_) => false,
 		None => true,
+	}
+}
+
+/// The bracket of a list as the high bits of its kind (`new_list(first, rest, bracket_info)`); node_in reads it back
+pub fn bracket_info(bracket: &Bracket) -> i64 {
+	match bracket {
+		Bracket::Curly => 0,
+		Bracket::Square => 1,
+		Bracket::Round => 2,
+		Bracket::Less => 3,
+		Bracket::Other(_, _) => 4,
+		Bracket::None => 5,
 	}
 }
 
