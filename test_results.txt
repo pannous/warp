@@ -437,6 +437,7 @@ PASSED:
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
   ✓ lists::test_list_number_comparison::ordering_a_list_with_a_number_is_a_loud_error
+  ✓ lists::test_list_of_objects::an_element_of_a_computed_list_of_objects_has_fields
   ✓ lists::test_list_of_objects::an_element_of_a_list_of_objects_has_fields
   ✓ lists::test_list_parameters::a_list_literal_assigned_to_a_parameter
   ✓ lists::test_list_parameters::implicit_it_indexed_as_list
@@ -1820,4 +1821,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1815 passed, 0 failed, 1815 total tested
+52 ignored, 1816 passed, 0 failed, 1816 total tested

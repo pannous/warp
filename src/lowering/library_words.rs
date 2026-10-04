@@ -618,10 +618,13 @@ impl Lowering {
 			Node::Key(list, Op::Hash, _) => list.drop_meta(),
 			other => other,
 		};
-		if let Node::Symbol(variable) = variable {
-			if !is_known && !has_arguments && !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable) {
-				return Some(field_lookup(receiver, name, word_node));
-			}
+		let may_hold_object = match variable {
+			Node::Symbol(variable) => !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable),
+			// an element of a computed list: `users.filter(…)#1.name`
+			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
+		};
+		if may_hold_object && !is_known && !has_arguments {
+			return Some(field_lookup(receiver, name, word_node));
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
