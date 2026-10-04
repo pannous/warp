@@ -49,6 +49,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   the same dimension, exact when it divides (`100 cm in m` → `1 m`), else a ratio (`150 cm in m` → `3/2 m`); the unit
   words take their long names too (minute(s), hour(s), meter(s)); a unit of another dimension is the DimensionError.
   Not implemented (not in the wiki). Night 2026-10-04.
+- P37 Gap filling (wiki/gap-filling.md, binding.md, inventions.md): `f y := y*y+v; f(y=2, v=3)` → 7, `fun={x*y};
+  fun(x:2 y:3)` → 6, `x=7; f(x):=x*x; f()` → 49: named arguments bind a function's free variables, and a missing
+  argument takes the variable of its name. Proposed default: named arguments `f(name=value)`/`f(name:value)` may set
+  parameters and free variables of the body; a missing argument stays an error (implicit capture of a same-named
+  variable is too surprising). Not implemented. Night 2026-10-04.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
