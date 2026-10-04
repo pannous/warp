@@ -184,118 +184,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			}
 		}
 		// List handling: distinguish data lists from statement sequences and function calls
-		Node::List(items, bracket, separator) if !items.is_empty() => {
-			if crate::host::fetch_call(node).is_some() {
-				return Kind::Text; // or an Error value, see check_unchecked_use
-			}
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name.as_str())) {
-				return Kind::List;
-			}
-			if let Node::Symbol(name) = items[0].drop_meta() {
-				if name == crate::library_words::LIST_SUM && items.len() == 3 {
-					return infer_type(&items[2], scope); // the loop it dispatches around
-				}
-				if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
-					return infer_type(&items[1], scope); // `return x` is worth x
-				}
-				if let Some(kind) = scope.function_kind(name) {
-					return kind;
-				}
-				if name == crate::closures::CLOSURE_NEW {
-					return Kind::Function;
-				}
-				if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
-					return kind;
-				}
-				if name == crate::wasp_parser::TEXT_TIMES {
-					return Kind::Text;
-				}
-				if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
-					return Kind::Symbol; // the type's name
-				}
-				if name == PRINT_CALL && items.len() >= 2 {
-					return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
-						[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
-						_ => Kind::Text, // `print a, b` is worth the joined text "a b"
-					};
-				}
-			}
-			// Check for function calls: (funcname args...) where first item is a symbol
-			if items.len() >= 2 {
-				if let Node::Symbol(s) = items[0].drop_meta() {
-					if s == "fetch" { return Kind::Text; }
-					// FFI/builtin function calls return Int by default
-					// This handles strcmp, strlen, abs, etc.
-					if crate::ffi::is_ffi_function(s) {
-						// Get actual return type from FFI signature if available
-						if let Some(sig) = crate::ffi::get_ffi_signature(s) {
-							if !sig.results.is_empty() {
-								return match sig.results[0] {
-									wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
-									_ => Kind::Int,
-								};
-							}
-						}
-						return Kind::Int;
-					}
-				}
-			}
-			// Type constructor: int("5"), float("1.5"), str(3), double 2
-			if items.len() == 2 {
-				if let Node::Symbol(s) = items[0].drop_meta() {
-					if let Some(kind) = type_word_kind(s) {
-						return kind;
-					}
-				}
-			}
-			// Function call with parentheses: a library word has its own result, any other call is assumed Int
-			if *bracket == Bracket::Round && items.len() >= 2 {
-				if let Node::Symbol(name) = items[0].drop_meta() {
-					if name == crate::library_words::SLICE || name == "reverse" {
-						// a slice or reversal of a text is a text, of anything else a list
-						return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
-					}
-					if name == crate::library_words::FIELD_WITH {
-						// a copy of the object with one field set: a Node, whatever the object's kind is known as
-						return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
-					}
-					return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
-				}
-			}
-			// Zero-arg function call: (funcname) with no args
-			if *bracket == Bracket::Round && items.len() == 1 {
-				if let Node::Symbol(s) = items[0].drop_meta() {
-					if crate::ffi::is_ffi_function(s) {
-						if let Some(sig) = crate::ffi::get_ffi_signature(s) {
-							if !sig.results.is_empty() {
-								return match sig.results[0] {
-									wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
-									_ => Kind::Int,
-								};
-							}
-						}
-						return Kind::Int;
-					}
-					// Assume zero-arg user function returns Int
-					return Kind::Int;
-				}
-			}
-			// Grouping: (x) has the type of x
-			if *bracket == Bracket::Round && items.len() == 1 {
-				return infer_type(&items[0], scope);
-			}
-			// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
-			let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
-			if computed_elements || (!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)) {
-				return Kind::List;
-			}
-			// Statement sequence: return type of last item
-			if let Some(last) = items.last() {
-				infer_type(last, scope)
-			} else {
-				Kind::Empty
-			}
-		}
+		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
@@ -367,6 +256,120 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}),
 		// Default to Int for other cases
 		_ => Kind::Int,
+	}
+}
+
+/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
+fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator, scope: &Scope) -> Kind {
+	if crate::host::fetch_call(node).is_some() {
+		return Kind::Text; // or an Error value, see check_unchecked_use
+	}
+	if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name.as_str())) {
+		return Kind::List;
+	}
+	if let Node::Symbol(name) = items[0].drop_meta() {
+		if name == crate::library_words::LIST_SUM && items.len() == 3 {
+			return infer_type(&items[2], scope); // the loop it dispatches around
+		}
+		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
+			return infer_type(&items[1], scope); // `return x` is worth x
+		}
+		if let Some(kind) = scope.function_kind(name) {
+			return kind;
+		}
+		if name == crate::closures::CLOSURE_NEW {
+			return Kind::Function;
+		}
+		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
+			return kind;
+		}
+		if name == crate::wasp_parser::TEXT_TIMES {
+			return Kind::Text;
+		}
+		if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
+			return Kind::Symbol; // the type's name
+		}
+		if name == PRINT_CALL && items.len() >= 2 {
+			return match crate::wasp_parser::print_arguments_of(items, bracket).as_slice() {
+				[printed] => held_kind(printed, || infer_type(printed, scope)), // `print x` is worth x, `print "c"` a text
+				_ => Kind::Text, // `print a, b` is worth the joined text "a b"
+			};
+		}
+	}
+	// Check for function calls: (funcname args...) where first item is a symbol
+	if items.len() >= 2 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if s == "fetch" { return Kind::Text; }
+			// FFI/builtin function calls return Int by default
+			// This handles strcmp, strlen, abs, etc.
+			if crate::ffi::is_ffi_function(s) {
+				// Get actual return type from FFI signature if available
+				if let Some(sig) = crate::ffi::get_ffi_signature(s) {
+					if !sig.results.is_empty() {
+						return match sig.results[0] {
+							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+							_ => Kind::Int,
+						};
+					}
+				}
+				return Kind::Int;
+			}
+		}
+	}
+	// Type constructor: int("5"), float("1.5"), str(3), double 2
+	if items.len() == 2 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if let Some(kind) = type_word_kind(s) {
+				return kind;
+			}
+		}
+	}
+	// Function call with parentheses: a library word has its own result, any other call is assumed Int
+	if *bracket == Bracket::Round && items.len() >= 2 {
+		if let Node::Symbol(name) = items[0].drop_meta() {
+			if name == crate::library_words::SLICE || name == "reverse" {
+				// a slice or reversal of a text is a text, of anything else a list
+				return if matches!(infer_type(&items[1], scope), Kind::Text | Kind::Codepoint) { Kind::Text } else { Kind::List };
+			}
+			if name == crate::library_words::FIELD_WITH {
+				// a copy of the object with one field set: a Node, whatever the object's kind is known as
+				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
+			}
+			return crate::library_words::result_kind(name).unwrap_or(Kind::Int);
+		}
+	}
+	// Zero-arg function call: (funcname) with no args
+	if *bracket == Bracket::Round && items.len() == 1 {
+		if let Node::Symbol(s) = items[0].drop_meta() {
+			if crate::ffi::is_ffi_function(s) {
+				if let Some(sig) = crate::ffi::get_ffi_signature(s) {
+					if !sig.results.is_empty() {
+						return match sig.results[0] {
+							wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32 => Kind::Float,
+							_ => Kind::Int,
+						};
+					}
+				}
+				return Kind::Int;
+			}
+			// Assume zero-arg user function returns Int
+			return Kind::Int;
+		}
+	}
+	// Grouping: (x) has the type of x
+	if *bracket == Bracket::Round && items.len() == 1 {
+		return infer_type(&items[0], scope);
+	}
+	// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
+	let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
+	if computed_elements || (!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)) {
+		return Kind::List;
+	}
+	// Statement sequence: return type of last item
+	if let Some(last) = items.last() {
+		infer_type(last, scope)
+	} else {
+		Kind::Empty
 	}
 }
 
