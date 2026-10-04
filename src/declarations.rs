@@ -202,6 +202,8 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition) = match items {
 		[keyword, definition] => (keyword, definition.drop_meta().clone()),
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
+		// Go's `func add1(x int) int {…}`: the result type between the head and the body
+		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None)),
 		_ => return None,
 	};
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
@@ -220,9 +222,30 @@ fn keyword_definition(items: &[Node]) -> Option<Node> {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![argument.clone()],
-	});
+	}).map(name_then_type);
+	let mut parameters: Vec<Node> = parameters.collect();
+	// `func add1(x int)`: the one parameter and its type arrive as two words
+	if let [parameter, type_word] = parameters.as_slice() {
+		if matches!(parameter.drop_meta(), Node::Symbol(_)) && is_type_word(type_word) {
+			parameters = vec![Node::Key(Box::new(parameter.clone()), Op::Colon, Box::new(type_word.clone()))];
+		}
+	}
 	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
 	Some(Node::Key(Box::new(head), op, Box::new(body)))
+}
+
+fn is_type_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
+}
+
+/// Go's parameter `x int` (the name, then its type) is `x:int`
+fn name_then_type(parameter: Node) -> Node {
+	match parameter.drop_meta() {
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_type_word(&parts[1]) => {
+			Node::Key(Box::new(parts[0].clone()), Op::Colon, Box::new(parts[1].clone()))
+		}
+		_ => parameter,
+	}
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {

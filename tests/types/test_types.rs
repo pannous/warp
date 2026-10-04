@@ -67,7 +67,6 @@ fn array() -> Node { Node::Empty }
 // fn array() -> types("array")
 
 #[test]
-#[ignore]
 fn test_go_types() {
 	is!("func add1(x int) int { return x + 1 };add1(41)", 42);
 }

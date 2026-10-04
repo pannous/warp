@@ -1419,6 +1419,7 @@ PASSED:
   ✓ types::test_types::test_emit_cast
   ✓ types::test_types::test_empty_typed_functions
   ✓ types::test_types::test_function_return_types
+  ✓ types::test_types::test_go_types
   ✓ types::test_types::test_polymorphism
   ✓ types::test_types::test_polymorphism2
   ✓ types::test_types::test_polymorphism3
@@ -1815,4 +1816,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-53 ignored, 1810 passed, 0 failed, 1810 total tested
+52 ignored, 1811 passed, 0 failed, 1811 total tested

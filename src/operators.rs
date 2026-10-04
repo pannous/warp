@@ -2,7 +2,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// Keywords that introduce function definitions
-pub const FUNCTION_KEYWORDS: [&str; 5] = ["fun", "fn", "def", "define", "function"];
+pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
 
