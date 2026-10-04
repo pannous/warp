@@ -148,7 +148,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
   ✓ ffi::test_ffi::test_ffi_string_math_combined
   ✓ ffi::test_ffi::test_ffi_strlen
-  ✓ ffi::test_ffi::test_ffi_strncmp
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
@@ -182,6 +181,7 @@ PASSED:
   ✓ function::tests::test_signature_format
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
   ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
@@ -698,6 +698,7 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
   ✓ numbers::test_unit_word_keys::a_quantity_held_in_a_variable
   ✓ numbers::test_unit_word_keys::a_unit_word_key_after_a_number
+  ✓ numbers::test_unit_word_keys::minutes_are_a_time_unit
   ✓ numbers::test_units_arithmetic::test_incompatible_units_are_an_error
   ✓ numbers::test_units_arithmetic::test_scaling_a_quantity
   ✓ numbers::test_units_arithmetic::test_spaced_known_unit_multiplies
@@ -1267,6 +1268,11 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_trait_default_methods::a_conforming_type_gets_the_default_method
+  ✓ types::test_trait_default_methods::a_type_overrides_the_default_method
+  ✓ types::test_trait_default_methods::a_type_with_the_required_operations_conforms
+  ✓ types::test_trait_runtime_dispatch::a_loop_over_mixed_instances_dispatches_at_run_time
+  ✓ types::test_trait_runtime_dispatch::an_element_of_a_mixed_list_dispatches_at_run_time
   ✓ types::test_traits::test_a_builtin_trait_cannot_be_redeclared
   ✓ types::test_traits::test_a_claim_of_a_declared_trait_is_checked
   ✓ types::test_traits::test_a_compare_with_mismatched_types_is_no_conformance
@@ -1730,4 +1736,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1725 passed, 0 failed, 1725 total tested
+58 ignored, 1731 passed, 0 failed, 1731 total tested
