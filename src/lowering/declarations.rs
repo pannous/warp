@@ -5,6 +5,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
 /// The implicit parameter of a function: `double := it * 2`
+/// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
+const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
 const ENUM_WORD: &str = "enum";
 const FIRST_CASE_INDEX: i64 = 0;
@@ -178,6 +180,12 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// parameter `it` is that parameter
 pub fn lower_spaced_definitions(node: Node) -> Node {
 	match node {
+		Node::List(items, _, _) if colon_iteration(&items).is_some() => lower_spaced_definitions(colon_iteration(&items).expect("guarded")),
+		// `1…5 do print it` (wiki/range.md): a loop over the range, the item is `it`
+		Node::Key(range, Op::Do, body) if matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) => {
+			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
+			Node::List(vec![Node::Symbol("for".into()), *range, block], Bracket::None, Separator::Space)
+		}
 		Node::List(items, bracket, separator) if spaced_definition(&items).is_some() => {
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
@@ -199,6 +207,33 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
 		other => other,
+	}
+}
+
+/// `each [1,2,3]: print it`, `all xs: …` (wiki/iteration.md): a for loop over the list whose item is `it`
+fn colon_iteration(items: &[Node]) -> Option<Node> {
+	let [word, list_and_body, rest @ ..] = items else { return None };
+	if !matches!(word.drop_meta(), Node::Symbol(word) if COLON_ITERATION_WORDS.contains(&word.as_str())) {
+		return None;
+	}
+	let (list, first) = split_at_colon(list_and_body)?;
+	let body = match rest {
+		[] => first,
+		_ => Node::List([vec![first], rest.to_vec()].concat(), Bracket::None, Separator::Space),
+	};
+	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
+	Some(Node::List(vec![Node::Symbol("for".into()), list, block], Bracket::None, Separator::Space))
+}
+
+/// `[1,2,3]: s += it`, parsed as `([1,2,3]: s) += it`: the part before the colon and the body after it
+fn split_at_colon(node: &Node) -> Option<(Node, Node)> {
+	match node.drop_meta() {
+		Node::Key(before, Op::Colon, after) => Some((before.as_ref().clone(), after.as_ref().clone())),
+		Node::Key(left, op, right) => {
+			let (before, body_start) = split_at_colon(left)?;
+			Some((before, Node::Key(Box::new(body_start), *op, right.clone())))
+		}
+		_ => None,
 	}
 }
 

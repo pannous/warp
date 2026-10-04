@@ -26,6 +26,8 @@ PASSED:
   ✓ control::test_do_block::do_runs_a_block_literal
   ✓ control::test_do_block::do_runs_a_named_block
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
+  ✓ control::test_each_colon::a_range_do_walks_it
+  ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
@@ -1825,4 +1827,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1820 passed, 0 failed, 1820 total tested
+52 ignored, 1822 passed, 0 failed, 1822 total tested
