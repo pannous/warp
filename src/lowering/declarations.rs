@@ -2,8 +2,10 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::Op;
+use crate::operators::{is_function_keyword, Op};
 
+/// The implicit parameter of a function: `double := it * 2`
+const IT_PARAMETER: &str = "it";
 const ENUM_WORD: &str = "enum";
 const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
@@ -170,6 +172,96 @@ fn never_happens(located: &Node, message: &str) -> Node {
 
 /// C definitions, before any pass reads `real f(…)` as a conversion of a call; and keyword definitions
 /// (`def f(x) {…}`, `fun`, `function`) as `f(x) := {…}`, so every pass reads one definition form
+/// The spaced definition `square x := x*x` (wiki/examples.md), parsed as the items `square`, `x := x*x`, is the
+/// definition `square(x) := x*x`; `x y z := y*y+u` names x of the parameters y and z. A braceless call ending the body
+/// keeps its argument (`fibonacci number := … + fibonacci it - 2`, wiki/Home.md), and in a definition of one named
+/// parameter `it` is that parameter
+pub fn lower_spaced_definitions(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) if spaced_definition(&items).is_some() => {
+			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
+			let body = lower_spaced_definitions(body);
+			let body = match parameters.as_slice() {
+				[Node::Symbol(parameter)] if parameter != IT_PARAMETER => crate::law::substitute(&body, &[(IT_PARAMETER.to_string(), Node::Symbol(parameter.clone()))].into()),
+				_ => body,
+			};
+			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
+			let _ = (bracket, separator);
+			Node::Key(Box::new(head), Op::Define, Box::new(body))
+		}
+		// `f(x) := x + it`: `it` is the one parameter too
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if one_parameter(&head).is_some() => {
+			let parameter = one_parameter(&head).expect("guarded");
+			let body = crate::law::substitute(&lower_spaced_definitions(*body), &[(IT_PARAMETER.to_string(), Node::Symbol(parameter))].into());
+			Node::Key(head, op, Box::new(body))
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(lower_spaced_definitions(*left)), op, Box::new(lower_spaced_definitions(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
+		other => other,
+	}
+}
+
+/// `name p… last := body extra…`: the function name, its parameters and its body (the extra items the argument of
+/// the braceless call that ends the body)
+fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
+	let definition = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(target, Op::Define, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
+	let (words, rest) = items.split_at(definition);
+	let (name, parameters) = words.split_first()?;
+	let is_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !is_function_keyword(word));
+	if !is_word(name) || !parameters.iter().all(is_word) {
+		return None;
+	}
+	let (definition, extra) = rest.split_first()?;
+	let Node::Key(last, _, body) = definition.drop_meta() else { return None };
+	let words: Vec<Node> = parameters.iter().map(|parameter| parameter.drop_meta().clone()).chain(std::iter::once(last.drop_meta().clone())).collect();
+	Some((name.drop_meta().clone(), typed_words(words), applied_to_last(body.as_ref().clone(), extra)))
+}
+
+/// `int x y` as the parameters `x:int`, `y`: a type word types the name after it
+fn typed_words(words: Vec<Node>) -> Vec<Node> {
+	let mut parameters = vec![];
+	let mut words = words.into_iter().peekable();
+	while let Some(word) = words.next() {
+		let is_type = matches!(&word, Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some());
+		match words.peek() {
+			Some(Node::Symbol(_)) if is_type => {
+				let name = words.next().expect("peeked");
+				parameters.push(Node::Key(Box::new(name), Op::Colon, Box::new(word)));
+			}
+			_ => parameters.push(word),
+		}
+	}
+	parameters
+}
+
+/// The one named parameter of a definition head `f(x)` (`f(x:int)`), not `it`
+fn one_parameter(head: &Node) -> Option<String> {
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let [name, parameter] = items.as_slice() else { return None };
+	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let parameter = match parameter.drop_meta() {
+		Node::Key(parameter, Op::Colon, _) => parameter.drop_meta(),
+		other => other,
+	};
+	match parameter {
+		Node::Symbol(parameter) if parameter != IT_PARAMETER => Some(parameter.clone()),
+		_ => None,
+	}
+}
+
+/// `a + f` with the extra items `x - 2`: the last operand called with them, `a + f(x - 2)`
+fn applied_to_last(body: Node, extra: &[Node]) -> Node {
+	if extra.is_empty() {
+		return body;
+	}
+	match body {
+		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(applied_to_last(*node, extra)), data },
+		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
+	}
+}
+
 pub fn lower_c_functions(node: Node) -> Node {
 	lower_lists(node, |items| c_function(items).or_else(|| keyword_definition(items)).or_else(|| partial_application(items)))
 }

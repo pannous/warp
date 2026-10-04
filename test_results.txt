@@ -244,6 +244,8 @@ PASSED:
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_definition_value::a_definition_alone_is_empty
+  ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
+  ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
   ✓ functions::test_effects::test_declared_constraint_violation_names_span_and_chain
@@ -1823,4 +1825,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-52 ignored, 1818 passed, 0 failed, 1818 total tested
+52 ignored, 1820 passed, 0 failed, 1820 total tested
