@@ -1,0 +1,20 @@
+// A task of a program on its own Worker (host.js startTask, src/tasks.rs natively): the function runs in a fresh instance
+// of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
+// starting program waits on with Atomics.wait.
+
+importScripts("reader.js", "host.js");
+self.postMessage("ready"); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
+
+self.onmessage = ({ data: { module, name, ints, values, shared } }) => {
+	let output = "";
+	const hooks = { print: text => { output += text; }, panicked: text => { output += text; } };
+	const record = runTask(module, hooks, [], name, ints, values);
+	if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
+	const reply = utf8.encode(JSON.stringify({ ...record, value: taskTree(record.value), output }));
+	if (TASK_HEADER + reply.length > shared.byteLength) shared.grow(TASK_HEADER + reply.length);
+	new Uint8Array(shared, TASK_HEADER, reply.length).set(reply);
+	const header = new Int32Array(shared, 0, 2);
+	header[1] = reply.length;
+	Atomics.store(header, 0, 1);
+	Atomics.notify(header, 0);
+};

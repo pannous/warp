@@ -24,7 +24,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
-  SITE_FILES: index.html playground.css playground.js worker.js host.js reader.js examples.js codemirror-wasp-mode.js codemirror warp.wasm warp.debug.wasm samples.js
+  SITE_FILES: index.html playground.css playground.js worker.js task-worker.js coi-serviceworker.js host.js reader.js examples.js codemirror-wasp-mode.js codemirror warp.wasm warp.debug.wasm samples.js
 
 jobs:
   build:

@@ -125,15 +125,15 @@ function programImports(holder, hooks) {
 			task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
 			task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readNode(program(), values)),
 			task_await: id => {
-				const task = holder.run.tasks.get(id);
+				const task = finishedTask(holder.run, hooks, id);
 				if (task.failure) throw new Error(task.failure);
 				return task.value;
 			},
-			task_await_value: id => buildValue(program(), taskTree(holder.run.tasks.get(id).value)),
-			task_join: id => holder.run.tasks.get(id).failure ? 1n : 0n,
-			task_failure: id => buildValue(program(), textTree(holder.run.tasks.get(id).failure ?? "")),
-			task_status: id => holder.run.tasks.get(id).failure ? TASK_FAILED : TASK_FINISHED,
-			task_control: () => 0n, // the task finished where it started: nothing to stop, pause or resume
+			task_await_value: id => buildValue(program(), taskTree(finishedTask(holder.run, hooks, id).value)),
+			task_join: id => finishedTask(holder.run, hooks, id).failure ? 1n : 0n,
+			task_failure: id => buildValue(program(), textTree(finishedTask(holder.run, hooks, id).failure ?? "")),
+			task_status: id => taskStatus(holder.run, id),
+			task_control: (id, operation) => controlTask(holder.run, id, operation),
 		},
 		wasi_snapshot_preview1: {
 			fd_write: (fd, vectors, count, written) => {
@@ -177,27 +177,98 @@ function programImports(holder, hooks) {
 	});
 }
 
-const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED
+const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
+const TASK_STOPPED_CODE = 3n;
+const TASK_STOP = 1n;
 const KIND_MASK = 0xFFn;
 const decode = bytes => utf8Decoder.decode(bytes);
 
-// a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run): the Int arguments
-// as they are, or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node; its result or failure
+const TASK_WORKER = "task-worker.js";
+const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its result into, grown as needed
+const TASK_RESULT_LIMIT = 1 << 28;
+const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
+const TASK_STOPPED = "task stopped";
+// Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
+// its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
+const taskPool = [];
+
+// the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
+function prepareTaskPool(size = Math.min(4, self.navigator?.hardwareConcurrency ?? 2)) {
+	if (!self.crossOriginIsolated || !self.Worker) return;
+	for (let index = 0; index < size; index++) {
+		const worker = new Worker(TASK_WORKER);
+		worker.onmessage = () => taskPool.push(worker); // loaded: it can take tasks
+	}
+}
+
+// a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
+// they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
+// (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
 function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
-	const taskHolder = { warnings: holder.warnings, run };
+	if (taskPool.length > 0) {
+		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+		const worker = taskPool.pop();
+		worker.postMessage({ module: run.module, name, ints, values, shared });
+		run.tasks.set(id, { name, worker, shared });
+	} else {
+		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values));
+	}
+	return id;
+}
+
+// the task here: {value} (a number or a tree) or {failure}
+function runTask(module, hooks, warnings, name, ints, values) {
+	const taskHolder = { warnings, run: { module, tasks: new Map() } };
 	try {
-		const instance = new WebAssembly.Instance(run.module, programImports(taskHolder, hooks));
+		const instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
-		run.tasks.set(id, { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result });
+		joinTasks(taskHolder.run, hooks);
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result };
 	} catch (trap) {
-		run.tasks.set(id, { failure: `task ${name}: ${trapMessage(trap, name)}` });
+		return { failure: `task ${name}: ${trapMessage(trap, name)}` };
 	}
-	return id;
+}
+
+// the task's record once it is done: a Worker's is waited for (the program runs in a worker, which may block) and
+// read from its shared buffer, its output printed then
+function finishedTask(run, hooks, id) {
+	const task = run.tasks.get(id);
+	if (!task.worker) return task;
+	const header = new Int32Array(task.shared, 0, 2);
+	Atomics.wait(header, 0, 0);
+	const record = JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, header[1]).slice()));
+	if (record.output) hooks.print(record.output, 1);
+	taskPool.push(task.worker); // free for the next task
+	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
+	run.tasks.set(id, record);
+	return record;
+}
+
+function joinTasks(run, hooks) {
+	for (const id of run.tasks.keys()) finishedTask(run, hooks, id);
+}
+
+// running, finished or failed, without waiting (src/host.rs task status codes)
+function taskStatus(run, id) {
+	const task = run.tasks.get(id);
+	if (task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0) return 0n;
+	const record = task.worker ? JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, new Int32Array(task.shared, 0, 2)[1]).slice())) : task;
+	if (!record.failure) return TASK_FINISHED;
+	return record.failure.endsWith(TASK_STOPPED) ? TASK_STOPPED_CODE : TASK_FAILED;
+}
+
+// `stop job` ends a Worker (pause and resume need checks in the program the browser cannot make yet)
+function controlTask(run, id, operation) {
+	const task = run.tasks.get(id);
+	if (!task.worker || operation !== TASK_STOP || Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0) return 0n;
+	task.worker.terminate();
+	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
+	return 1n;
 }
 
 // the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out
@@ -255,7 +326,9 @@ function runProgram(bytes, hooks) {
 	}
 	const { warnings } = holder;
 	try {
-		return { result: readResult(instance.exports, instance.exports.main()), warnings };
+		const result = instance.exports.main();
+		joinTasks(holder.run, hooks); // the tasks nobody awaited finish before the result, as natively
+		return { result: readResult(instance.exports, result), warnings };
 	} catch (trap) {
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = instance.exports[TRAP_DETAIL_EXPORT]?.value;

@@ -3,6 +3,7 @@
 // programs through warp_host (host.js), exactly like the playground.
 
 importScripts("reader.js", "host.js", "wasi.js");
+prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 let module; // the compiled test binary
 
