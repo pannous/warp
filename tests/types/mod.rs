@@ -33,3 +33,4 @@ mod test_trait_constraints;
 mod test_instance_arguments;
 mod test_tuple_values;
 mod test_printable;
+mod test_iterable;

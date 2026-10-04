@@ -87,6 +87,10 @@ Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` re
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
+## Printable and Iterable (2026-10-04, lowering/printable.rs)
+`text(p:person)` (P31) and `iterate(b:bag)` become the witnesses `text·person`, `iterate·bag`; where an instance's type
+is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
+The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.
+
 ## Later
-- Printable (`text(p:person)` for interpolation and `as text`), Iterable
 - `<` defined directly (`a:person < b:person := …`) and methods in the class body as sugar for the witnesses
