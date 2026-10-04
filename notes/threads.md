@@ -76,10 +76,11 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   idle (a Worker starts only once its creator returns to the event loop), results as JSON in a growable
   SharedArrayBuffer awaited with Atomics.wait; without cross-origin isolation a task runs at once in a fresh instance.
   The test server sends COOP/COEP; the playground gets them from coi-serviceworker.js (one reload). Measured: two
-  one-second tasks take 1.0 s in the playground. Pause/resume in the browser: not yet (no epoch checks there).
+  one-second tasks take 1.0 s in the playground. Pause/resume in the browser: each task Worker gets a control word (Int32Array on a SharedArrayBuffer); `task_poll`,
+  called where every loop starts in a program that controls tasks, waits on it while paused (Atomics.wait).
 
 - Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/shared_arrays.rs): host words shared_new/get/set/add/
-  count over arrays the host holds for the run (src/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
+  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
   SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
   the module's own, and every memory instruction assumes 0; the host call per access is the price.
 
