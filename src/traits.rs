@@ -937,7 +937,8 @@ impl Dispatch {
 			let Some(Shape::ListOf(type_name)) = self.types.shape(argument) else { continue };
 			let required = self.traits.named(trait_name)?;
 			if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) {
-				return self.fail(missing_conformance(&items[0], &type_name, required, operation, &format!("{name}({})", argument.serialize())));
+				let call = Node::List(items.to_vec(), Bracket::Round, Separator::None);
+				return self.fail(missing_conformance(&call, &type_name, required, operation, &format!("{name}({})", argument.serialize())));
 			}
 		}
 		None

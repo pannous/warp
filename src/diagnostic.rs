@@ -13,9 +13,9 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-	/// A diagnostic at the source position of `node` (0:0 if the parser recorded none)
+	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
+		let (line, column) = position(node).unwrap_or_default();
 		Diagnostic { message: message.into(), line, column, fix: None }
 	}
 
@@ -26,6 +26,20 @@ impl Diagnostic {
 
 	pub fn into_error(self) -> Node {
 		crate::node::error(&self.to_string())
+	}
+}
+
+/// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
+/// pass rebuilt keeps the positions of the parts it was built from
+fn position(node: &Node) -> Option<(usize, usize)> {
+	if let Some(info) = node.get_lineinfo() {
+		return Some((info.line_nr, info.column));
+	}
+	match node {
+		Node::Meta { node, .. } => position(node),
+		Node::Key(left, _, right) => position(left).or_else(|| position(right)),
+		Node::List(items, _, _) => items.iter().find_map(position),
+		_ => None,
 	}
 }
 
@@ -181,7 +195,7 @@ impl Ask {
 	}
 
 	pub fn at_node(self, node: &Node) -> Self {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
+		let (line, column) = position(node).unwrap_or_default();
 		self.at(line, column)
 	}
 
