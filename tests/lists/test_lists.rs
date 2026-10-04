@@ -84,7 +84,7 @@ fn test_array_operations() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "user: lists don't grow by index"]
 fn test_array_creation() {
 	//    skip!(
 

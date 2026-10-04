@@ -27,3 +27,4 @@ mod test_list_of_objects;
 mod test_dynamic_range;
 mod test_remove_and_index_of;
 mod test_find_any_all;
+mod test_set_past_the_end;

@@ -1181,6 +1181,10 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalGet(0));
 			f.instruction(&I::RefIsNull);
 			s.emit_fail_if(f, "index_out_of_range");
+			// lists do not grow by index, the empty list ø included (user, 2026-10-04)
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+			s.emit_fail_if(f, "index_out_of_range");
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
 			s.emit_field(f, 0, 0);

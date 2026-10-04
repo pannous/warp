@@ -75,6 +75,10 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   to be the tuple (2.0, 4); today the comma binds looser than `==`, so it is `((…) == 2.0), 4`. Tuples in parentheses
   compare element by element now (`(…) == (2.0, 4)` → 1). Change the precedence (or only for a tuple on the left)?
   Not changed. Night 2026-10-04.
+- P43 DECIDED (user, 2026-10-04): lists do not grow when an item is set past the end, the empty list included;
+  setting past the end is a loud, catchable `index out of range` error, as the existing tests have it
+  (`x=(1 2 3);x#4=0`, test_footguns). An experimental growth (night 2026-10-04) was dropped before commit; the
+  ignored tests expecting growth (test_array_creation) stay ignored.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -332,7 +336,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 ## Language design
 3. **Juxtaposition** `3x` → `3*x` (wiki/number.md specifies it; experiment: 0 regressions, makes test_implicit_multiplication pass):
    `1/2x` = `1/(2x)` (Julia) or `(1/2)x`? ordinals `2nd` stay text? `2i` / `2e` complex / constant or product? spaced `2 km` once units exist?
-4. **Lists (B8)**: `size` of a list = bytes (wiki/Footguns.md decision) or element count? assigning past the end = error or grow?
+4. **Lists (B8)**: `size` of a list = bytes (wiki/Footguns.md decision) or element count? assigning past the end = error (DECIDED, user 2026-10-04, see P43).
    typed array declarations `x : 100 int`, `pixel:int[100]`, `640000*int`? value of a `while` loop (C++: 0, Rust test: 11)?
 5. **Units**: `1 m + 1km`, `1950 ± 50`, `1900 - 2000 AD` (wiki/unit.md) — unit values as identifiers, so `3km` = `3*km`?
 6. **Data as scope**: does `a-b:2 c-d:4 a-b` resolve the symbol to its key's value (2)?
