@@ -29,3 +29,10 @@ fn on_set_runs_after_each_write_with_the_value() {
 	is!("x=10; total=0; on set x {total+=value}; x=3; x=4; total", 7);
 	is!("x=3; n=0; on set x : n+=1; while x-->0 : x; n", 4);
 }
+
+#[test]
+fn after_a_function_runs_after_each_statement_calling_it() {
+	is!("n=0; def test(x): x+1; after tested: n+=10; test(1); test(2); n", 20);
+	is!("n=0; def stop(): 1; after stopped {n+=1}; for i in 1 to 3 { stop() }; n", 3);
+	is!("log=0; def save(x): x; before save: log=log*10+1; after saved: log=log*10+2; save(5); log", 12);
+}

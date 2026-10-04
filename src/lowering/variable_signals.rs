@@ -3,6 +3,8 @@
 //! listener is its check after every later write of such a variable in the statements that follow it, loop bodies
 //! included: a write inside an expression (`while x-->0`) becomes `(x--; check; x+1)`, keeping the expression's value.
 //! `on set x {print value}` runs after every write of x; `value` (or `signal`, `event`) is the new value.
+//! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
+//! `before test {…}` before it.
 
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
@@ -13,22 +15,38 @@ const ONCE_WORD: &str = "once";
 const WHENEVER_WORD: &str = "whenever";
 const ON_WORD: &str = "on";
 const SET_WORD: &str = "set";
+const AFTER_WORD: &str = "after";
+const BEFORE_WORD: &str = "before";
+/// `tested`, `saved`: a function named in the past tense
+const PAST_SUFFIXES: [&str; 2] = ["ed", "d"];
 /// The written value inside an `on set` listener
 const VALUE_WORDS: [&str; 3] = ["value", "signal", "event"];
 /// `once_fired_0`: whether the first once listener ran
 const FIRED_PREFIX: &str = "once_fired_";
 
 #[derive(Clone)]
+enum Trigger {
+	/// a write of one of these variables
+	Write(HashSet<String>),
+	/// a statement calling the function
+	Call { function: String, before: bool },
+}
+
+#[derive(Clone)]
 struct Listener {
-	/// None for `on set`: every write
+	trigger: Trigger,
+	/// None for `on set` and calls: every time
 	condition: Option<Node>,
 	body: Node,
 	/// the flag of a once listener, None for whenever
 	fired: Option<String>,
-	watched: HashSet<String>,
 }
 
 impl Listener {
+	fn watches(&self, name: &str) -> bool {
+		matches!(&self.trigger, Trigger::Write(watched) if watched.contains(name))
+	}
+
 	fn check(&self) -> Node {
 		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
 		match &self.fired {
@@ -43,12 +61,15 @@ impl Listener {
 }
 
 pub fn lower(node: Node) -> Node {
-	Signals { count: 0 }.lower(node, &[])
+	let functions = defined_functions(&node);
+	Signals { count: 0, functions }.lower(node, &[])
 }
 
 struct Signals {
 	/// once listeners so far: each gets its own flag
 	count: usize,
+	/// the functions the program defines, which `after` and `before` may name
+	functions: HashSet<String>,
 }
 
 impl Signals {
@@ -94,6 +115,8 @@ impl Signals {
 				listeners.push(listener);
 				continue;
 			}
+			let (before, after) = call_listeners(&listeners, &item);
+			out.extend(before);
 			match statement_write(&item).filter(|name| watches(&listeners, name)) {
 				Some(name) => {
 					let Node::Key(target, op, value) = item.drop_meta().clone() else { unreachable!("a write is a key") };
@@ -102,6 +125,7 @@ impl Signals {
 				}
 				None => out.push(self.lower(item, &listeners)),
 			}
+			out.extend(after);
 		}
 		out
 	}
@@ -112,6 +136,9 @@ impl Signals {
 		let keyword = word(items.first()?);
 		if keyword == ON_WORD && items.get(1).map(word).as_deref() == Some(SET_WORD) {
 			return self.set_listener(&items[2..]);
+		}
+		if keyword == AFTER_WORD || keyword == BEFORE_WORD {
+			return self.call_listener(&items[1..], keyword == BEFORE_WORD);
 		}
 		if keyword != ONCE_WORD && keyword != WHENEVER_WORD {
 			return None;
@@ -127,7 +154,7 @@ impl Signals {
 			format!("{FIRED_PREFIX}{}", self.count - 1)
 		});
 		let body = self.lower(body, &[]);
-		Some(Listener { condition: Some(condition), body, fired, watched })
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(condition), body, fired })
 	}
 
 	/// `on set x {body}`: the body after every write of x, `value` in it is x
@@ -136,8 +163,80 @@ impl Signals {
 		let Node::Symbol(name) = variable.drop_meta() else { return None };
 		let bindings = VALUE_WORDS.iter().map(|value| (value.to_string(), Node::Symbol(name.clone()))).collect();
 		let body = self.lower(crate::law::substitute(&body, &bindings), &[]);
-		Some(Listener { condition: None, body, fired: None, watched: HashSet::from([name.clone()]) })
+		Some(Listener { trigger: Trigger::Write(HashSet::from([name.clone()])), condition: None, body, fired: None })
 	}
+
+	/// `after tested: body`, `before test {body}`: test must be a function of the program
+	fn call_listener(&mut self, rest: &[Node], before: bool) -> Option<Listener> {
+		let (subject, body) = subject_and_body(rest)?;
+		let function = self.function_named(&word(&subject))?;
+		let body = self.lower(body, &[]);
+		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None })
+	}
+
+	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
+	fn function_named(&self, name: &str) -> Option<String> {
+		let mut stems = vec![name.to_string()];
+		stems.extend(PAST_SUFFIXES.iter().filter_map(|suffix| name.strip_suffix(suffix)).map(str::to_string));
+		if let Some(stem) = name.strip_suffix(PAST_SUFFIXES[0]) {
+			let mut letters: Vec<char> = stem.chars().collect();
+			if letters.len() > 1 && letters[letters.len() - 1] == letters[letters.len() - 2] {
+				letters.pop(); // `stopped`: stop
+				stems.push(letters.into_iter().collect());
+			}
+		}
+		stems.into_iter().find(|stem| self.functions.contains(stem))
+	}
+}
+
+/// The names of `f(x) := …`, `def f: …` and the other keyword definitions
+fn defined_functions(node: &Node) -> HashSet<String> {
+	let mut functions = HashSet::new();
+	let head_name = |head: &Node| match head.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.first().map(word),
+		other => Some(word(other)),
+	};
+	node.visit(&mut |part| match part {
+		Node::Key(head, Op::Define, _) => functions.extend(head_name(head)),
+		Node::List(items, _, _) if items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first))) => {
+			if let Some(Node::Key(head, _, _)) = items.get(1).map(Node::drop_meta) {
+				functions.extend(head_name(head));
+			}
+		}
+		_ => {}
+	});
+	functions.remove("");
+	functions
+}
+
+/// The bodies of the call listeners to run before and after the statement
+fn call_listeners(listeners: &[Listener], statement: &Node) -> (Vec<Node>, Vec<Node>) {
+	let (mut before, mut after) = (vec![], vec![]);
+	for listener in listeners {
+		if let Trigger::Call { function, before: runs_before } = &listener.trigger {
+			if calls(statement, function) {
+				if *runs_before { before.push(listener.check()) } else { after.push(listener.check()) }
+			}
+		}
+	}
+	(before, after)
+}
+
+/// Does the statement call the function, outside the blocks nested in it (their statements get their own listeners)
+fn calls(node: &Node, function: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => name == function,
+		Node::List(items, bracket, separator) if !is_statement_list(bracket, separator) => {
+			word(items.first().unwrap_or(&Node::Empty)) == function || items.iter().skip(1).any(|item| calls_inside(item, function))
+		}
+		Node::Key(left, _, right) => calls_inside(left, function) || calls_inside(right, function),
+		_ => false,
+	}
+}
+
+/// A call inside an expression: a bare name there is a value, not a call
+fn calls_inside(node: &Node, function: &str) -> bool {
+	!matches!(node.drop_meta(), Node::Symbol(_)) && calls(node, function)
 }
 
 /// `subject {body}` or `subject: body`
@@ -154,11 +253,11 @@ fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 }
 
 fn watches(listeners: &[Listener], name: &str) -> bool {
-	listeners.iter().any(|listener| listener.watched.contains(name))
+	listeners.iter().any(|listener| listener.watches(name))
 }
 
 fn checks(listeners: &[Listener], name: &str) -> Vec<Node> {
-	listeners.iter().filter(|listener| listener.watched.contains(name)).map(Listener::check).collect()
+	listeners.iter().filter(|listener| listener.watches(name)).map(Listener::check).collect()
 }
 
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes
