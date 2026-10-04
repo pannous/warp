@@ -186,7 +186,7 @@ PASSED:
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
   ✓ functions::test_argument_kinds::list_is_never_silently_reduced_to_its_last_element
   ✓ functions::test_argument_kinds::matching_arguments_still_pass
-  ✓ functions::test_argument_kinds::text_argument_for_an_int_parameter_is_a_type_error
+  ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
   ✓ functions::test_bare_function_name::test_bare_name_of_function_without_parameters_calls_it
@@ -214,6 +214,8 @@ PASSED:
   ✓ functions::test_closures::test_map_and_reduce_with_a_closure_variable
   ✓ functions::test_closures::test_not_a_function_stays_loud
   ✓ functions::test_closures::test_returned_closure
+  ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
+  ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
   ✓ functions::test_def_forms::probe_def_block_syntax
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
@@ -297,6 +299,8 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_partial_application::a_placeholder_makes_a_partial_application
+  ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
   ✓ functions::test_property_access::test_dot_on_an_object_literal
@@ -361,6 +365,7 @@ PASSED:
   ✓ functions::test_undefined_calls::test_variable_is_not_callable
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
+  ✓ functions::test_user_method_form::a_user_function_taking_a_function_in_method_form
   ✓ host::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
@@ -450,6 +455,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
   ✓ lists::test_typed_lists::test_int_array_reads_back_as_the_same_node
+  ✓ lists::test_typed_lists::test_int_arrays_inside_functions
   ✓ lists::test_typed_lists::test_int_expression_items_are_an_array
   ✓ lists::test_typed_lists::test_int_list_literal_is_an_array
   ✓ lists::test_typed_lists::test_map_and_element_wise_over_int_arrays
@@ -463,7 +469,6 @@ PASSED:
   ✓ lists::test_unpacking::star_middle
   ✓ lists::test_unpacking::star_rest_empty
   ✓ lists::test_unpacking::star_rest_from_list
-  ✓ lists::test_unpacking::star_rest_from_tuple_function
   ✓ lists::test_unpacking::star_rest_from_values
   ✓ lists::test_unpacking::swap
   ✓ lists::test_unpacking::too_few_values_is_loud
@@ -807,6 +812,8 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipeline::a_pipeline_calls_each_stage_with_the_value
+  ✓ operators::test_pipeline::a_pipeline_over_several_lines
   ✓ operators::test_structural_equality::a_float_equals_the_same_exact_number
   ✓ operators::test_structural_equality::a_switch_chooses_a_case_by_the_same_equality
   ✓ operators::test_structural_equality::a_text_never_equals_a_number
@@ -885,6 +892,7 @@ PASSED:
   ✓ parser::test_meta::test_meta_field
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
+  ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
   ✓ parser::test_newline_precedence::newline_form_is_really_evaluated - should panic
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
   ✓ parser::test_newline_precedence::test_fibonacci_auto_typed_newline
@@ -1740,4 +1748,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-58 ignored, 1735 passed, 0 failed, 1735 total tested
+58 ignored, 1743 passed, 0 failed, 1743 total tested
