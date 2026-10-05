@@ -1,5 +1,3 @@
-use warp::analyzer::analyze;
-use warp::type_kinds::NodeKind;
 use warp::wasp_parser::parse;
 use warp::*;
 use warp::node::strings;
@@ -84,14 +82,10 @@ fn test_array_operations() {
 }
 
 #[test]
-#[ignore = "user: lists don't grow by index"]
+// P59 (user, 2026-10-05): lists don't grow by index, so setting past the end of an empty list is an error
 fn test_array_creation() {
-	//    skip!(
-
-	// todo create empty array
-	is!("pixel=[];pixel[1]=15;pixel[1]", 15);
-	is!("pixel=();pixel#1=15;pixel#1", 15); // diadic ternary operator
-	is!("pixel array;pixel#1=15;pixel#1", 15);
+	crate::common::fails_with("pixel=[];pixel[1]=15;pixel[1]", "index out of range");
+	crate::common::fails_with("pixel=();pixel#1=15;pixel#1", "index out of range");
 	is!("pixel:int[100];pixel[1]=15;pixel[1]", 15);
 	is!("pixel=int[100];pixel[1]=15;pixel[1]", 15); // todo wasp can't distinguish type ':' from value '=' OK?
 	is!("pixel: 100 int;pixel[1]=15;pixel[1]", 15); // number times type = typed array
@@ -140,31 +134,25 @@ fn test_while_nop_issue() {
 }
 
 #[test]
-#[ignore]
+// P59 (user, 2026-10-05): the lowered list is counted, not the parse tree
 fn test_array_initialization_basics() {
 	// via Units
-	let node = analyze(parse("x : 100 numbers"));
-	eq!(node.kind(), NodeKind::List);
-	eq!(node.length(), 100);
+	is!("x : 100 numbers; count(x)", 100);
 }
 
 #[test]
-#[ignore]
+// P59 (user, 2026-10-05): the `;[` typo fixed, the natural-language array phrases dropped
 fn test_array_initialization() {
 	// via Units
 	is!("x : int[100]; x.length", 100);
 	//     is!("x : u8 * 100; x.length", 100) // type times size operation!!
 	is!("x : 100 * int; x.length", 100);
-	is!("x : 100 * ints;[ x.length", 100);
+	is!("x : 100 * ints; x.length", 100);
 	//     is!("x : 100 ints;[ x.length", 100) // implicit multiplication, no special case!
 	is!("x : 100 int; x.length", 100);
 	is!("x : 100 integers; x.length", 100);
 	is!("x : 100 numbers; x.length", 100);
-	is!("x is 100 times [0]; x.length", 100);
-	is!("x is array of size 100; x.length", 100);
-	is!("x is an 100 integer array; x.length", 100);
-	is!("x is a 100 integer array; x.length", 100);
-	is!("x is a 100 element array; x.length", 100);
+	is!("x = 100 times [0]; x.length", 100); // `x is …` compares (assumption under P59: written as an assignment)
 }
 
 #[test]
