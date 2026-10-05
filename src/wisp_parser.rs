@@ -675,7 +675,8 @@ macro_rules! wis {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{expression, put, wis};
+	use crate::type_kinds::Kind;
+	use crate::{expression, put};
 
 	#[test]
 	fn test_wisp_basic_atom_types() {

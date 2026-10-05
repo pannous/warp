@@ -1,5 +1,5 @@
 use std::fs::{create_dir_all, File};
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", not(test)))]
 use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
@@ -18,7 +18,7 @@ pub fn download(url: &str) -> String {
 // test mode (native): use mock
 #[cfg(all(test, feature = "native"))]
 pub fn download(url: &str) -> String {
-	"mock".s() + url
+	format!("mock{url}")
 }
 
 // normal mode (native): use ureq

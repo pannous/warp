@@ -220,6 +220,19 @@ pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
 
 // use std::cmp::PartialEq;
 
+/// `'l'.is("l")`: a character equal to a one-character text (used by the unit tests below)
+#[cfg(test)]
+trait PartialEqStr {
+	fn is(&self, other: &str) -> bool;
+}
+
+#[cfg(test)]
+impl PartialEqStr for char {
+	fn is(&self, other: &str) -> bool {
+		other.len() == 1 && other.starts_with(*self)
+	}
+}
+
 #[allow(unused)]
 macro_rules! s {
 	($lit:literal) => {
