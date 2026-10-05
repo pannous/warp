@@ -1,7 +1,7 @@
 //! Forms other languages use, lowered to wasp's own (notes/welcoming.md), before any other pass:
 //! - `match v { 0 => "zero"; _ => "other" }`: the cases of switch/match written with `=>`, `_` the default
 //! - `loop { … }`: `while true { … }`, left by `break`
-//! (`xs |> f(b)` is read by the parser, `f(1, _)` lowered in declarations.rs)
+//!   (`xs |> f(b)` is read by the parser, `f(1, _)` lowered in declarations.rs)
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;

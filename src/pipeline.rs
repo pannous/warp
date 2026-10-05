@@ -2,10 +2,11 @@
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 use crate::wasp_parser::WaspParser;
+#[cfg(feature = "native")]
 use log::warn;
 
 const INDEX_OUT_OF_RANGE: &str = "index out of range";
@@ -90,6 +91,7 @@ pub fn eval_untrusted(code: &str) -> Node {
 }
 
 /// A compiled program and the host capabilities its imports need.
+#[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
 pub struct CompiledModule {
 	pub bytes: Vec<u8>,
 	pub(crate) needs_host: bool,

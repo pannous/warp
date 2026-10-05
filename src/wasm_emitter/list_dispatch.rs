@@ -21,9 +21,6 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-/// Element count from which a host/GPU backend would take over a list operation at run time; `None`: no such backend
-pub const HOST_BACKEND_MIN_LENGTH: Option<u32> = None;
-
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full
 const FIRST_CAPACITY: i32 = 4;
 const NODE_COUNT: &str = "node_count";
@@ -32,16 +29,10 @@ const SQUARE_BRACKET_INFO: i64 = 1;
 /// The list operations that go through the dispatch layer
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ListOp {
-	/// `#xs`, `count xs`, `xs.size`
-	Count,
 	/// `xs#i` as a number or as a Node
 	Element,
 	/// `xs#i = v`, `xs#i += v`
 	SetElement,
-	/// `xs = [1 2 3]`, `ys = xs`, `xs.add(4)`
-	Store,
-	/// `xs` where a Node is needed
-	AsNode,
 	/// `sum xs`: `list_sum(xs, loop)`
 	Sum,
 }
@@ -129,8 +120,6 @@ impl ElementType {
 pub enum Backend {
 	NodeCells,
 	TypedArray(ElementType),
-	/// host-native or GPU, behind a host import (not implemented)
-	Host,
 }
 
 /// A list variable held as a typed array

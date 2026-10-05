@@ -115,21 +115,16 @@ use crate::analyzer::{analyze_required_functions, captured_variables, kind_with_
 use crate::context::{Context, UserFunctionDef};
 use crate::local::Local;
 use crate::extensions::numbers::Number;
-use crate::function::{Function as FuncDef, Signature};
+use crate::function::Function as FuncDef;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
-use crate::normalize::hints as norm;
-use crate::operators::{is_function_keyword, op_to_code, Op};
-use crate::type_kinds::{any_heap_type, field_def_to_val_type, FieldDef, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
+use crate::operators::{op_to_code, Op};
+use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
-#[cfg(feature = "native")]
-use crate::wasm_reader::read_bytes;
-use crate::wasp_parser::WaspParser;
 use log::{trace, warn};
 use std::collections::HashMap;
-use std::thread::scope;
 use wasm_encoder::*;
 use Instruction as I;
 #[cfg(feature = "validate")]
@@ -137,7 +132,6 @@ use wasmparser::{Validator, WasmFeatures};
 use Instruction::I32Const;
 pub use crate::pipeline::{compile, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule};
 use crate::pipeline::returned_error_message;
-use StorageType::Val;
 use ValType::Ref;
 
 

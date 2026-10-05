@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports)]
+
 // shared code with wasp tests etc
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc

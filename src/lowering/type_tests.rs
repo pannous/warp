@@ -105,7 +105,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		all => all,
 	};
 	let (first, rest) = words.split_first()?;
-	if shadowed.contains(*first) {
+	if shadowed.contains(first) {
 		return None;
 	}
 	match (*first, rest) {

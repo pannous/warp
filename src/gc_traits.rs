@@ -19,14 +19,11 @@
 //! let age: i64 = person.age()?;
 //! ```
 
-#![allow(unused)]
 
 use anyhow::{anyhow, bail, Result};
-use paste::paste;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::ops::Index;
 use std::rc::Rc;
 use std::str;
 use std::sync::{Arc, Mutex};
@@ -1024,7 +1021,7 @@ pub mod wasm_name_resolver {
     use super::*;
     use std::sync::LazyLock;
 	use wasmparser as wp;
-	use crate::gc_traits::wasm_name_resolver::ParsedAbstractHeapType::{Any, Array, Extern, Func, NoExtern, NoFunc, Struct};
+	
 
 	static REGISTRY: LazyLock<Mutex<FieldNameRegistry>> =
         LazyLock::new(|| Mutex::new(FieldNameRegistry::default()));
@@ -1243,7 +1240,7 @@ pub mod wasm_name_resolver {
 		}
 
 		fn read_name_section(
-			mut reader: wp::NameSectionReader<'_>,
+			reader: wp::NameSectionReader<'_>,
 			field_names: &mut HashMap<u32, Vec<(u32, String)>>,
 			type_names: &mut HashMap<u32, String>,
 		) -> Result<()> {

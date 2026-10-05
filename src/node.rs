@@ -1,22 +1,18 @@
-#![allow(dead_code, unused_imports)]
 // type string = str; NO! ugly for a reason!
-use crate::extensions::lists::{map, Filter, VecExtensions, VecExtensions2};
+use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{CloneAny, Dada, DataType, LineInfo};
+use crate::meta::{Dada, DataType, LineInfo};
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::any::Any;
+use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::operators::{is_function_keyword, Op};
 // use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
-use crate::type_kinds::{AstKind, Kind, KIND_MASK};
-use crate::wasp_parser::parse;
+use crate::type_kinds::Kind;
 
 /// Prefix of a `@name(value)` annotation key
 pub const ATTRIBUTE_MARK: char = '@';
@@ -2195,20 +2191,6 @@ pub fn text_node(p0: String) -> Node {
 
 pub fn node(p0: &str) -> Node {
 	Text(p0.s())
-}
-
-// Now no pass can accidentally drop meta!
-fn map_node(n: Node, f: &impl Fn(Node) -> Node) -> Node {
-	match n {
-		Meta { node: inner, data } => Meta {
-			node: Box::new(map_node(*inner, f)),
-			data,
-		},
-		// Now no pass can accidentally drop meta!
-		List(xs, br, sep) => List(xs.into_iter().map(|x| map_node(x, f)).collect(), br, sep),
-
-		other => f(other),
-	}
 }
 
 // ============ Free Convenience Constructors ============

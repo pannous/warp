@@ -3,7 +3,6 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::normalize::hints as norm;
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -829,8 +828,8 @@ fn edit_distance(a: &str, b: &str) -> usize {
 	for (i, row) in rows.iter_mut().enumerate() {
 		row[0] = i;
 	}
-	for j in 0..=b.len() {
-		rows[0][j] = j;
+	for (j, cell) in rows[0].iter_mut().enumerate() {
+		*cell = j;
 	}
 	for i in 1..=a.len() {
 		for j in 1..=b.len() {

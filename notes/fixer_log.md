@@ -158,3 +158,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p47-job-lists (P47 stages 2-4)
 - `jobs.add(go f(i))` keeps tasks unawaited; reads of the list await every job, `jobs#i` one, `await all xs` every
   one (notes/threads.md "Job lists"); three one-second jobs take ~1 s.
+
+## 2026-10-05 zero-warnings-2
+- Redo of claude/zero-warnings-0h6ky3 on current main (its 13 commits conflicted with two days of changes; its CI half
+  was already on main): crate-level allows gone, dead code deleted as that branch chose, native-only items cfg-gated;
+  all six CI warning/clippy commands pass locally. The old remote is renamed archive/zero-warnings-0h6ky3.

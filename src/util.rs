@@ -1,4 +1,3 @@
-use serde_json::json;
 use std::cell::Cell;
 #[cfg(feature = "native")]
 use wasmtime::{Config, Engine, Store};
@@ -11,6 +10,7 @@ pub const DEFAULT_FUEL: u64 = 10_000_000_000;
 pub const FUEL_VARIABLE: &str = "WARP_FUEL";
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
 /// frame of a deep recursion) at each of its many small growths
+#[cfg(feature = "native")]
 const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
 
 thread_local! {
@@ -84,7 +84,7 @@ pub fn gc_engine() -> Engine {
 
 
 pub fn show_type_name<T>(_: &T) {
-	use std::any::{type_name, type_name_of_val};
+	use std::any::type_name;
 	// println!("{}", type_name_of_val(*json!({"name": "Alice"})));
 	println!("{}", type_name::<T>());
 }
