@@ -81,6 +81,8 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
 pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+/// Why a unit word is an undefined variable: quantities are computed in constant expressions only
+const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 
@@ -1004,7 +1006,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
-		self.emit_type_error(func, format!("undefined variable: {name}"));
+		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
+		let unit_hint = if crate::units::is_unit(name) { UNIT_AT_RUN_TIME } else { "" };
+		self.emit_type_error(func, format!("undefined variable: {name}{unit_hint}"));
 	}
 
 	/// The local slot of a defined variable; an undefined one is an error value at the use
