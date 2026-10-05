@@ -71,8 +71,11 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::Key(_, op, _) if op.is_compound_assign() => true,
 		Node::Key(_, Op::Then | Op::Else | Op::Do, _) => *bracket != Bracket::Square,
 		Node::Key(left, Op::Colon, _) => matches!(left.drop_meta(), Node::Symbol(s) if s == "global"),
-		// a lowered `for` loop: `i=a; while …`
-		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => true,
+		// a lowered `for` loop: `i=a; while …`; inside `[…]` a sequence ending in a value is a computed element (an awaited
+		// task, `[a, b]` of task variables)
+		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => {
+			*bracket != Bracket::Square || list_items.last().is_some_and(|last| is_statement(last, &Bracket::None))
+		}
 		// a group that runs statements, `(y=1; y)`, or prints: in a block it runs, it is not an item
 		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
 		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL)) => true,

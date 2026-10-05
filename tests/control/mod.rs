@@ -55,3 +55,4 @@ mod test_try_braceless_call;
 mod test_raise;
 mod test_try_catch_except;
 mod test_atomic_arrays;
+mod test_task_list_literal;

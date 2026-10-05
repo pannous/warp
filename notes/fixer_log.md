@@ -150,3 +150,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 p44-atomic
 - P44: `atomic xs = int[n]` is `shared xs = int[n]` (shared_arrays SHARED_WORDS).
+
+## 2026-10-05 p47-task-list-literal (P47 stage 1)
+- `[a, b]` of task variables gave the last result only: inside `[…]` an unbracketed sequence ending in a value (the
+  checked await) is a computed element, not a statement (analyzer is_statement).
