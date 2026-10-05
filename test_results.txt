@@ -67,6 +67,9 @@ PASSED:
   ✓ control::test_iteration_words::test_reduce
   ✓ control::test_iteration_words::test_reduce_of_an_empty_list_is_an_error
   ✓ control::test_iteration_words::test_words_a_program_defines_win
+  ✓ control::test_job_lists::a_list_of_jobs_gives_their_results_when_used
+  ✓ control::test_job_lists::counting_jobs_does_not_await_them
+  ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
@@ -170,6 +173,10 @@ PASSED:
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_type_word_filter_loops::test_a_literal_list_of_matching_items_needs_no_filter
+  ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
+  ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
+  ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
   ✓ control::test_unwrap_message::test_an_error_value_in_node_arithmetic_keeps_its_message
   ✓ control::test_unwrap_message::test_unwrapping_an_empty_optional_in_arithmetic_names_it
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
@@ -863,6 +870,8 @@ PASSED:
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
   ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
+  ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
   ✓ numbers::test_rational_type::test_floats_are_not_rational
   ✓ numbers::test_rational_type::test_int_is_a_special_case_of_rational
   ✓ numbers::test_rational_type::test_other_mixes_stay_plain_lists
@@ -901,6 +910,8 @@ PASSED:
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_polish::test_as_converts_to_a_powered_unit
+  ✓ numbers::test_unit_polish::test_middle_dot_multiplies
   ✓ numbers::test_unit_products::test_areas_add_divide_and_compare
   ✓ numbers::test_unit_products::test_mixed_dimensions_stay_loud
   ✓ numbers::test_unit_products::test_powers_of_quantities
@@ -915,6 +926,7 @@ PASSED:
   ✓ numbers::test_units_arithmetic::test_spaced_unknown_unit_stays_a_list
   ✓ numbers::test_units_arithmetic::test_unit_sum_uses_the_finer_unit
   ✓ numbers::test_units_arithmetic::test_variable_shadows_the_unit
+  ✓ numbers::test_units_at_run_time::test_quantities_at_run_time_fail_loudly_naming_the_unit
   ✓ numbers::test_units_compare::a_variable_may_change_from_nothing_to_a_number_in_a_loop
   ✓ numbers::test_units_compare::division_by_another_dimension_is_a_composite_unit
   ✓ numbers::test_units_compare::mixed_dimensions_are_a_loud_dimension_error
@@ -2048,4 +2060,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2043 passed, 0 failed, 2043 total tested
+37 ignored, 2055 passed, 0 failed, 2055 total tested
