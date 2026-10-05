@@ -51,7 +51,7 @@ pub enum TaskValue {
 }
 
 impl TaskValue {
-	fn of(node: &Node) -> Result<TaskValue> {
+	pub(crate) fn of(node: &Node) -> Result<TaskValue> {
 		use crate::extensions::numbers::Number;
 		Ok(match node.drop_meta() {
 			Node::Empty => TaskValue::Empty,

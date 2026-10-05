@@ -2,11 +2,15 @@
 //! contains unresolved symbol arithmetic"): `x : a+b` where the program defines a and b nowhere. Names inside a block
 //! resolve where `!` runs it (wiki/charged.md §5), so a name that appears nowhere else in the program can never resolve:
 //! the block is a typo, or symbolic data that wants `data a+b`.
+//! A block known only at run time runs through the host (run_block, notes/runtime_eval.md step 2).
 
 use crate::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{Node, Separator};
+use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 
 const UNRESOLVED_TOPIC: &str = "unresolved-block";
+/// The spec's word for `x!!`: run the block fully
+const INTERPRET: &str = "interpret";
 
 pub fn warn_unresolved(program: Node) -> Node {
 	let mut warnings: Vec<Ask> = vec![];
@@ -71,4 +75,75 @@ fn occurrences(node: &Node, name: &str) -> usize {
 	let mut count = 0;
 	node.visit(&mut |part| count += matches!(part, Node::Symbol(word) if word == name) as usize);
 	count
+}
+
+/// `interpret e` (wiki/charged.md §5: `x!!` or `interpret x`): of a block bound by `x : e` it is `x!!`, which blocks.rs
+/// runs where it is written; of any other value it runs the block at run time through the host,
+/// `run_block(e, "a b", [a, b])`, with the main-level variables assigned before it (a snapshot: the block reads them)
+pub fn lower_interpret(program: Node) -> Node {
+	let statements = match program.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
+		_ => vec![program.clone()],
+	};
+	if !statements.iter().any(mentions_interpret) {
+		return program;
+	}
+	let mut blocks: Vec<String> = vec![];
+	let mut variables: Vec<String> = vec![];
+	let mut lowered = vec![];
+	for statement in statements {
+		lowered.push(interpreted(statement.clone(), &blocks, &variables));
+		match crate::blocks::uncharged(&statement) {
+			Some((name, _)) => blocks.push(name),
+			None => {
+				if let Node::Key(target, Op::Assign, _) = statement.drop_meta() {
+					if let Node::Symbol(name) = target.drop_meta() {
+						blocks.retain(|block| block != name);
+						if !variables.contains(name) {
+							variables.push(name.clone());
+						}
+					}
+				}
+			}
+		}
+	}
+	match program {
+		Node::List(_, bracket, separator) => Node::List(lowered, bracket, separator),
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::List(lowered, Bracket::None, Separator::Newline)), data },
+		_ => lowered.into_iter().next().unwrap_or(Node::Empty),
+	}
+}
+
+fn mentions_interpret(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == INTERPRET));
+	found
+}
+
+/// `interpret e` / `interpret(e)`: e
+fn interpret_argument(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == INTERPRET) => Some(&items[1]),
+		_ => None,
+	}
+}
+
+fn interpreted(node: Node, blocks: &[String], variables: &[String]) -> Node {
+	if let Some(argument) = interpret_argument(&node) {
+		let argument = interpreted(argument.clone(), blocks, variables);
+		return match argument.drop_meta() {
+			Node::Symbol(name) if blocks.contains(name) => crate::mutation::marked_fully(argument),
+			_ => {
+				let names = Node::Text(variables.join(" "));
+				let values = Node::List(variables.iter().map(|name| Node::Symbol(name.clone())).collect(), Bracket::Square, Separator::Colon);
+				Node::List(vec![Node::Symbol(crate::host::RUN_BLOCK.to_string()), argument, names, values], Bracket::Round, Separator::None)
+			}
+		};
+	}
+	match node {
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| interpreted(item, blocks, variables)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(interpreted(*left, blocks, variables)), op, Box::new(interpreted(*right, blocks, variables))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(interpreted(*node, blocks, variables)), data },
+		other => other,
+	}
 }
