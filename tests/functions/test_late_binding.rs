@@ -75,3 +75,22 @@ fn a_def_without_parameters_over_constants_gets_a_note() {
 	assert!(hints_of("def t(): clock(); t()").iter().all(|(_, reason)| !reason.contains("never changes")));
 	assert!(hints_of("def double(x): x*2; double(2)").iter().all(|(_, reason)| !reason.contains("never changes")));
 }
+
+// Card g-qUrk: a function defined in a function body reads the enclosing function's parameters and variables at call
+// time too; a change after the definition that a later call in the body could observe is an error, as at main level
+#[test]
+fn late_binding_change_inside_function_is_an_error() {
+	common::fails_with("def outer(){ y=1; inner := {a=y; a*2}; y=2; inner() }; outer()", "inner reads y of outer (line 1)");
+	common::fails_with("def outer(){\n  y=1\n  inner := {a=y; a*2}\n  y=2\n  inner()\n}\nouter()", "at 4:");
+	common::fails_with("def outer(n){ inner := {m=n; m*2}; n+=1; inner() }; outer(1)", "inner reads n of outer");
+	common::fails_with("def outer(){ y=1; inner := {a=y; a}; for i in 1..3 { y = i }; inner() }; outer()", "inner reads y");
+	common::fails_with("def outer(){ xs=[1]; def inner(){ count(xs) }; xs.add(2); inner() }; outer()", "inner reads xs of outer");
+	common::fails_with("def outer(){ y=1; def inner(){ y*2 }; y=2; inner() }; outer()", "nonlocal y");
+}
+
+#[test]
+fn late_binding_change_inside_function_with_no_later_call_is_fine() {
+	is!("def outer(){ y=1; inner := {a=y; a*2}; b=inner(); y=2; b }; outer()", 2);
+	is!("def outer(){ y=1; y=2; inner := {a=y; a*2}; inner() }; outer()", 4);
+	is!("def outer(n){ inner := {m=n; m*2}; inner() }; outer(3)", 6);
+}
