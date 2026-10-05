@@ -103,5 +103,5 @@ matches wasp's value semantics (index assignment already copies, aliases never c
   `jobs.add(go f(i))` keeps the started task unawaited (its id; declarations::job_lists). A read of the list is
   `task·list` (every result, `jobs.map(awaited_job => checked await)` through task_await_value, which serves Int tasks
   too), `jobs#i` is `task·element` (that job only); `await all xs` is xs read once (the parser groups `await all X`).
-  A list of tasks that run where they start (TaskPath::Inline) holds their values. Not yet: `count(jobs)` awaits them all
-  (it needs no value), and the browser host is untested for job lists.
+  A list of tasks that run where they start (TaskPath::Inline) holds their values. `count(jobs)`, `#jobs`, `jobs.size`
+  count without awaiting. The browser host runs job lists too (cargo browser-test test_job_lists: 3 one-second jobs ~1 s).
