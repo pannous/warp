@@ -40,6 +40,7 @@ pub fn lower(node: Node) -> Node {
 /// finishes:` for `go download(url)`) runs at once, as the task is done; a handler of a pause or stop never runs and
 /// `stop job` has nothing left to stop: both warn. A program defining its own `go` or `await` keeps them.
 pub fn lower_tasks(node: Node) -> Node {
+	let node = awaited_starts(node, &std::cell::Cell::new(0));
 	let mut defined = std::collections::HashSet::new();
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
@@ -81,6 +82,34 @@ pub fn lower_tasks(node: Node) -> Node {
 	});
 	started.retain(|_, function| functions.contains(function));
 	Tasks { words, tasks, started, functions }.lower(node)
+}
+
+/// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
+fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let words: Vec<Node> = match items.as_slice() {
+				[pair, rest @ ..] if matches!(pair.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2) => {
+					let Node::List(inner, _, _) = pair.drop_meta() else { unreachable!("guarded") };
+					[inner.clone(), rest.to_vec()].concat()
+				}
+				_ => items.clone(),
+			};
+			match words.as_slice() {
+				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
+					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
+					let assignment = Node::Key(Box::new(job.clone()), Op::Assign, Box::new(start));
+					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
+					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
+				}
+				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
+			}
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(awaited_starts(*left, counter)), op, Box::new(awaited_starts(*right, counter))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited_starts(*node, counter)), data },
+		other => other,
+	}
 }
 
 /// `f(a, b)` or `f a b` after `go`: the function and its arguments

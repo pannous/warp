@@ -40,6 +40,7 @@ mod test_task_values;
 mod test_many_tasks;
 mod test_for_it;
 mod test_task_closures;
+mod test_await_go;
 mod test_shared_arrays;
 mod test_braceless_output_calls;
 mod test_try_division;
