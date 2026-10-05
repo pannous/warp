@@ -73,6 +73,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   test_law lean, test_eval_state threads, test_use_scopes) are marked `#[cfg_attr(not(feature = "native"), ignore =
   "browser: <reason>")]`: they still run natively, the browser suite turns green (user decision, existing-test edit).
   Asked by warp-ec; as recommended.
+  Refined (user: "but download should work on the browser and temporary folder may be through browser files"):
+  test_download and test_use_modules are made to pass in the browser instead (download via fetch; temp dirs on a
+  browser file system such as OPFS or the in-memory WASI fs); the directory walk of test_use_scopes uses the same
+  file system if it fits. Only git, Lean and the threads case are ignored in the browser.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
