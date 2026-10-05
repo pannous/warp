@@ -24,8 +24,14 @@ The first version takes the *copying* road, not the shared-store one below: simp
 * `warp compile` warns that a module calling run_block needs a warp host.
 * Step 0: `x : a+b` over names defined nowhere warns that `x!` can never run it.
 
-Not yet: leftover suffix `!` marks (blocks-3) forcing at run time per P73; the program's functions inside the block;
-exact ratios, big Ints and pairs as results ("cannot hand back yet"); sharing GC objects instead of copying.
+* run-block-4: the program's function definitions travel along as data, so the block may call them; exact ratios and
+  big Ints come back, composed from fixnums with the exported Int operations (EXACT_BUILDERS).
+* run-block-5 (P73, `!` forces): `e!` of an expression known only at run time (`xs#2!`) and of a name holding an
+  element of a list of data runs through run_block (src/lowering/run_time_blocks.rs `lower_run_time_bangs`, between
+  blocks.rs and mutation.rs); ø is "unwrapped ø", a value is itself. Other names keep mutation.rs's pure unwrap.
+
+Not yet: pairs as results ("cannot hand back yet"); a name whose data comes from elsewhere (a parameter, a call) still
+unwraps instead of running; sharing GC objects instead of copying.
 
 ## 0. State today (measured with the CLI, debug build of 2026-10-03)
 
