@@ -37,17 +37,14 @@ pub fn lower(node: Node) -> Node {
 /// `f(a, b) := body` and the block value `fun = {body}`, by name: their parameters
 fn definitions(node: &Node) -> HashMap<String, Function> {
 	let mut functions = HashMap::new();
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define | Op::Assign, _) => match head.drop_meta() {
-			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-				let parameters = items[1..].iter().map(parameter_name).collect();
-				let defaults = items[1..].iter().map(parameter_default).collect();
-				functions.insert(items[0].name(), Function { parameters, defaults, extras: vec![] });
-			}
-			_ => {}
-		},
-		_ => {}
-	});
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part { match head.drop_meta() {
+ 			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+ 				let parameters = items[1..].iter().map(parameter_name).collect();
+ 				let defaults = items[1..].iter().map(parameter_default).collect();
+ 				functions.insert(items[0].name(), Function { parameters, defaults, extras: vec![] });
+ 			}
+ 			_ => {}
+ 		} });
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
 		if let (Node::Symbol(name), Node::List(_, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) {
 			functions.entry(name.clone()).or_insert(Function { parameters: vec![], defaults: vec![], extras: vec![] });

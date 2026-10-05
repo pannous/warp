@@ -8,6 +8,7 @@ use std::time::Duration;
 
 /// The module's bump pointer for runtime texts; texts the host returns are allocated from it too, so they never overlap
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
+#[cfg(feature = "native")]
 const PAGE_BITS: u32 = 16;
 
 /// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
@@ -93,6 +94,7 @@ fn next_random() -> u64 {
 	x.wrapping_mul(0x2545_F491_4F6C_DD1D)
 }
 
+#[cfg(feature = "native")]
 fn milliseconds_since_epoch() -> i64 {
 	std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
 }
@@ -141,7 +143,10 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
-use anyhow::{anyhow, Result};
+#[cfg(feature = "native")]
+use anyhow::anyhow;
+use anyhow::Result;
+#[cfg(feature = "native")]
 use log::trace;
 #[cfg(feature = "native")]
 use wasmtime::{AsContextMut, Caller, Engine, Extern, Linker, Memory, Module, Val};

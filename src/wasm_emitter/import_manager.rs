@@ -4,7 +4,6 @@ use crate::context::Context;
 use crate::function::Function as FuncDef;
 use crate::wasm_emitter::config::EmitterConfig;
 use crate::wasm_emitter::type_manager::TypeManager;
-use std::collections::HashMap;
 use wasm_encoder::*;
 
 /// An FFI import being emitted: module, name, a signature label, parameter and result types

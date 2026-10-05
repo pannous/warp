@@ -16,8 +16,6 @@ use wasm_encoder::*;
 use Instruction as I;
 
 const RETURN: &str = "return";
-/// The suffix of a parameter's array copy (analyzer::indexed_parameter_copies)
-const LIST_COPY_SUFFIX: &str = "·list";
 
 /// The list calling convention of one function
 #[derive(Clone, Default, Debug)]

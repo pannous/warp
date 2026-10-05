@@ -213,8 +213,8 @@ impl TypeDef {
 /// Returns (type_name, field_values) for use with emit_raw_struct
 pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<RawFieldValue>)> {
 	use crate::node::Node;
-	use crate::type_kinds::RawFieldValue;
-	use crate::extensions::numbers::Number;
+	
+	
 
 	// Instance is Key(TypeName, :, List([Key(field, :, value), ...]))
 	match node.drop_meta() {

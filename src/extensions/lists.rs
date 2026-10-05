@@ -2,11 +2,8 @@
 
 use crate::extensions::numbers::Number;
 use crate::node::Node;
-use std::array::IntoIter;
-use std::iter::Enumerate;
 
 use std::ops::Range;
-use wasmparser::{FromReader, SectionLimited};
 
 // [a,b,c] => [(0,a), (1,b), (2,c)] aka enumerate
 pub trait Indexed<T> {
@@ -142,63 +139,15 @@ impl StringVecExtensions<String> for Vec<String> {
 		v
 	}
 }
-pub(crate) trait VecExtensions<T: Clone> {
-	fn with(&self, n: T) -> Vec<T>;
-	// fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T>;
-	// fn find(&self, f: &dyn Fn(&T) -> bool) -> Option<&T>;
-	fn filter(&self, f: fn(&T) -> bool) -> Vec<T>;
-	fn find(&self, f: fn(&T) -> bool) -> Option<&T>;
-}
-
-impl<T: Clone> VecExtensions<T> for Vec<T> {
-	fn with(&self, n: T) -> Vec<T> {
-		let mut v = self.clone();
-		v.push(n);
-		v
-	}
-	fn filter(&self, f: fn(&T) -> bool) -> Vec<T> {
-		self.iter().filter(|item| f(item)).cloned().collect()
-	}
-	fn find(&self, f: fn(&T) -> bool) -> Option<&T> {
-		self.iter().find(|item| f(item))
-	}
-}
-
 pub(crate) trait VecExtensions2<T: Clone> {
-	fn with(&self, n: T) -> Vec<T>;
-	fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T>;
 	fn find2(&self, f: &dyn Fn(&T) -> bool) -> Option<&T>;
 }
 
 impl<T: Clone> VecExtensions2<T> for Vec<T> {
-	fn with(&self, n: T) -> Vec<T> {
-		let mut new_vec = self.clone();
-		new_vec.push(n);
-		new_vec
-	}
-
-	fn filter(&self, f: &dyn Fn(&T) -> bool) -> Vec<T> {
-		self.iter().filter(|&x| f(x)).cloned().collect()
-	}
-
 	fn find2(&self, f: &dyn Fn(&T) -> bool) -> Option<&T> {
 		self.iter().find(|&x| f(x))
 	}
 }
-pub(crate) trait ArrayExtensions<T> {
-	fn push(&self, n: T) -> Vec<T>;
-}
-
-// ⚠️ Rust does not currently support generic traits over arrays with a dynamic length. Use Vec<T>
-// impl<T> ArrayExtensions<T> for [T; N]  ?
-impl<T: Clone> ArrayExtensions<T> for [T; 5] {
-	fn push(&self, n: T) -> Vec<T> {
-		let mut v = self.to_vec();
-		v.push(n);
-		v
-	}
-}
-
 // The "From" trait is used when you want to define your own custom conversion from one type to ano
 // it is used with let b:B=a.into() short form for From::from(a) or B::from(a)
 struct MyVec<T>(Vec<T>);

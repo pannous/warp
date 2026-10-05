@@ -7,7 +7,6 @@ use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
-use crate::*;
 use log::warn;
 use std::fs::read_to_string;
 use unicode_normalization::UnicodeNormalization;

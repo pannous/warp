@@ -403,7 +403,7 @@ fn int_starts(node: &Node, literal_kinds: &std::collections::HashMap<String, cra
 		match argument.drop_meta() {
 			Node::Number(crate::extensions::numbers::Number::Int(_)) => true,
 			Node::Symbol(name) => literal_kinds.get(name) == Some(&crate::type_kinds::Kind::Int),
-			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul) => surely_int(left, literal_kinds) && surely_int(right, literal_kinds),
+			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) => surely_int(left, literal_kinds) && surely_int(right, literal_kinds),
 			_ => false,
 		}
 	}

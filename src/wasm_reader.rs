@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::extensions::numbers::Number;
 use num_bigint::{BigInt, Sign};
 use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
-use wasmtime_wasi::{WasiCtxBuilder, p1};
+use wasmtime_wasi::p1;
 
 /// GcObject wraps a WASM GC struct reference with ergonomic field access
 pub struct GcObject {
