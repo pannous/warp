@@ -3465,6 +3465,10 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 	program.visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		for (name, arguments) in called_functions(items) {
+			// a closure call takes Nodes, or the numbers type_closure_calls gives both it and its entries
+			if crate::closures::closure_call_arity(&name).is_some() {
+				continue;
+			}
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 				let declared_int = function.params[index].annotation.is_some() && param_kind(&function.params[index]) == Kind::Int;
