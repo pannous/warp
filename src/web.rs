@@ -16,28 +16,31 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use crate::type_kinds::KIND_BITS;
 
-/// The topics the page already said "got it" to; every other warning or note shown is recorded for its "got it" button
+/// The topics and expressions (`topic@expression`) the page already said "got it" to; every other warning or note shown
+/// is recorded for its "got it" buttons: the topic and the key of its expression
 struct PageAcknowledger {
 	acknowledged: HashSet<String>,
-	notes: Rc<RefCell<Vec<String>>>,
+	notes: Rc<RefCell<Vec<(String, String)>>>,
 }
 
 impl Acknowledger for PageAcknowledger {
-	fn has_acknowledged(&self, topic: &str) -> bool {
-		self.acknowledged.contains(topic)
+	fn has_acknowledged(&self, key: &str) -> bool {
+		self.acknowledged.contains(key)
 	}
 
-	/// The page answers later, with its "got it" button (for the whole topic)
-	fn acknowledge(&self, topic: &str, _written: &str) -> crate::diagnostic::GotIt {
-		self.notes.borrow_mut().push(topic.to_string());
+	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
+	fn acknowledge(&self, topic: &str, written: &str) -> crate::diagnostic::GotIt {
+		self.notes.borrow_mut().push((topic.to_string(), diagnostic::expression_key(topic, written)));
 		crate::diagnostic::GotIt::No
 	}
 }
 
 /// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
 /// `value` (what the CLI prints), `error`, `errors` (the failed program's errors with fixes), `warnings`, `hints`,
-/// `notes` (topics of the warnings and notes shown that the user can say "got it" to) and `runtime_warnings`. Warnings,
-/// errors and hints carry `fixes` ("I meant: …" buttons, fixes_json). Acknowledging silences a warning, never changes the value.
+/// `notes` (topics of the warnings and notes shown that the user can say "got it" to), `got_it` (each of them with the
+/// `topic@expression` key that silences only its expression; a warning carries its own as `expression_key`) and
+/// `runtime_warnings`. Warnings, errors and hints carry `fixes` ("I meant: …" buttons, fixes_json). The acknowledged set
+/// holds topics and expression keys. Acknowledging silences a warning, never changes the value.
 pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
 	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
@@ -63,7 +66,8 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		"runtime_warnings": diagnostic::take_runtime_warnings(),
 		"hints": hints,
 		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
-		"notes": *notes.borrow(),
+		"notes": notes.borrow().iter().map(|(topic, _)| topic).collect::<Vec<_>>(),
+		"got_it": notes.borrow().iter().map(|(topic, expression)| json!({"topic": topic, "expression": expression})).collect::<Vec<_>>(),
 	})
 }
 
@@ -71,7 +75,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
 	json!({
 		"message": diagnostic.message, "line": diagnostic.line, "column": diagnostic.column, "fix": diagnostic.fix,
-		"topic": diagnostic.topic, "fixes": fixes_json(code, diagnostic.line, diagnostic.column, &diagnostic.fixes),
+		"topic": diagnostic.topic, "expression_key": diagnostic.expression_key, "fixes": fixes_json(code, diagnostic.line, diagnostic.column, &diagnostic.fixes),
 	})
 }
 

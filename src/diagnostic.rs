@@ -16,6 +16,8 @@ pub struct Diagnostic {
 	pub fixes: Vec<Fix>,
 	/// The kind of warning, which "got it" silences (an Ask's topic)
 	pub topic: Option<String>,
+	/// What "got it" for this expression only remembers: `topic@expression` (expression_key)
+	pub expression_key: Option<String>,
 }
 
 impl Diagnostic {
@@ -270,7 +272,8 @@ impl Ask {
 				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
-		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![] };
+		let expression_key = Some(expression_key(&self.topic, &self.question));
+		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![], expression_key };
 		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
 		fixes.fold(diagnostic, Diagnostic::offering)
 	}
@@ -326,7 +329,7 @@ impl Acknowledger for TerminalAcknowledger {
 }
 
 /// The key "got it" for one expression is remembered by: `topic@written`, on one line
-fn expression_key(topic: &str, written: &str) -> String {
+pub fn expression_key(topic: &str, written: &str) -> String {
 	format!("{topic}@{}", written.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 

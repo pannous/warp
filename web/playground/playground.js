@@ -139,7 +139,25 @@ function fixButtons(fixes = []) {
 		: element("button", { className: "apply-fix", title: fix.meaning, onclick: () => applyFix(fix) }, fix.label)));
 }
 
-const gotIt = topic => element("button", { className: "got-it", title: "keep the code, stop warning about this", onclick: () => acknowledge(topic) }, "got it");
+const GOT_IT_COMMENT = " // got it";
+
+// a `// got it` comment at the end of the warning's line silences that line's warnings in the code itself
+function commentGotIt(line) {
+	const index = line - 1;
+	editor.replaceRange(GOT_IT_COMMENT, { line: index, ch: editor.getLine(index).length });
+	clearTimeout(typingTimer);
+	runNow();
+}
+
+// "got it" (user, 2026-10-05): for this expression (its `topic@expression` key), for all of the kind (the topic), or
+// as a `// got it` comment on its line; each keeps the code and never changes the value
+function gotIt(topic, expression, line) {
+	const button = (label, title, onclick) => element("button", { className: "got-it", title, onclick }, label);
+	return element("span", { className: "got-it-choices" },
+		expression ? button("got it", "stop warning about this expression", () => acknowledge(expression)) : "",
+		button(`got it: all ${topic}`, `stop warning about every ${topic}`, () => acknowledge(topic)),
+		line ? button("// got it", "say it in the code: a // got it comment on this line", () => commentGotIt(line)) : "");
+}
 
 function showAcknowledged() {
 	$("acknowledged").replaceChildren(...acknowledged.map(topic => element("li", {}, `${topic} `,
@@ -155,15 +173,16 @@ function showReport(report) {
 	$("printed").hidden = printed === "";
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
+	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
 	const shown = (kind, problem, extra = "") => diagnostic(kind, at(problem.line, problem.column), problem.message,
 		problem.fix ? element("span", { className: "fix" }, "fix: ", code(problem.fix)) : "", fixButtons(problem.fixes), extra);
 	const items = [
 		...(report.errors ?? []).map(error => shown("error", error)),
-		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic) : "")),
+		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
 		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
 		...report.hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
-		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} warning above shows until you `, gotIt(topic))),
+		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	showAcknowledged();
