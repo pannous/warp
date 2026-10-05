@@ -11,6 +11,7 @@ pub mod for_loop;
 pub mod function_values;
 pub mod inlining;
 pub mod lambdas;
+pub mod late_binding;
 pub mod library_words;
 pub mod meta_entries;
 pub mod min_max;

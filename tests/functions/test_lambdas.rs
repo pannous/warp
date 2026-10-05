@@ -19,7 +19,9 @@ fn test_assigned_lambda_is_a_function() {
 
 #[test]
 fn test_lambda_captures_by_value() {
-	is!("n=10; f = x=>x+n; n=20; f 1", 11);
+	// late binding (wiki/charged.md §3, released 2026-10-05) replaced D7's silent snapshot: the change is an error
+	fails_with("n=10; f = x=>x+n; n=20; f 1", "f reads n (line 1): declare `global n` in f");
+	is!("n=10; f = x=>x+n; f 1", 11);
 }
 
 #[test]
