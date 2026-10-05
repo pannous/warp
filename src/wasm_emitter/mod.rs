@@ -2224,8 +2224,9 @@ impl WasmGcEmitter {
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
 	fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them)
-		if op.is_ordering() && [left, right].iter().any(|side| self.get_type(side) == Kind::Text) {
+		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
+		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
+		if op.is_ordering() && [left, right].iter().any(|side| matches!(self.get_type(side), Kind::Text | Kind::Empty | Kind::Data)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, library_ops::NODE_ORDER);
