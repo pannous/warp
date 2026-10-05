@@ -1,0 +1,2 @@
+square := it²
+square(3) + square(4)

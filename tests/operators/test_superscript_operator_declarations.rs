@@ -1,4 +1,4 @@
-//! ASSUMPTION P48 (open_decisions.md, parked proposal; revert this file with the commit that adds it): the wiki's
+//! P48 (user-decided, open_decisions.md): the wiki's
 //! operator declarations on superscript glyphs (wiki/operator.md) override the built-in superscript power, and the short
 //! form `suffix ⁰ := 1` (without `operator`) declares the same.
 use warp::*;

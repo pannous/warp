@@ -5,13 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P51 An unknown word applied to a value, `cube 3` (no `cube` defined): today data with a got-it warning
-  ("cube is no function … fix: [cube 3]", notes/unknown_prefix_word.md). Should it be a loud error like `cube(3)`
-  (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
-  notes/unresolved_call_survey.md (`print 3` as data). Proposed: keep the warning (wasp is a data notation; strict
-  mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
-  User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
-  the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
+- P63 P62 follow-ups (worker warp-90, defaults applied): (1) all-word lists in code (`hello world`,
+  `colors = [red, green, blue]`, samples/data_structures.wasp) stay data; only a word next to a value is judged
+  (`cube 3`, `[1 "two" three]`). Recommended: keep them data (enum-like symbols, many samples/tests), with the
+  near-miss warning chosen for object values. (2) the sample `mixed = [1 "two" three 4.0]` becomes
+  `mixed = quote [1 "two" three 4.0]`. (3) a comma tuple `(frobnicate, 3)` stays data (P62 named spaced brackets
+  only). Related to the open data-vs-code design discussion (charge levels, 2026-10-05). 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -94,10 +93,12 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P46 type-name and condition patterns in `for` (`for friend in [foe1, friend1, …]`, `for (it>2) in xs`): user:
   "this should give a warning, though if the user is unfamiliar, he needs to confirm that he understands the filter".
   So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
-  with got-it; notes/welcoming.md). Not implemented.
+  with got-it; notes/welcoming.md). Done (branch p46-filter-loops, wasp_parser try_parse_for_in): `for friend in xs`
+  with a declared class (instance_of, the item is `it` and `friend` in the body), `for (it>2) in xs`; got-it topic
+  `for-filter`. Not done: built-in type words (`for int in xs` stays a variable named int) and `for (even number) in`.
 - P61 `x is <value>` with a new name x (old test `x is 100 times [0]`): user: "educate the user to use the be key
   word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
-  (wiki/be.md, an alias of `:=`; the parser does not accept `be` yet, notes/normalization_audit.md). The test edit to
+  (wiki/be.md, an alias of `:=`, parsed since 67c405a5: `x be 3`, `x be number 3`). The test edit to
   `x = 100 times [0]` (Fixer, branch decided-test-edits) stands, or uses `be` once it parses. Asked by warp-2d.
   Follow-up (user, multiple choice): the typed form too. `x is number 9` with an undefined x no longer declares
   (fix-is-declaration is undone); it teaches `x be number 9` (or `x:number = 9`); `is` is always a comparison.
@@ -108,6 +109,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   function-level handlers (`catch (no food){…}`, `on error{…}`, Error.md) come later; now the classical
   `try {…} catch {…}` (with `catch e`) and Python's `try: … except: …` become synonyms of `try X else Y`.
   Asked by the Fixer warp-2d.
+
+- P51 unknown word applied to a value (`cube 3`, no cube defined): user: "should obviously be an error unless we're
+  in a clear data context, which is not currently well defined". In code it is the loud error like `cube(3)`
+  (Decided #7); the got-it warning on branch unknown-word is undone. What counts as a data context: P62.
+- P62 data contexts in a program (user, multiple choice): a `quote`/`data` prefix and the values of an object
+  literal (`{shape: cube 3}`) are data, besides data mode (`warp data`, parse_data). Explicit brackets were NOT
+  chosen: `[cube 3]` / `(cube 3)` in code are code, so an unknown word there is the error too.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a

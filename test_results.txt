@@ -1,6 +1,7 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
@@ -39,6 +40,10 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
+  ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
+  ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
+  ✓ control::test_filter_loops::test_plain_loops_do_not_filter
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -134,6 +139,8 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
   ✓ control::test_try_braceless_call::a_braceless_call_is_guarded
+  ✓ control::test_try_catch_except::try_catch_is_try_else
+  ✓ control::test_try_catch_except::try_except_is_try_else
   ✓ control::test_try_deep::caught_errors_leave_later_errors_loud
   ✓ control::test_try_deep::nested_try_restores_the_depth_on_both_paths
   ✓ control::test_try_deep::try_catches_a_failed_cast
@@ -531,6 +538,8 @@ PASSED:
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
+  ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
+  ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
   ✓ lists::test_index_assignment::test_index_assign_25_elements
   ✓ lists::test_index_assignment::test_index_assign_in_while_loop
   ✓ lists::test_index_assignment::test_index_assign_in_while_with_increment
@@ -937,6 +946,7 @@ PASSED:
   ✓ operators::test_in_position::in_gives_the_one_based_position
   ✓ operators::test_in_position::maps_and_has_keep_their_truth_value
   ✓ operators::test_in_position::the_position_never_warns
+  ✓ operators::test_infix_operand_names::test_infix_operands_named_left_and_right
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_like_known_type_mismatch::a_known_other_type_lacking_a_field_teaches_like
@@ -1460,6 +1470,7 @@ PASSED:
   ✓ types::test_array_types::test_declared_typed_arrays_keep_working
   ✓ types::test_array_types::test_plural_declarations_are_lists
   ✓ types::test_array_types::test_typed_array_as_a_value
+  ✓ types::test_be_definitions::test_be_defines_with_a_type
   ✓ types::test_cast_bugs::a_cast_to_char_can_be_stored
   ✓ types::test_cast_bugs::a_one_character_text_can_be_indexed
   ✓ types::test_cast_bugs::a_runtime_value_as_string
@@ -1495,7 +1506,8 @@ PASSED:
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_is_declaration::is_tests_an_assigned_variable
-  ✓ types::test_is_declaration::is_with_a_type_and_a_value_declares_a_new_name
+  ✓ types::test_is_declaration::is_with_a_type_and_a_value_teaches_be
+  ✓ types::test_is_teaches_be::is_with_an_undefined_name_teaches_be
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
   ✓ types::test_person_struct::test_person_struct_roundtrip
@@ -2029,4 +2041,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2024 passed, 0 failed, 2024 total tested
+37 ignored, 2036 passed, 0 failed, 2036 total tested

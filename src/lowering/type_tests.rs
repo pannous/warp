@@ -141,6 +141,28 @@ pub fn equality_operand(word: Node) -> Node {
 	}
 }
 
+/// Meta key on the name compared in `x is v` (set by the parser): v as written, before it is lowered (`100 times [0]`), for the
+/// error that teaches `x be v` when x is defined nowhere (P61, wasm_emitter emit_undefined_comparison)
+pub const COMPARED_WITH: &str = "compared with";
+
+pub fn with_compared_text(subject: Node, written: &str) -> Node {
+	match subject.drop_meta() {
+		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, Node::Text(written.to_string()))) },
+		_ => subject,
+	}
+}
+
+/// The written value a compared name carries (with_compared_text)
+pub fn compared_text(subject: &Node) -> Option<String> {
+	match subject {
+		Node::Meta { node, data } => match data.as_ref() {
+			Node::Key(key, _, value) if key.name() == COMPARED_WITH => Some(value.drop_meta().name()),
+			_ => compared_text(node),
+		},
+		_ => None,
+	}
+}
+
 fn is_equality_operand(node: &Node) -> bool {
 	matches!(node, Node::Meta { data, .. } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name() == EQUALITY_OPERAND))
 }
@@ -168,9 +190,6 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			}
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
-		Node::Key(subject, Op::Eq, right) if is_declaration(&subject, &right, shadowed).is_some() => {
-			expand(is_declaration(&subject, &right, shadowed).expect("guarded"), shadowed)
-		}
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
 			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
@@ -180,20 +199,6 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
 		other => other,
 	}
-}
-
-/// `x is number 9` of a name the program assigns nowhere declares it (wiki Features.md, inventions.md): `x:number = 9`
-fn is_declaration(subject: &Node, right: &Node, shadowed: &Names) -> Option<Node> {
-	let Node::Symbol(name) = subject.drop_meta() else { return None };
-	let Node::List(items, _, _) = right.drop_meta() else { return None };
-	let (value, type_words) = items.split_last()?;
-	let words = symbol_words(type_words)?;
-	if shadowed.contains(name) || is_equality_operand(right) || type_spec(&words, shadowed).is_none() {
-		return None;
-	}
-	let type_word = Node::Symbol(words.last()?.to_string());
-	let typed = Node::Key(Box::new(subject.clone()), Op::Colon, Box::new(type_word));
-	Some(Node::Key(Box::new(typed), Op::Assign, Box::new(value.clone())))
 }
 
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase

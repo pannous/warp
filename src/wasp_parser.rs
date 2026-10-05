@@ -219,8 +219,28 @@ fn is_unindexable_keyword(node: &Node) -> bool {
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
+/// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
+const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
+/// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
+fn item_named(node: Node, name: &str, item: &Node) -> Node {
+	match node {
+		Symbol(symbol) if symbol == name => item.clone(),
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) => {
+			let mut items = items.into_iter();
+			let head = items.next().expect("a head");
+			Node::List(std::iter::once(head).chain(items.map(|part| item_named(part, name, item))).collect(), Bracket::Round, Separator::None)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|part| item_named(part, name, item)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(item_named(*left, name, item)), op, Box::new(item_named(*right, name, item))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(item_named(*node, name, item)), data },
+		other => other,
+	}
+}
+
+/// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
+const FILTER_LOOP_TOPIC: &str = "for-filter";
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
@@ -507,13 +527,13 @@ const PRECEDENCE_STEP: u8 = 2;
 const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
-/// ASSUMPTION P48: superscript digits and signs too (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
+/// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
 fn is_operator_glyph(glyph: &str) -> bool {
 	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
 	!glyph.is_empty() && glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace())) && !glyph.is_ascii()
 }
 
-/// `suffix operator ⁰ := …` and, ASSUMPTION P48, the short `suffix ⁰ := …`: the glyph and the words after `:=`
+/// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
 fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
 	match words {
 		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
@@ -776,7 +796,11 @@ impl WaspParser {
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
 		let parameters = match kind {
-			UserOperatorKind::Infix => vec![Symbol("a".to_string()), Symbol("b".to_string())],
+			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
+			UserOperatorKind::Infix => {
+				let names = if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
+				names.map(|name| Symbol(name.to_string())).to_vec()
+			}
 			_ => vec![Symbol("it".to_string())],
 		};
 		let head = operator_call(&glyph, parameters);
@@ -1404,7 +1428,7 @@ impl WaspParser {
 			return None;
 		}
 		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
-			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t'))
+			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
 			.map(|(_, marker)| marker)
 	}
 
@@ -1414,14 +1438,21 @@ impl WaspParser {
 		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
 		self.skip_spaces();
+		self.skip_python_colon();
 		let outer = std::mem::replace(&mut self.stops_at_else, true);
 		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
 		self.stops_at_else = outer;
 		self.skip_spaces();
-		let fallback = if self.matches_keyword("else") {
-			self.advance_by("else".len());
+		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
+			self.advance_by(ahead + word.len());
 			self.skip_spaces();
-			self.parse_expr(0)
+			let caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			self.skip_python_colon();
+			let fallback = self.parse_expr(0);
+			if let Some(name) = caught.filter(|name| mentions(&fallback, name)) {
+				return error(&format!("`catch {name}`: the caught error is no value yet, write the fallback without {name} (`try X catch {{ Y }}`)"));
+			}
+			fallback
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
 		} else {
@@ -1430,12 +1461,46 @@ impl WaspParser {
 		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
 	}
 
+	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
+	/// with how many blanks (line breaks included) come before it
+	fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
+	}
+
+	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
+	fn parse_caught_name(&mut self, word: &str) -> Option<String> {
+		if !self.is_identifier_start(0) {
+			return None;
+		}
+		let mut name = self.word_at(0);
+		self.advance_by(name.chars().count());
+		self.skip_spaces();
+		if self.matches_keyword("as") {
+			self.advance_by(2);
+			self.skip_spaces();
+			name = self.word_at(0);
+			self.advance_by(name.chars().count());
+			self.skip_spaces();
+			return Some(name);
+		}
+		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
+	}
+
+	/// Python's `try:` and `except:` end with a colon; the block may start on the next line
+	fn skip_python_colon(&mut self) {
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_whitespace();
+		}
+	}
+
 	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
 	fn parse_guarded_phrase(&mut self) -> Node {
 		let mut items = vec![self.parse_expr(0)];
 		loop {
 			self.skip_spaces();
-			if self.matches_keyword("else") || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+			if FALLBACK_WORDS.iter().any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
 				break;
 			}
 			let position = self.pos;
@@ -2162,7 +2227,7 @@ impl WaspParser {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// Step 2: Suffix (led)
-			// ASSUMPTION P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
+			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
 			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {
 				lhs = updated;
 				continue;
@@ -2276,7 +2341,9 @@ impl WaspParser {
 			if op == Op::Colon {
 				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
+			let rhs_start = self.pos;
 			let rhs = block_body.unwrap_or_else(|| self.parse_expr(r_bp));
+			let rhs_written: String = self.chars[rhs_start.min(self.pos)..self.pos].iter().collect();
 
 			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
@@ -2311,12 +2378,21 @@ impl WaspParser {
 			}
 
 			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
+			if op == Op::Eq && written == IS_WORD {
+				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
+			}
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
 			} else {
 				op
 			};
+			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
+				if let Err(strict) = crate::diagnostic::report(&[warning]) {
+					lhs = strict;
+					continue;
+				}
+			}
 			lhs = match previous_comparand.take() {
 				Some(middle) if op.is_ordering() => {
 					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
@@ -2483,6 +2559,9 @@ impl WaspParser {
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.skip_spaces();
+		if let Some(filtered) = self.try_parse_condition_loop() {
+			return Some(filtered);
+		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
 		let named = variable.filter(|_| self.matches_keyword("in"));
@@ -2515,11 +2594,72 @@ impl WaspParser {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
 			None => self.parse_atom(),
 		};
+		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
+		// (P46), a call `friend(…)` still constructs
+		let (variable, body) = match variable.drop_meta() {
+			Symbol(name) if self.declared_types.contains(name) => {
+				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let body = item_named(body, name, &it);
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+					Ok(body) => (it, body),
+					Err(error) => return Some(error),
+				}
+			}
+			_ => (variable, body),
+		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
 			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
 		}
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
+	/// for any other header
+	fn try_parse_condition_loop(&mut self) -> Option<Node> {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		if self.current_char() != '(' {
+			return None;
+		}
+		self.advance();
+		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(0));
+		self.skip_spaces();
+		let mentions_it = crate::wasp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
+		if self.current_char() != ')' || !mentions_it {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		}
+		self.advance();
+		self.skip_spaces();
+		if !self.matches_keyword("in") {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		}
+		self.advance_by("in".len());
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.skip_spaces();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let body = match body_word {
+			Some(word) => self.colon_body(word),
+			None => self.parse_atom(),
+		};
+		let shown = crate::normalize::operand_text(&condition);
+		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), condition, body) {
+			Ok(body) => body,
+			Err(error) => return Some(error),
+		};
+		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46)
+	fn filtered_body(&self, written: &str, explicit: &str, test: Node, body: Node) -> Result<Node, Node> {
+		let question = format!("`{written}` visits only the items that pass its filter");
+		let readings = vec![reading("filter the items", explicit)];
+		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
+		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
 	}
 
 	/// The body after `:` or `do`: an indented block under a colon at the end of the line, else the rest of the line
@@ -4044,6 +4184,19 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
+}
+
+/// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
+/// `xs#(a..b)` and the range `(xs#a)..b`
+fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
+	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else { return None };
+	if !matches!(op, Op::Range | Op::To) {
+		return None;
+	}
+	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
+	let (target, index, end) = (target.trim(), index.trim(), end.trim());
+	let message = format!("{target}#{index}{written}{end} is the range from the value {target}#{index}: for the slice write {target}#({index}{written}{end}), for the range write ({target}#{index}){written}{end}");
+	Some(Diagnostic::at(lhs, message))
 }
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in

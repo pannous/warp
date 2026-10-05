@@ -987,6 +987,19 @@ impl WasmGcEmitter {
 		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
 	}
 
+	/// `x is 5` of a name defined nowhere: `is` compares (P61, user: "educate the user to use the be key word for
+	/// definitions"), so the error teaches the definition `x be 5`
+	fn emit_undefined_comparison(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Node::Key(subject, Op::Eq, value) = node.drop_meta() else { return false };
+		let Node::Symbol(name) = subject.drop_meta() else { return false };
+		if !self.is_unbound(name) {
+			return false;
+		}
+		let value = crate::type_tests::compared_text(subject).unwrap_or_else(|| value.drop_meta().serialize().trim().to_string());
+		self.emit_type_error(func, format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`"));
+		true
+	}
+
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		self.emit_type_error(func, format!("undefined variable: {name}"));
 	}
@@ -1359,6 +1372,9 @@ impl WasmGcEmitter {
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
 		self.note_position(node);
+		if self.emit_undefined_comparison(func, node) {
+			return;
+		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
@@ -3010,7 +3026,7 @@ impl WasmGcEmitter {
 
 	fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
 		self.note_position(node);
-		if self.emit_raised_error(func, node) {
+		if self.emit_raised_error(func, node) || self.emit_undefined_comparison(func, node) {
 			return;
 		}
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
