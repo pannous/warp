@@ -222,6 +222,9 @@ impl WasmGcEmitter {
 				s.cross_product(f, 1, 0);
 				s.call(f, "ratio_new");
 			};
+			// P66: an exact division by zero is the catchable error divide_by_zero (0 is the fixnum 0)
+			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz]);
+			s.emit_fail_if(f, super::list_ops::DIVIDE_BY_ZERO);
 			s.emit_fixnum_test(f, &[0, 1]);
 			Self::emit_list(f, &[
 				I::If(BlockType::Result(i64t)),

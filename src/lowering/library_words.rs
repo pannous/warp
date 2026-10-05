@@ -31,6 +31,7 @@ pub const MAP_WORD_FUNCTIONS: [&str; 7] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, CO
 const IN_WORD: &str = "in";
 /// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
 const COUNT_WORD: &str = "count";
+const FLOAT_WORD: &str = "float";
 const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
@@ -469,6 +470,11 @@ impl Lowering {
 				let right = self.in_definition(&left, *right);
 				Node::Key(Box::new(left), Op::Define, Box::new(right))
 			}
+			// P66: `x / 0.0`, a float division by a written zero, is IEEE's ∞ (an exact division by zero is divide_by_zero)
+			Node::Key(left, Op::Div, right) if is_float_zero(&right) => {
+				let as_float = |operand: Node| Node::Key(Box::new(operand), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string())));
+				Node::Key(Box::new(as_float(self.expand(*left))), Op::Div, Box::new(as_float(*right)))
+			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
@@ -887,6 +893,11 @@ pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> N
 		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
 		other => other,
 	}
+}
+
+/// A zero written with a decimal point, `0.0`
+fn is_float_zero(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(crate::extensions::numbers::Number::Float(value)) if *value == 0.0)
 }
 
 fn is_marker(node: &Node, marker: &str) -> bool {

@@ -22,8 +22,8 @@ fn test_exact_numbers_have_a_text_form() {
 	is!("y=10.05; y as string", "10.05");
 	is!("y=1/3; \"v=\"+y", "v=1/3");
 	is!("y=-7/3; y as string", "-7/3");
-	is!("y=1/0; \"a\"+y", "a∞");
-	is!("y=0/0; \"a\"+y", "aNaN");
+	is!("y=1.0/0.0; \"a\"+y", "a∞"); // P66: a float division by zero (an Int one is divide_by_zero)
+	is!("y=0.0/0.0; \"a\"+y", "aNaN");
 	is!("x=2^70; \"v\"+x", "v1180591620717411303424");
 	is!("x=-(2^70); x as string", "-1180591620717411303424");
 	is!("x=7; \"x\"+x", "x7");

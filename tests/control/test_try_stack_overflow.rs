@@ -30,3 +30,9 @@ fn untrusted_code_may_guard_a_call() {
 	assert_eq!(warp::wasm_emitter::eval_untrusted("f(x) := x * 2; try f(3) else 7"), warp::Node::int(6));
 }
 
+
+#[test]
+fn a_guarded_call_of_no_arguments() {
+	is!("f() := 5; try f() else 7", 5);
+	is!("f() := [1 2]#5; try f() else 7", 7);
+}

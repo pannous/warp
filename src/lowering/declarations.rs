@@ -526,7 +526,9 @@ fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, u
 	}
 	let mut items: Vec<Node> = wrapped.iter().map(|(function, count)| {
 		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
-		let head = Node::List(vec![Node::Symbol(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments.clone()], Bracket::Round, Separator::None);
+		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
+		let declared = Node::Key(Box::new(arguments.clone()), Op::Colon, Box::new(Node::Symbol("list".to_string())));
+		let head = Node::List(vec![Node::Symbol(format!("{function}{NODE_WRAPPER_SUFFIX}")), declared], Bracket::Round, Separator::None);
 		let argument = |index: usize| Node::Key(Box::new(arguments.clone()), Op::Hash, Box::new(Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1))));
 		let call = Node::List([vec![Node::Symbol(function.clone())], (0..*count).map(argument).collect()].concat(), Bracket::Round, Separator::None);
 		let result = Node::Symbol(WRAPPER_RESULT.to_string());
