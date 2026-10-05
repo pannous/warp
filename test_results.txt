@@ -315,6 +315,10 @@ PASSED:
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
   ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
+  ✓ ffi::test_foreign_operators::test_js_indexing_and_counting
+  ✓ ffi::test_foreign_operators::test_plain_values_keep_their_operators
+  ✓ ffi::test_foreign_operators::test_python_indexing_counting_iteration
+  ✓ ffi::test_foreign_operators::test_python_operators
   ✓ ffi::test_foreign_python::test_a_python_error_is_loud
   ✓ ffi::test_foreign_python::test_python_calls_and_reads
   ✓ ffi::test_foreign_python::test_python_values_cross_exactly
@@ -2276,4 +2280,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-31 ignored, 2271 passed, 0 failed, 2271 total tested
+31 ignored, 2275 passed, 0 failed, 2275 total tested
