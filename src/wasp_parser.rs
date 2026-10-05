@@ -1327,7 +1327,9 @@ impl WaspParser {
 		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
 		let after = blanks + name.chars().count();
 		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
-		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') {
+		// `map function square on [1 2 3]`: the iteration words' `on` ends it too
+		let on_follows = (rest..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect::<String>() == crate::lambdas::ON_WORD;
+		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
 			return None;
 		}
 		self.advance_by(after);
