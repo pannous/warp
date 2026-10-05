@@ -1,7 +1,6 @@
 //! wiki/charged.md sections 4 and 5, stage 3: `code e` / `block e` are blocks, `data e` runs only with a warning, a `block`
 //! parameter receives its argument unevaluated (lisp macros without macros), and any `!` on an expression is marked:
-//! one known only at run time is a loud error until the run-time compiler exists
-use crate::common::fails_with;
+//! one known only at run time runs there (run-block-5, P73)
 use warp::diagnostic::take_warnings;
 use warp::is;
 use warp::wasm_emitter::eval;
