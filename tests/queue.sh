@@ -7,9 +7,13 @@
 # A run that already holds the lock (WARP_TEST_LOCKED) runs directly, so nesting never deadlocks.
 # Waiters are served first come, first served by ticket files in $QUEUE; a full ./test.sh (the Integrator's run)
 # gets priority and takes the next slot ahead of targeted runs. Tickets of dead processes are dropped.
+# Every run is niced so the user's apps stay responsive; targeted runs use at most TARGETED_TEST_THREADS threads
+# (RUST_TEST_THREADS, which test.sh's explicit --test-threads overrides for the full suite).
 LOCK="${WARP_TEST_LOCK:-$HOME/.cargo/warp-tests.lock}"
 QUEUE="$LOCK.queue"
 POLL_SECONDS=2
+NICENESS=10
+TARGETED_TEST_THREADS=4
 
 if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
@@ -25,7 +29,7 @@ else
 fi
 mkdir -p "$(dirname "$LOCK")"
 
-case "${run[0]}" in *test.sh) priority=0 ;; *) priority=1 ;; esac
+case "${run[0]}" in *test.sh) priority=0 ;; *) priority=1; export RUST_TEST_THREADS="${RUST_TEST_THREADS:-$TARGETED_TEST_THREADS}" ;; esac
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
 echo "$PWD ${run[*]}" > "$ticket"
@@ -47,4 +51,4 @@ while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $PO
 # exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1
 exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
-	"$LOCK" "$ticket" "${run[@]}"
+	"$LOCK" "$ticket" nice -n "$NICENESS" "${run[@]}"
