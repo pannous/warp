@@ -82,11 +82,12 @@ fn test_auto_type() {
 
 #[test]
 fn test_auto_type_nan() {
-	// Division by zero produces special float values (semantically equal to Nan/Inf)
-	is!("0/0", Node::Number(Number::Nan));
-	is!("0÷0", Node::Number(Number::Nan));
-	is!("1/0", Node::Number(Number::Inf));
-	is!("-1/0", Node::Number(Number::NegInf));
+	// Float division by zero produces special float values (semantically equal to Nan/Inf); P66: an Int division by
+	// zero is the error divide_by_zero, so the divisions here are written with a decimal point
+	is!("0.0/0.0", Node::Number(Number::Nan));
+	is!("0.0÷0.0", Node::Number(Number::Nan));
+	is!("1.0/0.0", Node::Number(Number::Inf));
+	is!("-1.0/0.0", Node::Number(Number::NegInf));
 }
 
 	#[test]

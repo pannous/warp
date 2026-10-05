@@ -663,11 +663,13 @@ fn test_exact_rationals_stay_exact() {
 
 #[test]
 fn test_division_by_zero_is_extended_rational() {
-	is!("1/0 > 10^100", true); // exact infinity = 1/0, not IEEE's float Infinity
-	is!("1/(1/0)", 0);
-	is!("1/0 - 1/0", Node::Number(warp::Number::Nan));
-	is!("x=0/0; x==x", true); // IEEE: NaN != NaN
-	is!("0/0 == 1", false);
+	// P66 (user, 2026-10-05): no exact infinity any more: an Int division by zero is the catchable error divide_by_zero,
+	// only a float division (1.0/0.0) is IEEE's ∞
+	fails_with("1/0 > 10^100", "divide by zero");
+	fails_with("1/(1/0)", "divide by zero");
+	fails_with("x=0/0; x==x", "divide by zero");
+	is!("try 1/0 else 7", 7);
+	is!("1.0/0.0 > 10^100", true);
 }
 
 #[test]
