@@ -35,4 +35,5 @@ mod test_instance_arguments;
 mod test_tuple_values;
 mod test_printable;
 mod test_iterable;
+mod test_be_definitions;
 mod test_is_declaration;
