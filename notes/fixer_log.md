@@ -135,3 +135,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 p49b-whole-float
 - P49b: a whole float (2.0, y=3.0) passed to an int parameter is refused too ("2.0 is no int: write 2.0 as int").
+
+## 2026-10-05 p58-hash-range-warning
+- P58: `xs#a..b` stays the range from the value xs#a, with a warning naming the slice xs#(a..b) and the range (xs#a)..b
+  (wasp_parser hash_range_warning).
