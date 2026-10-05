@@ -105,6 +105,21 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P85 ignored-test corrections: only (1) approved: test_math_primitives expects -42.1 (typo) and is un-ignored.
   (2) test_function_params "9" vs 9, (3) test_string_operations "say 0." vs "say 0", (4) the fetch tests' trailing
   "\n" were NOT approved: those tests stay ignored as they are. Asked by the Fixer warp-2d.
+- P86 Node::add of two values it doesn't know (Symbol + Number), user: "it depends on the context: in lazy context it
+  must be allowed, in evaluation context the types must be of the addable trait". In a lazy context (data, a block,
+  symbolic) it builds the unevaluated sum `a + b`; when evaluated, both operands must have the Addable trait, else a
+  loud type error, never a panic. Asked by the Fixer warp-2d (card node-add).
+- P87 test_wisp_defn checks `body.drop_meta().serialize() == "mul(it it)"` and is un-ignored (user decision).
+- P88 capabilities, user: "currently allow everything to everyone": for now every host (CLI, eval, the playground,
+  eval_untrusted) grants every capability, Process and Sql included; the capability checks stay in the code for
+  later. Asked by warp-90 (card hijack-stdlib).
+- P89 foreign runtimes (`use python "math"`) get their own capability, not Ffi (granted to everyone for now, P88).
+  Asked by warp-90.
+- P90 the debug module ./test.wasm stays written at every compile (user chose "keep always on" over the recommended
+  WARP_DEBUG_WASM switch). Asked by warp-ec.
+- P91 one shared analysis per compile (extract_user_functions, EffectReport::of), refreshed only when a pass changed
+  the program: yes, as its own card after warp-90's and warp-2d's lowering work lands, one pass converted first to
+  show the gain. Asked by warp-ec; as recommended.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
