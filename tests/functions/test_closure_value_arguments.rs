@@ -6,7 +6,7 @@ use warp::is;
 fn test_a_returned_closure_takes_a_text() {
 	is!("make = () => (t => t + \"!\"); a = make(); a(\"x\")", "x!");
 	is!("make = () => (t => t + \"!\"); a = make(); a(\"xy\")", "xy!");
-	is!("def make(){ def add(t){ t + \"!\" }; add }; a = make(); a(\"x\")", "x!");
+	is!("def make(){ def add(t){ t + \"!\" }; function add }; a = make(); a(\"x\")", "x!");
 }
 
 #[test]

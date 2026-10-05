@@ -15,6 +15,25 @@ use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
+/// The mark of `&add` / `function add`: the function itself, not its call (user decision P82)
+const FUNCTION_REFERENCE_MARK: &str = "function_reference";
+
+/// `&add`, `function add`: the name, marked as the function itself; passes that ignore marks see the name
+pub fn function_reference(name: String) -> Node {
+	Node::Meta { node: Box::new(Node::Symbol(name)), data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, Node::True)) }
+}
+
+/// The function `&add` / `function add` refers to
+pub fn referenced_function(node: &Node) -> Option<String> {
+	let Node::Meta { node: inner, data } = node else { return None };
+	match data.as_ref() {
+		Node::Key(key, _, _) if key.name() == FUNCTION_REFERENCE_MARK => match inner.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => referenced_function(inner),
+	}
+}
 const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
@@ -398,6 +417,9 @@ impl Lifting {
 
 	/// A function name where a value is expected is the closure of that function
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
+		if let Some(target) = referenced_function(&node).and_then(|name| self.function_named(&name)) {
+			return closure_new(&target, vec![]);
+		}
 		match node {
 			Node::Symbol(ref name) if !bound.contains(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
@@ -405,8 +427,9 @@ impl Lifting {
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
-			// `{inc = () => 5; inc}`: a body ending in a function gives its value
-			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator @ (Separator::Semicolon | Separator::Newline)) if !items.is_empty() => {
+			// `{def add(t){…}; function add}`: a body ending in a function reference gives the function (a bare `add` there
+			// needs its arguments, P82)
+			Node::List(mut items, bracket @ (Bracket::Curly | Bracket::Round), separator) if items.last().is_some_and(|last| referenced_function(last).is_some()) => {
 				let last = items.pop().expect("not empty");
 				items.push(self.function_value(last, bound));
 				Node::List(items, bracket, separator)
