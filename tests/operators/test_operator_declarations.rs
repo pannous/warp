@@ -34,8 +34,9 @@ fn test_operators_declared_later_are_known_to_the_whole_program() {
 }
 
 #[test]
-fn test_precedence_declarations_are_refused() {
-	fails_with("infix operator ⊕ := a+b; operator ⊕ has precedence above +", "operator precedence declarations are not supported yet");
+fn test_precedence_declarations_are_followed() {
+	is!("infix operator ⊕ := a+b; operator ⊕ has precedence above *; 2 * 3 ⊕ 4", 14);
+	fails_with("operator + has precedence above *", "only a declared operator gets a precedence");
 }
 
 #[test]
