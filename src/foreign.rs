@@ -135,7 +135,7 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 		single => Value::Array(vec![json_of(single)]),
 	};
 	if runtime == crate::foreign_modules::COMPONENT_RUNTIME {
-		return component_call(&module.drop_meta().name(), member, &arguments);
+		return component_call(module, member, &arguments);
 	}
 	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
 		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
@@ -154,12 +154,20 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 	}
 }
 
-/// `lib.f(x)` of a component (src/components.rs): only calls, a component exports functions
-fn component_call(path: &str, member: &str, arguments: &Value) -> Result<Node, String> {
-	let Value::Array(arguments) = arguments else {
-		return Err(format!("wasm {path}: {member} is a function of the component, call it: {member}(…)"));
+/// `lib.f(x)` of a component (src/components.rs), or `handle.method(x)` of a resource it gave: only calls
+fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node, String> {
+	let receiver = match module.drop_meta() {
+		Node::Text(path) | Node::Symbol(path) => path.clone(),
+		handle => json_of(handle).get("text").and_then(Value::as_str).map_or_else(|| handle.serialize(), str::to_string),
 	};
-	crate::components::call(path, member, arguments).map(|value| node_of(&value)).map_err(|failure| format!("wasm {path}: {failure}"))
+	let Value::Array(arguments) = arguments else {
+		return Err(format!("wasm {receiver}: {member} is a function of the component, call it: {member}(…)"));
+	};
+	let result = match module.drop_meta() {
+		Node::Text(path) | Node::Symbol(path) => crate::components::call(path, member, arguments),
+		handle => crate::components::call_method(&json_of(handle), member, arguments),
+	};
+	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
 }
 
 /// One request line out, one answer line back; the child is started on first use and again after it ended

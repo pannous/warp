@@ -1,6 +1,7 @@
 wit_bindgen::generate!({ world: "demo", path: "wit" });
 
-use exports::warp::demo::text_tools::{Guest as TextTools, Shape, Stats};
+use exports::warp::demo::text_tools::{Counter, CounterBorrow, Guest as TextTools, GuestCounter, Shape, Stats};
+use std::cell::Cell;
 
 struct Demo;
 
@@ -10,7 +11,33 @@ impl Guest for Demo {
 	}
 }
 
+struct Tally {
+	value: Cell<i64>,
+}
+
+impl GuestCounter for Tally {
+	fn new(start: i64) -> Self {
+		Tally { value: Cell::new(start) }
+	}
+	fn increment(&self, by: i64) -> i64 {
+		self.value.set(self.value.get() + by);
+		self.value.get()
+	}
+	fn value(&self) -> i64 {
+		self.value.get()
+	}
+	fn merged(a: CounterBorrow<'_>, b: CounterBorrow<'_>) -> Counter {
+		Counter::new(Tally::new(a.get::<Tally>().value() + b.get::<Tally>().value()))
+	}
+}
+
 impl TextTools for Demo {
+	type Counter = Tally;
+
+	fn total(counters: Vec<CounterBorrow<'_>>) -> i64 {
+		counters.iter().map(|counter| counter.get::<Tally>().value()).sum()
+	}
+
 	fn words(text: String) -> Vec<String> {
 		text.split_whitespace().map(str::to_string).collect()
 	}

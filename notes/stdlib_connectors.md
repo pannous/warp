@@ -122,8 +122,15 @@ step 3.
   text), string, list, tuple (list), record ({field: value}), enum (its name as text), variant (a name or {case: value}),
   option (ø or the value), flags (a list of names). Results back: the same as JSON → Nodes; the err of a result is a
   warp error with its message. WIT names are kebab-case: `stats_of` finds `stats-of`.
-- A component's results are plain values, not handles: `s = lib.stats_of(t); s.words` reads the record's field.
-- Not yet: resources (they would be handles: one table per runtime, ids, freed at the end), a component's exports as
-  operators, components in the browser (host.js says it runs only in the native host; jco could transpile them),
+- A component's results are plain values: `s = lib.stats_of(t); s.words` reads the record's field, `n * 2` is warp's
+  arithmetic, `ws.reverse()` warp's method (foreign_modules does not forward operators of wasm values).
+- Resources (card wit-resources): a resource a component gives stays in it behind a handle
+  `{$handle: 1, type: "counter", text: "counter#1", component: path}` (shared handle rules: ids, one table per
+  component, kept until the process ends). `r.counter(5)` / `r.Counter(5)` call `[constructor]counter`, `r.merged(a, b)`
+  a `[static]counter.merged`, `c.increment(2)` the `[method]counter.increment` with the handle as self: a method call
+  on a variable assigned a component's result (or on such a call) goes to the component unless it is a warp method
+  (library words, list mutation, text builtins). Handles cross back as `own`/`borrow` arguments, also in lists;
+  a handle of another resource type or component is refused.
+- Not yet: dropping a resource before the process ends, a component's exports as operators, components in the browser (host.js says it runs only in the native host; jco could transpile them),
   `warp build --exe` (refused: foreign_call is a missing import). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
