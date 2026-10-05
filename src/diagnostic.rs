@@ -133,7 +133,6 @@ pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
 	result
 }
 
-/// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
 thread_local! {
 	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
 	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
@@ -148,6 +147,7 @@ pub(crate) fn note_said() {
 	SAID.with(|said| said.set(said.get() + 1));
 }
 
+/// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
 pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	if !warnings.is_empty() {
 		note_said();
