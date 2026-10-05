@@ -302,6 +302,10 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_foreign_python::test_a_python_error_is_loud
+  ✓ ffi::test_foreign_python::test_python_calls_and_reads
+  ✓ ffi::test_foreign_python::test_python_values_cross_exactly
+  ✓ ffi::test_foreign_python::test_untrusted_code_gets_no_python
   ✓ ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm
   ✓ ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
@@ -2245,4 +2249,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-33 ignored, 2240 passed, 0 failed, 2240 total tested
+33 ignored, 2244 passed, 0 failed, 2244 total tested
