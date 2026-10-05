@@ -1,5 +1,6 @@
 mod test_argument_kinds;
 mod test_bare_function_name;
+mod test_call_result_fields;
 mod test_block_function;
 mod test_broadcasting;
 mod test_broadcasting_declared;
