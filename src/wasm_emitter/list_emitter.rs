@@ -92,7 +92,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let diagnostic = crate::diagnostic::Diagnostic::at(&call, format!("undefined function: {name}"));
+		let diagnostic = crate::diagnostic::Diagnostic::at(&call, crate::ffi::undefined_function_message(name));
 		self.emit_type_error(func, diagnostic.to_string());
 		true
 	}

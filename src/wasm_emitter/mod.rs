@@ -641,7 +641,7 @@ impl WasmGcEmitter {
 	/// Emit a call to a user-defined function (returns Node)
 	fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
-			self.emit_type_error(func, format!("undefined function: {fn_name}"));
+			self.emit_type_error(func, crate::ffi::undefined_function_message(fn_name));
 			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();
@@ -684,7 +684,7 @@ impl WasmGcEmitter {
 	/// Note: For Node-returning functions, this extracts the integer value from the Node
 	fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
-			self.emit_type_error(func, format!("undefined function: {fn_name}"));
+			self.emit_type_error(func, crate::ffi::undefined_function_message(fn_name));
 			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();

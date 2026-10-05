@@ -16,6 +16,11 @@ const INCLUDE_DIRS: &[&str] = &[
 /// `:`-separated include directories replacing INCLUDE_DIRS (web/playground's test runner serves exactly one)
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
 const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
+/// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
+/// in the _stdlib.h and _ctype.h that stdlib.h and ctype.h include (`getenv`, `toupper`); a header missing on Linux is skipped
+const LIBC_HEADERS: [&str; 6] = ["string.h", "stdlib.h", "_stdlib.h", "stdio.h", "ctype.h", "_ctype.h"];
+/// Libraries whose header is not named after them: `use z` reads zlib.h
+const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 
 pub(crate) fn include_dirs() -> Vec<String> {
     match std::env::var(INCLUDE_VARIABLE) {
@@ -33,9 +38,12 @@ pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> 
 pub fn find_library_headers(library: &str) -> Vec<String> {
     let headers: Vec<String> = match library {
         "m" | "math" | "libm" => vec!["math.h".into()],
-        "c" | "libc" => vec!["string.h".into(), "stdlib.h".into(), "stdio.h".into()],
+        "c" | "libc" => LIBC_HEADERS.iter().map(|header| header.to_string()).collect(),
         "SDL2" | "sdl2" | "sdl" => SDL_HEADERS.iter().map(|header| format!("SDL2/{header}")).collect(),
-        _ => vec![format!("{library}.h"), format!("{library}/{library}.h")],
+        _ => match LIBRARY_HEADERS.iter().find(|(name, _)| *name == library) {
+            Some((_, header)) => vec![header.to_string()],
+            None => vec![format!("{library}.h"), format!("{library}/{library}.h")],
+        },
     };
     let dirs = include_dirs();
     headers.iter().filter_map(|header| find_header_in(header, &dirs)).collect()
