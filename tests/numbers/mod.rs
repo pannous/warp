@@ -19,6 +19,7 @@ mod test_shift_operators;
 mod test_sum_of_decimals;
 mod test_unbounded_int;
 mod test_unit_composites;
+mod test_rational_quantities;
 mod test_unit_products;
 mod test_units_arithmetic;
 mod test_units_compare;
