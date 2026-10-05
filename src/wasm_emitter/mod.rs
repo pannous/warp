@@ -3391,17 +3391,37 @@ impl WasmGcEmitter {
 
 	/// Emit a list as linked cons cells
 	fn emit_list_structure(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) {
+		self.emit_list_structure_with(func, items, bracket, Self::emit_node_instructions);
+	}
+
+	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
+	pub(super) fn emit_literal(&mut self, func: &mut Function, node: &Node) {
+		match node.drop_meta() {
+			Node::Symbol(name) => self.emit_string_call(func, name, "new_symbol"),
+			Node::Key(left, op, right) => {
+				self.emit_literal(func, left);
+				self.emit_literal(func, right);
+				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
+				self.emit_call(func, "new_key");
+			}
+			Node::List(items, bracket, _) if !items.is_empty() => self.emit_list_structure_with(func, items, bracket, Self::emit_literal),
+			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
+			other => self.emit_node_instructions(func, other),
+		}
+	}
+
+	fn emit_list_structure_with(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, emit: fn(&mut Self, &mut Function, &Node)) {
 		let bracket_info = bracket_info(bracket);
 
 		// Emit first item
-		self.emit_node_instructions(func, &items[0]);
+		emit(self, func, &items[0]);
 
 		// Emit rest as a proper linked list
 		// The value field must always be a list node (or null), never an element directly
 		if items.len() > 1 {
 			// Recursively build the rest of the list
 			// This ensures proper cons-cell structure: (data=first, value=list_node_for_rest)
-			self.emit_list_structure(func, &items[1..], bracket);
+			self.emit_list_structure_with(func, &items[1..], bracket, emit);
 		} else {
 			// Single element list: rest is null
 			self.emit_node_null(func);

@@ -656,12 +656,11 @@ impl WasmGcEmitter {
 		if *bracket != Bracket::None || *separator != Separator::Space || rest.is_empty() || !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str())) {
 			return false;
 		}
-		let outer = std::mem::replace(&mut self.data_context, true);
+		// data never runs: the expression as it is written (`data 1+2` is 1+2)
 		match rest {
-			[only] => self.emit_node_instructions(func, only),
-			many => self.emit_list_structure(func, many, &Bracket::None),
+			[only] => self.emit_literal(func, only),
+			many => self.emit_literal(func, &Node::List(many.to_vec(), Bracket::None, Separator::Space)),
 		}
-		self.data_context = outer;
 		true
 	}
 

@@ -387,26 +387,23 @@ impl fmt::Display for Op {
 	}
 }
 
+/// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
+/// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
+const OP_CODES: [Op; 57] = [
+	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
+	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
+	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
+	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
+	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
+	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
+];
+
 /// Encode Op as i64 for storage in kind field
 pub fn op_to_code(op: &Op) -> i64 {
-	match op {
-		Op::None => 0,
-		Op::Colon => 1,
-		Op::Assign => 2,
-		Op::Define => 3,
-		Op::Dot => 4,
-		_ => 0, // Default to None for other ops
-	}
+	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
 }
 
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
-	match code {
-		0 => Op::None,
-		1 => Op::Colon,
-		2 => Op::Assign,
-		3 => Op::Define,
-		4 => Op::Dot,
-		_ => Op::None,
-	}
+	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
 }
