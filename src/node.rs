@@ -178,7 +178,8 @@ impl Node {
 			),
 			(Meta { node, .. }, n) => node.add(n),
 			(n, Meta { node, .. }) => n.add(*node.clone()),
-			_ => todo!("rewrap a.add(b) => (a b) ?"),
+			// pending with the user (warp-08): an error, or the list (a b)
+			(a, b) => Error(Box::new(Text(format!("cannot add {} and {}", a.kind(), b.kind())))),
 		}
 	}
 
