@@ -5,6 +5,7 @@ runtime functions. A user function or a variable of the same name wins (the word
 
 | Word (aliases) | Args | How |
 |---|---|---|
+| `square` | 1 | expanded to `x*x`: an int stays an int, a float a float (wasp C++ Keywords.cpp has it built in) |
 | `first`, `last`, `sum` | 1 | expanded to source in `library_words.rs` (`x#1`, `x#(count(x))`, a `for` fold) |
 | `reverse`, `sort` | 1 | `list_reverse`, `list_sort` (ints only; other elements are an error) |
 | `upper` (`uppercase`), `lower` (`lowercase`) | 1 | `text_upper`, `text_lower`: ASCII only, a non-ASCII byte is the error `non ascii text` |

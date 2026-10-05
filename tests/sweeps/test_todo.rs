@@ -107,7 +107,6 @@ fn test_array_constructor() {
 
 // === Still pending (requires major features) ===
 #[test]
-#[ignore = "requires polymorphic function dispatch"]
 fn test_polymorphic_dispatch() {
 	is!("square(3.0)", 9.);
 }
