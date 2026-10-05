@@ -127,9 +127,9 @@ function programImports(holder, hooks) {
 				}
 			},
 			// a block known only at run time (src/host.rs run_block): a compiler instance of its own compiles and runs it
-			run_block: (block, names, values) => {
+			run_block: (block, names, values, definitions) => {
 				const module = program();
-				const request = { block: readNode(module, block), names: readNode(module, names), values: readNode(module, values) };
+				const request = { block: readNode(module, block), names: readNode(module, names), values: readNode(module, values), definitions: readNode(module, definitions) };
 				const report = evalBlock(hooks, JSON.stringify(request));
 				if (report.error !== undefined) {
 					holder.blockError = report.error;
@@ -416,6 +416,7 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1:
+			if (payload.exact) return module.new_int(exactHandle(module, ...payload.exact.map(BigInt)));
 			if (payload.int === undefined) throw new Error("an exact number beyond the fixnum range cannot cross to another task yet");
 			return module.new_int(BigInt(payload.int));
 		case 2: return module.new_float(Number(payload.float));
@@ -430,6 +431,21 @@ function buildValue(module, tree) {
 		}
 		default: throw new Error(`a value of kind ${kind & KIND_MASK} cannot cross to another task yet`);
 	}
+}
+
+// the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int
+// operations (src/tasks.rs EXACT_BUILDERS, integer_handle)
+const FIXNUM_MIN = -(2n ** 62n - 1n);
+const FIXNUM_MAX = 2n ** 62n;
+function exactHandle(module, numerator, denominator) {
+	const integer = n => {
+		if (n >= FIXNUM_MIN && n <= FIXNUM_MAX) return n;
+		const limbs = [];
+		for (let rest = n < 0n ? -n : n; rest > 0n; rest >>= 32n) limbs.push(rest & 0xffffffffn);
+		const magnitude = limbs.reduceRight((handle, limb) => module.exact_add(module.int_shift_left(handle, 32n), limb), 0n);
+		return n < 0n ? module.exact_sub(0n, magnitude) : magnitude;
+	};
+	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
 // run a compiled program: the outcome src/web.rs run_outcome reads

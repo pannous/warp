@@ -62,3 +62,19 @@ fn compiling_a_run_time_block_warns_about_the_host() {
 	assert!(warp::pipeline::compile("xs = [data a+1, data a*2]; a = 5; interpret(xs#2)").is_ok());
 	assert!(take_warnings().iter().any(|warning| warning.message.contains("its host must provide host.run_block")));
 }
+
+// The program's functions inside a run-time block, and exact numbers beyond the fixnums as its value
+#[test]
+fn a_run_time_block_calls_the_programs_functions() {
+	warp::is!("def twice(x): x*2; y = data twice(21); interpret y", 42);
+	warp::is!("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); k=10; y = data fib(k)+1; interpret y", 56);
+	crate::common::fails_with("y = data nope(2); interpret y", "the block (nope 2) failed: undefined function: nope");
+}
+
+#[test]
+fn a_run_time_block_hands_back_ratios_and_big_ints() {
+	warp::is!("y = data 7/2; z = interpret y; z*2", 7);
+	warp::is!("y = data 7/2; z = interpret y; z == 7/2", 1);
+	warp::is!("y = data 2^70; z = interpret y; z+1 == 2^70+1", 1);
+	warp::is!("y = data 0-2^70; z = interpret y; z == 0-2^70", 1);
+}

@@ -242,20 +242,22 @@ fn eval_program(node: Node) -> Node {
 pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
-/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block. The
+/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
+/// the program's function `definitions` follow. The
 /// block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
 /// `Err` is the message the run fails with, naming the block.
-pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, String> {
+pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) -> Result<Node, String> {
 	let written = block.serialize().trim().to_string();
 	let names: Vec<String> = match names.drop_meta() {
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
 	};
-	let values: Vec<Node> = match values.drop_meta() {
+	let items = |list: &Node| match list.drop_meta() {
 		Node::List(items, _, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
+	let values = items(values);
 	let as_written = |value: Node| match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
@@ -263,6 +265,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, Stri
 	let mut statements: Vec<Node> = names.into_iter().zip(values)
 		.map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Assign, Box::new(as_written(value))))
 		.collect();
+	statements.extend(items(definitions));
 	statements.push(block);
 	let program = Node::List(statements, Bracket::None, Separator::Newline);
 	let result = match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
@@ -276,7 +279,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node) -> Result<Node, Stri
 	}
 }
 
-/// A block's value the host has no constructor for in the running module yet (a pair, an exact ratio, a big Int)
+/// A block's value the host has no constructor for in the running module yet (a pair)
 pub fn cannot_hand_back(value: &Node) -> String {
 	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
 }

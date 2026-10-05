@@ -27,6 +27,9 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const INT_RUNTIME: &str = "int_runtime";
+/// The exported Int operations a host builds an exact number beyond the fixnums with (tasks.rs Builders, host.js
+/// exactHandle): shift, add, subtract, divide
+pub const EXACT_BUILDERS: [&str; 4] = ["int_shift_left", "exact_add", "exact_sub", "exact_div"];
 pub const FIXNUM_OFFSET: i64 = (1 << 62) - 1;
 pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
 pub const FIXNUM_MAX: i128 = 1 << 62;

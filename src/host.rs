@@ -63,8 +63,8 @@ pub const SHARED_WORDS: [&str; 5] = ["shared_new", "shared_get", "shared_set", "
 /// The same for an array of floats (`shared xs = float[n]`), its cells holding the bits: get, set, add
 pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared_addf"];
 /// `interpret e` of a block known only at run time (wiki/charged.md §5, notes/runtime_eval.md): run_block(block, names,
-/// values) compiles the block with the names bound to the values the program had where it ran it, runs it, and gives
-/// its value
+/// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
+/// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
 pub const HOST_WORDS: [&str; 23] = [GUARDED_CALL, RUN_BLOCK, SLEEP, RANDOM, RANDOM_BELOW, CLOCK, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2]];
@@ -73,7 +73,7 @@ pub const HOST_WORDS: [&str; 23] = [GUARDED_CALL, RUN_BLOCK, SLEEP, RANDOM, RAND
 pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 23] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
+	[(GUARDED_CALL, vec![I32, node], vec![node]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (CLOCK, vec![], vec![I64]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -479,13 +479,13 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 /// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one
 #[cfg(feature = "native")]
 fn run_block(mut caller: Caller<'_, HostState>, block: Option<wasmtime::Rooted<wasmtime::AnyRef>>, names: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
-	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>, definitions: Option<wasmtime::Rooted<wasmtime::AnyRef>>) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::tasks::{Builders, TaskFailure, TaskValue};
 	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("run_block: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
-	let [block, names, values] = [block, names, values].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let result = crate::pipeline::eval_block(block, &names, &values).map_err(failure)?;
+	let [block, names, values, definitions] = [block, names, values, definitions].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(failure)?;
 	let value = TaskValue::of(&result).map_err(|_| failure(crate::pipeline::cannot_hand_back(&result)))?;
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
