@@ -4,6 +4,8 @@ mod test_ffi_warning_once;
 mod test_ffi;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
 mod test_foreign_python;
+#[cfg(feature = "native")] // wasmtime components: not in the browser build
+mod test_components;
 mod test_foreign_js;
 mod test_foreign_handles;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
