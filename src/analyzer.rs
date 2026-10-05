@@ -2155,6 +2155,7 @@ fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Err(node) => node,
 	};
 	match node {
+		Node::List(items, _, _) if print_walk(&items, variables).is_some() => lower(print_walk(&items, variables).expect("guarded")),
 		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator, variables).is_some() => {
 			lower(counting_phrase(&items, &bracket, &separator, variables).expect("guarded"))
 		}
@@ -3538,6 +3539,27 @@ fn property_of_name(items: &[Node], separator: &Separator, variables: &HashSet<S
 
 /// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
 /// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
+/// `print chars in "hello"`: a name no variable has, in a collection, prints each item as `for chars in "hello": print it`
+fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
+	let [print, phrase] = items else { return None };
+	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else { return None };
+	// `chars in "hello"` arrives as the words or as `chars (in "hello")`
+	let (name, in_word, collection) = match phrase.as_slice() {
+		[name, in_word, collection] => (name, in_word, collection),
+		[name, rest] => match rest.drop_meta() {
+			Node::List(rest, _, _) if rest.len() == 2 => (name, &rest[0], &rest[1]),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	if !is_word(print, "print") || !is_word(in_word, "in") || variables.contains(name) {
+		return None;
+	}
+	let body = Node::List(vec![print.clone(), Node::Symbol(name.clone())], Bracket::Curly, Separator::Space);
+	Some(Node::List(vec![Node::Symbol("for".into()), Node::Symbol(name.clone()), in_word.clone(), collection.clone(), body], Bracket::None, Separator::Space))
+}
+
 fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
 	if let [unit, count, of, _, ..] = items {
 		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
