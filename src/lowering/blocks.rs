@@ -7,6 +7,10 @@
 //! Stage 2: `x = {statements}` is a block too (no warning: braces say so), an object's computed `key: value` entry is an
 //! uncharged block (`o.s1!` runs it, `o.s1 + 1` is the type error, the object holds it as data), and `obj!` of an object
 //! literal runs it as code: each `key: value` is the call `key(value)` (`help!`). `key := value` entries are untouched (P71).
+//! Stage 3: `x = code e` / `x = block e` are blocks, `y = data e; y!` runs with a got-it warning ("running data as code"),
+//! and a function with a `block` parameter (`when_not(c, body:block) := if not c { body! }`) is expanded at every call:
+//! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
+//! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
@@ -19,10 +23,83 @@ const DATA_WORD: &str = "data";
 /// The got-it topic of `x : a+b`, which keeps a block where a value may have been meant
 const BLOCK_TOPIC: &str = "uncharged-block";
 const IT: &str = "it";
+/// Prefixes of a block: `code e`, `block e` (synonyms, wiki/charged.md section 4)
+const BLOCK_WORDS: [&str; 2] = ["code", "block"];
+/// The got-it topic of `!` on data
+const DATA_RUN_TOPIC: &str = "data-as-code";
+/// `body·m0`: a parameter of an expanded block function, bound once
+const EXPANSION_SEPARATOR: &str = "·m";
 
 pub fn lower(program: Node) -> Node {
-	let mut lowering = Blocks { blocks: HashMap::new(), objects: HashMap::new() };
+	let mut functions = HashMap::new();
+	program.visit(&mut |node| {
+		if let Some((name, function)) = block_function(node) {
+			functions.insert(name, function);
+		}
+	});
+	let mut lowering = Blocks { blocks: HashMap::new(), objects: HashMap::new(), data: HashMap::new(), functions, expansions: 0 };
 	lowering.statement(program)
+}
+
+/// A function with a `block` parameter: its parameters (name, whether a block) and body
+#[derive(Clone)]
+struct BlockFunction {
+	parameters: Vec<(String, bool)>,
+	body: Node,
+}
+
+/// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter
+fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
+	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
+	let (name, parameters) = items.split_first()?;
+	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let parameters: Vec<(String, bool)> = parameters.iter().map(|parameter| match parameter.drop_meta() {
+		Node::Symbol(name) => Some((name.clone(), false)),
+		Node::Key(name, Op::Colon, kind) => Some((name.name(), matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())))),
+		_ => None,
+	}).collect::<Option<_>>()?;
+	parameters.iter().any(|(_, block)| *block).then(|| (name.clone(), BlockFunction { parameters, body: body.as_ref().clone() }))
+}
+
+/// The prefixed value `code e` / `data e`: the prefix and e
+fn prefixed<'a>(value: &'a Node, words: &[&str]) -> Option<&'a Node> {
+	let Node::List(items, Bracket::None, Separator::Space) = value.drop_meta() else { return None };
+	match items.as_slice() {
+		[prefix, expression] if matches!(prefix.drop_meta(), Node::Symbol(word) if words.contains(&word.as_str())) => Some(expression),
+		_ => None,
+	}
+}
+
+/// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,
+/// it is no function to call
+fn prefixed_group(node: &Node) -> Option<Node> {
+	let Node::List(items, bracket @ (Bracket::Round | Bracket::Square), Separator::None | Separator::Space) = node.drop_meta() else { return None };
+	let [prefix, _, ..] = items.as_slice() else { return None };
+	if !matches!(prefix.drop_meta(), Node::Symbol(word) if word == DATA_WORD || BLOCK_WORDS.contains(&word.as_str())) {
+		return None;
+	}
+	let prefixed = Node::List(items.clone(), Bracket::None, Separator::Space);
+	Some(match bracket {
+		Bracket::Square => Node::List(vec![prefixed], Bracket::Square, Separator::None),
+		_ => prefixed,
+	})
+}
+
+/// In a body: `param!` the argument's code (a group), a bare `param` the argument as data
+fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
+	if let Some((Node::Symbol(name), _)) = bang_target(&node) {
+		if name == parameter {
+			return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
+		}
+	}
+	match node {
+		Node::Symbol(name) if name == parameter => Node::List(vec![Node::Symbol(DATA_WORD.to_string()), argument.clone()], Bracket::None, Separator::Space),
+		Node::Key(left, op, right) => Node::Key(Box::new(substitute_block(*left, parameter, argument)), op, Box::new(substitute_block(*right, parameter, argument))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_block(item, parameter, argument)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_block(*node, parameter, argument)), data },
+		other => other,
+	}
 }
 
 struct Blocks {
@@ -30,6 +107,11 @@ struct Blocks {
 	blocks: HashMap<String, Node>,
 	/// Object literals in scope, by name: their entries, to run the object as code (`help!`)
 	objects: HashMap<String, Vec<(Node, Node)>>,
+	/// Names holding `data e`: e, run only with a warning
+	data: HashMap<String, Node>,
+	/// Functions with a `block` parameter, expanded at every call
+	functions: HashMap<String, BlockFunction>,
+	expansions: usize,
 }
 
 /// `x : a+b` of a computed expression: the name and the block
@@ -78,6 +160,9 @@ fn statement_block(value: &Node) -> Option<Node> {
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	})
 }
+
+/// Expansions of block functions in one program: a function expanding itself without end stops here
+const MAX_EXPANSIONS: usize = 1000;
 
 /// `node` with its innermost value replaced, keeping the meta information around it (`@unit("cm") {x:1}`)
 fn with_inner(node: &Node, inner: Node) -> Node {
@@ -128,8 +213,27 @@ impl Blocks {
 			self.blocks.insert(name, block);
 			return Node::Empty;
 		}
+		// a function with a `block` parameter exists only in its expansions
+		if block_function(&node).is_some() {
+			return Node::Empty;
+		}
 		if let Node::Key(target, Op::Assign, value) = node.drop_meta() {
 			if let Node::Symbol(name) = target.drop_meta() {
+				// `x = code 1+2`, `x = block e`: a block
+				if let Some(block) = prefixed(value, &BLOCK_WORDS) {
+					let block = self.rewrite(block.clone());
+					self.forget(name);
+					self.blocks.insert(name.clone(), block);
+					return Node::Empty;
+				}
+				// `y = data 1+2`: data, which `y!` runs with a warning
+				if let Some(data) = prefixed(value, &[DATA_WORD]) {
+					let data = data.clone();
+					let name = name.clone();
+					let lowered = self.rewrite(node);
+					self.data.insert(name, data);
+					return lowered;
+				}
 				// `x = {1+2}`: statements in braces are a block
 				if let Some(block) = statement_block(value) {
 					let block = self.rewrite(block);
@@ -193,6 +297,7 @@ impl Blocks {
 	fn forget(&mut self, name: &str) {
 		self.blocks.remove(name);
 		self.objects.remove(name);
+		self.data.remove(name);
 		let prefix = format!("{name}.");
 		self.blocks.retain(|key, _| !key.starts_with(&prefix));
 	}
@@ -204,14 +309,56 @@ impl Blocks {
 		if let Some(block) = self.blocks.get(&key) {
 			return Some(Node::List(vec![block.clone()], Bracket::Round, Separator::None));
 		}
+		if let Some(data) = self.data.get(&key) {
+			let written = crate::normalize::operand_text(data);
+			let question = Ask::new(DATA_RUN_TOPIC, format!("running data as code: {key} is data ({written})"),
+				vec![reading("run it", &format!("{key}!")), reading("a block", &format!("{key} = code {written}"))], Fallback::Warning).written(&format!("{key}!"));
+			if let Err(error) = ask(&question) {
+				return Some(error);
+			}
+			return Some(Node::List(vec![data.clone()], Bracket::Round, Separator::None));
+		}
 		let entries = self.objects.get(&key)?;
 		let calls = entries.iter().map(|(function, argument)| call(function, argument.clone())).collect();
 		Some(Node::List(calls, Bracket::Round, Separator::Semicolon))
 	}
 
+	/// `f(a, b)` of a function with a `block` parameter: its body with the block arguments' code and the other parameters bound
+	fn expand(&mut self, items: &[Node]) -> Option<Node> {
+		let (head, arguments) = items.split_first()?;
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let function = self.functions.get(name)?.clone();
+		if function.parameters.len() != arguments.len() || self.expansions > MAX_EXPANSIONS {
+			return None;
+		}
+		let number = self.expansions;
+		self.expansions += 1;
+		let mut statements = vec![];
+		let mut body = function.body;
+		for ((parameter, is_block), argument) in function.parameters.iter().zip(arguments) {
+			if *is_block {
+				body = substitute_block(body, parameter, argument);
+			} else {
+				let bound = Node::Symbol(format!("{parameter}{EXPANSION_SEPARATOR}{number}"));
+				statements.push(Node::Key(Box::new(bound.clone()), Op::Assign, Box::new(self.rewrite(argument.clone()))));
+				body = crate::library_words::substitute(body, parameter, &bound);
+			}
+		}
+		statements.push(self.rewrite(body));
+		Some(Node::List(statements, Bracket::Round, Separator::Semicolon))
+	}
+
 	fn rewrite(&mut self, node: Node) -> Node {
 		if let Some((target, _)) = bang_target(&node) {
 			return self.run(&target).unwrap_or(node);
+		}
+		if let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() {
+			if let Some(expanded) = self.expand(items) {
+				return expanded;
+			}
+		}
+		if let Some(prefixed) = prefixed_group(&node) {
+			return self.rewrite(prefixed);
 		}
 		// `o.s1!`: the parser marks the field it was reading (as for `x.upper!`)
 		if let Node::Key(object, Op::Dot, field) = node.drop_meta() {

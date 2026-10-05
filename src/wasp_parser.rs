@@ -256,6 +256,8 @@ const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
+/// How tight a suffix `!` binds: below the index `#` (170), above `^` (160) and arithmetic
+const BANG_BP: u8 = 165;
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
@@ -2265,7 +2267,7 @@ impl WaspParser {
 				continue;
 			}
 
-			if let Some(updated) = self.try_parse_evaluate_bang(&lhs)
+			if let Some(updated) = self.try_parse_evaluate_bang(&lhs, min_bp)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_nand(&lhs, min_bp))
@@ -2892,11 +2894,16 @@ impl WaspParser {
 	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.
 	/// After a function or method the `!` mutates in place (user decision D2, by position): `x.upper!` and `upper(x)!`
 	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
-	fn try_parse_evaluate_bang(&mut self, lhs: &Node) -> Option<Node> {
+	fn try_parse_evaluate_bang(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		// `xs#2!` runs xs#2, not the index 2: the suffix binds looser than `#`, tighter than arithmetic (`x!+1`)
+		if min_bp > BANG_BP {
+			return None;
+		}
 		let mutated = crate::mutation::mutated_variable(lhs).cloned();
 		// `o.s1!`: a field (no method) may hold a block too (wiki/charged.md section 4)
 		let is_field = matches!(lhs.drop_meta(), Node::Key(_, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)));
-		let is_evaluable = is_field || matches!(lhs.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		// any expression may be run (wiki/charged.md section 5): `xs#2!`, `f(x)!`; blocks.rs inlines what is known at compile time
+		let is_evaluable = is_field || !matches!(lhs.drop_meta(), Node::Empty);
 		// `name! email?`: glued to its name and followed by a space, the `!` is a suffix even when an operand follows
 		// `x!+1`: glued to its name and followed by an infix operator, the `!` is a suffix too
 		// `x!!`: run fully, a suffix as well
@@ -2911,12 +2918,16 @@ impl WaspParser {
 			self.advance();
 		}
 		Some(match (mutated, lhs.drop_meta()) {
+			// `o.s1!` runs a block field, `x.upper!` mutates (D2): blocks.rs knows which, mutation.rs mutates the rest
+			(Some(_), Node::Key(_, Op::Dot, _)) if fully => crate::mutation::marked_fully(lhs.clone()),
+			(Some(_), Node::Key(_, Op::Dot, _)) => crate::mutation::marked(lhs.clone()),
 			(Some(variable), _) => Node::Key(Box::new(variable), Op::Assign, Box::new(lhs.clone())),
 			(None, Node::Symbol(_)) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, Node::Symbol(_)) => crate::mutation::marked(lhs.clone()),
-			(None, Node::Key(_, Op::Dot, _)) if fully => crate::mutation::marked_fully(lhs.clone()),
-			(None, Node::Key(_, Op::Dot, _)) => crate::mutation::marked(lhs.clone()),
-			(None, _) => lhs.clone(),
+			// `{a*a}!` evaluates the block on the spot
+			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
+			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
+			(None, _) => crate::mutation::marked(lhs.clone()),
 		})
 	}
 

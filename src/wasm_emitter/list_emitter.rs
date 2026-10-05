@@ -41,7 +41,7 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 const INSERT_ORDER_TOPIC: &str = "insert-order";
 /// The got-it topic of an unknown word applied to a value (`cube 3`)
 /// `data cube 3`: the rest is data (P62, P63: `data` is the word for what never runs)
-const QUOTE_WORDS: [&str; 1] = ["data"];
+const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
 /// Words the near-miss warning compares with besides the program's own names
