@@ -21,7 +21,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   `square := it*it` stays a function), zero-parameter charged definitions via `def` (recommended); (2) always charged,
   `z = 6` after it an error; (3) Go-strict: `:=` declares a new variable, `=` only reassigns. User 2026-10-05: "idk".
   Assumed until decided: today's behaviour (1); workers do not change zero-parameter `:=` semantics, and the
-  "needless charging" note applies to `def` only.
+  "needless charging" note applies to `def` only. If (2) is chosen: the per-use getter is ~20 lines, commit 0b687e03 on
+  branch late-binding (warp-29).
 Parked: P64 run-time units (static F#-style recommended / dynamic pint-style), user 2026-10-05 "Later": the started
 work on branch runtime-units-survey pauses.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
