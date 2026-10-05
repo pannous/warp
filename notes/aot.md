@@ -46,6 +46,8 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    - The program prints its value: build --exe compiles `print(<last statement>)` (pipeline::compile_printing_result;
      a declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, texts unquoted)
      and the stub needs no Node reader.
+     Decided by the user (P77): an executable shows its prints, then its value as `print` shows it (texts without
+     quotes); exit code 0, 1 on a trap.
    - The stub provides print (WASI fd_write), libm ("m": Rust's f64 functions) and the host words sleep, random,
      random_below, clock. A program importing anything else (fetch, read, run_block, tasks, FFI libraries) is refused
      at build time with the missing imports named.
