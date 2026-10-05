@@ -77,6 +77,8 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - A nested `outer·inner` reads its captures from globals; outer refreshes them before every call it makes
   (`refresh_enclosing_captures`). Used as a value, `closure_new(outer·inner)` stores the current capture values in the
   closure and its entry sets the globals from them before the call, so `make(1)` and `make(2)` keep their own `k`.
-- `nonlocal y` written by inner: y lives in a cell, a one-element shared array (lowering/nonlocal_cells.rs, `y·cell`,
-  shared_get/set/add, the f variants for floats); the closure carries the cell's handle, so a counter returned by
-  `make()` keeps its own cell. Text or list values changed by inner are an error for now (cells hold numbers).
+- `nonlocal y` written by inner: y lives in a cell (lowering/nonlocal_cells.rs, `y·cell`; wasm_emitter/cells.rs:
+  `cell_new/cell_get/cell_set`, a $Node of Kind::Data holding a one-element $node_array, in the module itself, so the
+  browser build needs nothing). A cell holds any value; `cell_get` is typed like a map value (Kind::Empty, a Node that
+  joins texts and adds at run time), `cell_set` counts as a statement (a block of calls only would be a list). The
+  closure carries the cell, so a counter returned by `make()` keeps its own cell.

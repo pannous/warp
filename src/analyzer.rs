@@ -79,7 +79,8 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
 		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK].contains(&s.as_str()))
+			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET].contains(&s.as_str()))
 		}
 		_ => false,
 	}
@@ -308,6 +309,10 @@ fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &S
 		}
 		if name == crate::closures::CLOSURE_NEW {
 			return Kind::Function;
+		}
+		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
+		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
+			return if name == crate::wasm_emitter::cells::CELL_NEW { Kind::Data } else { Kind::Empty };
 		}
 		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
@@ -4145,6 +4150,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if fn_name == ZERO_FILL_CALL {
 					ctx.required_functions.insert(ZERO_FILL_CALL);
+				}
+				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
+					ctx.required_functions.insert(word);
 				}
 				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
 					ctx.required_functions.insert(INSERT_AT_CALL);
