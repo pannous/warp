@@ -12,13 +12,6 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
-- P44 (re-ask, user 2026-10-05 "can you ask P 44 again?"): shared arrays across tasks, decided once as `shared` +
-  atomic `+=` (see Decided 2026-10-05); the user wants to revisit it.
-- P60 Catch handlers: `raise X` / `throw X` are built (try catches them). The wiki's only `catch` form is Error.md's
-  function-level handlers (`fun f(){ eat(); drink(); catch (no food){}; catch (drunkenness){}; on error{} }`), with
-  no rule for how a name matches a raised value. Options: not built yet, `try X else Y` stays the one catching form
-  (recommended) / `catch name {…}` as the else-branch of the surrounding function body, matching the raised text.
-  Asked by the Fixer warp-2d. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -36,7 +29,7 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P29 `pair.0` counts from 0 (like `pair[0]`).
 - P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
   (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
-- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now. (Re-asked, see pending.)
+- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now. Re-asked: `atomic` is a synonym of `shared` (below).
 - P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
   infinity now (ω stays the hyperreal infinite).
 - P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
@@ -105,6 +98,13 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
   (wiki/be.md, an alias of `:=`; the parser does not accept `be` yet, notes/normalization_audit.md). The test edit to
   `x = 100 times [0]` (Fixer, branch decided-test-edits) stands, or uses `be` once it parses. Asked by warp-2d.
+
+- P44 re-asked: user: "make shared and atomic synonyms". `atomic xs = int[n]` is the same as `shared xs = int[n]`;
+  the rest stays (atomic `+=`/`-=`, `go f(xs)` passes the same array).
+- P60 catch handlers: user: "later, but also at the Classical track catch and try except syntax synonyms". The
+  function-level handlers (`catch (no food){…}`, `on error{…}`, Error.md) come later; now the classical
+  `try {…} catch {…}` (with `catch e`) and Python's `try: … except: …` become synonyms of `try X else Y`.
+  Asked by the Fixer warp-2d.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
