@@ -98,6 +98,8 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
   (wiki/be.md, an alias of `:=`; the parser does not accept `be` yet, notes/normalization_audit.md). The test edit to
   `x = 100 times [0]` (Fixer, branch decided-test-edits) stands, or uses `be` once it parses. Asked by warp-2d.
+  Follow-up (user, multiple choice): the typed form too. `x is number 9` with an undefined x no longer declares
+  (fix-is-declaration is undone); it teaches `x be number 9` (or `x:number = 9`); `is` is always a comparison.
 
 - P44 re-asked: user: "make shared and atomic synonyms". `atomic xs = int[n]` is the same as `shared xs = int[n]`;
   the rest stays (atomic `+=`/`-=`, `go f(xs)` passes the same array).
