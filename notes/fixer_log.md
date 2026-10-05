@@ -75,3 +75,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-ignored-2
 - Indexing ø (`x=ø; x#1`, `x[0]`) was a raw "wasm trap: cast failure" a `try` could not catch; ø is the empty list,
   so emit_list_walk fails index_out_of_range (tests/control/test_try_empty_index.rs).
+
+## 2026-10-05 fix-uniscript-entities
+- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
+  sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
+  `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
+  blocks stay with the uniscript package.

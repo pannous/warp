@@ -514,22 +514,31 @@ fn code_only(source: &str) -> String {
 	let mut code = String::with_capacity(source.len());
 	let mut at = 0;
 	while at < chars.len() {
-		let (c, next) = (chars[at], chars.get(at + 1).copied());
-		let skip_until = |from: usize, end: &[char]| (from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len());
-		let after = match (c, next) {
-			('/', Some('/')) if at == 0 || chars[at - 1] != ':' => (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len()),
-			('/', Some('*')) => skip_until(at + 2, &['*', '/']),
-			('"' | '\'', _) => skip_until(at + 1, &[c]),
-			_ => {
-				code.push(c);
-				at += 1;
-				continue;
+		match text_or_comment_end(&chars, at) {
+			Some(end) => {
+				code.push(' ');
+				at = end;
 			}
-		};
-		code.push(' ');
-		at = after.max(at + 1);
+			None => {
+				code.push(chars[at]);
+				at += 1;
+			}
+		}
 	}
 	code
+}
+
+/// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
+pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
+	let (c, next) = (chars[at], chars.get(at + 1).copied());
+	let skip_until = |from: usize, end: &[char]| (from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len());
+	let after = match (c, next) {
+		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len()),
+		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
+		('"' | '\'', _) => skip_until(at + 1, &[c]),
+		_ => return None,
+	};
+	Some(after.max(at + 1))
 }
 
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
@@ -590,6 +599,7 @@ impl WaspParser {
 	/// Source text is normalized to NFC, so equal-looking text and identifiers are equal
 	pub fn new_with_options(input: String, options: ParserOptions) -> Self {
 		let input: String = input.nfc().collect();
+		let input = if options.data_mode { input } else { crate::uniscript_entities::expand_entities(&input) };
 		let current_line = input.lines().next().unwrap_or("").to_string();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
@@ -1467,6 +1477,10 @@ impl WaspParser {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => self.parse_symbol_with_suffix(),
+			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+				(0..length).for_each(|_| self.advance());
+				error(&format!("unknown entity \\{name}: write the character itself, or a known name such as \\alpha or \\:infinity"))
+			}
 			ch => {
 				warn!(
 					"Unexpected character '{}' at line {}, column {}",
