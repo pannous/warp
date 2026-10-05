@@ -96,6 +96,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   bare name that needs arguments is the error "add needs 1 argument" everywhere, in a body's last value too, nested
   or top-level alike, with the fix "I meant: function add". Asked by warp-90 (card returning-top). User: "function
   references have an extra keyword … Maybe it was just function", then the recommended option.
+- P83 (after P82) an alias needs the explicit reference, `g = function add` (bare `g = add` is the P82 error with the
+  fix); an argument to a parameter that takes a function stays bare, `apply(add, 3)` (the parameter says a function is
+  expected, like wiki/function-pointer.md's `map square on xs`). Asked by warp-90; as recommended.
+- P84 `sum := fold +; sum 1 2 3` → 6 (wiki folding.md). User: "This should have already been done with broadcasting":
+  several juxtaposed arguments to a one-parameter function are taken as one list, `f 1 2 3` = `f [1 2 3]`, through
+  the broadcasting machinery (not the recommended keep-the-error). Asked by warp-90.
+- P85 ignored-test corrections: only (1) approved: test_math_primitives expects -42.1 (typo) and is un-ignored.
+  (2) test_function_params "9" vs 9, (3) test_string_operations "say 0." vs "say 0", (4) the fetch tests' trailing
+  "\n" were NOT approved: those tests stay ignored as they are. Asked by the Fixer warp-2d.
 - Got-it scope: the prompt offers `[y = this one, a = all of this kind, n]`; one expression is remembered by its
   written text; a `// got it` comment silences that line in the source.
 - P65 arithmetic a text can't do on a character (negation, %, /, sqrt) is not_a_number; `ord(c)` gives the number;
