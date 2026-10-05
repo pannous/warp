@@ -133,10 +133,10 @@ fn test_index_offset_advanced() {
 }
 
 #[test]
-#[ignore = "while loop with nop needs investigation"]
 fn test_while_nop_issue() {
 	// This test was failing before list indexing changes
-	is!("x=0;while x++<11: nop;", 11);
+	// P55 (user, 2026-10-05): a while loop's value is its last body value, so the test reads x after the loop
+	is!("x=0;while x++<11: nop;x", 11);
 }
 
 #[test]
