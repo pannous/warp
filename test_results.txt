@@ -83,8 +83,14 @@ PASSED:
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
+  ✓ control::test_object_blocks::test_a_computed_entry_warns_where_it_is_written
+  ✓ control::test_object_blocks::test_an_object_runs_as_code
+  ✓ control::test_object_blocks::test_computed_entries_are_uncharged
+  ✓ control::test_object_blocks::test_statements_in_braces_are_a_block
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
+  ✓ control::test_run_time_blocks::a_block_over_defined_names_does_not_warn
+  ✓ control::test_run_time_blocks::a_block_over_names_defined_nowhere_warns
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
@@ -173,6 +179,7 @@ PASSED:
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
   ✓ control::test_try_named_traps::indexing_a_number_is_not_a_list
+  ✓ control::test_try_stack_overflow::a_guarded_call_of_no_arguments
   ✓ control::test_try_stack_overflow::a_try_without_a_direct_call_keeps_todays_behaviour
   ✓ control::test_try_stack_overflow::the_instance_keeps_working_after_a_caught_overflow
   ✓ control::test_try_stack_overflow::try_catches_the_stack_overflow_of_a_call
@@ -806,6 +813,8 @@ PASSED:
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ numbers::test_division_by_zero::float_division_by_zero_is_infinity
+  ✓ numbers::test_division_by_zero::int_division_by_zero_is_an_error
   ✓ numbers::test_duration_text::a_duration_and_a_date_have_their_text
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
@@ -2089,4 +2098,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2084 passed, 0 failed, 2084 total tested
+37 ignored, 2093 passed, 0 failed, 2093 total tested
