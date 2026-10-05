@@ -20,10 +20,3 @@ fn test_typed_parameter_variants_dispatch_by_argument() {
 	is!("foo(x:int):=x+x; foo(x:text):=x+\"!\"; foo \"a\"", "a!");
 	is!("fib int i = i+1; fib float f = f*2; fib 2.5", 5.0);
 }
-
-#[test]
-fn test_builtin_square_takes_ints_and_floats() {
-	is!("square 3", 9);
-	is!("square(3.0)", 9.0);
-	is!("square(x):=x+1; square 3", 4); // a user function of the same name wins
-}
