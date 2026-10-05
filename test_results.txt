@@ -75,11 +75,18 @@ PASSED:
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
+  ✓ control::test_raise::raise_ends_the_run_with_its_message
+  ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
   ✓ control::test_shared_arrays::tasks_add_floats_to_one_shared_array
   ✓ control::test_shared_arrays::tasks_add_to_one_shared_array
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
+  ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
+  ✓ control::test_structural_patterns::test_list_patterns_bind_names
+  ✓ control::test_structural_patterns::test_nested_lists_and_pairs
+  ✓ control::test_structural_patterns::test_no_match_without_default_is_loud
+  ✓ control::test_structural_patterns::test_wildcards_and_numbers
   ✓ control::test_switch_match::a_switch_is_a_value
   ✓ control::test_switch_match::a_switch_picks_the_case_of_its_subject
   ✓ control::test_switch_match::a_user_function_named_switch_wins
@@ -547,7 +554,10 @@ PASSED:
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
+  ✓ lists::test_lists::test_array_initialization
+  ✓ lists::test_lists::test_array_initialization_basics
   ✓ lists::test_lists::test_array_size
   ✓ lists::test_lists::test_filter
   ✓ lists::test_lists::test_index
@@ -557,6 +567,7 @@ PASSED:
   ✓ lists::test_lists::test_iteration
   ✓ lists::test_lists::test_root_list_strings
   ✓ lists::test_lists::test_root_lists
+  ✓ lists::test_lists::test_while_nop_issue
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
   ✓ lists::test_map_variables::a_map_variable_reads_as_the_node_of_its_entries
   ✓ lists::test_map_variables::a_missing_key_of_a_map_variable_is_the_same_error
@@ -1308,6 +1319,7 @@ PASSED:
   ✓ sweeps::test_sweep_fixes::a_lone_false_is_zero
   ✓ sweeps::test_sweep_fixes::do_runs_an_add_to_phrase
   ✓ sweeps::test_todo::test_array_length
+  ✓ sweeps::test_todo::test_array_type_generics
   ✓ sweeps::test_todo::test_if_then_else
   ✓ sweeps::test_todo::test_index_assign_in_loop
   ✓ sweeps::test_todo::test_lambda_comparison
@@ -2010,4 +2022,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-40 ignored, 2005 passed, 0 failed, 2005 total tested
+38 ignored, 2017 passed, 0 failed, 2017 total tested
