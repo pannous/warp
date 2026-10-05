@@ -1806,6 +1806,7 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
+  ✓ wasm::test_standalone_executable::test_build_exe_signs_cleanly_on_macos
   ✓ wasm::test_standalone_executable::test_machine_code_rides_at_the_end_of_the_executable
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
@@ -1920,6 +1921,8 @@ PASSED:
   ✓ welcoming::test_fixits::bare_list_fixes
   ✓ welcoming::test_fixits::braceless_call_fixes
   ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
+  ✓ welcoming::test_fixits::filter_loop_fixes
+  ✓ welcoming::test_fixits::kebab_key_fixes
   ✓ welcoming::test_fixits::list_operator_fixes
   ✓ welcoming::test_fixits::local_or_global_fixes
   ✓ welcoming::test_fixits::loop_it_fix
@@ -1928,6 +1931,7 @@ PASSED:
   ✓ welcoming::test_fixits::signed_operand_fixes
   ✓ welcoming::test_fixits::suffix_word_fixes
   ✓ welcoming::test_fixits::the_page_gets_each_fix_as_an_edit
+  ✓ welcoming::test_fixits::the_page_gets_every_edit_of_a_fix
   ✓ welcoming::test_fixits::the_page_says_got_it_for_one_expression
   ✓ welcoming::test_fixits::word_fixes
   ✓ welcoming::test_footguns::test_addition_is_associative_by_default
@@ -2205,4 +2209,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2200 passed, 0 failed, 2200 total tested
+35 ignored, 2204 passed, 0 failed, 2204 total tested
