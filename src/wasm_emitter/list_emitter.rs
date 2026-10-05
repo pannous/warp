@@ -39,6 +39,8 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 }
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
+/// The got-it topic of an unknown word applied to a value (`cube 3`)
+const UNKNOWN_WORD_TOPIC: &str = "unknown-word";
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -279,6 +281,11 @@ impl WasmGcEmitter {
 		}
 
 		if self.reject_unresolved_call(func, items, bracket, separator) {
+			return;
+		}
+		if let Err(error) = self.warn_unknown_prefix_word(items, bracket, separator) {
+			let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+			self.emit_type_error(func, message);
 			return;
 		}
 
@@ -555,6 +562,24 @@ impl WasmGcEmitter {
 				}
 			}
 		}
+	}
+
+	/// `cube 3`: a word that names nothing applied to a value is data, never a call; the got-it warning names both forms.
+	/// Only when an argument is a value: `hello world` and `person{…}` are plain data
+	fn warn_unknown_prefix_word(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Result<(), Node> {
+		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		let [head, arguments @ ..] = items else { return Ok(()) };
+		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(_) | Node::List(_, Bracket::Curly, _));
+		if (bracket, separator) != (&Bracket::None, &Separator::Space) || !arguments.iter().any(is_value) {
+			return Ok(());
+		}
+		let Some(name) = self.unknown_word(head).filter(|name| !self.resolves_call(name)) else { return Ok(()) };
+		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
+		let text = written.serialize().trim().to_string();
+		let question = Ask::new(UNKNOWN_WORD_TOPIC, format!("{name} is no function: `{text}` is data, not a call (define {name}(x) := … to call it)"),
+			vec![reading("data", &format!("[{text}]")), reading("a call", &format!("{name}(x) := …; {text}"))], Fallback::Warning)
+			.written(&text).at_node(&written);
+		ask(&question).map(|_| ())
 	}
 
 	/// A bare word that is no variable, global or function

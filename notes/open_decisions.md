@@ -66,6 +66,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   and 4.0), (b) refuse at compile time ("2.2 is no int: write 2.2 as int"), (c) keep today's (the declaration is
   ignored for floats). Proposed default: (b), wasp never loses digits silently. The test needs editing either way.
   2026-10-05.
+- P51 An unknown word applied to a value, `cube 3` (no `cube` defined): today data with a got-it warning
+  ("cube is no function … fix: [cube 3]", notes/unknown_prefix_word.md). Should it be a loud error like `cube(3)`
+  (Decided #7)? Then call-shaped data in code needs brackets: `[cube 3]`, `(cube 3)`, which contradicts rule 3 of
+  notes/unresolved_call_survey.md (`print 3` as data). Proposed: keep the warning (wasp is a data notation; strict
+  mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),

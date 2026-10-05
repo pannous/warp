@@ -3,6 +3,7 @@ mod test_footguns;
 mod test_got_it_warnings;
 mod test_it_shadow_warning;
 mod test_style_dont_care;
+mod test_unknown_prefix_word;
 mod test_warning_mode;
 mod test_welcoming_ask;
 mod test_welcoming_break;
