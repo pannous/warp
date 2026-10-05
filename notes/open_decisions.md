@@ -117,6 +117,15 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   literal (`{shape: cube 3}`) are data, besides data mode (`warp data`, parse_data). Explicit brackets were NOT
   chosen: `[cube 3]` / `(cube 3)` in code are code, so an unknown word there is the error too.
 
+- Data vs code, charge levels (user discussion 2026-10-05; full spec wiki/charged.md, wiki c90efe7; DO NOT implement
+  before the user reviewed the spec): programs are code by default, data files data ("e: by default"); `x = e` now,
+  `f := e` and `def` deferred (user: "def == deferred", "def should behave exactly like Python … but close"),
+  `x : e` uncharged (a quote) until `x!`; the same operators inside objects; warnings at the definition site
+  (computed `:` values, effectful getters), a quote used as a value is a type error with the fix ("c, d very nice");
+  `quote`/`data` prefix, `block` parameters, `x!` eval. REVISES D7: free variables are read at call time (Python late
+  binding), loop variables captured per iteration, reassigning a variable a deferred definition reads gets a got-it
+  note. The word `quote` is provisional (user: "not sure if I like the word"). P62/P63 are refined by this spec.
+
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
   type word (P20 forbids it as a function name). Options: `show(p:person)` (Haskell) / `description(p:person)` (Swift)
