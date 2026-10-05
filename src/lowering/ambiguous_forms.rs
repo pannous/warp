@@ -23,7 +23,7 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
-	let words = functions.iter().flat_map(|function| SUFFIX_WORD_ENDINGS.map(|ending| (format!("{function}{ending}"), function.clone())));
+	let words = functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
 	let mut words: SuffixWords = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
 	for (word, function) in LIBRARY_SUFFIX_WORDS {
@@ -32,6 +32,29 @@ fn suffix_words(node: &Node) -> SuffixWords {
 		}
 	}
 	words
+}
+
+const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
+/// Final consonants English never doubles before -ed (`fixed`, `showed`, `played`)
+const UNDOUBLED_CONSONANTS: [char; 3] = ['w', 'x', 'y'];
+
+/// The English past forms of a function name (P24): `halve` → `halved`, `fix` → `fixed`, `stop` → `stopped` (a final
+/// consonant after a single vowel doubles), `copy` → `copied`
+fn past_forms(function: &str) -> Vec<String> {
+	let mut forms: Vec<String> = SUFFIX_WORD_ENDINGS.iter().map(|ending| format!("{function}{ending}")).collect();
+	let letters: Vec<char> = function.chars().collect();
+	let is_vowel = |c: &char| VOWELS.contains(c);
+	if let [.., before, vowel, last] = letters.as_slice() {
+		if !is_vowel(before) && is_vowel(vowel) && !is_vowel(last) && !UNDOUBLED_CONSONANTS.contains(last) && last.is_ascii_alphabetic() {
+			forms.push(format!("{function}{last}ed"));
+		}
+	}
+	if let [.., before, 'y'] = letters.as_slice() {
+		if !is_vowel(before) {
+			forms.push(format!("{}ied", &function[..function.len() - 1]));
+		}
+	}
+	forms
 }
 
 /// Suffix words of library functions; a function marked `^` is the power of its number: `squared` is `^2`

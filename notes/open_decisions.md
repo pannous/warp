@@ -99,7 +99,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
 - P22 `p:photo = pic{width:3}` with pic a known other type: an error that teaches `pic like photo`. The warning
   default on claude/like-keyword is undone.
 - P23 the type-word clash error covers every type word, generic ones (`number := …`) included (as assumed).
-- P24 the suffix form `4 doubled` calls a user function too (like `4.square`, wiki D9 `1+2 squared`). Not done yet.
+- P24 the suffix form `4 doubled` calls a user function too (like `4.square`, wiki D9 `1+2 squared`). Done (branch
+  suffix-calls): every English past form, +d/+ed, a doubled final consonant (`stopped`), y → ied (`copied`);
+  tests/functions/test_suffix_word_spellings.rs. The example itself needs a function named `double`, which P20 forbids
+  (a type word): `double(x):=…` is "double is a type; rename your function".
 - P26 libm (sin, exp, …) counts as pure: no Ffi capability, allowed in eval_untrusted and `! pure` functions.
   The Ffi assumption (effects.rs) is undone.
 
