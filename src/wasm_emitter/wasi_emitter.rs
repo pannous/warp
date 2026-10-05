@@ -44,24 +44,24 @@ impl WasmGcEmitter {
 		// Get string data pointer and length
 		let (str_ptr, str_len) = match arg.drop_meta() {
 			Node::Text(s) => self.allocate_string(s),
-			Node::Symbol(var_name) => {
-				// Check if this is a string variable with stored data
-				if let Some(local) = self.scope.lookup(var_name) {
-					if local.data_pointer > 0 {
-						(local.data_pointer, local.data_length)
-					} else {
-						// Fallback: use the symbol name itself
-						self.allocate_string(var_name)
-					}
-				} else {
-					self.allocate_string(var_name)
-				}
-			}
-			_ => self.allocate_string(""),
+			Node::Symbol(var_name) => match self.scope.lookup(var_name) {
+				// a text variable with its stored data
+				Some(local) if local.data_pointer > 0 => (local.data_pointer, local.data_length),
+				// any other variable: its value at run time (writing the name, or nothing, was a silent wrong answer)
+				Some(_) => return self.emit_runtime_puts(func, arg),
+				None => self.allocate_string(var_name),
+			},
+			_ => return self.emit_runtime_puts(func, arg),
 		};
 
 		self.emit_stdout_write(func, str_ptr, str_len);
 		// Stack now has i32 (error code), leave it for conversion to Node
+	}
+
+	/// puts of a value known only at run time: its text through put_value; fd_write's success code, like a constant write
+	fn emit_runtime_puts(&mut self, func: &mut Function, value: &Node) {
+		self.emit_put_value(func, value);
+		func.instruction(&I::I32Const(0));
 	}
 
 	/// `print x` / `print(x)`: writes x and a newline to stdout, the value is the printed value. A literal is written as
@@ -72,33 +72,38 @@ impl WasmGcEmitter {
 			Node::Number(number) => number.to_string(),
 			Node::Text(text) => text.clone(),
 			Node::Char(character) => character.to_string(),
-			_ => match self.get_type(value) {
-				// a list prints the text `str(xs)` gives, nested lists in brackets (user, P32), a map or an entry likewise;
-				// print gives the value
-				Kind::List | Kind::Key | Kind::Symbol | Kind::Empty => {
-					let held = self.emit_dynamic_text(func, value);
-					self.emit_call(func, PRINT_VALUE);
-					Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);
-					return;
-				}
-				Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => {
-					self.emit_node_instructions(func, value);
-					self.emit_call(func, PRINT_VALUE);
-					return;
-				}
-				Kind::Error if self.reports_own_error(func, value) => return,
-				kind => {
-					let reason = format!("print of {} has no runtime text yet", crate::analyzer::kind_with_article(kind));
-					self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
-					return;
-				}
-			},
+			_ => {
+				self.emit_written_value(func, value, PRINT_VALUE, "print");
+				return;
+			}
 		};
 		self.emit_wasi_puts(func, &Node::Text(format!("{text}{PRINT_TERMINATOR}")));
 		func.instruction(&I::Drop);
 		match value.drop_meta() {
 			Node::Char(_) => self.emit_node_instructions(func, &Node::Text(text)), // a text, as analyzer::held_kind has it
 			_ => self.emit_node_instructions(func, value),
+		}
+	}
+
+	/// Write the text of `value` at run time with `writer` (print_value or put_value) and leave the value: a list as the
+	/// text `str(xs)` gives, nested lists in brackets (user, P32), a map or an entry likewise; a value of a kind without
+	/// a runtime text is a type error named after `word`
+	fn emit_written_value(&mut self, func: &mut Function, value: &Node, writer: &'static str, word: &str) {
+		match self.get_type(value) {
+			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty => {
+				let held = self.emit_dynamic_text(func, value);
+				self.emit_call(func, writer);
+				Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);
+			}
+			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, writer);
+			}
+			Kind::Error if self.reports_own_error(func, value) => {}
+			kind => {
+				let reason = format!("{word} of {} has no runtime text yet", crate::analyzer::kind_with_article(kind));
+				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
+			}
 		}
 	}
 
@@ -170,8 +175,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_put_value(&mut self, func: &mut Function, value: &Node) {
-		self.emit_node_instructions(func, value);
-		self.emit_call(func, PUT_VALUE);
+		self.emit_written_value(func, value, PUT_VALUE, "puts");
 		func.instruction(&I::Drop);
 	}
 
@@ -184,8 +188,7 @@ impl WasmGcEmitter {
 
 			self.emit_stdout_write(func, str_ptr, str_len);
 		} else {
-			self.emit_put_value(func, arg);
-			func.instruction(&I::I32Const(0)); // fd_write's success code, like the constant write
+			self.emit_runtime_puts(func, arg);
 		}
 	}
 
