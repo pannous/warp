@@ -16,6 +16,6 @@ fn a_non_int_element_is_caught() {
 	is!("x=[1,\"ab\"]; try -x#2 else 7", 7);
 	is!("x=[1,[2]]; try x#2 % 2 else 7", 7);
 	is!("x=[1,ø]; try x#2 + 1 else 7", 7);
-	is!("x=[1,'a']; try -x#2 else 7", -97);
+	is!("x=[1,'a']; try -x#2 else 7", 7); // P65: a character is no number in arithmetic
 	is!("x=[1,5]; try -x#2 else 7", -5);
 }

@@ -197,7 +197,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::F64Sub);
 					self.emit_call(func, "new_float");
 				} else {
-					self.emit_numeric_value(func, right);
+					self.emit_arithmetic_operand(func, right);
 					let range = self.int_range(right);
 					self.emit_int_neg(func, range);
 					self.emit_call(func, "new_int");
