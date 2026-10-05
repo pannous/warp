@@ -221,6 +221,24 @@ pub const TRY_MARKER: &str = "try·else";
 pub const ASSERT_MARKER: &str = "assert·else";
 const GUARD_MARKERS: [(&str, &str); 2] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER)];
 /// `nand` and its glyph pair, both `not (a and b)`
+/// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
+fn item_named(node: Node, name: &str, item: &Node) -> Node {
+	match node {
+		Symbol(symbol) if symbol == name => item.clone(),
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) => {
+			let mut items = items.into_iter();
+			let head = items.next().expect("a head");
+			Node::List(std::iter::once(head).chain(items.map(|part| item_named(part, name, item))).collect(), Bracket::Round, Separator::None)
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|part| item_named(part, name, item)).collect(), bracket, separator),
+		Node::Key(left, op, right) => Node::Key(Box::new(item_named(*left, name, item)), op, Box::new(item_named(*right, name, item))),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(item_named(*node, name, item)), data },
+		other => other,
+	}
+}
+
+/// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
+const FILTER_LOOP_TOPIC: &str = "for-filter";
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
@@ -2472,6 +2490,9 @@ impl WaspParser {
 	fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
 		self.skip_spaces();
+		if let Some(filtered) = self.try_parse_condition_loop() {
+			return Some(filtered);
+		}
 		let variable = self.parse_loop_variable();
 		self.skip_spaces();
 		let named = variable.filter(|_| self.matches_keyword("in"));
@@ -2504,11 +2525,72 @@ impl WaspParser {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
 			None => self.parse_atom(),
 		};
+		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
+		// (P46), a call `friend(…)` still constructs
+		let (variable, body) = match variable.drop_meta() {
+			Symbol(name) if self.declared_types.contains(name) => {
+				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let body = item_named(body, name, &it);
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+					Ok(body) => (it, body),
+					Err(error) => return Some(error),
+				}
+			}
+			_ => (variable, body),
+		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
 			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
 		}
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
+	/// for any other header
+	fn try_parse_condition_loop(&mut self) -> Option<Node> {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		if self.current_char() != '(' {
+			return None;
+		}
+		self.advance();
+		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(0));
+		self.skip_spaces();
+		let mentions_it = crate::wasp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
+		if self.current_char() != ')' || !mentions_it {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		}
+		self.advance();
+		self.skip_spaces();
+		if !self.matches_keyword("in") {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return None;
+		}
+		self.advance_by("in".len());
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.skip_spaces();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let body = match body_word {
+			Some(word) => self.colon_body(word),
+			None => self.parse_atom(),
+		};
+		let shown = crate::normalize::operand_text(&condition);
+		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), condition, body) {
+			Ok(body) => body,
+			Err(error) => return Some(error),
+		};
+		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46)
+	fn filtered_body(&self, written: &str, explicit: &str, test: Node, body: Node) -> Result<Node, Node> {
+		let question = format!("`{written}` visits only the items that pass its filter");
+		let readings = vec![reading("filter the items", explicit)];
+		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
+		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
 	}
 
 	/// The body after `:` or `do`: an indented block under a colon at the end of the line, else the rest of the line
