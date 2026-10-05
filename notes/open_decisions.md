@@ -5,6 +5,12 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
+- P63 P62 follow-ups (worker warp-90, defaults applied): (1) all-word lists in code (`hello world`,
+  `colors = [red, green, blue]`, samples/data_structures.wasp) stay data; only a word next to a value is judged
+  (`cube 3`, `[1 "two" three]`). Recommended: keep them data (enum-like symbols, many samples/tests), with the
+  near-miss warning chosen for object values. (2) the sample `mixed = [1 "two" three 4.0]` becomes
+  `mixed = quote [1 "two" three 4.0]`. (3) a comma tuple `(frobnicate, 3)` stays data (P62 named spaced brackets
+  only). Related to the open data-vs-code design discussion (charge levels, 2026-10-05). 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
