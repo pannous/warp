@@ -47,7 +47,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	late_bound.extend(declared);
 	late_bound.sort();
 	late_bound.dedup();
-	Ok(declare_global(without_nonlocal_declarations(crate::nonlocal_cells::lower(program)?), &late_bound))
+	Ok(declare_global(without_nonlocal_declarations(crate::nonlocal_cells::lower(program)), &late_bound))
 }
 
 /// The late-binding check of the functions defined in `statements` whose free variables `scope` binds: main's

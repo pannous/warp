@@ -9,7 +9,8 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 17] = [
+const BUILTIN_CALLS: [&str; 20] = [
+	super::cells::CELL_WORDS[0], super::cells::CELL_WORDS[1], super::cells::CELL_WORDS[2],
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF,
@@ -267,6 +268,9 @@ impl WasmGcEmitter {
 
 		if let Some((list, sum_loop)) = super::list_dispatch::list_sum_call(items) {
 			return self.emit_list_sum(func, list, sum_loop, super::list_dispatch::Wanted::Node);
+		}
+		if self.emit_cell_call(func, items) {
+			return;
 		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::analyzer::ZERO_FILL_CALL {

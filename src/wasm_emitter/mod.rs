@@ -1,6 +1,7 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
 mod big_int;
+pub mod cells;
 mod closures;
 pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
@@ -1242,6 +1243,7 @@ impl WasmGcEmitter {
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 		// Emit list and string operation functions
 		self.emit_list_ops();
+		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();
 		self.emit_text_as_int(); // after the getters: it calls get_int_value

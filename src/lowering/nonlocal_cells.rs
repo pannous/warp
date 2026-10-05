@@ -1,44 +1,31 @@
-//! `nonlocal y` written by a nested function (card nonlocal-inner): y lives in a cell outer and its nested functions
-//! share, so inner's change is outer's, and a closure that escapes outer keeps that cell (each call of outer makes its
-//! own). The cell is a shared array of one number (shared_arrays.rs, host-held, passed by its handle): `y = e` →
-//! `shared_set(y·cell, 1, e)`, `y += e` → `shared_add(y·cell, 1, e)`, a read of y → `shared_get(y·cell, 1)`
-//! (`shared_setf` … for a float). Variables only read keep the captures of wasm_emitter `refresh_enclosing_captures`.
-//! A text or other value changed by inner is an error until cells hold any value.
+//! `nonlocal y` written by a nested function (cards nonlocal-inner, nonlocal-cells): y lives in a cell outer and its
+//! nested functions share, so inner's change is outer's, and a closure that escapes outer keeps that cell (each call
+//! of outer makes its own). A cell holds any value (wasm_emitter/cells.rs): `y = e` → `cell_set(y·cell, e)`,
+//! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
+//! captures of wasm_emitter `refresh_enclosing_captures`.
 
-use crate::host::{SHARED_FLOAT_WORDS, SHARED_WORDS};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
-use crate::node::{error, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
 
 /// `y·cell`: the variable holding y's cell (no name the parser reads)
 const CELL_SUFFIX: &str = "·cell";
-/// The one element of a cell
-const CELL_INDEX: i64 = 1;
 
-/// The words of a cell of Ints or of floats: new, get, set, add
-struct CellWords {
-	get: &'static str,
-	set: &'static str,
-	add: &'static str,
-}
-
-const INT_CELL: CellWords = CellWords { get: SHARED_WORDS[1], set: SHARED_WORDS[2], add: SHARED_WORDS[3] };
-const FLOAT_CELL: CellWords = CellWords { get: SHARED_FLOAT_WORDS[0], set: SHARED_FLOAT_WORDS[1], add: SHARED_FLOAT_WORDS[2] };
-
-pub fn lower(node: Node) -> Result<Node, Node> {
+pub fn lower(node: Node) -> Node {
 	if let Some((head, op, params, body)) = definition(&node) {
 		let mut body = body.clone();
 		for variable in written_nonlocals(&body) {
-			body = celled(body, &variable, params.contains(&variable))?;
+			body = celled(body, &variable, params.contains(&variable));
 		}
-		return Ok(Node::Key(Box::new(head.clone()), op, Box::new(lower(body)?)));
+		return Node::Key(Box::new(head.clone()), op, Box::new(lower(body)));
 	}
-	Ok(match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)?), op, Box::new(lower(*right)?)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect::<Result<_, _>>()?, bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)?), data },
+	match node {
+		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
-	})
+	}
 }
 
 /// `f(a, b) := body`: its head, operator, parameter names and body
@@ -75,65 +62,25 @@ fn written_nonlocals(body: &Node) -> Vec<String> {
 	written
 }
 
-/// The body with `variable` in a cell, made first (holding the parameter's value for a parameter)
-fn celled(body: Node, variable: &str, is_param: bool) -> Result<Node, Node> {
-	let words = match assigned_kind(&body, variable) {
-		AssignedKind::Float => &FLOAT_CELL,
-		AssignedKind::Number => &INT_CELL,
-		AssignedKind::Other(value) => {
-			let written = crate::normalize::operand_text(&value);
-			return Err(error(&format!("nonlocal {variable} holds {written}: a nested function can change a nonlocal number only, for now")));
-		}
-	};
+/// The body with `variable` in a cell, made first (holding the parameter's value for a parameter, else ø)
+fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 	let cell = Node::Symbol(format!("{variable}{CELL_SUFFIX}"));
-	let mut statements = vec![Node::Key(Box::new(cell.clone()), Op::Assign, Box::new(call(SHARED_WORDS[0], vec![Node::from(CELL_INDEX)])))];
-	if is_param {
-		statements.push(call(words.set, vec![cell.clone(), Node::from(CELL_INDEX), Node::Symbol(variable.to_string())]));
-	}
-	let body = through_cell(body, variable, &cell, words);
-	Ok(match body {
+	let initial = if is_param { Node::Symbol(variable.to_string()) } else { Node::Empty };
+	let made = Node::Key(Box::new(cell.clone()), Op::Assign, Box::new(call(CELL_NEW, vec![initial])));
+	match through_cell(body, variable, &cell) {
 		Node::List(items, bracket @ (Bracket::Curly | Bracket::None), separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List([statements, items].concat(), bracket, separator)
+			Node::List([vec![made], items].concat(), bracket, separator)
 		}
-		single => Node::List([statements, vec![single]].concat(), Bracket::Curly, Separator::Semicolon),
-	})
-}
-
-enum AssignedKind {
-	Number,
-	Float,
-	Other(Node),
-}
-
-/// What the assignments of `variable` give it: a float written anywhere makes a cell of floats
-fn assigned_kind(body: &Node, variable: &str) -> AssignedKind {
-	let mut kind = AssignedKind::Number;
-	body.visit(&mut |node| {
-		let Node::Key(target, op, value) = node else { return };
-		if !matches!(target.drop_meta(), Node::Symbol(name) if name == variable) || !(matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()) {
-			return;
-		}
-		match value.drop_meta() {
-			Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _) => kind = AssignedKind::Other(value.as_ref().clone()),
-			_ if mentions_float(value) && !matches!(kind, AssignedKind::Other(_)) => kind = AssignedKind::Float,
-			_ => {}
-		}
-	});
-	kind
-}
-
-fn mentions_float(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |inner| found |= matches!(inner, Node::Number(crate::extensions::numbers::Number::Float(_))));
-	found
+		single => Node::List(vec![made, single], Bracket::Curly, Separator::Semicolon),
+	}
 }
 
 /// Reads and changes of `variable` through its cell; a nested function where it is a parameter, or its own local
 /// (changed without `nonlocal`), is another variable
-fn through_cell(node: Node, variable: &str, cell: &Node, words: &CellWords) -> Node {
+fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 	let is_variable = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == variable);
-	let index = || Node::from(CELL_INDEX);
-	let get = || call(words.get, vec![cell.clone(), index()]);
+	let get = || call(CELL_GET, vec![cell.clone()]);
+	let set = |value: Node| call(CELL_SET, vec![cell.clone(), value]);
 	if let Some((_, _, params, body)) = definition(&node) {
 		let shadows = params.iter().any(|param| param == variable)
 			|| (!changes_in(body, variable).is_empty() && !declared_nonlocals(body).iter().any(|declared| declared == variable));
@@ -144,22 +91,16 @@ fn through_cell(node: Node, variable: &str, cell: &Node, words: &CellWords) -> N
 	match node {
 		Node::Symbol(ref name) if name == variable => get(),
 		Node::Key(keyword, Op::Colon, names) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL) => Node::Key(keyword, Op::Colon, names),
-		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => {
-			call(words.set, vec![cell.clone(), index(), through_cell(*value, variable, cell, words)])
-		}
-		Node::Key(target, Op::AddAssign, value) if is_variable(&target) => {
-			call(words.add, vec![cell.clone(), index(), through_cell(*value, variable, cell, words)])
-		}
+		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => set(through_cell(*value, variable, cell)),
 		Node::Key(target, op, value) if is_variable(&target) && op.is_compound_assign() => {
-			let changed = Node::Key(Box::new(get()), op.base_op(), Box::new(through_cell(*value, variable, cell, words)));
-			call(words.set, vec![cell.clone(), index(), changed])
+			set(Node::Key(Box::new(get()), op.base_op(), Box::new(through_cell(*value, variable, cell))))
 		}
 		Node::Key(target, op @ (Op::Inc | Op::Dec), _) if is_variable(&target) => {
-			call(words.add, vec![cell.clone(), index(), Node::from(if op == Op::Inc { 1 } else { -1 })])
+			set(Node::Key(Box::new(get()), if op == Op::Inc { Op::Add } else { Op::Sub }, Box::new(Node::from(1))))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(through_cell(*left, variable, cell, words)), op, Box::new(through_cell(*right, variable, cell, words))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| through_cell(item, variable, cell, words)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(through_cell(*node, variable, cell, words)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(through_cell(*left, variable, cell)), op, Box::new(through_cell(*right, variable, cell))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| through_cell(item, variable, cell)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(through_cell(*node, variable, cell)), data },
 		other => other,
 	}
 }
