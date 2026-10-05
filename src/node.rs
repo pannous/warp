@@ -178,8 +178,9 @@ impl Node {
 			),
 			(Meta { node, .. }, n) => node.add(n),
 			(n, Meta { node, .. }) => n.add(*node.clone()),
-			// pending with the user (warp-08): an error, or the list (a b)
-			(a, b) => Error(Box::new(Text(format!("cannot add {} and {}", a.kind(), b.kind())))),
+			// a data operation evaluates nothing: the unevaluated sum a + b (user, P86: lazily allowed; evaluated, both
+			// operands must be addable, which the compiled program checks)
+			(a, b) => Key(Box::new(a.clone()), Op::Add, Box::new(b)),
 		}
 	}
 
