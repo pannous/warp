@@ -2038,7 +2038,15 @@ impl WaspParser {
 		let ch = self.current_char();
 		match ch {
 			'{' => {
-				let block = self.parse_bracketed('{');
+				let mut blocks = vec![self.parse_bracketed('{')];
+				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
+				while self.current_char() == '{' {
+					blocks.push(self.parse_bracketed('{'));
+				}
+				let block = match blocks.len() {
+					1 => blocks.remove(0),
+					_ => Node::List(blocks, Bracket::None, Separator::None),
+				};
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))

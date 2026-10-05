@@ -1403,12 +1403,15 @@ impl PartialEq for Node {
 			}
 			Key(k1, op1, v1) => match other {
 				Key(k2, op2, v2) => k1 == k2 && op1 == op2 && v1 == v2,
+				List(items, _, _) if items.len() == 1 => other == self,
 				_ => false,
 			},
 			List(items1, _, _) => match other {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
 				Meta { node, .. } => self == node.as_ref(), // unwrap Meta
+				// an object of one entry is that entry: {x:1} == x:1 (but {x} is no x)
+				Key(..) => matches!(items1.as_slice(), [only] if only.drop_meta() == other),
 				_ => false,
 			},
 			Type { name: n1, body: b1 } => match other {
