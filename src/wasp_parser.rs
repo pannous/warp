@@ -3261,9 +3261,10 @@ impl WaspParser {
 				if let Some(c) = chars.next() {
 					if chars.next().is_none() {
 						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
-							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); only a single-quoted character converts to its code point");
-							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(format!("'{c}' as {number_type}"))
-								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), format!("ord('{c}')")).into_error();
+							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
+							let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(&explicit)
+								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error();
 						}
 						return Node::codepoint(c);
 					}

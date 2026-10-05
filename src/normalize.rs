@@ -892,7 +892,8 @@ fn check_items(items: &[Node], positioned: &Node) {
                 hints::function_keyword(word, &name, &parameters, body_form);
             }
         }
-        (type_word, [argument]) if crate::analyzer::type_word_kind(&type_word.to_lowercase()).is_some() => {
+        // `codepoint(c)` is a library word (P74), not the type's constructor
+        (type_word, [argument]) if crate::analyzer::type_word_kind(&type_word.to_lowercase()).is_some() && !crate::library_words::is_library_word(type_word) => {
             let is_call = match argument.drop_meta() {
                 // `int g(int x) {…}` defines g, `int(…)` would convert
                 Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [_, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) => false,

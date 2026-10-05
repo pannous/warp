@@ -1565,9 +1565,14 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 }
 
 /// `for 1..4 {…}`: a loop that binds the implicit `it`
-fn is_it_loop(items: &[Node]) -> bool {
-	matches!(items, [keyword, _, body] if matches!(keyword.drop_meta(), Node::Symbol(word) if word == "for")
-		&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
+/// `for 1..4 {…}` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable and body
+fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
+	let (keyword, iterable, body) = match items {
+		[keyword, iterable, body] => (keyword, iterable, body),
+		[keyword, _, in_word, iterable, body] if is_word(in_word, "in") => (keyword, iterable, body),
+		_ => return None,
+	};
+	(is_word(keyword, "for") && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((iterable, body))
 }
 
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
@@ -1575,7 +1580,7 @@ fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => word == "it",
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
-		Node::List(items, _, _) if is_it_loop(items) => uses_it_outside_loops(&items[1]),
+		Node::List(items, _, _) if it_loop(items).is_some() => it_loop(items).is_some_and(|(iterable, _)| uses_it_outside_loops(iterable)),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
 		_ => false,
 	}
@@ -1588,7 +1593,7 @@ const FUNCTION_IT: &str = "outer_it";
 fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
-			if is_it_loop(items) && uses_it(&items[2]) {
+			if it_loop(items).is_some_and(|(_, body)| uses_it(body)) {
 				let renamed = crate::library_words::substitute(node.clone(), "it", &Node::Symbol(FUNCTION_IT.to_string()));
 				let explicit = format!("{FUNCTION_IT}=it; {}", renamed.serialize().trim());
 				warnings.push(Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")

@@ -108,16 +108,22 @@ fn operator_ambiguity_fixes() {
 #[test]
 fn loop_it_fix() {
 	assert_fix("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "function's `it`", "30");
+	assert_fix("f:={s=it; for i in [5 6] {s+=it}; s}; f(10)", "function's `it`", "30"); // #23: `for i in` binds it too
+}
+
+/// The hint about `original` in `code` offers its preferred form, which gives `expected`
+fn assert_hint_fix(code: &str, original: &str, expected: &str) {
+	let (_, hints) = capture_hints(|| eval(code));
+	let hint = hints.iter().find(|hint| hint.original == original).unwrap_or_else(|| panic!("{hints:?}"));
+	let (line, column) = hint.line_and_column();
+	let source = fixed(code, line, column, &hint.fix().expect("a rewrite")).expect("the hint's text is in the source");
+	assert_eq!(eval(&source).serialize(), expected, "{source}");
 }
 
 #[test]
 fn a_hint_offers_its_preferred_form() {
-	let code = "x = 2; y = x ** 3; y";
-	let (_, hints) = capture_hints(|| eval(code));
-	let hint = hints.iter().find(|hint| hint.original == "**").unwrap_or_else(|| panic!("{hints:?}"));
-	let (line, column) = hint.line_and_column();
-	let source = fixed(code, line, column, &hint.fix().expect("a rewrite")).expect("the hint's text is in the source");
-	assert_eq!(eval(&source).serialize(), "8", "{source}");
+	assert_hint_fix("x = 2; y = x ** 3; y", "**", "8");
+	assert_hint_fix("'a' as float", "'a' as float", "97"); // P74: a character is no number, codepoint('a') is
 }
 
 #[test]
@@ -130,4 +136,14 @@ fn the_page_gets_each_fix_as_an_edit() {
 	let warned = warp::web::evaluate("x=0; for i in 1 upto 4 {x+=i}; x", Default::default());
 	assert_eq!(warned["warnings"][0]["topic"], "upto");
 	assert_eq!(warned["warnings"][0]["fixes"][1]["replacement"], "...");
+}
+
+#[test]
+fn codepoint_is_the_preferred_name() {
+	// P74 (user, 2026-10-05): codepoint(c) in hints, fixes and docs; ord and ordinal stay synonyms
+	warp::is!("codepoint('x') as float", 120.0);
+	warp::is!("(codepoint('x') as float) / 8", 15.0);
+	warp::is!("ord('x') + ordinal('x')", 240);
+	let (_, hints) = capture_hints(|| eval("codepoint('x')"));
+	assert!(hints.is_empty(), "codepoint(c) is no type constructor: {hints:?}");
 }
