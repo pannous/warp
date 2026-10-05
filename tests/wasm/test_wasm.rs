@@ -864,9 +864,8 @@ fn test_wasm_runtime_extension() {
 	//	is!("puts 'hello' 'world'", "hello world");
 	//	is!("hello world", "hello world");// unresolved symbol printed as is
 
+	is!("x=123;x + 4 is 127", true);
 	skip!(
-
-		is!("x=123;x + 4 is 127", true);
 		//	is!("'123'='123'", true);// parsed as key a:b !?!? todo!
 		//	is!("'123' = '123'", true);
 	);
@@ -1063,14 +1062,11 @@ fn test_square() {
 	is!("π*1000000.", 3141592.653589793);
 	is!("i=-9;-i", 9);
 	is!("- √9", -3);
-	skip!(
-		// TODO: parser doesn't handle numbers starting with '.'
-		is!(".1 + .9", 1);
-		is!("-.1 + -.9", -1);
-	);
+	is!(".1 + .9", 1);
+	is!("-.1 + -.9", -1);
 	is!("√9", 3);
 	//	is!("√-9 is -3i", -3);// if «use complex numbers»
-	skip!(is!(".1", 0.1));
+	is!(".1", 0.1);
 	{
 		// and !LINUX // todo why
 		skip!(
@@ -1088,10 +1084,7 @@ fn test_round_floor_ceiling() {
 	is!("ceil 3.7", 4);
 	is!("floor 3.7", 3);
 	is!("round 3.7", 4);
-	skip!(
-		// TODO: parser doesn't handle numbers starting with '.'
-		is!("i=3.7;.3+i", 4);
-	);
+	is!("i=3.7;.3+i", 4);
 	// lol "⌊3.7⌋" is cursed and is transformed into \n\t or something in wasm and IDE!
 	//	is!("⌊3.7", 3);// floor
 	//	is!("⌊3.7⌋", 3);// floor
