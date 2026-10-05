@@ -1415,7 +1415,7 @@ impl WaspParser {
 		self.advance_by(word_length);
 		self.skip_spaces();
 		let outer = std::mem::replace(&mut self.stops_at_else, true);
-		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_expr(0));
+		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
 		self.stops_at_else = outer;
 		self.skip_spaces();
 		let fallback = if self.matches_keyword("else") {
@@ -1428,6 +1428,24 @@ impl WaspParser {
 			Empty
 		};
 		Node::List(vec![Symbol(marker.to_string()), guarded, fallback], Bracket::Round, Separator::None)
+	}
+
+	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
+	fn parse_guarded_phrase(&mut self) -> Node {
+		let mut items = vec![self.parse_expr(0)];
+		loop {
+			self.skip_spaces();
+			if self.matches_keyword("else") || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+				break;
+			}
+			let position = self.pos;
+			let item = self.parse_expr(0);
+			if self.pos == position {
+				break;
+			}
+			items.push(item);
+		}
+		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)

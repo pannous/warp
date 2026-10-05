@@ -129,4 +129,4 @@ The supervisor should remove the DONE elements after a while.
 - An unknown word applied to a value is silent data: `cube 3` and `square [1 2]` print ` cube 3 ` (the spaced list of symbol and number), while `cube(3)` is "undefined function: cube". A prefix application of an undefined word in code position should be the same loud error. (worker dispatch, 2026-10-05)
 - `∞` (also `\:infinity`) is "Unexpected character '∞'": no infinity value yet; f64 infinity or an exact ∞ (hyperreals row 36)? (fixer 2026-10-05)
 - DONE: `count 'a' in "banana"` → 1, silently wrong (3 expected; probably answers "contains"). (fixer 2026-10-05, notes/wiki_features.md row 10) (count x in y counts items, characters or substrings: library_words::lower_count_in; fixer 2026-10-05)
-- `try raise "boom" else 3` → "`try` needs an `else`": misleading, `raise` is the unknown word. (fixer 2026-10-05)
+- DONE: `try raise "boom" else 3` → "`try` needs an `else`": misleading, `raise` is the unknown word. (fixer 2026-10-05) (the guarded part may be a braceless call, wasp_parser parse_guarded_phrase; `raise` itself stays silent data like any unknown word; fixer 2026-10-05)

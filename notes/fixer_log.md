@@ -102,3 +102,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 fix-count-in
 - `count x in y` counts occurrences (items of a list, characters of a text, substrings of a text) instead of being
   read as count(x in y) = 1; `count bytes in t` is t.bytes. Own pass before the lambdas (library_words::lower_count_in).
+
+## 2026-10-05 fix-try-raise
+- `try f x else y`: the guarded part may be a braceless call (was "`try` needs an `else`" after the first word)
+  (tests/control/test_try_braceless_call.rs).

@@ -48,3 +48,4 @@ mod test_shared_arrays;
 mod test_braceless_output_calls;
 mod test_try_division;
 mod test_try_list_index;
+mod test_try_braceless_call;
