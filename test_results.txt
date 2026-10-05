@@ -430,6 +430,9 @@ PASSED:
   ✓ functions::test_free_var_if_arms::ternary_capped_sum
   ✓ functions::test_free_var_if_arms::then_arm_only_free_var_sum
   ✓ functions::test_function_keyword::function_defines_like_def
+  ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
+  ✓ functions::test_function_references::test_a_body_returns_a_function_reference
+  ✓ functions::test_function_references::test_a_function_reference_as_a_value_and_an_argument
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
   ✓ functions::test_function_values::test_a_lambda_that_captures_nothing_is_a_value
@@ -2219,4 +2222,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-35 ignored, 2214 passed, 0 failed, 2214 total tested
+35 ignored, 2217 passed, 0 failed, 2217 total tested
