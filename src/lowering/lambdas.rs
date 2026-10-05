@@ -273,11 +273,21 @@ impl Lowering {
 		(arguments.len() == iteration.extra_arguments + 1).then(|| (iteration, arguments.to_vec()))
 	}
 
-	/// `{x*x}(x=5)`: an anonymous function called with its bindings
+	/// `{x*x}(x=5)`: an anonymous function called with its bindings; `{it*2} 3` and `{it^2}[1 2 3]`: with its argument,
+	/// which a list broadcasts over like for a named function (broadcasting.rs)
 	fn immediate_call(&self, items: &[Node]) -> Option<Node> {
 		let [block, arguments] = items else { return None };
 		let lambda = block_lambda(block).or_else(|| arrow_lambda(block))?;
-		let Node::List(entries, Bracket::Round, _) = arguments.drop_meta() else { return None };
+		let is_function = |node: &Node| block_lambda(node).or_else(|| arrow_lambda(node)).is_some_and(|lambda| !lambda.params.is_empty());
+		let juxtaposed;
+		let entries = match arguments.drop_meta() {
+			Node::List(entries, Bracket::Round, _) => entries,
+			argument if !lambda.params.is_empty() && !is_function(argument) => {
+				juxtaposed = vec![argument.clone()];
+				&juxtaposed
+			}
+			_ => return None,
+		};
 		let bindings: Vec<(String, Node)> = entries
 			.iter()
 			.filter_map(|entry| match entry.drop_meta() {
@@ -295,7 +305,7 @@ impl Lowering {
 		};
 		let name = self.fresh("lambda");
 		let defined = definition(&name, Lambda::new(params, lambda.body));
-		Some(Node::List(vec![defined, call(&name, values)], Bracket::Round, Separator::Semicolon))
+		Some(crate::broadcasting::lower(Node::List(vec![defined, call(&name, values)], Bracket::Round, Separator::Semicolon)))
 	}
 
 	/// `map xs f`, `map(xs, f)`, `fold xs 0 f`, and `xs.map {it*it}` (the method word, then the arguments as the next items)
