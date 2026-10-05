@@ -27,3 +27,4 @@ mod test_item_list_cast_hint;
 mod test_adopted_acknowledgements;
 mod test_error_positions;
 mod test_fixits;
+mod test_braceless_call_argument;
