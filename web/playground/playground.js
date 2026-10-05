@@ -124,9 +124,10 @@ function diagnostic(kind, position, ...content) {
 
 const code = text => element("code", {}, text);
 
-// replace the UTF-16 range start..end of the editor's text (src/web.rs fixes_json) and run the changed code
+// apply a fix's edits to the editor's text (UTF-16 ranges, src/web.rs fixes_json) and run the changed code
 function applyFix(fix) {
-	editor.replaceRange(fix.replacement, editor.posFromIndex(fix.start), editor.posFromIndex(fix.end));
+	// every edit of the fix, the last in the text first, so the earlier offsets stay valid
+	for (const edit of fix.edits) editor.replaceRange(edit.replacement, editor.posFromIndex(edit.start), editor.posFromIndex(edit.end));
 	clearTimeout(typingTimer);
 	runNow();
 }

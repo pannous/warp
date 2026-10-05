@@ -79,15 +79,20 @@ fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
 	})
 }
 
-/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`.
-/// A fix whose text the source does not show has `start` and `end` null: the page shows it, but cannot apply it
+/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`,
+/// then each of its further `edits` (the last in the text first). A fix whose text the source does not show has
+/// `start` and `end` null: the page shows it, but cannot apply it
 fn fixes_json(code: &str, line: usize, column: usize, fixes: &[Fix]) -> Vec<Value> {
 	fixes.iter().filter(|fix| fix.changes_something()).map(|fix| {
-		let range = fixits::edit(code, line, column, fix).map(|edit| edit.range);
+		let edits = fixits::edits(code, line, column, fix);
+		let range = edits.as_ref().and_then(|_| fixits::edit(code, line, column, fix)).map(|edit| edit.range);
 		let offset = |at: fn(&std::ops::Range<usize>) -> usize| range.as_ref().map(|range| fixits::utf16_offset(code, at(range)));
+		let edits: Vec<Value> = edits.unwrap_or_default().iter().map(|edit| json!({
+			"start": fixits::utf16_offset(code, edit.range.start), "end": fixits::utf16_offset(code, edit.range.end), "replacement": edit.replacement,
+		})).collect();
 		json!({
 			"label": fix.label(), "meaning": fix.meaning, "written": fix.written, "replacement": fix.replacement,
-			"start": offset(|range| range.start), "end": offset(|range| range.end),
+			"start": offset(|range| range.start), "end": offset(|range| range.end), "edits": edits,
 		})
 	}).collect()
 }

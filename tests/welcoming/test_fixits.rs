@@ -163,3 +163,33 @@ fn the_page_says_got_it_for_one_expression() {
 	assert!(warnings[0]["message"].as_str().unwrap().contains("upto 3"), "{silenced}");
 	assert_eq!(silenced["value"], report["value"]);
 }
+
+// "No fix yet" (notes/fixits.md, card g-qU1o): a kebab data key whose parts are variables (user, P81) and the filter loops
+
+#[test]
+fn kebab_key_fixes() {
+	assert_fix("a=5; b=1; a-b:2", "the data key a-b", "a-b:2");
+	assert_fix("a=5; b=1; x={a-b:2}; x.a-b", "the data key a-b", "2"); // the member read already means the key
+	assert_fix("a=5; b=1; a-b:2; a-b", "the subtraction", "4");
+	assert_fix("a=5; b=1; a-b:2; a-b", "renamed a_b", "2");
+	assert_fix("a=5; b=1; a-b:2; a-b + a-b", "renamed a_b", "4");
+}
+
+#[test]
+fn filter_loop_fixes() {
+	assert_fix("xs=[1,\"a\",2]; s=0; for int in xs: s += it\ns", "filter the items", "3");
+	assert_fix("xs=[1,5,3]; s=0; for (it>2) in xs: s += it\ns", "filter the items", "8");
+	assert_fix("type Friend {name}; xs=[Friend{name:\"a\"}, 3]; n=0; for Friend in xs: n += 1\nn", "filter the items", "1");
+}
+
+#[test]
+fn the_page_gets_every_edit_of_a_fix() {
+	let code = "a=5; b=1; a-b:2; a-b";
+	let report = warp::web::evaluate(code, Default::default());
+	let renamed = report["warnings"][0]["fixes"].as_array().unwrap_or_else(|| panic!("{report}")).iter()
+		.find(|fix| fix["meaning"].as_str().unwrap_or_default().contains("renamed")).unwrap_or_else(|| panic!("{report}"));
+	let edits = renamed["edits"].as_array().unwrap();
+	assert_eq!(edits.len(), 2, "{renamed}");
+	// the last in the text first: the read at the end, then the key
+	assert_eq!((edits[0]["start"].as_u64(), edits[1]["start"].as_u64()), (Some(code.len() as u64 - 3), Some(10)));
+}
