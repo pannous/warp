@@ -803,7 +803,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 					"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"))
 					.fix(format!("global {name}")).into_error());
 			}
-			if ask_local_or_global(node, name, &function.name)? == MAIN_LEVEL_READING && !meant_global.contains(name) {
+			if ask_local_or_global(node, name, &function.name, main_assignment(&program, name))? == MAIN_LEVEL_READING && !meant_global.contains(name) {
 				meant_global.push(name.clone());
 			}
 		}
@@ -848,14 +848,29 @@ const LOCAL_OR_GLOBAL: &str = "local-or-global";
 const LOCAL_KEYWORDS: [&str; 2] = ["let", "var"];
 const MAIN_LEVEL_READING: usize = 1;
 
-/// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n?
-fn ask_local_or_global(assignment: &Node, name: &str, function: &str) -> Result<usize, Node> {
+/// The main-level statement that first assigns `name`: `n=0` of `n=0; def f(x){n=5;x}`
+fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a Node> {
+	let statements = match program.drop_meta() {
+		Node::List(items, _, _) => items.as_slice(),
+		_ => std::slice::from_ref(program),
+	};
+	statements.iter().find(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name)))
+}
+
+/// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n? The fix of main's n
+/// declares it where main assigns it: `global n=0`
+fn ask_local_or_global(assignment: &Node, name: &str, function: &str, main_assignment: Option<&Node>) -> Result<usize, Node> {
 	use crate::diagnostic::{ask, reading, Ask, Fallback};
 	let question = format!("does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}?");
-	let readings = vec![
-		reading(&format!("a new local of {function}"), &format!("let {name} = …")),
-		reading(&format!("the main-level {name}"), &format!("global {name}")),
-	];
+	let main_level = reading(&format!("the main-level {name}"), &format!("global {name}"));
+	let main_level = match main_assignment.and_then(crate::diagnostic::position) {
+		Some((line, column)) => {
+			let fix = crate::fixits::fix(&main_level.meaning, format!("{name} ="), format!("global {name} ="));
+			main_level.fixed_by(fix.at(line, column))
+		}
+		None => main_level.replacing("", ""), // no main-level assignment to declare: no edit
+	};
+	let readings = vec![reading(&format!("a new local of {function}"), &format!("let {name} = …")).replacing(format!("{name} ="), format!("let {name} =")), main_level];
 	ask(&Ask::new(LOCAL_OR_GLOBAL, question, readings, Fallback::Warning).written(&format!("{name} = …")).at_node(assignment))
 }
 
@@ -1568,13 +1583,19 @@ fn uses_it_outside_loops(node: &Node) -> bool {
 	}
 }
 
+/// The name the fix of a hidden `it` gives the function's `it`, so the loop can read it
+const FUNCTION_IT: &str = "outer_it";
+
 /// The loops in a function with an implicit `it` whose own `it` hides the function's (user decision #23: kept, warned)
 fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if is_it_loop(items) && uses_it(&items[2]) {
+				let renamed = crate::library_words::substitute(node.clone(), "it", &Node::Symbol(FUNCTION_IT.to_string()));
+				let explicit = format!("{FUNCTION_IT}=it; {}", renamed.serialize().trim());
 				warnings.push(Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")
-					.fix(format!("for i in {} {{…}}", crate::normalize::operand_text(&items[1]))));
+					.fix(format!("name the function's it before the loop: {FUNCTION_IT}=it; for … {{… {FUNCTION_IT} …}}"))
+					.offer("the function's `it` inside the loop", node.serialize().trim(), explicit));
 			}
 		}
 	});
@@ -1585,14 +1606,22 @@ fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 		Node::Key(left, op, right) => {
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
 				let (condition, then, otherwise) = (condition.serialize(), then.serialize(), right.serialize());
+				let explicit = format!("if {condition} then {then} else {otherwise}");
 				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
-					.fix(format!("if {condition} then {then} else {otherwise}")));
+					.fix(&explicit).offer(format!("{then} whenever {condition} holds"), format!("{condition} and {then} or {otherwise}"), explicit));
 			}
 			if *op == Op::As && is_arithmetic(left) {
-				warnings.push(Diagnostic::at(node, conversion_of_arithmetic_warning(left, right)).fix(conversion_readings(left, right)));
+				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
+				let written = format!("{} as {}", left.serialize(), right.serialize());
+				let readings = conversion_readings(left, right);
+				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
+				let diagnostic = diagnostic.fix(forms.join(" or "));
+				warnings.push(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
-				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right)));
+				let (a, b) = (left.serialize(), right.serialize());
+				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right))
+					.offer("the truncated remainder of C/Java/JS", format!("{} % {}", a.trim(), b.trim()), format!("{} rem {}", a.trim(), b.trim())));
 			}
 			lint_into(left, warnings);
 			lint_into(right, warnings);
@@ -1727,19 +1756,18 @@ fn conversion_of_arithmetic_warning(left: &Node, right: &Node) -> String {
 	format!("`{} as {}` converts the whole `{}`, not only its last operand", left.serialize(), right.serialize(), left.serialize())
 }
 
-/// Both readings of `a * b as T`: the whole expression, or the nearest operand
-fn conversion_readings(left: &Node, right: &Node) -> String {
+/// Both readings of `a * b as T` with their explicit forms: the whole expression, or the nearest operand
+fn conversion_readings(left: &Node, right: &Node) -> Vec<(String, String)> {
 	let (whole, target) = (left.serialize(), right.serialize());
-	match left {
-		Node::Key(first, op, last) => {
-			let tight = match last.drop_meta() {
-				Node::Number(_) => format!("{}:{target}", last.serialize()),
-				_ => format!("({} as {target})", last.serialize()),
-			};
-			format!("({whole}) as {target} or {} {} {tight}", first.serialize(), op.as_str())
-		}
-		_ => format!("({whole}) as {target}"),
+	let mut readings = vec![(format!("convert the whole {whole}"), format!("({whole}) as {target}"))];
+	if let Node::Key(first, op, last) = left {
+		let tight = match last.drop_meta() {
+			Node::Number(_) => format!("{}:{target}", last.serialize()),
+			_ => format!("({} as {target})", last.serialize()),
+		};
+		readings.push((format!("convert only {}", last.serialize()), format!("{} {} {tight}", first.serialize(), op.as_str())));
 	}
+	readings
 }
 
 /// A negative literal or a negation: `-7`, `-x`, `(-7)`
@@ -1805,8 +1833,11 @@ fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 			if op.is_arithmetic() && holds_call(argument) {
 				let whole = format!("{head}({})", explicit(argument));
 				let first = format!("{head}({}) {} {}", explicit(left), op.as_str(), explicit(right));
-				return Some(Diagnostic::at(node, format!("ambiguous braceless call: {head} {}", argument.drop_meta().serialize()))
-					.fix(format!("{first} or {whole}")));
+				let written = format!("{head} {}", argument.drop_meta().serialize());
+				return Some(Diagnostic::at(node, format!("ambiguous braceless call: {written}"))
+					.fix(format!("{first} or {whole}"))
+					.offer(format!("{head} of {} only", left.serialize()), &written, &first)
+					.offer(format!("{head} of the whole {}", argument.drop_meta().serialize()), &written, &whole));
 			}
 		}
 	}
@@ -1831,8 +1862,9 @@ fn check_boolean_arithmetic(node: &Node) -> Option<Diagnostic> {
 		Node::Key(left, op, right) if op.is_arithmetic() && (is_boolean(left) || is_boolean(right)) => {
 			let expression = node.drop_meta().serialize();
 			let converted = |operand: &Node| if is_boolean(operand) { format!("int({})", operand.serialize()) } else { operand.serialize() };
-			Some(Diagnostic::at(node, format!("arithmetic on a boolean: {expression}"))
-				.fix(format!("{} {} {}", converted(left), op.as_str(), converted(right))))
+			let explicit = format!("{} {} {}", converted(left), op.as_str(), converted(right));
+			Some(Diagnostic::at(node, format!("arithmetic on a boolean: {expression}")).fix(&explicit)
+				.offer("count true as 1 and false as 0", expression.as_str(), explicit))
 		}
 		Node::Key(left, _, right) => check_boolean_arithmetic(left).or_else(|| check_boolean_arithmetic(right)),
 		Node::List(items, _, _) => items.iter().find_map(check_boolean_arithmetic),

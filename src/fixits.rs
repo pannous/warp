@@ -1,0 +1,133 @@
+//! Machine-applicable fixes (notes/fixits.md): a warning or an ambiguity error offers each reading the user might have
+//! meant as a `Fix` (the text as written, its replacement), and a host turns it into an `Edit` of the source (byte
+//! range + replacement): the playground's "I meant: …" buttons (src/web.rs), later `warp fix` and IDE quick fixes.
+//! A replacement is an explicit form, which never warns, so applying a fix also ends its warning.
+
+use std::ops::Range;
+
+/// One reading the user might have meant: replace the text `written` (near the diagnostic's position) with `replacement`
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Fix {
+	pub meaning: String,
+	pub written: String,
+	pub replacement: String,
+	/// Where `written` stands when that is not at the diagnostic (`n=0` of main for `global n=0`, asked in a function)
+	pub at: Option<(usize, usize)>,
+}
+
+pub fn fix(meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Fix {
+	Fix { meaning: meaning.into(), written: written.into(), replacement: replacement.into(), at: None }
+}
+
+impl Fix {
+	/// The button text: "I meant: square(3) + square(4)"
+	pub fn label(&self) -> String {
+		format!("I meant: {}", self.replacement)
+	}
+
+	pub fn at(self, line: usize, column: usize) -> Self {
+		Fix { at: Some((line, column)), ..self }
+	}
+
+	/// A fix that changes nothing (the reading already written) is no fix; spacing counts: `1 -1` → `1 - 1`
+	pub fn changes_something(&self) -> bool {
+		!self.written.is_empty() && self.written.trim() != self.replacement.trim()
+	}
+}
+
+/// A change of the source: replace the bytes `range` with `replacement`
+#[derive(Clone, Debug, PartialEq)]
+pub struct Edit {
+	pub range: Range<usize>,
+	pub replacement: String,
+}
+
+/// Spacing and list commas: the compiler shows `written` serialized (`[1 2] + 3`), the source may say `[1,2]+3`
+fn is_insignificant(c: char) -> bool {
+	c.is_whitespace() || c == ','
+}
+
+fn without_insignificant(text: &str) -> String {
+	text.chars().filter(|c| !is_insignificant(*c)).collect()
+}
+
+fn is_word_char(c: char) -> bool {
+	c.is_alphanumeric() || c == '_'
+}
+
+/// The byte end of `wanted` matched at `start`, ignoring insignificant characters on both sides; `None` when it does not match
+fn match_at(source: &str, start: usize, wanted: &[char]) -> Option<usize> {
+	let mut rest = wanted.iter().peekable();
+	let mut end = start;
+	for (offset, c) in source[start..].char_indices() {
+		let Some(&&next) = rest.peek() else { break };
+		if is_insignificant(c) {
+			continue;
+		}
+		if c != next {
+			return None;
+		}
+		rest.next();
+		end = start + offset + c.len_utf8();
+	}
+	rest.peek().is_none().then_some(end)
+}
+
+/// Does the match stand as whole words: `n =` must not match inside `fn =`
+fn on_word_boundaries(source: &str, range: &Range<usize>) -> bool {
+	let first_inside = source[range.clone()].chars().next();
+	let last_inside = source[range.clone()].chars().next_back();
+	let before = source[..range.start].chars().next_back();
+	let after = source[range.end..].chars().next();
+	let glued = |inside: Option<char>, outside: Option<char>| inside.is_some_and(is_word_char) && outside.is_some_and(is_word_char);
+	!glued(first_inside, before) && !glued(last_inside, after)
+}
+
+/// The 1-based line and column of a byte offset
+pub fn line_and_column(source: &str, offset: usize) -> (usize, usize) {
+	let before = &source[..offset];
+	let line = before.matches('\n').count() + 1;
+	let column = before.rsplit('\n').next().unwrap_or_default().chars().count() + 1;
+	(line, column)
+}
+
+/// Where `written` stands in `source`: of all its places, the one nearest to the diagnostic's `line`:`column`
+/// (0:0, no position: the first one)
+pub fn locate(source: &str, line: usize, column: usize, written: &str) -> Option<Range<usize>> {
+	let wanted: Vec<char> = without_insignificant(written).chars().collect();
+	if wanted.is_empty() {
+		return None;
+	}
+	let distance = |range: &Range<usize>| {
+		let (at_line, at_column) = line_and_column(source, range.start);
+		(at_line.abs_diff(line), at_column.abs_diff(column))
+	};
+	source.char_indices()
+		.filter(|(_, c)| *c == wanted[0])
+		.filter_map(|(start, _)| match_at(source, start, &wanted).map(|end| start..end))
+		.filter(|range| on_word_boundaries(source, range))
+		.min_by_key(|range| if line == 0 { (0, range.start) } else { distance(range) })
+}
+
+/// The edit that applies `fix` to `source` for a diagnostic at `line`:`column`, `None` when its text is not there
+pub fn edit(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Edit> {
+	let (line, column) = fix.at.unwrap_or((line, column));
+	locate(source, line, column, &fix.written).map(|range| Edit { range, replacement: fix.replacement.clone() })
+}
+
+/// The source with `fix` of the diagnostic at `line`:`column` applied, `None` when its text is not there
+/// (a later `warp fix` and IDE quick fixes start here)
+pub fn fixed(source: &str, line: usize, column: usize, fix: &Fix) -> Option<String> {
+	edit(source, line, column, fix).map(|edit| apply(source, &edit))
+}
+
+pub fn apply(source: &str, edit: &Edit) -> String {
+	let mut changed = source.to_string();
+	changed.replace_range(edit.range.clone(), &edit.replacement);
+	changed
+}
+
+/// The offset in UTF-16 code units (JavaScript strings, LSP positions) of a byte offset
+pub fn utf16_offset(source: &str, offset: usize) -> usize {
+	source[..offset].encode_utf16().count()
+}

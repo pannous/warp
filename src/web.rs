@@ -5,6 +5,7 @@
 
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
+use crate::fixits::{self, Fix};
 use crate::meta::{Dada, DataType};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -34,29 +35,67 @@ impl Acknowledger for PageAcknowledger {
 }
 
 /// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
-/// `value` (what the CLI prints), `error`, `warnings`, `hints`, `notes` (topics of the warnings and notes shown that
-/// the user can say "got it" to) and `runtime_warnings`. Acknowledging silences a warning, never changes the value.
+/// `value` (what the CLI prints), `error`, `errors` (the failed program's errors with fixes), `warnings`, `hints`,
+/// `notes` (topics of the warnings and notes shown that the user can say "got it" to) and `runtime_warnings`. Warnings,
+/// errors and hints carry `fixes` ("I meant: …" buttons, fixes_json). Acknowledging silences a warning, never changes the value.
 pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
 	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
 	diagnostic::take_warnings();
+	diagnostic::take_error_diagnostics();
 	diagnostic::take_runtime_warnings();
 	let (result, hints) = diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| crate::wasm_emitter::eval(code)));
-	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| json!({
-		"message": warning.message, "line": warning.line, "column": warning.column, "fix": warning.fix,
-	})).collect();
-	let hints: Vec<Value> = hints.iter().map(|hint| json!({
-		"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
-	})).collect();
+	let warnings: Vec<Value> = diagnostic::take_warnings().iter().map(|warning| diagnostic_json(code, warning)).collect();
+	let is_error = matches!(result.drop_meta(), Node::Error(_));
+	let errors: Vec<Value> = unique(diagnostic::take_error_diagnostics()).iter().filter(|_| is_error).map(|error| diagnostic_json(code, error)).collect();
+	let hints: Vec<Value> = hints.iter().map(|hint| {
+		let (line, column) = hint.line_and_column();
+		json!({
+			"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
+			"fixes": fixes_json(code, line, column, &[hint.fix()]),
+		})
+	}).collect();
 	json!({
 		"value": result.serialize(),
-		"error": matches!(result.drop_meta(), Node::Error(_)),
+		"error": is_error,
+		"errors": errors,
 		"warnings": warnings,
 		"runtime_warnings": diagnostic::take_runtime_warnings(),
 		"hints": hints,
 		"asks": [], // no Asks any more (every ambiguity is a warning or an error); kept until the page stops reading it
 		"notes": *notes.borrow(),
 	})
+}
+
+/// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
+fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
+	json!({
+		"message": diagnostic.message, "line": diagnostic.line, "column": diagnostic.column, "fix": diagnostic.fix,
+		"topic": diagnostic.topic, "fixes": fixes_json(code, diagnostic.line, diagnostic.column, &diagnostic.fixes),
+	})
+}
+
+/// Each fix as the page applies it: replace the UTF-16 range `start`..`end` of the editor's text with `replacement`.
+/// A fix whose text the source does not show has `start` and `end` null: the page shows it, but cannot apply it
+fn fixes_json(code: &str, line: usize, column: usize, fixes: &[Fix]) -> Vec<Value> {
+	fixes.iter().filter(|fix| fix.changes_something()).map(|fix| {
+		let range = fixits::edit(code, line, column, fix).map(|edit| edit.range);
+		let offset = |at: fn(&std::ops::Range<usize>) -> usize| range.as_ref().map(|range| fixits::utf16_offset(code, at(range)));
+		json!({
+			"label": fix.label(), "meaning": fix.meaning, "written": fix.written, "replacement": fix.replacement,
+			"start": offset(|range| range.start), "end": offset(|range| range.end),
+		})
+	}).collect()
+}
+
+/// Lowering may build the same error twice: each one once
+fn unique(diagnostics: Vec<diagnostic::Diagnostic>) -> Vec<diagnostic::Diagnostic> {
+	let mut seen = Vec::new();
+	diagnostics.into_iter().filter(|diagnostic| {
+		let new = !seen.contains(diagnostic);
+		seen.push(diagnostic.clone());
+		new
+	}).collect()
 }
 
 /// The topics the page acknowledged: a JSON array of topics, or the older object whose `ack:<topic>` keys are the

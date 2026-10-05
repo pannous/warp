@@ -52,6 +52,20 @@ pub struct CapturedHint {
     pub reason: String,
 }
 
+impl CapturedHint {
+    /// The preferred form as an applicable fix of the original
+    pub fn fix(&self) -> crate::fixits::Fix {
+        crate::fixits::fix(&self.reason, &self.original, &self.canonical)
+    }
+
+    /// The line and column of `position` (`file:line:column` or `line:column`), 0:0 for none
+    pub fn line_and_column(&self) -> (usize, usize) {
+        let mut parts = self.position.rsplit(':').map(|part| part.parse().unwrap_or(0));
+        let column = parts.next().unwrap_or(0);
+        (parts.next().unwrap_or(0), column)
+    }
+}
+
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
 pub fn capture_hints<T>(action: impl FnOnce() -> T) -> (T, Vec<CapturedHint>) {
     CAPTURED_HINTS.with(|captured| *captured.borrow_mut() = Some(Vec::new()));
