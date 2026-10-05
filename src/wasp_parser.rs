@@ -222,6 +222,16 @@ impl SpecialInfix {
 	}
 }
 
+/// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
+/// names the item by the type word (then the body would change too)
+fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(String, String)> {
+	if mentions(body, name) {
+		return None;
+	}
+	let collection = crate::normalize::operand_text(iterable);
+	Some((format!("for {name} in {collection}"), format!("for x in {collection}.filter(x => x is {name})")))
+}
+
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
 }
@@ -2728,8 +2738,9 @@ impl WaspParser {
 			Symbol(name) if self.declared_types.contains(name) => {
 				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
 				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
 					Ok(body) => (it, body),
 					Err(error) => return Some(error),
 				}
@@ -2738,7 +2749,8 @@ impl WaspParser {
 			// all are of the type needs no filter
 			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
 				let test = self.type_test(&variable, name).expect("a type word");
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+				let header = type_filter_header(name, &iterable, &body);
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
 					Ok(body) => (variable, body),
 					Err(error) => return Some(error),
 				}
@@ -2802,7 +2814,9 @@ impl WaspParser {
 			None => self.parse_atom(),
 		};
 		let shown = crate::normalize::operand_text(&condition);
-		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), condition, body) {
+		let collection = crate::normalize::operand_text(&iterable);
+		let header = (format!("for ({shown}) in {collection}"), format!("for it in {collection}.filter(it => {shown})"));
+		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), Some(header), condition, body) {
 			Ok(body) => body,
 			Err(error) => return Some(error),
 		};
@@ -2842,10 +2856,16 @@ impl WaspParser {
 		Some(Node::List(vec![Symbol(test.to_string()), value.clone(), Node::Text(type_name.to_string())], Bracket::Round, Separator::None))
 	}
 
-	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46)
-	fn filtered_body(&self, written: &str, explicit: &str, test: Node, body: Node) -> Result<Node, Node> {
+	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46).
+	/// `header` is the loop's header as written and its explicit form, the fix ("I meant: …"); None when the body
+	/// needs the edit too
+	fn filtered_body(&self, written: &str, explicit: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
 		let question = format!("`{written}` visits only the items that pass its filter");
-		let readings = vec![reading("filter the items", explicit)];
+		let filter = reading("filter the items", explicit);
+		let readings = vec![match header {
+			Some((written, replacement)) => filter.replacing(written, replacement),
+			None => filter,
+		}];
 		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
 		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
 		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
