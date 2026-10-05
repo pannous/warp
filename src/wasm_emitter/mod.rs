@@ -20,6 +20,7 @@ mod text_unicode;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
+pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
 pub(crate) use loop_control::mark_step;
 pub(crate) mod text_builtins;

@@ -2031,22 +2031,67 @@ pub fn lower_declarations(node: Node) -> Node {
 /// `arr·list = arr`, which the emitter holds as an array (list_dispatch.rs `$NodeList`): one conversion per call
 /// instead of a walk per index
 pub fn indexed_parameter_copies(node: Node) -> Node {
+	let maps = map_parameters(&node);
+	parameter_copies(node, &maps)
+}
+
+fn parameter_copies(node: Node, maps: &HashSet<(String, usize)>) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
-			let mut body = indexed_parameter_copies(*body);
+			let function = items[0].name();
+			let mut body = parameter_copies(*body, maps);
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
-			for parameter in items[1..].iter().filter_map(parameter_symbol) {
+			for (index, parameter) in items[1..].iter().enumerate().filter_map(|(index, parameter)| Some((index, parameter_symbol(parameter)?))) {
 				if indexes(&body, &parameter) && !assigned_from_call_in_loop(&body, &parameter) {
-					body = with_list_copy(body, &parameter);
+					body = with_copy(body, &parameter, LIST_COPY_SUFFIX);
+				} else if maps.contains(&(function.clone(), index)) && keys(&body, &parameter) && !assigns(&body, &parameter) {
+					body = with_copy(body, &parameter, crate::wasm_emitter::MAP_COPY_SUFFIX); // a hash table (map_backend.rs)
 				}
 			}
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(indexed_parameter_copies(*left)), op, Box::new(indexed_parameter_copies(*right))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(indexed_parameter_copies).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(indexed_parameter_copies(*node)), data },
+		Node::Key(left, op, right) => Node::Key(Box::new(parameter_copies(*left, maps)), op, Box::new(parameter_copies(*right, maps))),
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| parameter_copies(item, maps)).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(parameter_copies(*node, maps)), data },
 		other => other,
+	}
+}
+
+/// The parameters every call passes a map: a map literal of name keys, or a variable only ever assigned one. Only those
+/// may become hash tables; a list or an instance given there keeps the generic way
+fn map_parameters(program: &Node) -> HashSet<(String, usize)> {
+	let is_map_literal = |value: &Node| matches!(value.drop_meta(), Node::List(items, Bracket::Curly, _) if items.iter().all(|item|
+		matches!(item.drop_meta(), Node::Key(key, Op::Colon, _) if matches!(key.drop_meta(), Node::Symbol(key) | Node::Text(key) if !key.starts_with(crate::node::ATTRIBUTE_MARK)))));
+	let mut assigned: HashMap<String, bool> = HashMap::new();
+	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+		if let Node::Symbol(name) = target.drop_meta() {
+			*assigned.entry(name.clone()).or_insert(true) &= is_map_literal(value);
+		}
+	});
+	let is_map = |argument: &Node| is_map_literal(argument) || matches!(argument.drop_meta(), Node::Symbol(name) if assigned.get(name) == Some(&true));
+	let mut passed: HashMap<(String, usize), bool> = HashMap::new();
+	calls_outside_heads(program, &mut |items| for (function, arguments) in called_functions(items) {
+		for (index, argument) in arguments.into_iter().enumerate() {
+			*passed.entry((function.clone(), index)).or_insert(true) &= is_map(argument);
+		}
+	});
+	passed.into_iter().filter(|(_, maps)| *maps).map(|(position, _)| position).collect()
+}
+
+/// Every list of the program but a definition's head `(f a b) := …`, which names parameters and calls nothing
+fn calls_outside_heads<'a>(node: &'a Node, action: &mut dyn FnMut(&'a [Node])) {
+	match node.drop_meta() {
+		Node::Key(head, Op::Define | Op::Assign, body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => calls_outside_heads(body, action),
+		Node::Key(left, _, right) => {
+			calls_outside_heads(left, action);
+			calls_outside_heads(right, action);
+		}
+		Node::List(items, _, _) => {
+			action(items);
+			items.iter().for_each(|item| calls_outside_heads(item, action));
+		}
+		_ => {}
 	}
 }
 
@@ -2072,8 +2117,7 @@ fn indexes(body: &Node, name: &str) -> bool {
 	loops.into_iter().for_each(|body| body.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		let by_key = matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Text(_) | Node::Char(_));
-		found |= !by_key && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= !is_text_key(index) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	}));
 	found
 }
@@ -2090,9 +2134,53 @@ fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	found
 }
 
-/// `name·list = name` first, then the body with every `name` read as the copy
-fn with_list_copy(body: Node, name: &str) -> Node {
-	let copy = format!("{name}{LIST_COPY_SUFFIX}");
+/// Does the body set an entry of the map variable (`m[k] = v`) or look one up in a loop, by a text key
+fn keys(body: &Node, name: &str) -> bool {
+	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let by_key = is_text_key;
+	let mut found = false;
+	body.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		found |= matches!(target.drop_meta(), Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index));
+		found |= is_name(target) && field_update(value, name);
+	});
+	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
+		part.visit(&mut |inner| found |= matches!(inner, Node::Key(map, Op::Hash, index) if is_name(map) && by_key(index)));
+	});
+	found
+}
+
+/// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
+fn field_update(value: &Node, name: &str) -> bool {
+	matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, map, key, _]
+		if word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name) && is_text(key)))
+}
+
+/// An index by a text key: `m["k"]`, `m["k\(i)"]` (arriving as `"k" + text_form(i)`), not a position
+fn is_text_key(index: &Node) -> bool {
+	is_text(crate::wasp_parser::subscript_key(index).unwrap_or(index))
+}
+
+fn is_text(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Text(_) | Node::Char(_) => true,
+		Node::Key(left, Op::Add, right) => is_text(left) || is_text(right),
+		_ => false,
+	}
+}
+
+/// Is the variable itself assigned in the body (`m = …`, `m += …`), other than by setting an entry
+fn assigns(body: &Node, name: &str) -> bool {
+	let mut found = false;
+	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
+		let is_variable = matches!(target.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= is_variable && (op.is_compound_assign() || (*op == Op::Assign && !field_update(value, name)));
+	});
+	found
+}
+
+/// `name·list = name` (or another copy suffix) first, then the body with every `name` read as the copy
+fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
+	let copy = format!("{name}{suffix}");
 	let renamed = rename_symbol(body, name, &copy);
 	let start = Node::Key(Box::new(Node::Symbol(copy)), Op::Assign, Box::new(Node::Symbol(name.to_string())));
 	match renamed {

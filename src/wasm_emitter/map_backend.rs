@@ -18,11 +18,14 @@ pub(super) const NODE_MAP_NEW: &str = "node_map_new";
 pub(super) const NODE_MAP_SET: &str = "node_map_set";
 pub(super) const NODE_MAP_LOOKUP: &str = "node_map_lookup";
 pub(super) const NODE_MAP_AS_NODE: &str = "node_map_as_node";
+pub(super) const NODE_MAP_OF: &str = "node_map_of";
+/// The hash-table copy of a map parameter, `m·map = m` (analyzer::indexed_parameter_copies)
+pub const MAP_COPY_SUFFIX: &str = "·map";
 const NODE_MAP_HASH: &str = "node_map_hash";
 const NODE_MAP_SLOT: &str = "node_map_slot";
 const NODE_MAP_REHASH: &str = "node_map_rehash";
 /// The functions a program using a map variable calls; the rest come with them
-pub(super) const NODE_MAP_FUNCTIONS: [&str; 4] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE];
+pub(super) const NODE_MAP_FUNCTIONS: [&str; 5] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF];
 /// Entries and slots of a new table; both double when full (slots when half full)
 const FIRST_ENTRIES: i32 = 8;
 const FIRST_SLOTS: i32 = 16;
@@ -42,11 +45,13 @@ impl WasmGcEmitter {
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) && is_empty_map(value) => { started.insert(name.clone()); }
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) && is_map_start(name, value) => { started.insert(name.clone()); }
+				// `m = field_with(m, "k", v)`, the lowered `m["k"] = v` of a parameter
+				Node::Symbol(name) if *op == Op::Assign && entry_update(name, value).is_some_and(|(key, _)| self.map_key(&key).is_some() && !is_meta_key(&key)) => { keyed.insert(name.clone()); }
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) || is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(map, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					let Node::Symbol(name) = map.drop_meta() else { return };
-					if matches!(op, Op::Assign) && self.map_key(index).is_some() { keyed.insert(name.clone()) } else { excluded.insert(name.clone()) };
+					if matches!(op, Op::Assign) && self.map_key(index).is_some() && !is_meta_key(index) { keyed.insert(name.clone()) } else { excluded.insert(name.clone()) };
 				}
 				_ => {}
 			}
@@ -76,9 +81,19 @@ impl WasmGcEmitter {
 		RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_map_type) }
 	}
 
-	/// `m = {}`: a new table in m's local, left on the stack
-	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, slot: u32) {
-		self.emit_call(func, NODE_MAP_NEW);
+	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's local, left on the stack; `m = field_with(m, k, v)` sets the
+	/// entry in place
+	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: u32, value: &Node) {
+		if let Some((key, entry_value)) = entry_update(name, value) {
+			let key = self.map_key(&key).expect("find_typed_maps admits only name keys");
+			self.emit_typed_map_set(func, slot, &key, &entry_value);
+			func.instruction(&I::LocalGet(slot));
+		} else if is_empty_map(value) {
+			self.emit_call(func, NODE_MAP_NEW);
+		} else {
+			self.emit_node_instructions(func, value);
+			self.emit_call(func, NODE_MAP_OF);
+		}
 		func.instruction(&I::LocalTee(slot));
 	}
 
@@ -240,6 +255,42 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array)]);
 		});
 
+		// node_map_of(node): the table of a map Node: ø none, an entry `k:v` one, a curly list its entries (a missing
+		// value as ø); anything else is no map
+		self.runtime_function(NODE_MAP_OF, vec![node_ref], vec![map_ref], vec![map_ref, nullable, nullable, ValType::I64], |s, f| {
+			let (table, cell, entry, kind) = (1, 2, 3, 4);
+			let add_entry = |s: &Self, f: &mut Function| {
+				Self::emit_list(f, &[I::LocalGet(table), I::LocalGet(entry), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(node))]);
+				Self::emit_list(f, &[I::LocalGet(entry), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 }, I::RefIsNull, I::If(BlockType::Result(node_ref))]);
+				s.call(f, "new_empty");
+				Self::emit_list(f, &[I::Else, I::LocalGet(entry), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 }, I::RefAsNonNull, I::End]);
+				s.call(f, NODE_MAP_SET);
+			};
+			let kind_is = |f: &mut Function, local: u32, expected: i64| {
+				Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And, I::I64Const(expected), I::I64Eq]);
+			};
+			s.call(f, NODE_MAP_NEW);
+			f.instruction(&I::LocalSet(table));
+			Self::emit_list(f, &[I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(table), I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Key as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalSet(entry)]);
+			add_entry(s, f);
+			Self::emit_list(f, &[I::LocalGet(table), I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty)]);
+			s.call(f, "not_an_object");
+			Self::emit_list(f, &[I::End, I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 1 }, I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull]);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			kind_is(f, entry, Kind::Key as i64);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			s.call(f, "not_an_object");
+			f.instruction(&I::End);
+			add_entry(s, f);
+			f.instruction(&I::End);
+			Self::emit_list(f, &[I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(table)]);
+		});
+
 		// node_map_as_node(map): ø, the one entry, or the curly list of the entries in their order
 		let colon = crate::operators::op_to_code(&Op::Colon);
 		self.runtime_function(NODE_MAP_AS_NODE, vec![map_ref], vec![node_ref], vec![int, nullable], |s, f| {
@@ -265,8 +316,32 @@ impl WasmGcEmitter {
 	}
 }
 
+/// A meta entry `@name` (meta_entries.rs) is no field: a map with one keeps the generic way
+fn is_meta_key(index: &Node) -> bool {
+	let key = crate::wasp_parser::subscript_key(index).unwrap_or(index);
+	matches!(key.drop_meta(), Node::Text(name) | Node::Symbol(name) if name.starts_with(crate::node::ATTRIBUTE_MARK))
+}
+
 fn is_update(op: &Op) -> bool {
 	op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
+}
+
+/// `field_with(m, key, value)` updating the variable m itself: the key (as an index, `key + 1` like `m[key]`) and value
+fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, _, _) = value.drop_meta() else { return None };
+	let [word, map, key, entry_value] = items.as_slice() else { return None };
+	let updates_itself = word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name);
+	updates_itself.then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
+}
+
+/// What a map variable held as a table may start from: `{}`, a map literal of name keys, or the parameter it copies
+fn is_map_start(name: &str, value: &Node) -> bool {
+	let is_entry = |item: &Node| matches!(item.drop_meta(), Node::Key(key, Op::Colon, _) if matches!(key.drop_meta(), Node::Symbol(key) | Node::Text(key) if !key.starts_with(crate::node::ATTRIBUTE_MARK)));
+	match value.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.iter().all(is_entry),
+		Node::Symbol(copied) => name.strip_suffix(MAP_COPY_SUFFIX) == Some(copied.as_str()),
+		_ => false,
+	}
 }
 
 fn is_empty_map(value: &Node) -> bool {

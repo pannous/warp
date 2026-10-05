@@ -540,7 +540,7 @@ impl WasmGcEmitter {
 	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
 	pub(super) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
 		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
-			self.emit_typed_map_store(func, slot); // find_typed_maps admits only `{}`
+			self.emit_typed_map_store(func, name, slot, value);
 			return true;
 		}
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
