@@ -30,3 +30,12 @@ Next: code/block prefixes, block parameters for if/while/for/def.
 - `x = code e` / `x = block e` bind blocks; `y = data e; y!` runs with the got-it warning "running data as code".
 - Block parameters: `f(c, body:block) := …` is expanded at each call like a macro: other parameters bound once to
   `param·mN`, `body!` → `(arg)`, bare `body` → `data arg`; the definition itself is dropped. Cap: 1000 expansions.
+
+## Function entries of objects (branch object-functions)
+- `o = {a: 1, f := it*2}`, `f := x => …`, `f = x => …`, `f: x => …`, `f(x, y) := …`: the entry becomes the top-level
+  function `o·f` (blocks.rs `method`; `·` is no name the parser reads), the object keeps `f: data <body>`; `o.f(3)` and
+  `o.f 3` call it. A body reading the object's other fields takes the object as its first parameter `o` (`o·f(o, it)`),
+  so `o.a = 5` is seen; reading a global object from a top-level function is unreliable (`k.a` comes back as text).
+- The parser reads `o = {f := it*2}` as `o := …` (its `it`); `object_assignment` turns it back into `=` when only
+  function entries mention `it` (`inc := {x = x+1}` stays a definition).
+- `s := e` without `it` is a value entry (P71 open: now), as on main.

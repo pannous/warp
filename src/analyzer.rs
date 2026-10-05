@@ -443,8 +443,9 @@ pub(crate) fn raises_error(branch: &Node) -> bool {
 
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	match branch.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => infer_type(&statements[statements.len() - 1], scope),
-		other => infer_type(other, scope),
+		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => branch_kind(&statements[statements.len() - 1], scope),
+		// a branch yielding ø (`if c then 3 else ø`) is a Node, as a variable holding ø is
+		other => held_kind(other, || infer_type(other, scope)),
 	}
 }
 
@@ -456,6 +457,10 @@ fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
 		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
+	} else if kinds.contains(&Kind::Empty) {
+		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
+		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
+		Kind::Empty
 	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
 		Kind::Text
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
@@ -3242,8 +3247,10 @@ fn with_closure_captures(ctx: &Context, program: &Node, mut globals: HashMap<Str
 			}
 			None => captured_variables(function, &outer),
 		};
+		// the binding itself, its declared or literal type with it (`k = {a: 10}`: `k.a` is an Int there too)
 		for (name, kind) in captured {
-			globals.entry(name.clone()).or_insert_with(|| Local::new(0, name, kind));
+			let binding = outer.lookup(&name).cloned().map(|local| Local { kind, ..local });
+			globals.entry(name.clone()).or_insert_with(|| binding.unwrap_or_else(|| Local::new(0, name, kind)));
 		}
 	}
 	globals

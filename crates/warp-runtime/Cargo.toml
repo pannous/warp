@@ -1,5 +1,6 @@
-# Compiler-less wasmtime runtime for `warp build --exe` (notes/aot.md §Next).
-# Features match probes/aot/standalone_runner.rs: no Cranelift, so a prebuilt stub + appended .cwasm needs no Rust toolchain.
+# Running compiled warp programs without the compiler (notes/aot.md): the engine settings and host words warp links
+# for its own runs, and the binary `warp-runtime`, the prebuilt stub `warp build --exe` appends a program's machine
+# code to. Built on its own (`cargo build --release -p warp-runtime`) it is wasmtime without Cranelift, about 1 MB.
 [package]
 name = "warp-runtime"
 version = "0.1.0"
@@ -9,6 +10,15 @@ publish = false
 [[bin]]
 name = "warp-runtime"
 path = "src/main.rs"
+required-features = ["engine"]
+
+[features]
+default = ["engine"]
+# running modules: wasmtime's runtime and GC, the host words; without it only the names of the host words
+engine = ["dep:wasmtime"]
+# compiling modules too (warp itself): Cranelift and its settings; warp's wasmtime has the component model (through
+# wasmtime-wasi), which its engines turn off
+compiler = ["engine", "wasmtime/cranelift", "wasmtime/component-model"]
 
 [dependencies]
-wasmtime = { version = "49.0.1", default-features = false, features = ["runtime", "gc", "gc-copying", "std"] }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
