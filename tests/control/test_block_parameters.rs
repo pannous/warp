@@ -33,3 +33,11 @@ fn test_a_bang_known_only_at_run_time_is_loud() {
 	is!("x=3; x!+1", 4);
 	is!("x=\"hi\"; x.upper!; x", "HI");
 }
+
+#[test]
+fn test_a_prefix_takes_the_rest_of_its_group() {
+	is!("a = 1; count [data a]", 1);
+	is!("q = 1; xs = [(data q+1), 2]; count xs", 2);
+	assert_eq!(eval("[data 1/0]").serialize(), "[1/0]");
+	assert_eq!(eval("x = (data a+1); x").serialize(), "a+1");
+}

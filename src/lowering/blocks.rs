@@ -71,6 +71,21 @@ fn prefixed<'a>(value: &'a Node, words: &[&str]) -> Option<&'a Node> {
 	}
 }
 
+/// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,
+/// it is no function to call
+fn prefixed_group(node: &Node) -> Option<Node> {
+	let Node::List(items, bracket @ (Bracket::Round | Bracket::Square), Separator::None | Separator::Space) = node.drop_meta() else { return None };
+	let [prefix, _, ..] = items.as_slice() else { return None };
+	if !matches!(prefix.drop_meta(), Node::Symbol(word) if word == DATA_WORD || BLOCK_WORDS.contains(&word.as_str())) {
+		return None;
+	}
+	let prefixed = Node::List(items.clone(), Bracket::None, Separator::Space);
+	Some(match bracket {
+		Bracket::Square => Node::List(vec![prefixed], Bracket::Square, Separator::None),
+		_ => prefixed,
+	})
+}
+
 /// In a body: `param!` the argument's code (a group), a bare `param` the argument as data
 fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 	if let Some((Node::Symbol(name), _)) = bang_target(&node) {
@@ -341,6 +356,9 @@ impl Blocks {
 			if let Some(expanded) = self.expand(items) {
 				return expanded;
 			}
+		}
+		if let Some(prefixed) = prefixed_group(&node) {
+			return self.rewrite(prefixed);
 		}
 		// `o.s1!`: the parser marks the field it was reading (as for `x.upper!`)
 		if let Node::Key(object, Op::Dot, field) = node.drop_meta() {
