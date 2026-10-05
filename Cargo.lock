@@ -1630,11 +1630,19 @@ dependencies = [
  "sha2",
  "unicode-normalization",
  "ureq",
+ "warp-runtime",
  "wasm-encoder 0.259.0",
  "wasmparser 0.259.0",
  "wasmtime",
  "wasmtime-wasi",
  "wat",
+]
+
+[[package]]
+name = "warp-runtime"
+version = "0.1.0"
+dependencies = [
+ "wasmtime",
 ]
 
 [[package]]
