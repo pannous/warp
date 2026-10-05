@@ -5,30 +5,11 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P29 `pair.0`: counts from 0 like `pair[0]` (Rust/Swift tuples) / from 1 like `pair#1`. Assumed: from 0
-  (library_words method_call). Night session 2026-10-04.
-- P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
-  are not required. Assumed: Python semantics. Night session 2026-10-04.
-- P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
-  (Python dict.pop) / give a new map; `index_of` 0-based (Python) / 1-based like `x in xs` and `in` on texts.
-  Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
-  absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
-  (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
-- P44 Shared arrays across tasks (user P33 step 6, notes/threads.md): `shared xs = int[n]` makes n Ints (zeros) in a
-  memory every task of the run shares; `xs#i` reads, `xs#i = v` writes, `xs#i += v` / `-=` add atomically (the value
-  is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
-  `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
-  alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
 - P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
   the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
   holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
   `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
   `friend` only when one is declared. Not implemented. Night 2026-10-04.
-- P47 Lists of tasks: a job used as a value awaits it (the auto-cast, P33), so `jobs.add(j)` awaits j at once and
-  tasks cannot be collected without running them one after the other (200 tasks of 200 ms: 41 s). Proposed default
-  (supervisor): adding a job to a list keeps the handle unawaited, the auto-cast applies only where a value is needed
-  (arithmetic, print, a call taking a number), and `await all jobs` waits for every job of a list, giving their
-  results. Not implemented. 2026-10-05.
 - P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
   `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
   and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
@@ -51,6 +32,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
+- P60 Catch handlers: `raise X` / `throw X` are built (try catches them). The wiki's only `catch` form is Error.md's
+  function-level handlers (`fun f(){ eat(); drink(); catch (no food){}; catch (drunkenness){}; on error{} }`), with
+  no rule for how a name matches a raised value. Options: not built yet, `try X else Y` stays the one catching form
+  (recommended) / `catch name {…}` as the else-branch of the surrounding function body, matching the raised text.
+  Asked by the Fixer warp-2d. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -63,6 +49,10 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P29 `pair.0` counts from 0 (like `pair[0]`).
+- P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
+  (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
+- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now.
 - P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
   infinity now (ω stays the hyperreal infinite).
 - P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
@@ -117,6 +107,11 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   `\:name`.
 - P28 `real x;` read before any assignment: user chose "Zero value (Go)": x reads as the zero/empty value of its
   type. The loud error (analyzer::check_unassigned_declarations) is undone.
+
+- P47 lists of tasks: user: "Jobs and tasks are as[ynchronous] by definition if someone waits for one result that
+  should not affect the others". So a started job runs on its own; putting it in a list (`jobs.add(j)`) or awaiting
+  another job never waits for it, only a use that needs this job's value does. The recommended default fits:
+  awaiting only where a value is needed, `await all jobs` for a list.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
