@@ -368,6 +368,7 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
             return;
         }
 
+    crate::diagnostic::note_said();
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {

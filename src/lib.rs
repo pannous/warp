@@ -12,6 +12,7 @@ pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analyzer;
+pub mod analysis_memo;
 pub mod dead_functions;
 pub mod node;
 #[cfg(feature = "native")]
