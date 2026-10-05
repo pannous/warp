@@ -97,11 +97,13 @@ PASSED:
   ✓ control::test_raise::raise_ends_the_run_with_its_message
   ✓ control::test_raise::try_catches_a_raise
   ✓ control::test_run_time_blocks::a_bang_known_only_at_run_time_runs_the_block
+  ✓ control::test_run_time_blocks::a_bang_on_a_parameter_or_a_call_result_decides_at_run_time
   ✓ control::test_run_time_blocks::a_block_over_defined_names_does_not_warn
   ✓ control::test_run_time_blocks::a_block_over_names_defined_nowhere_warns
   ✓ control::test_run_time_blocks::a_failing_run_time_block_names_the_block
   ✓ control::test_run_time_blocks::a_run_time_block_calls_the_programs_functions
   ✓ control::test_run_time_blocks::a_run_time_block_gets_no_capabilities
+  ✓ control::test_run_time_blocks::a_run_time_block_hands_back_a_pair
   ✓ control::test_run_time_blocks::a_run_time_block_hands_back_ratios_and_big_ints
   ✓ control::test_run_time_blocks::a_run_time_block_reads_the_values_where_it_runs
   ✓ control::test_run_time_blocks::compiling_a_run_time_block_warns_about_the_host
@@ -520,6 +522,8 @@ PASSED:
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
+  ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
+  ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
   ✓ functions::test_suffix_word_spellings::test_english_spellings_of_the_suffix_form
   ✓ functions::test_suffix_word_spellings::test_suffix_form_calls_a_user_function
   ✓ functions::test_suffix_word_spellings::test_suffix_forms_chain_and_mix_like_before
@@ -1720,6 +1724,11 @@ PASSED:
   ✓ types::test_types::test_user_type_wasm_emission
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
+  ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_compiles_once_then_maps_the_compiled_module
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_compiled_programs
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_emitter::test_compact_empty
   ✓ wasm::test_emitter::test_compact_float
   ✓ wasm::test_emitter::test_compact_int
@@ -2138,4 +2147,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-37 ignored, 2133 passed, 0 failed, 2133 total tested
+37 ignored, 2142 passed, 0 failed, 2142 total tested
