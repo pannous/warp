@@ -253,7 +253,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 }
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
-const FILTER_LOOP_TOPIC: &str = "for-filter";
+pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
@@ -2729,7 +2729,10 @@ impl WaspParser {
 			return None;
 		}
 		self.advance_by("in".len());
+		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let body = match body_word {
