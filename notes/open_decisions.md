@@ -5,33 +5,11 @@ already follows. Answers move to a Decided section with the date and the user's 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-- P28 `real x;` (declared without a value) read before an assignment: loud error "x is declared without a value"
-  (Java/Kotlin) / zero value of the type (Go). Assumed: error (analyzer::check_unassigned_declarations). Night
-  session 2026-10-04.
-- P29 `pair.0`: counts from 0 like `pair[0]` (Rust/Swift tuples) / from 1 like `pair#1`. Assumed: from 0
-  (library_words method_call). Night session 2026-10-04.
-- P30 `xs.pop()` gives the last item and removes it from the variable (Python); `xs.pop()!` style mutation markers
-  are not required. Assumed: Python semantics. Night session 2026-10-04.
-- P35 `m.remove(k)` on a map and `xs.index_of(x)` on a list: remove the key from the variable and give its value
-  (Python dict.pop) / give a new map; `index_of` 0-based (Python) / 1-based like `x in xs` and `in` on texts.
-  Implemented defaults (supervisor, night 2026-10-04): remove takes the entry out of m and gives its value (ø when
-  absent), analyzer::removed_key + the runtime map_without; index_of is the 1-based position, 0 when absent
-  (a synonym of collection_position). Test: tests/lists/test_remove_and_index_of.rs.
-- P44 Shared arrays across tasks (user P33 step 6, notes/threads.md): `shared xs = int[n]` makes n Ints (zeros) in a
-  memory every task of the run shares; `xs#i` reads, `xs#i = v` writes, `xs#i += v` / `-=` add atomically (the value
-  is the new one), `#xs` / `count(xs)` is n; `go f(xs)` passes the same array, the one exception to copying, marked by
-  `shared`; a parameter given a shared array is shared inside its function. Ints only for now. Implemented default;
-  alternatives: `atomic` instead of `shared`, an explicit `xs.add(i, v)` instead of atomic `+=`. Night 2026-10-04.
 - P46 Type-name patterns in `for` (wiki/for.md): `for friend in [foe1, friend1, foe2, friend2]: print it` walks only
   the items whose name matches the loop variable's type name, and `for (it>2) in [1,2,3,4]` the items a condition
   holds for. Proposed default (parked, supervisor): `for NAME in xs` stays every item; a filtered walk is written
   `for x in xs where cond` (or `xs.filter(…)`), and a type-named walk `for friend in xs` filters by the declared type
   `friend` only when one is declared. Not implemented. Night 2026-10-04.
-- P47 Lists of tasks: a job used as a value awaits it (the auto-cast, P33), so `jobs.add(j)` awaits j at once and
-  tasks cannot be collected without running them one after the other (200 tasks of 200 ms: 41 s). Proposed default
-  (supervisor): adding a job to a list keeps the handle unawaited, the auto-cast applies only where a value is needed
-  (arithmetic, print, a call taking a number), and `await all jobs` waits for every job of a list, giving their
-  results. Not implemented. 2026-10-05.
 - P48 Custom operators (wiki/operator.md): `prefix operator ⁻ := it*-1`, `suffix operator ³ := it*it*it`,
   `suffix operator ⁰ := 1`. Proposed syntax (parked, supervisor): exactly the wiki's, `prefix operator SYMBOL := body`
   and `suffix operator SYMBOL := body` with `it` the operand, plus `infix operator SYMBOL := a op b`-style bodies naming
@@ -54,31 +32,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   mode makes it an error). Asked by worker warp-90, branch unknown-word. 2026-10-05.
   User 2026-10-05, undecided: "i'm not certain probably the second one [loud error] or we need to declare data in
   the beginning of the file or I don't know let's discuss it later". Keep the warning until discussed.
-- P52 Calling a `to` phrase with its prepositions: `to add number a to number b: a+b` is called `add(1, 2)` today;
-  should `add 1 to 2` work too, and `square of 4` for `square of a number`? Today `1 to 2` is a range and `x of y` a
-  field lookup, so `add 1 to 2` is add(1..2). Proposed: when the name is a phrase-defined function, its own
-  prepositions win; everywhere else the operators keep their meaning. Asked by warp-90, branch type-name-params.
-  2026-10-05.
-- P53 test_wasm::test_custom_operators stays ignored only because its `.5³` line expects Rust's `1 / 8` (integer
-  division, 0) while the value is 0.125. Options: change that line to 0.125 and un-ignore (recommended) / leave it
-  ignored. Assumed: ignored. Asked by warp-90, branch custom-operators 28ee01c2. 2026-10-05.
-- P54 tests/operators/test_operator_declarations.rs::test_precedence_declarations_are_refused pins
-  `infix operator ⊕ := a+b; operator ⊕ has precedence above +` as "not supported yet"; the new feature makes it work
-  (X must be a declared operator; built-ins are never re-ranked). Options: replace the assertion with the positive
-  result (recommended) / keep the refusal, drop the feature. Assumed: replaced in its own commit. Asked by warp-90,
-  branch operator-precedence. 2026-10-05.
-- P55 test_while_nop_issue (ignored) expects `x=0;while x++<11: nop;` to be 11, but a while loop's value is its last
-  body value (Decided 2026-09-30). Options: rewrite the test to `…;x` (gives 11 today, recommended) / a loop whose
-  body has no value gives the condition variable. Assumed: stays ignored. Asked by the Fixer warp-2d. 2026-10-05.
-- P56 Uniscript entities (row 37, branch fix-uniscript-entities, all four assumed as recommended): (1) `\name` inside
-  double-quoted texts: no, code only (`"\nat"` stays newline+"at", not ℕ); (2) `\epsilon`/`\phi` are ε U+03B5 and
-  φ U+03C6 (not LaTeX's lunate ϵ/ϕ); (3) an unknown `\name` is the loud error "unknown entity \name"; (4) `∞` has no
-  value yet: f64 infinity now, or wait for the hyperreals (ω)? Asked by the Fixer warp-2d. 2026-10-05.
-- P57 Hyperreals (branch hyperreals, notes/hyperreals.md; ε exact with integer exponents, compile time only):
-  (1) `1/(1+ε)` (an infinite series): keep the error (recommended) / truncated series marked approximate
-  (HyperApproxInv.lean); (2) dual-number mode (ε² = 0) via `use dual`: later (recommended) / now; (3) hyperreals at
-  run time (a WASM GC representation): later with exact reals at run time (recommended) / now. Asked by warp-90.
-  2026-10-05.
+- P60 Catch handlers: `raise X` / `throw X` are built (try catches them). The wiki's only `catch` form is Error.md's
+  function-level handlers (`fun f(){ eat(); drink(); catch (no food){}; catch (drunkenness){}; on error{} }`), with
+  no rule for how a name matches a raised value. Options: not built yet, `try X else Y` stays the one catching form
+  (recommended) / `catch name {…}` as the else-branch of the surrounding function body, matching the raised text.
+  Asked by the Fixer warp-2d. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
@@ -91,6 +49,30 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
 
 ## Decided 2026-10-05 (user, multiple choice, all as recommended)
+- P29 `pair.0` counts from 0 (like `pair[0]`).
+- P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
+  (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
+- P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now.
+- P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
+  infinity now (ω stays the hyperreal infinite).
+- P57 hyperreals: `1/(1+ε)` stays an error; dual-number mode and run-time hyperreals later (with exact reals at run
+  time).
+- Standing rule (user): "it's allowed to un ignore test that are suddenly passing". Removing `#[ignore]` from a test
+  that passes unedited needs no question; editing its assertions still does.
+- P49b a whole float is no int either: `f(x:int)` called with 2.0 is refused like `x:int = 2.0` (write `2.0 as int`).
+- P45b the P45 error covers kinds evident from the source; inferred kinds keep the Node fallback until inference is
+  reliable.
+- P59 the Fixer's five ignored tests get the recommended edits (user decision): test_array_creation expects "index
+  out of range" (keeps `pixel:int[100]`, drops `pixel array;…`); test_array_initialization_basics uses
+  `count(x)`; test_array_initialization: typo fixed, the two natural-language array phrases dropped;
+  test_array_type_generics expects "list of int"; test_hyphen_units stays ignored (interval equality, later).
+- P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`, `square of 4`); everywhere else
+  `to` stays a range and `of` a field lookup.
+- P53 test_custom_operators: the `.5³` line becomes 0.125, the test is un-ignored (user decision).
+- P54 test_precedence_declarations_are_refused asserts the working `operator ⊕ has precedence above +` (user
+  decision); only declared operators are ranked, built-ins never re-ranked.
+- P55 test_while_nop_issue is rewritten to `x=0;while x++<11: nop;x` → 11 (user decision); a loop's value stays its
+  last body value.
 - P50 a declared scalar parameter broadcasts over a list too (`foo(x:int):=x+1; foo([1 2 3])` → [2 3 4], the wiki's
   `square number = …; square [1 2 3]`); test_argument_kinds and test_parameter_call_kinds change to a text argument
   (user decision). `print [1 2 3]` keeps printing the list (not asked; the recommended default stands).
@@ -114,6 +96,22 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   the kinds evident from literals (`x = [1]; x = 5` → "x was a List, is given an Int: use another name"). Where a
   kind is only inferred (a call's result, a loop variable reusing a list's name) the Node fallback still holds the
   value: an error there would rest on guessed kinds (function results default to Int before inference).
+
+- P58 `xs#a..b` (range from xs#a, or a slice?): user: "create a strong warning and I don't care how to interpret
+  it". So: unparenthesized `xs#a..b` keeps the range and gets a strong warning naming both explicit forms,
+  `xs#(a..b)` / `xs#(a…b)` (the 1-based slice) and `(xs#a)..b` (the range).
+
+- P56(1) uniscript entities: user: "yes, they should work everywhere but they have the syntax \:". The entity form
+  is `\:name` (wiki/uniscript.md: `\:infinity == ∞`, long form `<:name>`), in code AND inside texts; a bare
+  `\name` is no entity (so `"\nat"` stays newline+"at"). The branch fix-uniscript-entities moves from `\name` to
+  `\:name`.
+- P28 `real x;` read before any assignment: user chose "Zero value (Go)": x reads as the zero/empty value of its
+  type. The loud error (analyzer::check_unassigned_declarations) is undone.
+
+- P47 lists of tasks: user: "Jobs and tasks are as[ynchronous] by definition if someone waits for one result that
+  should not affect the others". So a started job runs on its own; putting it in a list (`jobs.add(j)`) or awaiting
+  another job never waits for it, only a use that needs this job's value does. The recommended default fits:
+  awaiting only where a value is needed, `await all jobs` for a list.
 
 ## Decided 2026-10-04 (user; moved out of the pending queue 2026-10-05)
 - P31 DECIDED (user, 2026-10-04): the Printable operation is `text(p:person)`, the one allowed exception to type words as function names; `as text`, print and interpolation call it. Printable trait: the operation that gives an instance's text for interpolation, `as text` and print. `text` is a
