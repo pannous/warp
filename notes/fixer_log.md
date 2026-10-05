@@ -93,3 +93,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ## 2026-10-05 p26-libm-pure
 - P26: libm calls carry no FFI effect; a Libm capability (granted to eval and untrusted code) keeps them imported
   (tests/functions/test_libm_pure.rs; two pinned tests edited in their own commit).
+
+## 2026-10-05 p49-float-to-int-param
+- P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
+  "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
+  test_function_argument_cast edited (approved) and un-ignored.

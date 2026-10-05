@@ -3261,6 +3261,24 @@ fn variable_kinds(program: &Node, ctx: &Context, unknown_keeps_kind: bool) -> Ha
 	kinds.into_iter().filter(|(name, _)| !unknown_keeps_kind || literal.contains(name)).filter_map(|(name, kind)| Some((name, kind?))).collect()
 }
 
+/// A decimal literal with digits after the point (`2.5`; an exact decimal, so its kind is Int)
+fn is_fractional_literal(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(crate::extensions::numbers::Number::Float(value)) if value.fract() != 0.0)
+}
+
+/// Variables assigned a fractional literal (`y = 2.5`)
+fn fractional_variables(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = node {
+			if let (Node::Symbol(name), true) = (target.drop_meta(), is_fractional_literal(value)) {
+				names.insert(name.clone());
+			}
+		}
+	});
+	names
+}
+
 /// An undeclared parameter takes the kind of its arguments when every call agrees, over the kind its use suggests
 /// (an indexed parameter is a List unless it is passed a Text); calls that disagree are a reported conflict.
 /// Parameters that only get Int arguments (or none) keep their usage kind. Arguments that are neither literals nor
@@ -3272,11 +3290,23 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		_ => None,
 	});
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
+	// a float passed to a declared int parameter loses digits: a compile error (P49)
+	let mut float_for_int: Vec<String> = Vec::new();
+	// a parameter of the same name shadows the variable (as in literal_variable_kinds)
+	let mut fractional_variables = fractional_variables(program);
+	ctx.user_functions.values().flat_map(|function| &function.params).for_each(|param| { fractional_variables.remove(&param.name); });
+	let has_digits_an_int_loses = |argument: &Node| is_fractional_literal(argument) || argument_kind(argument) == Some(Kind::Float)
+		|| matches!(argument.drop_meta(), Node::Symbol(name) if fractional_variables.contains(name));
 	program.visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		for (name, arguments) in called_functions(items) {
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
+				let declared_int = function.params[index].annotation.is_some() && param_kind(&function.params[index]) == Kind::Int;
+				if declared_int && has_digits_an_int_loses(argument) {
+					let written = argument.drop_meta().serialize();
+					float_for_int.push(format!("{written} is no int: write {written} as int"));
+				}
 				if let Some(kind) = argument_kind(argument) {
 					let kinds = argument_kinds.entry((name.clone(), index)).or_default();
 					if !kinds.contains(&kind) {
@@ -3286,6 +3316,7 @@ fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			}
 		}
 	});
+	ctx.parameter_conflicts.extend(float_for_int);
 	for ((name, index), kinds) in argument_kinds {
 		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
 		let param = &mut function.params[index];
