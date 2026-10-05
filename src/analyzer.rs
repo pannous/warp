@@ -3591,7 +3591,7 @@ fn extract_user_functions_in(ctx: &mut Context, node: &Node, enclosing: Option<&
 /// Between an enclosing function and a nested `def` lifted out of its body: `outer·inner`
 const NESTED_DEF_SEPARATOR: &str = "·";
 
-fn qualify_nested_name(enclosing: Option<&str>, name: &str) -> String {
+pub(crate) fn qualify_nested_name(enclosing: Option<&str>, name: &str) -> String {
 	match enclosing {
 		Some(parent) => format!("{parent}{NESTED_DEF_SEPARATOR}{name}"),
 		None => name.to_string(),
@@ -3602,6 +3602,11 @@ fn register_user_function(ctx: &mut Context, short_name: &str, params: Vec<Param
 	let name = qualify_nested_name(enclosing, short_name);
 	let (body, renames) = lift_nested_defs_from_body(ctx, body.clone(), &name);
 	let body = rename_nested_calls(body, &renames);
+	// a sibling calls a nested function too: `def sibling(){ inner() }` beside `def inner()` in outer
+	let nested_prefix = format!("{name}{NESTED_DEF_SEPARATOR}");
+	for function in ctx.user_functions.values_mut().filter(|function| function.name.starts_with(&nested_prefix)) {
+		function.body = Box::new(rename_nested_calls(function.body.as_ref().clone(), &renames));
+	}
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
 	}
@@ -3666,12 +3671,13 @@ fn lift_nested_defs_walk(ctx: &mut Context, node: Node, parent: &str, renames: &
 	}
 }
 
-/// `inner()` / `inner()+1` inside the enclosing body: the call head becomes `outer·inner`
+/// `inner()` / `inner()+1` / `apply(inner)` inside the enclosing body: the name becomes `outer·inner`
 fn rename_nested_calls(node: Node, renames: &HashMap<String, String>) -> Node {
 	if renames.is_empty() {
 		return node;
 	}
 	match node {
+		Node::Symbol(name) if renames.contains_key(&name) => Node::Symbol(renames[&name].clone()),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_nested_calls(*node, renames)), data },
 		Node::Key(left, op, right) => Node::Key(
 			Box::new(rename_nested_calls(*left, renames)),

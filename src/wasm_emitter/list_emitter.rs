@@ -690,7 +690,7 @@ impl WasmGcEmitter {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_call(item) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
-		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) {
+		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) {
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
