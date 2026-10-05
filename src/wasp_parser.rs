@@ -239,8 +239,21 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	}
 }
 
+/// A list literal whose items all are literals of the type: `[1, 2]` for `number`
+fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
+	let Node::List(items, Bracket::Square, _) = iterable.drop_meta() else { return false };
+	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
+	items.iter().all(|item| match item.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
+		_ => false,
+	})
+}
+
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 const FILTER_LOOP_TOPIC: &str = "for-filter";
+/// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
+const EVEN_WORD: &str = "even";
+const ODD_WORD: &str = "odd";
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 /// `a[start:end]` calls the library word `slice`
@@ -2606,6 +2619,15 @@ impl WaspParser {
 					Err(error) => return Some(error),
 				}
 			}
+			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
+			// all are of the type needs no filter
+			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
+				let test = self.type_test(&variable, name).expect("a type word");
+				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), test, body) {
+					Ok(body) => (variable, body),
+					Err(error) => return Some(error),
+				}
+			}
 			_ => (variable, body),
 		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
@@ -2623,13 +2645,30 @@ impl WaspParser {
 			return None;
 		}
 		self.advance();
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(0));
-		self.skip_spaces();
+		// the expressions up to `)`: one condition `it>2`, or the words `even number`
+		let mut parts = vec![];
+		loop {
+			self.skip_spaces();
+			if matches!(self.current_char(), ')' | '\0' | '\n') {
+				break;
+			}
+			let start = self.pos;
+			parts.push(self.with_equals_comparing(true, |parser| parser.parse_expr(0)));
+			if self.pos == start {
+				break;
+			}
+		}
+		let condition = match parts.len() {
+			1 => parts.remove(0),
+			_ => Node::List(parts, Bracket::None, Separator::Space),
+		};
 		let mentions_it = crate::wasp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
-		if self.current_char() != ')' || !mentions_it {
+		// `(even number)`: an adjective and a type word
+		let condition = if mentions_it { Some(condition) } else { self.adjective_condition(&condition) };
+		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
 			(self.pos, self.line_nr, self.column, self.current_line) = before;
 			return None;
-		}
+		};
 		self.advance();
 		self.skip_spaces();
 		if !self.matches_keyword("in") {
@@ -2651,6 +2690,38 @@ impl WaspParser {
 		};
 		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
 		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+	}
+
+	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and
+	/// `it is number`; None for anything else
+	fn adjective_condition(&self, words: &Node) -> Option<Node> {
+		// the two words, spaced or read as the call `even(number)`
+		let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = words.drop_meta() else { return None };
+		let [adjective, type_word] = items.as_slice() else { return None };
+		let Symbol(adjective) = adjective.drop_meta() else { return None };
+		let Symbol(type_name) = type_word.drop_meta() else { return None };
+		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		let type_test = self.type_test(&it, type_name)?;
+		let parity = |op: Op| Node::Key(Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))), op, Box::new(Node::int(0)));
+		let adjective_test = match adjective.as_str() {
+			word if self.functions.contains(word) => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			EVEN_WORD => parity(Op::Eq),
+			ODD_WORD => parity(Op::Ne),
+			word => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+		};
+		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
+	}
+
+	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
+	fn type_test(&self, value: &Node, type_name: &str) -> Option<Node> {
+		let test = if self.declared_types.contains(type_name) {
+			crate::traits::INSTANCE_OF
+		} else if crate::analyzer::type_word_kind(type_name).is_some() {
+			crate::type_tests::IS_TYPE
+		} else {
+			return None;
+		};
+		Some(Node::List(vec![Symbol(test.to_string()), value.clone(), Node::Text(type_name.to_string())], Bracket::Round, Separator::None))
 	}
 
 	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46)

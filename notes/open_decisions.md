@@ -95,7 +95,9 @@ uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done)
   So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
   with got-it; notes/welcoming.md). Done (branch p46-filter-loops, wasp_parser try_parse_for_in): `for friend in xs`
   with a declared class (instance_of, the item is `it` and `friend` in the body), `for (it>2) in xs`; got-it topic
-  `for-filter`. Not done: built-in type words (`for int in xs` stays a variable named int) and `for (even number) in`.
+  `for-filter`. Built-in type words filter too (`for number in xs`, under their own name; a literal list of matching
+  items needs no filter) and an adjective with a type word is a condition (`for (even number) in xs`: even/odd built
+  in, else the user's function), branch p46-type-word-filters.
 - P61 `x is <value>` with a new name x (old test `x is 100 times [0]`): user: "educate the user to use the be key
   word for definitions". `is` stays a comparison; with an undefined x the warning/error teaches `x be <value>`
   (wiki/be.md, an alias of `:=`, parsed since 67c405a5: `x be 3`, `x be number 3`). The test edit to
