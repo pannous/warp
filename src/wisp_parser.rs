@@ -808,7 +808,6 @@ mod tests {
 
 	#[test]
 	// #[todo]
-	#[ignore]
 	fn test_wisp_defn() {
 		// todo: param list vs body!!
 		let _result = parse_wisp("(def square (mul it it))"); // how is that already legal?
@@ -819,7 +818,7 @@ mod tests {
 			Key(name, Op::Define, body) => {
 				assert_eq!(*name, Symbol("square".to_string()));
 				put!(body);
-				assert_eq!(body.len(), 3); // (mul it it)
+				assert_eq!(body.drop_meta().serialize(), "mul(it it)"); // (mul it it)
 			}
 			_ => panic!("expected defn"),
 		}
