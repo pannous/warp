@@ -21,3 +21,11 @@ fn jobs_in_a_list_run_at_the_same_time() {
 	is!("f(ms) := { sleep(ms); ms }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; sum(await all jobs)", 3000);
 	assert!(started.elapsed() < OVERLAPPING_LIMIT, "three one-second jobs took {:?}", started.elapsed());
 }
+
+#[test]
+fn counting_jobs_does_not_await_them() {
+	// the count is there at once: well before the one-second jobs end (clock() is in milliseconds)
+	let jobs = "f(ms) := { sleep(ms); ms }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; ";
+	is!(&format!("{jobs}t0 = clock(); n = count(jobs) + #jobs + jobs.size; t1 = clock(); if t1 - t0 < 500 then n else -1"), 9);
+	is!(&format!("{jobs}count(jobs) + sum(await all jobs)"), 3003);
+}

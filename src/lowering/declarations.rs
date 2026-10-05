@@ -29,6 +29,8 @@ const TASK_ELEMENT: &str = "task·element";
 /// `await all jobs`: the results of every job of a list
 const ALL_WORD: &str = "all";
 const ADD_WORD: &str = "add";
+/// The words that count a list: counting a job list waits for no job
+const JOB_COUNTERS: [&str; 4] = ["count", "size", "length", "len"];
 /// The parameter of the await map over a job list (resolve_tasks)
 const AWAITED_JOB: &str = "awaited_job";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
@@ -215,6 +217,17 @@ impl Tasks<'_> {
 		Some(marker(TASK_VALUE, vec![Node::Symbol(variable.to_string()), Node::Symbol(function.clone())]))
 	}
 
+	/// `count(jobs)`, `count jobs`, `#jobs`, `jobs.size` (count, length) of a job list: a count needs no result (P47)
+	fn counted_job_list(&self, node: &Node) -> bool {
+		let is_job_list = |list: &Node| matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name));
+		match node.drop_meta() {
+			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if JOB_COUNTERS.contains(&word(counter).as_str()) && is_job_list(list)),
+			Node::Key(empty, Op::Hash, list) => matches!(empty.drop_meta(), Node::Empty) && is_job_list(list),
+			Node::Key(list, Op::Dot, counter) => is_job_list(list) && JOB_COUNTERS.contains(&word(counter).as_str()),
+			_ => false,
+		}
+	}
+
 	/// A read of a job list or of one of its jobs: its results once the jobs are done
 	fn job_list_read(&self, list: &str, read: Node, marker_word: &str) -> Node {
 		let functions = self.job_lists[list].iter().map(|function| Node::Symbol(function.clone()));
@@ -225,6 +238,8 @@ impl Tasks<'_> {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
 			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),
+			// `count(jobs)`, `#jobs`, `jobs.size`: how many jobs, without waiting for any
+			node if self.counted_job_list(&node) => node,
 			// `jobs.add(go f(i))`: the list keeps the task, unawaited
 			Node::Key(receiver, Op::Dot, method) if matches!(receiver.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) && added_task(&method).is_some() => {
 				let started = self.task_statement(&added_task(&method).expect("guarded")).expect("a go of a user function");
