@@ -17,6 +17,19 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   like pint (run-time amount + units), needed only for units arriving from input / both later (static, plus parsing
   input into checked values). Assumed: (1). Asked by warp-90 via warp-7e. Asked once 2026-10-05, dismissed by the user
   mid-discussion: ask again later. 2026-10-05.
+- P65 Character arithmetic: `'5' + 1` is "51", `'5' * 2` "55" (a character acts as a one-letter text), but `-'a'` is
+  -97, `'a' % 2` 1, `sqrt('a')` 9.85 (code points); comparisons (`c >= '0'`) rightly use code points. Recommended:
+  arithmetic a text can't do (negation, %, /, sqrt) on a character is not_a_number, never its code point; `ord(c)`
+  gives the number. Asked by the Fixer warp-2d. 2026-10-05.
+- P66 `1/0` is ∞ (f64) in a block or function but a caught division by zero under `try 1/0 else 7`. Recommended:
+  exact Int division by zero is always the catchable error divide_by_zero; only float division (1.0/0.0) is ∞.
+  Asked by warp-2d. 2026-10-05.
+- P67 `catch e` / `except E as e` (P60): the fallback can't use e yet (loud error). The user once rejected
+  `try X else e => Y`, but P60 names `catch e`. Recommended: e is the Error value (its message): the error a returned
+  Error carries, or the runtime error's name / raise message for a trap. Asked by warp-2d. 2026-10-05.
+- P68 `square 3 + square(4)` with `square := it²` is 361, read as square(3 + square(4)). Recommended: a got-it warning
+  naming both readings `square(3) + square(4)` / `square(3 + square(4))` when a braceless call's argument contains an
+  operator. Asked by warp-2d. 2026-10-05.
 Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 Dropped as answered: code quality 7 (Node operators return Node::Error: Decided #1, errors as values); #14 (test_math
 uses near!), #14c (exit(0) commented out), #15 (decided: delete), #17/#18 (done), #20 (AGENTS.md fixed; CLAUDE.md → P12),
